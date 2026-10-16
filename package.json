@@ -1,0 +1,27 @@
+{
+  "name": "arrimo",
+  "version": "1.0.0",
+  "description": "Arrimo : lits hospitaliers et transferts interhospitaliers",
+  "main": "src/server.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "db:seed": "node db/seed.js",
+    "db:reset": "node db/reset.js",
+    "test": "node --test --test-concurrency=1 tests/api.test.js",
+    "demo:deux": "node db/demo-deux.js",
+    "demo:reset": "node db/reset.js deux"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "express": "^4.21.2",
+    "pg": "^8.13.1",
+    "qrcode": "^1.5.4"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "private": true
+}

@@ -1,0 +1,7 @@
+node_modules/
+.env
+acces-demo.txt
+*.dump
+test-results/
+playwright-report/
+captures/

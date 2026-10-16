@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="fr-CA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arrimo</title>
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Connexion -->
+<section id="ecran-connexion" class="connexion" hidden>
+  <form id="f-connexion" class="carte-connexion" novalidate>
+    <img src="logo.svg" alt="" width="56" height="56">
+    <h1>Arrimo</h1>
+    <p class="muted">Lits et transferts entre établissements</p>
+    <label for="c-email">Adresse courriel</label>
+    <input id="c-email" type="email" autocomplete="username" required>
+    <label for="c-mdp">Mot de passe</label>
+    <input id="c-mdp" type="password" autocomplete="current-password" required>
+    <p id="c-erreur" class="erreur" role="alert" hidden></p>
+    <button class="btn pri large" type="submit">Se connecter</button>
+  </form>
+  <form id="f-2fa" class="carte-connexion" novalidate hidden>
+    <img src="logo.svg" alt="" width="56" height="56">
+    <h1>Code de vérification</h1>
+    <p class="muted">Ouvrez votre application d’authentification et entrez le code à 6 chiffres affiché pour Arrimo.</p>
+    <label for="c-code">Code</label>
+    <input id="c-code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required>
+    <p id="c-erreur-2fa" class="erreur" role="alert" hidden></p>
+    <button class="btn pri large" type="submit">Valider</button>
+    <button class="btn large" type="button" id="b-retour-connexion">Retour</button>
+  </form>
+  <form id="f-mdp-temp" class="carte-connexion" novalidate hidden>
+    <img src="logo.svg" alt="" width="56" height="56">
+    <h1>Choisissez votre mot de passe</h1>
+    <p class="muted">Vous utilisez un mot de passe temporaire. Choisissez-en un personnel : au moins 12 caractères, avec des lettres et des chiffres.</p>
+    <label for="t-actuel">Mot de passe temporaire</label>
+    <input id="t-actuel" type="password" autocomplete="current-password" required>
+    <label for="t-nouveau">Nouveau mot de passe</label>
+    <input id="t-nouveau" type="password" autocomplete="new-password" required>
+    <label for="t-confirme">Confirmer</label>
+    <input id="t-confirme" type="password" autocomplete="new-password" required>
+    <p id="t-erreur" class="erreur" role="alert" hidden></p>
+    <button class="btn pri large" type="submit">Enregistrer et continuer</button>
+  </form>
+</section>
+
+<!-- Application -->
+<div id="ecran-app" hidden>
+  <header class="barre">
+    <div class="barre-in">
+      <div class="marque"><img src="logo.svg" alt="" width="30" height="30"><div><strong>Arrimo</strong><small id="nom-utilisateur"></small></div></div>
+      <div class="barre-droite">
+        <label class="ctx" for="ctx">Établissement
+          <select id="ctx"></select>
+        </label>
+        <button class="btn icone" id="b-notif" aria-label="Notifications" title="Notifications">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3a1.5 1.5 0 0 0-3 0v1.16A7 7 0 0 0 5 11v5l-2 2v1h18v-1Z"/></svg>
+          <span id="n-notif" class="pastille" hidden>0</span>
+        </button>
+        <button class="btn" id="b-compte">Mon compte</button>
+        <button class="btn" id="b-deconnexion">Déconnexion</button>
+      </div>
+    </div>
+    <nav class="onglets" id="onglets" role="tablist">
+      <button role="tab" data-v="copilote" aria-selected="true">Copilote</button>
+      <button role="tab" data-v="reseau" aria-selected="false">Réseau</button>
+      <button role="tab" data-v="lits" aria-selected="false">Lits</button>
+      <button role="tab" data-v="admissions" aria-selected="false">Admissions <span class="n" id="n-adm">0</span></button>
+      <button role="tab" data-v="transferts" aria-selected="false">Transferts <span class="n" id="n-tr">0</span></button>
+      <button role="tab" data-v="nettoyage" aria-selected="false">Nettoyage <span class="n" id="n-net">0</span></button>
+      <button role="tab" data-v="nsa" aria-selected="false">NSA</button>
+      <button role="tab" data-v="indicateurs" aria-selected="false">Indicateurs</button>
+      <button role="tab" data-v="journal" aria-selected="false">Journal</button>
+      <button role="tab" data-v="params" aria-selected="false">Paramètres</button>
+      <button role="tab" data-v="admin" aria-selected="false" hidden>Administration</button>
+    </nav>
+  </header>
+  <div id="bandeau" class="bandeau" hidden></div>
+  <main class="contenu">
+    <section id="v-copilote"></section>
+    <section id="v-reseau" hidden></section>
+    <section id="v-lits" hidden></section>
+    <section id="v-admissions" hidden></section>
+    <section id="v-transferts" hidden></section>
+    <section id="v-nettoyage" hidden></section>
+    <section id="v-nsa" hidden></section>
+    <section id="v-indicateurs" hidden></section>
+    <section id="v-journal" hidden></section>
+    <section id="v-params" hidden></section>
+    <section id="v-admin" hidden></section>
+    <section id="v-compte" hidden></section>
+  </main>
+  <aside id="panneau-notif" class="panneau" hidden aria-label="Notifications"></aside>
+</div>
+
+<div id="modale" class="modale" hidden></div>
+<div id="toasts" class="toasts" aria-live="polite"></div>
+<script src="app.js"></script>
+</body>
+</html>
