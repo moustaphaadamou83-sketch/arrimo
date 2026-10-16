@@ -58,6 +58,7 @@ Tout changement : ajouter ou adapter un test dans `tests/api.test.js`, puis `npm
 7. Dépôt GitHub privé `arrimo` (sans `node_modules` ni `.env`).
 
 ### B. Finir le produit avant toute prise de contact
+État 2026-10-16 : B1 à B8 faits dans /root/arrimo-dev (non déployés). Restent : remarques de Moustafa sur l'interface, relecture des pages légales par un avocat, courriel professionnel pour activer B8.
 1. **Vérifier l’interface dans un vrai navigateur** (ordinateur, téléphone, tablette) en suivant `GUIDE-DEMO.md` ; corriger tout défaut d’affichage, surtout l’écran Nettoyage sur tablette.
 2. **Version anglaise** complète de l’interface avec choix de langue mémorisé (garder le français par défaut).
 3. **Aide intégrée** : une page d’aide par rôle (coordination, urgence, entretien, administration).
