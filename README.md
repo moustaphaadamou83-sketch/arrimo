@@ -134,6 +134,8 @@ X-SH-Key: <SH_API_KEY>
 | POST | `/api/lits/{id}/action` | `reserver`, `admettre`, `annuler`, `liberer`, `nettoyage_ok`, `hors_service`, `remettre` |
 | PUT | `/api/lits/{id}/sortie-prevue` | Congé prévu |
 | GET | `/api/blocages?etablissement_id=` | Blocages détectés |
+| GET | `/api/national?depuis=&type_id=&avec_lit=1&max_minutes=&page=` | Tableau national : tous les établissements qui partagent, du plus proche au plus loin (distance en SQL, pages de 20) |
+| GET | `/api/national/carte?depuis=` | Points de la carte (position, niveau d’alerte) |
 | GET | `/api/civieres?etablissement_id=` | Civières de l’urgence et statistiques (taux, > 24 h, > 48 h, durée moyenne) |
 | POST | `/api/civieres/{id}/action` | `placer` (référence), `liberer`, `nettoyage_ok`, `hors_service` (motif), `remettre` |
 | POST | `/api/civieres/{id}/deplacer` | Changer le patient de civière (`vers_id`, `version`) ; sa demande de lit le suit |

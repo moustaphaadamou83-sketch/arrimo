@@ -373,3 +373,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS adm_civiere_active ON demandes_admission (civi
 ALTER TABLE transferts ADD COLUMN IF NOT EXISTS date_chambre_prete timestamptz;
 ALTER TABLE transferts ADD COLUMN IF NOT EXISTS minutes_route int;
 ALTER TABLE transferts ADD COLUMN IF NOT EXISTS arrivee_prevue timestamptz;
+
+-- Tableau de bord national : adresse affichée (fictive en démonstration)
+ALTER TABLE etablissements ADD COLUMN IF NOT EXISTS adresse text;

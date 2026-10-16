@@ -297,6 +297,17 @@ for (const L of LARGEURS) {
     await verifier(x, L, '12-indicateurs');
     await onglet(x, 'reseau');
     await verifier(x, L, '13-reseau');
+    // Tableau national : du plus proche au plus loin, filtre « lit libre », « Transférer ici »
+    await onglet(x, 'national');
+    await verifier(x, L, '13b-national');
+    await x.selectOption('#n-type', { label: 'Médecine' });
+    await x.waitForSelector('#n-libre:not([disabled])');
+    await x.check('#n-libre');
+    await x.waitForSelector('#v-national [data-ici]');
+    await x.locator('#v-national [data-ici]').first().click();
+    await x.waitForSelector('#modale:not([hidden]) #m-npat');
+    await verifier(x, L, '13c-national-transferer');
+    await x.keyboard.press('Escape');
     await onglet(x, 'journal');
     await verifier(x, L, '14-journal');
     await onglet(x, 'params');
@@ -431,7 +442,7 @@ test('interface en anglais : aucun texte français restant (noms propres except�
     await x.waitForSelector('#v-copilote .reponse');
     await ecran(x, `02-question-${i}`);
   }
-  for (const vue of ['reseau', 'lits', 'urgence', 'admissions', 'transferts', 'nettoyage', 'nsa', 'indicateurs', 'journal', 'params']) {
+  for (const vue of ['reseau', 'national', 'lits', 'urgence', 'admissions', 'transferts', 'nettoyage', 'nsa', 'indicateurs', 'journal', 'params']) {
     await onglet(x, vue);
     await ecran(x, `03-${vue}`);
   }

@@ -56,6 +56,20 @@ window.ARRIMO_I18N.en.aide = {
         ['“No free bed left at …”', 'The last bed was just taken. Search again.'],
       ],
     },
+    national: {
+      nom: 'National',
+      but: 'Every facility that shares its capacity, from nearest to farthest, with no distance limit: free and expected beds by unit type, stretchers, alert level.',
+      gestes: [
+        'Choose the unit type and the patient’s needs, then check “With a free bed only”.',
+        'Limit the drive time if needed (30 min, 1 h, 2 h, 4 h).',
+        'Open the map to see each facility’s alert level.',
+        'Click “Transfer here”, enter the patient reference and confirm: the bed is held and the receiving facility is notified.',
+      ],
+      erreurs: [
+        ['“No free bed left at …”', 'The last bed was just taken. Choose the next facility in the list.'],
+        ['“This facility does not share its capacity”', 'It does not appear on the national dashboard; call it directly.'],
+      ],
+    },
     lits: {
       nom: 'Beds',
       but: 'All the facility’s beds by state: free, reserved, occupied, cleaning, unavailable. Every change is logged.',

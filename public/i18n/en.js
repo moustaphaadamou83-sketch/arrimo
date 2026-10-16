@@ -31,6 +31,7 @@ window.ARRIMO_I18N.en = {
     demo: 'Demonstration · fictitious data',
   },
   onglets: {
+    national: 'National',
     urgence: 'ER',
     copilote: 'Copilot', reseau: 'Network', lits: 'Beds', admissions: 'Admissions', transferts: 'Transfers', nettoyage: 'Cleaning',
     nsa: 'ALC', indicateurs: 'Indicators', journal: 'Log', params: 'Settings', admin: 'Administration', compte: 'My account',
@@ -90,6 +91,19 @@ window.ARRIMO_I18N.en = {
     aucun_blocage: 'No blockages. Beds are turning over normally.', votre_etab: 'Your facility', prevus_titre: 'Expected free', risque_titre: 'Risk of saturation',
     agrege_note: 'This facility only shares its number of free beds.',
     urgence: 'ER: {occ|no patients|# patient|# patients} for {fonc|# stretcher|# stretchers}', urgence_24h: '{n|none over 24 h|# over 24 h|# over 24 h}',
+  },
+  national: {
+    titre: 'National dashboard', intro: 'Every facility that shares its capacity, from nearest to farthest from {etab}, with no distance limit.',
+    inactif: 'The national dashboard is available once the module is enabled.', affichage: 'Display', liste: 'List', carte: 'Map',
+    type: 'Unit type', tous_types: 'All types', temps_max: 'Drive time', sans_limite: 'No limit', au_plus: '{duree} max',
+    avec_lit: 'With a free bed only', avec_lit_aide: 'Choose a unit type to keep only facilities with a suitable free bed.',
+    total: '{n|No facilities|# facility|# facilities}', page: 'page {p} of {n}', precedent: 'Previous', suivant: 'Next',
+    route: '{km} km · about {duree} drive', vous: 'Your facility', libres: '{n|no free beds|# free bed|# free beds}',
+    prevus: '{n|none expected|# expected|# expected} within {h} h', prevus_inconnu: 'forecast not shared', aucune_unite: 'No units.',
+    aucun: 'No facility matches these filters. Widen the drive time or remove a need.',
+    transferer_ici: 'Transfer here', transfert_titre: 'Transfer to {etab}', demander: 'Reserve and request the transfer',
+    transfert_aide: 'A suitable bed is held at the receiving facility, which gets the reference and needs, then must accept.',
+    carte_note: 'Color: alert level of each facility. Map data © OpenStreetMap.', carte_indisponible: 'The map could not be loaded. The list is still available.',
   },
   lits: {
     titre: 'Beds · {etab}', intro: 'Cycle: free, reserved, occupied, cleaning, then free after confirmation. Every change is logged.',

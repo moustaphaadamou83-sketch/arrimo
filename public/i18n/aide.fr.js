@@ -56,6 +56,20 @@ window.ARRIMO_I18N.fr.aide = {
         ['« Plus aucun lit libre à … »', 'Le dernier lit vient d’être pris. Relancez la recherche.'],
       ],
     },
+    national: {
+      nom: 'National',
+      but: 'Tous les établissements qui partagent leur capacité, du plus proche au plus loin, sans limite de distance : lits libres et prévus par type d’unité, civières, niveau d’alerte.',
+      gestes: [
+        'Choisissez le type d’unité et les besoins du patient, puis cochez « Avec lit libre seulement ».',
+        'Limitez au besoin le temps de route (30 min, 1 h, 2 h, 4 h).',
+        'Ouvrez la carte pour voir le niveau d’alerte de chaque établissement.',
+        'Cliquez sur « Transférer ici », entrez la référence patient et confirmez : le lit est réservé et le receveur est avisé.',
+      ],
+      erreurs: [
+        ['« Plus aucun lit libre à … »', 'Le dernier lit vient d’être pris. Choisissez l’établissement suivant dans la liste.'],
+        ['« Cet établissement ne partage pas sa capacité »', 'Il n’apparaît pas au tableau national ; appelez-le directement.'],
+      ],
+    },
     lits: {
       nom: 'Lits',
       but: 'Tous les lits de l’établissement par état : libre, réservé, occupé, nettoyage, indisponible. Chaque changement est journalisé.',

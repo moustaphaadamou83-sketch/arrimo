@@ -31,6 +31,7 @@ window.ARRIMO_I18N.fr = {
     demo: 'Démonstration · données fictives',
   },
   onglets: {
+    national: 'National',
     urgence: 'Urgence',
     copilote: 'Copilote', reseau: 'Réseau', lits: 'Lits', admissions: 'Admissions', transferts: 'Transferts', nettoyage: 'Nettoyage',
     nsa: 'NSA', indicateurs: 'Indicateurs', journal: 'Journal', params: 'Paramètres', admin: 'Administration', compte: 'Mon compte',
@@ -91,6 +92,19 @@ window.ARRIMO_I18N.fr = {
     aucun_blocage: 'Aucun blocage. Les lits tournent normalement.', votre_etab: 'Votre établissement', prevus_titre: 'Prévus libres', risque_titre: 'Risque de saturation',
     agrege_note: 'Cet établissement partage seulement le nombre de lits libres.',
     urgence: 'Urgence : {occ|aucun patient|# patient|# patients} pour {fonc|# civière|# civières}', urgence_24h: '{n|aucun depuis plus de 24 h|# depuis plus de 24 h|# depuis plus de 24 h}',
+  },
+  national: {
+    titre: 'Tableau national', intro: 'Tous les établissements qui partagent leur capacité, du plus proche au plus loin depuis {etab}, sans limite de distance.',
+    inactif: 'Le tableau national est disponible une fois le module activé.', affichage: 'Affichage', liste: 'Liste', carte: 'Carte',
+    type: 'Type d’unité', tous_types: 'Tous les types', temps_max: 'Temps de route', sans_limite: 'Sans limite', au_plus: '{duree} au plus',
+    avec_lit: 'Avec lit libre seulement', avec_lit_aide: 'Choisissez un type d’unité pour ne garder que les établissements qui ont un lit libre adapté.',
+    total: '{n|Aucun établissement|# établissement|# établissements}', page: 'page {p} sur {n}', precedent: 'Précédents', suivant: 'Suivants',
+    route: '{km} km · environ {duree} de route', vous: 'Votre établissement', libres: '{n|aucun lit libre|# lit libre|# lits libres}',
+    prevus: '{n|aucun prévu|# prévu|# prévus} d’ici {h} h', prevus_inconnu: 'prévisions non partagées', aucune_unite: 'Aucune unité.',
+    aucun: 'Aucun établissement ne répond à ces filtres. Élargissez le temps de route ou retirez un besoin.',
+    transferer_ici: 'Transférer ici', transfert_titre: 'Transférer vers {etab}', demander: 'Réserver et demander le transfert',
+    transfert_aide: 'Un lit adapté est bloqué chez le receveur, qui reçoit la référence et les besoins, puis doit accepter.',
+    carte_note: 'Couleur : niveau d’alerte de chaque établissement. Fond de carte © OpenStreetMap.', carte_indisponible: 'La carte n’a pas pu être chargée. La liste reste disponible.',
   },
   lits: {
     titre: 'Lits · {etab}', intro: 'Cycle : libre, réservé, occupé, nettoyage, puis libre après confirmation. Chaque changement est journalisé.',

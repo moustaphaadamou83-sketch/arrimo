@@ -348,7 +348,7 @@ async function rafraichir() {
     bandeau.hidden = e.module_actif;
     bandeau.innerHTML = e.module_actif ? '' : `<div>${t('barre.bandeau_inactif', { etab: esc(e.nom) })}</div>`;
     await Promise.all([majCompteurs(), ({
-      copilote: vueCopilote, reseau: vueReseau, lits: vueLits, urgence: vueUrgence, admissions: vueAdmissions, transferts: vueTransferts,
+      copilote: vueCopilote, reseau: vueReseau, national: vueNational, lits: vueLits, urgence: vueUrgence, admissions: vueAdmissions, transferts: vueTransferts,
       nettoyage: vueNettoyage, nsa: vueNsa, indicateurs: vueIndicateurs, journal: vueJournal, params: vueParams,
       admin: vueAdmin, compte: vueCompte,
     })[etat.vue]()]);
@@ -488,6 +488,97 @@ async function vueReseau() {
   if (an) an.onclick = () => { R.choix = null; rafraichir(); };
   brancherActionsLit(v);
   v.querySelectorAll('[data-besoin]').forEach((c) => { c.onchange = () => { R.besoins[c.dataset.besoin] = c.checked; R.res = null; R.choix = null; }; });
+}
+
+/* ---------------- Tableau national par proximité ---------------- */
+etat.national = { type_id: '', max: '', besoins: {}, avec_lit: false, page: 1, carte: false };
+const COULEURS_NIVEAU = { vert: '#16A34A', jaune: '#F59E0B', orange: '#D97706', rouge: '#DC2626' };
+let leaflet = null; let carteNat = null;
+/** Charge Leaflet (hébergé ici) seulement quand la carte est ouverte. */
+function chargerLeaflet() {
+  if (leaflet) return leaflet;
+  leaflet = new Promise((ok, ko) => {
+    const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = 'vendor/leaflet/leaflet.css'; document.head.appendChild(css);
+    const js = document.createElement('script'); js.src = 'vendor/leaflet/leaflet.js'; js.onload = () => ok(window.L); js.onerror = ko; document.head.appendChild(js);
+  });
+  return leaflet;
+}
+async function vueNational() {
+  const v = $('#v-national');
+  const e = etabCtx();
+  const N = (k, vars) => esc(t(`national.${k}`, vars));
+  if (!e.module_actif) { v.innerHTML = `<p class="note">${N('inactif')}</p>`; return; }
+  const cfg = configCtx(); const F = etat.national;
+  const qs = `depuis=${etat.ctx}&page=${F.page}${F.type_id ? `&type_id=${F.type_id}` : ''}${F.max ? `&max_minutes=${F.max}` : ''}${F.avec_lit && F.type_id ? '&avec_lit=1' : ''}${qsBesoins(F.besoins)}`;
+  const r = await api('GET', `/national?${qs}`);
+  const typeChoisi = cfg.types.find((x) => String(x.id) === String(F.type_id));
+  const carteEtab = (x) => {
+    const u = x.urgence;
+    const lignes = x.unites.map((un) => `<div class="nat-unite${String(un.type_id) === String(F.type_id) ? ' choisie' : ''}"><span>${esc(un.type_nom)}</span>
+      <span class="num">${esc(t('national.libres', { n: un.libres }))}</span><span class="note num">${un.prevus != null ? esc(t('national.prevus', { n: un.prevus, h: cfg.horizon_h })) : esc(t('national.prevus_inconnu'))}</span></div>`).join('');
+    const peut = !x.moi && (!typeChoisi || x.unites.some((un) => un.type_id === typeChoisi.id && un.libres > 0));
+    return `<article class="etab${x.moi ? ' moi' : ''}"><header><div><h3>${esc(x.nom)}</h3>
+        <div class="note">${esc([x.adresse, x.ville].filter(Boolean).join(', '))}</div>
+        ${x.moi ? '' : `<div class="nat-route">${icone('map-pin')}<span class="num">${esc(t('national.route', { km: x.distance_km, duree: duree(x.minutes_route) }))}</span></div>`}</div>
+        <div class="nat-etat">${x.moi ? `<span class="badge fort">${N('vous')}</span>` : `<span class="badge">${esc(t(`partage.${x.partage}`))}</span>`} ${niveauHTML(x.niveau, ` · ${esc(pct(x.pression))}`)}</div></header>
+      <div class="nat-unites">${lignes || `<p class="note">${N('aucune_unite')}</p>`}</div>
+      ${u ? `<div class="urgence-etab"><span>${esc(t('reseau.urgence', { occ: u.occupees, fonc: u.fonctionnelles }))}</span><span><b class="num">${esc(pct(u.taux))}</b>${u.plus_24h != null ? ` · ${esc(t('reseau.urgence_24h', { n: u.plus_24h }))}` : ''} ${niveauHTML(u.niveau)}</span></div>` : ''}
+      ${peut ? `<div class="actions-etab"><button class="btn pri" data-ici="${x.id}">${icone('ambulance')}${N('transferer_ici')}</button></div>` : ''}
+      ${x.partage === 'agrege' && !x.moi ? `<p class="note">${esc(t('reseau.agrege_note'))}</p>` : ''}</article>`;
+  };
+  v.innerHTML = `<div class="entete"><div><h2>${N('titre')}</h2><p>${N('intro', { etab: e.nom })}</p></div>
+      <div class="chips" role="group" aria-label="${N('affichage')}"><button class="chip" data-nv="liste" aria-pressed="${!F.carte}">${N('liste')}</button><button class="chip" data-nv="carte" aria-pressed="${F.carte}">${N('carte')}</button></div></div>
+    <div class="panneau-c filtres"><div class="ligne">
+      <div class="champ"><label class="lbl" for="n-type">${N('type')}</label><select id="n-type"><option value="">${N('tous_types')}</option>${cfg.types.map((ty) => `<option value="${ty.id}"${String(ty.id) === String(F.type_id) ? ' selected' : ''}>${esc(nomType(ty))}</option>`).join('')}</select></div>
+      <div class="champ"><label class="lbl" for="n-max">${N('temps_max')}</label><select id="n-max"><option value="">${N('sans_limite')}</option>${[30, 60, 120, 240].map((m) => `<option value="${m}"${String(m) === String(F.max) ? ' selected' : ''}>${esc(t('national.au_plus', { duree: duree(m) }))}</option>`).join('')}</select></div></div>
+      <div class="cases">${casesBesoins('data-nbesoin', F.besoins)}<label class="case"><input type="checkbox" id="n-libre"${F.avec_lit ? ' checked' : ''}${F.type_id ? '' : ' disabled'}> ${N('avec_lit')}</label></div>
+      ${F.type_id ? '' : `<p class="note">${N('avec_lit_aide')}</p>`}</div>
+    <p class="nat-total">${N('total', { n: r.total })}${r.pages > 1 ? ` · ${N('page', { p: r.page, n: r.pages })}` : ''}</p>
+    ${F.carte ? `<div id="carte-nat" class="carte-nat" role="region" aria-label="${N('carte')}"></div><p class="note">${N('carte_note')}</p>` : ''}
+    <div class="etabs">${r.etablissements.map(carteEtab).join('') || `<p class="vide">${N('aucun')}</p>`}</div>
+    ${r.pages > 1 ? `<div class="pagination"><button class="btn" id="n-prec"${r.page <= 1 ? ' disabled' : ''}>${N('precedent')}</button><button class="btn" id="n-suiv"${r.page >= r.pages ? ' disabled' : ''}>${N('suivant')}</button></div>` : ''}`;
+  const changer = (fn) => { fn(); F.page = 1; rafraichir(); };
+  $('#n-type').onchange = (ev) => changer(() => { F.type_id = ev.target.value; if (!F.type_id) F.avec_lit = false; });
+  $('#n-max').onchange = (ev) => changer(() => { F.max = ev.target.value; });
+  $('#n-libre').onchange = (ev) => changer(() => { F.avec_lit = ev.target.checked; });
+  v.querySelectorAll('[data-nbesoin]').forEach((c) => { c.onchange = () => changer(() => { F.besoins[c.dataset.nbesoin] = c.checked; }); });
+  v.querySelectorAll('[data-nv]').forEach((b) => { b.onclick = () => { F.carte = b.dataset.nv === 'carte'; rafraichir(); }; });
+  if ($('#n-prec')) { $('#n-prec').onclick = () => { F.page -= 1; rafraichir(); }; $('#n-suiv').onclick = () => { F.page += 1; rafraichir(); }; }
+  v.querySelectorAll('[data-ici]').forEach((b) => { b.onclick = () => transfererIci(r.etablissements.find((x) => x.id === Number(b.dataset.ici))); });
+  if (F.carte) dessinerCarte();
+}
+async function dessinerCarte() {
+  try {
+    const [L, points] = await Promise.all([chargerLeaflet(), api('GET', `/national/carte?depuis=${etat.ctx}`)]);
+    const zone = $('#carte-nat');
+    if (!zone) return;
+    if (carteNat) { carteNat.remove(); carteNat = null; }
+    carteNat = L.map(zone, { scrollWheelZoom: false });
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 15, attribution: '&copy; OpenStreetMap' }).addTo(carteNat);
+    const bornes = [];
+    for (const p of points) {
+      const m = L.circleMarker([p.latitude, p.longitude], { radius: p.moi ? 10 : 7, color: p.moi ? '#0E5E6F' : '#FFFFFF', weight: p.moi ? 3 : 2,
+        fillColor: COULEURS_NIVEAU[p.niveau], fillOpacity: 0.95 }).addTo(carteNat);
+      m.bindPopup(`<strong>${esc(p.nom)}</strong><br>${esc(p.ville || '')}<br>${esc(t(`niveaux.${p.niveau}`))} · ${esc(t('national.libres', { n: p.libres }))}`);
+      bornes.push([p.latitude, p.longitude]);
+    }
+    if (bornes.length) carteNat.fitBounds(bornes, { padding: [24, 24], maxZoom: 11 });
+  } catch (err) { toast(t('national.carte_indisponible'), true); }
+}
+/** « Transférer ici » : la référence, l'urgence et les besoins ; le lit est réservé chez le receveur, qui doit accepter. */
+function transfererIci(x) {
+  const cfg = configCtx(); const F = etat.national;
+  const types = cfg.types.filter((ty) => x.unites.some((u) => u.type_id === ty.id && u.libres > 0));
+  modale(t('national.transfert_titre', { etab: x.nom }), `<p class="note">${esc(t('national.route', { km: x.distance_km, duree: duree(x.minutes_route) }))}</p>
+    <div class="champ"><label class="lbl" for="m-ntype">${esc(t('national.type'))}</label><select id="m-ntype">${types.map((ty) => `<option value="${ty.id}"${String(ty.id) === String(F.type_id) ? ' selected' : ''}>${esc(nomType(ty))}</option>`).join('')}</select></div>
+    <div class="champ"><label class="lbl" for="m-npat">${esc(t('reseau.ref_patient'))}</label><input id="m-npat" placeholder="${esc(cfg.reference_exemple)}" autocomplete="off"></div>
+    <div class="cases">${casesBesoins('data-mnbesoin', F.besoins)}<label class="case"><input type="checkbox" id="m-nurg"> ${esc(t('reseau.urgent'))}</label></div>
+    <p class="note">${esc(t('national.transfert_aide'))}</p>`,
+  [{ label: t('general.annuler') }, { label: t('national.demander'), pri: true, run: async () => {
+    const besoins = {}; document.querySelectorAll('#modale [data-mnbesoin]').forEach((c) => { besoins[c.dataset.mnbesoin] = c.checked; });
+    return (await agir(null, () => api('POST', '/transferts', { origine_id: etat.ctx, destination_id: x.id, type_id: Number($('#m-ntype').value),
+      patient_ref: $('#m-npat').value.trim(), urgent: $('#m-nurg').checked, besoins, hors_rayon: true }), (tr) => t('reseau.lit_bloque', { lit: tr.lit_code, numero: tr.numero }))) !== null || false;
+  } }]);
 }
 
 /* ---------------- Lits ---------------- */

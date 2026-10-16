@@ -406,3 +406,18 @@ label.item input[type=radio] { order: -1; width: 20px; height: 20px; flex: none;
 /* Transferts : heure d'arrivée prévue et compte à rebours (receveur) */
 .arrivee { display: flex; align-items: center; gap: var(--e2); font-size: var(--t-note); background: var(--doux); border-radius: var(--rayon); padding: var(--e2); }
 .arrivee .ic { color: var(--principal); }
+
+/* Tableau national */
+.filtres { margin-bottom: var(--e4); }
+.nat-total { margin: 0 0 var(--e3); font-weight: 600; }
+.nat-route { display: flex; align-items: center; gap: var(--e1); font-size: var(--t-note); margin-top: var(--e1); }
+.nat-route .ic { width: 16px; height: 16px; color: var(--principal); }
+.nat-etat { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e2); }
+.nat-unites { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: var(--e2); }
+.nat-unite { display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--bordure); border-radius: var(--rayon); padding: var(--e2) var(--e3); }
+.nat-unite > span:first-child { font-weight: 600; }
+.nat-unite.choisie { border-color: var(--principal); box-shadow: 0 0 0 1px var(--principal); }
+.actions-etab { display: flex; justify-content: flex-end; margin-top: var(--e3); }
+.pagination { display: flex; justify-content: center; gap: var(--e2); margin-top: var(--e4); }
+.carte-nat { height: 420px; border-radius: var(--rayon-carte); border: 1px solid var(--bordure); margin-bottom: var(--e2); }
+@media (max-width: 600px) { .carte-nat { height: 320px; } }

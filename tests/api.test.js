@@ -595,6 +595,75 @@ test('transfert sans dossier côté receveur : chambre prête, heure d’arrivé
   assert.strictEqual((await appel('y', 'POST', `/transferts/${tr.id}/reception`)).statut, 200);
 });
 
+test('tableau national : 200 établissements, tri par distance, filtres, partage agrégé, pagination, moins de 300 ms', async () => {
+  const hx = await id('HX'); const med = await type('MED');
+  const cfg = (await pool.query('SELECT config_id FROM etablissements WHERE id = $1', [hx])).rows[0].config_id;
+  // 200 établissements fictifs répartis sur le territoire : 1 sur 10 en partage agrégé, 1 sur 25 sans partage, 1 sur 40 sans module
+  await pool.query(`INSERT INTO etablissements (code, nom, ville, adresse, latitude, longitude, config_id, partage, module_actif)
+    SELECT 'NAT' || g, 'Établissement fictif ' || g, 'Ville ' || g, g || ' rue Fictive', 45 + (g * 37 % 400) / 100.0, -79 + (g * 53 % 1500) / 100.0, $1,
+           CASE WHEN g % 25 = 0 THEN 'aucun' WHEN g % 10 = 0 THEN 'agrege' ELSE 'complet' END, g % 40 <> 0
+      FROM generate_series(1, 200) g`, [cfg]);
+  await pool.query(`INSERT INTO unites (etablissement_id, type_id, nom) SELECT e.id, t.id, t.nom FROM etablissements e, types_unite t
+    WHERE e.code LIKE 'NAT%' AND t.config_id = $1`, [cfg]);
+  await pool.query(`INSERT INTO chambres (unite_id, numero) SELECT u.id, '100' FROM unites u JOIN etablissements e ON e.id = u.etablissement_id WHERE e.code LIKE 'NAT%'`);
+  await pool.query(`INSERT INTO lits (chambre_id, unite_id, type_id, etablissement_id, code, etat, patient_ref, isolement)
+    SELECT c.id, u.id, u.type_id, u.etablissement_id, 'L' || u.id || '-' || k,
+           CASE WHEN (u.id + k) % 4 = 0 THEN 'libre' ELSE 'occupe' END,
+           CASE WHEN (u.id + k) % 4 = 0 THEN NULL ELSE 'P-' || lpad(((u.id * 10 + k) % 99999)::text, 5, '0') END, k % 3 = 0
+      FROM chambres c JOIN unites u ON u.id = c.unite_id JOIN etablissements e ON e.id = u.etablissement_id, generate_series(1, 10) k
+     WHERE e.code LIKE 'NAT%'`);
+  try {
+    const visibles = (await pool.query(`SELECT count(*)::int AS n FROM etablissements WHERE actif AND module_actif AND config_id = $1 AND partage <> 'aucun'`, [cfg])).rows[0].n;
+    const r = (await appel('x', 'GET', `/national?depuis=${hx}`)).corps;
+    assert.strictEqual(r.total, visibles, 'tous ceux qui partagent leur capacité, sans limite de rayon');
+    assert.deepStrictEqual([r.taille, r.etablissements.length, r.pages], [20, 20, Math.ceil(visibles / 20)]);
+    assert.ok(r.etablissements[0].moi);
+    const dist = r.etablissements.slice(1).map((e) => e.distance_km);
+    assert.deepStrictEqual(dist, [...dist].sort((a, b) => a - b), 'du plus proche au plus loin');
+    // Pages suivantes : sans doublon, la distance continue de croître
+    const p2 = (await appel('x', 'GET', `/national?depuis=${hx}&page=2`)).corps;
+    assert.ok(p2.etablissements[0].distance_km >= dist[dist.length - 1]);
+    assert.ok(!p2.etablissements.some((e) => r.etablissements.some((x) => x.id === e.id)));
+    // Partage : « aucun » et module inactif absents ; « agrégé » sans prévisions ni détail des séjours
+    const tous = [];
+    for (let p = 1; p <= r.pages; p += 1) tous.push(...(await appel('x', 'GET', `/national?depuis=${hx}&page=${p}`)).corps.etablissements);
+    assert.strictEqual(tous.length, visibles);
+    const codes = new Set((await pool.query(`SELECT id FROM etablissements WHERE partage = 'aucun' OR NOT module_actif`)).rows.map((x) => x.id));
+    assert.ok(!tous.some((e) => codes.has(e.id)));
+    const agrege = tous.find((e) => e.partage === 'agrege');
+    assert.ok(agrege.unites.every((u) => u.prevus === null));
+    const complet = tous.find((e) => e.partage === 'complet' && !e.moi);
+    assert.ok(complet.unites.every((u) => u.prevus !== null) && complet.adresse && complet.minutes_route > 0);
+    // Filtres : temps de route maximal, lit libre adapté du type
+    const proche = (await appel('x', 'GET', `/national?depuis=${hx}&max_minutes=60&taille=50`)).corps;
+    assert.ok(proche.total < visibles && proche.etablissements.every((e) => e.minutes_route <= 60));
+    const libre = (await appel('x', 'GET', `/national?depuis=${hx}&type_id=${med}&isolement=1&avec_lit=1&taille=50`)).corps;
+    assert.ok(libre.total > 0 && libre.etablissements.filter((e) => !e.moi).every((e) => e.unites.find((u) => u.type_id === med).libres > 0));
+    assert.strictEqual((await appel('x', 'GET', `/national?depuis=${hx}&avec_lit=1`)).statut, 400, 'le type d’unité est requis');
+    // Carte : tous les établissements visibles, avec leur niveau
+    const carte = (await appel('x', 'GET', `/national/carte?depuis=${hx}`)).corps;
+    assert.strictEqual(carte.length, visibles);
+    assert.ok(carte.every((p) => ['vert', 'jaune', 'orange', 'rouge'].includes(p.niveau)));
+    // Temps de réponse : moins de 300 ms, avec et sans filtres
+    for (const q of ['', `&type_id=${med}&isolement=1&avec_lit=1`, '&max_minutes=120&page=2']) {
+      const t0 = Date.now();
+      for (let i = 0; i < 5; i += 1) assert.strictEqual((await appel('x', 'GET', `/national?depuis=${hx}${q}`)).statut, 200);
+      const moyenne = (Date.now() - t0) / 5;
+      assert.ok(moyenne < 300, `national${q} : ${moyenne} ms`);
+    }
+    // « Transférer ici » au-delà du rayon de suggestion : permis seulement quand l'utilisateur le choisit au tableau national
+    const loin = tous.find((e) => e.partage === 'complet' && e.distance_km > 250 && e.unites.find((u) => u.type_id === med)?.libres > 0);
+    assert.ok(loin, 'un établissement à plus de 250 km avec un lit libre');
+    const sans = await appel('x', 'POST', '/transferts', { origine_id: hx, destination_id: loin.id, type_id: med, patient_ref: 'P-90002' });
+    assert.strictEqual(sans.corps.code, 'hors_rayon');
+    const avec = await appel('x', 'POST', '/transferts', { origine_id: hx, destination_id: loin.id, type_id: med, patient_ref: 'P-90002', hors_rayon: true });
+    assert.strictEqual(avec.statut, 200, JSON.stringify(avec.corps));
+  } finally {
+    // Les tests suivants reviennent à la démo X / Y
+    await pool.query(`UPDATE etablissements SET actif = false WHERE code LIKE 'NAT%'`);
+  }
+});
+
 /* ======================= Version 4 : comptes et administration ======================= */
 const totp = require('../src/totp');
 
@@ -800,7 +869,7 @@ test('aide : premiers pas mémorisés côté serveur, une seule fois', async () 
 
 test('aide : chaque écran a son aide complète, en français et en anglais, pour chaque rôle', () => {
   const { fr, en } = dictionnaires();
-  const ecrans = ['copilote', 'reseau', 'lits', 'urgence', 'admissions', 'transferts', 'nettoyage', 'nsa', 'indicateurs', 'journal', 'params', 'admin', 'compte'];
+  const ecrans = ['copilote', 'reseau', 'national', 'lits', 'urgence', 'admissions', 'transferts', 'nettoyage', 'nsa', 'indicateurs', 'journal', 'params', 'admin', 'compte'];
   for (const d of [fr, en]) {
     for (const e of ecrans) {
       const a = d.aide.ecrans[e];

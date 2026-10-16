@@ -34,7 +34,8 @@ function creerApp(pool) {
       'X-Frame-Options': 'DENY',
       'Referrer-Policy': 'no-referrer',
       // Police hébergée ici (aucun appel à un service tiers)
-      'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline'; "
+      // Tuiles de la carte nationale : OpenStreetMap (images seulement)
+      'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; "
         + "font-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'",
     });
     next();
@@ -208,6 +209,15 @@ function creerApp(pool) {
     return t.debuterNettoyage(pool, req.utilisateur, id);
   }));
   api.get('/nsa', route((req) => t.listeNsa(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
+
+  /* ---------- tableau de bord national par proximité ---------- */
+  const nat = require('./national');
+  api.get('/national', route((req) => nat.national(pool, req.utilisateur, entier(req.query.depuis, 'depuis'), {
+    type_id: req.query.type_id, max_minutes: req.query.max_minutes, avec_lit: req.query.avec_lit === '1', page: req.query.page, taille: req.query.taille,
+    besoins: { isolement: req.query.isolement === '1', pression_negative: req.query.pression_negative === '1',
+      ventilation: req.query.ventilation === '1', telemetrie: req.query.telemetrie === '1' },
+  })));
+  api.get('/national/carte', route((req) => nat.carte(pool, req.utilisateur, entier(req.query.depuis, 'depuis'))));
 
   /* ---------- civières de l'urgence ---------- */
   api.get('/civieres', route((req) => civ.listeCivieres(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));

@@ -259,7 +259,8 @@ async function creerTransfert(pool, utilisateur, b, client = null) {
   const type = await pool.query('SELECT * FROM types_unite WHERE id = $1 AND config_id = $2', [typeId, origine.config_id]);
   if (!type.rows[0]) throw new ErreurHttp(400, 'type_unite_inconnu');
   const distance = distanceKm(origine, dest);
-  if (distance > origine.config.rayon_km) throw new ErreurHttp(400, 'hors_rayon');
+  // Le rayon limite les suggestions ; un transfert choisi au tableau national (hors_rayon) peut aller au-delà
+  if (distance > origine.config.rayon_km && !b.hors_rayon) throw new ErreurHttp(400, 'hors_rayon');
 
   const besoins = lireBesoins(b.besoins || {});
   const filtre = sqlBesoins(besoins);
