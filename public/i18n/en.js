@@ -208,6 +208,11 @@ window.ARRIMO_I18N.en = {
     th_dernier: 'Last message', th_rejets: 'Rejections 24 h', revoque: 'revoked', revoquer: 'Revoke', aucun_connecteur: 'No connectors.',
     reseau_lect: 'Network (read)', cle_titre: 'Connector key: {nom}', cle_aide: 'To configure in the hospital interface engine (X-Connecteur-Key header):',
     revoque_ok: 'Connector revoked. Its key no longer works.', connecteur_defaut: 'Connector',
+    demo_titre: 'Reset the demo',
+    demo_aide: 'Erases all data on this demonstration server and recreates the starting situation (Hospital X under pressure, Hospital Y with room). All accounts are signed out; demo passwords do not change.',
+    demo_recalage: 'Between presentations, the demo clocks are realigned automatically when nobody is using it: waiting times stay realistic at any hour. A full reset runs every night at 4 a.m.',
+    demo_bouton: 'Reset the demo', demo_confirmer: 'Everything done during the demonstration will be erased. Continue?',
+    demo_ok: 'Demo reset. Please sign in again.',
     th_date: 'Date', th_par: 'By', th_action: 'Action', th_cible: 'Target', th_detail: 'Detail', th_etab: 'Facility', aucune_action: 'No actions.',
   },
   // Messages d'erreur du serveur, par code (src/erreurs.js)

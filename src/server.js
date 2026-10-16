@@ -1,6 +1,7 @@
 const { creerPool } = require('./db');
 const { creerApp } = require('./app');
 const { detecterBlocages } = require('./services');
+const demo = require('./demo');
 
 const url = process.env.DATABASE_URL;
 if (!url) {
@@ -15,8 +16,13 @@ const hote = process.env.HOST || '127.0.0.1';
 
 app.listen(port, hote, () => console.log(`Arrimo sur ${hote}:${port}`));
 
-// Détection des blocages toutes les 15 minutes (et une fois au démarrage)
+// Détection des blocages toutes les 15 minutes (et une fois au démarrage).
+// Sur le serveur de démonstration, recalage des horloges de la démo d'abord, si personne ne l'utilise.
 const intervalle = Number(process.env.BLOCAGES_MINUTES || 15) * 60000;
-const tourner = () => detecterBlocages(pool).catch((e) => console.error('Détection des blocages :', e.message));
+const tourner = () => demo.recaler(pool)
+  .then((min) => { if (min) console.log(`Démo recalée de ${min} min.`); })
+  .catch((e) => console.error('Recalage de la démo :', e.message))
+  .then(() => detecterBlocages(pool))
+  .catch((e) => console.error('Détection des blocages :', e.message));
 tourner();
 setInterval(tourner, intervalle);

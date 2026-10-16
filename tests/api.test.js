@@ -636,3 +636,53 @@ test('pages légales : accessibles sans connexion, en français et en anglais ; 
   assert.strictEqual(p.corps.demo, false);
   assert.deepStrictEqual(p.corps.legal, {});
 });
+
+/* Ce test remet la base à zéro : il reste le dernier du fichier. */
+test('démo toujours prête : remise à zéro refusée sans ARRIMO_DEMO=1, réservée au gestionnaire ; horloges recalées', async () => {
+  const demo = require('../src/demo');
+  const avant2fa = process.env.ARRIMO_2FA_ADMIN;
+  process.env.ARRIMO_2FA_ADMIN = '0';
+  try {
+    const { hacher } = require('../src/auth');
+    await pool.query(`INSERT INTO utilisateurs (email, nom, mot_de_passe_hash, role) VALUES ('gest.demo@demo.arrimo', 'Gestionnaire (test)', $1, 'gestionnaire')`, [hacher(MOT_DE_PASSE_DEMO)]);
+    tokens.gdemo = (await appel(null, 'POST', '/connexion', { email: 'gest.demo@demo.arrimo', mot_de_passe: MOT_DE_PASSE_DEMO })).corps.token;
+    delete process.env.ARRIMO_DEMO;
+    const refus = await appel('gdemo', 'POST', '/admin/demo/reinitialiser');
+    assert.deepStrictEqual([refus.statut, refus.corps.code], [403, 'demo_desactivee']);
+    assert.strictEqual((await appel(null, 'GET', '/public')).corps.demo, false);
+    process.env.ARRIMO_DEMO = '1';
+    const pasGest = await appel('x', 'POST', '/admin/demo/reinitialiser');
+    assert.strictEqual(pasGest.statut, 403);
+    assert.strictEqual((await appel(null, 'GET', '/public')).corps.demo, true);
+    // Une action pendant la démonstration, puis la remise à zéro l'efface
+    const hx = await id('HX');
+    await appel('x', 'POST', '/admissions', { etablissement_id: hx, type_id: await type('MED'), patient_ref: 'P-77777', priorite: 'p3' });
+    const ok = await appel('gdemo', 'POST', '/admin/demo/reinitialiser');
+    assert.strictEqual(ok.statut, 200, JSON.stringify(ok.corps));
+    assert.strictEqual((await pool.query(`SELECT count(*)::int AS n FROM demandes_admission WHERE patient_ref = 'P-77777'`)).rows[0].n, 0);
+    assert.strictEqual((await appel('gdemo', 'GET', '/moi')).statut, 401, 'les sessions sont fermées');
+    const j = await pool.query(`SELECT detail FROM journal_admin WHERE action = 'Démo remise à zéro'`);
+    assert.deepStrictEqual(j.rows.map((r) => r.detail), ['par gest.demo@demo.arrimo']);
+
+    // Recalage : trois heures plus tard, les attentes de la démo sont celles du départ
+    const attente = async () => (await pool.query(`SELECT max(EXTRACT(EPOCH FROM (now() - cree_le)) / 60)::int AS m FROM demandes_admission WHERE statut = 'attente'`)).rows[0].m;
+    const depart = await attente();
+    await pool.query(`UPDATE demandes_admission SET cree_le = cree_le - interval '180 minutes'`);
+    await pool.query(`UPDATE demo_etat SET reference = reference - interval '180 minutes'`);
+    assert.ok(await attente() >= depart + 179);
+    const etatsAvant = (await pool.query('SELECT id, etat, version FROM lits ORDER BY id')).rows;
+    assert.strictEqual(await demo.recaler(pool, { calmeMin: 0 }), 180);
+    assert.ok(Math.abs(await attente() - depart) <= 1, 'attentes revenues à la situation de départ');
+    assert.deepStrictEqual((await pool.query('SELECT id, etat, version FROM lits ORDER BY id')).rows, etatsAvant, 'aucun état de lit ne change');
+    assert.strictEqual(await demo.recaler(pool, { calmeMin: 0 }), 0, 'rien à recaler juste après');
+    // Si quelqu'un utilise la démo, on ne recale pas
+    await pool.query(`UPDATE demo_etat SET reference = reference - interval '60 minutes'`);
+    await pool.query('UPDATE utilisateurs SET derniere_connexion = now() WHERE email = $1', ['coordo.x@demo.arrimo']);
+    assert.strictEqual(await demo.recaler(pool, { calmeMin: 30 }), 0);
+    delete process.env.ARRIMO_DEMO;
+    assert.strictEqual(await demo.recaler(pool, { calmeMin: 0 }), 0, 'jamais hors démonstration');
+  } finally {
+    delete process.env.ARRIMO_DEMO;
+    if (avant2fa === undefined) delete process.env.ARRIMO_2FA_ADMIN; else process.env.ARRIMO_2FA_ADMIN = avant2fa;
+  }
+});

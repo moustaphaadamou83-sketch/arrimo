@@ -11,6 +11,7 @@ const { hacher, changerMotDePasse, verifierRobustesse, motDePasseTemporaire } = 
 const totp = require('./totp');
 const { journaliser } = require('./regles');
 const cx = require('./connecteurs');
+const demo = require('./demo');
 
 const ROLES = ['coordonnateur', 'entretien', 'admin_etab', 'gestionnaire'];
 
@@ -320,6 +321,18 @@ function brancher(api, pool, route, entier) {
     else if (!req.utilisateur.gestionnaire) throw new ErreurHttp(403, 'reserve_gestionnaire');
     await pool.query('UPDATE connecteurs SET actif = false WHERE id = $1', [c.id]);
     await journalAdmin(pool, req.utilisateur, 'Connecteur révoqué', c.nom, null, c.etablissement_id);
+  }));
+
+  /* ---------------------------------------------------------------- démonstration */
+  // Remise à zéro : gestionnaire réseau avec double authentification, serveur de démonstration seulement
+  api.post('/admin/demo/reinitialiser', route(async (req) => {
+    exigerGestionnaire(req);
+    if (!demo.estDemo()) throw new ErreurHttp(403, 'demo_desactivee');
+    const par = req.utilisateur.email;
+    await demo.reinitialiser(pool);
+    await pool.query(`INSERT INTO journal_admin (action, cible, detail) VALUES ('Démo remise à zéro', 'démonstration', $1)`, [`par ${par}`]);
+    console.log(`Démo remise à zéro par ${par}.`);
+    return { ok: true };
   }));
 
   /* ---------------------------------------------------------------- journal d'administration */

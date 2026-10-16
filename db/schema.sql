@@ -310,5 +310,11 @@ ALTER TABLE notifications ADD COLUMN IF NOT EXISTS vars jsonb;
 ALTER TABLE lits ADD COLUMN IF NOT EXISTS blocage_code text;
 ALTER TABLE lits ADD COLUMN IF NOT EXISTS blocage_vars jsonb;
 
+-- Démonstration : heure de référence de la situation de départ (recalage des horloges)
+CREATE TABLE IF NOT EXISTS demo_etat (
+  id         int PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  reference  timestamptz NOT NULL DEFAULT now()
+);
+
 -- Aide intégrée : la page « Premiers pas » n'est montrée qu'une fois
 ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS premiers_pas_vus boolean NOT NULL DEFAULT false;

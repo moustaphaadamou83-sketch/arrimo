@@ -274,6 +274,19 @@ for (const L of LARGEURS) {
     await r.waitForSelector('#f-mdp');
     await verifier(r, L, '22-mon-compte');
 
+    // Démo toujours prête : remise à zéro par le gestionnaire réseau (double authentification active)
+    await onglet(r, 'admin');
+    await r.click('[data-ao="demo"]');
+    await r.waitForSelector('#b-demo-zero');
+    await verifier(r, L, '23-demo-remise-a-zero');
+    await r.click('#b-demo-zero');
+    await r.waitForSelector('#modale:not([hidden])');
+    await r.click('#modale .btn.pri');
+    await r.waitForSelector('#ecran-connexion:not([hidden])');
+    assert.match(await r.textContent('#c-erreur'), /remise à zéro/);
+    const recree = (await pool.query(`SELECT count(*)::int AS n FROM utilisateurs WHERE email LIKE 'essai.%'`)).rows[0].n;
+    assert.strictEqual(recree, 0, 'le compte créé pendant la démo a disparu');
+
     for (const p of [x, y, e, r]) await p.context().close();
   });
 }

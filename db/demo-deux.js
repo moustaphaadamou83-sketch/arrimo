@@ -194,6 +194,7 @@ async function demoDeux(pool, { silencieux = false } = {}) {
                     date_depart = now() - interval '15 minutes' WHERE id = $1`, [t2.id]);
   await pool.query(`UPDATE transferts SET date_demande = now() - interval '25 minutes' WHERE id = $1`, [t1.id]);
   await detecterBlocages(pool);
+  await pool.query('INSERT INTO demo_etat (id, reference) VALUES (1, now()) ON CONFLICT (id) DO UPDATE SET reference = now()');
   const conX = await creerConnecteur(pool, `Interface ADT · ${X.nom} (démo)`, ids.HX);
   const conR = await creerConnecteur(pool, 'Coordination régionale (démo, lecture)', null);
 

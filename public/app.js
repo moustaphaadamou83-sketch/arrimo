@@ -1046,7 +1046,21 @@ function premiersPas(revoir) {
   }
 }
 
-async function vueAdminDemo() {}
+/* ---------------- Démonstration : remise à zéro (gestionnaire réseau, serveur de démonstration) ---------------- */
+async function vueAdminDemo(corps) {
+  const D = (k) => esc(t(`admin.${k}`));
+  corps.innerHTML = `<div class="panneau-c" style="max-width:640px"><h3>${D('demo_titre')}</h3><p>${D('demo_aide')}</p><p class="note">${D('demo_recalage')}</p>
+    <div><button class="btn dan" id="b-demo-zero">${D('demo_bouton')}</button></div></div>`;
+  $('#b-demo-zero').onclick = () => modale(t('admin.demo_titre'), `<p>${D('demo_confirmer')}</p>`,
+    [{ label: t('general.annuler') }, { label: t('admin.demo_bouton'), pri: true, run: async () => {
+      try {
+        await api('POST', '/admin/demo/reinitialiser');
+        deconnecter(true);
+        $('#c-erreur').textContent = t('admin.demo_ok');
+        return true;
+      } catch (e) { toast(e.message, true); return false; }
+    } }]);
+}
 
 /* ---------------- démarrage ---------------- */
 appliquerLangue();

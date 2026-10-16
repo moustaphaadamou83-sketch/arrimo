@@ -141,6 +141,34 @@ UNIT
 systemctl daemon-reload
 systemctl enable --now arrimo-surveillance.timer >/dev/null 2>&1
 
+echo "== 5d Démonstration : remise à zéro chaque nuit à 4 h (serveur de démonstration seulement)"
+if grep -q '^ARRIMO_DEMO=1' "$DOSSIER/.env"; then
+  cat > /etc/systemd/system/arrimo-demo-nuit.service <<UNIT
+[Unit]
+Description=Remise à zéro nocturne de la démonstration Arrimo
+After=postgresql.service
+[Service]
+Type=oneshot
+User=arrimo
+WorkingDirectory=$DOSSIER
+EnvironmentFile=$DOSSIER/.env
+ExecStart=/usr/bin/node db/reset.js deux --silencieux
+UNIT
+  cat > /etc/systemd/system/arrimo-demo-nuit.timer <<UNIT
+[Unit]
+Description=Remise à zéro de la démonstration Arrimo chaque nuit à 4 h
+[Timer]
+OnCalendar=*-*-* 04:00:00
+[Install]
+WantedBy=timers.target
+UNIT
+  systemctl daemon-reload
+  systemctl enable --now arrimo-demo-nuit.timer >/dev/null 2>&1
+  echo "   Timer arrimo-demo-nuit actif."
+else
+  echo "   Serveur de production : pas de remise à zéro automatique."
+fi
+
 echo "== 6/7 Nginx"
 echo 'limit_req_zone $binary_remote_addr zone=arrimo_connexion:10m rate=10r/m;' > /etc/nginx/conf.d/arrimo-limites.conf
 cat > /etc/nginx/sites-available/arrimo <<NGINX
