@@ -31,6 +31,7 @@ let pool; let serveur; let base; let navigateur;
 
 test.before(async () => {
   assert.ok(URL_TEST, 'TEST_DATABASE_URL requis');
+  process.env.ARRIMO_DEMO = '1';   // serveur de démonstration : bandeau et remise à zéro
   pool = creerPool(URL_TEST);
   serveur = creerApp(pool).listen(0);
   base = `http://127.0.0.1:${serveur.address().port}`;
@@ -129,7 +130,18 @@ for (const L of LARGEURS) {
     accueil.erreurs = [];
     await accueil.goto(base);
     await accueil.waitForSelector('#ecran-connexion:not([hidden])');
+    await accueil.waitForSelector('#bandeau-demo:not([hidden])');
     await verifier(accueil, L, '00-connexion');
+    // Pages légales depuis l'écran de connexion, sans être connecté
+    await accueil.click('#f-connexion .liens-legaux a[href="/confidentialite"]');
+    await accueil.waitForSelector('#corps section h2');
+    assert.match(await accueil.textContent('#avertissement'), /avocat/);
+    assert.ok(await accueil.isVisible('#bandeau-demo'));
+    await verifier(accueil, L, '00b-confidentialite');
+    await accueil.click('#lien-autre');
+    await accueil.waitForURL('**/conditions');
+    await accueil.waitForSelector('#corps section h2');
+    await verifier(accueil, L, '00c-conditions');
     await accueil.context().close();
 
     // Premiers pas : montrés à la première connexion seulement
@@ -319,6 +331,15 @@ test('interface en anglais : aucun texte français restant (noms propres except�
   assert.strictEqual(await accueil.textContent('#c-erreur'), 'Incorrect email address or password.');
   accueil.erreurs = accueil.erreurs.filter((e) => !/401/.test(e));   // la ressource refusée est normale ici
   await ecran(accueil, '00-connexion');
+  // Pages légales en anglais (le choix de langue est partagé)
+  for (const [chemin, titre] of [['/privacy', 'Privacy policy'], ['/terms', 'Terms of use'], ['/confidentialite', 'Privacy policy']]) {
+    await accueil.goto(`${base}${chemin}`);
+    await accueil.waitForSelector('#corps section h2');
+    assert.strictEqual(await accueil.textContent('#titre'), titre);
+    await sansFrancais(accueil, [...noms, 'Commission d’accès à l’information du Québec', 'Commission d’accès à l’information'], `00${chemin}`);
+    await verifier(accueil, { ...L, nom: 'anglais' }, `00${chemin.replace('/', '-')}`);
+  }
+  await accueil.goto(base);
   // Le choix est mémorisé : rechargé, l'écran reste en anglais
   await accueil.reload();
   assert.strictEqual(await accueil.textContent('#f-connexion button[type=submit]'), 'Sign in');

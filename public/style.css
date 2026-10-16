@@ -187,6 +187,18 @@ dt { color: var(--texte-2); } dd { margin: 0; }
 .notif { border-bottom: 1px solid var(--bordure); padding-bottom: 8px; font-size: 13px; }
 .notif.nouvelle { border-left: 3px solid var(--secondaire); padding-left: 8px; }
 
+/* Liens et pages légales */
+.liens-legaux { font-size: 12px; text-align: center; color: var(--texte-2); margin-top: 10px; }
+.liens-legaux a { color: var(--principal); }
+.pied { max-width: 1280px; margin: 0 auto; padding: 0 16px 24px; }
+.page-legale .marque { color: #fff; text-decoration: none; }
+.legal { max-width: 760px; }
+.legal h1 { font-size: 26px; color: var(--principal); margin: 8px 0 4px; }
+.legal h2 { font-size: 17px; margin: 22px 0 6px; }
+.legal p { margin: 0 0 8px; line-height: 1.55; }
+.avertissement-legal { background: #FEF3C7; border: 1px solid var(--attention); border-radius: 8px; padding: 10px 14px; font-weight: 600; }
+.a-remplir { background: var(--doux); color: var(--principal); border: 1px dashed var(--secondaire); border-radius: 4px; padding: 0 4px; font-family: var(--mono); font-size: 12px; }
+
 /* Aide intégrée */
 .panneau-aide { width: min(440px, 100%); font-size: 13px; }
 .panneau-aide h4 { margin: 10px 0 4px; font-size: 13px; color: var(--principal); }

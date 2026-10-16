@@ -33,6 +33,8 @@ function creerApp(pool) {
     next();
   });
   app.use(express.static(path.join(__dirname, '..', 'public')));
+  // Pages légales, accessibles sans connexion (français et anglais)
+  app.get(['/confidentialite', '/conditions', '/privacy', '/terms'], (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'legal.html')));
 
   const api = express.Router();
   // Langue des textes produits par le serveur : paramètre « langue » (adresse ou corps) ou en-tête X-Langue (français par défaut)
@@ -47,6 +49,13 @@ function creerApp(pool) {
   /* ---------- connexion ---------- */
   api.post('/connexion', route((req) => connexion(pool, req.body.email, req.body.mot_de_passe)));
   api.post('/connexion/2fa', route((req) => connexion2fa(pool, req.body.jeton, req.body.code)));
+
+  /* ---------- informations publiques : serveur de démonstration, champs des pages légales ---------- */
+  const CHAMPS_LEGAUX = ['entite', 'adresse', 'responsable', 'contact', 'duree_comptes', 'duree_journaux', 'duree_references', 'hebergeur', 'entente'];
+  api.get('/public', (req, res) => res.json({
+    demo: process.env.ARRIMO_DEMO === '1',
+    legal: Object.fromEntries(CHAMPS_LEGAUX.map((k) => [k, process.env[`ARRIMO_LEGAL_${k.toUpperCase()}`] || null]).filter(([, v]) => v)),
+  }));
 
   /* ---------- surveillance : état du service et de la base (sans données) ---------- */
   api.get('/sante', async (req, res) => {

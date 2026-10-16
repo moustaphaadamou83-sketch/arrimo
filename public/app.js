@@ -1050,6 +1050,7 @@ async function vueAdminDemo() {}
 
 /* ---------------- démarrage ---------------- */
 appliquerLangue();
+fetch('/api/public').then((r) => r.json()).then((p) => { $('#bandeau-demo').hidden = !p.demo; }).catch(() => {});
 (async () => {
   etat.token = lire('arrimo-token');
   if (!etat.token) { $('#ecran-connexion').hidden = false; return; }

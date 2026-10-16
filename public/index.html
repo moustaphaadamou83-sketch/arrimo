@@ -12,6 +12,7 @@
 <script src="i18n/aide.en.js"></script>
 </head>
 <body>
+<div id="bandeau-demo" class="bandeau-demo" hidden data-i18n="barre.demo">Démonstration · données fictives</div>
 
 <!-- Connexion -->
 <section id="ecran-connexion" class="connexion" hidden>
@@ -26,6 +27,7 @@
     <input id="c-mdp" type="password" autocomplete="current-password" required>
     <p id="c-erreur" class="erreur" role="alert" hidden></p>
     <button class="btn pri large" type="submit" data-i18n="connexion.se_connecter">Se connecter</button>
+    <nav class="liens-legaux"><a href="/confidentialite" data-i18n="pied.confidentialite">Confidentialité</a> · <a href="/conditions" data-i18n="pied.conditions">Conditions d’utilisation</a></nav>
   </form>
   <form id="f-2fa" class="carte-connexion" novalidate hidden>
     <img src="logo.svg" alt="" width="56" height="56">
@@ -85,7 +87,6 @@
       <button role="tab" data-v="admin" aria-selected="false" hidden data-i18n="onglets.admin">Administration</button>
     </nav>
   </header>
-  <div id="bandeau-demo" class="bandeau-demo" hidden data-i18n="barre.demo">Démonstration · données fictives</div>
   <div id="bandeau" class="bandeau" hidden></div>
   <main class="contenu">
     <section id="v-copilote"></section>
@@ -101,6 +102,7 @@
     <section id="v-admin" hidden></section>
     <section id="v-compte" hidden></section>
   </main>
+  <footer class="pied"><nav class="liens-legaux"><a href="/confidentialite" data-i18n="pied.confidentialite">Confidentialité</a> · <a href="/conditions" data-i18n="pied.conditions">Conditions d’utilisation</a></nav></footer>
   <aside id="panneau-notif" class="panneau" hidden aria-label="Notifications" data-i18n-attr="aria-label:barre.notifications"></aside>
   <aside id="panneau-aide" class="panneau panneau-aide" hidden aria-label="Aide" data-i18n-attr="aria-label:barre.aide"></aside>
 </div>

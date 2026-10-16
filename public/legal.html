@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="fr-CA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arrimo</title>
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+<script src="/i18n/fr.js"></script>
+<script src="/i18n/en.js"></script>
+<script src="/i18n/legal.fr.js"></script>
+<script src="/i18n/legal.en.js"></script>
+</head>
+<body class="page-legale">
+<div id="bandeau-demo" class="bandeau-demo" hidden></div>
+<header class="barre"><div class="barre-in">
+  <a class="marque" href="/"><img src="/logo.svg" alt="" width="30" height="30"><div><strong>Arrimo</strong></div></a>
+  <div class="barre-droite"><select class="choix-langue barre-langue" id="langue-legale"></select></div>
+</div></header>
+<main class="contenu legal">
+  <p class="avertissement-legal" id="avertissement" role="note"></p>
+  <h1 id="titre"></h1>
+  <p class="note" id="mise-a-jour"></p>
+  <div id="corps"></div>
+  <nav class="liens-legaux"><a id="lien-retour" href="/"></a> · <a id="lien-autre" href="#"></a></nav>
+</main>
+<script>
+'use strict';
+(function () {
+  const DATE = '2026-10-16';
+  const PAGES = { '/confidentialite': ['confidentialite', 'fr'], '/privacy': ['confidentialite', 'en'], '/conditions': ['conditions', 'fr'], '/terms': ['conditions', 'en'] };
+  const [page, langueUrl] = PAGES[location.pathname.replace(/\/$/, '')] || ['confidentialite', 'fr'];
+  const lire = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+  const ecrire = (k, v) => { try { localStorage.setItem(k, v); } catch { /* stockage indisponible */ } };
+  const params = new URLSearchParams(location.search);
+  let langue = ['fr', 'en'].includes(params.get('langue')) ? params.get('langue') : (lire('arrimo-langue') || langueUrl);
+  if (!['fr', 'en'].includes(langue)) langue = 'fr';
+  const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  let champs = {}; let demo = false;
+
+  function afficher() {
+    const L = window.ARRIMO_LEGAL[langue];
+    const I = window.ARRIMO_I18N[langue];
+    const remplir = (texte) => esc(texte).replace(/\{(\w+)\}/g, (m, k) => (champs[k]
+      ? esc(champs[k]) : `<span class="a-remplir">${esc(L.a_remplir)}</span>`));
+    document.documentElement.lang = I.langue.locale;
+    document.title = `${L[page].titre} · Arrimo`;
+    document.getElementById('avertissement').textContent = L.avertissement;
+    document.getElementById('titre').textContent = L[page].titre;
+    document.getElementById('mise-a-jour').textContent = L.mise_a_jour.replace('{date}', new Date(`${DATE}T12:00:00`).toLocaleDateString(I.langue.locale, { year: 'numeric', month: 'long', day: 'numeric' }));
+    document.getElementById('corps').innerHTML = L[page].sections.map(([titre, paras]) => `<section><h2>${esc(titre)}</h2>${paras.map((p) => `<p>${remplir(p)}</p>`).join('')}</section>`).join('');
+    document.getElementById('lien-retour').textContent = L.retour;
+    const autre = page === 'confidentialite' ? 'conditions' : 'confidentialite';
+    const lien = document.getElementById('lien-autre');
+    lien.textContent = L.autre_page[page];
+    lien.href = `/${autre}`;
+    const bd = document.getElementById('bandeau-demo');
+    bd.textContent = I.barre.demo;
+    bd.hidden = !demo;
+    const s = document.getElementById('langue-legale');
+    s.innerHTML = ['fr', 'en'].map((l) => `<option value="${l}">${esc(window.ARRIMO_I18N[l].langue.court)} · ${esc(window.ARRIMO_I18N[l].langue.nom)}</option>`).join('');
+    s.setAttribute('aria-label', I.langue.choisir);
+    s.value = langue;
+  }
+  document.getElementById('langue-legale').onchange = (e) => { langue = e.target.value; ecrire('arrimo-langue', langue); afficher(); };
+  afficher();
+  fetch('/api/public').then((r) => r.json()).then((p) => { champs = p.legal || {}; demo = !!p.demo; afficher(); }).catch(() => {});
+}());
+</script>
+</body>
+</html>

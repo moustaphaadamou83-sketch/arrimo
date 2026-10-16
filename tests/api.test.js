@@ -615,3 +615,24 @@ test('aide : chaque écran a son aide complète, en français et en anglais, pou
     }
   }
 });
+
+test('pages légales : accessibles sans connexion, en français et en anglais ; informations publiques', async () => {
+  for (const chemin of ['/confidentialite', '/conditions', '/privacy', '/terms']) {
+    const r = await fetch(`${base}${chemin}`);
+    assert.strictEqual(r.status, 200, chemin);
+    assert.match(await r.text(), /legal\.fr\.js[\s\S]*legal\.en\.js/);
+  }
+  const { fr, en } = (() => { const bac = { window: {} }; for (const l of ['fr', 'en']) vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'public', 'i18n', `legal.${l}.js`), 'utf8'), bac); return bac.window.ARRIMO_LEGAL; })();
+  for (const page of ['confidentialite', 'conditions']) {
+    assert.strictEqual(fr[page].sections.length, en[page].sections.length, `${page} : mêmes sections`);
+    fr[page].sections.forEach(([, p], i) => assert.strictEqual(p.length, en[page].sections[i][1].length, `${page} section ${i}`));
+  }
+  const texte = JSON.stringify(fr.confidentialite);
+  for (const mot of ['Données|données', 'conservation', 'Sécurité', 'Hébergement', 'rectification', 'Responsable|responsable']) assert.match(texte, new RegExp(mot));
+  assert.match(fr.avertissement, /avocat/);
+  assert.ok(!/Odoo|Afrique/i.test(JSON.stringify({ fr, en })));
+  const p = await appel(null, 'GET', '/public');
+  assert.strictEqual(p.statut, 200);
+  assert.strictEqual(p.corps.demo, false);
+  assert.deepStrictEqual(p.corps.legal, {});
+});
