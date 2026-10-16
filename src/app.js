@@ -33,8 +33,9 @@ function creerApp(pool) {
       'X-Content-Type-Options': 'nosniff',
       'X-Frame-Options': 'DENY',
       'Referrer-Policy': 'no-referrer',
-      'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-        + "font-src https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'",
+      // Police hébergée ici (aucun appel à un service tiers)
+      'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline'; "
+        + "font-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'",
     });
     next();
   });

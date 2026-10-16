@@ -50,18 +50,18 @@ const RANG = { vert: 0, jaune: 1, orange: 2, rouge: 3 };
 const pireNiveau = (a, b) => (RANG[b] > RANG[a] ? b : a);
 
 /** Durée moyenne sur civière des patients partis pendant la période (paires « occupée » → « nettoyage » du journal). */
-async function dureePeriode(db, etabId, jours) {
+async function dureePeriode(db, etabId, jours, fin = 0) {
   const { rows } = await db.query(
     `WITH ev AS (
        SELECT civiere_id, date, nouvel_etat, ancien_etat,
               lag(date) OVER (PARTITION BY civiere_id ORDER BY date, id) AS date_prec,
               lag(nouvel_etat) OVER (PARTITION BY civiere_id ORDER BY date, id) AS etat_prec
          FROM journal WHERE etablissement_id = $1 AND civiere_id IS NOT NULL AND NOT refuse
-          AND date > now() - make_interval(days => $2) - interval '7 days')
+          AND date > now() - make_interval(days => $2) - interval '7 days' AND date <= now() - make_interval(days => $3))
      SELECT round((avg(EXTRACT(EPOCH FROM (date - date_prec))) / 3600)::numeric, 1)::float AS duree_moy_h, count(*)::int AS sejours,
             count(*) FILTER (WHERE date - date_prec > interval '24 hours')::int AS sejours_24h
        FROM ev WHERE ancien_etat = 'occupee' AND nouvel_etat = 'nettoyage' AND etat_prec = 'occupee'
-        AND date > now() - make_interval(days => $2)`, [etabId, jours]);
+        AND date > now() - make_interval(days => $2)`, [etabId, jours, fin]);
   return rows[0];
 }
 

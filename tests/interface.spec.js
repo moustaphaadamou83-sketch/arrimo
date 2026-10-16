@@ -62,7 +62,7 @@ async function fermerPremiersPas(page) {
 
 /** L'aide du rôle connecté : un bloc pour chaque onglet visible, l'écran actuel ouvert. */
 async function verifierAide(page, L, nom, role) {
-  await page.click('#b-aide');
+  await menu(page, '#b-aide');
   await page.waitForSelector('#panneau-aide:not([hidden]) .aide-role');
   assert.strictEqual(await page.getAttribute('#panneau-aide .aide-role', 'data-role'), role);
   const onglets = await page.$$eval('#onglets button', (bs) => bs.filter((b) => !b.hidden).map((b) => b.dataset.v));
@@ -71,6 +71,13 @@ async function verifierAide(page, L, nom, role) {
   assert.ok(await page.isVisible('#panneau-aide details[open] ol li'), `${nom} : l'écran actuel est expliqué`);
   await verifier(page, L, nom);
   await page.click('#b-fermer-aide');
+}
+
+/** Ouvre le menu du compte (aide, mon compte, langue, déconnexion) puis choisit un élément. */
+async function menu(page, element) {
+  await page.click('#b-menu');
+  await page.waitForSelector('#menu-compte:not([hidden])');
+  await page.click(element);
 }
 
 async function onglet(page, vue) {
@@ -97,13 +104,51 @@ async function verifier(page, L, nom) {
     const boutons = [...document.querySelectorAll('button, .btn, select, input:not([type=checkbox]):not([type=radio])')]
       .filter((b) => b.offsetParent !== null && !b.closest('[hidden]'))
       .map((b) => ({ h: b.getBoundingClientRect().height, t: (b.textContent || b.id || b.name || '').trim().slice(0, 30) }));
+    // Textes visibles : aucun « (s) » ; contraste d'au moins 4,5:1 (3:1 pour les grands textes), norme WCAG AA
+    const rgb = (c) => { const m = c.match(/rgba?\(([\d.]+), ([\d.]+), ([\d.]+)(?:, ([\d.]+))?\)/); return m ? [+m[1], +m[2], +m[3], m[4] === undefined ? 1 : +m[4]] : null; };
+    const lum = ([r, g, b]) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+    const fondDe = (el) => {
+      const couches = [];
+      for (let e = el; e; e = e.parentElement) {
+        const st = getComputedStyle(e);
+        if (st.backgroundImage !== 'none' && !couches.length) return null;      // dégradé ou image : non mesurable
+        const c = rgb(st.backgroundColor);
+        if (c && c[3] > 0) { couches.push(c); if (c[3] >= 1) break; }
+      }
+      let fond = [255, 255, 255];
+      for (const c of couches.reverse()) fond = fond.map((v, i) => c[i] * c[3] + v * (1 - c[3]));
+      return fond;
+    };
+    const textes = []; const contrastes = [];
+    const marche = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let n = marche.nextNode(); n; n = marche.nextNode()) {
+      const el = n.parentElement; const txt = n.textContent.trim();
+      if (!txt || !el || el.closest('script, style, [hidden], option')) continue;
+      const r0 = el.getBoundingClientRect(); const st = getComputedStyle(el);
+      if (!r0.width || st.visibility === 'hidden' || st.display === 'none') continue;
+      textes.push(txt);
+      if (el.closest('.toast, :disabled, [aria-disabled="true"]')) continue;
+      let opaque = true; for (let e = el; e; e = e.parentElement) if (+getComputedStyle(e).opacity < 1) { opaque = false; break; }
+      if (!opaque) continue;
+      const fond = fondDe(el); const coul = rgb(st.color);
+      if (!fond || !coul) continue;
+      const c = coul[3] < 1 ? coul.map((v, i) => (i < 3 ? v * coul[3] + fond[i] * (1 - coul[3]) : 1)) : coul;
+      const [a, b] = [lum(c), lum(fond)].sort((x, y) => y - x);
+      const ratio = (a + 0.05) / (b + 0.05);
+      const taille = parseFloat(st.fontSize); const gras = +st.fontWeight >= 700;
+      const min = taille >= 24 || (taille >= 18.66 && gras) ? 3 : 4.5;
+      if (ratio < min - 0.01) contrastes.push(`« ${txt.slice(0, 40)} » ${ratio.toFixed(2)}:1 (${st.color} sur rgb(${fond.map(Math.round).join(',')}))`);
+    }
+    const pluriels = textes.filter((x) => /\(s\)|\(e\)|\(es\)/.test(x));
     const m = document.querySelector('#modale:not([hidden]) .boite');
     const boite = m ? m.getBoundingClientRect() : null;
-    return { page: document.documentElement.scrollWidth, vw, debordent: debordent.slice(0, 5), boutons,
+    return { page: document.documentElement.scrollWidth, vw, debordent: debordent.slice(0, 5), boutons, pluriels, contrastes: [...new Set(contrastes)].slice(0, 8),
       boite: boite && { haut: boite.top, bas: boite.bottom, gauche: boite.left, droite: boite.right, vh: window.innerHeight } };
   });
   assert.ok(mesures.page <= mesures.vw, `${L.nom}/${nom} : la page déborde horizontalement (${mesures.page} > ${mesures.vw}) ${mesures.debordent.join(', ')}`);
   assert.deepStrictEqual(mesures.debordent, [], `${L.nom}/${nom} : éléments hors de l'écran`);
+  assert.deepStrictEqual(mesures.pluriels, [], `${L.nom}/${nom} : « (s) » dans l'interface`);
+  assert.deepStrictEqual(mesures.contrastes, [], `${L.nom}/${nom} : contraste insuffisant (WCAG AA)`);
   if (mesures.boite) {
     const b = mesures.boite;
     assert.ok(b.haut >= 0 && b.bas <= b.vh && b.gauche >= 0 && b.droite <= mesures.vw, `${L.nom}/${nom} : la modale dépasse de l'écran ${JSON.stringify(b)}`);
@@ -153,7 +198,7 @@ for (const L of LARGEURS) {
     await p1.waitForSelector('#b-premiers-pas-ok');
     await verifier(p1, L, '00-premiers-pas');
     await p1.click('#b-premiers-pas-ok');
-    await p1.click('#b-deconnexion');
+    await menu(p1, '#b-deconnexion');
     await p1.fill('#c-email', 'urgence.x@demo.arrimo'); await p1.fill('#c-mdp', MDP);
     await p1.click('#f-connexion button[type=submit]');
     await p1.waitForSelector('body[data-pret="1"]');
@@ -179,7 +224,7 @@ for (const L of LARGEURS) {
 
     // 2 bis. L'urgence de X : civières, corridor, séjours de plus de 24 h
     await onglet(x, 'urgence');
-    assert.match(await x.textContent('#v-urgence .tuiles'), /\d{3} %/);
+    assert.match(await x.textContent('#v-urgence .tuiles'), /\d{3}\s%/);
     await verifier(x, L, '02b-urgence-x');
     await x.locator('#v-urgence [data-a="demander"]').first().click();
     await x.waitForSelector('#modale:not([hidden]) #m-type');
@@ -228,7 +273,7 @@ for (const L of LARGEURS) {
     await verifier(e, L, '08-nettoyage-termine');
 
     await onglet(x, 'nsa');
-    assert.match(await x.textContent('#v-nsa'), /cible 8 %/);
+    assert.match(await x.textContent('#v-nsa'), /cible : 8\s%/);
     await verifier(x, L, '09-nsa');
     await onglet(x, 'lits');
     assert.match(await x.textContent('#v-lits'), /Manque de personnel/);
@@ -267,7 +312,7 @@ for (const L of LARGEURS) {
     await r.click('#b-2fa-prep');
     await r.waitForSelector('#a-code');
     await verifier(r, L, '18-activation-2fa');
-    const secret = (await r.textContent('#zone-2fa .mono')).trim();
+    const secret = (await r.textContent('#zone-2fa .num')).trim();
     await r.fill('#a-code', totp.codePourPas(secret, totp.pasActuel()));
     await r.click('#b-2fa-ok');
     await toast(r, 'activée');
@@ -283,7 +328,7 @@ for (const L of LARGEURS) {
     await r.click('[data-ao="journal"]');
     await r.waitForSelector('#admin-corps table');
     await verifier(r, L, '21-journal-administration');
-    await r.click('#b-compte');
+    await menu(r, '#b-compte');
     await r.waitForSelector('#f-mdp');
     await verifier(r, L, '22-mon-compte');
 
@@ -421,7 +466,7 @@ test('interface en anglais : aucun texte français restant (noms propres except�
   await x.waitForSelector('#panneau-notif:not([hidden])');
   await ecran(x, '07-notifications');
   await x.click('#b-fermer-notif');
-  await x.click('#b-compte');
+  await menu(x, '#b-compte');
   await x.waitForSelector('#f-mdp');
   await ecran(x, '08-my-account');
 
@@ -445,7 +490,7 @@ test('interface en anglais : aucun texte français restant (noms propres except�
   await r.click('#b-2fa-prep');
   await r.waitForSelector('#a-code');
   await ecran(r, '14-2fa');
-  const secret = (await r.textContent('#zone-2fa .mono')).trim();
+  const secret = (await r.textContent('#zone-2fa .num')).trim();
   await r.fill('#a-code', totp.codePourPas(secret, totp.pasActuel()));
   await r.click('#b-2fa-ok');
   await toast(r, 'enabled');

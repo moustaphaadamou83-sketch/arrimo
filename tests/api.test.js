@@ -371,6 +371,10 @@ test('indicateurs et export CSV', async () => {
   assert.strictEqual(i.statut, 200);
   assert.ok(i.corps.transferts.total >= 1);
   assert.ok(i.corps.nettoyage.nettoyages >= 1, 'les nettoyages sont mesurés à partir du journal');
+  // Comparaison avec la période précédente (même durée) et cibles de la configuration
+  assert.ok('delai_assignation_min' in i.corps.precedent && 'nettoyage_min' in i.corps.precedent && 'civiere_h' in i.corps.precedent);
+  assert.strictEqual(i.corps.cibles.nettoyage_cible_min, 45);
+  assert.strictEqual(i.corps.cibles.attente_admission_max_min, 240);
   const r = await fetch(`${base}/api/indicateurs.csv?etablissement_id=${mb}`, { headers: { Authorization: `Bearer ${tokens.tremblay}` } });
   assert.strictEqual(r.status, 200);
   assert.match(await r.text(), /capacite\.occupation/);
@@ -387,7 +391,7 @@ test('proximité d’abord : le plus proche avec un lit adapté, sauf s’il dé
   assert.ok(rcSug && rcSug.libres >= 1);
   const plusProcheCalme = r.filter((x) => x.libres && ['vert', 'jaune'].includes(x.niveau)).sort((a, b) => a.distance_km - b.distance_km)[0];
   assert.strictEqual(reco.etablissement_id, plusProcheCalme.etablissement_id, 'le plus proche sans tension est recommandé');
-  assert.ok(reco.minutes_route > 0 && /min de route/.test(reco.raison));
+  assert.ok(reco.minutes_route > 0 && / de route \(\d+ km\)/.test(reco.raison));
   // Si cet hôpital se met à déborder (patients en attente), il recule au profit d'un hôpital plus loin mais disponible
   const roy = { id: (await pool.query(`SELECT id FROM utilisateurs WHERE email = 'roy@demo.arrimo'`)).rows[0].id };
   for (let i = 0; i < 25; i += 1) {
@@ -525,8 +529,8 @@ test('civières de l’urgence : états, verrou, demande liée, admission, chang
   await pool.query(`UPDATE etablissements SET partage = 'complet' WHERE id = $1`, [hx]);
   assert.deepStrictEqual(Object.keys(agrege).sort(), ['fonctionnelles', 'niveau', 'occupees', 'taux'], 'partage agrégé : totaux seulement');
   const brx = (await appel('x', 'GET', `/copilote/briefing?etablissement_id=${hx}`)).corps;
-  assert.match(brx.resume, /Urgence : \d+ patient\(s\) sur civière/);
-  assert.ok(brx.recommandations.some((r) => /^Urgence à \d+ %/.test(r.titre)));
+  assert.match(brx.resume, /Urgence : \d+ patients sur civière pour \d+ civières \(\d+\s%\)/);
+  assert.ok(brx.recommandations.some((r) => /^Urgence à \d+\s% : \d+ patients pour \d+ civières$/.test(r.titre)));
   assert.ok(brx.recommandations.some((r) => r.action?.type === 'aller' && /^Demander un lit pour P-/.test(r.titre)), 'patient sur civière depuis longtemps, sans demande');
   const titres = brx.recommandations.map((r) => r.titre);
   assert.strictEqual(new Set(titres).size, titres.length);
@@ -534,7 +538,7 @@ test('civières de l’urgence : états, verrou, demande liée, admission, chang
   assert.ok(vueRes.etablissements.every((e) => e.urgence && e.urgence.taux >= 0));
   ux = await civ('x', hx);
   const q = (await appel('x', 'POST', '/copilote/question', { etablissement_id: hx, question: 'Combien de civières occupées depuis plus de 24 h ?' })).corps;
-  assert.match(q.reponse, new RegExp(`${ux.stats.plus_24h} patient\\(s\\) depuis plus de 24 h`));
+  assert.match(q.reponse, new RegExp(`\n${ux.stats.plus_24h} patients depuis plus de 24 h`));
   assert.strictEqual(q.reponse.split('\n').filter((l) => l.startsWith('•')).length, ux.stats.plus_24h, 'la liste montre les patients de plus de 24 h');
   const qen = (await appel('x', 'POST', '/copilote/question', { etablissement_id: hx, question: 'How many stretchers have been occupied for more than 24 h?', langue: 'en' })).corps;
   assert.match(qen.reponse, /^ER at /);
@@ -674,6 +678,42 @@ test('langues : dictionnaires FR et EN complets, chaque code d’erreur traduit'
   const utilises = [...src.matchAll(/new ErreurHttp\(\d+, '(\w+)'/g)].map((m) => m[1]);
   assert.ok(utilises.length > 80);
   assert.deepStrictEqual(utilises.filter((c) => !MESSAGES[c]), []);
+});
+
+test('mise en forme : pluriels, nombres et durées selon la langue ; aucun « (s) » dans les textes', () => {
+  const F = require('../public/i18n/format');
+  const { TEXTES } = require('../src/langue');
+  // Pluriels : en français 0 et 1 au singulier, en anglais seulement 1 ; forme zéro si fournie
+  assert.strictEqual(F.remplir('fr-CA', '{n|# lit libre|# lits libres}', { n: 1 }), '1 lit libre');
+  assert.strictEqual(F.remplir('fr-CA', '{n|# lit libre|# lits libres}', { n: 3 }), '3 lits libres');
+  assert.strictEqual(F.remplir('fr-CA', '{n|aucune demande transférée|# demande transférée|# demandes transférées}', { n: 0 }), 'aucune demande transférée');
+  assert.strictEqual(F.remplir('en-CA', '{n|# free bed|# free beds}', { n: 0 }), '0 free beds');
+  assert.strictEqual(F.remplir('en-CA', '{n|# free bed|# free beds}', { n: 1 }), '1 free bed');
+  assert.strictEqual(F.remplir('fr-CA', '{n|# nettoyage mesuré|# nettoyages mesurés}', { n: 25 }), '25 nettoyages mesurés');
+  // Nombres et pourcentages : virgule et espace en français, point sans espace en anglais
+  assert.strictEqual(F.pourcent('fr-CA', 9.5).replace(/\s/g, ' '), '9,5 %');
+  assert.strictEqual(F.pourcent('en-CA', 9.5), '9.5%');
+  assert.strictEqual(F.nombre('fr-CA', 15.6), '15,6');
+  assert.strictEqual(F.remplir('fr-CA', '{p} %', { p: 9.5 }), '9,5 %');
+  // Durées : « 49 min », « 5 h 08 » / « 5 h 8 min », « 3 j 4 h » / « 3 d 4 h »
+  const d = (l, m) => F.duree(l, m).replace(/ /g, ' ');
+  assert.deepStrictEqual([d('fr-CA', 49), d('fr-CA', 308), d('fr-CA', 300), d('fr-CA', 76 * 60)], ['49 min', '5 h 08', '5 h', '3 j 4 h']);
+  assert.deepStrictEqual([d('en-CA', 49), d('en-CA', 308), d('en-CA', 76 * 60)], ['49 min', '5 h 8 min', '3 d 4 h']);
+  // Aucun « (s) » : interface, aide, pages légales, textes du serveur, messages d'erreur
+  const { fr, en } = dictionnaires();
+  const tous = (o) => (typeof o === 'string' ? [o] : Array.isArray(o) ? o.flatMap(tous) : o && typeof o === 'object' ? Object.values(o).flatMap(tous) : []);
+  const bac = { window: {} };
+  for (const f of ['legal.fr', 'legal.en']) vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'public', 'i18n', `${f}.js`), 'utf8'), bac);
+  const textes = [...tous(fr), ...tous(en), ...tous(bac.window), ...tous(TEXTES), ...Object.values(MESSAGES)];
+  assert.ok(textes.length > 800);
+  assert.deepStrictEqual(textes.filter((x) => /\(s\)|\(e\)|\(es\)/.test(x)), [], 'vraies formes du singulier et du pluriel');
+  // Chaque modèle de pluriel est bien formé : 2 ou 3 formes, et le nombre (#) dans au moins une forme
+  for (const x of textes) {
+    for (const m of x.matchAll(/\{(\w+)\|([^{}]*)\}/g)) {
+      const formes = m[2].split('|');
+      assert.ok(formes.length === 2 || formes.length === 3, `${m[0]} : 2 ou 3 formes`);
+    }
+  }
 });
 
 test('langues : erreurs avec code stable, Copilote et notifications en anglais', async () => {

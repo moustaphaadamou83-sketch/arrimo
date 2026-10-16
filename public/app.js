@@ -12,7 +12,8 @@ const ACTIONS = {
 const STATUTS = [['demande', 'var(--attention)'], ['validee', 'var(--secondaire)'], ['transport', 'var(--info)'],
   ['en_route', 'var(--principal)'], ['recu', 'var(--succes)'], ['refuse', 'var(--critique)']];
 const BESOINS = ['isolement', 'pression_negative', 'ventilation', 'telemetrie'];
-const COULEUR_NIVEAU = { vert: 'var(--succes)', jaune: '#B45309', orange: '#D97706', rouge: 'var(--critique)' };
+/** Niveau d'alerte : petite pastille de couleur et libellé en couleur de texte normale. */
+const niveauHTML = (n, suite = '') => `<span class="etat-niveau n-${n}">${esc(t(`niveaux.${n}`))}${suite}</span>`;
 
 const etat = {
   token: null, moi: null, ctx: null, vue: 'copilote', filtreUnite: '*', jours: 30,
@@ -21,6 +22,8 @@ const etat = {
 };
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+/** Icône de la bibliothèque (public/icones.svg, Lucide), décorative. */
+const icone = (nom, cls = 'ic') => `<svg class="${cls}" aria-hidden="true" focusable="false"><use href="icones.svg#i-${nom}"/></svg>`;
 const lire = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const ecrire = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch { /* stockage indisponible */ } };
 
@@ -38,12 +41,15 @@ function t(cle, vars) {
   if (v == null) v = chercher('fr', cle);
   if (v == null) return cle;
   if (typeof v !== 'string' || !vars) return v;
-  return v.replace(/\{(\w+)\}/g, (m, k) => {
-    if (vars[k] === undefined) return m;
-    return k.endsWith('_etat') ? t(`etats.${vars[k]}`) : String(vars[k]);
-  });
+  // Pluriels {n|un|plusieurs}, nombres selon la langue ; une variable « *_etat » est un état de lit ou de civière
+  return F.remplir(locale(), v, vars, (k, x) => (k.endsWith('_etat') ? t(`etats.${x}`) : undefined));
 }
-const locale = () => t('langue.locale');
+const F = window.ArrimoFormat;
+const locale = () => chercher(langue, 'langue.locale') || 'fr-CA';
+/** Mise en forme selon la langue : nombre, pourcentage, durée (minutes). */
+const nb = (n, dec = 1) => F.nombre(locale(), n, dec);
+const pct = (n, dec = 1) => F.pourcent(locale(), n, dec);
+const duree = (min) => F.duree(locale(), min);
 const nomType = (ty) => (ty ? (langue === 'en' && ty.nom_en) || ty.nom : '');
 const fuseau = () => { try { return configCtx().fuseau; } catch { return undefined; } };
 
@@ -69,13 +75,8 @@ document.querySelectorAll('select.choix-langue').forEach((s) => {
   s.onchange = () => changerLangue(s.value);
 });
 
-function depuis(iso) {
-  const m = Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000));
-  if (m < 60) return t('general.minutes', { n: m });
-  const h = Math.floor(m / 60);
-  if (h < 48) return m % 60 ? t('general.heures_min', { h, m: String(m % 60).padStart(2, '0') }) : t('general.heures', { h });
-  return t('general.jours', { n: Math.floor(h / 24) });
-}
+/** Temps écoulé depuis une date : « 25 min », « 5 h 08 », « 3 j 4 h ». */
+const depuis = (iso) => duree((Date.now() - new Date(iso)) / 60000);
 const heure = (iso) => new Date(iso).toLocaleString(locale(), { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: fuseau() });
 
 function toast(msg, err) {
@@ -145,7 +146,34 @@ function modale(titre, corps, actions) {
   ($('input, textarea', m) || zone.lastChild).focus();
 }
 $('#modale').addEventListener('click', (e) => { if (e.target.id === 'modale') e.target.hidden = true; });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { $('#modale').hidden = true; $('#panneau-notif').hidden = true; fermerAide(); } });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { $('#modale').hidden = true; $('#panneau-notif').hidden = true; fermerAide(); fermerMenu(); } });
+
+/* ---------------- menu du compte : aide, mon compte, langue, déconnexion ---------------- */
+function fermerMenu(rendreFocus) {
+  const m = $('#menu-compte');
+  if (!m || m.hidden) return;
+  m.hidden = true;
+  $('#b-menu').setAttribute('aria-expanded', 'false');
+  if (rendreFocus) $('#b-menu').focus();
+}
+$('#b-menu').onclick = (e) => {
+  e.stopPropagation();
+  const m = $('#menu-compte');
+  if (!m.hidden) { fermerMenu(); return; }
+  m.hidden = false;
+  $('#b-menu').setAttribute('aria-expanded', 'true');
+  $('.menu-item', m).focus();
+};
+document.addEventListener('click', (e) => { if (!e.target.closest('.menu-compte')) fermerMenu(); });
+// Flèches haut/bas entre les éléments du menu
+$('#menu-compte').addEventListener('keydown', (e) => {
+  if (!['ArrowDown', 'ArrowUp'].includes(e.key)) return;
+  e.preventDefault();
+  const items = [...document.querySelectorAll('#menu-compte .menu-item, #menu-compte select')];
+  const i = items.indexOf(document.activeElement);
+  items[(i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length].focus();
+});
+document.querySelectorAll('#menu-compte .menu-item').forEach((b) => b.addEventListener('click', () => fermerMenu()));
 
 /* ---------------- connexion ---------------- */
 $('#f-connexion').addEventListener('submit', async (e) => {
@@ -251,6 +279,7 @@ function allerA(vue) {
 function majNomUtilisateur() {
   const u = etat.moi.utilisateur;
   $('#nom-utilisateur').textContent = `${u.nom}${u.role === 'gestionnaire' ? t('barre.gestionnaire') : ''}`;
+  $('#menu-qui').innerHTML = `<strong>${esc(u.nom)}</strong><span>${esc(u.email)}</span>`;
 }
 function majSelecteurCtx() {
   $('#ctx').innerHTML = etat.moi.etablissements.map((e) => `<option value="${e.id}">${esc(e.nom)}${e.module_actif ? '' : esc(t('barre.module_desactive'))}</option>`).join('');
@@ -383,7 +412,7 @@ async function vueReseau() {
   const resume = cfg.types.map((ty) => {
     let libres = 0; let dotes = 0;
     res.etablissements.forEach((x) => x.unites.filter((u) => u.type_id === ty.id).forEach((u) => { libres += u.libres; dotes += u.dotes; }));
-    return `<div><span class="lbl">${esc(nomType(ty))}</span><span class="gros mono">${t('reseau.libres_sur', { libres, dotes })}</span><span class="note">${esc(t('reseau.occupation', { n: dotes ? Math.round(((dotes - libres) / dotes) * 100) : 0 }))}</span></div>`;
+    return `<div><span class="lbl">${esc(nomType(ty))}</span><span class="gros num">${t('reseau.libres_sur', { libres, dotes })}</span><span class="note">${esc(t('reseau.occupation', { n: pct(dotes ? ((dotes - libres) / dotes) * 100 : 0) }))}</span></div>`;
   }).join('');
 
   let resHTML = '';
@@ -392,7 +421,7 @@ async function vueReseau() {
       const choisi = R.choix && R.choix.etablissement_id === s.etablissement_id;
       return `<div class="item${choisi ? ' choisi' : ''}"><div><strong>${esc(s.nom)}</strong>${s.recommande ? ` <span class="badge fort">${esc(t('reseau.recommande'))}</span>` : ''}${!s.libres ? ` <span class="badge">${esc(t('reseau.prevision_seulement'))}</span>` : ''}
         <div class="note">${esc(s.ville)}${s.partage === 'agrege' ? esc(t('reseau.lit_par_receveur')) : s.lit ? esc(t('reseau.lit_code', { code: s.lit.code })) : ''}</div>
-        <div class="note mono">${esc(s.raison)}</div>${s.pourquoi ? `<div class="note">${esc(s.pourquoi)}</div>` : ''}</div>
+        <div class="note num">${esc(s.raison)}</div>${s.pourquoi ? `<div class="note">${esc(s.pourquoi)}</div>` : ''}</div>
         ${s.libres ? `<button class="btn${choisi ? ' pri' : ''}" data-choix="${s.etablissement_id}">${esc(t(choisi ? 'reseau.propose' : 'reseau.proposer'))}</button>` : ''}</div>`;
     }).join('') : `<p class="note">${esc(t('reseau.aucun_rayon', { km: cfg.rayon_km }))}</p>`;
     resHTML = `<p class="note">${esc(t('reseau.chez_vous', { n: R.res.libres_ici }))}</p><div class="liste">${resHTML}</div>`;
@@ -408,19 +437,19 @@ async function vueReseau() {
 
   const blocHTML = blocages.length ? blocages.map((b) => {
     const act = b.etat === 'nettoyage' ? ['nettoyage_ok', 'nettoyage_ok'] : b.etat === 'reserve' ? ['annuler', 'annuler_reservation'] : b.etat === 'indispo' ? ['remettre', 'remettre'] : null;
-    return `<div class="item"><div><span class="risque ${b.blocage_niveau}">${esc(t(`blocages_niveaux.${b.blocage_niveau}`))}</span> <b class="mono">${esc(b.code)}</b><div class="note">${esc(b.blocage_motif)}</div></div>
+    return `<div class="item"><div><span class="risque ${b.blocage_niveau}">${esc(t(`blocages_niveaux.${b.blocage_niveau}`))}</span> <b class="num">${esc(b.code)}</b><div class="note">${esc(b.blocage_motif)}</div></div>
       ${act ? `<button class="btn" data-lit="${b.id}" data-action="${act[0]}" data-version="${b.version}">${esc(t(`actions_lit.${act[1]}`))}</button>` : ''}</div>`;
   }).join('') : `<p class="note">${esc(t('reseau.aucun_blocage'))}</p>`;
 
   const etabsHTML = res.etablissements.map((x) => `<article class="etab${x.moi ? ' moi' : ''}"><header><div><h3>${esc(x.nom)}</h3>
-      <span class="note">${esc(x.ville || '')}${x.moi ? '' : ` · <span class="mono">${esc(t('general.km', { n: x.distance_km }))}</span>`}</span></div>
+      <span class="note">${esc(x.ville || '')}${x.moi ? '' : ` · <span class="num">${esc(t('general.km', { n: x.distance_km }))}</span>`}</span></div>
       <div>${x.moi ? `<span class="badge fort">${esc(t('reseau.votre_etab'))}</span>` : `<span class="badge">${esc(t(`partage.${x.partage}`))}</span>`}</div></header>
       <div class="unites">${x.unites.map((u) => `<div class="unite"><span>${esc(u.type_nom)}</span>${barre(u.repartition, u.dotes + (u.repartition?.indispo || 0))}
-        <span class="mono">${u.libres} / ${u.dotes}${u.prevus != null ? ` <small class="muted" title="${esc(t('reseau.prevus_titre'))}">+${u.prevus}</small>` : ''}</span>
+        <span class="num">${u.libres} / ${u.dotes}${u.prevus != null ? ` <small class="muted" title="${esc(t('reseau.prevus_titre'))}">+${u.prevus}</small>` : ''}</span>
         <span class="risque ${u.risque}" title="${esc(t('reseau.risque_titre'))}">${esc(t(`risques.${u.risque}`))}</span></div>`).join('')}</div>
       ${x.urgence ? `<div class="urgence-etab"><span>${esc(t('reseau.urgence', { occ: x.urgence.occupees, fonc: x.urgence.fonctionnelles }))}</span>
-        <span><b class="mono">${x.urgence.taux} %</b>${x.urgence.plus_24h != null ? ` · ${esc(t('reseau.urgence_24h', { n: x.urgence.plus_24h }))}` : ''}
-        <span class="risque" style="color:${COULEUR_NIVEAU[x.urgence.niveau]}">${esc(t(`niveaux.${x.urgence.niveau}`))}</span></span></div>` : ''}
+        <span><b class="num">${pct(x.urgence.taux)}</b>${x.urgence.plus_24h != null ? ` · ${esc(t('reseau.urgence_24h', { n: x.urgence.plus_24h }))}` : ''}
+        ${niveauHTML(x.urgence.niveau)}</span></div>` : ''}
       ${x.partage === 'agrege' && !x.moi ? `<p class="note" style="margin:8px 0 0">${esc(t('reseau.agrege_note'))}</p>` : ''}</article>`).join('');
 
   v.innerHTML = `<div class="entete"><div><h2>${esc(t('reseau.titre'))}</h2><p>${esc(t('reseau.intro', { etab: e.nom, h: cfg.horizon_h }))}</p></div>
@@ -523,8 +552,8 @@ async function vueLits() {
   const liste = etat.filtreUnite === '*' ? lits : lits.filter((l) => l.type_id === Number(etat.filtreUnite));
   const cols = ORDRE_ETATS.map((st) => {
     const items = liste.filter((l) => l.etat === st);
-    return `<div class="col e-${st}"><h3>${esc(t(`etats.${st}`))} <span class="mono">${items.length}</span></h3>${items.map((l) => `<div class="fiche e-${st}">
-      <div class="t"><b>${esc(l.code)}</b><span class="note mono" title="${esc(t('lits.depuis_titre'))}">${depuis(l.etat_depuis)}</span></div>
+    return `<div class="col e-${st}"><h3>${esc(t(`etats.${st}`))} <span class="num">${items.length}</span></h3>${items.map((l) => `<div class="fiche e-${st}">
+      <div class="t"><b>${esc(l.code)}</b><span class="note num" title="${esc(t('lits.depuis_titre'))}">${depuis(l.etat_depuis)}</span></div>
       <div class="note">${esc(t('lits.chambre', { unite: l.unite, ch: l.chambre }))}</div>
       ${l.patient_ref ? `<div class="note">${t('lits.patient', { ref: esc(l.patient_ref) })}${l.transfert_numero ? ` · ${esc(l.transfert_numero)}` : ''}</div>` : ''}
       ${attributs(l)}
@@ -568,11 +597,11 @@ async function vueTransferts() {
   const actif = etabCtx().module_actif;
   const cols = STATUTS.map(([k, c]) => {
     const items = trs.filter((x) => x.statut === k);
-    return `<div class="col" style="--c:${c}"><h3>${esc(t(`statuts.${k}`))} <span class="mono">${items.length}</span></h3>${items.map((x) => `<div class="fiche" style="--c:${x.urgent ? 'var(--critique)' : 'var(--secondaire)'}">
+    return `<div class="col" style="--c:${c}"><h3>${esc(t(`statuts.${k}`))} <span class="num">${items.length}</span></h3>${items.map((x) => `<div class="fiche" style="--c:${x.urgent ? 'var(--critique)' : 'var(--secondaire)'}">
       <div class="t"><b>${esc(x.numero)}</b>${x.urgent ? `<span class="urgent">${esc(t('transferts.urgent'))}</span>` : `<span class="note">${esc(t(x.destination_id === etat.ctx ? 'transferts.entrant' : 'transferts.sortant'))}</span>`}</div>
       <div style="font-size:12px">${esc(x.origine_nom)} → ${esc(x.destination_nom)}</div>
-      <div class="note">${esc(x.type_nom)} · ${esc(t('transferts.lit'))} <span class="mono">${esc(x.lit_code || '—')}</span> · <span class="mono">${esc(x.patient_ref)}</span></div>
-      <div class="note"><span class="mono">${x.distance_km != null ? esc(t('general.km', { n: x.distance_km })) : '—'}</span> · ${depuis(x.date_demande)}${x.transport_info ? ` · ${esc(x.transport_info)}` : ''}</div>
+      <div class="note">${esc(x.type_nom)} · ${esc(t('transferts.lit'))} <span class="num">${esc(x.lit_code || '—')}</span> · <span class="num">${esc(x.patient_ref)}</span></div>
+      <div class="note"><span class="num">${x.distance_km != null ? esc(t('general.km', { n: x.distance_km })) : '—'}</span> · ${depuis(x.date_demande)}${x.transport_info ? ` · ${esc(x.transport_info)}` : ''}</div>
       ${x.motif_refus ? `<div class="note">${esc(t('transferts.motif', { motif: '' }))}<span class="donnee">${esc(x.motif_refus)}</span></div>` : ''}
       ${attente(x) ? `<div class="note">${esc(attente(x))}</div>` : ''}
       ${actif ? `<div class="actions">${actionsTransfert(x).map(([a, p]) => `<button class="btn${p ? ' pri' : ''}${a === 'refuser' ? ' dan' : ''}" data-tr="${x.id}" data-etape="${a}" data-num="${esc(x.numero)}">${esc(t(`transferts.${a}`))}</button>`).join('')}</div>` : ''}
@@ -623,9 +652,9 @@ async function vueJournal() {
   const etatLib = (k) => (k ? t(`etats.${k}`) : '—');
   $('#v-journal').innerHTML = `<div class="entete"><div><h2>${esc(t('journal.titre', { etab: etabCtx().nom }))}</h2><p>${esc(t('journal.intro'))}</p></div></div>
     <div class="tableau"><table><thead><tr><th>${esc(t('journal.date'))}</th><th>${esc(t('journal.utilisateur'))}</th><th>${esc(t('journal.action'))}</th><th>${esc(t('journal.lit'))}</th><th>${esc(t('journal.changement'))}</th><th>${esc(t('journal.detail'))}</th><th>${esc(t('journal.transfert'))}</th></tr></thead><tbody>${
-  lignes.map((j) => `<tr><td class="mono">${heure(j.date)}</td><td class="donnee">${esc(j.utilisateur || t('general.systeme'))}</td><td${j.refuse ? ' class="refuse"' : ''}>${esc(libelleAction('journal_actions', j.action))}</td>
-      <td class="mono">${esc(j.lit_code || '')}</td><td>${j.ancien_etat || j.nouvel_etat ? `${esc(etatLib(j.ancien_etat))} → ${esc(etatLib(j.nouvel_etat))}` : ''}</td>
-      <td class="donnee">${esc(j.detail || '')}</td><td class="mono">${esc(j.transfert_numero || '')}</td></tr>`).join('') || `<tr><td colspan="7" class="muted">${esc(t('journal.aucune'))}</td></tr>`
+  lignes.map((j) => `<tr><td class="num">${heure(j.date)}</td><td class="donnee">${esc(j.utilisateur || t('general.systeme'))}</td><td${j.refuse ? ' class="refuse"' : ''}>${esc(libelleAction('journal_actions', j.action))}</td>
+      <td class="num">${esc(j.lit_code || '')}</td><td>${j.ancien_etat || j.nouvel_etat ? `${esc(etatLib(j.ancien_etat))} → ${esc(etatLib(j.nouvel_etat))}` : ''}</td>
+      <td class="donnee">${esc(j.detail || '')}</td><td class="num">${esc(j.transfert_numero || '')}</td></tr>`).join('') || `<tr><td colspan="7" class="muted">${esc(t('journal.aucune'))}</td></tr>`
 }</tbody></table></div>${plus ? boutonPlus('journal') : ''}`;
   brancherPlus($('#v-journal'), 'journal', `/journal?etablissement_id=${etat.ctx}`, lignes);
 }
@@ -640,12 +669,12 @@ async function vueParams() {
     <div class="grille">
       <div class="panneau-c"><h3>${P('configuration', { nom: '' })}<span class="donnee">${esc(cfg.nom)}</span></h3><dl>
         <dt>${P('types')}</dt><dd>${cfg.types.map((ty) => esc(nomType(ty))).join(', ')}</dd>
-        <dt>${P('rayon')}</dt><dd class="mono">${esc(t('general.km', { n: cfg.rayon_km }))}</dd>
-        <dt>${P('horizon')}</dt><dd class="mono">${esc(t('general.heures', { h: cfg.horizon_h }))}</dd>
-        <dt>${P('nettoyage_cible')}</dt><dd class="mono">${esc(t('general.minutes', { n: cfg.nettoyage_cible_min }))}</dd>
-        <dt>${P('reservation')}</dt><dd class="mono">${P('reservation_val', { n: cfg.reservation_max_min })}</dd>
-        <dt>${P('conge_depasse')}</dt><dd class="mono">${P('conge_val', { n: cfg.marge_conge_min })}</dd>
-        <dt>${P('hors_service')}</dt><dd class="mono">${P('hs_val', { n: cfg.hors_service_max_h })}</dd>
+        <dt>${P('rayon')}</dt><dd class="num">${esc(t('general.km', { n: cfg.rayon_km }))}</dd>
+        <dt>${P('horizon')}</dt><dd class="num">${esc(duree(cfg.horizon_h * 60))}</dd>
+        <dt>${P('nettoyage_cible')}</dt><dd class="num">${esc(duree(cfg.nettoyage_cible_min))}</dd>
+        <dt>${P('reservation')}</dt><dd class="num">${P('reservation_val', { duree: duree(cfg.reservation_max_min) })}</dd>
+        <dt>${P('conge_depasse')}</dt><dd class="num">${P('conge_val', { duree: duree(cfg.marge_conge_min) })}</dd>
+        <dt>${P('hors_service')}</dt><dd class="num">${P('hs_val', { duree: duree(cfg.hors_service_max_h * 60) })}</dd>
         <dt>${P('reference')}</dt><dd>${P('reference_val', { ex: cfg.reference_exemple })}</dd>
         <dt>${P('transport')}</dt><dd>${esc(cfg.transport_libelle)}</dd></dl></div>
       <div class="panneau-c"><h3>${P('cycle')}</h3><div class="cycle">${['libre', 'reserve', 'occupe', 'nettoyage', 'libre'].map((k) => `<span class="pill f-${k}">${esc(t(`etats.${k}`))}</span>`).join('→')}</div>
@@ -710,7 +739,7 @@ async function vueCopilote() {
   etat.recos = b.recommandations;
   const exemples = t('copilote.exemples');
   const C = (k, vars) => esc(t(`copilote.${k}`, vars));
-  v.innerHTML = `<div class="entete"><div class="copilote-tete"><span class="ic">C</span><div><h2>${C('titre', { etab: b.etablissement })}</h2><p style="margin:0">${C('intro', { heure: new Date(b.genere_le).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit', timeZone: fuseau() }) })}</p></div></div></div>
+  v.innerHTML = `<div class="entete"><div class="copilote-tete"><span class="copilote-ic">${icone('sparkles')}</span><div><h2>${C('titre', { etab: b.etablissement })}</h2><p style="margin:0">${C('intro', { heure: new Date(b.genere_le).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit', timeZone: fuseau() }) })}</p></div></div></div>
     <div class="niveau n-${b.alerte.niveau}"><span class="pastille-niveau">${C('niveau', { niveau: t(`niveaux.${b.alerte.niveau}`) })}</span><p>${esc(b.resume)}</p><p class="note" style="flex-basis:100%">${C('protocole', { texte: b.alerte.protocole })}</p></div>
     <div class="deux"><div class="pile">
       <div class="panneau-c"><h3>${C('recommandations', { n: b.recommandations.length })}</h3><div class="recos">${b.recommandations.length ? b.recommandations.map((x, i) => `<div class="reco">
@@ -722,8 +751,8 @@ async function vueCopilote() {
         <div class="chips">${exemples.map((x, i) => `<button class="chip" data-ex="${i}">${esc(x)}</button>`).join('')}</div>
         ${etat.reponse ? `<div class="reponse">${esc(etat.reponse)}</div><span class="mode">${C(etat.modeReponse === 'ia' ? 'mode_ia' : 'mode_local')}</span>` : ''}</div>
       <div class="panneau-c"><h3>${C('reseau')}</h3><div class="liste">${r.etablissements.map((e) => `<div class="item"><div><strong>${esc(e.nom)}</strong>${e.moi ? ` <span class="badge fort">${C('vous')}</span>` : ''}
-        <div class="note">${C('libres', { n: e.libres })}${e.en_attente != null ? C('en_attente', { n: e.en_attente }) : ''}${e.urgence ? C('urgence_taux', { n: e.urgence.taux }) : ''}${e.moi ? '' : ` · ${esc(t('general.km', { n: e.distance_km }))}`}</div></div>
-        <span class="risque" style="color:${COULEUR_NIVEAU[e.niveau]}">${esc(t(`niveaux.${e.niveau}`))} · ${e.pression} %</span></div>`).join('')}</div>
+        <div class="note">${C('libres', { n: e.libres })}${e.en_attente != null ? C('en_attente', { n: e.en_attente }) : ''}${e.urgence ? C('urgence_taux', { n: pct(e.urgence.taux) }) : ''}${e.moi ? '' : ` · ${esc(t('general.km', { n: e.distance_km }))}`}</div></div>
+        ${niveauHTML(e.niveau, ` · ${esc(pct(e.pression))}`)}</div>`).join('')}</div>
         ${r.delestages.length ? `<h3 style="margin-top:6px">${C('delestages')}</h3><div class="liste">${r.delestages.map((d) => `<div class="item"><div><strong>${esc(d.de)} → ${esc(d.vers)}</strong><div class="note">${esc(d.type)} · ${esc(d.raison)}</div></div></div>`).join('')}</div>` : ''}</div>
     </div></div>`;
   v.querySelectorAll('[data-reco]').forEach((btn) => { btn.onclick = () => executerProposition(etat.recos[Number(btn.dataset.reco)].action, btn); });
@@ -738,7 +767,6 @@ async function vueCopilote() {
 
 /* ---------------- Urgence : civières ---------------- */
 const classeDuree = (h) => (h >= 48 ? 'duree-48' : h >= 24 ? 'duree-24' : 'note');
-const heures = (h) => (h == null ? '—' : t('urgence.heures', { h: String(h).replace('.', t('langue.locale') === 'fr-CA' ? ',' : '.') }));
 const ACTIONS_CIV = {
   libre: [['placer', true], ['hors_service']],
   occupee: [['demander', true], ['deplacer'], ['liberer']],
@@ -755,31 +783,31 @@ async function vueUrgence() {
     v.innerHTML = `<div class="entete"><div><h2>${U('titre', { etab: etabCtx().nom })}</h2><p>${U('aucune')}</p></div></div>`;
     return;
   }
-  const tuile = (l, val, note, mauvais) => `<div class="tuile"><span class="lbl">${l}</span><span class="v${mauvais ? ' mauvais' : ''}">${esc(val)}</span><span class="note">${note}</span></div>`;
   const libres = civieres.filter((c) => c.etat === 'libre');
   const carte = (c) => {
     const actions = (ACTIONS_CIV[c.etat] || []).filter(([a]) => !(a === 'demander' && c.demande_id) && !(a === 'deplacer' && !libres.length));
     return `<div class="fiche e-${c.etat}">
       <div class="t"><b>${esc(c.code)}</b><span class="note">${esc(t(`etats.${c.etat}`))}</span></div>
-      ${c.patient_ref ? `<div class="note">${t('lits.patient', { ref: esc(c.patient_ref) })} · <span class="${classeDuree(c.heures)}">${U('depuis_h', { h: Math.floor(c.heures) })}</span></div>` : ''}
+      ${c.patient_ref ? `<div class="note">${t('lits.patient', { ref: esc(c.patient_ref) })} · <span class="${classeDuree(c.heures)}">${U('depuis_h', { duree: duree(c.heures * 60) })}</span></div>` : ''}
       ${c.demande_id ? `<div class="note">${c.demande_statut === 'assignee' ? t('urgence.lit_assigne', { code: esc(c.lit_code) }) : U('demande', { type: c.type_nom, prio: c.demande_priorite.toUpperCase() })}</div>`
     : c.etat === 'occupee' ? `<div class="alerte">${U('sans_demande')}</div>` : ''}
       ${c.motif_indispo ? `<div class="note">${esc(t('lits.motif', { motif: t(`motifs.${c.motif_indispo}`) }))}</div>` : ''}
-      ${c.etat !== 'occupee' ? `<div class="note mono" title="${esc(t('lits.depuis_titre'))}">${depuis(c.etat_depuis)}</div>` : ''}
+      ${c.etat !== 'occupee' ? `<div class="note num" title="${esc(t('lits.depuis_titre'))}">${depuis(c.etat_depuis)}</div>` : ''}
       ${actif && actions.length ? `<div class="actions">${actions.map(([a, p]) => `<button class="btn${p ? ' pri' : ''}" data-civ="${c.id}" data-a="${a}" data-version="${c.version}" data-code="${esc(c.code)}">${U(`a_${a}`)}</button>`).join('')}</div>` : ''}
     </div>`;
   };
   const groupe = (cat) => {
     const liste = civieres.filter((c) => c.categorie === cat);
-    return liste.length ? `<h3>${U(`cat_${cat}`)} <span class="note mono">${liste.filter((c) => c.etat === 'occupee').length} / ${liste.length}</span></h3><div class="civieres">${liste.map(carte).join('')}</div>` : '';
+    return liste.length ? `<h3>${U(`cat_${cat}`)} <span class="note num">${liste.filter((c) => c.etat === 'occupee').length} / ${liste.length}</span></h3><div class="civieres">${liste.map(carte).join('')}</div>` : '';
   };
   v.innerHTML = `<div class="entete"><div><h2>${U('titre', { etab: etabCtx().nom })}</h2><p>${U('intro')}</p></div>
     <div class="legende">${['libre', 'occupee', 'nettoyage', 'indispo'].map((k) => `<span><i class="f-${k === 'occupee' ? 'occupe' : k}"></i>${esc(t(`etats.${k}`))}</span>`).join('')}</div></div>
     <div class="tuiles">
-      ${tuile(U('taux'), `${stats.taux} %`, U('taux_note', { occ: stats.occupees, fonc: stats.fonctionnelles }), stats.taux >= cfg.seuil_civieres_orange)}
-      ${tuile(U('corridor'), String(stats.en_corridor), U('corridor_note', { n: stats.libres }), stats.en_corridor > 0)}
-      ${tuile(U('plus_24h'), String(stats.plus_24h), U('plus_48h', { n: stats.plus_48h }), stats.plus_24h > 0)}
-      ${tuile(U('duree'), heures(stats.duree_moy_h), U('duree_note'), stats.duree_moy_h >= 24)}</div>
+      ${tuile({ lbl: t('urgence.taux'), val: pct(stats.taux), note: U('taux_note', { occ: stats.occupees, fonc: stats.fonctionnelles }),
+    etat: etatSeuil(stats.taux, cfg.seuil_civieres_jaune, cfg.seuil_civieres_rouge), cible: t('indicateurs.cible_max', { v: pct(cfg.seuil_civieres_jaune) }) })}
+      ${tuile({ lbl: t('urgence.corridor'), val: nb(stats.en_corridor), note: U('corridor_note', { n: stats.libres }), etat: stats.en_corridor ? 'attention' : null })}
+      ${tuile({ lbl: t('urgence.plus_24h'), val: nb(stats.plus_24h), note: U('plus_48h', { n: stats.plus_48h }), etat: stats.plus_48h ? 'critique' : stats.plus_24h ? 'attention' : null })}
+      ${tuile({ lbl: t('urgence.duree'), val: duree((stats.duree_moy_h ?? 0) * 60), note: U('duree_note') })}</div>
     ${groupe('reguliere')}${groupe('debordement')}
     <p class="note">${U('ref_seulement')}</p>`;
   v.querySelectorAll('[data-civ]').forEach((b) => {
@@ -837,9 +865,9 @@ async function vueAdmissions() {
   const sansDemande = urg.civieres.filter((c) => c.etat === 'occupee' && !c.demande_id);
   const A = (k, vars) => esc(t(`admissions.${k}`, vars));
   const carte = (d) => `<div class="fiche" style="--c:${d.priorite === 'p1' ? 'var(--critique)' : d.depasse ? 'var(--attention)' : 'var(--secondaire)'}">
-      <div class="t"><b>${esc(d.patient_ref)}</b><span class="${d.depasse ? 'urgent' : 'note mono'}">${d.priorite.toUpperCase()} · ${depuis(d.cree_le)}</span></div>
+      <div class="t"><b>${esc(d.patient_ref)}</b><span class="${d.depasse ? 'urgent' : 'note num'}">${d.priorite.toUpperCase()} · ${depuis(d.cree_le)}</span></div>
       <div class="note">${esc(d.type_nom)} · ${esc(t(`provenances.${d.provenance}`).toLowerCase())} · ${esc(besoinsTexte(d))}</div>
-      ${d.civiere_code ? `<div class="note">${A('sur_civiere', { code: d.civiere_code })} · <span class="${classeDuree(d.heures_civiere)}">${esc(t('urgence.depuis_h', { h: d.heures_civiere }))}</span></div>` : ''}
+      ${d.civiere_code ? `<div class="note">${A('sur_civiere', { code: d.civiere_code })} · <span class="${classeDuree(d.heures_civiere)}">${esc(t('urgence.depuis_h', { duree: duree(d.heures_civiere * 60) }))}</span></div>` : ''}
       ${d.statut === 'assignee' ? `<div class="note">${t('admissions.lit_assigne', { code: esc(d.lit_code) })}</div>` : d.lit_suggere ? `<div class="note">${t('admissions.lit_adapte', { code: esc(d.lit_suggere.code) })}</div>` : `<div class="alerte">${A('aucun_lit')}</div>`}
       ${actif ? `<div class="actions">${d.statut === 'attente'
     ? `${d.lit_suggere ? `<button class="btn pri" data-adm="${d.id}" data-a="assigner" data-lit="${d.lit_suggere.id}" data-version="${d.lit_suggere.version}">${A('assigner', { code: d.lit_suggere.code })}</button>` : ''}
@@ -852,15 +880,15 @@ async function vueAdmissions() {
     <div class="deux"><div class="pile"><div class="panneau-c"><h3>${A('nouvelle')}</h3>
       <div class="ligne"><div class="champ"><label class="lbl" for="a-type">${A('type_unite')}</label><select id="a-type">${cfg.types.map((x) => `<option value="${x.id}">${esc(nomType(x))}</option>`).join('')}</select></div>
       <div class="champ"><label class="lbl" for="a-ref">${A('ref_patient')}</label><input id="a-ref" placeholder="${esc(cfg.reference_exemple)}" autocomplete="off"></div></div>
-      ${sansDemande.length ? `<div class="champ"><label class="lbl" for="a-civ">${A('civiere')}</label><select id="a-civ"><option value="">${A('sans_civiere')}</option>${sansDemande.map((c) => `<option value="${c.id}" data-ref="${esc(c.patient_ref)}">${esc(c.code)} · ${esc(c.patient_ref)} · ${esc(t('urgence.depuis_h', { h: Math.floor(c.heures) }))}</option>`).join('')}</select></div>` : ''}
+      ${sansDemande.length ? `<div class="champ"><label class="lbl" for="a-civ">${A('civiere')}</label><select id="a-civ"><option value="">${A('sans_civiere')}</option>${sansDemande.map((c) => `<option value="${c.id}" data-ref="${esc(c.patient_ref)}">${esc(c.code)} · ${esc(c.patient_ref)} · ${esc(t('urgence.depuis_h', { duree: duree(c.heures * 60) }))}</option>`).join('')}</select></div>` : ''}
       <div class="ligne"><div class="champ"><label class="lbl" for="a-prio">${A('priorite')}</label><select id="a-prio">${options('priorites_adm', ['p1', 'p2', 'p3'], 'p2')}</select></div>
       <div class="champ"><label class="lbl" for="a-prov">${A('provenance')}</label><select id="a-prov">${options('provenances', ['urgence', 'bloc', 'externe', 'autre'])}</select></div></div>
       <div class="cases">${casesBesoins('data-abesoin')}</div>
       <button class="btn pri" id="b-demande"${actif ? '' : ' disabled'}>${A('ajouter')}</button>
       <p class="note">${A('ref_seulement')}</p></div></div>
     <div class="kanban" style="margin-top:0;grid-auto-columns:minmax(260px,1fr)">
-      <div class="col" style="--c:var(--attention)"><h3>${A('en_attente')} <span class="mono">${attenteF.length}</span></h3>${attenteF.map(carte).join('') || `<div class="vide">${A('personne')}</div>`}</div>
-      <div class="col" style="--c:var(--secondaire)"><h3>${A('assigne_col')} <span class="mono">${assignees.length}</span></h3>${assignees.map(carte).join('') || `<div class="vide">${A('aucune')}</div>`}</div>
+      <div class="col" style="--c:var(--attention)"><h3>${A('en_attente')} <span class="num">${attenteF.length}</span></h3>${attenteF.map(carte).join('') || `<div class="vide">${A('personne')}</div>`}</div>
+      <div class="col" style="--c:var(--secondaire)"><h3>${A('assigne_col')} <span class="num">${assignees.length}</span></h3>${assignees.map(carte).join('') || `<div class="vide">${A('aucune')}</div>`}</div>
     </div></div>`;
   $('#b-demande').onclick = (ev) => {
     const besoins = {};
@@ -882,7 +910,7 @@ async function vueAdmissions() {
       const res = await api('GET', `/recherche?depuis=${etat.ctx}&type_id=${d.type_id}${qsBesoins(be)}`).catch((e) => { toast(e.message, true); return null; });
       if (!res) return null;
       const sug = res.suggestions.filter((x) => x.libres);
-      modale(t('admissions.ailleurs_titre', { ref: d.patient_ref }), sug.length ? `<div class="liste">${sug.map((x, i) => `<label class="item"><div><strong>${esc(x.nom)}</strong>${x.recommande ? ` <span class="badge fort">${esc(t('reseau.recommande'))}</span>` : ''}<div class="note mono">${esc(x.raison)}</div>${x.pourquoi ? `<div class="note">${esc(x.pourquoi)}</div>` : ''}</div><input type="radio" name="m-sug" value="${i}"${i === 0 ? ' checked' : ''}></label>`).join('')}</div>
+      modale(t('admissions.ailleurs_titre', { ref: d.patient_ref }), sug.length ? `<div class="liste">${sug.map((x, i) => `<label class="item"><div><strong>${esc(x.nom)}</strong>${x.recommande ? ` <span class="badge fort">${esc(t('reseau.recommande'))}</span>` : ''}<div class="note num">${esc(x.raison)}</div>${x.pourquoi ? `<div class="note">${esc(x.pourquoi)}</div>` : ''}</div><input type="radio" name="m-sug" value="${i}"${i === 0 ? ' checked' : ''}></label>`).join('')}</div>
         <p class="note">${A('ailleurs_aide', { besoins: besoinsTexte(d) })}</p>` : `<p>${A('ailleurs_aucun')}</p>`,
       sug.length ? [{ label: t('general.annuler') }, { label: t('admissions.demander_transfert'), pri: true, run: async () => {
         const x = sug[Number(($('input[name="m-sug"]:checked') || {}).value || 0)];
@@ -902,7 +930,7 @@ async function vueNettoyage() {
   v.innerHTML = `<div class="entete"><div><h2>${N('titre', { etab: etabCtx().nom })}</h2><p>${N('intro')}</p></div></div>
     <div class="liste">${liste.map((l, i) => `<div class="net-item" style="--c:${couleur[l.priorite]}"><div>
       <div class="grand">${i + 1}. ${esc(l.code)}</div>
-      <div class="note">${l.genre === 'civiere' ? N('civiere', { cat: t(`urgence.cat_${l.categorie}`).toLowerCase() }) : `${N('chambre', { unite: l.unite, ch: l.chambre })}${l.isolement ? N('isolement') : ''}`}</div>
+      <div class="note">${l.genre === 'civiere' ? N('civiere', { cat: t(`urgence.une_${l.categorie}`) }) : `${N('chambre', { unite: l.unite, ch: l.chambre })}${l.isolement ? N('isolement') : ''}`}</div>
       <div style="font-size:13px">${esc(l.raison)}</div>
       <div class="note">${l.nettoyage_debut ? N('commence_il_y_a', { duree: depuis(l.nettoyage_debut) }) : N('attente_depuis', { duree: depuis(l.etat_depuis) })}</div></div>
       <div class="actions">${l.nettoyage_debut || l.genre === 'civiere' ? '' : `<button class="btn" data-debut="${l.id}">${N('commencer')}</button>`}
@@ -921,43 +949,84 @@ async function vueNsa() {
   const S = (k, vars) => esc(t(`nsa.${k}`, vars));
   v.innerHTML = `<div class="entete"><div><h2>${S('titre', { etab: etabCtx().nom })}</h2><p>${S('intro')}</p></div></div>
     <div class="tuiles">
-      <div class="tuile"><span class="lbl">${S('taux')}</span><span class="v${n.taux > n.cible ? ' mauvais' : ''}">${n.taux} %</span><span class="note">${S('cible', { n: n.cible })}</span></div>
-      <div class="tuile"><span class="lbl">${S('patients')}</span><span class="v">${n.total}</span><span class="note">${S('sur_occupes', { n: n.occupes })}</span></div>
-      <div class="tuile"><span class="lbl">${S('jours_lits')}</span><span class="v">${n.jours_lits}</span><span class="note">${S('cumul')}</span></div>
+      ${tuile({ lbl: t('nsa.taux'), val: pct(n.taux), etat: etatSeuil(n.taux, n.cible, n.cible * 1.5), note: S('cible', { n: pct(n.cible) }) })}
+      ${tuile({ lbl: t('nsa.patients'), val: nb(n.total), note: S('sur_occupes', { n: n.occupes }) })}
+      ${tuile({ lbl: t('nsa.jours_lits'), val: nb(n.jours_lits), note: S('cumul') })}
       <div class="tuile"><span class="lbl">${S('orientations')}</span><span class="note" style="font-size:13px">${Object.entries(n.par_orientation).map(([k, x]) => `${esc(t(`orientations.${k}`))} : ${x}`).join('<br>') || '—'}</span></div></div>
     <div class="tableau"><table><thead><tr><th>${S('lit')}</th><th>${S('unite')}</th><th>${S('patient')}</th><th>${S('depuis')}</th><th>${S('orientation')}</th><th></th></tr></thead><tbody>${n.lits.map((l) => `<tr>
-      <td class="mono">${esc(l.code)}</td><td class="donnee">${esc(l.unite)}</td><td class="mono">${esc(l.patient_ref)}</td><td class="mono${l.jours >= 30 ? ' refuse' : ''}">${S('jours', { n: l.jours })}</td>
+      <td class="num">${esc(l.code)}</td><td class="donnee">${esc(l.unite)}</td><td class="num">${esc(l.patient_ref)}</td><td class="num">${S('jours', { n: l.jours })}${l.jours >= 30 ? ' <span class="pt pt-attention" aria-hidden="true"></span>' : ''}</td>
       <td><select data-orient="${l.id}" aria-label="${S('orientation')}">${options('orientations', ORIENTATIONS, l.nsa_orientation)}</select></td>
       <td><button class="btn" data-retirer="${l.id}">${S('retirer')}</button></td></tr>`).join('') || `<tr><td colspan="6" class="muted">${S('aucun')}</td></tr>`}</tbody></table></div>`;
   v.querySelectorAll('[data-orient]').forEach((sel) => { sel.onchange = () => agir(sel, () => api('PUT', `/lits/${sel.dataset.orient}/nsa`, { orientation: sel.value }), t('nsa.orient_ok')); });
   v.querySelectorAll('[data-retirer]').forEach((b) => { b.onclick = () => agir(b, () => api('DELETE', `/lits/${b.dataset.retirer}/nsa`), t('nsa.retire_ok')); });
 }
 
+/* ---------------- Tuiles d'indicateurs ---------------- */
+/** État d'un indicateur où « plus bas est mieux » : rien sous la cible, « attention » au-delà, « critique » au-delà du seuil critique. */
+const etatSeuil = (val, cible, critique) => (val == null || cible == null ? null : critique != null && val >= critique ? 'critique' : val > cible ? 'attention' : null);
+/** Tuile : libellé, valeur en couleur de texte normale, petite pastille d'état seulement si le seuil est dépassé, note, cible, tendance. */
+function tuile({ lbl, val, note = '', etat: e = null, cible = '', tendance: tend = '' }) {
+  const pt = e ? `<span class="pt pt-${e}" role="img" aria-label="${esc(t(`indicateurs.etat_${e}`))}" title="${esc(t(`indicateurs.etat_${e}`))}"></span>` : '';
+  return `<div class="tuile"><span class="lbl">${esc(lbl)}</span><span class="v">${esc(val)}${pt}</span>${note ? `<span class="note">${note}</span>` : ''}${
+    cible ? `<span class="cible">${esc(cible)}</span>` : ''}${tend}</div>`;
+}
+/** Tendance par rapport à la période précédente (plus bas est mieux) : flèche, écart mis en forme, couleur selon que c'est bon ou mauvais. */
+function tendance(act, prec, fmt, seuilStable) {
+  if (act == null || prec == null) return `<span class="tendance">${esc(t('indicateurs.sans_comparaison'))}</span>`;
+  const d = act - prec;
+  if (Math.abs(d) < seuilStable) return `<span class="tendance">${icone('minus')}${esc(t('indicateurs.stable'))}</span>`;
+  return `<span class="tendance ${d < 0 ? 't-bon' : 't-mauvais'}">${icone(d > 0 ? 'arrow-up' : 'arrow-down')}${esc(t(`indicateurs.${d > 0 ? 'hausse' : 'baisse'}`, { v: fmt(Math.abs(d)) }))}</span>`;
+}
+const points = (d) => t('indicateurs.points', { n: Math.round(d * 10) / 10 });
+
 /* ---------------- Indicateurs ---------------- */
-const min = (x) => (x == null ? '—' : x >= 120 ? t('general.heures_min', { h: Math.floor(x / 60), m: String(x % 60).padStart(2, '0') }) : t('general.minutes', { n: x }));
 async function vueIndicateurs() {
   const v = $('#v-indicateurs');
   const i = await api('GET', `/indicateurs?etablissement_id=${etat.ctx}&jours=${etat.jours}`);
   const I = (k, vars) => esc(t(`indicateurs.${k}`, vars));
-  const tuile = (l, val, note, mauvais) => `<div class="tuile"><span class="lbl">${l}</span><span class="v${mauvais ? ' mauvais' : ''}">${esc(val)}</span><span class="note">${note}</span></div>`;
-  v.innerHTML = `<div class="entete"><div><h2>${I('titre', { etab: etabCtx().nom })}</h2><p>${I('intro', { n: i.periode_jours })}</p></div>
-    <div class="ligne"><select id="i-jours" aria-label="${I('periode')}">${[7, 30, 90].map((j) => `<option value="${j}"${j === etat.jours ? ' selected' : ''}>${I('jours', { n: j })}</option>`).join('')}</select><button class="btn" id="b-csv">${I('exporter')}</button></div></div>
-    <h3 style="margin-bottom:8px">${I('capacite')}</h3><div class="tuiles">
-      ${tuile(I('occupation'), `${i.capacite.occupation} %`, I('libres_sur', { libres: i.capacite.libres, dotes: i.capacite.dotes }), i.capacite.occupation >= 95)}
-      ${tuile(I('niveau'), t(`niveaux.${i.alerte.niveau}`), I('pression', { n: i.alerte.pression }), ['orange', 'rouge'].includes(i.alerte.niveau))}
-      ${tuile(I('fermes'), String(i.capacite.indispo), Object.entries(i.capacite.indispo_par_motif).map(([k, x]) => `${esc(t(`motifs.${k}`))} : ${x}`).join(' · ') || I('aucun'), i.capacite.indispo > 0)}
-      ${tuile(I('taux_nsa'), `${i.nsa.taux} %`, I('nsa_note', { cible: i.nsa.cible, jl: i.nsa.jours_lits }), i.nsa.taux > i.nsa.cible)}</div>
-    <h3 style="margin-bottom:8px">${I('fluidite')}</h3><div class="tuiles">
-      ${tuile(I('attente_lit'), min(i.admissions.delai_assignation_min), I('attente_note', { total: i.admissions.total, attente: i.admissions.en_attente, transf: i.admissions.transferees }))}
-      ${tuile(I('reponse'), min(i.transferts.delai_validation_min), I('reponse_note', { total: i.transferts.total, sortants: i.transferts.sortants, entrants: i.transferts.entrants }))}
-      ${tuile(I('total'), min(i.transferts.delai_total_min), I('total_note'))}
-      ${tuile(I('refus'), `${i.transferts.taux_refus} %`, Object.entries(i.transferts.refus_par_motif).map(([k, x]) => `${esc(t(`motifs_refus.${k}`))} : ${x}`).join(' · ') || I('aucun_refus'), i.transferts.taux_refus > 20)}
-      ${tuile(I('nettoyage'), min(i.nettoyage.duree_moy_min), I('nettoyage_note', { n: i.nettoyage.nettoyages }), i.nettoyage.duree_moy_min > configCtx().nettoyage_cible_min)}</div>
-    ${i.urgence ? `<h3 style="margin-bottom:8px">${I('urgence')}</h3><div class="tuiles">
-      ${tuile(I('taux_civieres'), `${i.urgence.taux} %`, I('taux_civieres_note', { occ: i.urgence.occupees, fonc: i.urgence.fonctionnelles, cor: i.urgence.en_corridor }), i.urgence.taux >= configCtx().seuil_civieres_orange)}
-      ${tuile(I('plus_24h'), String(i.urgence.plus_24h), I('plus_48h_note', { n: i.urgence.plus_48h }), i.urgence.plus_24h > 0)}
-      ${tuile(I('duree_civiere'), heures(i.urgence.duree_moy_h), I('duree_civiere_note'), i.urgence.duree_moy_h >= 24)}
-      ${tuile(I('duree_civiere_periode'), heures(i.urgence.periode.duree_moy_h), I('duree_periode_note', { n: i.urgence.periode.sejours, h24: i.urgence.periode.sejours_24h }), i.urgence.periode.duree_moy_h >= 24)}</div>` : ''}`;
+  const c = i.cibles; const p = i.precedent; const j = i.periode_jours;
+  const cibleMax = (v) => t('indicateurs.cible_max', { v });
+  const motifs = Object.entries(i.transferts.refus_par_motif).map(([k, x]) => `${t(`motifs_refus.${k}`)} ${nb(x)}`).join(', ');
+  const niveauEtat = { vert: null, jaune: 'attention', orange: 'attention', rouge: 'critique' }[i.alerte.niveau];
+  const capacite = [
+    tuile({ lbl: t('indicateurs.occupation'), val: pct(i.capacite.occupation), note: I('occupation_note', { libres: i.capacite.libres, dotes: i.capacite.dotes }),
+      etat: etatSeuil(i.capacite.occupation, c.seuil_jaune, c.seuil_rouge), cible: cibleMax(pct(c.seuil_jaune)) }),
+    tuile({ lbl: t('indicateurs.niveau'), val: t(`niveaux.${i.alerte.niveau}`), note: I('pression', { p: pct(i.alerte.pression) }), etat: niveauEtat }),
+    tuile({ lbl: t('indicateurs.fermes'), val: nb(i.capacite.indispo),
+      note: esc(Object.entries(i.capacite.indispo_par_motif).map(([k, x]) => `${t(`motifs.${k}`)} ${nb(x)}`).join(' · ')) || I('fermes_aucun') }),
+    tuile({ lbl: t('indicateurs.taux_nsa'), val: pct(i.nsa.taux), note: I('nsa_note', { n: i.nsa.total, jl: i.nsa.jours_lits }),
+      etat: etatSeuil(i.nsa.taux, i.nsa.cible, i.nsa.cible * 1.5), cible: cibleMax(pct(i.nsa.cible)) }),
+  ];
+  const fluidite = [
+    tuile({ lbl: t('indicateurs.attente_lit'), val: duree(i.admissions.delai_assignation_min), note: I('attente_note', { total: i.admissions.total, transf: i.admissions.transferees }),
+      etat: etatSeuil(i.admissions.delai_assignation_min, c.attente_admission_max_min, 2 * c.attente_admission_max_min), cible: cibleMax(duree(c.attente_admission_max_min)),
+      tendance: tendance(i.admissions.delai_assignation_min, p.delai_assignation_min, duree, 1) }),
+    tuile({ lbl: t('indicateurs.reponse'), val: duree(i.transferts.delai_validation_min), note: I('reponse_note', { total: i.transferts.total, sortants: i.transferts.sortants, entrants: i.transferts.entrants }),
+      tendance: tendance(i.transferts.delai_validation_min, p.delai_validation_min, duree, 1) }),
+    tuile({ lbl: t('indicateurs.total'), val: duree(i.transferts.delai_total_min), note: I('total_note'), tendance: tendance(i.transferts.delai_total_min, p.delai_total_min, duree, 1) }),
+    tuile({ lbl: t('indicateurs.refus'), val: pct(i.transferts.taux_refus), note: esc(motifs ? t('indicateurs.refus_motifs', { n: i.transferts.refuses, motifs }) : t('indicateurs.refus_note', { n: i.transferts.refuses })),
+      tendance: tendance(i.transferts.taux_refus, p.taux_refus, points, 0.5) }),
+    tuile({ lbl: t('indicateurs.nettoyage'), val: duree(i.nettoyage.duree_moy_min), note: I('nettoyage_note', { n: i.nettoyage.nettoyages }),
+      etat: etatSeuil(i.nettoyage.duree_moy_min, c.nettoyage_cible_min, 2 * c.nettoyage_cible_min), cible: cibleMax(duree(c.nettoyage_cible_min)),
+      tendance: tendance(i.nettoyage.duree_moy_min, p.nettoyage_min, duree, 1) }),
+  ];
+  const u = i.urgence;
+  const urgence = u ? [
+    tuile({ lbl: t('indicateurs.taux_civieres'), val: pct(u.taux), note: I('taux_civieres_note', { occ: u.occupees, fonc: u.fonctionnelles, cor: u.en_corridor }),
+      etat: etatSeuil(u.taux, c.seuil_civieres_jaune, c.seuil_civieres_rouge), cible: cibleMax(pct(c.seuil_civieres_jaune)) }),
+    tuile({ lbl: t('indicateurs.plus_24h'), val: nb(u.plus_24h), note: I('plus_48h_note', { n: u.plus_48h }),
+      etat: u.plus_48h ? 'critique' : u.plus_24h ? 'attention' : null, cible: t('indicateurs.cible_zero') }),
+    tuile({ lbl: t('indicateurs.duree_civiere'), val: duree((u.duree_moy_h ?? 0) * 60), note: I('duree_civiere_note') }),
+    tuile({ lbl: t('indicateurs.duree_civiere_periode'), val: duree(u.periode.duree_moy_h == null ? null : u.periode.duree_moy_h * 60),
+      note: I('duree_periode_note', { n: u.periode.sejours, h24: u.periode.sejours_24h }),
+      tendance: tendance(u.periode.duree_moy_h == null ? null : u.periode.duree_moy_h * 60, p.civiere_h == null ? null : p.civiere_h * 60, duree, 1) }),
+  ] : null;
+  v.innerHTML = `<div class="entete"><div><h2>${I('titre', { etab: etabCtx().nom })}</h2><p>${I('intro', { n: j })}</p></div>
+    <div class="ligne"><select id="i-jours" aria-label="${I('periode')}">${[7, 30, 90].map((x) => `<option value="${x}"${x === etat.jours ? ' selected' : ''}>${I('jours', { n: x })}</option>`).join('')}</select>
+      <button class="btn" id="b-csv">${icone('download')}${I('exporter')}</button></div></div>
+    <h3 class="titre-section">${I('capacite')}</h3><div class="tuiles">${capacite.join('')}</div>
+    <h3 class="titre-section">${I('fluidite')}</h3><div class="tuiles">${fluidite.join('')}</div>
+    ${urgence ? `<h3 class="titre-section">${I('urgence')}</h3><div class="tuiles">${urgence.join('')}</div>` : ''}`;
   $('#i-jours').onchange = (ev) => { etat.jours = Number(ev.target.value); rafraichir(); };
   $('#b-csv').onclick = async () => {
     try {
@@ -1010,7 +1079,7 @@ async function vueCompte() {
         $('#zone-2fa').innerHTML = `<ol class="note" style="padding-left:18px;margin:0">
             <li>${K('etape1')}</li><li>${K('etape2')}</li><li>${K('etape3')}</li></ol>
           <div style="width:200px;max-width:100%;background:#fff;padding:6px;border:1px solid var(--bordure);border-radius:8px">${r.qr_svg}</div>
-          <div class="note">${K('cle')} <span class="mono" style="word-break:break-all">${esc(r.secret)}</span></div>
+          <div class="note">${K('cle')} <span class="num" style="word-break:break-all">${esc(r.secret)}</span></div>
           <div class="ligne"><div class="champ"><label class="lbl" for="a-code">${K('code6')}</label><input id="a-code" inputmode="numeric" maxlength="7" autocomplete="one-time-code"></div>
           <button class="btn pri" id="b-2fa-ok">${esc(t('general.confirmer'))}</button></div>`;
         $('#b-2fa-ok').onclick = (ev) => agir(ev.target, async () => {
@@ -1027,7 +1096,7 @@ async function vueCompte() {
 /* ---------------- Administration ---------------- */
 etat.adminOnglet = 'utilisateurs';
 function montrerSecret(titre, texte, explication) {
-  modale(titre, `<p class="note">${esc(explication)}</p><div class="reponse mono" style="word-break:break-all;user-select:all">${esc(texte)}</div>
+  modale(titre, `<p class="note">${esc(explication)}</p><div class="reponse num" style="word-break:break-all;user-select:all">${esc(texte)}</div>
     <p class="note">${esc(t('admin.secret_note'))}</p>`,
   [{ label: t('general.copier'), run: async () => { try { await navigator.clipboard.writeText(texte); toast(t('general.copie')); } catch { toast(t('general.copier_manuel'), true); } return false; } }, { label: t('general.fermer'), pri: true }]);
 }
@@ -1101,7 +1170,7 @@ async function vueAdmin() {
       <div class="pile">${st.map((un) => `<div class="panneau-c"><div class="entete" style="margin:0"><h3><span class="donnee">${esc(un.nom)}</span> <span class="note">${esc(un.type_nom)}</span></h3>
           <div class="ligne"><input placeholder="${D('num_chambre')}" data-chnum="${un.id}" style="width:130px" aria-label="${D('num_chambre')}"><button class="btn" data-ch="${un.id}">${D('ajouter_chambre')}</button></div></div>
         ${un.chambres.map((ch) => `<div class="item"><div style="flex:1 1 100%"><strong>${D('chambre', { n: ch.numero })}</strong>
-          <div class="liste" style="margin-top:6px">${ch.lits.map((l) => `<div class="ligne" style="justify-content:space-between;gap:8px"><span class="mono">${esc(l.code)} <span class="note">${esc(t(`etats.${l.etat}`))}</span></span>
+          <div class="liste" style="margin-top:6px">${ch.lits.map((l) => `<div class="ligne" style="justify-content:space-between;gap:8px"><span class="num">${esc(l.code)} <span class="note">${esc(t(`etats.${l.etat}`))}</span></span>
             <span class="cases">${BESOINS.map((k) => `<label class="case" title="${esc(t(`besoins.${k}`))}"><input type="checkbox" data-eq="${l.id}" data-k="${k}"${l[k] ? ' checked' : ''}> ${esc(t(`equipement_court.${k}`))}</label>`).join('')}</span></div>`).join('') || `<span class="note">${D('aucun_lit')}</span>`}</div>
           <div class="ligne" style="margin-top:6px"><input placeholder="${D('code_lit', { ex: `${un.type_code}-${ch.numero}C` })}" data-litcode="${ch.id}" style="width:230px" aria-label="${D('code_lit', { ex: '' })}"><button class="btn" data-lit-ch="${ch.id}">${D('ajouter_lit')}</button></div></div></div>`).join('') || `<p class="note">${D('aucune_chambre')}</p>`}</div>`).join('')}</div>`;
     $('#b-unite').onclick = (ev) => agir(ev.target, () => api('POST', '/admin/unites', { etablissement_id: etat.ctx, type_id: Number($('#s-type').value), nom: $('#s-nom').value }), t('admin.unite_ok'));
@@ -1111,7 +1180,7 @@ async function vueAdmin() {
     // Civières de l'urgence
     const civs = await api('GET', `/admin/civieres?etablissement_id=${etat.ctx}`);
     corps.insertAdjacentHTML('beforeend', `<div class="panneau-c" style="margin-top:14px"><h3>${D('civieres')}</h3><p class="note">${D('civieres_aide')}</p>
-      <div class="chips">${civs.map((c) => `<span class="chip mono">${esc(c.code)} · ${esc(t(`urgence.cat_${c.categorie}`))}</span>`).join('') || `<span class="note">${D('aucune_civiere')}</span>`}</div>
+      <div class="chips">${civs.map((c) => `<span class="chip num">${esc(c.code)} · ${esc(t(`urgence.cat_${c.categorie}`))}</span>`).join('') || `<span class="note">${D('aucune_civiere')}</span>`}</div>
       <div class="ligne"><div class="champ"><label class="lbl" for="s-civ-code">${D('code_civiere')}</label><input id="s-civ-code" placeholder="URG-01" autocomplete="off"></div>
         <div class="champ"><label class="lbl" for="s-civ-cat">${D('categorie')}</label><select id="s-civ-cat">${['reguliere', 'debordement'].map((k) => `<option value="${k}">${esc(t(`urgence.cat_${k}`))}</option>`).join('')}</select></div>
         <button class="btn" id="b-civiere">${D('ajouter_civiere')}</button></div></div>`);
@@ -1150,7 +1219,7 @@ async function vueAdmin() {
         <p class="note">${D('connecteur_aide')}</p></div>
       <div class="tableau"><table><thead><tr><th>${D('th_nom')}</th><th>${D('etablissement')}</th><th>${D('th_dernier')}</th><th>${D('th_rejets')}</th><th></th></tr></thead><tbody>${cons.map((c) => `<tr>
         <td><span class="donnee">${esc(c.nom)}</span>${c.actif ? '' : ` <span class="badge">${D('revoque')}</span>`}</td><td>${esc(c.etablissement || t('admin.reseau_lect'))}</td>
-        <td class="note">${c.dernier_message ? heure(c.dernier_message) : esc(t('general.aucun'))}</td><td class="mono${c.rejets_24h ? ' refuse' : ''}">${c.rejets_24h}</td>
+        <td class="note">${c.dernier_message ? heure(c.dernier_message) : esc(t('general.aucun'))}</td><td class="num${c.rejets_24h ? ' refuse' : ''}">${c.rejets_24h}</td>
         <td>${c.actif ? `<button class="btn dan" data-revoquer="${c.id}">${D('revoquer')}</button>` : ''}</td></tr>`).join('') || `<tr><td colspan="5" class="muted">${D('aucun_connecteur')}</td></tr>`}</tbody></table></div></div>`;
     $('#b-con').onclick = (ev) => agir(ev.target, async () => {
       const r = await api('POST', '/admin/connecteurs', { nom: $('#c-nom-con').value || t('admin.connecteur_defaut'), etablissement_id: $('#c-etab-con').value ? Number($('#c-etab-con').value) : null });
@@ -1162,7 +1231,7 @@ async function vueAdmin() {
   if (etat.adminOnglet === 'journal') {
     const { lignes: j, plus } = avecSuite('admin-journal', await api('GET', '/admin/journal'));
     corps.innerHTML = `<div class="tableau"><table><thead><tr><th>${D('th_date')}</th><th>${D('th_par')}</th><th>${D('th_action')}</th><th>${D('th_cible')}</th><th>${D('th_detail')}</th><th>${D('th_etab')}</th></tr></thead><tbody>${j.map((x) => `<tr>
-      <td class="mono">${heure(x.date)}</td><td class="donnee">${esc(x.utilisateur || '')}</td><td>${esc(libelleAction('journal_admin_actions', x.action))}</td><td class="donnee">${esc(x.cible || '')}</td><td class="note donnee">${esc(x.detail || '')}</td><td class="note">${esc(x.etablissement || '')}</td></tr>`).join('') || `<tr><td colspan="6" class="muted">${D('aucune_action')}</td></tr>`}</tbody></table></div>${plus ? boutonPlus('admin-journal') : ''}`;
+      <td class="num">${heure(x.date)}</td><td class="donnee">${esc(x.utilisateur || '')}</td><td>${esc(libelleAction('journal_admin_actions', x.action))}</td><td class="donnee">${esc(x.cible || '')}</td><td class="note donnee">${esc(x.detail || '')}</td><td class="note">${esc(x.etablissement || '')}</td></tr>`).join('') || `<tr><td colspan="6" class="muted">${D('aucune_action')}</td></tr>`}</tbody></table></div>${plus ? boutonPlus('admin-journal') : ''}`;
     brancherPlus(corps, 'admin-journal', '/admin/journal', j);
   }
 

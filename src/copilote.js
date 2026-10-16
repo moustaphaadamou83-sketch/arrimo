@@ -7,7 +7,7 @@
 const s = require('./services');
 const t = require('./terrain');
 const { exigerEtablissement } = require('./auth');
-const { tr, dico, traducteurTypes } = require('./langue');
+const { tr, dico, traducteurTypes, duree } = require('./langue');
 const civ = require('./civieres');
 
 /** Briefing de l'établissement : niveau d'alerte, résumé et recommandations classées, dans la langue de l'utilisateur. */
@@ -40,7 +40,7 @@ async function briefing(pool, utilisateur, etabId) {
     if (d.lit_suggere && !litsProposes.has(d.lit_suggere.id)) {
       litsProposes.add(d.lit_suggere.id);
       ajouter(urgent ? 1 : 2, tr(L, 'r_assigner', { lit: d.lit_suggere.code, ref: d.patient_ref }),
-        tr(L, 'r_assigner_raison', { type: type(d.type_nom), min: d.attente_min, prio: d.priorite.toUpperCase(), prov: dico(L, 'provenance')[d.provenance] }),
+        tr(L, 'r_assigner_raison', { type: type(d.type_nom), duree: duree(L, d.attente_min), prio: d.priorite.toUpperCase(), prov: dico(L, 'provenance')[d.provenance] }),
         { type: 'assigner', demande_id: d.id, lit_id: d.lit_suggere.id, version: d.lit_suggere.version, libelle: tr(L, 'r_assigner_action') });
     } else {
       const rec = await s.recommander(pool, utilisateur, etabId, d.type_id, t.besoinsDemande(d));
@@ -49,7 +49,7 @@ async function briefing(pool, utilisateur, etabId) {
       if (netType) litsProposes.add(netType.id);
       if (netType) {
         ajouter(1, tr(L, 'r_nettoyer', { lit: netType.code }),
-          tr(L, 'r_nettoyer_raison', { ref: d.patient_ref, type: type(d.type_nom), min: d.attente_min }),
+          tr(L, 'r_nettoyer_raison', { ref: d.patient_ref, type: type(d.type_nom), duree: duree(L, d.attente_min) }),
           netType.nettoyage_debut ? null : { type: 'debut_nettoyage', lit_id: netType.id, libelle: tr(L, 'r_nettoyer_action') });
       }
       if (sug && (urgent || !netType)) {
@@ -67,7 +67,7 @@ async function briefing(pool, utilisateur, etabId) {
   for (const tr0 of transferts) {
     if (tr0.statut === 'demande' && tr0.destination_id === etabId) {
       ajouter(tr0.urgent ? 1 : 2, tr(L, 'r_repondre', { numero: tr0.numero }),
-        tr(L, 'r_repondre_raison', { origine: tr0.origine_nom, min: Math.round((Date.now() - new Date(tr0.date_demande)) / 60000),
+        tr(L, 'r_repondre_raison', { origine: tr0.origine_nom, duree: duree(L, (Date.now() - new Date(tr0.date_demande)) / 60000),
           urgent: tr0.urgent ? tr(L, 'r_urgent') : '', lit: tr0.lit_code }),
         { type: 'transfert', transfert_id: tr0.id, etape: 'accepter', libelle: tr(L, 'r_repondre_action') });
     }
@@ -83,7 +83,7 @@ async function briefing(pool, utilisateur, etabId) {
       { type: 'lit', lit_id: l.id, action: 'annuler', version: l.version, libelle: tr(L, 'r_reservation_action') });
   }
   for (const n of nettoyage.filter((x) => x.genre === 'lit' && x.priorite !== 'haute' && Number(x.age_min) > 2 * x.nettoyage_cible_min)) {
-    ajouter(2, tr(L, 'r_net_retard', { lit: n.code }), tr(L, 'r_net_retard_raison', { min: Math.round(Number(n.age_min)), cible: n.nettoyage_cible_min }),
+    ajouter(2, tr(L, 'r_net_retard', { lit: n.code }), tr(L, 'r_net_retard_raison', { duree: duree(L, Number(n.age_min)), cible: duree(L, n.nettoyage_cible_min) }),
       { type: 'lit', lit_id: n.id, action: 'nettoyage_ok', version: n.version, libelle: tr(L, 'r_net_retard_action') });
   }
 
@@ -98,7 +98,7 @@ async function briefing(pool, utilisateur, etabId) {
   }
   const depasses = lits.filter((l) => l.etat === 'occupe' && l.blocage_code === 'conge_depasse');
   if (depasses.length) {
-    ajouter(2, tr(L, 'r_depasses', { n: depasses.length }), tr(L, 'r_depasses_raison', { lits: depasses.map((l) => l.code).join(', ') }));
+    ajouter(2, tr(L, 'r_depasses', { n: depasses.length }), tr(L, 'r_depasses_raison', { n: depasses.length, lits: depasses.map((l) => l.code).join(', ') }));
   }
 
   // 4 bis. Urgence : patients sur civière
@@ -110,7 +110,7 @@ async function briefing(pool, utilisateur, etabId) {
     const libresReg = urgence.civieres.filter((c) => c.categorie === 'reguliere' && c.etat === 'libre');
     corridor.slice(0, libresReg.length).forEach((c, i) => {
       ajouter(2, tr(L, 'r_civ_deplacer', { ref: c.patient_ref, code: libresReg[i].code }),
-        tr(L, 'r_civ_deplacer_raison', { de: c.code, h: Math.floor(c.heures), code: libresReg[i].code }),
+        tr(L, 'r_civ_deplacer_raison', { de: c.code, duree: duree(L, c.heures * 60), code: libresReg[i].code }),
         { type: 'deplacer', civiere_id: c.id, vers_id: libresReg[i].id, version: libresReg[i].version, libelle: tr(L, 'r_civ_deplacer_action') });
     });
     const enAttenteCorridor = corridor.length - libresReg.length;
@@ -122,7 +122,7 @@ async function briefing(pool, utilisateur, etabId) {
     }
     // Patients sur civière depuis longtemps sans demande de lit
     for (const c of occupees.filter((x) => !x.demande_id && x.heures >= 12).sort((a, b) => b.heures - a.heures).slice(0, 5)) {
-      ajouter(c.heures >= 24 ? 1 : 2, tr(L, 'r_civ_demande', { ref: c.patient_ref }), tr(L, 'r_civ_demande_raison', { code: c.code, h: Math.floor(c.heures) }),
+      ajouter(c.heures >= 24 ? 1 : 2, tr(L, 'r_civ_demande', { ref: c.patient_ref }), tr(L, 'r_civ_demande_raison', { code: c.code, duree: duree(L, c.heures * 60) }),
         { type: 'aller', vue: 'urgence', libelle: tr(L, 'r_civ_demande_action') });
     }
     if (['orange', 'rouge'].includes(alerte.urgence?.niveau)) {
@@ -247,15 +247,15 @@ async function question(pool, utilisateur, etabId, q, fetchImpl) {
     const seuil = /48/.test(qn) ? 48 : /24/.test(qn) ? 24 : 0;
     const liste = civieres.filter((c) => c.etat === 'occupee' && c.heures >= seuil).sort((a, b) => b.heures - a.heures);
     return { mode: 'local', reponse: `${tr(L, 'q_civieres', { etab: etab.nom, occ: stats.occupees, fonc: stats.fonctionnelles, taux: stats.taux,
-      corridor: stats.en_corridor, h24: stats.plus_24h, h48: stats.plus_48h, duree: stats.duree_moy_h ?? 0 })}\n${liste.slice(0, 12).map((c) => tr(L, 'q_civieres_ligne',
-      { ref: c.patient_ref, code: c.code, h: Math.floor(c.heures),
+      corridor: stats.en_corridor, h24: stats.plus_24h, h48: stats.plus_48h, duree: duree(L, (stats.duree_moy_h ?? 0) * 60) })}\n${liste.slice(0, 12).map((c) => tr(L, 'q_civieres_ligne',
+      { ref: c.patient_ref, code: c.code, duree: duree(L, c.heures * 60),
         demande: c.demande_id ? tr(L, 'q_civieres_demande', { type: nomType(c.type_nom).toLowerCase() }) : tr(L, 'q_civieres_sans_demande') })).join('\n')}`.trim() };
   }
   if (/(attente|admission|urgence|waiting|emergency|\ber\b)/.test(qn)) {
     const nomType = await traducteurTypes(pool, L);
     const f = (await t.fileAdmission(pool, utilisateur, etabId)).filter((d) => d.statut === 'attente');
     return { mode: 'local', reponse: f.length ? `${tr(L, 'q_attente', { n: f.length })}\n${f.map((d) => tr(L, 'q_attente_ligne',
-      { ref: d.patient_ref, type: nomType(d.type_nom), prio: d.priorite.toUpperCase(), min: d.attente_min })
+      { ref: d.patient_ref, type: nomType(d.type_nom), prio: d.priorite.toUpperCase(), duree: duree(L, d.attente_min) })
       + (d.lit_suggere ? tr(L, 'q_attente_lit', { lit: d.lit_suggere.code }) : tr(L, 'q_attente_aucun_lit'))).join('\n')}` : tr(L, 'q_attente_vide') };
   }
   if (/(nettoy|menage|entretien|clean|housekeep)/.test(qn)) {

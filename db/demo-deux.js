@@ -115,14 +115,15 @@ async function demoDeux(pool, { silencieux = false } = {}) {
                           etat_depuis = now() - interval '30 hours'
                    WHERE id IN (SELECT id FROM lits WHERE etablissement_id = $1 AND type_id = $2 AND etat = 'libre' ORDER BY code DESC LIMIT 2)`, [ids.HX, types.CHIR]);
 
-    // Un mois d'historique terminé pour les indicateurs (transferts, admissions, nettoyages)
+    // Deux mois d'historique terminé pour les indicateurs et leur tendance (le mois le plus ancien est un peu moins bon)
     const coordo = async (sfx) => (await c.query('SELECT id FROM utilisateurs WHERE email = $1', [`coordo.${sfx}@demo.arrimo`])).rows[0].id;
     const ux = await coordo('x'); const uy = await coordo('y');
-    for (let j = 1; j <= 28; j += 1) {
+    for (let j = 1; j <= 58; j += 1) {
+      const ancien = j > 30;
       const vers = j % 5 === 0 ? 'X' : 'Y';
       const o = vers === 'Y' ? ids.HX : ids.HY; const d = vers === 'Y' ? ids.HY : ids.HX;
       const refuse = j % 9 === 0;
-      const valid = 12 + Math.floor(rnd() * 70); const total = valid + 50 + Math.floor(rnd() * 120);
+      const valid = 12 + Math.floor(rnd() * 70) + (ancien ? 25 : 0); const total = valid + 50 + Math.floor(rnd() * 120) + (ancien ? 40 : 0);
       const t = (await c.query(
         `INSERT INTO transferts (numero, patient_ref, origine_id, destination_id, type_id, urgent, statut, distance_km, demande_par,
                                  date_demande, date_validation, date_depart, date_reception, transport_info, motif_refus_code, motif_refus)
@@ -143,14 +144,16 @@ async function demoDeux(pool, { silencieux = false } = {}) {
          VALUES ($1, 'urgence', $2, $3, $4, 'admise', now() - make_interval(days => $5::int, hours => 8),
                  now() - make_interval(days => $5::int, hours => 8) + make_interval(mins => $6::int),
                  now() - make_interval(days => $5::int, hours => 8) + make_interval(mins => $6::int + 20))`,
-        [j % 3 === 0 ? ids.HY : ids.HX, types.MED, ref(), j % 4 === 0 ? 'p1' : 'p2', j, j % 3 === 0 ? 45 + j : 180 + j * 9]);
+        [j % 3 === 0 ? ids.HY : ids.HX, types.MED, ref(), j % 4 === 0 ? 'p1' : 'p2', j, (j % 3 === 0 ? 45 + j : 180 + (j % 30) * 9) + (ancien ? 70 : 0)]);
     }
     // nettoyages mesurés : paires « nettoyage » puis « libre » dans le journal
     const pourNettoyage = (await c.query(
       `SELECT id, etablissement_id FROM (SELECT id, etablissement_id, row_number() OVER (PARTITION BY etablissement_id ORDER BY id) AS n FROM lits) x
-        WHERE n <= 25 ORDER BY n, etablissement_id`)).rows;
+        WHERE n <= 50 ORDER BY n, etablissement_id`)).rows;
     for (const [i, l] of pourNettoyage.entries()) {
-      const jour = 1 + (i % 27); const duree = l.etablissement_id === ids.HX ? 70 + (i * 7) % 60 : 35 + (i * 5) % 25;
+      const ancien = i >= 50;
+      const jour = 1 + (i % 27) + (ancien ? 30 : 0);
+      const duree = (l.etablissement_id === ids.HX ? 70 + (i * 7) % 60 : 35 + (i * 5) % 25) + (ancien ? 15 : 0);
       await c.query(`INSERT INTO journal (lit_id, etablissement_id, action, ancien_etat, nouvel_etat, detail, date)
                      VALUES ($1, $2, 'Changement d’état', 'occupe', 'nettoyage', 'Départ du patient', now() - make_interval(days => $3::int, hours => 5))`,
       [l.id, l.etablissement_id, jour]);
@@ -186,10 +189,11 @@ async function demoDeux(pool, { silencieux = false } = {}) {
                        VALUES ($1, $2, 'Création', $3, 'Données de démonstration', now() - interval '31 days')`, [cv.id, ids[code], etat]);
       }
       // Séjours terminés du dernier mois : durée moyenne sur civière (X ≈ 20 h, Y ≈ 8 h)
-      for (let j = 0; j < 40; j += 1) {
+      for (let j = 0; j < 80; j += 1) {
         const cv = civs[j % civs.length];
-        const duree = code === 'HX' ? 8 + ((j * 7) % 30) : 3 + ((j * 5) % 11);
-        const debut = `now() - make_interval(days => ${2 + (j % 27)}, hours => ${j % 9})`;
+        const ancien = j >= 40;
+        const duree = (code === 'HX' ? 8 + ((j * 7) % 30) : 3 + ((j * 5) % 11)) + (ancien ? 4 : 0);
+        const debut = `now() - make_interval(days => ${2 + (j % 27) + (ancien ? 31 : 0)}, hours => ${j % 9})`;
         await c.query(`INSERT INTO journal (civiere_id, etablissement_id, action, ancien_etat, nouvel_etat, detail, date)
                        VALUES ($1, $2, 'Civière', 'libre', 'occupee', 'Données de démonstration', ${debut})`, [cv.id, ids[code]]);
         await c.query(`INSERT INTO journal (civiere_id, etablissement_id, action, ancien_etat, nouvel_etat, detail, date)

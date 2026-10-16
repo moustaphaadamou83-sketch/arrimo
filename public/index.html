@@ -6,6 +6,7 @@
 <title>Arrimo</title>
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="style.css">
+<script src="i18n/format.js"></script>
 <script src="i18n/fr.js"></script>
 <script src="i18n/en.js"></script>
 <script src="i18n/aide.fr.js"></script>
@@ -86,29 +87,40 @@
         <label class="ctx" for="ctx"><span data-i18n="barre.etablissement">Établissement</span>
           <select id="ctx"></select>
         </label>
-        <select class="choix-langue barre-langue" id="langue-barre" data-i18n-attr="aria-label:langue.choisir"></select>
-        <button class="btn icone" id="b-notif" aria-label="Notifications" title="Notifications" data-i18n-attr="aria-label:barre.notifications;title:barre.notifications">
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3a1.5 1.5 0 0 0-3 0v1.16A7 7 0 0 0 5 11v5l-2 2v1h18v-1Z"/></svg>
+        <button class="btn icone barre-btn" id="b-notif" aria-label="Notifications" title="Notifications" data-i18n-attr="aria-label:barre.notifications;title:barre.notifications">
+          <svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-bell"/></svg>
           <span id="n-notif" class="pastille" hidden>0</span>
         </button>
-        <button class="btn" id="b-aide" data-i18n="barre.aide" aria-controls="panneau-aide">Aide</button>
-        <button class="btn" id="b-compte" data-i18n="barre.mon_compte">Mon compte</button>
-        <button class="btn" id="b-deconnexion" data-i18n="barre.deconnexion">Déconnexion</button>
+        <div class="menu-compte">
+          <button class="btn barre-btn" id="b-menu" aria-haspopup="menu" aria-expanded="false" aria-controls="menu-compte">
+            <svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-circle-user-round"/></svg>
+            <span class="menu-libelle" data-i18n="barre.menu">Compte</span>
+            <svg class="ic petit" aria-hidden="true" focusable="false"><use href="icones.svg#i-chevron-down"/></svg>
+          </button>
+          <div class="menu" id="menu-compte" role="menu" hidden>
+            <p class="menu-qui" id="menu-qui"></p>
+            <button role="menuitem" class="menu-item" id="b-aide" aria-controls="panneau-aide"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-circle-help"/></svg><span data-i18n="barre.aide">Aide</span></button>
+            <button role="menuitem" class="menu-item" id="b-compte"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-user"/></svg><span data-i18n="barre.mon_compte">Mon compte</span></button>
+            <label class="menu-langue"><span data-i18n="langue.choisir">Langue</span>
+              <select class="choix-langue" id="langue-barre" data-i18n-attr="aria-label:langue.choisir"></select></label>
+            <button role="menuitem" class="menu-item" id="b-deconnexion"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-log-out"/></svg><span data-i18n="barre.deconnexion">Déconnexion</span></button>
+          </div>
+        </div>
       </div>
     </div>
     <nav class="onglets" id="onglets" role="tablist">
-      <button role="tab" data-v="copilote" aria-selected="true" data-i18n="onglets.copilote">Copilote</button>
-      <button role="tab" data-v="reseau" aria-selected="false" data-i18n="onglets.reseau">Réseau</button>
-      <button role="tab" data-v="lits" aria-selected="false" data-i18n="onglets.lits">Lits</button>
-      <button role="tab" data-v="urgence" aria-selected="false" data-i18n="onglets.urgence">Urgence</button>
-      <button role="tab" data-v="admissions" aria-selected="false"><span data-i18n="onglets.admissions">Admissions</span> <span class="n" id="n-adm">0</span></button>
-      <button role="tab" data-v="transferts" aria-selected="false"><span data-i18n="onglets.transferts">Transferts</span> <span class="n" id="n-tr">0</span></button>
-      <button role="tab" data-v="nettoyage" aria-selected="false"><span data-i18n="onglets.nettoyage">Nettoyage</span> <span class="n" id="n-net">0</span></button>
-      <button role="tab" data-v="nsa" aria-selected="false" data-i18n="onglets.nsa">NSA</button>
-      <button role="tab" data-v="indicateurs" aria-selected="false" data-i18n="onglets.indicateurs">Indicateurs</button>
-      <button role="tab" data-v="journal" aria-selected="false" data-i18n="onglets.journal">Journal</button>
-      <button role="tab" data-v="params" aria-selected="false" data-i18n="onglets.params">Paramètres</button>
-      <button role="tab" data-v="admin" aria-selected="false" hidden data-i18n="onglets.admin">Administration</button>
+      <button role="tab" data-v="copilote" aria-selected="true"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-sparkles"/></svg><span data-i18n="onglets.copilote"></span></button>
+      <button role="tab" data-v="reseau" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-network"/></svg><span data-i18n="onglets.reseau"></span></button>
+      <button role="tab" data-v="lits" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-bed-double"/></svg><span data-i18n="onglets.lits"></span></button>
+      <button role="tab" data-v="urgence" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-siren"/></svg><span data-i18n="onglets.urgence"></span></button>
+      <button role="tab" data-v="admissions" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-clipboard-list"/></svg><span data-i18n="onglets.admissions"></span> <span class="n" id="n-adm">0</span></button>
+      <button role="tab" data-v="transferts" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-ambulance"/></svg><span data-i18n="onglets.transferts"></span> <span class="n" id="n-tr">0</span></button>
+      <button role="tab" data-v="nettoyage" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-spray-can"/></svg><span data-i18n="onglets.nettoyage"></span> <span class="n" id="n-net">0</span></button>
+      <button role="tab" data-v="nsa" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-hourglass"/></svg><span data-i18n="onglets.nsa"></span></button>
+      <button role="tab" data-v="indicateurs" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-chart-column"/></svg><span data-i18n="onglets.indicateurs"></span></button>
+      <button role="tab" data-v="journal" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-history"/></svg><span data-i18n="onglets.journal"></span></button>
+      <button role="tab" data-v="params" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-settings"/></svg><span data-i18n="onglets.params"></span></button>
+      <button role="tab" data-v="admin" aria-selected="false" hidden><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-shield-check"/></svg><span data-i18n="onglets.admin"></span></button>
     </nav>
   </header>
   <div id="bandeau" class="bandeau" hidden></div>

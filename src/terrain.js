@@ -6,7 +6,7 @@ const { transaction, ErreurHttp } = require('./db');
 const { exigerEtablissement } = require('./auth');
 const { changerEtat, journaliser } = require('./regles');
 const s = require('./services');
-const { tr, traducteurTypes } = require('./langue');
+const { tr, traducteurTypes, duree } = require('./langue');
 const cv = require('./civieres');
 
 const ORIENTATIONS = ['chsld', 'ri', 'readaptation', 'domicile', 'palliatif', 'autre'];
@@ -89,7 +89,7 @@ async function fileNettoyage(pool, utilisateur, etabId) {
     r.priorite_score = manque * 100 + Number(r.age_min);
     r.priorite = manque > 0 ? 'haute' : Number(r.age_min) > r.nettoyage_cible_min ? 'moyenne' : 'normale';
     r.raison = manque > 0 ? tr(L, 'net_attente', { n: r.en_attente, type: nomType(r.type_nom).toLowerCase() })
-      : Number(r.age_min) > r.nettoyage_cible_min ? tr(L, 'net_long', { min: r.nettoyage_cible_min }) : tr(L, 'net_ordre');
+      : Number(r.age_min) > r.nettoyage_cible_min ? tr(L, 'net_long', { duree: duree(L, r.nettoyage_cible_min) }) : tr(L, 'net_ordre');
   }
   // Civières de l'urgence à nettoyer : une civière régulière passe en premier si des patients attendent en corridor
   const civ = await pool.query(
@@ -105,7 +105,7 @@ async function fileNettoyage(pool, utilisateur, etabId) {
     r.priorite_score = manque * 100 + age;
     r.priorite = manque > 0 ? 'haute' : age > r.nettoyage_civiere_cible_min ? 'moyenne' : 'normale';
     r.raison = manque > 0 ? tr(L, 'net_civiere_corridor', { n: manque })
-      : age > r.nettoyage_civiere_cible_min ? tr(L, 'net_long', { min: r.nettoyage_civiere_cible_min }) : tr(L, 'net_ordre');
+      : age > r.nettoyage_civiere_cible_min ? tr(L, 'net_long', { duree: duree(L, r.nettoyage_civiere_cible_min) }) : tr(L, 'net_ordre');
   }
   return [...rows, ...civ.rows].sort((a, b) => b.priorite_score - a.priorite_score);
 }
@@ -295,9 +295,9 @@ async function listeNsa(pool, utilisateur, etabId) {
 }
 
 /* ------------------------------------------------------------------ indicateurs */
-async function indicateurs(pool, utilisateur, etabId, jours = 30) {
-  exigerEtablissement(utilisateur, etabId);
-  const j = Math.min(Math.max(Number(jours) || 30, 1), 365);
+/** Mesures de fluidité sur une fenêtre de temps : de `debut` jours avant maintenant à `fin` jours avant maintenant. */
+async function mesuresPeriode(pool, etabId, debut, fin) {
+  const fenetre = (col) => `${col} > now() - make_interval(days => $2) AND ${col} <= now() - make_interval(days => $3)`;
   const tr = await pool.query(
     `SELECT count(*)::int AS total,
             count(*) FILTER (WHERE origine_id = $1)::int AS sortants,
@@ -307,40 +307,73 @@ async function indicateurs(pool, utilisateur, etabId, jours = 30) {
             round(avg(EXTRACT(EPOCH FROM (date_reception - date_demande)) / 60) FILTER (WHERE date_reception IS NOT NULL))::int AS delai_total_min,
             COALESCE(jsonb_object_agg(motif_refus_code, n) FILTER (WHERE motif_refus_code IS NOT NULL), '{}') AS refus_par_motif
        FROM (SELECT t.*, count(*) OVER (PARTITION BY motif_refus_code) AS n FROM transferts t
-              WHERE (origine_id = $1 OR destination_id = $1) AND date_demande > now() - make_interval(days => $2)) x`, [etabId, j]);
+              WHERE (origine_id = $1 OR destination_id = $1) AND ${fenetre('date_demande')}) x`, [etabId, debut, fin]);
   const adm = await pool.query(
     `SELECT count(*)::int AS total,
             count(*) FILTER (WHERE statut = 'attente')::int AS en_attente,
             round(avg(EXTRACT(EPOCH FROM (assignee_le - cree_le)) / 60) FILTER (WHERE assignee_le IS NOT NULL))::int AS delai_assignation_min,
             count(*) FILTER (WHERE statut = 'transferee')::int AS transferees
-       FROM demandes_admission WHERE etablissement_id = $1 AND cree_le > now() - make_interval(days => $2)`, [etabId, j]);
+       FROM demandes_admission WHERE etablissement_id = $1 AND ${fenetre('cree_le')}`, [etabId, debut, fin]);
   const net = await pool.query(
     `WITH ev AS (
        SELECT lit_id, date, nouvel_etat, ancien_etat,
               lag(date) OVER (PARTITION BY lit_id ORDER BY date, id) AS date_prec,
               lag(nouvel_etat) OVER (PARTITION BY lit_id ORDER BY date, id) AS etat_prec
-         FROM journal WHERE etablissement_id = $1 AND action = 'Changement d’état' AND date > now() - make_interval(days => $2))
+         FROM journal WHERE etablissement_id = $1 AND action = 'Changement d’état'
+          AND date > now() - make_interval(days => $2) - interval '1 day' AND date <= now() - make_interval(days => $3))
      SELECT round(avg(EXTRACT(EPOCH FROM (date - date_prec)) / 60))::int AS duree_moy_min, count(*)::int AS nettoyages
-       FROM ev WHERE ancien_etat = 'nettoyage' AND nouvel_etat = 'libre' AND etat_prec = 'nettoyage'`, [etabId, j]);
+       FROM ev WHERE ancien_etat = 'nettoyage' AND nouvel_etat = 'libre' AND etat_prec = 'nettoyage'
+        AND date > now() - make_interval(days => $2)`, [etabId, debut, fin]);
+  const t = tr.rows[0];
+  return {
+    transferts: { ...t, taux_refus: t.total ? Math.round((t.refuses / t.total) * 1000) / 10 : 0 },
+    admissions: adm.rows[0],
+    nettoyage: net.rows[0],
+    civieres: await cv.dureePeriode(pool, etabId, debut, fin),
+  };
+}
+
+/**
+ * Indicateurs de l'établissement : capacité maintenant, fluidité sur la période et sur la période précédente
+ * (même durée, juste avant), pour afficher la tendance ; cibles issues de la configuration du pays.
+ */
+async function indicateurs(pool, utilisateur, etabId, jours = 30) {
+  exigerEtablissement(utilisateur, etabId);
+  const j = Math.min(Math.max(Number(jours) || 30, 1), 365);
+  const [actuelle, precedente] = [await mesuresPeriode(pool, etabId, j, 0), await mesuresPeriode(pool, etabId, 2 * j, j)];
   const cap = await pool.query(
     `SELECT count(*) FILTER (WHERE etat <> 'indispo')::int AS dotes,
             count(*) FILTER (WHERE etat = 'libre')::int AS libres,
             count(*) FILTER (WHERE etat = 'indispo')::int AS indispo,
             COALESCE(jsonb_object_agg(motif_indispo, n) FILTER (WHERE motif_indispo IS NOT NULL), '{}') AS indispo_par_motif
        FROM (SELECT l.*, count(*) OVER (PARTITION BY motif_indispo) AS n FROM lits l WHERE etablissement_id = $1) x`, [etabId]);
+  const cfg = (await pool.query(
+    `SELECT c.seuil_jaune, c.seuil_orange, c.seuil_rouge, c.attente_admission_max_min, c.nettoyage_cible_min, c.cible_nsa_pct,
+            c.seuil_civieres_jaune, c.seuil_civieres_orange, c.seuil_civieres_rouge
+       FROM etablissements e JOIN config_pays c ON c.id = e.config_id WHERE e.id = $1`, [etabId])).rows[0];
   const nsa = await listeNsa(pool, utilisateur, etabId);
   const alerte = await niveauAlerte(pool, etabId, utilisateur.langue);
-  const urgence = alerte.urgence ? { ...alerte.urgence, periode: await cv.dureePeriode(pool, etabId, j) } : null;
-  const t = tr.rows[0];
+  const urgence = alerte.urgence ? { ...alerte.urgence, periode: actuelle.civieres } : null;
+  const c = cap.rows[0];
   return {
     periode_jours: j,
-    capacite: { ...cap.rows[0], occupation: cap.rows[0].dotes ? Math.round(((cap.rows[0].dotes - cap.rows[0].libres) / cap.rows[0].dotes) * 100) : 0 },
-    transferts: { ...t, taux_refus: t.total ? Math.round((t.refuses / t.total) * 100) : 0 },
-    admissions: adm.rows[0],
-    nettoyage: net.rows[0],
+    capacite: { ...c, occupation: c.dotes ? Math.round(((c.dotes - c.libres) / c.dotes) * 1000) / 10 : 0 },
+    transferts: actuelle.transferts,
+    admissions: actuelle.admissions,
+    nettoyage: actuelle.nettoyage,
     nsa: { total: nsa.total, taux: nsa.taux, cible: nsa.cible, jours_lits: nsa.jours_lits, par_orientation: nsa.par_orientation },
     urgence,
     alerte,
+    // Période précédente, de même durée : pour la tendance (↑ ↓)
+    precedent: {
+      delai_assignation_min: precedente.admissions.delai_assignation_min,
+      delai_validation_min: precedente.transferts.delai_validation_min,
+      delai_total_min: precedente.transferts.delai_total_min,
+      taux_refus: precedente.transferts.total ? precedente.transferts.taux_refus : null,
+      nettoyage_min: precedente.nettoyage.duree_moy_min,
+      civiere_h: precedente.civieres.duree_moy_h,
+    },
+    cibles: cfg,
   };
 }
 

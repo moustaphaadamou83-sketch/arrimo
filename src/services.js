@@ -1,7 +1,7 @@
 const { transaction, ErreurHttp } = require('./db');
 const { changerEtat, journaliser } = require('./regles');
 const { exigerEtablissement, peutAgirPour } = require('./auth');
-const { tr, dico, traducteurTypes } = require('./langue');
+const { tr, dico, traducteurTypes, duree } = require('./langue');
 const cv = require('./civieres');
 
 /* ------------------------------------------------------------------ outils */
@@ -49,7 +49,12 @@ async function notifier(db, etablissementId, transfertId, code, vars) {
 
 /** Motif d'un blocage dans la langue de l'utilisateur (repli sur le texte enregistré). */
 function motifBlocage(langue, lit) {
-  return lit.blocage_code ? tr(langue, `blocage.${lit.blocage_code}`, lit.blocage_vars || {}) : lit.blocage_motif;
+  return lit.blocage_code ? texteBlocage(langue, lit.blocage_code, lit.blocage_vars || {}) : lit.blocage_motif;
+}
+/** Texte d'un blocage : les durées enregistrées (minutes ou heures) sont mises en forme selon la langue. */
+function texteBlocage(langue, code, v) {
+  const d = v.min != null ? duree(langue, v.min) : v.h != null ? duree(langue, v.h * 60) : undefined;
+  return tr(langue, `blocage.${code}`, { ...v, duree: d, cible: v.cible != null ? duree(langue, v.cible) : undefined });
 }
 
 /* ------------------------------------------------------------------ capacité */
@@ -186,7 +191,7 @@ async function recommander(pool, utilisateur, depuisId, typeId, besoins = {}) {
   const L = utilisateur.langue;
   const niv = dico(L, 'niveau');
   for (const x of res) {
-    const route = tr(L, 'route', { min: x.minutes_route, km: x.distance_km });
+    const route = tr(L, 'route', { duree: duree(L, x.minutes_route), km: x.distance_km });
     const dispo = x.libres ? tr(L, 'dispo_libres', { n: x.libres }) : tr(L, 'dispo_prevus', { n: x.prevus, h: cfg.horizon_h });
     const tension = x.niveau === 'vert' ? tr(L, 'tension_vert') : tr(L, 'tension', { niveau: niv[x.niveau], p: x.pression });
     x.raison = `${route} · ${dispo} · ${tension}`;
@@ -472,7 +477,7 @@ async function detecterBlocages(pool) {
     } else if (l.etat === 'indispo' && age > l.hors_service_max_h * 60) {
       niveau = 'faible'; code = 'hors_service_long'; vars = { h: Math.floor(age / 60) };
     }
-    const motif = code ? tr('fr', `blocage.${code}`, vars) : null;
+    const motif = code ? texteBlocage('fr', code, vars) : null;
     if (niveau !== l.blocage_niveau || motif !== l.blocage_motif) {
       await pool.query('UPDATE lits SET blocage_niveau = $2, blocage_motif = $3, blocage_code = $4, blocage_vars = $5 WHERE id = $1',
         [l.id, niveau, motif, code, vars]);
