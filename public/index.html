@@ -27,6 +27,7 @@
     <input id="c-mdp" type="password" autocomplete="current-password" required>
     <p id="c-erreur" class="erreur" role="alert" hidden></p>
     <button class="btn pri large" type="submit" data-i18n="connexion.se_connecter">Se connecter</button>
+    <button class="lien" type="button" id="b-oubli" hidden data-i18n="connexion.oublie">Mot de passe oublié ?</button>
     <nav class="liens-legaux"><a href="/confidentialite" data-i18n="pied.confidentialite">Confidentialité</a> · <a href="/conditions" data-i18n="pied.conditions">Conditions d’utilisation</a></nav>
   </form>
   <form id="f-2fa" class="carte-connexion" novalidate hidden>
@@ -38,6 +39,28 @@
     <p id="c-erreur-2fa" class="erreur" role="alert" hidden></p>
     <button class="btn pri large" type="submit" data-i18n="connexion.valider">Valider</button>
     <button class="btn large" type="button" id="b-retour-connexion" data-i18n="general.retour">Retour</button>
+  </form>
+  <form id="f-oubli" class="carte-connexion" novalidate hidden>
+    <img src="logo.svg" alt="" width="56" height="56">
+    <h1 data-i18n="connexion.oubli_titre">Mot de passe oublié</h1>
+    <p class="muted" data-i18n="connexion.oubli_aide">Entrez votre adresse courriel professionnelle.</p>
+    <label for="o-email" data-i18n="connexion.courriel">Adresse courriel</label>
+    <input id="o-email" type="email" autocomplete="username" required>
+    <p id="o-message" class="succes-msg" role="status" hidden></p>
+    <p id="o-erreur" class="erreur" role="alert" hidden></p>
+    <button class="btn pri large" type="submit" data-i18n="connexion.envoyer">Envoyer le lien</button>
+    <button class="btn large" type="button" id="b-oubli-retour" data-i18n="general.retour">Retour</button>
+  </form>
+  <form id="f-reinit" class="carte-connexion" novalidate hidden>
+    <img src="logo.svg" alt="" width="56" height="56">
+    <h1 data-i18n="connexion.reinit_titre">Nouveau mot de passe</h1>
+    <p class="muted" data-i18n="connexion.reinit_aide">Au moins 12 caractères, avec des lettres et des chiffres.</p>
+    <label for="r-nouveau" data-i18n="connexion.nouveau">Nouveau mot de passe</label>
+    <input id="r-nouveau" type="password" autocomplete="new-password" required>
+    <label for="r-confirme" data-i18n="connexion.confirmer">Confirmer</label>
+    <input id="r-confirme" type="password" autocomplete="new-password" required>
+    <p id="r-erreur" class="erreur" role="alert" hidden></p>
+    <button class="btn pri large" type="submit" data-i18n="general.enregistrer">Enregistrer</button>
   </form>
   <form id="f-mdp-temp" class="carte-connexion" novalidate hidden>
     <img src="logo.svg" alt="" width="56" height="56">

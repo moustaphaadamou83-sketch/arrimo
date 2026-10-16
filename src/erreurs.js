@@ -24,6 +24,7 @@ const MESSAGES = {
   pas_2fa: 'La double authentification n’est pas active.',
   qr_dabord: 'Commencez par afficher le code QR.',
   jeton_invalide: 'Ce lien n’est plus valable. Demandez-en un nouveau.',
+  courriel_non_configure: 'L’envoi de courriels n’est pas encore configuré. Demandez une réinitialisation à votre administrateur.',
   trop_requetes: 'Trop de requêtes. Patientez quelques secondes et réessayez.',
   // accès
   etab_interdit: "Vous n'avez pas accès à cet établissement.",

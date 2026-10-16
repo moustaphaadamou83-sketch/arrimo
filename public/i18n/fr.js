@@ -17,7 +17,11 @@ window.ARRIMO_I18N.fr = {
     temp_actuel: 'Mot de passe temporaire', nouveau: 'Nouveau mot de passe', confirmer: 'Confirmer', temp_ok: 'Enregistrer et continuer',
     mdp_enregistre: 'Mot de passe enregistré.', session_expiree: 'Session expirée. Reconnectez-vous.',
     sans_etab: 'Votre compte n’est rattaché à aucun établissement. Contactez votre gestionnaire.',
-    oublie: 'Mot de passe oublié ?',
+    oublie: 'Mot de passe oublié ?', oubli_titre: 'Mot de passe oublié',
+    oubli_aide: 'Entrez votre adresse courriel professionnelle. Si un compte existe, vous recevrez un lien valable 30 minutes.',
+    envoyer: 'Envoyer le lien', oubli_envoye: 'Si un compte existe pour cette adresse, un courriel vient d’être envoyé. Le lien est valable 30 minutes.',
+    reinit_titre: 'Nouveau mot de passe', reinit_aide: 'Choisissez un mot de passe d’au moins 12 caractères, avec des lettres et des chiffres.',
+    reinit_ok: 'Mot de passe enregistré. Connectez-vous avec votre nouveau mot de passe.',
   },
   barre: {
     etablissement: 'Établissement', notifications: 'Notifications', mon_compte: 'Mon compte', deconnexion: 'Déconnexion', aide: 'Aide',

@@ -102,6 +102,8 @@ const TEXTES = {
     q_combien_sans: '• {type} : pas d’unité ici, {reseau} dans le réseau',
     q_aide: 'Je peux répondre à des questions comme :\n• Combien de lits libres en soins intensifs ?\n• Où trouver un lit de chirurgie le plus proche ?\n• Quels lits bloquent chez nous ?\n• Combien de lits vont se libérer d’ici ce soir ?',
     ia_langue: 'Réponds en français',
+    courriel_sujet: 'Arrimo · Réinitialiser votre mot de passe',
+    courriel_texte: 'Bonjour {nom},\n\nVous avez demandé à réinitialiser votre mot de passe Arrimo. Ouvrez ce lien pour en choisir un nouveau ; il est valable {min} minutes et ne sert qu’une fois :\n\n{lien}\n\nSi vous n’êtes pas à l’origine de cette demande, ignorez ce courriel : votre mot de passe ne change pas.\n\nArrimo',
   },
   en: {
     locale: 'en-CA',
@@ -193,6 +195,8 @@ const TEXTES = {
     q_combien_sans: '• {type}: no unit here, {reseau} in the network',
     q_aide: 'I can answer questions such as:\n• How many free intensive care beds?\n• Where is the closest surgery bed?\n• Which beds are blocked here?\n• How many beds will free up by tonight?',
     ia_langue: 'Answer in English',
+    courriel_sujet: 'Arrimo · Reset your password',
+    courriel_texte: 'Hello {nom},\n\nYou asked to reset your Arrimo password. Open this link to choose a new one; it is valid for {min} minutes and can be used only once:\n\n{lien}\n\nIf you did not make this request, ignore this email: your password does not change.\n\nArrimo',
   },
 };
 
