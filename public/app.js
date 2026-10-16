@@ -12,6 +12,7 @@ const ACTIONS = {
 const STATUTS = [['demande', 'var(--attention)'], ['validee', 'var(--secondaire)'], ['transport', 'var(--info)'],
   ['en_route', 'var(--principal)'], ['recu', 'var(--succes)'], ['refuse', 'var(--critique)']];
 const BESOINS = ['isolement', 'pression_negative', 'ventilation', 'telemetrie'];
+const COULEUR_NIVEAU = { vert: 'var(--succes)', jaune: '#B45309', orange: '#D97706', rouge: 'var(--critique)' };
 
 const etat = {
   token: null, moi: null, ctx: null, vue: 'copilote', filtreUnite: '*', jours: 30,
@@ -318,7 +319,7 @@ async function rafraichir() {
     bandeau.hidden = e.module_actif;
     bandeau.innerHTML = e.module_actif ? '' : `<div>${t('barre.bandeau_inactif', { etab: esc(e.nom) })}</div>`;
     await Promise.all([majCompteurs(), ({
-      copilote: vueCopilote, reseau: vueReseau, lits: vueLits, admissions: vueAdmissions, transferts: vueTransferts,
+      copilote: vueCopilote, reseau: vueReseau, lits: vueLits, urgence: vueUrgence, admissions: vueAdmissions, transferts: vueTransferts,
       nettoyage: vueNettoyage, nsa: vueNsa, indicateurs: vueIndicateurs, journal: vueJournal, params: vueParams,
       admin: vueAdmin, compte: vueCompte,
     })[etat.vue]()]);
@@ -417,6 +418,9 @@ async function vueReseau() {
       <div class="unites">${x.unites.map((u) => `<div class="unite"><span>${esc(u.type_nom)}</span>${barre(u.repartition, u.dotes + (u.repartition?.indispo || 0))}
         <span class="mono">${u.libres} / ${u.dotes}${u.prevus != null ? ` <small class="muted" title="${esc(t('reseau.prevus_titre'))}">+${u.prevus}</small>` : ''}</span>
         <span class="risque ${u.risque}" title="${esc(t('reseau.risque_titre'))}">${esc(t(`risques.${u.risque}`))}</span></div>`).join('')}</div>
+      ${x.urgence ? `<div class="urgence-etab"><span>${esc(t('reseau.urgence', { occ: x.urgence.occupees, fonc: x.urgence.fonctionnelles }))}</span>
+        <span><b class="mono">${x.urgence.taux} %</b>${x.urgence.plus_24h != null ? ` · ${esc(t('reseau.urgence_24h', { n: x.urgence.plus_24h }))}` : ''}
+        <span class="risque" style="color:${COULEUR_NIVEAU[x.urgence.niveau]}">${esc(t(`niveaux.${x.urgence.niveau}`))}</span></span></div>` : ''}
       ${x.partage === 'agrege' && !x.moi ? `<p class="note" style="margin:8px 0 0">${esc(t('reseau.agrege_note'))}</p>` : ''}</article>`).join('');
 
   v.innerHTML = `<div class="entete"><div><h2>${esc(t('reseau.titre'))}</h2><p>${esc(t('reseau.intro', { etab: e.nom, h: cfg.horizon_h }))}</p></div>
@@ -680,14 +684,17 @@ function executerProposition(a, bouton) {
     transfert: () => api('POST', `/transferts/${a.transfert_id}/${a.etape}`),
     lit: () => api('POST', `/lits/${a.lit_id}/action`, { action: a.action, version: a.version }),
     conge: () => api('PUT', `/lits/${a.lit_id}/conge`, { statut: a.statut }),
+    civiere: () => api('POST', `/civieres/${a.civiere_id}/action`, { action: a.action, version: a.version }),
+    deplacer: () => api('POST', `/civieres/${a.civiere_id}/deplacer`, { vers_id: a.vers_id, version: a.version }),
   }[a.type];
+  if (a.type === 'aller') { allerA(a.vue); return; }
   if (!faire) return;
   if (a.type === 'transferer') {
     modale(t('copilote.transfert_titre'), `<p>${esc(a.libelle)}.</p><p class="note">${esc(t('copilote.transfert_aide'))}</p>`,
       [{ label: t('general.annuler') }, { label: t('general.confirmer'), pri: true, run: async () => (await agir(null, faire, t('copilote.transfert_ok'))) !== null || false }]);
     return;
   }
-  const messages = { assigner: 'copilote.assigner_ok', debut_nettoyage: 'copilote.nettoyage_ok', lit: 'copilote.lit_ok',
+  const messages = { assigner: 'copilote.assigner_ok', debut_nettoyage: 'copilote.nettoyage_ok', lit: 'copilote.lit_ok', civiere: 'copilote.civiere_ok', deplacer: 'copilote.deplace_ok',
     conge: 'copilote.conge_ok', transfert: a.etape === 'accepter' ? 'copilote.accepte_ok' : 'copilote.transport_ok' };
   agir(bouton, faire, t(messages[a.type] || 'general.fait'));
 }
@@ -715,8 +722,8 @@ async function vueCopilote() {
         <div class="chips">${exemples.map((x, i) => `<button class="chip" data-ex="${i}">${esc(x)}</button>`).join('')}</div>
         ${etat.reponse ? `<div class="reponse">${esc(etat.reponse)}</div><span class="mode">${C(etat.modeReponse === 'ia' ? 'mode_ia' : 'mode_local')}</span>` : ''}</div>
       <div class="panneau-c"><h3>${C('reseau')}</h3><div class="liste">${r.etablissements.map((e) => `<div class="item"><div><strong>${esc(e.nom)}</strong>${e.moi ? ` <span class="badge fort">${C('vous')}</span>` : ''}
-        <div class="note">${C('libres', { n: e.libres })}${e.en_attente != null ? C('en_attente', { n: e.en_attente }) : ''}${e.moi ? '' : ` · ${esc(t('general.km', { n: e.distance_km }))}`}</div></div>
-        <span class="risque" style="color:${{ vert: 'var(--succes)', jaune: '#B45309', orange: '#D97706', rouge: 'var(--critique)' }[e.niveau]}">${esc(t(`niveaux.${e.niveau}`))} · ${e.pression} %</span></div>`).join('')}</div>
+        <div class="note">${C('libres', { n: e.libres })}${e.en_attente != null ? C('en_attente', { n: e.en_attente }) : ''}${e.urgence ? C('urgence_taux', { n: e.urgence.taux }) : ''}${e.moi ? '' : ` · ${esc(t('general.km', { n: e.distance_km }))}`}</div></div>
+        <span class="risque" style="color:${COULEUR_NIVEAU[e.niveau]}">${esc(t(`niveaux.${e.niveau}`))} · ${e.pression} %</span></div>`).join('')}</div>
         ${r.delestages.length ? `<h3 style="margin-top:6px">${C('delestages')}</h3><div class="liste">${r.delestages.map((d) => `<div class="item"><div><strong>${esc(d.de)} → ${esc(d.vers)}</strong><div class="note">${esc(d.type)} · ${esc(d.raison)}</div></div></div>`).join('')}</div>` : ''}</div>
     </div></div>`;
   v.querySelectorAll('[data-reco]').forEach((btn) => { btn.onclick = () => executerProposition(etat.recos[Number(btn.dataset.reco)].action, btn); });
@@ -729,16 +736,110 @@ async function vueCopilote() {
   v.querySelectorAll('[data-ex]').forEach((c) => { c.onclick = () => poser(exemples[Number(c.dataset.ex)]); });
 }
 
+/* ---------------- Urgence : civières ---------------- */
+const classeDuree = (h) => (h >= 48 ? 'duree-48' : h >= 24 ? 'duree-24' : 'note');
+const heures = (h) => (h == null ? '—' : t('urgence.heures', { h: String(h).replace('.', t('langue.locale') === 'fr-CA' ? ',' : '.') }));
+const ACTIONS_CIV = {
+  libre: [['placer', true], ['hors_service']],
+  occupee: [['demander', true], ['deplacer'], ['liberer']],
+  nettoyage: [['nettoyage_ok', true]],
+  indispo: [['remettre', true]],
+};
+async function vueUrgence() {
+  const v = $('#v-urgence');
+  const { civieres, stats } = await api('GET', `/civieres?etablissement_id=${etat.ctx}`);
+  const actif = etabCtx().module_actif;
+  const cfg = configCtx();
+  const U = (k, vars) => esc(t(`urgence.${k}`, vars));
+  if (!stats) {
+    v.innerHTML = `<div class="entete"><div><h2>${U('titre', { etab: etabCtx().nom })}</h2><p>${U('aucune')}</p></div></div>`;
+    return;
+  }
+  const tuile = (l, val, note, mauvais) => `<div class="tuile"><span class="lbl">${l}</span><span class="v${mauvais ? ' mauvais' : ''}">${esc(val)}</span><span class="note">${note}</span></div>`;
+  const libres = civieres.filter((c) => c.etat === 'libre');
+  const carte = (c) => {
+    const actions = (ACTIONS_CIV[c.etat] || []).filter(([a]) => !(a === 'demander' && c.demande_id) && !(a === 'deplacer' && !libres.length));
+    return `<div class="fiche e-${c.etat}">
+      <div class="t"><b>${esc(c.code)}</b><span class="note">${esc(t(`etats.${c.etat}`))}</span></div>
+      ${c.patient_ref ? `<div class="note">${t('lits.patient', { ref: esc(c.patient_ref) })} · <span class="${classeDuree(c.heures)}">${U('depuis_h', { h: Math.floor(c.heures) })}</span></div>` : ''}
+      ${c.demande_id ? `<div class="note">${c.demande_statut === 'assignee' ? t('urgence.lit_assigne', { code: esc(c.lit_code) }) : U('demande', { type: c.type_nom, prio: c.demande_priorite.toUpperCase() })}</div>`
+    : c.etat === 'occupee' ? `<div class="alerte">${U('sans_demande')}</div>` : ''}
+      ${c.motif_indispo ? `<div class="note">${esc(t('lits.motif', { motif: t(`motifs.${c.motif_indispo}`) }))}</div>` : ''}
+      ${c.etat !== 'occupee' ? `<div class="note mono" title="${esc(t('lits.depuis_titre'))}">${depuis(c.etat_depuis)}</div>` : ''}
+      ${actif && actions.length ? `<div class="actions">${actions.map(([a, p]) => `<button class="btn${p ? ' pri' : ''}" data-civ="${c.id}" data-a="${a}" data-version="${c.version}" data-code="${esc(c.code)}">${U(`a_${a}`)}</button>`).join('')}</div>` : ''}
+    </div>`;
+  };
+  const groupe = (cat) => {
+    const liste = civieres.filter((c) => c.categorie === cat);
+    return liste.length ? `<h3>${U(`cat_${cat}`)} <span class="note mono">${liste.filter((c) => c.etat === 'occupee').length} / ${liste.length}</span></h3><div class="civieres">${liste.map(carte).join('')}</div>` : '';
+  };
+  v.innerHTML = `<div class="entete"><div><h2>${U('titre', { etab: etabCtx().nom })}</h2><p>${U('intro')}</p></div>
+    <div class="legende">${['libre', 'occupee', 'nettoyage', 'indispo'].map((k) => `<span><i class="f-${k === 'occupee' ? 'occupe' : k}"></i>${esc(t(`etats.${k}`))}</span>`).join('')}</div></div>
+    <div class="tuiles">
+      ${tuile(U('taux'), `${stats.taux} %`, U('taux_note', { occ: stats.occupees, fonc: stats.fonctionnelles }), stats.taux >= cfg.seuil_civieres_orange)}
+      ${tuile(U('corridor'), String(stats.en_corridor), U('corridor_note', { n: stats.libres }), stats.en_corridor > 0)}
+      ${tuile(U('plus_24h'), String(stats.plus_24h), U('plus_48h', { n: stats.plus_48h }), stats.plus_24h > 0)}
+      ${tuile(U('duree'), heures(stats.duree_moy_h), U('duree_note'), stats.duree_moy_h >= 24)}</div>
+    ${groupe('reguliere')}${groupe('debordement')}
+    <p class="note">${U('ref_seulement')}</p>`;
+  v.querySelectorAll('[data-civ]').forEach((b) => {
+    b.onclick = () => {
+      const id = Number(b.dataset.civ); const a = b.dataset.a; const version = Number(b.dataset.version); const code = b.dataset.code;
+      const c = civieres.find((x) => x.id === id);
+      const post = (corps, msg) => agir(null, () => api('POST', `/civieres/${id}/action`, { version, ...corps }), msg);
+      if (a === 'placer') {
+        modale(t('urgence.placer_titre', { code }), `<div class="champ"><label class="lbl" for="m-pat">${esc(t('reseau.ref_patient'))}</label><input id="m-pat" placeholder="${esc(cfg.reference_exemple)}" autocomplete="off"></div>
+          <p class="note">${esc(t('lits.ref_seulement'))}</p>`,
+        [{ label: t('general.annuler') }, { label: t('urgence.a_placer'), pri: true, run: async () => (await post({ action: 'placer', patient_ref: $('#m-pat').value.trim() }, t('urgence.place_ok', { code }))) !== null || false }]);
+        return;
+      }
+      if (a === 'demander') {
+        modale(t('urgence.demander_titre', { ref: c.patient_ref }), `<div class="champ"><label class="lbl" for="m-type">${esc(t('admissions.type_unite'))}</label><select id="m-type">${cfg.types.map((x) => `<option value="${x.id}">${esc(nomType(x))}</option>`).join('')}</select></div>
+          <div class="champ"><label class="lbl" for="m-prio">${esc(t('admissions.priorite'))}</label><select id="m-prio">${options('priorites_adm', ['p1', 'p2', 'p3'], 'p2')}</select></div>
+          <div class="cases">${casesBesoins('data-mbesoin')}</div><p class="note">${esc(t('urgence.demander_aide'))}</p>`,
+        [{ label: t('general.annuler') }, { label: t('urgence.a_demander'), pri: true, run: async () => {
+          const besoins = {}; document.querySelectorAll('#modale [data-mbesoin]').forEach((x) => { besoins[x.dataset.mbesoin] = x.checked; });
+          return (await agir(null, () => api('POST', '/admissions', { etablissement_id: etat.ctx, civiere_id: id, type_id: Number($('#m-type').value),
+            priorite: $('#m-prio').value, provenance: 'urgence', besoins }), t('admissions.ajoutee'))) !== null || false;
+        } }]);
+        return;
+      }
+      if (a === 'deplacer') {
+        modale(t('urgence.deplacer_titre', { ref: c.patient_ref }), `<div class="champ"><label class="lbl" for="m-vers">${esc(t('urgence.vers'))}</label><select id="m-vers">${libres.map((x) => `<option value="${x.id}" data-version="${x.version}">${esc(x.code)} · ${esc(t(`urgence.cat_${x.categorie}`))}</option>`).join('')}</select></div>
+          <p class="note">${esc(t('urgence.deplacer_aide'))}</p>`,
+        [{ label: t('general.annuler') }, { label: t('urgence.a_deplacer'), pri: true, run: async () => {
+          const o = $('#m-vers').selectedOptions[0];
+          return (await agir(null, () => api('POST', `/civieres/${id}/deplacer`, { vers_id: Number(o.value), version: Number(o.dataset.version) }), t('copilote.deplace_ok'))) !== null || false;
+        } }]);
+        return;
+      }
+      if (a === 'liberer') {
+        modale(t('urgence.liberer_titre', { code }), `<p>${esc(t('urgence.liberer_aide', { ref: c.patient_ref }))}</p>`,
+          [{ label: t('general.annuler') }, { label: t('urgence.a_liberer'), pri: true, run: async () => (await post({ action: 'liberer' }, t('urgence.libere_ok', { code }))) !== null || false }]);
+        return;
+      }
+      if (a === 'hors_service') {
+        modale(t('lits.hs_titre', { code }), `<div class="champ"><label class="lbl" for="m-motif-i">${esc(t('lits.motif_lbl'))}</label><select id="m-motif-i">${options('motifs', MOTIFS)}</select></div>`,
+          [{ label: t('general.annuler') }, { label: t('lits.hs_bouton'), pri: true, run: async () => (await post({ action: 'hors_service', motif: $('#m-motif-i').value }, t('lits.hs_ok', { code }))) !== null || false }]);
+        return;
+      }
+      agir(b, () => api('POST', `/civieres/${id}/action`, { action: a, version }), (x) => t('lits.etat_ok', { code: x.code, etat: t(`etats.${x.etat}`) }));
+    };
+  });
+}
+
 /* ---------------- Admissions ---------------- */
 async function vueAdmissions() {
   const v = $('#v-admissions');
   const actif = etabCtx().module_actif;
   const cfg = configCtx();
-  const file = await api('GET', `/admissions?etablissement_id=${etat.ctx}`);
+  const [file, urg] = await Promise.all([api('GET', `/admissions?etablissement_id=${etat.ctx}`), api('GET', `/civieres?etablissement_id=${etat.ctx}`)]);
+  const sansDemande = urg.civieres.filter((c) => c.etat === 'occupee' && !c.demande_id);
   const A = (k, vars) => esc(t(`admissions.${k}`, vars));
   const carte = (d) => `<div class="fiche" style="--c:${d.priorite === 'p1' ? 'var(--critique)' : d.depasse ? 'var(--attention)' : 'var(--secondaire)'}">
       <div class="t"><b>${esc(d.patient_ref)}</b><span class="${d.depasse ? 'urgent' : 'note mono'}">${d.priorite.toUpperCase()} · ${depuis(d.cree_le)}</span></div>
       <div class="note">${esc(d.type_nom)} · ${esc(t(`provenances.${d.provenance}`).toLowerCase())} · ${esc(besoinsTexte(d))}</div>
+      ${d.civiere_code ? `<div class="note">${A('sur_civiere', { code: d.civiere_code })} · <span class="${classeDuree(d.heures_civiere)}">${esc(t('urgence.depuis_h', { h: d.heures_civiere }))}</span></div>` : ''}
       ${d.statut === 'assignee' ? `<div class="note">${t('admissions.lit_assigne', { code: esc(d.lit_code) })}</div>` : d.lit_suggere ? `<div class="note">${t('admissions.lit_adapte', { code: esc(d.lit_suggere.code) })}</div>` : `<div class="alerte">${A('aucun_lit')}</div>`}
       ${actif ? `<div class="actions">${d.statut === 'attente'
     ? `${d.lit_suggere ? `<button class="btn pri" data-adm="${d.id}" data-a="assigner" data-lit="${d.lit_suggere.id}" data-version="${d.lit_suggere.version}">${A('assigner', { code: d.lit_suggere.code })}</button>` : ''}
@@ -751,6 +852,7 @@ async function vueAdmissions() {
     <div class="deux"><div class="pile"><div class="panneau-c"><h3>${A('nouvelle')}</h3>
       <div class="ligne"><div class="champ"><label class="lbl" for="a-type">${A('type_unite')}</label><select id="a-type">${cfg.types.map((x) => `<option value="${x.id}">${esc(nomType(x))}</option>`).join('')}</select></div>
       <div class="champ"><label class="lbl" for="a-ref">${A('ref_patient')}</label><input id="a-ref" placeholder="${esc(cfg.reference_exemple)}" autocomplete="off"></div></div>
+      ${sansDemande.length ? `<div class="champ"><label class="lbl" for="a-civ">${A('civiere')}</label><select id="a-civ"><option value="">${A('sans_civiere')}</option>${sansDemande.map((c) => `<option value="${c.id}" data-ref="${esc(c.patient_ref)}">${esc(c.code)} · ${esc(c.patient_ref)} · ${esc(t('urgence.depuis_h', { h: Math.floor(c.heures) }))}</option>`).join('')}</select></div>` : ''}
       <div class="ligne"><div class="champ"><label class="lbl" for="a-prio">${A('priorite')}</label><select id="a-prio">${options('priorites_adm', ['p1', 'p2', 'p3'], 'p2')}</select></div>
       <div class="champ"><label class="lbl" for="a-prov">${A('provenance')}</label><select id="a-prov">${options('provenances', ['urgence', 'bloc', 'externe', 'autre'])}</select></div></div>
       <div class="cases">${casesBesoins('data-abesoin')}</div>
@@ -763,9 +865,12 @@ async function vueAdmissions() {
   $('#b-demande').onclick = (ev) => {
     const besoins = {};
     v.querySelectorAll('[data-abesoin]').forEach((c) => { besoins[c.dataset.abesoin] = c.checked; });
+    const civ = $('#a-civ') ? Number($('#a-civ').value) || null : null;
     agir(ev.target, () => api('POST', '/admissions', { etablissement_id: etat.ctx, type_id: Number($('#a-type').value), patient_ref: $('#a-ref').value.trim(),
-      priorite: $('#a-prio').value, provenance: $('#a-prov').value, besoins }), t('admissions.ajoutee'));
+      priorite: $('#a-prio').value, provenance: $('#a-prov').value, besoins, civiere_id: civ }), t('admissions.ajoutee'));
   };
+  const selCiv = $('#a-civ');
+  if (selCiv) selCiv.onchange = () => { const o = selCiv.selectedOptions[0]; if (o && o.dataset.ref) { $('#a-ref').value = o.dataset.ref; $('#a-prov').value = 'urgence'; } };
   v.querySelectorAll('[data-adm]').forEach((b) => {
     b.onclick = async () => {
       const id = b.dataset.adm; const a = b.dataset.a;
@@ -797,13 +902,16 @@ async function vueNettoyage() {
   v.innerHTML = `<div class="entete"><div><h2>${N('titre', { etab: etabCtx().nom })}</h2><p>${N('intro')}</p></div></div>
     <div class="liste">${liste.map((l, i) => `<div class="net-item" style="--c:${couleur[l.priorite]}"><div>
       <div class="grand">${i + 1}. ${esc(l.code)}</div>
-      <div class="note">${N('chambre', { unite: l.unite, ch: l.chambre })}${l.isolement ? N('isolement') : ''}</div>
+      <div class="note">${l.genre === 'civiere' ? N('civiere', { cat: t(`urgence.cat_${l.categorie}`).toLowerCase() }) : `${N('chambre', { unite: l.unite, ch: l.chambre })}${l.isolement ? N('isolement') : ''}`}</div>
       <div style="font-size:13px">${esc(l.raison)}</div>
       <div class="note">${l.nettoyage_debut ? N('commence_il_y_a', { duree: depuis(l.nettoyage_debut) }) : N('attente_depuis', { duree: depuis(l.etat_depuis) })}</div></div>
-      <div class="actions">${l.nettoyage_debut ? '' : `<button class="btn" data-debut="${l.id}">${N('commencer')}</button>`}
-        <button class="btn pri" data-fini="${l.id}" data-version="${l.version}" data-code="${esc(l.code)}">${N('termine')}</button></div></div>`).join('') || `<p class="note">${N('aucun')}</p>`}</div>`;
+      <div class="actions">${l.nettoyage_debut || l.genre === 'civiere' ? '' : `<button class="btn" data-debut="${l.id}">${N('commencer')}</button>`}
+        <button class="btn pri" data-fini="${l.id}" data-genre="${l.genre}" data-version="${l.version}" data-code="${esc(l.code)}">${N('termine')}</button></div></div>`).join('') || `<p class="note">${N('aucun')}</p>`}</div>`;
   v.querySelectorAll('[data-debut]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/nettoyage/${b.dataset.debut}/debut`), t('nettoyage.commence_ok')); });
-  v.querySelectorAll('[data-fini]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/lits/${b.dataset.fini}/action`, { action: 'nettoyage_ok', version: Number(b.dataset.version) }), t('nettoyage.pret', { code: b.dataset.code })); });
+  v.querySelectorAll('[data-fini]').forEach((b) => {
+    const chemin = b.dataset.genre === 'civiere' ? 'civieres' : 'lits';
+    b.onclick = () => agir(b, () => api('POST', `/${chemin}/${b.dataset.fini}/action`, { action: 'nettoyage_ok', version: Number(b.dataset.version) }), t('nettoyage.pret', { code: b.dataset.code }));
+  });
 }
 
 /* ---------------- NSA ---------------- */
@@ -844,7 +952,12 @@ async function vueIndicateurs() {
       ${tuile(I('reponse'), min(i.transferts.delai_validation_min), I('reponse_note', { total: i.transferts.total, sortants: i.transferts.sortants, entrants: i.transferts.entrants }))}
       ${tuile(I('total'), min(i.transferts.delai_total_min), I('total_note'))}
       ${tuile(I('refus'), `${i.transferts.taux_refus} %`, Object.entries(i.transferts.refus_par_motif).map(([k, x]) => `${esc(t(`motifs_refus.${k}`))} : ${x}`).join(' · ') || I('aucun_refus'), i.transferts.taux_refus > 20)}
-      ${tuile(I('nettoyage'), min(i.nettoyage.duree_moy_min), I('nettoyage_note', { n: i.nettoyage.nettoyages }), i.nettoyage.duree_moy_min > configCtx().nettoyage_cible_min)}</div>`;
+      ${tuile(I('nettoyage'), min(i.nettoyage.duree_moy_min), I('nettoyage_note', { n: i.nettoyage.nettoyages }), i.nettoyage.duree_moy_min > configCtx().nettoyage_cible_min)}</div>
+    ${i.urgence ? `<h3 style="margin-bottom:8px">${I('urgence')}</h3><div class="tuiles">
+      ${tuile(I('taux_civieres'), `${i.urgence.taux} %`, I('taux_civieres_note', { occ: i.urgence.occupees, fonc: i.urgence.fonctionnelles, cor: i.urgence.en_corridor }), i.urgence.taux >= configCtx().seuil_civieres_orange)}
+      ${tuile(I('plus_24h'), String(i.urgence.plus_24h), I('plus_48h_note', { n: i.urgence.plus_48h }), i.urgence.plus_24h > 0)}
+      ${tuile(I('duree_civiere'), heures(i.urgence.duree_moy_h), I('duree_civiere_note'), i.urgence.duree_moy_h >= 24)}
+      ${tuile(I('duree_civiere_periode'), heures(i.urgence.periode.duree_moy_h), I('duree_periode_note', { n: i.urgence.periode.sejours, h24: i.urgence.periode.sejours_24h }), i.urgence.periode.duree_moy_h >= 24)}</div>` : ''}`;
   $('#i-jours').onchange = (ev) => { etat.jours = Number(ev.target.value); rafraichir(); };
   $('#b-csv').onclick = async () => {
     try {
@@ -995,12 +1108,21 @@ async function vueAdmin() {
     corps.querySelectorAll('[data-ch]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', '/admin/chambres', { unite_id: Number(b.dataset.ch), numero: corps.querySelector(`[data-chnum="${b.dataset.ch}"]`).value }), t('admin.chambre_ok')); });
     corps.querySelectorAll('[data-lit-ch]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', '/admin/lits', { chambre_id: Number(b.dataset.litCh), code: corps.querySelector(`[data-litcode="${b.dataset.litCh}"]`).value }), t('admin.lit_ok')); });
     corps.querySelectorAll('[data-eq]').forEach((c) => { c.onchange = () => agir(null, () => api('PUT', `/admin/lits/${c.dataset.eq}/equipement`, { [c.dataset.k]: c.checked }), t('admin.equipement_ok')); });
+    // Civières de l'urgence
+    const civs = await api('GET', `/admin/civieres?etablissement_id=${etat.ctx}`);
+    corps.insertAdjacentHTML('beforeend', `<div class="panneau-c" style="margin-top:14px"><h3>${D('civieres')}</h3><p class="note">${D('civieres_aide')}</p>
+      <div class="chips">${civs.map((c) => `<span class="chip mono">${esc(c.code)} · ${esc(t(`urgence.cat_${c.categorie}`))}</span>`).join('') || `<span class="note">${D('aucune_civiere')}</span>`}</div>
+      <div class="ligne"><div class="champ"><label class="lbl" for="s-civ-code">${D('code_civiere')}</label><input id="s-civ-code" placeholder="URG-01" autocomplete="off"></div>
+        <div class="champ"><label class="lbl" for="s-civ-cat">${D('categorie')}</label><select id="s-civ-cat">${['reguliere', 'debordement'].map((k) => `<option value="${k}">${esc(t(`urgence.cat_${k}`))}</option>`).join('')}</select></div>
+        <button class="btn" id="b-civiere">${D('ajouter_civiere')}</button></div></div>`);
+    $('#b-civiere').onclick = (ev) => agir(ev.target, () => api('POST', '/admin/civieres', { etablissement_id: etat.ctx, code: $('#s-civ-code').value, categorie: $('#s-civ-cat').value }), t('admin.civiere_ok'));
   }
 
   if (etat.adminOnglet === 'config') {
     const cfgs = await api('GET', '/admin/config');
     const champs = ['rayon_km', 'vitesse_kmh', 'facteur_route', 'penalite_orange_km', 'penalite_rouge_km', 'horizon_h', 'seuil_jaune', 'seuil_orange',
-      'seuil_rouge', 'attente_admission_max_min', 'nettoyage_cible_min', 'reservation_max_min', 'marge_conge_min', 'hors_service_max_h', 'cible_nsa_pct'];
+      'seuil_rouge', 'attente_admission_max_min', 'nettoyage_cible_min', 'reservation_max_min', 'marge_conge_min', 'hors_service_max_h', 'cible_nsa_pct',
+      'seuil_civieres_jaune', 'seuil_civieres_orange', 'seuil_civieres_rouge', 'nettoyage_civiere_cible_min'];
     const niveaux = ['vert', 'jaune', 'orange', 'rouge'];
     const protocoles = (c, cle, attr) => niveaux.map((n) => `<div class="champ"><label class="lbl" for="${attr}-${c.id}-${n}">${esc(t(`niveaux.${n}`))}</label><textarea id="${attr}-${c.id}-${n}" data-${attr}="${n}" rows="2" class="donnee">${esc((c[cle] || {})[n] || '')}</textarea></div>`).join('');
     corps.innerHTML = cfgs.map((c) => `<form class="panneau-c" data-cfg="${c.id}"><h3 class="donnee">${esc(c.nom)}</h3><div class="grille" style="gap:10px">${champs.map((k) => `<div class="champ"><label class="lbl" for="cfg-${c.id}-${k}">${D(`champs.${k}`)}</label><input id="cfg-${c.id}-${k}" data-k="${k}" value="${esc(c[k])}" inputmode="decimal"></div>`).join('')}</div>

@@ -9,6 +9,7 @@ const { changerEtat, ACTIONS_LIT, DETAIL_ACTION, journaliser } = require('./regl
 const s = require('./services');
 const t = require('./terrain');
 const copilote = require('./copilote');
+const civ = require('./civieres');
 const cx = require('./connecteurs');
 const { langueDe, traducteurTypes, traduireTypes } = require('./langue');
 const { limiteur } = require('./limites');
@@ -125,7 +126,7 @@ function creerApp(pool) {
     if (req.utilisateur.role !== 'entretien') return next();
     const ok = (req.method === 'GET' && ['/moi', '/nettoyage'].includes(req.path)) || req.path.startsWith('/moi/')
       || (req.method === 'POST' && (req.path === '/deconnexion' || /^\/nettoyage\/\d+\/debut$/.test(req.path)
-        || (/^\/lits\/\d+\/action$/.test(req.path) && req.body && req.body.action === 'nettoyage_ok')));
+        || (/^\/(lits|civieres)\/\d+\/action$/.test(req.path) && req.body && req.body.action === 'nettoyage_ok')));
     return ok ? next() : next(new ErreurHttp(403, 'role_entretien'));
   });
 
@@ -206,6 +207,12 @@ function creerApp(pool) {
     return t.debuterNettoyage(pool, req.utilisateur, id);
   }));
   api.get('/nsa', route((req) => t.listeNsa(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
+
+  /* ---------- civières de l'urgence ---------- */
+  api.get('/civieres', route((req) => civ.listeCivieres(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
+  api.post('/civieres/:id/action', route((req) => civ.actionCiviere(pool, req.utilisateur, entier(req.params.id, 'id'), String(req.body.action || ''), req.body)));
+  api.post('/civieres/:id/deplacer', route((req) => civ.deplacer(pool, req.utilisateur, entier(req.params.id, 'id'),
+    entier(req.body.vers_id, 'vers_id'), req.body.version)));
 
   /* ---------- file d'admission ---------- */
   api.get('/admissions', route((req) => t.fileAdmission(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));

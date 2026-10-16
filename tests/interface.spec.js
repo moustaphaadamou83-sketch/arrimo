@@ -177,6 +177,16 @@ for (const L of LARGEURS) {
     await x.waitForFunction(() => /NSA/.test(document.querySelector('#v-copilote .reponse')?.textContent || ''));
     await verifier(x, L, '02-copilote-questions');
 
+    // 2 bis. L'urgence de X : civières, corridor, séjours de plus de 24 h
+    await onglet(x, 'urgence');
+    assert.match(await x.textContent('#v-urgence .tuiles'), /\d{3} %/);
+    await verifier(x, L, '02b-urgence-x');
+    await x.locator('#v-urgence [data-a="demander"]').first().click();
+    await x.waitForSelector('#modale:not([hidden]) #m-type');
+    await verifier(x, L, '02c-urgence-demander-lit');
+    await x.click('#modale .btn.pri');
+    await toast(x, 'Demande ajoutée');
+
     // 3. Transfert X → Y : patient P1 qui a besoin d'isolement
     await onglet(x, 'admissions');
     await verifier(x, L, '03-admissions-x');
@@ -211,6 +221,9 @@ for (const L of LARGEURS) {
     const debut = premier.locator('[data-debut]');
     if (await debut.count()) { await debut.click(); await toast(e, 'commencé'); }
     await e.locator('#v-nettoyage .net-item').first().locator('[data-fini]').click();
+    await toast(e, 'est prêt');
+    // Les civières passent en premier quand des patients attendent en corridor ; puis le premier lit
+    await e.locator('#v-nettoyage [data-fini][data-genre="lit"]').first().click();
     await toast(e, 'est prêt');
     await verifier(e, L, '08-nettoyage-termine');
 
@@ -366,7 +379,7 @@ test('interface en anglais : aucun texte français restant (noms propres except�
     await x.waitForSelector('#v-copilote .reponse');
     await ecran(x, `02-question-${i}`);
   }
-  for (const vue of ['reseau', 'lits', 'admissions', 'transferts', 'nettoyage', 'nsa', 'indicateurs', 'journal', 'params']) {
+  for (const vue of ['reseau', 'lits', 'urgence', 'admissions', 'transferts', 'nettoyage', 'nsa', 'indicateurs', 'journal', 'params']) {
     await onglet(x, vue);
     await ecran(x, `03-${vue}`);
   }
@@ -383,6 +396,14 @@ test('interface en anglais : aucun texte français restant (noms propres except�
     await ecran(x, `05-modale-${action}`);
     await x.keyboard.press('Escape');
   }
+  await onglet(x, 'urgence');
+  for (const action of ['demander', 'liberer']) {
+    await x.locator(`#v-urgence [data-a="${action}"]`).first().click();
+    await x.waitForSelector('#modale:not([hidden])');
+    await ecran(x, `05-er-${action}`);
+    await x.keyboard.press('Escape');
+  }
+  await onglet(x, 'lits');
   // Erreur du serveur traduite : référence patient invalide
   await x.locator('#v-lits [data-action="reserver"]').first().click();
   await x.fill('#m-pat', 'Dupont');

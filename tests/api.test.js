@@ -432,6 +432,128 @@ test('démonstration Hôpital X / Hôpital Y : se crée et donne une situation p
   assert.strictEqual((await appel('y', 'POST', `/transferts/${tr.corps.id}/accepter`)).statut, 200);
 });
 
+test('civières de l’urgence : états, verrou, demande liée, admission, changement de civière, réseau, Copilote, indicateurs', async () => {
+  const hx = await id('HX'); const hy = await id('HY'); const med = await type('MED');
+  const civ = async (qui, etab) => (await appel(qui, 'GET', `/civieres?etablissement_id=${etab}`)).corps;
+  // Urgence de X débordée : taux au-delà de 100 %, patients en corridor, séjours de plus de 24 h et 48 h
+  let ux = await civ('x', hx);
+  assert.ok(ux.stats.taux > 100 && ux.stats.en_corridor > 0 && ux.stats.plus_24h >= 3 && ux.stats.plus_48h >= 1, JSON.stringify(ux.stats));
+  assert.strictEqual(ux.stats.occupees, ux.civieres.filter((c) => c.etat === 'occupee').length);
+  const alerteX = (await appel('x', 'GET', `/indicateurs?etablissement_id=${hx}`)).corps;
+  assert.strictEqual(alerteX.urgence.niveau, 'rouge');
+  assert.ok(alerteX.urgence.periode.sejours >= 30 && alerteX.urgence.periode.duree_moy_h > 0, 'durée moyenne sur la période, depuis le journal');
+  const uy = await civ('y', hy);
+  assert.ok(uy.stats.taux < 90, 'Y a de la place');
+
+  // Isolation : Y ne voit ni n'agit sur les civières de X
+  assert.strictEqual((await appel('y', 'GET', `/civieres?etablissement_id=${hx}`)).statut, 403);
+  const libreY = uy.civieres.find((c) => c.etat === 'libre' && c.categorie === 'reguliere');
+  assert.strictEqual((await appel('x', 'POST', `/civieres/${libreY.id}/action`, { action: 'placer', patient_ref: 'P-81000' })).statut, 404);
+
+  // Placer : référence seulement ; une civière n'est prise qu'une fois (5 essais simultanés, un seul gagne, refus journalisés)
+  assert.strictEqual((await appel('y', 'POST', `/civieres/${libreY.id}/action`, { action: 'placer', patient_ref: 'Mme Untel' })).statut, 400);
+  const essais = await Promise.all([0, 1, 2, 3, 4].map((i) => appel('y', 'POST', `/civieres/${libreY.id}/action`,
+    { action: 'placer', version: libreY.version, patient_ref: `P-8100${i}` })));
+  assert.strictEqual(essais.filter((e) => e.statut === 200).length, 1, essais.map((e) => e.statut).join(','));
+  assert.ok(essais.filter((e) => e.statut === 409).every((e) => ['civiere_verrouillee', 'civiere_deja_modifiee'].includes(e.corps.code)));
+  const refus = (await pool.query('SELECT count(*)::int AS n FROM journal WHERE civiere_id = $1 AND refuse', [libreY.id])).rows[0].n;
+  assert.strictEqual(refus, 4, 'chaque refus est journalisé');
+  const place = essais.find((e) => e.statut === 200).corps;
+  const autre = (await civ('y', hy)).civieres.find((c) => c.etat === 'libre' && c.id !== libreY.id);
+  const double = await appel('y', 'POST', `/civieres/${autre.id}/action`, { action: 'placer', patient_ref: place.patient_ref });
+  assert.deepStrictEqual([double.statut, double.corps.code], [409, 'patient_deja_sur_civiere']);
+  assert.strictEqual((await appel('y', 'POST', `/civieres/${libreY.id}/action`, { action: 'nettoyage_ok' })).statut, 409, 'transition interdite');
+
+  // Demande de lit liée à la civière : la référence vient de la civière, une seule demande active
+  const d = await appel('y', 'POST', '/admissions', { etablissement_id: hy, type_id: med, civiere_id: libreY.id, priorite: 'p2' });
+  assert.strictEqual(d.statut, 200, JSON.stringify(d.corps));
+  assert.deepStrictEqual([d.corps.patient_ref, d.corps.civiere_id, d.corps.provenance], [place.patient_ref, libreY.id, 'urgence']);
+  assert.strictEqual((await appel('y', 'POST', '/admissions', { etablissement_id: hy, type_id: med, civiere_id: libreY.id })).corps.code, 'civiere_deja_demande');
+  assert.strictEqual((await appel('y', 'POST', '/admissions', { etablissement_id: hy, type_id: med, civiere_id: libreY.id + 100000 })).statut, 400);
+  const bloque = await appel('y', 'POST', `/civieres/${libreY.id}/action`, { action: 'liberer' });
+  assert.deepStrictEqual([bloque.statut, bloque.corps.code], [409, 'civiere_demande_active']);
+  const fileY = (await appel('y', 'GET', `/admissions?etablissement_id=${hy}`)).corps.find((x) => x.id === d.corps.id);
+  assert.strictEqual(fileY.civiere_code, libreY.code);
+  // Admission dans un lit : la civière passe en nettoyage dans la même transaction
+  assert.strictEqual((await appel('y', 'POST', `/admissions/${d.corps.id}/assigner`, { lit_id: fileY.lit_suggere.id, version: fileY.lit_suggere.version })).statut, 200);
+  assert.strictEqual((await appel('y', 'POST', `/admissions/${d.corps.id}/admettre`)).statut, 200);
+  const apres = (await pool.query('SELECT etat, patient_ref FROM civieres WHERE id = $1', [libreY.id])).rows[0];
+  assert.deepStrictEqual(apres, { etat: 'nettoyage', patient_ref: null });
+  const j = await pool.query(`SELECT detail FROM journal WHERE civiere_id = $1 AND nouvel_etat = 'nettoyage' AND NOT refuse ORDER BY date DESC, id DESC LIMIT 1`, [libreY.id]);
+  assert.match(j.rows[0].detail, /admis au lit/);
+  // L'entretien nettoie les civières (et rien d'autre)
+  const netY = (await appel('y', 'GET', `/nettoyage?etablissement_id=${hy}`)).corps;
+  assert.ok(netY.some((x) => x.genre === 'civiere' && x.id === libreY.id));
+  const ex = (await pool.query('SELECT id FROM civieres WHERE etablissement_id = $1 AND etat = $2 LIMIT 1', [hx, 'nettoyage'])).rows[0];
+  const netX = (await appel('ex', 'GET', `/nettoyage?etablissement_id=${hx}`)).corps;
+  assert.strictEqual(netX[0].genre, 'civiere', 'une civière régulière passe en premier quand des patients attendent en corridor');
+  assert.strictEqual(netX[0].priorite, 'haute');
+  const libreX = (await pool.query(`SELECT id FROM civieres WHERE etablissement_id = $1 AND etat = 'libre' LIMIT 1`, [hx])).rows[0];
+  if (libreX) assert.strictEqual((await appel('ex', 'POST', `/civieres/${libreX.id}/action`, { action: 'placer', patient_ref: 'P-81111' })).statut, 403);
+  assert.strictEqual((await appel('ex', 'POST', `/civieres/${ex.id}/action`, { action: 'nettoyage_ok' })).corps.etat, 'libre');
+
+  // Changer de civière : du corridor vers la civière régulière libérée ; la demande et l'heure d'arrivée suivent
+  ux = await civ('x', hx);
+  const cible = ux.civieres.find((c) => c.id === ex.id);
+  const corridor = ux.civieres.filter((c) => c.categorie === 'debordement' && c.etat === 'occupee').sort((a, b) => b.heures - a.heures)[0];
+  const arrivee = corridor.arrivee_le;
+  const b = (await appel('x', 'GET', `/copilote/briefing?etablissement_id=${hx}`)).corps;
+  const reco = b.recommandations.find((r) => r.action?.type === 'deplacer');
+  assert.ok(reco && reco.action.civiere_id === corridor.id && reco.action.vers_id === cible.id, 'le Copilote propose de sortir le patient du corridor');
+  const dep = await appel('x', 'POST', `/civieres/${corridor.id}/deplacer`, { vers_id: cible.id, version: cible.version });
+  assert.strictEqual(dep.statut, 200, JSON.stringify(dep.corps));
+  assert.deepStrictEqual([dep.corps.patient_ref, new Date(dep.corps.arrivee_le).getTime()], [corridor.patient_ref, new Date(arrivee).getTime()]);
+  assert.strictEqual((await pool.query('SELECT etat FROM civieres WHERE id = $1', [corridor.id])).rows[0].etat, 'nettoyage');
+
+  // Transfert depuis l'urgence : au départ de l'ambulance, la civière part au nettoyage
+  const surCiv = (await appel('x', 'GET', `/admissions?etablissement_id=${hx}`)).corps.find((x) => x.civiere_code && x.type_id === med && x.statut === 'attente');
+  const rec = (await appel('x', 'GET', `/recherche?depuis=${hx}&type_id=${med}`)).corps.suggestions.find((x) => x.libres);
+  const tr = await appel('x', 'POST', `/admissions/${surCiv.id}/transferer`, { destination_id: rec.etablissement_id, lit_id: rec.lit?.id, version: rec.lit?.version });
+  assert.strictEqual(tr.statut, 200, JSON.stringify(tr.corps));
+  for (const [qui, etape] of [['y', 'accepter'], ['x', 'transport']]) assert.strictEqual((await appel(qui, 'POST', `/transferts/${tr.corps.id}/${etape}`)).statut, 200);
+  assert.strictEqual((await pool.query('SELECT etat FROM civieres WHERE id = $1', [surCiv.civiere_id])).rows[0].etat, 'occupee', 'le patient attend l’ambulance');
+  assert.strictEqual((await appel('x', 'POST', `/transferts/${tr.corps.id}/depart`)).statut, 200);
+  assert.strictEqual((await pool.query('SELECT etat FROM civieres WHERE id = $1', [surCiv.civiere_id])).rows[0].etat, 'nettoyage');
+
+  // Réseau, niveaux d'alerte et Copilote
+  const res = (await appel('y', 'GET', `/reseau?depuis=${hy}`)).corps;
+  const vuX = res.etablissements.find((e) => e.id === hx);
+  assert.ok(vuX.urgence.taux > 100 && ['orange', 'rouge'].includes(vuX.urgence.niveau), JSON.stringify(vuX.urgence));
+  assert.ok(vuX.urgence.plus_24h >= 1, 'partage complet : détail des séjours');
+  await pool.query(`UPDATE etablissements SET partage = 'agrege' WHERE id = $1`, [hx]);
+  const agrege = (await appel('y', 'GET', `/reseau?depuis=${hy}`)).corps.etablissements.find((e) => e.id === hx).urgence;
+  await pool.query(`UPDATE etablissements SET partage = 'complet' WHERE id = $1`, [hx]);
+  assert.deepStrictEqual(Object.keys(agrege).sort(), ['fonctionnelles', 'niveau', 'occupees', 'taux'], 'partage agrégé : totaux seulement');
+  const brx = (await appel('x', 'GET', `/copilote/briefing?etablissement_id=${hx}`)).corps;
+  assert.match(brx.resume, /Urgence : \d+ patient\(s\) sur civière/);
+  assert.ok(brx.recommandations.some((r) => /^Urgence à \d+ %/.test(r.titre)));
+  assert.ok(brx.recommandations.some((r) => r.action?.type === 'aller' && /^Demander un lit pour P-/.test(r.titre)), 'patient sur civière depuis longtemps, sans demande');
+  const titres = brx.recommandations.map((r) => r.titre);
+  assert.strictEqual(new Set(titres).size, titres.length);
+  const vueRes = (await appel('x', 'GET', `/copilote/reseau?etablissement_id=${hx}`)).corps;
+  assert.ok(vueRes.etablissements.every((e) => e.urgence && e.urgence.taux >= 0));
+  ux = await civ('x', hx);
+  const q = (await appel('x', 'POST', '/copilote/question', { etablissement_id: hx, question: 'Combien de civières occupées depuis plus de 24 h ?' })).corps;
+  assert.match(q.reponse, new RegExp(`${ux.stats.plus_24h} patient\\(s\\) depuis plus de 24 h`));
+  assert.strictEqual(q.reponse.split('\n').filter((l) => l.startsWith('•')).length, ux.stats.plus_24h, 'la liste montre les patients de plus de 24 h');
+  const qen = (await appel('x', 'POST', '/copilote/question', { etablissement_id: hx, question: 'How many stretchers have been occupied for more than 24 h?', langue: 'en' })).corps;
+  assert.match(qen.reponse, /^ER at /);
+
+  // Administration : ajout d'une civière (code unique, catégorie contrôlée)
+  const avant2fa = process.env.ARRIMO_2FA_ADMIN;
+  process.env.ARRIMO_2FA_ADMIN = '0';
+  try {
+    tokens.res = (await appel(null, 'POST', '/connexion', { email: 'reseau@demo.arrimo', mot_de_passe: MOT_DE_PASSE_DEMO })).corps.token;
+    const n = await appel('res', 'POST', '/admin/civieres', { etablissement_id: hy, code: 'COR-09', categorie: 'debordement' });
+    assert.strictEqual(n.statut, 200, JSON.stringify(n.corps));
+    assert.strictEqual((await appel('res', 'POST', '/admin/civieres', { etablissement_id: hy, code: 'COR-09' })).corps.code, 'code_civiere_existe');
+    assert.strictEqual((await appel('res', 'POST', '/admin/civieres', { etablissement_id: hy, code: 'X-1', categorie: 'lit' })).corps.code, 'categorie_invalide');
+    assert.strictEqual((await appel('y', 'POST', '/admin/civieres', { etablissement_id: hy, code: 'X-2' })).statut, 403);
+  } finally {
+    if (avant2fa === undefined) delete process.env.ARRIMO_2FA_ADMIN; else process.env.ARRIMO_2FA_ADMIN = avant2fa;
+  }
+});
+
 /* ======================= Version 4 : comptes et administration ======================= */
 const totp = require('../src/totp');
 
@@ -601,7 +723,7 @@ test('aide : premiers pas mémorisés côté serveur, une seule fois', async () 
 
 test('aide : chaque écran a son aide complète, en français et en anglais, pour chaque rôle', () => {
   const { fr, en } = dictionnaires();
-  const ecrans = ['copilote', 'reseau', 'lits', 'admissions', 'transferts', 'nettoyage', 'nsa', 'indicateurs', 'journal', 'params', 'admin', 'compte'];
+  const ecrans = ['copilote', 'reseau', 'lits', 'urgence', 'admissions', 'transferts', 'nettoyage', 'nsa', 'indicateurs', 'journal', 'params', 'admin', 'compte'];
   for (const d of [fr, en]) {
     for (const e of ecrans) {
       const a = d.aide.ecrans[e];

@@ -21,6 +21,7 @@ async function reinitialiser(pool) {
 // Colonnes d'horloge de la démo (le journal n'en fait pas partie : il est immuable)
 const HORLOGES = {
   lits: ['etat_depuis', 'sortie_prevue', 'nsa_depuis', 'nettoyage_debut'],
+  civieres: ['etat_depuis', 'arrivee_le'],
   demandes_admission: ['cree_le', 'assignee_le', 'terminee_le'],
   transferts: ['date_demande', 'date_validation', 'date_depart', 'date_reception'],
   notifications: ['date'],

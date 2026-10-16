@@ -336,3 +336,35 @@ CREATE INDEX IF NOT EXISTS jetons_mdp_utilisateur ON jetons_mdp (utilisateur_id,
 
 -- Aide intégrée : la page « Premiers pas » n'est montrée qu'une fois
 ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS premiers_pas_vus boolean NOT NULL DEFAULT false;
+
+-- Civières de l'urgence : distinctes des lits. Régulières (au permis) ou de débordement (corridor).
+-- Le taux d'occupation compte tous les patients sur civière, rapportés aux civières régulières fonctionnelles : il peut dépasser 100 %.
+CREATE TABLE IF NOT EXISTS civieres (
+  id                serial PRIMARY KEY,
+  etablissement_id  int  NOT NULL REFERENCES etablissements(id),
+  code              text NOT NULL,
+  categorie         text NOT NULL DEFAULT 'reguliere' CHECK (categorie IN ('reguliere', 'debordement')),
+  etat              text NOT NULL DEFAULT 'libre' CHECK (etat IN ('libre', 'occupee', 'nettoyage', 'indispo')),
+  patient_ref       text,
+  arrivee_le        timestamptz,            -- arrivée du patient sur civière (suit le patient s'il change de civière)
+  version           int  NOT NULL DEFAULT 1,
+  etat_depuis       timestamptz NOT NULL DEFAULT now(),
+  motif_indispo     text CHECK (motif_indispo IN ('personnel', 'equipement', 'travaux', 'infection', 'autre')),
+  UNIQUE (etablissement_id, code),
+  CHECK ((etat = 'occupee') = (patient_ref IS NOT NULL)),
+  CHECK ((etat = 'occupee') = (arrivee_le IS NOT NULL))
+);
+CREATE INDEX IF NOT EXISTS civieres_etab_etat ON civieres (etablissement_id, etat);
+-- Un patient n'est que sur une civière à la fois
+CREATE UNIQUE INDEX IF NOT EXISTS civieres_patient_unique ON civieres (etablissement_id, patient_ref) WHERE etat = 'occupee';
+ALTER TABLE journal ADD COLUMN IF NOT EXISTS civiere_id int REFERENCES civieres(id);
+CREATE INDEX IF NOT EXISTS journal_civiere ON journal (civiere_id, date) WHERE civiere_id IS NOT NULL;
+ALTER TABLE demandes_admission ADD COLUMN IF NOT EXISTS civiere_id int REFERENCES civieres(id);
+-- Seuils d'alerte sur le taux d'occupation des civières (%)
+ALTER TABLE config_pays ADD COLUMN IF NOT EXISTS seuil_civieres_jaune int NOT NULL DEFAULT 90;
+ALTER TABLE config_pays ADD COLUMN IF NOT EXISTS seuil_civieres_orange int NOT NULL DEFAULT 110;
+ALTER TABLE config_pays ADD COLUMN IF NOT EXISTS seuil_civieres_rouge int NOT NULL DEFAULT 140;
+-- Nettoyage d'une civière : cible plus courte qu'une chambre
+ALTER TABLE config_pays ADD COLUMN IF NOT EXISTS nettoyage_civiere_cible_min int NOT NULL DEFAULT 15;
+-- Une seule demande de lit active par civière
+CREATE UNIQUE INDEX IF NOT EXISTS adm_civiere_active ON demandes_admission (civiere_id) WHERE civiere_id IS NOT NULL AND statut IN ('attente', 'assignee');

@@ -2,6 +2,7 @@ const { transaction, ErreurHttp } = require('./db');
 const { changerEtat, journaliser } = require('./regles');
 const { exigerEtablissement, peutAgirPour } = require('./auth');
 const { tr, dico, traducteurTypes } = require('./langue');
+const cv = require('./civieres');
 
 /* ------------------------------------------------------------------ outils */
 function distanceKm(a, b) {
@@ -104,16 +105,27 @@ async function capaciteReseau(pool, utilisateur, depuisId) {
       risque: risque(r),
     });
   }
+  // Urgence : civières et taux d'occupation. Le partage agrégé n'expose que les totaux.
+  const urg = await cv.statsUrgence(pool, [...parEtab.keys()]);
+  for (const e of parEtab.values()) {
+    const u = urg.get(e.id);
+    if (!u) { e.urgence = null; continue; }
+    const niveau = cv.niveauCivieres(u, ici.config);
+    e.urgence = e.moi || e.partage === 'complet'
+      ? { fonctionnelles: u.fonctionnelles, occupees: u.occupees, en_corridor: u.en_corridor, libres: u.libres, taux: u.taux,
+        plus_24h: u.plus_24h, plus_48h: u.plus_48h, duree_moy_h: u.duree_moy_h, niveau }
+      : { fonctionnelles: u.fonctionnelles, occupees: u.occupees, taux: u.taux, niveau };
+  }
   const liste = [...parEtab.values()].sort((a, b) => (b.moi - a.moi) || (a.distance_km - b.distance_km));
   return { depuis: ici.id, config: ici.config, etablissements: liste };
 }
 
 /** Classe les hôpitaux pour un type d'unité. Ne réserve rien. */
-/** Niveau d'alerte d'un établissement à partir de sa capacité et des patients qui attendent un lit. */
-function niveauDepuis(dotes, libres, enAttente, cfg) {
+/** Niveau d'alerte d'un établissement à partir de sa capacité, des patients qui attendent un lit et de son urgence (civières). */
+function niveauDepuis(dotes, libres, enAttente, cfg, urgence = null) {
   const pression = dotes ? Math.round(((dotes - libres + enAttente) / dotes) * 100) : 0;
   const niveau = pression >= cfg.seuil_rouge ? 'rouge' : pression >= cfg.seuil_orange ? 'orange' : pression >= cfg.seuil_jaune ? 'jaune' : 'vert';
-  return { pression, niveau };
+  return { pression, niveau: cv.pireNiveau(niveau, cv.niveauCivieres(urgence, cfg)) };
 }
 
 /**
@@ -130,6 +142,7 @@ async function recommander(pool, utilisateur, depuisId, typeId, besoins = {}) {
   const attente = await pool.query(
     `SELECT etablissement_id, count(*)::int AS n FROM demandes_admission WHERE statut = 'attente' GROUP BY etablissement_id`);
   const enAttente = new Map(attente.rows.map((r) => [r.etablissement_id, r.n]));
+  const urgences = await cv.statsUrgence(pool, [...new Set(rows.map((r) => r.etablissement_id))]);
   // Charge globale de chaque établissement (tous types d'unité confondus)
   const global = new Map();
   for (const r of rows) {
@@ -150,7 +163,7 @@ async function recommander(pool, utilisateur, depuisId, typeId, besoins = {}) {
     }
     if (!r.libres && !r.prevus) continue;
     const g = global.get(r.etablissement_id);
-    const { pression, niveau } = niveauDepuis(g.dotes, g.libres, enAttente.get(r.etablissement_id) || 0, cfg);
+    const { pression, niveau } = niveauDepuis(g.dotes, g.libres, enAttente.get(r.etablissement_id) || 0, cfg, urgences.get(r.etablissement_id));
     const penalite = niveau === 'rouge' ? cfg.penalite_rouge_km : niveau === 'orange' ? cfg.penalite_orange_km : 0;
     const minutes = Math.round(((d * Number(cfg.facteur_route)) / cfg.vitesse_kmh) * 60);
     let lit = null;
@@ -331,6 +344,11 @@ async function avancerTransfert(pool, utilisateur, transfertId, etape, corps = {
       maj.date_depart = 'now()';
       journal = 'Départ confirmé';
       dest = t.destination_id; notif = ['transfert_depart', { ref: t.patient_ref, numero: t.numero }];
+      // Le patient quitte la civière de l'urgence d'origine : elle part au nettoyage
+      if (t.demande_admission_id) {
+        const d = (await c.query('SELECT * FROM demandes_admission WHERE id = $1', [t.demande_admission_id])).rows[0];
+        if (d) await cv.libererPourDemande(c, pool, utilisateur.id, d, `Départ en transfert (${t.numero})`, t.id);
+      }
     } else if (etape === 'reception') {
       if (t.lit_id) {
         await changerEtat(c, pool, utilisateur.id, t.lit_id, 'occupe',
@@ -407,9 +425,10 @@ async function lireJournal(pool, utilisateur, etabId, { avant, limite } = {}) {
          ORDER BY j.date DESC, j.id DESC LIMIT $4)
        ORDER BY date DESC, id DESC LIMIT $4)
      SELECT j.id, j.date, j.action, j.ancien_etat, j.nouvel_etat, j.detail, j.refuse, ${sqlCurseur('j.date', 'j.id')},
-            l.code AS lit_code, u.nom AS utilisateur, t.numero AS transfert_numero
+            COALESCE(l.code, cv.code) AS lit_code, (j.civiere_id IS NOT NULL) AS civiere, u.nom AS utilisateur, t.numero AS transfert_numero
        FROM page JOIN journal j ON j.id = page.id
        LEFT JOIN lits l ON l.id = j.lit_id
+       LEFT JOIN civieres cv ON cv.id = j.civiere_id
        LEFT JOIN utilisateurs u ON u.id = j.utilisateur_id
        LEFT JOIN transferts t ON t.id = j.transfert_id
       ORDER BY j.date DESC, j.id DESC`, [etabId, d, i, taillePage(limite)]);

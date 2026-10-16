@@ -253,9 +253,35 @@ function brancher(api, pool, route, entier) {
     });
   }));
 
+  /* ---------------------------------------------------------------- civières de l'urgence */
+  api.get('/admin/civieres', route(async (req) => {
+    exigerAdmin(req);
+    const etab = entier(req.query.etablissement_id, 'etablissement_id');
+    await exigerEtabGerable(req.utilisateur, etab);
+    return (await pool.query('SELECT id, code, categorie, etat FROM civieres WHERE etablissement_id = $1 ORDER BY categorie DESC, code', [etab])).rows;
+  }));
+  api.post('/admin/civieres', route(async (req) => {
+    exigerAdmin(req);
+    const etab = entier(req.body.etablissement_id, 'etablissement_id');
+    await exigerEtabGerable(req.utilisateur, etab);
+    const code = String(req.body.code || '').trim();
+    if (!/^[\w.-]{1,30}$/.test(code)) throw new ErreurHttp(400, 'code_civiere_invalide');
+    const categorie = req.body.categorie || 'reguliere';
+    if (!['reguliere', 'debordement'].includes(categorie)) throw new ErreurHttp(400, 'categorie_invalide');
+    return transaction(pool, async (c) => {
+      const deja = await c.query('SELECT 1 FROM civieres WHERE etablissement_id = $1 AND code = $2', [etab, code]);
+      if (deja.rows[0]) throw new ErreurHttp(409, 'code_civiere_existe');
+      const cv = (await c.query('INSERT INTO civieres (etablissement_id, code, categorie) VALUES ($1, $2, $3) RETURNING *', [etab, code, categorie])).rows[0];
+      await journaliser(c, { civiereId: cv.id, etablissementId: etab, utilisateurId: req.utilisateur.id, action: 'Création', nouveau: 'libre', detail: categorie });
+      await journalAdmin(c, req.utilisateur, 'Civière créée', code, categorie, etab);
+      return cv;
+    });
+  }));
+
   /* ---------------------------------------------------------------- configuration pays (gestionnaire) */
   const CHAMPS_CONFIG = ['rayon_km', 'horizon_h', 'nettoyage_cible_min', 'reservation_max_min', 'marge_conge_min', 'hors_service_max_h',
-    'seuil_jaune', 'seuil_orange', 'seuil_rouge', 'attente_admission_max_min', 'cible_nsa_pct', 'vitesse_kmh', 'penalite_orange_km', 'penalite_rouge_km'];
+    'seuil_jaune', 'seuil_orange', 'seuil_rouge', 'attente_admission_max_min', 'cible_nsa_pct', 'vitesse_kmh', 'penalite_orange_km', 'penalite_rouge_km',
+    'seuil_civieres_jaune', 'seuil_civieres_orange', 'seuil_civieres_rouge', 'nettoyage_civiere_cible_min'];
   api.get('/admin/config', route(async (req) => {
     exigerAdmin(req);
     return (await pool.query('SELECT * FROM config_pays ORDER BY nom')).rows;
@@ -286,7 +312,8 @@ function brancher(api, pool, route, entier) {
     return transaction(pool, async (c) => {
       const r = (await c.query(`UPDATE config_pays SET ${sets.join(', ')} WHERE id = $1 RETURNING *`, vals)).rows[0];
       if (!r) throw new ErreurHttp(404, 'config_introuvable');
-      if (!(r.seuil_jaune < r.seuil_orange && r.seuil_orange <= r.seuil_rouge)) {
+      if (!(r.seuil_jaune < r.seuil_orange && r.seuil_orange <= r.seuil_rouge)
+        || !(r.seuil_civieres_jaune < r.seuil_civieres_orange && r.seuil_civieres_orange <= r.seuil_civieres_rouge)) {
         throw new ErreurHttp(400, 'seuils_croissants');
       }
       await journalAdmin(c, req.utilisateur, 'Configuration modifiée', r.nom, sets.map((x) => x.split(' =')[0]).join(', '));

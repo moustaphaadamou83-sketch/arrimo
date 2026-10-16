@@ -13,7 +13,7 @@ window.ARRIMO_I18N.fr.aide = {
     },
     entretien: {
       titre: 'Entretien',
-      texte: 'Vous voyez seulement l’écran Nettoyage : la liste des lits à nettoyer dans l’ordre recommandé. Commencez par le haut de la liste, '
+      texte: 'Vous voyez seulement l’écran Nettoyage : la liste des lits à nettoyer dans l’ordre recommandé. Commencez par le haut de la liste (lits et civières de l’urgence), '
         + 'appuyez sur « Commencer » en arrivant dans la chambre, puis sur « Terminé ».',
     },
     admin_etab: {
@@ -69,6 +69,21 @@ window.ARRIMO_I18N.fr.aide = {
       erreurs: [
         ['« Transition interdite »', 'Le cycle est fixe : libre → réservé → occupé → nettoyage → libre. Suivez l’ordre.'],
         ['« Ce lit est lié au transfert … en cours »', 'Refusez le transfert dans l’onglet Transferts pour libérer le lit.'],
+      ],
+    },
+    urgence: {
+      nom: 'Urgence',
+      but: 'Les civières de l’urgence : qui est sur civière, depuis combien de temps, en corridor ou non, et qui attend encore un lit. Le taux d’occupation peut dépasser 100 %.',
+      gestes: [
+        'Libre : « Placer un patient » avec sa référence (ex. P-00000).',
+        'Occupée : « Demander un lit » ajoute le patient à la file d’admission, liée à sa civière.',
+        'Quand une civière régulière se libère, « Changer de civière » sort un patient du corridor.',
+        'À l’admission dans un lit, la civière part au nettoyage d’elle-même ; « Nettoyage terminé » la rend libre.',
+        'Surveillez les durées en orange (plus de 24 h) et en rouge (plus de 48 h).',
+      ],
+      erreurs: [
+        ['« … a une demande de lit en cours »', 'Le patient attend un lit : admettez-le depuis Admissions, ou annulez sa demande avant le départ.'],
+        ['« Le patient … est déjà sur la civière … »', 'Un patient n’est que sur une civière à la fois. Utilisez « Changer de civière ».'],
       ],
     },
     admissions: {
@@ -193,7 +208,7 @@ window.ARRIMO_I18N.fr.aide = {
       'Le bouton « Aide », en haut, explique l’écran où vous êtes.',
     ],
     roles: {
-      coordonnateur: ['Commencez par l’onglet Copilote : niveau d’alerte et recommandations.', 'À l’urgence, ajoutez les patients dans l’onglet Admissions.'],
+      coordonnateur: ['Commencez par l’onglet Copilote : niveau d’alerte et recommandations.', 'À l’urgence, l’onglet Urgence montre les civières ; « Demander un lit » ajoute le patient à la file d’admission.'],
       entretien: ['Votre écran est Nettoyage : prenez le lit en haut de la liste.', 'Appuyez sur « Commencer », puis sur « Terminé ».'],
       admin_etab: ['Activez la double authentification dans Mon compte avant d’entrer dans l’Administration.', 'Créez les comptes de votre équipe et vérifiez vos unités et lits.'],
       gestionnaire: ['Activez la double authentification dans Mon compte avant d’entrer dans l’Administration.', 'Le Copilote montre le niveau de chaque hôpital et les délestages possibles.'],

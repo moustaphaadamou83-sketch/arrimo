@@ -16,7 +16,8 @@ Propriétaire : Moustafa Adamou. Langue de travail et de l’interface : **fran�
 
 ## Architecture
 - `src/server.js` démarrage, détection des blocages toutes les 15 min · `src/app.js` routes API
-- `src/regles.js` **seul endroit qui change l’état d’un lit** (verrou `FOR NO KEY UPDATE NOWAIT` + numéro de version, journal, refus journalisés)
+- `src/regles.js` **seul endroit qui change l’état d’un lit ou d’une civière** (verrou `FOR NO KEY UPDATE NOWAIT` + numéro de version, journal, refus journalisés)
+- `src/civieres.js` civières de l’urgence : liste, actions, changement de civière, statistiques (taux, > 24 h, > 48 h)
 - `src/services.js` capacité réseau, recommandation (proximité), transferts, journal, assistant
 - `src/terrain.js` file d’admission, NSA, congés, nettoyage, niveaux d’alerte, indicateurs
 - `src/copilote.js` briefing, recommandations, vue réseau, questions (mode local ; mode IA facultatif sans référence patient)

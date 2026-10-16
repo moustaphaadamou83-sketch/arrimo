@@ -24,6 +24,7 @@ Node.js + PostgreSQL + interface web. Aucune dépendance à un ERP.
 | Problème réel | Fonction d’Arrimo |
 |---|---|
 | Patients sur civière qui attendent un lit | **File d’admission** priorisée (P1 à P3), temps d’attente, lit adapté proposé, transfert en un clic si rien ici |
+| Urgence débordée, patients en corridor | **Civières de l’urgence** (régulières et débordement) : taux d’occupation (peut dépasser 100 %), patients depuis plus de 24 h et 48 h, durée moyenne ; la demande de lit est liée à la civière, qui part au nettoyage à l’admission |
 | Lits bloqués par des patients NSA | **Suivi NSA** : orientation attendue, jours d’attente, taux comparé à la cible (8 % au Québec) |
 | Lits fermés faute de personnel | **Motif d’indisponibilité** obligatoire, capacité perdue visible dans les indicateurs |
 | Nettoyage lent entre deux patients | **Écran Nettoyage** pour l’équipe d’entretien, trié par priorité, début et fin chronométrés |
@@ -105,11 +106,13 @@ createdb arrimo_test
 TEST_DATABASE_URL=postgres:///arrimo_test npm test
 ```
 
-29 tests de bout en bout sur une vraie base : cycle du lit, concurrence, transitions interdites,
+40 tests de bout en bout sur une vraie base : cycle du lit, concurrence, transitions interdites,
 référence sans donnée médicale, journal immuable, isolation, partage, transferts complets,
 version périmée, refus, blocages, prévision, assistant, activation SH, motifs d’indisponibilité, NSA,
 file d’admission (besoins, concurrence), transfert depuis la file, nettoyage et rôle entretien, Copilote
-(briefing, actions, vue réseau, mode IA sans référence patient), connecteurs (idempotence, isolation), indicateurs.
+(briefing, actions, vue réseau, mode IA sans référence patient), connecteurs (idempotence, isolation), indicateurs,
+civières de l’urgence (verrou, demande liée, admission, changement de civière, partage), langues, aide, pages légales, pagination, limites.
+`npm run test:interface` : parcours du guide de démonstration dans Chromium, en largeur ordinateur, tablette et téléphone, et en anglais.
 
 ## Activation depuis SH
 
@@ -131,6 +134,10 @@ X-SH-Key: <SH_API_KEY>
 | POST | `/api/lits/{id}/action` | `reserver`, `admettre`, `annuler`, `liberer`, `nettoyage_ok`, `hors_service`, `remettre` |
 | PUT | `/api/lits/{id}/sortie-prevue` | Congé prévu |
 | GET | `/api/blocages?etablissement_id=` | Blocages détectés |
+| GET | `/api/civieres?etablissement_id=` | Civières de l’urgence et statistiques (taux, > 24 h, > 48 h, durée moyenne) |
+| POST | `/api/civieres/{id}/action` | `placer` (référence), `liberer`, `nettoyage_ok`, `hors_service` (motif), `remettre` |
+| POST | `/api/civieres/{id}/deplacer` | Changer le patient de civière (`vers_id`, `version`) ; sa demande de lit le suit |
+| GET/POST | `/api/admissions` | File d’admission ; `civiere_id` lie la demande à la civière du patient |
 | GET/POST | `/api/transferts`, `/api/transferts/{id}/{accepter|refuser|transport|depart|reception}` | Transferts |
 | GET | `/api/journal?etablissement_id=` | Journal |
 | GET/POST | `/api/notifications`, `/api/notifications/lues` | Notifications |

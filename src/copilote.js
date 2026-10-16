@@ -8,6 +8,7 @@ const s = require('./services');
 const t = require('./terrain');
 const { exigerEtablissement } = require('./auth');
 const { tr, dico, traducteurTypes } = require('./langue');
+const civ = require('./civieres');
 
 /** Briefing de l'établissement : niveau d'alerte, résumé et recommandations classées, dans la langue de l'utilisateur. */
 async function briefing(pool, utilisateur, etabId) {
@@ -15,7 +16,7 @@ async function briefing(pool, utilisateur, etabId) {
   const L = utilisateur.langue;
   const etab = await s.etablissement(pool, etabId);
   s.exigerActif(etab);
-  const [alerte, reseau, file, nettoyage, nsa, transferts, lits, nomType] = await Promise.all([
+  const [alerte, reseau, file, nettoyage, nsa, transferts, lits, nomType, urgence] = await Promise.all([
     t.niveauAlerte(pool, etabId, L),
     s.capaciteReseau(pool, utilisateur, etabId),
     t.fileAdmission(pool, utilisateur, etabId),
@@ -24,6 +25,7 @@ async function briefing(pool, utilisateur, etabId) {
     s.listeTransferts(pool, utilisateur, etabId),
     s.litsEtablissement(pool, utilisateur, etabId),
     traducteurTypes(pool, L),
+    civ.listeCivieres(pool, utilisateur, etabId),
   ]);
   const cfg = etab.config;
   const moi = reseau.etablissements.find((e) => e.moi);
@@ -80,7 +82,7 @@ async function briefing(pool, utilisateur, etabId) {
     ajouter(2, tr(L, 'r_reservation', { lit: l.code }), l.blocage_motif,
       { type: 'lit', lit_id: l.id, action: 'annuler', version: l.version, libelle: tr(L, 'r_reservation_action') });
   }
-  for (const n of nettoyage.filter((x) => x.priorite !== 'haute' && Number(x.age_min) > 2 * x.nettoyage_cible_min)) {
+  for (const n of nettoyage.filter((x) => x.genre === 'lit' && x.priorite !== 'haute' && Number(x.age_min) > 2 * x.nettoyage_cible_min)) {
     ajouter(2, tr(L, 'r_net_retard', { lit: n.code }), tr(L, 'r_net_retard_raison', { min: Math.round(Number(n.age_min)), cible: n.nettoyage_cible_min }),
       { type: 'lit', lit_id: n.id, action: 'nettoyage_ok', version: n.version, libelle: tr(L, 'r_net_retard_action') });
   }
@@ -97,6 +99,36 @@ async function briefing(pool, utilisateur, etabId) {
   const depasses = lits.filter((l) => l.etat === 'occupe' && l.blocage_code === 'conge_depasse');
   if (depasses.length) {
     ajouter(2, tr(L, 'r_depasses', { n: depasses.length }), tr(L, 'r_depasses_raison', { lits: depasses.map((l) => l.code).join(', ') }));
+  }
+
+  // 4 bis. Urgence : patients sur civière
+  const u = urgence.stats;
+  if (u) {
+    const occupees = urgence.civieres.filter((c) => c.etat === 'occupee');
+    // Patients en corridor alors qu'une civière régulière est libre, ou en nettoyage
+    const corridor = occupees.filter((c) => c.categorie === 'debordement').sort((a, b) => b.heures - a.heures);
+    const libresReg = urgence.civieres.filter((c) => c.categorie === 'reguliere' && c.etat === 'libre');
+    corridor.slice(0, libresReg.length).forEach((c, i) => {
+      ajouter(2, tr(L, 'r_civ_deplacer', { ref: c.patient_ref, code: libresReg[i].code }),
+        tr(L, 'r_civ_deplacer_raison', { de: c.code, h: Math.floor(c.heures), code: libresReg[i].code }),
+        { type: 'deplacer', civiere_id: c.id, vers_id: libresReg[i].id, version: libresReg[i].version, libelle: tr(L, 'r_civ_deplacer_action') });
+    });
+    const enAttenteCorridor = corridor.length - libresReg.length;
+    if (enAttenteCorridor > 0) {
+      for (const c of nettoyage.filter((x) => x.genre === 'civiere' && x.categorie === 'reguliere').slice(0, enAttenteCorridor)) {
+        ajouter(2, tr(L, 'r_civ_nettoyer', { code: c.code }), tr(L, 'r_civ_nettoyer_raison', { n: enAttenteCorridor }),
+          { type: 'civiere', civiere_id: c.id, action: 'nettoyage_ok', version: c.version, libelle: tr(L, 'r_civ_nettoyer_action') });
+      }
+    }
+    // Patients sur civière depuis longtemps sans demande de lit
+    for (const c of occupees.filter((x) => !x.demande_id && x.heures >= 12).sort((a, b) => b.heures - a.heures).slice(0, 5)) {
+      ajouter(c.heures >= 24 ? 1 : 2, tr(L, 'r_civ_demande', { ref: c.patient_ref }), tr(L, 'r_civ_demande_raison', { code: c.code, h: Math.floor(c.heures) }),
+        { type: 'aller', vue: 'urgence', libelle: tr(L, 'r_civ_demande_action') });
+    }
+    if (['orange', 'rouge'].includes(alerte.urgence?.niveau)) {
+      ajouter(alerte.urgence.niveau === 'rouge' ? 1 : 2, tr(L, 'r_urgence', { taux: u.taux, occ: u.occupees, fonc: u.fonctionnelles }),
+        tr(L, 'r_urgence_raison', { h24: u.plus_24h, h48: u.plus_48h }));
+    }
   }
 
   // 5. NSA
@@ -124,7 +156,8 @@ async function briefing(pool, utilisateur, etabId) {
   const enAttente = file.filter((d) => d.statut === 'attente').length;
   const resume = tr(L, 'resume', { niveau: dico(L, L === 'en' ? 'niveau_maj' : 'niveau')[alerte.niveau], p: alerte.pression, libres, prevus,
     h: cfg.horizon_h, attente: enAttente, net: nettoyage.length, nsa: nsa.total, taux: nsa.taux,
-    longue: alerte.attente_longue ? tr(L, 'resume_longue', { n: alerte.attente_longue, h: Math.round(cfg.attente_admission_max_min / 60) }) : '' });
+    longue: alerte.attente_longue ? tr(L, 'resume_longue', { n: alerte.attente_longue, h: Math.round(cfg.attente_admission_max_min / 60) }) : '' })
+    + (u ? tr(L, 'resume_urgence', { occ: u.occupees, fonc: u.fonctionnelles, taux: u.taux, h24: u.plus_24h }) : '');
   return { etablissement: etab.nom, genere_le: new Date().toISOString(), alerte, resume, recommandations: recos };
 }
 
@@ -155,7 +188,7 @@ async function briefingReseau(pool, utilisateur, depuisId) {
   return {
     etablissements: etabs.map((e) => ({ id: e.id, nom: e.nom, ville: e.ville, moi: e.moi, partage: e.partage, distance_km: e.distance_km,
       niveau: e.alerte.niveau, pression: e.alerte.pression, libres: e.unites.reduce((a, u) => a + u.libres, 0),
-      en_attente: e.moi || e.partage === 'complet' ? e.alerte.en_attente : null })),
+      en_attente: e.moi || e.partage === 'complet' ? e.alerte.en_attente : null, urgence: e.urgence })),
     delestages,
   };
 }
@@ -206,7 +239,19 @@ async function question(pool, utilisateur, etabId, q, fetchImpl) {
     return { mode: 'local', reponse: `${tr(L, 'q_nsa', { n: n.total, taux: n.taux, cible: n.cible, jl: n.jours_lits })}\n`
       + Object.entries(n.par_orientation).map(([k, v]) => tr(L, 'q_ligne', { a: orient[k] || k, b: v })).join('\n') };
   }
-  if (/(attente|admission|urgence|civiere|waiting|emergency|stretcher|\ber\b)/.test(qn)) {
+  if (/(civiere|brancard|stretcher|gurney|corridor|hallway|24 ?h|48 ?h)/.test(qn)) {
+    const nomType = await traducteurTypes(pool, L);
+    const { civieres, stats } = await civ.listeCivieres(pool, utilisateur, etabId);
+    const etab = await s.etablissement(pool, etabId);
+    if (!stats) return { mode: 'local', reponse: tr(L, 'q_civieres_vide', { etab: etab.nom }) };
+    const seuil = /48/.test(qn) ? 48 : /24/.test(qn) ? 24 : 0;
+    const liste = civieres.filter((c) => c.etat === 'occupee' && c.heures >= seuil).sort((a, b) => b.heures - a.heures);
+    return { mode: 'local', reponse: `${tr(L, 'q_civieres', { etab: etab.nom, occ: stats.occupees, fonc: stats.fonctionnelles, taux: stats.taux,
+      corridor: stats.en_corridor, h24: stats.plus_24h, h48: stats.plus_48h, duree: stats.duree_moy_h ?? 0 })}\n${liste.slice(0, 12).map((c) => tr(L, 'q_civieres_ligne',
+      { ref: c.patient_ref, code: c.code, h: Math.floor(c.heures),
+        demande: c.demande_id ? tr(L, 'q_civieres_demande', { type: nomType(c.type_nom).toLowerCase() }) : tr(L, 'q_civieres_sans_demande') })).join('\n')}`.trim() };
+  }
+  if (/(attente|admission|urgence|waiting|emergency|\ber\b)/.test(qn)) {
     const nomType = await traducteurTypes(pool, L);
     const f = (await t.fileAdmission(pool, utilisateur, etabId)).filter((d) => d.statut === 'attente');
     return { mode: 'local', reponse: f.length ? `${tr(L, 'q_attente', { n: f.length })}\n${f.map((d) => tr(L, 'q_attente_ligne',
@@ -220,7 +265,8 @@ async function question(pool, utilisateur, etabId, q, fetchImpl) {
   if (/(alerte|niveau|deborde|saturation|surcapacite|reseau|alert|level|overflow|overcapacity|network)/.test(qn)) {
     const r = await briefingReseau(pool, utilisateur, etabId);
     const niv = dico(L, 'niveau');
-    return { mode: 'local', reponse: r.etablissements.map((e) => tr(L, 'q_reseau_ligne', { nom: e.nom, niveau: niv[e.niveau], p: e.pression, libres: e.libres })).join('\n')
+    return { mode: 'local', reponse: r.etablissements.map((e) => tr(L, 'q_reseau_ligne', { nom: e.nom, niveau: niv[e.niveau], p: e.pression, libres: e.libres })
+      + (e.urgence ? tr(L, 'q_reseau_urgence', { taux: e.urgence.taux }) : '')).join('\n')
       + (r.delestages.length ? `\n${tr(L, 'q_delestages')}\n${r.delestages.map((d) => `• ${d.de} → ${d.vers} (${d.type})`).join('\n')}` : '') };
   }
   if (/(quoi faire|priorit|recommand|briefing|resume|situation|what should|first|summary)/.test(qn)) {

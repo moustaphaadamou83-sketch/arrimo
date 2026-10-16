@@ -159,6 +159,44 @@ async function demoDeux(pool, { silencieux = false } = {}) {
       [l.id, l.etablissement_id, jour, duree]);
     }
     await c.query(`INSERT INTO utilisateurs (email, nom, mot_de_passe_hash, role) VALUES ('reseau@demo.arrimo', 'Coordination régionale (démo)', $1, 'gestionnaire')`, [hash]);
+
+    // Civières de l'urgence. X : urgence débordée (patients en corridor, séjours de plus de 24 h et 48 h). Y : de la place.
+    // [régulières, débordement, patients sur civière, heures sur civière (les premiers) ]
+    const URG = { HX: [18, 8, 24, [56, 50, 38, 31, 27, 26, 22, 19, 16, 14, 12, 11, 9, 8, 7, 6, 5, 4, 3.5, 3, 2.5, 2, 1.5, 1]], HY: [12, 4, 8, [20, 9, 7, 5, 4, 3, 2, 1]] };
+    for (const [code, [nReg, nDeb, nOcc, heures]] of Object.entries(URG)) {
+      const civs = [];
+      for (let i = 1; i <= nReg; i += 1) civs.push({ code: `URG-${String(i).padStart(2, '0')}`, categorie: 'reguliere' });
+      for (let i = 1; i <= nDeb; i += 1) civs.push({ code: `COR-${String(i).padStart(2, '0')}`, categorie: 'debordement' });
+      // Les régulières se remplissent d'abord ; une régulière en nettoyage et une hors service chez X
+      const occ = civs.filter((x) => x.categorie === 'reguliere').concat(civs.filter((x) => x.categorie === 'debordement'));
+      let k = 0;
+      for (const [i, cv] of occ.entries()) {
+        let etat = 'libre'; let h = null;
+        if (code === 'HX' && i === 3) etat = 'nettoyage';
+        else if (code === 'HX' && i === 5) etat = 'indispo';
+        else if (k < nOcc) { etat = 'occupee'; h = heures[k]; k += 1; }
+        const r = await c.query(
+          `INSERT INTO civieres (etablissement_id, code, categorie, etat, patient_ref, arrivee_le, etat_depuis, motif_indispo)
+           VALUES ($1, $2, $3, $4, $5, CASE WHEN $6::float IS NULL THEN NULL ELSE now() - make_interval(secs => $6::float * 3600) END,
+                   now() - make_interval(mins => $7::int), $8) RETURNING id`,
+          [ids[code], cv.code, cv.categorie, etat, etat === 'occupee' ? ref() : null, h,
+            etat === 'occupee' ? Math.round(h * 60) : etat === 'nettoyage' ? 25 : 300, etat === 'indispo' ? 'equipement' : null]);
+        cv.id = r.rows[0].id; cv.etat = etat; cv.heures = h;
+        await c.query(`INSERT INTO journal (civiere_id, etablissement_id, action, nouvel_etat, detail, date)
+                       VALUES ($1, $2, 'Création', $3, 'Données de démonstration', now() - interval '31 days')`, [cv.id, ids[code], etat]);
+      }
+      // Séjours terminés du dernier mois : durée moyenne sur civière (X ≈ 20 h, Y ≈ 8 h)
+      for (let j = 0; j < 40; j += 1) {
+        const cv = civs[j % civs.length];
+        const duree = code === 'HX' ? 8 + ((j * 7) % 30) : 3 + ((j * 5) % 11);
+        const debut = `now() - make_interval(days => ${2 + (j % 27)}, hours => ${j % 9})`;
+        await c.query(`INSERT INTO journal (civiere_id, etablissement_id, action, ancien_etat, nouvel_etat, detail, date)
+                       VALUES ($1, $2, 'Civière', 'libre', 'occupee', 'Données de démonstration', ${debut})`, [cv.id, ids[code]]);
+        await c.query(`INSERT INTO journal (civiere_id, etablissement_id, action, ancien_etat, nouvel_etat, detail, date)
+                       VALUES ($1, $2, 'Civière', 'occupee', 'nettoyage', 'Données de démonstration', ${debut} + make_interval(hours => $3::int))`,
+        [cv.id, ids[code], duree]);
+      }
+    }
   });
 
   // Situation en cours, créée par les vraies règles de l'application
@@ -175,13 +213,17 @@ async function demoDeux(pool, { silencieux = false } = {}) {
     ['SI', 'p1', 380, { ventilation: true }], ['MED', 'p2', 300, {}], ['MED', 'p1', 140, { isolement: true }],
     ['CHIR', 'p2', 75, {}], ['MED', 'p3', 50, {}], ['MAT', 'p2', 20, {}],
   ];
-  for (const [t, prio, ilya, besoins] of file) {
-    const d = await creerDemande(pool, urgX, { etablissement_id: ids.HX, type_id: types[t], priorite: prio, provenance: 'urgence', patient_ref: ref(), besoins });
+  // Chaque patient de la file attend sur une civière de l'urgence, arrivé avant sa demande de lit
+  const civX = (await pool.query(`SELECT id, arrivee_le FROM civieres WHERE etablissement_id = $1 AND etat = 'occupee' ORDER BY arrivee_le`, [ids.HX])).rows;
+  for (const [i, [t, prio, ilya, besoins]] of file.entries()) {
+    const civ = civX[[2, 4, 6, 9, 12, 15][i]];
+    const d = await creerDemande(pool, urgX, { etablissement_id: ids.HX, type_id: types[t], priorite: prio, provenance: 'urgence', civiere_id: civ.id, besoins });
     await pool.query('UPDATE demandes_admission SET cree_le = now() - make_interval(mins => $2) WHERE id = $1', [d.id, ilya]);
   }
   // Une demande à l'urgence de Y aussi
   const urgY = await utilisateur('urgence.y@demo.arrimo');
-  const dY = await creerDemande(pool, urgY, { etablissement_id: ids.HY, type_id: types.CHIR, priorite: 'p2', provenance: 'urgence', patient_ref: ref() });
+  const civY = (await pool.query(`SELECT id FROM civieres WHERE etablissement_id = $1 AND etat = 'occupee' ORDER BY arrivee_le DESC LIMIT 1 OFFSET 5`, [ids.HY])).rows[0];
+  const dY = await creerDemande(pool, urgY, { etablissement_id: ids.HY, type_id: types.CHIR, priorite: 'p2', provenance: 'urgence', civiere_id: civY.id });
   await pool.query(`UPDATE demandes_admission SET cree_le = now() - interval '35 minutes' WHERE id = $1`, [dY.id]);
   // Transferts en cours entre X et Y, à différentes étapes
   const t1 = await creerTransfert(pool, coX, { origine_id: ids.HX, destination_id: ids.HY, type_id: types.MED, patient_ref: ref(), urgent: false });

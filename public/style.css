@@ -288,3 +288,16 @@ label.item input[type=radio] { order: -1; width: 20px; height: 20px; flex: none;
 }
 .cases { display: flex; flex-wrap: wrap; gap: 10px 16px; }
 .mode { font-size: 11px; color: var(--texte-2); }
+
+/* Civières de l'urgence */
+.e-occupee { --c: var(--info); }
+.civieres { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 10px; margin: 8px 0 18px; }
+.duree-24 { color: #B45309; font-weight: 600; }
+.duree-48 { color: var(--critique); font-weight: 600; }
+.urgence-etab { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--bordure); font-size: 13px; }
+/* Téléphone : tuiles de résumé deux par ligne, pour garder le contenu à l'écran */
+@media (max-width: 520px) {
+  .tuiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .tuile { padding: 10px 12px; }
+  .tuile .v { font-size: 20px; }
+}

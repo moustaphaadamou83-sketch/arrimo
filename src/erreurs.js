@@ -4,7 +4,7 @@
  * et garde le texte français `erreur` en repli. Variables : {nom}. Une variable dont le nom finit par
  * « _etat » est un état de lit (libre, reserve…) affiché avec son libellé.
  */
-const ETATS = { libre: 'Libre', reserve: 'Réservé', occupe: 'Occupé', nettoyage: 'Nettoyage', indispo: 'Indisponible' };
+const ETATS = { libre: 'Libre', reserve: 'Réservé', occupe: 'Occupé', occupee: 'Occupée', nettoyage: 'Nettoyage', indispo: 'Indisponible' };
 
 const MESSAGES = {
   // connexion et compte
@@ -57,6 +57,20 @@ const MESSAGES = {
   orientation_inconnue: 'Orientation NSA inconnue.',
   conge_statut_inconnu: 'Statut de congé inconnu.',
   nettoyage_impossible: 'Ce lit n’est pas en attente de nettoyage, ou le nettoyage a déjà commencé.',
+  // civières de l'urgence
+  civiere_introuvable: 'Civière introuvable.',
+  civiere_verrouillee: 'Cette civière est en cours de modification par quelqu’un d’autre. Réessayez.',
+  civiere_deja_modifiee: 'La civière {code} vient d’être modifiée par quelqu’un d’autre. Rafraîchissez la page.',
+  civiere_demande_active: 'Le patient de la civière {code} a une demande de lit en cours. Admettez-le, ou annulez la demande d’abord.',
+  patient_deja_sur_civiere: 'Le patient {ref} est déjà sur la civière {code}.',
+  civiere_cible_invalide: 'Choisissez une autre civière libre de la même urgence.',
+  civiere_non_occupee: 'Aucun patient sur la civière {code}.',
+  civiere_invalide: 'Cette civière n’a pas de patient dans votre urgence.',
+  civiere_deja_demande: 'Le patient de la civière {code} a déjà une demande de lit en cours.',
+  civiere_patient_different: 'La civière {code} est occupée par {ref} : vérifiez la référence.',
+  code_civiere_invalide: 'Code de civière invalide (lettres, chiffres, tirets).',
+  code_civiere_existe: 'Ce code de civière existe déjà dans l’établissement.',
+  categorie_invalide: 'Catégorie de civière invalide : régulière ou débordement.',
   // admissions
   type_unite_inconnu: "Type d'unité inconnu.",
   demande_introuvable: 'Demande introuvable.',

@@ -13,7 +13,7 @@ window.ARRIMO_I18N.en.aide = {
     },
     entretien: {
       titre: 'Housekeeping',
-      texte: 'You only see the Cleaning screen: the list of beds to clean in the recommended order. Start at the top of the list, '
+      texte: 'You only see the Cleaning screen: the list of beds to clean in the recommended order. Start at the top of the list (beds and ER stretchers), '
         + 'press “Start” when you enter the room, then “Done”.',
     },
     admin_etab: {
@@ -69,6 +69,21 @@ window.ARRIMO_I18N.en.aide = {
       erreurs: [
         ['“Transition not allowed”', 'The cycle is fixed: free → reserved → occupied → cleaning → free. Follow the order.'],
         ['“This bed is linked to transfer … in progress”', 'Decline the transfer in the Transfers tab to free the bed.'],
+      ],
+    },
+    urgence: {
+      nom: 'ER',
+      but: 'The ER stretchers: who is on a stretcher, for how long, in the hallway or not, and who is still waiting for a bed. The occupancy rate can exceed 100%.',
+      gestes: [
+        'Free: “Place a patient” with their reference (e.g. P-00000).',
+        'Occupied: “Request a bed” adds the patient to the admission queue, linked to their stretcher.',
+        'When a regular stretcher frees up, “Change stretcher” moves a patient out of the hallway.',
+        'When the patient is admitted to a bed, the stretcher goes to cleaning on its own; “Cleaning done” makes it free.',
+        'Watch times in orange (over 24 h) and red (over 48 h).',
+      ],
+      erreurs: [
+        ['“… has a bed request in progress”', 'The patient is waiting for a bed: admit them from Admissions, or cancel their request before they leave.'],
+        ['“Patient … is already on stretcher …”', 'A patient is on one stretcher at a time. Use “Change stretcher”.'],
       ],
     },
     admissions: {
@@ -193,7 +208,7 @@ window.ARRIMO_I18N.en.aide = {
       'The “Help” button at the top explains the screen you are on.',
     ],
     roles: {
-      coordonnateur: ['Start with the Copilot tab: alert level and recommendations.', 'In the ER, add patients in the Admissions tab.'],
+      coordonnateur: ['Start with the Copilot tab: alert level and recommendations.', 'In the ER, the ER tab shows the stretchers; “Request a bed” adds the patient to the admission queue.'],
       entretien: ['Your screen is Cleaning: take the bed at the top of the list.', 'Press “Start”, then “Done”.'],
       admin_etab: ['Enable two-factor authentication in My account before entering Administration.', 'Create your team’s accounts and check your units and beds.'],
       gestionnaire: ['Enable two-factor authentication in My account before entering Administration.', 'The Copilot shows each hospital’s level and possible offloading.'],

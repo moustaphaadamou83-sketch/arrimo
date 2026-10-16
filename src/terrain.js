@@ -7,6 +7,7 @@ const { exigerEtablissement } = require('./auth');
 const { changerEtat, journaliser } = require('./regles');
 const s = require('./services');
 const { tr, traducteurTypes } = require('./langue');
+const cv = require('./civieres');
 
 const ORIENTATIONS = ['chsld', 'ri', 'readaptation', 'domicile', 'palliatif', 'autre'];
 const CONGES = ['prevu', 'confirme', 'attente_transport'];
@@ -83,13 +84,30 @@ async function fileNettoyage(pool, utilisateur, etabId) {
   const L = utilisateur.langue;
   const nomType = await traducteurTypes(pool, L);
   for (const r of rows) {
+    r.genre = 'lit';
     const manque = Math.max(0, r.en_attente - r.libres_unite);
     r.priorite_score = manque * 100 + Number(r.age_min);
     r.priorite = manque > 0 ? 'haute' : Number(r.age_min) > r.nettoyage_cible_min ? 'moyenne' : 'normale';
     r.raison = manque > 0 ? tr(L, 'net_attente', { n: r.en_attente, type: nomType(r.type_nom).toLowerCase() })
       : Number(r.age_min) > r.nettoyage_cible_min ? tr(L, 'net_long', { min: r.nettoyage_cible_min }) : tr(L, 'net_ordre');
   }
-  return rows.sort((a, b) => b.priorite_score - a.priorite_score);
+  // Civières de l'urgence à nettoyer : une civière régulière passe en premier si des patients attendent en corridor
+  const civ = await pool.query(
+    `SELECT cv.id, cv.code, cv.categorie, cv.version, cv.etat_depuis, c.nettoyage_civiere_cible_min,
+            EXTRACT(EPOCH FROM (now() - cv.etat_depuis)) / 60 AS age_min,
+            (SELECT count(*)::int FROM civieres x WHERE x.etablissement_id = cv.etablissement_id AND x.etat = 'occupee' AND x.categorie = 'debordement') AS en_corridor
+       FROM civieres cv JOIN etablissements e ON e.id = cv.etablissement_id JOIN config_pays c ON c.id = e.config_id
+      WHERE cv.etablissement_id = $1 AND cv.etat = 'nettoyage'`, [etabId]);
+  for (const r of civ.rows) {
+    r.genre = 'civiere';
+    const manque = r.categorie === 'reguliere' ? r.en_corridor : 0;
+    const age = Number(r.age_min);
+    r.priorite_score = manque * 100 + age;
+    r.priorite = manque > 0 ? 'haute' : age > r.nettoyage_civiere_cible_min ? 'moyenne' : 'normale';
+    r.raison = manque > 0 ? tr(L, 'net_civiere_corridor', { n: manque })
+      : age > r.nettoyage_civiere_cible_min ? tr(L, 'net_long', { min: r.nettoyage_civiere_cible_min }) : tr(L, 'net_ordre');
+  }
+  return [...rows, ...civ.rows].sort((a, b) => b.priorite_score - a.priorite_score);
 }
 
 /* ------------------------------------------------------------------ file d'admission */
@@ -103,21 +121,30 @@ async function creerDemande(pool, utilisateur, b) {
   exigerEtablissement(utilisateur, etabId);
   const etab = await s.etablissement(pool, etabId);
   s.exigerActif(etab);
-  const ref = String(b.patient_ref || '').trim();
+  // Patient sur civière à l'urgence : la demande est liée à sa civière (la référence vient de la civière)
+  const civiereId = b.civiere_id ? Number(b.civiere_id) : null;
+  if (b.civiere_id && !Number.isInteger(civiereId)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'civiere_id' });
+  const civiere = civiereId ? await cv.civierePourDemande(pool, etabId, civiereId, String(b.patient_ref || '').trim() || null) : null;
+  const ref = civiere ? civiere.patient_ref : String(b.patient_ref || '').trim();
   if (!new RegExp(etab.config.reference_regex).test(ref)) {
     throw new ErreurHttp(400, 'reference_invalide', { exemple: etab.config.reference_exemple });
   }
   const type = await pool.query('SELECT id FROM types_unite WHERE id = $1 AND config_id = $2', [b.type_id, etab.config_id]);
   if (!type.rows[0]) throw new ErreurHttp(400, 'type_unite_inconnu');
   const be = s.lireBesoins(b.besoins || b);
-  const { rows } = await pool.query(
-    `INSERT INTO demandes_admission (etablissement_id, provenance, type_id, patient_ref, priorite,
-       besoin_isolement, besoin_pression_negative, besoin_ventilation, besoin_telemetrie, cree_par)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-    [etabId, ['urgence', 'bloc', 'externe', 'autre'].includes(b.provenance) ? b.provenance : 'urgence', type.rows[0].id, ref,
-      ['p1', 'p2', 'p3'].includes(b.priorite) ? b.priorite : 'p2',
-      be.isolement, be.pression_negative, be.ventilation, be.telemetrie, utilisateur.id]);
-  return rows[0];
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO demandes_admission (etablissement_id, provenance, type_id, patient_ref, priorite,
+         besoin_isolement, besoin_pression_negative, besoin_ventilation, besoin_telemetrie, cree_par, civiere_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+      [etabId, civiere ? 'urgence' : ['urgence', 'bloc', 'externe', 'autre'].includes(b.provenance) ? b.provenance : 'urgence', type.rows[0].id, ref,
+        ['p1', 'p2', 'p3'].includes(b.priorite) ? b.priorite : 'p2',
+        be.isolement, be.pression_negative, be.ventilation, be.telemetrie, utilisateur.id, civiereId]);
+    return rows[0];
+  } catch (e) {
+    if (e.code === '23505' && civiere) throw new ErreurHttp(409, 'civiere_deja_demande', { code: civiere.code });
+    throw e;
+  }
 }
 
 /** File d'admission avec, pour chaque demande, le meilleur lit libre de l'établissement qui respecte les besoins. */
@@ -125,16 +152,20 @@ async function fileAdmission(pool, utilisateur, etabId) {
   exigerEtablissement(utilisateur, etabId);
   const { rows } = await pool.query(
     `SELECT d.*, t.nom AS type_nom, l.code AS lit_code, c.attente_admission_max_min,
-            EXTRACT(EPOCH FROM (now() - d.cree_le)) / 60 AS attente_min
+            EXTRACT(EPOCH FROM (now() - d.cree_le)) / 60 AS attente_min,
+            cv.code AS civiere_code, cv.categorie AS civiere_categorie,
+            EXTRACT(EPOCH FROM (now() - cv.arrivee_le)) / 3600 AS heures_civiere
        FROM demandes_admission d
        JOIN types_unite t ON t.id = d.type_id
        JOIN etablissements e ON e.id = d.etablissement_id JOIN config_pays c ON c.id = e.config_id
        LEFT JOIN lits l ON l.id = d.lit_id
+       LEFT JOIN civieres cv ON cv.id = d.civiere_id AND cv.etat = 'occupee'
       WHERE d.etablissement_id = $1 AND d.statut IN ('attente', 'assignee')
       ORDER BY d.priorite, d.cree_le`, [etabId]);
   for (const d of rows) {
     d.attente_min = Math.round(Number(d.attente_min));
     d.depasse = d.attente_min > d.attente_admission_max_min;
+    d.heures_civiere = d.heures_civiere == null ? null : Math.floor(Number(d.heures_civiere));
     if (d.statut === 'attente') {
       const l = await pool.query(
         `SELECT l.id, l.code, l.version FROM lits l WHERE l.etablissement_id = $1 AND l.type_id = $2 AND l.etat = 'libre'${s.sqlBesoins(besoinsDemande(d))}
@@ -171,7 +202,9 @@ async function admettreDemande(pool, utilisateur, demandeId) {
   return transaction(pool, async (c) => {
     const d = await lireDemande(c, utilisateur, demandeId);
     if (d.statut !== 'assignee') throw new ErreurHttp(409, 'assigner_dabord');
-    await changerEtat(c, pool, utilisateur.id, d.lit_id, 'occupe', { detail: `Admission depuis ${d.provenance}` });
+    const lit = await changerEtat(c, pool, utilisateur.id, d.lit_id, 'occupe', { detail: `Admission depuis ${d.provenance}` });
+    // Le patient quitte sa civière : elle part au nettoyage
+    await cv.libererPourDemande(c, pool, utilisateur.id, d, `Patient admis au lit ${lit.code}`);
     const u = await c.query(`UPDATE demandes_admission SET statut = 'admise', terminee_le = now() WHERE id = $1 RETURNING *`, [d.id]);
     return u.rows[0];
   });
@@ -208,6 +241,7 @@ async function transfererDemande(pool, utilisateur, demandeId, b) {
 async function niveauAlerte(db, etabId, langue = 'fr') {
   const { rows } = await db.query(
     `SELECT c.seuil_jaune, c.seuil_orange, c.seuil_rouge, c.attente_admission_max_min, c.protocoles, c.protocoles_en,
+            c.seuil_civieres_jaune, c.seuil_civieres_orange, c.seuil_civieres_rouge,
             count(l.*) FILTER (WHERE l.etat <> 'indispo')::int AS dotes,
             count(l.*) FILTER (WHERE l.etat = 'libre')::int AS libres,
             count(l.*) FILTER (WHERE l.etat = 'indispo' AND l.motif_indispo = 'personnel')::int AS fermes_personnel,
@@ -221,12 +255,16 @@ async function niveauAlerte(db, etabId, langue = 'fr') {
   if (!r) return null;
   // La pression réelle compte les patients qui attendent un lit, pas seulement les lits occupés
   const pression = r.dotes ? Math.round(((r.dotes - r.libres + r.en_attente) / r.dotes) * 100) : 0;
-  let niveau = 'vert';
-  if (pression >= r.seuil_rouge || r.attente_longue >= 3) niveau = 'rouge';
-  else if (pression >= r.seuil_orange || r.attente_longue >= 1) niveau = 'orange';
-  else if (pression >= r.seuil_jaune) niveau = 'jaune';
-  return { niveau, pression, dotes: r.dotes, libres: r.libres, en_attente: r.en_attente,
-    attente_longue: r.attente_longue, fermes_personnel: r.fermes_personnel,
+  let niveauLits = 'vert';
+  if (pression >= r.seuil_rouge || r.attente_longue >= 3) niveauLits = 'rouge';
+  else if (pression >= r.seuil_orange || r.attente_longue >= 1) niveauLits = 'orange';
+  else if (pression >= r.seuil_jaune) niveauLits = 'jaune';
+  // L'urgence compte aussi : une urgence débordée (civières) relève le niveau de l'établissement
+  const urgence = (await cv.statsUrgence(db, [etabId])).get(etabId) || null;
+  if (urgence) urgence.niveau = cv.niveauCivieres(urgence, r);
+  const niveau = cv.pireNiveau(niveauLits, urgence?.niveau || 'vert');
+  return { niveau, niveau_lits: niveauLits, pression, dotes: r.dotes, libres: r.libres, en_attente: r.en_attente,
+    attente_longue: r.attente_longue, fermes_personnel: r.fermes_personnel, urgence,
     protocole: (langue === 'en' && r.protocoles_en?.[niveau]) || r.protocoles[niveau] };
 }
 
@@ -291,6 +329,8 @@ async function indicateurs(pool, utilisateur, etabId, jours = 30) {
             COALESCE(jsonb_object_agg(motif_indispo, n) FILTER (WHERE motif_indispo IS NOT NULL), '{}') AS indispo_par_motif
        FROM (SELECT l.*, count(*) OVER (PARTITION BY motif_indispo) AS n FROM lits l WHERE etablissement_id = $1) x`, [etabId]);
   const nsa = await listeNsa(pool, utilisateur, etabId);
+  const alerte = await niveauAlerte(pool, etabId, utilisateur.langue);
+  const urgence = alerte.urgence ? { ...alerte.urgence, periode: await cv.dureePeriode(pool, etabId, j) } : null;
   const t = tr.rows[0];
   return {
     periode_jours: j,
@@ -299,7 +339,8 @@ async function indicateurs(pool, utilisateur, etabId, jours = 30) {
     admissions: adm.rows[0],
     nettoyage: net.rows[0],
     nsa: { total: nsa.total, taux: nsa.taux, cible: nsa.cible, jours_lits: nsa.jours_lits, par_orientation: nsa.par_orientation },
-    alerte: await niveauAlerte(pool, etabId, utilisateur.langue),
+    urgence,
+    alerte,
   };
 }
 
