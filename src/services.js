@@ -552,7 +552,7 @@ async function assistant(pool, utilisateur, etabId, question) {
     const r = await recommander(pool, utilisateur, etabId, t.id);
     const s = r.suggestions.find((x) => x.libres);
     if (!s) return tr(L, 'q_ou_aucun', { type: nomType(t).toLowerCase(), km: reseau.config.rayon_km });
-    return tr(L, 'q_ou', { type: nomType(t).toLowerCase(), etab: s.nom, ville: s.ville, km: s.distance_km, libres: s.libres, prevus: s.prevus });
+    return tr(L, 'q_ou', { type: nomType(t).toLowerCase(), etab: s.nom, ville: s.ville, km: s.distance_km, duree: duree(L, s.minutes_route), libres: s.libres, prevus: s.prevus });
   }
   if (/(combien|libre|dispo|capacite|place|how many|free|available|capacity|room|space)/.test(q)) {
     const lignes = types.rows.filter((t) => !type || t.id === type.id).map((t) => {

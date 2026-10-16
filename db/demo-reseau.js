@@ -235,6 +235,46 @@ async function demoReseau(pool, { silencieux = false, comptesRoles = false } = {
         [cv.id, ids[code], duree]);
       }
     }
+    // Huit semaines d'historique horaire pour les prévisions (X et Y) : départs en fin de matinée, admissions l'après-midi et le soir,
+    // arrivées à l'urgence en journée. Chaque départ est suivi de son nettoyage (paire mesurée).
+    const POIDS_DEPART = [0, 0, 0, 0, 0, 0, 0, 1, 2, 4, 7, 9, 9, 8, 6, 4, 2, 1, 1, 0, 0, 0, 0, 0];
+    const POIDS_ADMISSION = [1, 1, 0, 0, 0, 0, 0, 1, 1, 2, 3, 4, 5, 6, 7, 7, 7, 6, 6, 5, 5, 4, 3, 2];
+    const POIDS_URGENCE = [2, 1, 1, 1, 1, 1, 2, 3, 5, 7, 8, 8, 8, 7, 7, 7, 7, 8, 8, 7, 6, 5, 4, 3];
+    const tirerHeure = (poids) => { let x = rnd() * poids.reduce((a, b) => a + b, 0); for (let h = 0; h < 24; h += 1) { x -= poids[h]; if (x < 0) return h; } return 12; };
+    const evts = { lit: [], etab: [], ancien: [], nouveau: [], detail: [], date: [], civ: [] };
+    const ajouterEvt = (lit, civ, etab, ancien, nouveau, quand) => {
+      evts.lit.push(lit); evts.civ.push(civ); evts.etab.push(etab); evts.ancien.push(ancien); evts.nouveau.push(nouveau);
+      evts.detail.push('Historique de démonstration'); evts.date.push(quand.toISOString());
+    };
+    const minuit = new Date(); minuit.setHours(0, 0, 0, 0);
+    for (const code of ['HX', 'HY']) {
+      const litsH = (await c.query('SELECT id, type_id FROM lits WHERE etablissement_id = $1 ORDER BY id', [ids[code]])).rows;
+      const civsH = (await c.query('SELECT id FROM civieres WHERE etablissement_id = $1 ORDER BY id', [ids[code]])).rows;
+      const parJourLits = Math.round(litsH.length / (code === 'HX' ? 6 : 4.5));
+      const parJourCiv = code === 'HX' ? 30 : 16;
+      for (let jour = 1; jour <= 56; jour += 1) {
+        const base = new Date(minuit.getTime() - jour * 86400000);
+        const ancien = jour > 30;
+        for (let k = 0; k < parJourLits; k += 1) {
+          const l = litsH[Math.floor(rnd() * litsH.length)];
+          const d = new Date(base.getTime() + (tirerHeure(POIDS_DEPART) * 60 + Math.floor(rnd() * 60)) * 60000);
+          ajouterEvt(l.id, null, ids[code], 'occupe', 'nettoyage', d);
+          const net = (code === 'HX' ? 70 + Math.floor(rnd() * 60) : 35 + Math.floor(rnd() * 25)) + (ancien ? 15 : 0);
+          ajouterEvt(l.id, null, ids[code], 'nettoyage', 'libre', new Date(d.getTime() + net * 60000));
+          const a = litsH[Math.floor(rnd() * litsH.length)];
+          ajouterEvt(a.id, null, ids[code], 'reserve', 'occupe', new Date(base.getTime() + (tirerHeure(POIDS_ADMISSION) * 60 + Math.floor(rnd() * 60)) * 60000));
+        }
+        for (let k = 0; k < parJourCiv; k += 1) {
+          const v = civsH[Math.floor(rnd() * civsH.length)];
+          ajouterEvt(null, v.id, ids[code], 'libre', 'occupee', new Date(base.getTime() + (tirerHeure(POIDS_URGENCE) * 60 + Math.floor(rnd() * 60)) * 60000));
+          // X : les départs de l'urgence sont un peu moins nombreux que les arrivées en soirée (l'urgence se remplit le soir)
+          ajouterEvt(null, v.id, ids[code], 'occupee', 'nettoyage', new Date(base.getTime() + (tirerHeure(code === 'HX' ? POIDS_DEPART : POIDS_URGENCE) * 60 + Math.floor(rnd() * 60)) * 60000));
+        }
+      }
+    }
+    await c.query(`INSERT INTO journal (lit_id, civiere_id, etablissement_id, action, ancien_etat, nouvel_etat, detail, date)
+      SELECT * FROM unnest($1::int[], $2::int[], $3::int[], $4::text[], $5::text[], $6::text[], $7::text[], $8::timestamptz[])`,
+    [evts.lit, evts.civ, evts.etab, evts.lit.map((l) => (l ? 'Changement d’état' : 'Civière')), evts.ancien, evts.nouveau, evts.detail, evts.date]);
   });
 
   // Situation en cours, créée par les vraies règles de l'application

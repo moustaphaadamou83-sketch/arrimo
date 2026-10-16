@@ -428,3 +428,14 @@ label.item input[type=radio] { order: -1; width: 20px; height: 20px; flex: none;
 .bandeau-dispo > div > span:nth-child(2) { flex: 1 1 280px; }
 .bandeau-dispo .ic { color: var(--principal); }
 .actions-dispo { display: flex; align-items: center; gap: var(--e2); }
+
+/* Copilote : vue d'ensemble et prévisions */
+.ensemble { margin-bottom: var(--e5); }
+.ensemble-cases { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--bordure);
+  border: 1px solid var(--bordure); border-radius: var(--rayon-carte); overflow: hidden; }
+.case-ens { background: var(--carte); padding: var(--e3); display: flex; flex-direction: column; gap: 2px; }
+.case-ens .v { font-size: 22px; font-weight: 650; line-height: 1.2; }
+.tableau.prev table { min-width: 0; }
+.tableau.prev td:first-child { font-weight: 600; }
+.prev-risque { color: var(--attention-texte); font-weight: 600; }
+@media (max-width: 520px) { .ensemble-cases { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

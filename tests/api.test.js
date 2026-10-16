@@ -547,6 +547,46 @@ test('disponibilité à côté : alerte aux hôpitaux proches qui en ont besoin,
   }
 });
 
+test('Copilote : vue complète, prévisions à 4 h, 12 h et 24 h avec marge, questions de prévision', async () => {
+  const hx = await id('HX'); const hy = await id('HY'); const med = await type('MED');
+  const p = (await appel('x', 'GET', `/copilote/previsions?etablissement_id=${hx}`)).corps;
+  assert.deepStrictEqual(p.horizons, [4, 12, 24]);
+  assert.strictEqual(p.semaines, 8, 'huit semaines d’historique');
+  for (const u of p.unites) {
+    for (const h of p.horizons) {
+      const x = u.horizons[h];
+      assert.ok(x.marge >= 0 && Number.isInteger(x.libres_prevus));
+      assert.strictEqual(x.sature, x.libres_prevus <= 0);
+      assert.ok(x.liberations >= 0 && x.arrivees >= u.en_attente);
+    }
+    assert.ok(u.horizons[24].arrivees >= u.horizons[4].arrivees, 'les arrivées attendues croissent avec l’horizon');
+  }
+  assert.ok(p.civieres && p.civieres.horizons[4].occupees >= 0 && p.civieres.horizons[4].marge > 0);
+  // Méthode : des congés confirmés dans l'heure s'ajoutent aux lits qui vont se libérer (pondérés à 95 %)
+  const avant = (await appel('y', 'GET', `/copilote/previsions?etablissement_id=${hy}`)).corps.unites.find((u) => u.type_id === med).horizons[4];
+  const occ = (await pool.query(`SELECT id FROM lits WHERE etablissement_id = $1 AND type_id = $2 AND etat = 'occupe' AND nsa_depuis IS NULL`, [hy, med])).rows;
+  await pool.query(`UPDATE lits SET sortie_prevue = now() + interval '1 hour', conge_statut = 'confirme' WHERE id = ANY($1::int[])`, [occ.map((l) => l.id)]);
+  const apres = (await appel('y', 'GET', `/copilote/previsions?etablissement_id=${hy}`)).corps.unites.find((u) => u.type_id === med).horizons[4];
+  assert.ok(apres.liberations >= Math.floor(occ.length * 0.95), `${apres.liberations} libérations pour ${occ.length} congés confirmés`);
+  assert.ok(apres.libres_prevus > avant.libres_prevus);
+  // Vue complète : lits, chambres, civières, file, transferts, NSA, nettoyage, voisins
+  const t0 = Date.now();
+  const b = (await appel('x', 'GET', `/copilote/briefing?etablissement_id=${hx}`)).corps;
+  assert.ok(Date.now() - t0 < 1500, `briefing en ${Date.now() - t0} ms`);
+  assert.deepStrictEqual(Object.keys(b.vue).sort(), ['chambres', 'civieres', 'file', 'lits', 'nettoyage', 'nsa', 'proches', 'transferts']);
+  assert.ok(b.vue.proches.etablissements >= 3 && b.vue.proches.rayon_km === 10);
+  assert.ok(b.previsions.unites.length >= 3);
+  // Questions de prévision et de proximité, en français et en anglais
+  const q = async (question, langue) => (await appel('x', 'POST', '/copilote/question', { etablissement_id: hx, question, langue })).corps.reponse;
+  const soir = await q('Est-ce qu’on sera saturés ce soir ?');
+  assert.match(soir, /^(Oui, probablement|Non, probablement pas)/);
+  assert.match(soir, /Médecine : .*\(± \d+\)/);
+  assert.match(soir, /Calculé à partir des congés prévus/);
+  assert.match(await q('Où envoyer un patient de chirurgie le plus vite ?'), /^Meilleure option en chirurgie : .* km, environ .* de route\)/);
+  assert.match(await q('Combien de civières occupées depuis plus de 24 h ?'), /depuis plus de 24 h/);
+  assert.match(await q('Will we be full tonight?', 'en'), /^(Yes, probably|No, probably not)/);
+});
+
 test('civières de l’urgence : états, verrou, demande liée, admission, changement de civière, réseau, Copilote, indicateurs', async () => {
   const hx = await id('HX'); const hy = await id('HY'); const med = await type('MED');
   const civ = async (qui, etab) => (await appel(qui, 'GET', `/civieres?etablissement_id=${etab}`)).corps;

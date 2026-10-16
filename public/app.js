@@ -896,11 +896,13 @@ async function vueCopilote() {
   const C = (k, vars) => esc(t(`copilote.${k}`, vars));
   v.innerHTML = `<div class="entete"><div class="copilote-tete"><span class="copilote-ic">${icone('sparkles')}</span><div><h2>${C('titre', { etab: b.etablissement })}</h2><p style="margin:0">${C('intro', { heure: new Date(b.genere_le).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit', timeZone: fuseau() }) })}</p></div></div></div>
     <div class="niveau n-${b.alerte.niveau}"><span class="pastille-niveau">${C('niveau', { niveau: t(`niveaux.${b.alerte.niveau}`) })}</span><p>${esc(b.resume)}</p><p class="note" style="flex-basis:100%">${C('protocole', { texte: b.alerte.protocole })}</p></div>
+    ${vueEnsemble(b.vue)}
     <div class="deux"><div class="pile">
       <div class="panneau-c"><h3>${C('recommandations', { n: b.recommandations.length })}</h3><div class="recos">${b.recommandations.length ? b.recommandations.map((x, i) => `<div class="reco">
         <span class="prio prio-${x.priorite}">${esc(t(`prios.${x.priorite}`))}</span><div><h4>${esc(x.titre)}</h4><p>${esc(x.raison)}</p></div>
         ${x.action ? `<button class="btn pri" data-reco="${i}">${esc(x.action.libelle)}</button>` : '<span></span>'}</div>`).join('') : `<p class="note">${C('rien')}</p>`}</div></div>
     </div><div class="pile">
+      ${tableauPrevisions(b.previsions)}
       <div class="panneau-c"><h3>${C('question_titre')}</h3>
         <form id="f-copilote" class="ligne"><div class="champ" style="flex:1 1 200px"><label class="lbl" for="q">${C('question')}</label><input id="q" value="${esc(etat.question)}" placeholder="${esc(exemples[0])}" autocomplete="off"></div><button class="btn pri" type="submit">${C('demander')}</button></form>
         <div class="chips">${exemples.map((x, i) => `<button class="chip" data-ex="${i}">${esc(x)}</button>`).join('')}</div>
@@ -1009,6 +1011,34 @@ async function vueUrgence() {
       agir(b, () => api('POST', `/civieres/${id}/action`, { action: a, version }), (x) => t('lits.etat_ok', { code: x.code, etat: t(`etats.${x.etat}`) }));
     };
   });
+}
+
+/* ---------------- Copilote : vue d'ensemble et prévisions ---------------- */
+function vueEnsemble(v) {
+  if (!v) return '';
+  const C = (k, vars) => t(`copilote.${k}`, vars);
+  const cases = [
+    [C('v_lits'), nb(v.lits.libres), C('v_lits_note', { occ: v.lits.occupes, net: v.lits.nettoyage, fermes: v.lits.fermes })],
+    [C('v_chambres'), nb(v.chambres.libres), C('v_chambres_note', { n: v.chambres.total })],
+    ...(v.civieres ? [[C('v_civieres'), pct(v.civieres.taux), C('v_civieres_note', { occ: v.civieres.occupees, fonc: v.civieres.fonctionnelles, h24: v.civieres.plus_24h })]] : []),
+    [C('v_file'), nb(v.file.attente), C('v_file_note', { n: v.file.assignees })],
+    [C('v_transferts'), nb(v.transferts.entrants + v.transferts.sortants), C('v_transferts_note', { e: v.transferts.entrants, s: v.transferts.sortants })],
+    [C('v_nsa'), nb(v.nsa), C('v_nettoyage', { n: v.nettoyage })],
+    [C('v_proches'), nb(v.proches.avec_place), C('v_proches_note', { n: v.proches.etablissements, km: v.proches.rayon_km, libres: v.proches.libres })],
+  ];
+  return `<section class="ensemble" aria-label="${esc(C('vue_titre'))}"><h3 class="titre-section">${esc(C('vue_titre'))}</h3>
+    <div class="ensemble-cases">${cases.map(([l, val, note]) => `<div class="case-ens"><span class="lbl">${esc(l)}</span><span class="v">${esc(val)}</span><span class="note">${esc(note)}</span></div>`).join('')}</div></section>`;
+}
+function tableauPrevisions(p) {
+  if (!p) return '';
+  const C = (k, vars) => esc(t(`copilote.${k}`, vars));
+  const cellule = (x) => (x.sature ? `<span class="etat-niveau n-rouge">${C('prev_sature')}</span>`
+    : `<span class="${x.risque ? 'prev-risque' : ''}">${C('prev_libres', { n: x.libres_prevus })}</span>`) + ` <span class="note">± ${esc(nb(x.marge))}</span>`;
+  return `<div class="panneau-c"><div><h3>${C('prev_titre')}</h3><p class="note">${C('prev_intro')}</p></div>
+    <div class="tableau prev"><table><thead><tr><th>${C('prev_unite')}</th>${p.horizons.map((h) => `<th>${C('prev_heures', { h })}</th>`).join('')}</tr></thead><tbody>
+    ${p.unites.map((u) => `<tr><td>${esc(u.type_nom)}</td>${p.horizons.map((h) => `<td>${cellule(u.horizons[h])}</td>`).join('')}</tr>`).join('')}
+    ${p.civieres ? `<tr><td>${C('prev_civieres')}</td>${p.horizons.map((h) => { const x = p.civieres.horizons[h]; return `<td>${C('prev_civ_val', { occ: x.occupees, taux: pct(x.taux) })} <span class="note">± ${esc(nb(x.marge))}</span></td>`; }).join('')}</tr>` : ''}
+    </tbody></table></div><p class="note">${C('prev_methode', { s: p.semaines })}</p></div>`;
 }
 
 /* ---------------- Admissions ---------------- */

@@ -9,6 +9,7 @@ const t = require('./terrain');
 const { exigerEtablissement } = require('./auth');
 const { tr, dico, traducteurTypes, duree } = require('./langue');
 const civ = require('./civieres');
+const prev = require('./previsions');
 
 /** Briefing de l'établissement : niveau d'alerte, résumé et recommandations classées, dans la langue de l'utilisateur. */
 async function briefing(pool, utilisateur, etabId) {
@@ -27,6 +28,7 @@ async function briefing(pool, utilisateur, etabId) {
     traducteurTypes(pool, L),
     civ.listeCivieres(pool, utilisateur, etabId),
   ]);
+  const previsions = await prev.previsions(pool, utilisateur, etabId);
   const cfg = etab.config;
   const moi = reseau.etablissements.find((e) => e.moi);
   const recos = [];
@@ -173,6 +175,20 @@ async function briefing(pool, utilisateur, etabId) {
     ajouter(2, tr(L, 'r_sature', { type: nomType(u.type_nom), h: cfg.horizon_h }),
       sug ? tr(L, 'r_sature_option', { etab: sug.nom, raison: sug.raison }) : tr(L, 'r_sature_aucun'));
   }
+  // 6 bis. Saturation prévue (prévisions à 4 h, 12 h, 24 h), si elle n'est pas déjà signalée
+  for (const u of previsions.unites) {
+    const h = previsions.horizons.find((x) => u.horizons[x].sature);
+    if (!h || moi.unites.some((x) => x.type_id === u.type_id && x.risque === 'eleve')) continue;
+    const p = u.horizons[h];
+    ajouter(h <= 4 ? 1 : 2, tr(L, 'r_prevision', { type: nomType(u.type_nom), h }),
+      tr(L, 'r_prevision_raison', { manque: Math.max(0, -p.libres_prevus), marge: p.marge, liberations: p.liberations, arrivees: p.arrivees }));
+  }
+  if (previsions.civieres) {
+    const p = previsions.civieres.horizons[12];
+    if (p.taux >= cfg.seuil_civieres_rouge && previsions.civieres.taux < cfg.seuil_civieres_rouge) {
+      ajouter(2, tr(L, 'r_prevision_civ', { taux: p.taux, h: 12 }), tr(L, 'r_prevision_civ_raison', { occ: p.occupees, marge: p.marge }));
+    }
+  }
   if (alerte.fermes_personnel) {
     ajouter(3, tr(L, 'r_fermes', { n: alerte.fermes_personnel }), tr(L, 'r_fermes_raison'));
   }
@@ -185,7 +201,23 @@ async function briefing(pool, utilisateur, etabId) {
     h: cfg.horizon_h, attente: enAttente, net: nettoyage.length, nsa: nsa.total, taux: nsa.taux,
     longue: alerte.attente_longue ? tr(L, 'resume_longue', { n: alerte.attente_longue, h: Math.round(cfg.attente_admission_max_min / 60) }) : '' })
     + (u ? tr(L, 'resume_urgence', { occ: u.occupees, fonc: u.fonctionnelles, taux: u.taux, h24: u.plus_24h }) : '');
-  return { etablissement: etab.nom, genere_le: new Date().toISOString(), alerte, resume, recommandations: recos };
+  // Vue d'ensemble : tout ce que le Copilote suit
+  const actifs = transferts.filter((x) => !['recu', 'refuse'].includes(x.statut));
+  const chambres = new Map();
+  for (const l of lits) { const k = `${l.unite}|${l.chambre}`; chambres.set(k, (chambres.has(k) ? chambres.get(k) : true) && l.etat === 'libre'); }
+  const proches = reseau.etablissements.filter((e) => !e.moi && e.distance_km <= etab.rayon_alerte_km);
+  const vue = {
+    lits: { libres: lits.filter((l) => l.etat === 'libre').length, occupes: lits.filter((l) => l.etat === 'occupe').length,
+      nettoyage: lits.filter((l) => l.etat === 'nettoyage').length, fermes: lits.filter((l) => l.etat === 'indispo').length },
+    chambres: { total: chambres.size, libres: [...chambres.values()].filter(Boolean).length },
+    civieres: u ? { occupees: u.occupees, fonctionnelles: u.fonctionnelles, taux: u.taux, plus_24h: u.plus_24h } : null,
+    file: { attente: file.filter((d) => d.statut === 'attente').length, assignees: file.filter((d) => d.statut === 'assignee').length },
+    transferts: { entrants: actifs.filter((x) => x.destination_id === etabId).length, sortants: actifs.filter((x) => x.origine_id === etabId).length },
+    nsa: nsa.total, nettoyage: nettoyage.length,
+    proches: { etablissements: proches.length, avec_place: proches.filter((e) => e.unites.some((x) => x.libres > 0)).length, rayon_km: etab.rayon_alerte_km,
+      libres: proches.reduce((a, e) => a + e.unites.reduce((b, x) => b + x.libres, 0), 0) },
+  };
+  return { etablissement: etab.nom, genere_le: new Date().toISOString(), alerte, resume, recommandations: recos, vue, previsions };
 }
 
 /** Vue réseau : où ça déborde, où il reste de la place, et quels délestages proposer. */
@@ -265,6 +297,23 @@ async function question(pool, utilisateur, etabId, q, fetchImpl) {
     const n = await t.listeNsa(pool, utilisateur, etabId);
     return { mode: 'local', reponse: `${tr(L, 'q_nsa', { n: n.total, taux: n.taux, cible: n.cible, jl: n.jours_lits })}\n`
       + Object.entries(n.par_orientation).map(([k, v]) => tr(L, 'q_ligne', { a: orient[k] || k, b: v })).join('\n') };
+  }
+  // Saturation prévue : « Est-ce qu'on sera saturés ce soir ? », « demain ? »
+  if (/(satur|deborde|ce soir|cette nuit|demain|tonight|tomorrow|full|prevision|forecast|predict)/.test(qn) && !/reseau|network/.test(qn)) {
+    const p = await prev.previsions(pool, utilisateur, etabId);
+    const etab = await s.etablissement(pool, etabId);
+    // Horizon : demain → 24 h ; ce soir → jusqu'à 22 h (au moins 4 h) ; sinon 12 h
+    const heureLocale = Number(new Intl.DateTimeFormat('en-CA', { timeZone: etab.config.fuseau, hour: 'numeric', hourCycle: 'h23' }).format(new Date()));
+    const h = /(demain|tomorrow|24)/.test(qn) ? 24 : /(ce soir|cette nuit|tonight)/.test(qn) ? (22 - heureLocale <= 4 ? 4 : 22 - heureLocale <= 12 ? 12 : 24) : 12;
+    const nomType = await traducteurTypes(pool, L);
+    const lignes = p.unites.map((u) => {
+      const x = u.horizons[h];
+      return x.sature ? tr(L, 'q_prev_sature', { type: nomType(u.type_nom), manque: Math.max(0, -x.libres_prevus), marge: x.marge })
+        : tr(L, 'q_prev_libres', { type: nomType(u.type_nom), n: x.libres_prevus, marge: x.marge });
+    });
+    if (p.civieres) lignes.push(tr(L, 'q_prev_civ', { occ: p.civieres.horizons[h].occupees, taux: p.civieres.horizons[h].taux, marge: p.civieres.horizons[h].marge }));
+    const saturees = p.unites.filter((u) => u.horizons[h].sature).map((u) => nomType(u.type_nom).toLowerCase());
+    return { mode: 'local', reponse: `${saturees.length ? tr(L, 'q_prev_oui', { h, liste: saturees.join(', ') }) : tr(L, 'q_prev_non', { h })}\n${lignes.join('\n')}\n${tr(L, 'q_prev_methode', { s: p.semaines })}` };
   }
   if (/(civiere|brancard|stretcher|gurney|corridor|hallway|24 ?h|48 ?h)/.test(qn)) {
     const nomType = await traducteurTypes(pool, L);

@@ -32,6 +32,7 @@ window.ARRIMO_I18N.fr.aide = {
       nom: 'Copilote',
       but: 'Le résumé de la situation pour la réunion de gestion des lits : niveau d’alerte, recommandations classées et réponses à vos questions. Le Copilote propose ; vous décidez.',
       gestes: [
+        'Lisez la vue d’ensemble et les prévisions à 4 h, 12 h et 24 h (avec leur marge) ; demandez « Est-ce qu’on sera saturés ce soir ? ».',
         'Lisez le bandeau de niveau : la pression compte les patients qui attendent un lit.',
         'Traitez les recommandations « Urgent » d’abord ; chacune explique pourquoi.',
         'Cliquez sur le bouton d’une recommandation pour l’appliquer : rien ne se fait sans votre clic.',

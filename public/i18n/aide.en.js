@@ -32,6 +32,7 @@ window.ARRIMO_I18N.en.aide = {
       nom: 'Copilot',
       but: 'The situation summary for the bed management meeting: alert level, ranked recommendations and answers to your questions. The Copilot proposes; you decide.',
       gestes: [
+        'Read the overview and the 4 h, 12 h and 24 h forecast (with its margin); ask “Will we be full tonight?”.',
         'Read the level banner: pressure counts the patients waiting for a bed.',
         'Handle “Urgent” recommendations first; each one explains why.',
         'Click a recommendation’s button to apply it: nothing happens without your click.',
