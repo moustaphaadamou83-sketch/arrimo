@@ -5,6 +5,7 @@ const { transaction, ErreurHttp } = require('./db');
 const { connexion, connexion2fa, exigerSession, exigerEtablissement } = require('./auth');
 const admin = require('./admin');
 const { version } = require('../package.json');
+const env = require('./environnement');
 const { changerEtat, ACTIONS_LIT, DETAIL_ACTION, journaliser } = require('./regles');
 const s = require('./services');
 const t = require('./terrain');
@@ -63,7 +64,8 @@ function creerApp(pool) {
   /* ---------- informations publiques : serveur de démonstration, champs des pages légales ---------- */
   const CHAMPS_LEGAUX = ['entite', 'adresse', 'responsable', 'contact', 'duree_comptes', 'duree_journaux', 'duree_references', 'hebergeur', 'entente'];
   api.get('/public', (req, res) => res.json({
-    demo: process.env.ARRIMO_DEMO === '1',
+    demo: env.estDemo(),
+    environnement: env.environnement(),
     mot_de_passe_oublie: courriel.actif(),
     legal: Object.fromEntries(CHAMPS_LEGAUX.map((k) => [k, process.env[`ARRIMO_LEGAL_${k.toUpperCase()}`] || null]).filter(([, v]) => v)),
   }));
@@ -157,7 +159,7 @@ function creerApp(pool) {
         WHERE c.id = ANY($1::int[]) GROUP BY c.id`, [[...new Set(rows.map((e) => e.config_id))]]);
     return { utilisateur: { id: u.id, nom: u.nom, email: u.email, role: u.role, admin: u.admin, gestionnaire: u.gestionnaire,
       totp_actif: u.totp_actif, mdp_temporaire: u.mdp_temporaire, premiers_pas_vus: u.premiers_pas_vus },
-    etablissements: rows, configs: configs.rows, demo: process.env.ARRIMO_DEMO === '1' };
+    etablissements: rows, configs: configs.rows, demo: env.estDemo(), environnement: env.environnement() };
   }));
 
   /* ---------- capacité, recherche, assistant ---------- */

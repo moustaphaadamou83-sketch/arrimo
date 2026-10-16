@@ -68,6 +68,7 @@ function changerLangue(l) {
   langue = l;
   ecrire('arrimo-langue', l);
   appliquerLangue();
+  if (etat.environnement) bandeauEnvironnement(etat.environnement);
   if (etat.moi) { majNomUtilisateur(); majSelecteurCtx(); etat.reponse = ''; rafraichir(); }
 }
 document.querySelectorAll('select.choix-langue').forEach((s) => {
@@ -288,7 +289,7 @@ function majSelecteurCtx() {
 
 async function demarrer() {
   etat.moi = await api('GET', '/moi');
-  $('#bandeau-demo').hidden = !etat.moi.demo;
+  bandeauEnvironnement(etat.moi.environnement);
   if (etat.moi.utilisateur.mdp_temporaire) { montrerFormulaire('#f-mdp-temp'); $('#t-actuel').focus(); return; }
   const etabs = etat.moi.etablissements;
   majNomUtilisateur();
@@ -1512,7 +1513,15 @@ async function vueAdminDemo(corps) {
 
 /* ---------------- démarrage ---------------- */
 appliquerLangue();
-fetch('/api/public').then((r) => r.json()).then((p) => { $('#bandeau-demo').hidden = !p.demo; $('#b-oubli').hidden = !p.mot_de_passe_oublie; }).catch(() => {});
+/** Bandeau de l'environnement : démonstration (données fictives) ou recette (données de test) ; rien en production. */
+function bandeauEnvironnement(env) {
+  const b = $('#bandeau-demo');
+  etat.environnement = env;
+  b.hidden = !['demo', 'recette'].includes(env);
+  b.classList.toggle('recette', env === 'recette');
+  b.textContent = env === 'recette' ? t('barre.recette') : t('barre.demo');
+}
+fetch('/api/public').then((r) => r.json()).then((p) => { bandeauEnvironnement(p.environnement); $('#b-oubli').hidden = !p.mot_de_passe_oublie; }).catch(() => {});
 (async () => {
   // Lien reçu par courriel : /?reinit=<jeton> ; le jeton est retiré de l'adresse aussitôt lu
   const reinit = new URLSearchParams(location.search).get('reinit');

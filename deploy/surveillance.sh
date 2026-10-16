@@ -4,16 +4,17 @@
 # URL à surveiller : ARRIMO_URL_SANTE (par défaut, le service local).
 set -uo pipefail
 URL="${ARRIMO_URL_SANTE:-http://127.0.0.1:3010/api/sante}"
-ETAT=/run/arrimo-surveillance.echec
+NOM="${SURVEILLANCE_NOM:-arrimo-surveillance}"   # un nom par environnement (ex. arrimo-recette-surveillance)
+ETAT="/run/$NOM.echec"
 
 REPONSE=$(curl -sS --max-time 10 "$URL" 2>&1)
 if printf '%s' "$REPONSE" | grep -q '"etat":"ok"'; then
   if [ -f "$ETAT" ]; then
-    logger -t arrimo-surveillance -p user.notice "Rétabli : $URL répond de nouveau (panne depuis $(cat "$ETAT"))"
+    logger -t "$NOM" -p user.notice "Rétabli : $URL répond de nouveau (panne depuis $(cat "$ETAT"))"
     rm -f "$ETAT"
   fi
   exit 0
 fi
 [ -f "$ETAT" ] || date -u +%Y-%m-%dT%H:%M:%SZ > "$ETAT"
-logger -t arrimo-surveillance -p user.err "ÉCHEC : $URL ne répond pas correctement : $(printf '%s' "$REPONSE" | head -c 200)"
+logger -t "$NOM" -p user.err "ÉCHEC : $URL ne répond pas correctement : $(printf '%s' "$REPONSE" | head -c 200)"
 exit 1

@@ -24,6 +24,7 @@ window.ARRIMO_I18N.fr = {
     reinit_ok: 'Mot de passe enregistré. Connectez-vous avec votre nouveau mot de passe.',
   },
   barre: {
+    recette: 'Recette · données de test, pas d’usage réel',
     menu: 'Compte',
     etablissement: 'Établissement', notifications: 'Notifications', mon_compte: 'Mon compte', deconnexion: 'Déconnexion', aide: 'Aide',
     gestionnaire: ' · gestionnaire réseau', module_desactive: ' (module désactivé)',

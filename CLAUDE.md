@@ -24,6 +24,7 @@ Propriétaire : Moustafa Adamou. Langue de travail et de l’interface : **fran�
 - `src/connecteurs.js` réception d’événements HL7 ADT traduits en JSON, capacité réseau en lecture
 - `src/admin.js` mon compte, double authentification, administration · `src/totp.js` codes à 6 chiffres (RFC 6238)
 - `db/schema.sql` schéma (idempotent, rejouable) · `db/seed.js` ancienne démo à 6 établissements (tests) · `db/demo-reseau.js` démo : réseau de 20 hôpitaux (comptes hopital.x, hopital.y, reseau)
+- `src/environnement.js` ARRIMO_ENV (demo, recette, production) et ARRIMO_DOMAINE (seul réglage de domaine) · `deploy/noms.sh` noms par environnement · `db/premier-compte.js` premier compte d'un environnement vide
 - `src/simulation.js` démo vivante : les hôpitaux sans compte évoluent toutes les 3 min (même règles, journalisé) · `src/national.js` tableau national par proximité
 - `public/` interface (`index.html`, `app.js`, `style.css`, `logo.svg`)
 - `deploy/installer.sh` installation serveur · `deploy/sauvegarde.sh`, `deploy/restaurer.sh`
@@ -36,7 +37,7 @@ createdb arrimo && createdb arrimo_test
 npm install
 DATABASE_URL=postgres:///arrimo npm run demo:reset
 DATABASE_URL=postgres:///arrimo HOST=127.0.0.1 npm start        # http://localhost:3010
-TEST_DATABASE_URL=postgres:///arrimo_test npm test               # 29 tests, tous doivent passer
+TEST_DATABASE_URL=postgres:///arrimo_test npm test               # 49 tests, tous doivent passer
 ```
 Tout changement : ajouter ou adapter un test dans `tests/api.test.js`, puis `npm test` vert avant de déployer.
 
@@ -48,6 +49,8 @@ Tout changement : ajouter ou adapter un test dans `tests/api.test.js`, puis `npm
 - **Déployer une nouvelle version** (la base est conservée) :
   `git archive` ou zip du dépôt → `scp arrimo.zip deploy/installer.sh root@37.60.243.149:/root/` → `ssh root@37.60.243.149 "cd /root && bash installer.sh arrimo.senseafri.com"`
   Le script rejoue `db/schema.sql` (sans effacer les données) et redémarre le service.
+- **Recette** (même serveur, données de test) : `/opt/arrimo-recette`, service `arrimo-recette`, base `arrimo_recette`, https://recette.arrimo.senseafri.com · installer avec `ARRIMO_ENV=recette bash installer.sh arrimo.senseafri.com`.
+- **Production** : jamais sur ce serveur ; hébergement au Canada (l'installateur exige `CONFIRMER_HEBERGEMENT_CANADA=oui`).
 - **Remettre la démo à zéro** : `sudo -u arrimo bash -c 'set -a; . /opt/arrimo/.env; set +a; cd /opt/arrimo && npm run -s demo:reset' > /opt/arrimo/acces-demo.txt`
 
 ## Tâches, par ordre de priorité

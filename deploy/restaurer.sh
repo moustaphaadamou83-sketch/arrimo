@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Restaure une sauvegarde Arrimo. ATTENTION : remplace toutes les données actuelles.
-# Usage : bash restaurer.sh /var/backups/arrimo/arrimo-AAAAMMJJTHHMMSSZ.dump
+# Usage : arrimo-restaurer /var/backups/arrimo/arrimo-AAAAMMJJTHHMMSSZ.dump   (recette : arrimo-recette-restaurer …)
 set -euo pipefail
 FICHIER="${1:-}"
 DOSSIER_APP="${DOSSIER_APP:-/opt/arrimo}"
+SERVICE="${SERVICE:-arrimo}"
 [ -f "$FICHIER" ] || { echo "Usage : bash restaurer.sh <fichier.dump>"; exit 1; }
 if [ -f "$FICHIER.sha256" ]; then sha256sum -c "$FICHIER.sha256" >/dev/null || { echo "Fichier corrompu (somme de contrôle)."; exit 1; }; fi
 set -a; . "$DOSSIER_APP/.env"; set +a
@@ -13,8 +14,8 @@ if [ "${CONFIRMER:-}" != "oui" ]; then
 fi
 # Sauvegarde de sécurité de l'état actuel avant d'écraser
 pg_dump --format=custom "$DATABASE_URL" > "/tmp/arrimo-avant-restauration-$(date +%s).dump" || true
-systemctl stop arrimo 2>/dev/null || true
+systemctl stop "$SERVICE" 2>/dev/null || true
 psql "$DATABASE_URL" -q -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
 pg_restore --no-owner --exit-on-error -d "$DATABASE_URL" "$FICHIER"
-systemctl start arrimo 2>/dev/null || true
+systemctl start "$SERVICE" 2>/dev/null || true
 echo "Restauration terminée depuis $FICHIER"

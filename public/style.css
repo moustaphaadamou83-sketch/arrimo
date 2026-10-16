@@ -447,3 +447,6 @@ label.item input[type=radio] { order: -1; width: 20px; height: 20px; flex: none;
 .groupe-liste li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--e2); border-top: 1px solid var(--bordure); padding-top: var(--e2); font-size: var(--t-note); }
 .groupe-liste li > div { display: flex; flex-direction: column; min-width: 0; }
 #b-recos-plus { align-self: center; }
+
+/* Bandeau de l'environnement de recette : ambre, distinct de la démonstration */
+.bandeau-demo.recette { background: var(--attention-fond); color: #78350F; border-bottom-color: var(--attention); }

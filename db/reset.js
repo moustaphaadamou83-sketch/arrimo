@@ -3,15 +3,16 @@
  *   node db/reset.js          réseau de 6 établissements
  *   node db/reset.js demo     démonstration : réseau de 20 hôpitaux (Hôpital X, Hôpital Y et 18 autres)
  *   --silencieux              n'affiche pas les accès (timer de nuit : le mot de passe ne va pas dans les journaux)
- * Refusé en production, sauf sur un serveur de démonstration (ARRIMO_DEMO=1).
+ * Permis seulement sur un serveur de démonstration (ARRIMO_ENV=demo) ou en développement ; refusé en recette et en production.
  */
 const { creerPool } = require('../src/db');
 const { seed } = require('./seed');
 const { demoReseau } = require('./demo-reseau');
 const { viderBase } = require('./vider');
 
-if (process.env.NODE_ENV === 'production' && process.env.ARRIMO_DEMO !== '1') {
-  console.error('Interdit en production. Sur un serveur de démonstration, définissez ARRIMO_DEMO=1.');
+const { environnement } = require('../src/environnement');
+if (!['demo', 'developpement'].includes(environnement())) {
+  console.error(`Interdit en ${environnement()} : la remise à zéro et les données de démonstration sont réservées à la démo (ARRIMO_ENV=demo).`);
   process.exit(1);
 }
 const pool = creerPool(process.env.DATABASE_URL);

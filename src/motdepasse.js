@@ -24,7 +24,7 @@ async function demander(pool, email, langue) {
       const jeton = crypto.randomBytes(32).toString('hex');
       await pool.query(`INSERT INTO jetons_mdp (jeton_hash, utilisateur_id, expire_le) VALUES ($1, $2, now() + make_interval(mins => $3))`,
         [empreinte(jeton), u.id, DUREE_MIN]);
-      const lien = `${(process.env.ARRIMO_URL || '').replace(/\/$/, '')}/?reinit=${jeton}`;
+      const lien = `${require('./environnement').urlPublique()}/?reinit=${jeton}`;
       // Envoi sans attendre : la réponse prend le même temps que l'adresse existe ou non
       courriel.envoyer({ a: u.email, sujet: tr(langue, 'courriel_sujet'), texte: tr(langue, 'courriel_texte', { nom: u.nom, lien, min: DUREE_MIN }) })
         .catch((e) => console.error('Courriel de réinitialisation :', e.message));

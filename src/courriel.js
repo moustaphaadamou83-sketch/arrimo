@@ -7,7 +7,7 @@
 let transportTest = null;
 let transportSmtp = null;
 
-const actif = () => !!(transportTest || (process.env.SMTP_URL && process.env.ARRIMO_URL));
+const actif = () => !!(transportTest || (process.env.SMTP_URL && require('./environnement').urlPublique()));
 
 function definirTransport(fn) { transportTest = fn; }
 

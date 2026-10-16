@@ -1,5 +1,5 @@
 /**
- * Démonstration toujours prête (serveur de démonstration seulement, ARRIMO_DEMO=1).
+ * Démonstration toujours prête (serveur de démonstration seulement : ARRIMO_ENV=demo, voir src/environnement.js).
  * - reinitialiser : efface la base et recrée la démo Hôpital X / Hôpital Y (bouton du gestionnaire réseau, commande, timer de nuit).
  * - recaler : quand personne n'utilise la démo, avance toutes ses horloges du temps écoulé, pour que les attentes,
  *   congés et nettoyages restent ceux de la situation de départ, quelle que soit l'heure. Aucun état de lit ne change
@@ -9,7 +9,7 @@ const { transaction } = require('./db');
 const { viderBase } = require('../db/vider');
 const { viderCacheTypes } = require('./langue');
 
-const estDemo = () => process.env.ARRIMO_DEMO === '1';
+const { estDemo } = require('./environnement');
 
 async function reinitialiser(pool) {
   const { demoReseau } = require('../db/demo-reseau');

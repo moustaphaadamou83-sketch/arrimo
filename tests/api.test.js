@@ -1253,3 +1253,93 @@ test('démo toujours prête : remise à zéro refusée sans ARRIMO_DEMO=1, rése
     if (avant2fa === undefined) delete process.env.ARRIMO_2FA_ADMIN; else process.env.ARRIMO_2FA_ADMIN = avant2fa;
   }
 });
+
+/* ======================= Partie C1 : environnements ======================= */
+test('environnements : démo, recette, production ; domaine en un seul réglage ; garde-fous', async () => {
+  const { spawnSync } = require('child_process');
+  const env = require('../src/environnement');
+  const avant = { ...process.env };
+  const regler = (v) => { for (const k of ['ARRIMO_ENV', 'ARRIMO_DEMO', 'ARRIMO_DOMAINE', 'ARRIMO_URL', 'NODE_ENV']) delete process.env[k]; Object.assign(process.env, v); };
+  try {
+    regler({ ARRIMO_ENV: 'demo', ARRIMO_DOMAINE: 'arrimo.senseafri.com' });
+    assert.deepStrictEqual([env.environnement(), env.estDemo(), env.hote(), env.urlPublique()], ['demo', true, 'arrimo.senseafri.com', 'https://arrimo.senseafri.com']);
+    regler({ ARRIMO_ENV: 'recette', ARRIMO_DEMO: '1', ARRIMO_DOMAINE: 'arrimo.senseafri.com' });
+    assert.deepStrictEqual([env.environnement(), env.estDemo(), env.urlPublique()], ['recette', false, 'https://recette.arrimo.senseafri.com'], 'ARRIMO_ENV prime sur l’ancien ARRIMO_DEMO');
+    // Changer de domaine : un seul réglage
+    regler({ ARRIMO_ENV: 'recette', ARRIMO_DOMAINE: 'arrimo.ca' });
+    assert.strictEqual(env.urlPublique(), 'https://recette.arrimo.ca');
+    regler({ ARRIMO_ENV: 'production', ARRIMO_DOMAINE: 'arrimo.ca', ARRIMO_URL: 'https://app.arrimo.ca/' });
+    assert.deepStrictEqual([env.estProduction(), env.urlPublique()], [true, 'https://app.arrimo.ca']);
+    regler({ ARRIMO_DEMO: '1' });
+    assert.strictEqual(env.environnement(), 'demo', 'compatibilité avec les serveurs existants');
+    regler({ NODE_ENV: 'production' });
+    assert.strictEqual(env.environnement(), 'production');
+
+    // Le serveur annonce son environnement ; hors démo : pas de remise à zéro, pas de simulation
+    regler({ ARRIMO_ENV: 'recette', ARRIMO_DEMO: '1' });
+    const pub = (await appel(null, 'GET', '/public')).corps;
+    assert.deepStrictEqual([pub.environnement, pub.demo], ['recette', false]);
+    assert.strictEqual((await require('../src/simulation').simuler(pool)), 0);
+    assert.strictEqual(await require('../src/demo').recaler(pool, { calmeMin: 0 }), 0);
+    // Scripts de données fictives refusés en recette et en production, avant tout accès à la base
+    for (const e of ['recette', 'production']) {
+      for (const script of ['db/reset.js', 'db/demo-reseau.js', 'db/seed.js']) {
+        const r = spawnSync(process.execPath, [script, 'demo'], { cwd: require('path').join(__dirname, '..'),
+          env: { PATH: process.env.PATH, ARRIMO_ENV: e, ARRIMO_DEMO: '1', DATABASE_URL: 'postgres://personne@127.0.0.1:1/aucune' }, encoding: 'utf8' });
+        assert.strictEqual(r.status, 1, `${script} en ${e}`);
+        assert.match(r.stderr, /Interdit en (recette|production)/);
+      }
+    }
+  } finally {
+    for (const k of ['ARRIMO_ENV', 'ARRIMO_DEMO', 'ARRIMO_DOMAINE', 'ARRIMO_URL', 'NODE_ENV']) { if (avant[k] === undefined) delete process.env[k]; else process.env[k] = avant[k]; }
+  }
+});
+
+test('installateur : noms propres à chaque environnement, domaine changeable ; scripts valides', () => {
+  const { spawnSync } = require('child_process');
+  const racine = require('path').join(__dirname, '..');
+  const noms = (vars) => {
+    const r = spawnSync('bash', ['-c', '. deploy/noms.sh && printf "%s|%s|%s|%s|%s|%s|%s" "$NOM" "$DOSSIER" "$UTILISATEUR" "$BASE" "$PORT" "$HOTE" "$SAUVEGARDES"'],
+      { cwd: racine, env: { PATH: process.env.PATH, ...vars }, encoding: 'utf8' });
+    return r.status === 0 ? r.stdout.split('|') : [`erreur ${r.status}`, r.stdout.trim()];
+  };
+  assert.deepStrictEqual(noms({ DOMAINE: 'arrimo.senseafri.com' }),
+    ['arrimo', '/opt/arrimo', 'arrimo', 'arrimo', '3010', 'arrimo.senseafri.com', '/var/backups/arrimo'], 'la démo actuelle ne change pas');
+  assert.deepStrictEqual(noms({ ARRIMO_ENV: 'recette', DOMAINE: 'arrimo.senseafri.com' }),
+    ['arrimo-recette', '/opt/arrimo-recette', 'arrimo-recette', 'arrimo_recette', '3011', 'recette.arrimo.senseafri.com', '/var/backups/arrimo-recette']);
+  assert.strictEqual(noms({ ARRIMO_ENV: 'recette', DOMAINE: 'Arrimo.CA' })[5], 'recette.arrimo.ca');
+  assert.deepStrictEqual(noms({ ARRIMO_ENV: 'production', DOMAINE: 'arrimo.ca' }).slice(0, 6), ['arrimo', '/opt/arrimo', 'arrimo', 'arrimo', '3010', 'arrimo.ca']);
+  assert.match(noms({ ARRIMO_ENV: 'essai', DOMAINE: 'x' })[0], /^erreur 1/);
+  for (const f of ['installer.sh', 'noms.sh', 'sauvegarde.sh', 'restaurer.sh', 'surveillance.sh']) {
+    assert.strictEqual(spawnSync('bash', ['-n', `deploy/${f}`], { cwd: racine }).status, 0, f);
+  }
+  // Garde-fous de l'installateur, vérifiés dans le texte (il n'est jamais lancé par les tests : il installerait des paquets)
+  const inst = require('fs').readFileSync(require('path').join(racine, 'deploy', 'installer.sh'), 'utf8');
+  const avantPaquets = inst.slice(0, inst.indexOf('apt-get update'));
+  assert.match(avantPaquets, /CONFIRMER_HEBERGEMENT_CANADA:-\}" = oui/, 'production : confirmation d’hébergement au Canada avant toute installation');
+  assert.match(avantPaquets, /contient un autre environnement/, 'jamais un environnement par-dessus un autre');
+  assert.match(inst, /NOUVELLE_INSTALLATION:-0\}" = 1 \] && \[ "\$ARRIMO_ENV" = demo \]/, 'données de démonstration en démo seulement');
+});
+
+test('premier compte d’un environnement vide : gestionnaire, mot de passe temporaire ; refusé s’il existe des comptes', async () => {
+  const { premierCompte } = require('../db/premier-compte');
+  await assert.rejects(premierCompte(pool, 'premier@exemple.ca', 'Premier'), /déjà des comptes/);
+  const nomBase = `arrimo_test_premier_${process.pid}`;
+  await pool.query(`DROP DATABASE IF EXISTS ${nomBase}`);
+  await pool.query(`CREATE DATABASE ${nomBase}`);
+  const url = new URL(URL_TEST); url.pathname = `/${nomBase}`;
+  const vide = creerPool(url.toString());
+  try {
+    await assert.rejects(premierCompte(vide, 'pas un courriel', 'X'), /Courriel invalide/);
+    const mdp = await premierCompte(vide, 'Moustafa@Exemple.ca', 'Moustafa Adamou');
+    assert.ok(mdp.length >= 12);
+    const u = (await vide.query('SELECT email, role, mdp_temporaire FROM utilisateurs')).rows;
+    assert.deepStrictEqual(u, [{ email: 'moustafa@exemple.ca', role: 'gestionnaire', mdp_temporaire: true }]);
+    assert.strictEqual((await vide.query('SELECT count(*)::int AS n FROM etablissements')).rows[0].n, 0, 'aucune donnée de démonstration');
+    assert.deepStrictEqual((await vide.query('SELECT code FROM types_unite ORDER BY ordre')).rows.map((r) => r.code), ['SI', 'MED', 'CHIR', 'MAT'], 'configuration de base du Québec');
+    await assert.rejects(premierCompte(vide, 'autre@exemple.ca', 'Autre'), /déjà des comptes/);
+  } finally {
+    await vide.end();
+    await pool.query(`DROP DATABASE IF EXISTS ${nomBase}`);
+  }
+});

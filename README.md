@@ -154,12 +154,30 @@ X-SH-Key: <SH_API_KEY>
 - Gestion des utilisateurs et de la structure (unités, chambres) par écran ; aujourd’hui par l’API gestionnaire ou en base.
 - Authentification unique (SSO) de l’établissement et double authentification.
 
-## Mise en ligne sur un serveur (démonstration)
+## Environnements et mise en ligne
 
-1. Chez Namecheap, créer un enregistrement DNS **A** (ex. `arrimo`) vers l’adresse IP du serveur.
+Le même code et le même installateur pour trois environnements ; seul le fichier `.env` diffère.
+
+| | Démo | Recette | Production |
+|---|---|---|---|
+| `ARRIMO_ENV` | `demo` | `recette` | `production` |
+| Adresse | `<domaine>` | `recette.<domaine>` | `<domaine>` (serveur au Canada) |
+| Dossier, service, base | `/opt/arrimo`, `arrimo`, `arrimo` | `/opt/arrimo-recette`, `arrimo-recette`, `arrimo_recette` | `/opt/arrimo`, `arrimo`, `arrimo` |
+| Données | fictives (réseau de 20 hôpitaux) | structure réelle, patients de test | réelles |
+| Bandeau | « Démonstration · données fictives » | « Recette · données de test » (ambre) | aucun |
+| Remise à zéro, simulation | oui | non | non (refusées par le serveur) |
+
+**Domaine : un seul réglage.** `ARRIMO_DOMAINE` dans `.env` (aujourd'hui `arrimo.senseafri.com`) ; toutes les adresses en découlent.
+Pour passer à un autre domaine (ex. `arrimo.ca`) : enregistrement DNS, puis relancer l'installateur avec le nouveau domaine.
+
+1. DNS (Namecheap, Advanced DNS) : un enregistrement **A** de l'hôte vers l'adresse IP du serveur.
 2. Copier `arrimo.zip` et `deploy/installer.sh` sur le serveur, puis en root :
-   `bash installer.sh arrimo.mondomaine.com`
-3. Le script installe Node.js, PostgreSQL et Nginx, crée la base avec un mot de passe aléatoire,
-   charge les données fictives avec un mot de passe de démonstration aléatoire, lance le service
-   au redémarrage, et active HTTPS. Les comptes et les clés sont écrits dans `/opt/arrimo/acces-demo.txt`.
+   - démo : `bash installer.sh arrimo.senseafri.com`
+   - recette : `ARRIMO_ENV=recette PREMIER_COMPTE=<courriel> PREMIER_NOM="<nom>" bash installer.sh arrimo.senseafri.com`
+   - production : `ARRIMO_ENV=production CONFIRMER_HEBERGEMENT_CANADA=oui PREMIER_COMPTE=<courriel> PREMIER_NOM="<nom>" bash installer.sh arrimo.ca`
+3. Le script installe Node.js, PostgreSQL et Nginx, crée la base avec un mot de passe aléatoire, le service, les sauvegardes de nuit,
+   la surveillance et HTTPS. En démo, il charge les données fictives (accès dans `/opt/arrimo/acces-demo.txt`) ;
+   en recette et en production, il crée seulement la configuration de base et le premier compte (mot de passe temporaire dans `premier-compte.txt`).
 4. Pour une mise à jour : recopier le nouveau `arrimo.zip` et relancer la même commande ; la base est conservée.
+5. Commandes par environnement : `<nom>-sauvegarde`, `<nom>-restaurer <fichier.dump>`, `journalctl -u <nom>`, `journalctl -t <nom>-surveillance`
+   (`<nom>` = `arrimo` ou `arrimo-recette`).

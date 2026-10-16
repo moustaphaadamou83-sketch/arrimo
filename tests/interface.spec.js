@@ -550,3 +550,30 @@ test('interface en anglais : aucun texte français restant (noms propres except�
 
   for (const p of [x, y, e, r]) await p.context().close();
 });
+
+/* ------------------------------------------------------------------ environnements (C1) */
+test('bandeau de l’environnement : démonstration, recette (ambre), rien en production', { timeout: 120000 }, async () => {
+  const L = LARGEURS[0];
+  const avant = { env: process.env.ARRIMO_ENV, demo: process.env.ARRIMO_DEMO };
+  try {
+    for (const [env, attendu] of [['recette', /^Recette · données de test/], ['production', null], ['demo', /^Démonstration · données fictives$/]]) {
+      process.env.ARRIMO_ENV = env;
+      const page = await (await navigateur.newContext({ viewport: { width: L.width, height: L.height } })).newPage();
+      page.erreurs = [];
+      for (const chemin of ['/', '/confidentialite']) {
+        await page.goto(`${base}${chemin}`);
+        await page.waitForLoadState('networkidle');
+        const visible = await page.isVisible('#bandeau-demo');
+        if (!attendu) { assert.ok(!visible, `${env}${chemin} : aucun bandeau`); continue; }
+        assert.ok(visible, `${env}${chemin} : bandeau visible`);
+        assert.match((await page.textContent('#bandeau-demo')).trim(), attendu);
+        assert.strictEqual(await page.evaluate(() => document.getElementById('bandeau-demo').classList.contains('recette')), env === 'recette');
+        await verifier(page, { ...L, nom: 'environnements' }, `${env}${chemin.replace('/', '-')}`);
+      }
+      await page.context().close();
+    }
+  } finally {
+    if (avant.env === undefined) delete process.env.ARRIMO_ENV; else process.env.ARRIMO_ENV = avant.env;
+    if (avant.demo === undefined) delete process.env.ARRIMO_DEMO; else process.env.ARRIMO_DEMO = avant.demo;
+  }
+});

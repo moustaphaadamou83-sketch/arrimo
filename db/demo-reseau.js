@@ -347,6 +347,9 @@ async function demoReseau(pool, { silencieux = false, comptesRoles = false } = {
 }
 
 if (require.main === module) {
+  // Données fictives : jamais en recette ni en production
+  const { environnement } = require('../src/environnement');
+  if (!['demo', 'developpement'].includes(environnement())) { console.error(`Interdit en ${environnement()}.`); process.exit(1); }
   const pool = creerPool(process.env.DATABASE_URL);
   demoReseau(pool).then(() => pool.end()).catch((e) => { console.error(e.message); pool.end(); process.exit(1); });
 }

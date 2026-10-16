@@ -36,7 +36,7 @@
   let langue = ['fr', 'en'].includes(params.get('langue')) ? params.get('langue') : (lire('arrimo-langue') || langueUrl);
   if (!['fr', 'en'].includes(langue)) langue = 'fr';
   const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  let champs = {}; let demo = false;
+  let champs = {}; let env = null;
 
   function afficher() {
     const L = window.ARRIMO_LEGAL[langue];
@@ -55,8 +55,9 @@
     lien.textContent = L.autre_page[page];
     lien.href = `/${autre}`;
     const bd = document.getElementById('bandeau-demo');
-    bd.textContent = I.barre.demo;
-    bd.hidden = !demo;
+    bd.textContent = env === 'recette' ? I.barre.recette : I.barre.demo;
+    bd.classList.toggle('recette', env === 'recette');
+    bd.hidden = !['demo', 'recette'].includes(env);
     const s = document.getElementById('langue-legale');
     s.innerHTML = ['fr', 'en'].map((l) => `<option value="${l}">${esc(window.ARRIMO_I18N[l].langue.court)} · ${esc(window.ARRIMO_I18N[l].langue.nom)}</option>`).join('');
     s.setAttribute('aria-label', I.langue.choisir);
@@ -64,7 +65,7 @@
   }
   document.getElementById('langue-legale').onchange = (e) => { langue = e.target.value; ecrire('arrimo-langue', langue); afficher(); };
   afficher();
-  fetch('/api/public').then((r) => r.json()).then((p) => { champs = p.legal || {}; demo = !!p.demo; afficher(); }).catch(() => {});
+  fetch('/api/public').then((r) => r.json()).then((p) => { champs = p.legal || {}; env = p.environnement; afficher(); }).catch(() => {});
 }());
 </script>
 </body>

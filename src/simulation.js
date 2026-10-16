@@ -1,5 +1,5 @@
 /**
- * Simulation douce du réseau de démonstration (serveur de démonstration seulement, ARRIMO_DEMO=1).
+ * Simulation douce du réseau de démonstration (serveur de démonstration seulement, ARRIMO_ENV=demo).
  * Toutes les quelques minutes, chaque hôpital sans compte vit un peu : nettoyages terminés, congés, admissions,
  * patients qui arrivent sur civière ou qui la quittent. Les hôpitaux qui ont un compte (X, Y) ne sont jamais touchés.
  * Chaque changement passe par les mêmes règles que l'interface (src/regles.js : verrou, version, journal).

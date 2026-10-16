@@ -24,6 +24,7 @@ window.ARRIMO_I18N.en = {
     reinit_ok: 'Password saved. Sign in with your new password.',
   },
   barre: {
+    recette: 'Test environment · test data, not for real use',
     menu: 'Account',
     etablissement: 'Facility', notifications: 'Notifications', mon_compte: 'My account', deconnexion: 'Sign out', aide: 'Help',
     gestionnaire: ' · network manager', module_desactive: ' (module disabled)',
