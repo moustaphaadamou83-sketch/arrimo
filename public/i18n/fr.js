@@ -64,7 +64,7 @@ window.ARRIMO_I18N.fr = {
     'Transfert validé': 'Transfert validé', 'Transport organisé': 'Transport organisé', 'Départ confirmé': 'Départ confirmé',
     'Désignation NSA': 'Désignation NSA', 'Fin du statut NSA': 'Fin du statut NSA', 'Orientation NSA modifiée': 'Orientation NSA modifiée',
     'Congé mis à jour': 'Congé mis à jour', 'Congé prévu modifié': 'Congé prévu modifié', 'Nettoyage commencé': 'Nettoyage commencé',
-    'Équipement modifié': 'Équipement modifié', 'Civière': 'Civière',
+    'Équipement modifié': 'Équipement modifié', 'Chambre prête': 'Chambre prête', 'Civière': 'Civière',
   },
   journal_admin_actions: {
     'Mot de passe changé': 'Mot de passe changé', 'Double authentification activée': 'Double authentification activée',
@@ -106,7 +106,10 @@ window.ARRIMO_I18N.fr = {
     hs_bouton: 'Mettre hors service', hs_ok: '{code} hors service.', etat_ok: '{code} : {etat}',
   },
   transferts: {
-    titre: 'Transferts · {etab}', intro: 'Seuls les transferts qui concernent votre établissement sont visibles. Chaque étape revient au bon établissement.',
+    chambre_prete: 'Chambre prête', chambre_prete_ok: 'Chambre prête : le demandeur est avisé.', badge_prete: 'Chambre prête', a_preparer: 'Chambre à préparer',
+    chambre_en_preparation: 'Chambre en préparation chez le receveur', arrivee: 'Arrivée prévue vers {heure}', dans: 'dans {duree}', imminente: 'arrivée imminente',
+    retard: 'prévue il y a {duree}', besoins: 'Besoins : {liste}',
+    titre: 'Transferts · {etab}', intro: 'Seuls les transferts qui concernent votre établissement sont visibles. Le receveur ne crée aucun dossier : il reçoit la référence, les besoins du patient et l’heure d’arrivée.',
     aucun: 'Aucun transfert en cours.', urgent: 'Urgent', entrant: 'Entrant', sortant: 'Sortant', lit: 'lit', motif: 'Motif : {motif}',
     attente_de: 'En attente de {etab}',
     accepter: 'Accepter', refuser: 'Refuser', transport: 'Organiser le transport', depart: 'Confirmer le départ', reception: 'Confirmer la réception',

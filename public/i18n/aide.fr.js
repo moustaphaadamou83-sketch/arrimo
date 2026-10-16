@@ -104,6 +104,7 @@ window.ARRIMO_I18N.fr.aide = {
       nom: 'Transferts',
       but: 'Les transferts entrants et sortants, étape par étape. Chaque étape revient à l’établissement concerné.',
       gestes: [
+        'Receveur : « Chambre prête » dès que la chambre est préparée ; le demandeur est avisé. Aucun dossier à créer : la référence, les besoins et l’heure d’arrivée suffisent.',
         'Receveur : « Accepter » ou « Refuser » une demande (le lit est déjà bloqué pour le patient).',
         'Demandeur : « Organiser le transport », puis « Confirmer le départ ».',
         'Receveur : « Confirmer la réception » ; le lit devient occupé.',

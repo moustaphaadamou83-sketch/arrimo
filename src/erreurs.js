@@ -88,6 +88,7 @@ const MESSAGES = {
   transfert_introuvable: 'Transfert introuvable.',
   action_revient_a: 'Cette action revient à {etab}.',
   transfert_statut: 'Le transfert {numero} n’est plus au statut attendu. Rafraîchissez la page.',
+  chambre_deja_prete: 'La chambre du transfert {numero} est déjà indiquée comme prête.',
   // administration
   etab_non_administre: "Vous n'administrez pas cet établissement.",
   etabs_non_administres: "Vous n'administrez pas tous ces établissements.",

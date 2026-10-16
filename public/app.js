@@ -581,8 +581,19 @@ function actionsTransfert(x) {
   if (x.statut === 'validee' && orig) a.push(['transport', true]);
   if (x.statut === 'transport' && orig) a.push(['depart', true]);
   if (x.statut === 'en_route' && dest) a.push(['reception', true]);
+  if (['validee', 'transport', 'en_route'].includes(x.statut) && dest && !x.date_chambre_prete) a.push(['chambre_prete', x.statut !== 'en_route']);
   return a;
 }
+const heureCourte = (iso) => new Date(iso).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit', timeZone: fuseau() });
+/** Compte à rebours jusqu'à l'heure d'arrivée prévue, mis à jour sans recharger la page. */
+function majDecomptes() {
+  document.querySelectorAll('[data-eta]').forEach((el) => {
+    const m = (new Date(el.dataset.eta) - Date.now()) / 60000;
+    const z = el.querySelector('.decompte');
+    if (z) z.textContent = m >= 1 ? t('transferts.dans', { duree: duree(m) }) : m > -1 ? t('transferts.imminente') : t('transferts.retard', { duree: duree(-m) });
+  });
+}
+setInterval(majDecomptes, 15000);
 function attente(x) {
   const cote = { demande: 'destination', validee: 'origine', transport: 'origine', en_route: 'destination' }[x.statut];
   if (!cote) return '';
@@ -602,6 +613,10 @@ async function vueTransferts() {
       <div style="font-size:12px">${esc(x.origine_nom)} → ${esc(x.destination_nom)}</div>
       <div class="note">${esc(x.type_nom)} · ${esc(t('transferts.lit'))} <span class="num">${esc(x.lit_code || '—')}</span> · <span class="num">${esc(x.patient_ref)}</span></div>
       <div class="note"><span class="num">${x.distance_km != null ? esc(t('general.km', { n: x.distance_km })) : '—'}</span> · ${depuis(x.date_demande)}${x.transport_info ? ` · ${esc(x.transport_info)}` : ''}</div>
+      ${besoinsTransfert(x) ? `<div class="note">${esc(t('transferts.besoins', { liste: besoinsTransfert(x) }))}</div>` : ''}
+      ${x.statut === 'en_route' && x.arrivee_prevue ? `<div class="arrivee" data-eta="${esc(x.arrivee_prevue)}">${icone('clock')}<span><strong>${esc(t('transferts.arrivee', { heure: heureCourte(x.arrivee_prevue) }))}</strong> · <span class="decompte"></span></span></div>` : ''}
+      ${['validee', 'transport', 'en_route'].includes(x.statut) ? (x.date_chambre_prete ? `<div><span class="etat-niveau n-vert">${esc(t('transferts.badge_prete'))}</span></div>`
+    : x.destination_id === etat.ctx ? `<div><span class="etat-niveau n-jaune">${esc(t('transferts.a_preparer'))}</span></div>` : `<div class="note">${esc(t('transferts.chambre_en_preparation'))}</div>`) : ''}
       ${x.motif_refus ? `<div class="note">${esc(t('transferts.motif', { motif: '' }))}<span class="donnee">${esc(x.motif_refus)}</span></div>` : ''}
       ${attente(x) ? `<div class="note">${esc(attente(x))}</div>` : ''}
       ${actif ? `<div class="actions">${actionsTransfert(x).map(([a, p]) => `<button class="btn${p ? ' pri' : ''}${a === 'refuser' ? ' dan' : ''}" data-tr="${x.id}" data-etape="${a}" data-num="${esc(x.numero)}">${esc(t(`transferts.${a}`))}</button>`).join('')}</div>` : ''}
@@ -618,10 +633,12 @@ async function vueTransferts() {
         [{ label: t('general.retour') }, { label: t('transferts.refuser_bouton'), pri: true, run: async () => (await agir(null, () => api('POST', `/transferts/${id}/refuser`, { motif: $('#m-motif').value }), t('transferts.refuse_ok', { numero }))) !== null || false }]);
         return;
       }
-      agir(b, () => api('POST', `/transferts/${id}/${etape}`), t({ accepter: 'transferts.accepte_ok', transport: 'transferts.transport_ok', depart: 'transferts.depart_ok', reception: 'transferts.reception_ok' }[etape], { numero }));
+      agir(b, () => api('POST', `/transferts/${id}/${etape}`), t({ accepter: 'transferts.accepte_ok', chambre_prete: 'transferts.chambre_prete_ok', transport: 'transferts.transport_ok', depart: 'transferts.depart_ok', reception: 'transferts.reception_ok' }[etape], { numero }));
     };
   });
+  majDecomptes();
 }
+const besoinsTransfert = (x) => BESOINS.filter((k) => x.besoins?.[k]).map((k) => t(`besoins.${k}`).toLowerCase()).join(', ');
 
 /* ---------------- Listes longues : pages de 300 lignes, « Afficher plus » ---------------- */
 const PAGE = 300;
@@ -724,7 +741,7 @@ function executerProposition(a, bouton) {
     return;
   }
   const messages = { assigner: 'copilote.assigner_ok', debut_nettoyage: 'copilote.nettoyage_ok', lit: 'copilote.lit_ok', civiere: 'copilote.civiere_ok', deplacer: 'copilote.deplace_ok',
-    conge: 'copilote.conge_ok', transfert: a.etape === 'accepter' ? 'copilote.accepte_ok' : 'copilote.transport_ok' };
+    conge: 'copilote.conge_ok', transfert: { accepter: 'copilote.accepte_ok', chambre_prete: 'transferts.chambre_prete_ok' }[a.etape] || 'copilote.transport_ok' };
   agir(bouton, faire, t(messages[a.type] || 'general.fait'));
 }
 

@@ -558,6 +558,43 @@ test('civières de l’urgence : états, verrou, demande liée, admission, chang
   }
 });
 
+test('transfert sans dossier côté receveur : chambre prête, heure d’arrivée prévue, besoins transmis', async () => {
+  const hx = await id('HX'); const hy = await id('HY'); const med = await type('MED');
+  const lit = (await pool.query(`SELECT id, version FROM lits WHERE etablissement_id = $1 AND type_id = $2 AND etat = 'libre' AND isolement LIMIT 1`, [hy, med])).rows[0];
+  const tr = (await appel('x', 'POST', '/transferts', { origine_id: hx, destination_id: hy, type_id: med, lit_id: lit.id, version: lit.version,
+    patient_ref: 'P-90001', besoins: { isolement: true } })).corps;
+  assert.ok(tr.minutes_route > 0, 'temps de route estimé dès la demande');
+  assert.strictEqual((await appel('y', 'POST', `/transferts/${tr.id}/chambre_prete`)).statut, 409, 'pas avant l’acceptation');
+  assert.strictEqual((await appel('y', 'POST', `/transferts/${tr.id}/accepter`)).statut, 200);
+  // Le receveur voit la référence et les besoins ; le Copilote lui propose de préparer la chambre
+  let b = (await appel('y', 'GET', `/copilote/briefing?etablissement_id=${hy}`)).corps;
+  const reco = b.recommandations.find((r) => r.action?.etape === 'chambre_prete' && r.action.transfert_id === tr.id);
+  assert.ok(reco && /P-90001/.test(reco.raison) && /isolement/.test(reco.raison) && /pas encore confirmé/.test(reco.raison), JSON.stringify(reco));
+  assert.strictEqual((await appel('x', 'POST', `/transferts/${tr.id}/chambre_prete`)).statut, 403, 'seul le receveur confirme la chambre');
+  const cp = await appel('y', 'POST', `/transferts/${tr.id}/chambre_prete`);
+  assert.strictEqual(cp.statut, 200);
+  assert.strictEqual(cp.corps.statut, 'validee', 'chambre prête ne change pas le statut');
+  assert.ok(cp.corps.date_chambre_prete);
+  assert.strictEqual((await appel('y', 'POST', `/transferts/${tr.id}/chambre_prete`)).corps.code, 'chambre_deja_prete');
+  const nx = (await appel('x', 'GET', `/notifications?etablissement_id=${hx}`)).corps;
+  assert.ok(nx.some((n) => n.message === `Hôpital Y : la chambre du lit ${tr.lit_code} est prête pour le transfert ${tr.numero}.`));
+  b = (await appel('y', 'GET', `/copilote/briefing?etablissement_id=${hy}`)).corps;
+  assert.ok(!b.recommandations.some((r) => r.action?.transfert_id === tr.id && r.action.etape === 'chambre_prete'));
+  // Départ : heure d'arrivée prévue = départ + temps de route, annoncée au receveur dans sa langue
+  assert.strictEqual((await appel('x', 'POST', `/transferts/${tr.id}/transport`)).statut, 200);
+  const dep = (await appel('x', 'POST', `/transferts/${tr.id}/depart`)).corps;
+  const ecart = new Date(dep.arrivee_prevue) - new Date(dep.date_depart);
+  assert.ok(Math.abs(ecart - tr.minutes_route * 60000) < 5000, `${ecart} ms`);
+  const ny = (await appel('y', 'GET', `/notifications?etablissement_id=${hy}`)).corps.find((n) => n.code === 'transfert_depart' && n.transfert_id === tr.id);
+  assert.match(ny.message, /est en route\. Arrivée prévue vers \d{1,2} h \d{2}\.$/);
+  const nyEn = (await fetch(`${base}/api/notifications?etablissement_id=${hy}`, { headers: { Authorization: `Bearer ${tokens.y}`, 'X-Langue': 'en' } }).then((r) => r.json()))
+    .find((n) => n.code === 'transfert_depart' && n.transfert_id === tr.id);
+  assert.match(nyEn.message, /Expected arrival around \d{1,2}:\d{2}/);
+  const liste = (await appel('y', 'GET', `/transferts?etablissement_id=${hy}`)).corps.find((x) => x.id === tr.id);
+  assert.deepStrictEqual([liste.patient_ref, liste.besoins.isolement, !!liste.arrivee_prevue], ['P-90001', true, true]);
+  assert.strictEqual((await appel('y', 'POST', `/transferts/${tr.id}/reception`)).statut, 200);
+});
+
 /* ======================= Version 4 : comptes et administration ======================= */
 const totp = require('../src/totp');
 

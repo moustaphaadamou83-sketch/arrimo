@@ -57,6 +57,11 @@ function texteBlocage(langue, code, v) {
   return tr(langue, `blocage.${code}`, { ...v, duree: d, cible: v.cible != null ? duree(langue, v.cible) : undefined });
 }
 
+/** Temps de route estimé en minutes : distance à vol d'oiseau × facteur de route, à la vitesse moyenne d'une ambulance. */
+const minutesRoute = (km, cfg) => Math.max(1, Math.round(((km * Number(cfg.facteur_route)) / cfg.vitesse_kmh) * 60));
+/** Heure locale (fuseau de la configuration) dans la langue : « 14 h 32 » ou « 2:32 p.m. ». */
+const heureLocale = (langue, date, fuseau) => new Date(date).toLocaleTimeString(dico(langue, 'locale'), { hour: '2-digit', minute: '2-digit', timeZone: fuseau });
+
 /* ------------------------------------------------------------------ capacité */
 const SQL_CAPACITE = `
   SELECT e.id AS etablissement_id, e.code, e.nom, e.ville, e.partage, e.latitude, e.longitude,
@@ -170,7 +175,7 @@ async function recommander(pool, utilisateur, depuisId, typeId, besoins = {}) {
     const g = global.get(r.etablissement_id);
     const { pression, niveau } = niveauDepuis(g.dotes, g.libres, enAttente.get(r.etablissement_id) || 0, cfg, urgences.get(r.etablissement_id));
     const penalite = niveau === 'rouge' ? cfg.penalite_rouge_km : niveau === 'orange' ? cfg.penalite_orange_km : 0;
-    const minutes = Math.round(((d * Number(cfg.facteur_route)) / cfg.vitesse_kmh) * 60);
+    const minutes = minutesRoute(d, cfg);
     let lit = null;
     if (r.partage === 'complet' && r.libres) {
       const l = await pool.query(
@@ -279,10 +284,11 @@ async function creerTransfert(pool, utilisateur, b, client = null) {
       versionAttendue: version, patientRef: b.patient_ref, detail: `Réservé pour un transfert depuis ${origine.nom}`,
     });
     const t = await c.query(
-      `INSERT INTO transferts (numero, patient_ref, origine_id, destination_id, type_id, lit_id, urgent, distance_km, demande_par, besoins, demande_admission_id)
-       VALUES ('TR-' || lpad(nextval('transfert_seq')::text, 5, '0'), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `INSERT INTO transferts (numero, patient_ref, origine_id, destination_id, type_id, lit_id, urgent, distance_km, demande_par, besoins, demande_admission_id, minutes_route)
+       VALUES ('TR-' || lpad(nextval('transfert_seq')::text, 5, '0'), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
-      [lit.patient_ref, origineId, destId, typeId, litId, !!b.urgent, distance, utilisateur.id, besoins, b.demande_admission_id || null]);
+      [lit.patient_ref, origineId, destId, typeId, litId, !!b.urgent, distance, utilisateur.id, besoins, b.demande_admission_id || null,
+        minutesRoute(distance, origine.config)]);
     const tr = t.rows[0];
     await c.query('UPDATE lits SET transfert_id = $2 WHERE id = $1', [litId, tr.id]);
     await journaliser(c, { litId, utilisateurId: utilisateur.id, action: 'Référence transmise',
@@ -294,8 +300,10 @@ async function creerTransfert(pool, utilisateur, b, client = null) {
   return client ? executer(client) : transaction(pool, executer);
 }
 
+// « chambre_prete » ne change pas le statut : le receveur la confirme quand il veut entre l'acceptation et l'arrivée
 const ETAPES = {
   accepter: { de: ['demande'], cote: 'destination', vers: 'validee' },
+  chambre_prete: { de: ['validee', 'transport', 'en_route'], cote: 'destination', vers: null },
   refuser: { de: ['demande', 'validee'], cote: 'destination', vers: 'refuse' },
   transport: { de: ['validee'], cote: 'origine', vers: 'transport' },
   depart: { de: ['transport'], cote: 'origine', vers: 'en_route' },
@@ -307,7 +315,7 @@ async function avancerTransfert(pool, utilisateur, transfertId, etape, corps = {
   if (!regle) throw new ErreurHttp(400, 'action_inconnue');
   return transaction(pool, async (c) => {
     const r = await c.query(
-      `SELECT t.*, o.nom AS origine_nom, d.nom AS destination_nom, c.transport_libelle, l.code AS lit_code
+      `SELECT t.*, o.nom AS origine_nom, d.nom AS destination_nom, c.transport_libelle, c.fuseau, c.facteur_route, c.vitesse_kmh, l.code AS lit_code
          FROM transferts t
          JOIN etablissements o ON o.id = t.origine_id
          JOIN etablissements d ON d.id = t.destination_id
@@ -325,12 +333,17 @@ async function avancerTransfert(pool, utilisateur, transfertId, etape, corps = {
     if (!regle.de.includes(t.statut)) {
       throw new ErreurHttp(409, 'transfert_statut', { numero: t.numero });
     }
-    const maj = { statut: regle.vers };
+    const maj = regle.vers ? { statut: regle.vers } : {};
     let journal = null; let notif = null; let dest = null;
     if (etape === 'accepter') {
       maj.date_validation = 'now()';
       journal = 'Transfert validé';
       dest = t.origine_id; notif = ['transfert_accepte', { dest: t.destination_nom, numero: t.numero, lit: t.lit_code }];
+    } else if (etape === 'chambre_prete') {
+      if (t.date_chambre_prete) throw new ErreurHttp(409, 'chambre_deja_prete', { numero: t.numero });
+      maj.date_chambre_prete = 'now()';
+      journal = 'Chambre prête';
+      dest = t.origine_id; notif = ['chambre_prete', { dest: t.destination_nom, numero: t.numero, lit: t.lit_code }];
     } else if (etape === 'refuser') {
       if (t.lit_id) {
         const l = await c.query('SELECT etat FROM lits WHERE id = $1', [t.lit_id]);
@@ -347,8 +360,14 @@ async function avancerTransfert(pool, utilisateur, transfertId, etape, corps = {
       journal = 'Transport organisé';
     } else if (etape === 'depart') {
       maj.date_depart = 'now()';
+      // Heure d'arrivée prévue : départ + temps de route estimé
+      const min = t.minutes_route || minutesRoute(t.distance_km || 0, t);
+      const arrivee = new Date(Date.now() + min * 60000);
+      maj.arrivee_prevue = arrivee;
+      if (!t.minutes_route) maj.minutes_route = min;
       journal = 'Départ confirmé';
-      dest = t.destination_id; notif = ['transfert_depart', { ref: t.patient_ref, numero: t.numero }];
+      dest = t.destination_id;
+      notif = ['transfert_depart', { ref: t.patient_ref, numero: t.numero, arrivee: arrivee.toISOString(), heure: heureLocale('fr', arrivee, t.fuseau) }];
       // Le patient quitte la civière de l'urgence d'origine : elle part au nettoyage
       if (t.demande_admission_id) {
         const d = (await c.query('SELECT * FROM demandes_admission WHERE id = $1', [t.demande_admission_id])).rows[0];
@@ -446,8 +465,12 @@ async function lireNotifications(pool, utilisateur, etabId) {
     `SELECT n.*, t.numero FROM notifications n LEFT JOIN transferts t ON t.id = n.transfert_id
       WHERE n.etablissement_id = $1 ORDER BY n.date DESC LIMIT 50`, [etabId]);
   const nomType = await traducteurTypes(pool, utilisateur.langue);
+  const fuseau = rows.some((n) => n.vars?.arrivee) ? (await etablissement(pool, etabId)).config.fuseau : null;
   for (const n of rows) {
-    if (n.code) n.message = tr(utilisateur.langue, `notif.${n.code}`, { ...n.vars, ...(n.vars?.type ? { type: nomType(n.vars.type) } : {}) });
+    if (!n.code) continue;
+    const vars = { ...n.vars, ...(n.vars?.type ? { type: nomType(n.vars.type) } : {}) };
+    if (vars.arrivee) vars.heure = heureLocale(utilisateur.langue, vars.arrivee, fuseau);
+    n.message = tr(utilisateur.langue, `notif.${n.code}`, vars);
   }
   return rows;
 }
@@ -541,7 +564,7 @@ async function assistant(pool, utilisateur, etabId, question) {
 }
 
 module.exports = {
-  distanceKm, etablissement, capaciteReseau, recommander, litsEtablissement, litVisible,
+  distanceKm, minutesRoute, heureLocale, etablissement, capaciteReseau, recommander, litsEtablissement, litVisible,
   creerTransfert, avancerTransfert, listeTransferts, lireJournal, lireNotifications,
   detecterBlocages, assistant, exigerActif, motifBlocage, curseur, taillePage, sqlCurseur, sqlAvant, niveauDepuis, lireBesoins, sqlBesoins, notifier, SQL_CAPACITE, risque,
 };

@@ -23,7 +23,7 @@ const HORLOGES = {
   lits: ['etat_depuis', 'sortie_prevue', 'nsa_depuis', 'nettoyage_debut'],
   civieres: ['etat_depuis', 'arrivee_le'],
   demandes_admission: ['cree_le', 'assignee_le', 'terminee_le'],
-  transferts: ['date_demande', 'date_validation', 'date_depart', 'date_reception'],
+  transferts: ['date_demande', 'date_validation', 'date_depart', 'date_reception', 'date_chambre_prete', 'arrivee_prevue'],
   notifications: ['date'],
 };
 

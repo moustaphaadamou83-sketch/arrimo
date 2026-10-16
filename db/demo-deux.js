@@ -237,7 +237,8 @@ async function demoDeux(pool, { silencieux = false } = {}) {
   await avancerTransfert(pool, coX, t2.id, 'transport');
   await avancerTransfert(pool, coX, t2.id, 'depart');
   await pool.query(`UPDATE transferts SET date_demande = now() - interval '70 minutes', date_validation = now() - interval '52 minutes',
-                    date_depart = now() - interval '15 minutes' WHERE id = $1`, [t2.id]);
+                    date_depart = now() - interval '15 minutes',
+                    arrivee_prevue = now() - interval '15 minutes' + make_interval(mins => minutes_route) WHERE id = $1`, [t2.id]);
   await pool.query(`UPDATE transferts SET date_demande = now() - interval '25 minutes' WHERE id = $1`, [t1.id]);
   await detecterBlocages(pool);
   await pool.query('INSERT INTO demo_etat (id, reference) VALUES (1, now()) ON CONFLICT (id) DO UPDATE SET reference = now()');

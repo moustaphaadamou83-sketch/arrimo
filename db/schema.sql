@@ -368,3 +368,8 @@ ALTER TABLE config_pays ADD COLUMN IF NOT EXISTS seuil_civieres_rouge int NOT NU
 ALTER TABLE config_pays ADD COLUMN IF NOT EXISTS nettoyage_civiere_cible_min int NOT NULL DEFAULT 15;
 -- Une seule demande de lit active par civière
 CREATE UNIQUE INDEX IF NOT EXISTS adm_civiere_active ON demandes_admission (civiere_id) WHERE civiere_id IS NOT NULL AND statut IN ('attente', 'assignee');
+
+-- Transfert sans dossier côté receveur : chambre prête, temps de route estimé, heure d'arrivée prévue
+ALTER TABLE transferts ADD COLUMN IF NOT EXISTS date_chambre_prete timestamptz;
+ALTER TABLE transferts ADD COLUMN IF NOT EXISTS minutes_route int;
+ALTER TABLE transferts ADD COLUMN IF NOT EXISTS arrivee_prevue timestamptz;

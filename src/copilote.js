@@ -71,6 +71,17 @@ async function briefing(pool, utilisateur, etabId) {
           urgent: tr0.urgent ? tr(L, 'r_urgent') : '', lit: tr0.lit_code }),
         { type: 'transfert', transfert_id: tr0.id, etape: 'accepter', libelle: tr(L, 'r_repondre_action') });
     }
+    // Le receveur ne crée aucun dossier : il prépare la chambre à partir de la référence, des besoins et de l'heure d'arrivée
+    if (tr0.destination_id === etabId && ['validee', 'transport', 'en_route'].includes(tr0.statut) && !tr0.date_chambre_prete) {
+      const besoins = Object.entries(tr0.besoins || {}).filter(([, v]) => v).map(([k]) => dico(L, 'besoin')[k]);
+      const arrivee = tr0.arrivee_prevue
+        ? tr(L, 'r_chambre_arrivee', { heure: s.heureLocale(L, tr0.arrivee_prevue, cfg.fuseau), duree: duree(L, (new Date(tr0.arrivee_prevue) - Date.now()) / 60000) })
+        : tr(L, 'r_chambre_attente');
+      ajouter(tr0.statut === 'en_route' ? 1 : 2, tr(L, 'r_chambre', { lit: tr0.lit_code, numero: tr0.numero }),
+        tr(L, 'r_chambre_raison', { origine: tr0.origine_nom, ref: tr0.patient_ref, type: type(tr0.type_nom),
+          besoins: besoins.length ? tr(L, 'r_chambre_besoins', { liste: besoins.join(', ') }) : '', arrivee }),
+        { type: 'transfert', transfert_id: tr0.id, etape: 'chambre_prete', libelle: tr(L, 'r_chambre_action') });
+    }
     if (tr0.statut === 'validee' && tr0.origine_id === etabId) {
       ajouter(2, tr(L, 'r_transport', { numero: tr0.numero }), tr(L, 'r_transport_raison', { dest: tr0.destination_nom }),
         { type: 'transfert', transfert_id: tr0.id, etape: 'transport', libelle: tr(L, 'r_transport_action') });

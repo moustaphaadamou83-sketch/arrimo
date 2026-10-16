@@ -63,7 +63,7 @@ window.ARRIMO_I18N.en = {
     'Transfert validé': 'Transfer accepted', 'Transport organisé': 'Transport arranged', 'Départ confirmé': 'Departure confirmed',
     'Désignation NSA': 'ALC designation', 'Fin du statut NSA': 'ALC status ended', 'Orientation NSA modifiée': 'ALC destination changed',
     'Congé mis à jour': 'Discharge updated', 'Congé prévu modifié': 'Planned discharge changed', 'Nettoyage commencé': 'Cleaning started',
-    'Équipement modifié': 'Equipment changed', 'Civière': 'Stretcher',
+    'Équipement modifié': 'Equipment changed', 'Chambre prête': 'Room ready', 'Civière': 'Stretcher',
   },
   journal_admin_actions: {
     'Mot de passe changé': 'Password changed', 'Double authentification activée': 'Two-factor authentication enabled',
@@ -105,7 +105,10 @@ window.ARRIMO_I18N.en = {
     hs_bouton: 'Take out of service', hs_ok: '{code} out of service.', etat_ok: '{code}: {etat}',
   },
   transferts: {
-    titre: 'Transfers · {etab}', intro: 'Only transfers involving your facility are visible. Each step belongs to the right facility.',
+    chambre_prete: 'Room ready', chambre_prete_ok: 'Room ready: the requester has been notified.', badge_prete: 'Room ready', a_preparer: 'Room to prepare',
+    chambre_en_preparation: 'Room being prepared by the receiving facility', arrivee: 'Expected arrival around {heure}', dans: 'in {duree}', imminente: 'arriving now',
+    retard: 'expected {duree} ago', besoins: 'Needs: {liste}',
+    titre: 'Transfers · {etab}', intro: 'Only transfers involving your facility are shown. The receiving facility creates no record: it receives the reference, the patient’s needs and the arrival time.',
     aucun: 'No transfers', urgent: 'Urgent', entrant: 'Incoming', sortant: 'Outgoing', lit: 'bed', motif: 'Reason: {motif}',
     attente_de: 'Waiting for {etab}',
     accepter: 'Accept', refuser: 'Decline', transport: 'Arrange transport', depart: 'Confirm departure', reception: 'Confirm arrival',
@@ -254,6 +257,7 @@ window.ARRIMO_I18N.en = {
   },
   // Messages d'erreur du serveur, par code (src/erreurs.js)
   erreurs: {
+    chambre_deja_prete: 'The room for transfer {numero} is already marked as ready.',
     civiere_introuvable: 'Stretcher not found.',
     civiere_verrouillee: 'This stretcher is being changed by someone else. Try again.',
     civiere_deja_modifiee: 'Stretcher {code} was just changed by someone else. Refresh the page.',

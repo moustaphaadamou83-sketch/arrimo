@@ -248,6 +248,13 @@ for (const L of LARGEURS) {
     await verifier(y, L, '05-transferts-y');
     await y.locator('#v-transferts [data-etape="accepter"]').first().click();
     await toast(y, 'validé');
+    // Le receveur ne crée aucun dossier : il confirme la chambre ; le demandeur est avisé
+    await y.locator('#v-transferts [data-etape="chambre_prete"]').first().click();
+    await toast(y, 'Chambre prête');
+    // Le patient déjà en route vers Y : heure d'arrivée prévue et compte à rebours
+    await y.waitForSelector('#v-transferts [data-eta] .decompte');
+    assert.match(await y.textContent('#v-transferts [data-eta]'), /Arrivée prévue vers .* · (dans|arrivée|prévue)/);
+    await verifier(y, L, '05b-transferts-y-arrivee');
     await onglet(x, 'transferts');
     await x.waitForSelector('#v-transferts [data-etape="transport"]');
     await verifier(x, L, '06-transferts-x');

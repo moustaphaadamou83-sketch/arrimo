@@ -104,6 +104,7 @@ window.ARRIMO_I18N.en.aide = {
       nom: 'Transfers',
       but: 'Incoming and outgoing transfers, step by step. Each step belongs to the facility concerned.',
       gestes: [
+        'Receiving facility: “Room ready” once the room is prepared; the requester is notified. No record to create: the reference, needs and arrival time are enough.',
         'Receiving facility: “Accept” or “Decline” a request (the bed is already held for the patient).',
         'Requesting facility: “Arrange transport”, then “Confirm departure”.',
         'Receiving facility: “Confirm arrival”; the bed becomes occupied.',
