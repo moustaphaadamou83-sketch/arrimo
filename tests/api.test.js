@@ -420,6 +420,10 @@ test('démonstration : réseau de 20 hôpitaux : se crée et donne une situation
   assert.ok(bx.corps.recommandations.length >= 8);
   const titres = bx.corps.recommandations.map((r) => r.titre);
   assert.strictEqual(new Set(titres).size, titres.length, 'aucune recommandation en double');
+  // Recommandations du même genre regroupées : congés à confirmer, chacun avec son action dans la liste
+  const conges = bx.corps.recommandations.find((r) => /^Confirmer \d+ congés prévus$/.test(r.titre));
+  assert.ok(conges && conges.details.length >= 2 && conges.details.every((d) => d.action?.type === 'conge' && /^Lit [\w-]+ · congé prévu à /.test(d.titre)));
+  assert.ok(!titres.some((x) => /^Confirmer le congé du lit/.test(x)));
   const by = await appel('y', 'GET', `/copilote/briefing?etablissement_id=${ids.HY}`);
   assert.ok(['vert', 'jaune'].includes(by.corps.alerte.niveau));
   assert.ok(by.corps.recommandations.some((r) => r.titre.startsWith('Répondre à la demande')));
@@ -682,8 +686,13 @@ test('civières de l’urgence : états, verrou, demande liée, admission, chang
   assert.deepStrictEqual(Object.keys(agrege).sort(), ['fonctionnelles', 'niveau', 'occupees', 'taux'], 'partage agrégé : totaux seulement');
   const brx = (await appel('x', 'GET', `/copilote/briefing?etablissement_id=${hx}`)).corps;
   assert.match(brx.resume, /Urgence : \d+ patients sur civière pour \d+ civières \(\d+\s%\)/);
-  assert.ok(brx.recommandations.some((r) => /^Urgence à \d+\s% : \d+ patients pour \d+ civières$/.test(r.titre)));
-  assert.ok(brx.recommandations.some((r) => r.action?.type === 'aller' && /^Demander un lit pour P-/.test(r.titre)), 'patient sur civière depuis longtemps, sans demande');
+  assert.ok(!brx.recommandations.some((r) => /^Urgence à/.test(r.titre)), 'le taux de l’urgence est déjà dans le bandeau : pas répété');
+  // Patients sur civière depuis plus de 24 h sans demande de lit : une seule recommandation, liste dépliable, une action (ouvrir l'urgence)
+  const groupe = brx.recommandations.find((r) => /^\d+ patients sur civière depuis plus de 24 h sans demande de lit$/.test(r.titre));
+  assert.ok(groupe && groupe.action.type === 'aller' && groupe.details.length >= 2, JSON.stringify(brx.recommandations.map((r) => r.titre)));
+  assert.strictEqual(Number(groupe.titre.split(' ')[0]), groupe.details.length);
+  assert.ok(groupe.details.every((d) => /^P-\d{5} · civière [\w-]+ · depuis /.test(d.titre)));
+  assert.ok(!brx.recommandations.some((r) => /^Demander un lit pour P-/.test(r.titre)), 'plus de recommandation par patient');
   const titres = brx.recommandations.map((r) => r.titre);
   assert.strictEqual(new Set(titres).size, titres.length);
   const vueRes = (await appel('x', 'GET', `/copilote/reseau?etablissement_id=${hx}`)).corps;
@@ -988,7 +997,8 @@ test('langues : erreurs avec code stable, Copilote et notifications en anglais',
   const nettoyer = (txt) => noms.reduce((x, n) => x.split(n).join(' '), txt);
   const b = await appel('x', 'GET', `/copilote/briefing?etablissement_id=${hx}&langue=en`);
   assert.strictEqual(b.statut, 200);
-  const textes = [b.corps.resume, b.corps.alerte.protocole, ...b.corps.recommandations.flatMap((x) => [x.titre, x.raison, x.action?.libelle || ''])];
+  const textes = [b.corps.resume, b.corps.alerte.protocole, ...b.corps.recommandations.flatMap((x) => [x.titre, x.raison, x.action?.libelle || '',
+    ...(x.details || []).flatMap((d) => [d.titre, d.raison || '', d.action?.libelle || ''])])];
   assert.deepStrictEqual(textes.map(nettoyer).filter((x) => francais.test(x)), []);
   assert.match(b.corps.resume, /level \(pressure/);
   // Questions en anglais, réponses en anglais

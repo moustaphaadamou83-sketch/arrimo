@@ -153,6 +153,7 @@ window.ARRIMO_I18N.fr = {
     note: 'L’activation et le partage se gèrent depuis SH.', etab_ok: 'Établissement mis à jour.', partage_ok: 'Partage mis à jour.',
   },
   copilote: {
+    voir_autres: 'Voir {n|# autre|# autre|les # autres}', voir_moins: 'Voir seulement les plus importantes', voir_liste: 'Voir la liste ({n})',
     reseau_proches: 'Les {n} établissements les plus proches.', voir_national: 'Voir tous les établissements au tableau national',
     vue_titre: 'Vue d’ensemble', v_lits: 'Lits libres', v_lits_note: '{occ|aucun occupé|# occupé|# occupés} · {net|aucun à nettoyer|# à nettoyer|# à nettoyer} · {fermes|aucun fermé|# fermé|# fermés}',
     v_chambres: 'Chambres libres', v_chambres_note: 'sur {n|# chambre|# chambres}', v_civieres: 'Urgence', v_civieres_note: '{occ|aucun patient|# patient|# patients} pour {fonc|# civière|# civières} · {h24} > 24 h',

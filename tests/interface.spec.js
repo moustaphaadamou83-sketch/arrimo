@@ -214,6 +214,12 @@ for (const L of LARGEURS) {
     await verifier(x, L, '01-copilote-x');
 
     // 2. Le Copilote propose, l'humain décide : assigner le lit de maternité
+    // Les 5 plus importantes d'abord ; les autres sur demande
+    assert.ok(await x.locator('#v-copilote .reco').count() <= 5);
+    await x.click('#b-recos-plus');
+    await x.waitForFunction(() => document.querySelectorAll('#v-copilote .reco').length > 5);
+    await x.locator('#v-copilote details.groupe summary').first().click();
+    await verifier(x, L, '01e-copilote-regroupements');
     const reco = x.locator('.reco', { hasText: 'maternité' }).first();
     await reco.locator('button').click();
     await toast(x, 'Lit assigné');

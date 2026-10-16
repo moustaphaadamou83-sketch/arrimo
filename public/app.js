@@ -902,9 +902,14 @@ async function vueCopilote() {
     <div class="niveau n-${b.alerte.niveau}"><span class="pastille-niveau">${C('niveau', { niveau: t(`niveaux.${b.alerte.niveau}`) })}</span><p>${esc(b.resume)}</p><p class="note" style="flex-basis:100%">${C('protocole', { texte: b.alerte.protocole })}</p></div>
     ${vueEnsemble(b.vue)}
     <div class="deux"><div class="pile">
-      <div class="panneau-c"><h3>${C('recommandations', { n: b.recommandations.length })}</h3><div class="recos">${b.recommandations.length ? b.recommandations.map((x, i) => `<div class="reco">
-        <span class="prio prio-${x.priorite}">${esc(t(`prios.${x.priorite}`))}</span><div><h4>${esc(x.titre)}</h4><p>${esc(x.raison)}</p></div>
-        ${x.action ? `<button class="btn pri" data-reco="${i}">${esc(x.action.libelle)}</button>` : '<span></span>'}</div>`).join('') : `<p class="note">${C('rien')}</p>`}</div></div>
+      <div class="panneau-c"><h3>${C('recommandations', { n: b.recommandations.length })}</h3><div class="recos">${b.recommandations.length
+    ? b.recommandations.slice(0, etat.toutesRecos ? undefined : 5).map((x, i) => `<div class="reco">
+        <span class="prio prio-${x.priorite}">${esc(t(`prios.${x.priorite}`))}</span><div><h4>${esc(x.titre)}</h4><p>${esc(x.raison)}</p>
+        ${x.details ? `<details class="groupe"><summary>${C('voir_liste', { n: x.details.length })}</summary><ul class="groupe-liste">${x.details.map((d, j) => `<li><div><span>${esc(d.titre)}</span>${d.raison ? `<span class="note">${esc(d.raison)}</span>` : ''}</div>
+          ${d.action ? `<button class="btn" data-reco="${i}.${j}">${esc(d.action.libelle)}</button>` : ''}</li>`).join('')}</ul></details>` : ''}</div>
+        ${x.action ? `<button class="btn pri" data-reco="${i}">${esc(x.action.libelle)}</button>` : '<span></span>'}</div>`).join('')
+      + (b.recommandations.length > 5 ? `<button class="btn discret" id="b-recos-plus">${C(etat.toutesRecos ? 'voir_moins' : 'voir_autres', { n: b.recommandations.length - 5 })}</button>` : '')
+    : `<p class="note">${C('rien')}</p>`}</div></div>
     </div><div class="pile">
       ${tableauPrevisions(b.previsions)}
       <div class="panneau-c"><h3>${C('question_titre')}</h3>
@@ -918,7 +923,12 @@ async function vueCopilote() {
         ${r.delestages.length ? `<h3 style="margin-top:6px">${C('delestages')}</h3><div class="liste">${r.delestages.slice(0, 6).map((d) => `<div class="item"><div><strong>${esc(d.de)} → ${esc(d.vers)}</strong><div class="note">${esc(d.type)} · ${esc(d.raison)}</div></div></div>`).join('')}</div>` : ''}</div>
     </div></div>`;
   $('#b-vers-national').onclick = () => allerA('national');
-  v.querySelectorAll('[data-reco]').forEach((btn) => { btn.onclick = () => executerProposition(etat.recos[Number(btn.dataset.reco)].action, btn); });
+  v.querySelectorAll('[data-reco]').forEach((btn) => {
+    const [i, j] = btn.dataset.reco.split('.').map(Number);
+    btn.onclick = () => executerProposition(j == null ? etat.recos[i].action : etat.recos[i].details[j].action, btn);
+  });
+  const plus = $('#b-recos-plus');
+  if (plus) plus.onclick = () => { etat.toutesRecos = !etat.toutesRecos; rafraichir(); };
   const poser = (q) => agir(null, async () => {
     etat.question = q;
     const rep = await api('POST', '/copilote/question', { etablissement_id: etat.ctx, question: q, langue });

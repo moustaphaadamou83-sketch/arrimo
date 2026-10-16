@@ -32,7 +32,8 @@ async function briefing(pool, utilisateur, etabId) {
   const cfg = etab.config;
   const moi = reseau.etablissements.find((e) => e.moi);
   const recos = [];
-  const ajouter = (priorite, titre, raison, action = null) => recos.push({ priorite, titre, raison, action });
+  // groupe : les recommandations d'un même groupe sont fusionnées en une seule, avec la liste dépliable (voir plus bas)
+  const ajouter = (priorite, titre, raison, action = null, groupe = null, court = null) => recos.push({ priorite, titre, raison, action, groupe, court });
   const type = (nom) => nomType(nom).toLowerCase();
 
   // 1. Patients qui attendent un lit (chaque lit proposé ne l'est qu'à un seul patient)
@@ -52,7 +53,7 @@ async function briefing(pool, utilisateur, etabId) {
       if (netType) {
         ajouter(1, tr(L, 'r_nettoyer', { lit: netType.code }),
           tr(L, 'r_nettoyer_raison', { ref: d.patient_ref, type: type(d.type_nom), duree: duree(L, d.attente_min) }),
-          netType.nettoyage_debut ? null : { type: 'debut_nettoyage', lit_id: netType.id, libelle: tr(L, 'r_nettoyer_action') });
+          netType.nettoyage_debut ? null : { type: 'debut_nettoyage', lit_id: netType.id, libelle: tr(L, 'r_nettoyer_action') }, 'nettoyer');
       }
       if (sug && (urgent || !netType)) {
         ajouter(urgent ? 1 : 2, tr(L, 'r_transferer', { ref: d.patient_ref, etab: sug.nom }),
@@ -109,11 +110,11 @@ async function briefing(pool, utilisateur, etabId) {
   // 3. Lits immobilisés sans raison
   for (const l of lits.filter((x) => x.blocage_niveau === 'eleve' && x.etat === 'reserve' && !x.transfert_numero)) {
     ajouter(2, tr(L, 'r_reservation', { lit: l.code }), l.blocage_motif,
-      { type: 'lit', lit_id: l.id, action: 'annuler', version: l.version, libelle: tr(L, 'r_reservation_action') });
+      { type: 'lit', lit_id: l.id, action: 'annuler', version: l.version, libelle: tr(L, 'r_reservation_action') }, 'reservation');
   }
   for (const n of nettoyage.filter((x) => x.genre === 'lit' && x.priorite !== 'haute' && Number(x.age_min) > 2 * x.nettoyage_cible_min)) {
     ajouter(2, tr(L, 'r_net_retard', { lit: n.code }), tr(L, 'r_net_retard_raison', { duree: duree(L, Number(n.age_min)), cible: duree(L, n.nettoyage_cible_min) }),
-      { type: 'lit', lit_id: n.id, action: 'nettoyage_ok', version: n.version, libelle: tr(L, 'r_net_retard_action') });
+      { type: 'lit', lit_id: n.id, action: 'nettoyage_ok', version: n.version, libelle: tr(L, 'r_net_retard_action') }, 'net_retard');
   }
 
   // 4. Congés des 12 prochaines heures : les confirmer tôt permet de planifier nettoyage et admissions
@@ -123,7 +124,7 @@ async function briefing(pool, utilisateur, etabId) {
   for (const l of congesJour.slice(0, 6)) {
     const heure = new Date(l.sortie_prevue).toLocaleTimeString(dico(L, 'locale'), { hour: '2-digit', minute: '2-digit', timeZone: cfg.fuseau });
     ajouter(3, tr(L, 'r_conge', { lit: l.code }), tr(L, 'r_conge_raison', { heure }),
-      { type: 'conge', lit_id: l.id, statut: 'confirme', libelle: tr(L, 'r_conge_action') });
+      { type: 'conge', lit_id: l.id, statut: 'confirme', libelle: tr(L, 'r_conge_action') }, 'conge', tr(L, 'r_conge_court', { lit: l.code, heure }));
   }
   const depasses = lits.filter((l) => l.etat === 'occupe' && l.blocage_code === 'conge_depasse');
   if (depasses.length) {
@@ -146,17 +147,14 @@ async function briefing(pool, utilisateur, etabId) {
     if (enAttenteCorridor > 0) {
       for (const c of nettoyage.filter((x) => x.genre === 'civiere' && x.categorie === 'reguliere').slice(0, enAttenteCorridor)) {
         ajouter(2, tr(L, 'r_civ_nettoyer', { code: c.code }), tr(L, 'r_civ_nettoyer_raison', { n: enAttenteCorridor }),
-          { type: 'civiere', civiere_id: c.id, action: 'nettoyage_ok', version: c.version, libelle: tr(L, 'r_civ_nettoyer_action') });
+          { type: 'civiere', civiere_id: c.id, action: 'nettoyage_ok', version: c.version, libelle: tr(L, 'r_civ_nettoyer_action') }, 'civ_nettoyer');
       }
     }
-    // Patients sur civière depuis longtemps sans demande de lit
-    for (const c of occupees.filter((x) => !x.demande_id && x.heures >= 12).sort((a, b) => b.heures - a.heures).slice(0, 5)) {
-      ajouter(c.heures >= 24 ? 1 : 2, tr(L, 'r_civ_demande', { ref: c.patient_ref }), tr(L, 'r_civ_demande_raison', { code: c.code, duree: duree(L, c.heures * 60) }),
-        { type: 'aller', vue: 'urgence', libelle: tr(L, 'r_civ_demande_action') });
-    }
-    if (['orange', 'rouge'].includes(alerte.urgence?.niveau)) {
-      ajouter(alerte.urgence.niveau === 'rouge' ? 1 : 2, tr(L, 'r_urgence', { taux: u.taux, occ: u.occupees, fonc: u.fonctionnelles }),
-        tr(L, 'r_urgence_raison', { h24: u.plus_24h, h48: u.plus_48h }));
+    // Patients sur civière depuis plus de 24 h sans demande de lit (le taux de l'urgence est déjà dans le bandeau : pas répété ici)
+    for (const c of occupees.filter((x) => !x.demande_id && x.heures >= 24).sort((a, b) => b.heures - a.heures)) {
+      ajouter(1, tr(L, 'r_civ_demande', { ref: c.patient_ref }), tr(L, 'r_civ_demande_raison', { code: c.code, duree: duree(L, c.heures * 60) }),
+        { type: 'aller', vue: 'urgence', libelle: tr(L, 'r_civ_demande_action') }, 'civ_demande',
+        tr(L, 'r_civ_demande_court', { ref: c.patient_ref, code: c.code, duree: duree(L, c.heures * 60) }));
     }
   }
 
@@ -193,6 +191,20 @@ async function briefing(pool, utilisateur, etabId) {
     ajouter(3, tr(L, 'r_fermes', { n: alerte.fermes_personnel }), tr(L, 'r_fermes_raison'));
   }
 
+  // Regroupement : dès deux recommandations du même genre, une seule ligne avec la liste dépliable de ses éléments
+  const groupes = new Map();
+  for (const r of recos) if (r.groupe) groupes.set(r.groupe, [...(groupes.get(r.groupe) || []), r]);
+  for (const [g, items] of groupes) {
+    if (items.length < 2) continue;
+    const i = recos.indexOf(items[0]);
+    const commune = g === 'civ_demande' ? items[0].action : null;   // une seule action pour tout le groupe (ouvrir l'urgence)
+    recos.splice(i, 1, {
+      priorite: Math.min(...items.map((x) => x.priorite)), titre: tr(L, `g_${g}`, { n: items.length }), raison: tr(L, `g_${g}_raison`), action: commune,
+      details: items.map((x) => (x.court ? { titre: x.court, action: commune ? null : x.action } : { titre: x.titre, raison: x.raison, action: commune ? null : x.action })),
+    });
+    for (const x of items.slice(1)) recos.splice(recos.indexOf(x), 1);
+  }
+  for (const r of recos) { delete r.groupe; delete r.court; }
   recos.sort((a, b) => a.priorite - b.priorite);
   const prevus = moi.unites.reduce((a, u) => a + (u.prevus || 0), 0);
   const libres = moi.unites.reduce((a, u) => a + u.libres, 0);

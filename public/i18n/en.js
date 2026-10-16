@@ -152,6 +152,7 @@ window.ARRIMO_I18N.en = {
     note: 'Activation and sharing are managed from SH.', etab_ok: 'Facility updated.', partage_ok: 'Sharing updated.',
   },
   copilote: {
+    voir_autres: 'Show {n|# more|# more|# more}', voir_moins: 'Show only the most important', voir_liste: 'Show the list ({n})',
     reseau_proches: 'The {n} closest facilities.', voir_national: 'See every facility on the national dashboard',
     vue_titre: 'Overview', v_lits: 'Free beds', v_lits_note: '{occ|none occupied|# occupied|# occupied} · {net|none to clean|# to clean|# to clean} · {fermes|none closed|# closed|# closed}',
     v_chambres: 'Free rooms', v_chambres_note: 'of {n|# room|# rooms}', v_civieres: 'ER', v_civieres_note: '{occ|no patients|# patient|# patients} for {fonc|# stretcher|# stretchers} · {h24} > 24 h',
