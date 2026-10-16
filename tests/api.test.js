@@ -1343,3 +1343,116 @@ test('premier compte d’un environnement vide : gestionnaire, mot de passe temp
     await pool.query(`DROP DATABASE IF EXISTS ${nomBase}`);
   }
 });
+
+/* ======================= Partie C3 : import CSV ======================= */
+test('import CSV : nouvel établissement, vérification ligne par ligne, import tout ou rien, réimport sans doublon, comptes temporaires', async () => {
+  const avant2fa = process.env.ARRIMO_2FA_ADMIN;
+  process.env.ARRIMO_2FA_ADMIN = '0';
+  try {
+    tokens.gi = (await appel(null, 'POST', '/connexion', { email: 'reseau@demo.arrimo', mot_de_passe: MOT_DE_PASSE_DEMO })).corps.token;
+    tokens.x = (await appel(null, 'POST', '/connexion', { email: 'hopital.x@demo.arrimo', mot_de_passe: MOT_DE_PASSE_DEMO })).corps.token;
+    // Nouvel établissement : gestionnaire seulement, code unique, position valide, créé inactif
+    const nouveau = { code: 'hop-imp', nom: 'Hôpital de l’Import', ville: 'Ville I', adresse: '1, rue du Test', latitude: '45.5', longitude: '-72.1' };
+    assert.strictEqual((await appel('x', 'POST', '/admin/etablissements', nouveau)).statut, 403);
+    assert.strictEqual((await appel('gi', 'POST', '/admin/etablissements', { ...nouveau, latitude: '95' })).corps.code, 'position_invalide');
+    const e = (await appel('gi', 'POST', '/admin/etablissements', nouveau)).corps;
+    assert.deepStrictEqual([e.code, e.module_actif], ['HOP-IMP', false]);
+    assert.strictEqual((await appel('gi', 'POST', '/admin/etablissements', nouveau)).corps.code, 'code_etab_existe');
+    const etab = e.id;
+    const verifier = (type, contenu) => appel('gi', 'POST', '/admin/import/verifier', { etablissement_id: etab, type, contenu });
+    const importer = (type, contenu, empreinte) => appel('gi', 'POST', '/admin/import/importer', { etablissement_id: etab, type, contenu, empreinte });
+
+    // Modèle téléchargeable : séparateur « ; », BOM pour Excel, exemples fictifs
+    const m = await fetch(`${base}/api/admin/import/modeles/lits`, { headers: { Authorization: `Bearer ${tokens.gi}` } });
+    const octets = Buffer.from(await m.arrayBuffer());
+    assert.match(m.headers.get('content-type'), /text\/csv/);
+    assert.deepStrictEqual([...octets.subarray(0, 3)], [0xEF, 0xBB, 0xBF], 'BOM pour Excel');
+    assert.ok(octets.subarray(3).toString('utf8').startsWith('unite;chambre;lit;isolement;pression_negative;ventilation;telemetrie\r\n'));
+
+    // Vérification : erreurs ligne par ligne, rien n'est écrit
+    let v = (await verifier('unites', 'unite;type_unite;nom_patient\nMédecine;MED;x')).corps;
+    assert.deepStrictEqual(v.erreurs.map((x) => [x.ligne, x.colonne, x.code]), [[1, 'nom_patient', 'donnees_patient']]);
+    v = (await verifier('unites', 'unite;type_unite\nMédecine;MED\nUrgence;URG\nMédecine;MED\nChirurgie;;\nGériatrie;P-12345')).corps;
+    assert.deepStrictEqual(v.erreurs.map((x) => [x.ligne, x.colonne, x.code]),
+      [[3, 'type_unite', 'type_unite_inconnu'], [4, 'unite', 'doublon'], [5, 'type_unite', 'valeur_requise'], [6, 'type_unite', 'donnees_patient']]);
+    assert.strictEqual(v.erreurs[1].vars.premiere, 2);
+    assert.strictEqual((await importer('unites', 'unite;type_unite\nMédecine;MED\nUrgence;URG', v.empreinte)).corps.code, 'import_erreurs');
+    assert.strictEqual((await pool.query('SELECT count(*)::int AS n FROM unites WHERE etablissement_id = $1', [etab])).rows[0].n, 0, 'rien n’est écrit');
+    // Ordre : les chambres demandent des unités existantes
+    v = (await verifier('chambres', 'unite;chambre\nMédecine;301')).corps;
+    assert.strictEqual(v.erreurs[0].code, 'unite_inconnue');
+
+    // Unités : vérifier, importer ; une empreinte différente est refusée
+    const unites = 'unite;type_unite\nMédecine 3e;MED\n"Soins intensifs";Soins intensifs\nChirurgie;chir\n';
+    v = (await verifier('unites', unites)).corps;
+    assert.deepStrictEqual([v.nb_erreurs, v.resume], [0, { creer: 3, maj: 0, inchange: 0 }]);
+    assert.strictEqual((await importer('unites', `${unites}Maternité;MAT\n`, v.empreinte)).corps.code, 'import_fichier_change');
+    let r = (await importer('unites', unites, v.empreinte)).corps;
+    assert.deepStrictEqual(r.resume, { creer: 3, maj: 0, inchange: 0 });
+    // Réimporter : rien de neuf, pas de doublon
+    v = (await verifier('unites', unites)).corps;
+    assert.deepStrictEqual(v.resume, { creer: 0, maj: 0, inchange: 3 });
+    // Une unité existante ne change pas de type
+    assert.strictEqual((await verifier('unites', 'unite;type_unite\nChirurgie;MED')).corps.erreurs[0].code, 'unite_autre_type');
+
+    // Chambres (séparateur « , » accepté), puis lits avec équipement
+    const chambres = 'unite,chambre\nMédecine 3e,301\nMédecine 3e,302\nSoins intensifs,101\n';
+    v = (await verifier('chambres', chambres)).corps;
+    assert.strictEqual(v.resume.creer, 3);
+    await importer('chambres', chambres, v.empreinte);
+    const lits = 'unite;chambre;lit;isolement;pression_negative;ventilation;telemetrie\nMédecine 3e;301;MED-301A;oui;non;non;non\nMédecine 3e;301;MED-301B;;;;oui\nSoins intensifs;101;SI-101;Oui;Oui;Oui;Oui\n';
+    assert.strictEqual((await verifier('lits', lits.replace(';oui;non;non;non', ';peut-être;non;non;non'))).corps.erreurs[0].code, 'oui_non');
+    v = (await verifier('lits', lits)).corps;
+    r = (await importer('lits', lits, v.empreinte)).corps;
+    assert.strictEqual(r.resume.creer, 3);
+    const si = (await pool.query(`SELECT etat, isolement, pression_negative, ventilation, telemetrie, type_id FROM lits WHERE etablissement_id = $1 AND code = 'SI-101'`, [etab])).rows[0];
+    assert.deepStrictEqual([si.etat, si.isolement, si.pression_negative, si.ventilation, si.telemetrie], ['libre', true, true, true, true]);
+    assert.strictEqual((await pool.query(`SELECT count(*)::int AS n FROM journal j JOIN lits l ON l.id = j.lit_id WHERE l.etablissement_id = $1 AND j.detail = 'Import CSV'`, [etab])).rows[0].n, 3);
+    // Réimport avec un équipement changé : mise à jour ; un lit ne change pas de chambre
+    const lits2 = lits.replace('MED-301B;;;;oui', 'MED-301B;oui;;;oui');
+    v = (await verifier('lits', lits2)).corps;
+    assert.deepStrictEqual(v.resume, { creer: 0, maj: 1, inchange: 2 });
+    await importer('lits', lits2, v.empreinte);
+    assert.strictEqual((await pool.query(`SELECT isolement FROM lits WHERE etablissement_id = $1 AND code = 'MED-301B'`, [etab])).rows[0].isolement, true);
+    assert.strictEqual((await verifier('lits', 'unite;chambre;lit\nMédecine 3e;302;MED-301A')).corps.erreurs[0].code, 'lit_autre_chambre');
+
+    // Civières
+    const civs = 'civiere;categorie\nURG-01;reguliere\nURG-02;Régulière\nCOR-01;debordement\n';
+    v = (await verifier('civieres', civs)).corps;
+    await importer('civieres', civs, v.empreinte);
+    assert.strictEqual((await pool.query('SELECT count(*)::int AS n FROM civieres WHERE etablissement_id = $1', [etab])).rows[0].n, 3);
+
+    // Utilisateurs : mot de passe temporaire retourné une seule fois ; un courriel d'un autre établissement est refusé
+    const users = 'nom;courriel;role\nCoordination Import;Coord@Import.exemple;coordonnateur\nEntretien Import;entretien@import.exemple;entretien\n';
+    assert.strictEqual((await verifier('utilisateurs', `${users}Intrus;hopital.x@demo.arrimo;coordonnateur\n`)).corps.erreurs[0].code, 'courriel_autre_etab');
+    assert.strictEqual((await verifier('utilisateurs', 'nom;courriel;role\nChef;chef@import.exemple;gestionnaire')).corps.erreurs[0].code, 'role_inconnu');
+    v = (await verifier('utilisateurs', users)).corps;
+    r = (await importer('utilisateurs', users, v.empreinte)).corps;
+    assert.strictEqual(r.comptes.length, 2);
+    assert.strictEqual(r.comptes[0].courriel, 'coord@import.exemple');
+    const cnx = await appel(null, 'POST', '/connexion', { email: 'coord@import.exemple', mot_de_passe: r.comptes[0].mot_de_passe_temporaire });
+    assert.strictEqual(cnx.statut, 200);
+    assert.strictEqual((await appel(null, 'GET', '/moi', null, { Authorization: `Bearer ${cnx.corps.token}` })).corps.utilisateur.mdp_temporaire, true);
+    const stocke = (await pool.query(`SELECT mot_de_passe_hash FROM utilisateurs WHERE email = 'coord@import.exemple'`)).rows[0].mot_de_passe_hash;
+    assert.ok(!stocke.includes(r.comptes[0].mot_de_passe_temporaire), 'jamais conservé en clair');
+    v = (await verifier('utilisateurs', users)).corps;
+    assert.deepStrictEqual(v.resume, { creer: 0, maj: 0, inchange: 2 });
+    r = (await importer('utilisateurs', users, v.empreinte)).corps;
+    assert.deepStrictEqual(r.comptes, [], 'réimport : aucun nouveau mot de passe');
+    // Journal d'administration : une entrée par import
+    const j = (await pool.query(`SELECT cible, detail FROM journal_admin WHERE action = 'Import CSV' AND etablissement_id = $1 ORDER BY id`, [etab])).rows;
+    assert.ok(j.length >= 7 && j.every((x) => /créations : \d+ · mises à jour : \d+ · inchangées : \d+/.test(x.detail)));
+    // Un administrateur d'établissement n'importe pas dans un autre établissement
+    assert.strictEqual((await appel('x', 'POST', '/admin/import/verifier', { etablissement_id: etab, type: 'unites', contenu: unites })).statut, 403);
+  } finally {
+    if (avant2fa === undefined) delete process.env.ARRIMO_2FA_ADMIN; else process.env.ARRIMO_2FA_ADMIN = avant2fa;
+    await pool.query(`UPDATE etablissements SET actif = false WHERE code = 'HOP-IMP'`);
+  }
+});
+
+test('import CSV : lecture robuste (guillemets, fins de ligne Windows, BOM) et valeurs oui/non', () => {
+  const { lireCsv, ouiNon } = require('../src/import');
+  assert.deepStrictEqual(lireCsv('﻿a;b\r\n"x;y";"il dit ""oui"""\r\n'), [['a', 'b'], ['x;y', 'il dit "oui"']]);
+  assert.deepStrictEqual(lireCsv('a,b\n1,2'), [['a', 'b'], ['1', '2']]);
+  assert.deepStrictEqual(['oui', 'Non', '', 'X', 'vrai', '1', 'peut-être'].map(ouiNon), [true, false, false, true, true, true, null]);
+});

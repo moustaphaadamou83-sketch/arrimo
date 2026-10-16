@@ -285,6 +285,7 @@ function majNomUtilisateur() {
 function majSelecteurCtx() {
   $('#ctx').innerHTML = etat.moi.etablissements.map((e) => `<option value="${e.id}">${esc(e.nom)}${e.module_actif ? '' : esc(t('barre.module_desactive'))}</option>`).join('');
   $('#ctx').value = etat.ctx;
+  $('label.ctx').hidden = !etat.moi.etablissements.length;   // environnement neuf : rien à choisir
 }
 
 async function demarrer() {
@@ -293,6 +294,17 @@ async function demarrer() {
   if (etat.moi.utilisateur.mdp_temporaire) { montrerFormulaire('#f-mdp-temp'); $('#t-actuel').focus(); return; }
   const etabs = etat.moi.etablissements;
   majNomUtilisateur();
+  if (!etabs.length && etat.moi.utilisateur.gestionnaire) {
+    // Environnement neuf (recette, production) : le gestionnaire crée le premier établissement dans l'administration
+    etat.ctx = null; majSelecteurCtx();
+    $('#ecran-connexion').hidden = true;
+    $('#ecran-app').hidden = false;
+    document.querySelectorAll('#onglets button').forEach((b) => { b.hidden = b.dataset.v !== 'admin'; });
+    $('#b-notif').hidden = true;
+    allerA(etat.moi.utilisateur.totp_actif ? 'admin' : 'compte');
+    document.body.dataset.pret = '1';
+    return;
+  }
   if (!etabs.length) {
     $('#ecran-connexion').hidden = false;
     $('#c-erreur').textContent = t('connexion.sans_etab');
@@ -338,7 +350,7 @@ document.querySelectorAll('#onglets button').forEach((b) => {
 });
 
 const etabCtx = () => etat.moi.etablissements.find((e) => e.id === etat.ctx);
-const configCtx = () => etat.moi.configs.find((c) => c.id === etabCtx().config_id);
+const configCtx = () => (etabCtx() ? etat.moi.configs.find((c) => c.id === etabCtx().config_id) : etat.moi.configs[0]);
 
 let enCours = false;
 async function rafraichir() {
@@ -347,9 +359,9 @@ async function rafraichir() {
   try {
     const e = etabCtx();
     const bandeau = $('#bandeau');
-    bandeau.hidden = e.module_actif;
-    bandeau.innerHTML = e.module_actif ? '' : `<div>${t('barre.bandeau_inactif', { etab: esc(e.nom) })}</div>`;
-    await Promise.all([majCompteurs(), ({
+    bandeau.hidden = !e || e.module_actif;
+    bandeau.innerHTML = !e || e.module_actif ? '' : `<div>${t('barre.bandeau_inactif', { etab: esc(e.nom) })}</div>`;
+    await Promise.all([e ? majCompteurs() : null, ({
       copilote: vueCopilote, reseau: vueReseau, national: vueNational, lits: vueLits, urgence: vueUrgence, admissions: vueAdmissions, transferts: vueTransferts,
       nettoyage: vueNettoyage, nsa: vueNsa, indicateurs: vueIndicateurs, journal: vueJournal, params: vueParams,
       admin: vueAdmin, compte: vueCompte,
@@ -1312,8 +1324,8 @@ async function vueAdmin() {
     $('#b-vers-compte').onclick = () => allerA('compte');
     return;
   }
-  const onglets = ['utilisateurs', 'structure', 'connecteurs', 'journal'];
-  if (u.gestionnaire) onglets.splice(2, 0, 'config');
+  const onglets = ['utilisateurs', 'structure', 'import', 'connecteurs', 'journal'];
+  if (u.gestionnaire) onglets.splice(3, 0, 'config');
   if (u.gestionnaire && etat.moi.demo) onglets.push('demo');
   if (!onglets.includes(etat.adminOnglet)) etat.adminOnglet = 'utilisateurs';
   v.innerHTML = `<div class="entete"><div><h2>${D('titre')}</h2><p>${D('intro', { portee: t(u.gestionnaire ? 'admin.tout_reseau' : 'admin.vos_etabs') })}</p></div></div>
@@ -1363,10 +1375,16 @@ async function vueAdmin() {
     corps.querySelectorAll('[data-actif]').forEach((b) => { b.onclick = () => agir(b, () => api('PUT', `/admin/utilisateurs/${b.dataset.actif}`, { actif: b.dataset.val === 'true' }), t('admin.compte_ok')); });
   }
 
+  if (!etabCtx()) {
+    corps.innerHTML = `<p>${esc(t('import.aucun_etab'))}</p>${u.gestionnaire ? formNouvelEtab() : ''}`;
+    const d = corps.querySelector('details.nouvel-etab'); if (d) d.open = true;
+    brancherNouvelEtab();
+    return;
+  }
   if (etat.adminOnglet === 'structure') {
     const cfg = configCtx();
     const st = await api('GET', `/admin/structure?etablissement_id=${etat.ctx}`);
-    corps.innerHTML = `<p class="note">${t('admin.etab_courant', { etab: esc(etabCtx().nom) })}</p>
+    corps.innerHTML = `${u.gestionnaire ? formNouvelEtab() : ''}<p class="note">${t('admin.etab_courant', { etab: esc(etabCtx().nom) })}</p>
       <div class="ligne" style="margin-bottom:14px"><div class="champ"><label class="lbl" for="s-type">${D('type')}</label><select id="s-type">${cfg.types.map((ty) => `<option value="${ty.id}">${esc(nomType(ty))}</option>`).join('')}</select></div>
         <div class="champ"><label class="lbl" for="s-nom">${D('nom_unite')}</label><input id="s-nom" autocomplete="off"></div><button class="btn pri" id="b-unite">${D('ajouter_unite')}</button></div>
       <div class="pile">${st.map((un) => `<div class="panneau-c"><div class="entete" style="margin:0"><h3><span class="donnee">${esc(un.nom)}</span> <span class="note">${esc(un.type_nom)}</span></h3>
@@ -1375,6 +1393,7 @@ async function vueAdmin() {
           <div class="liste" style="margin-top:6px">${ch.lits.map((l) => `<div class="ligne" style="justify-content:space-between;gap:8px"><span class="num">${esc(l.code)} <span class="note">${esc(t(`etats.${l.etat}`))}</span></span>
             <span class="cases">${BESOINS.map((k) => `<label class="case" title="${esc(t(`besoins.${k}`))}"><input type="checkbox" data-eq="${l.id}" data-k="${k}"${l[k] ? ' checked' : ''}> ${esc(t(`equipement_court.${k}`))}</label>`).join('')}</span></div>`).join('') || `<span class="note">${D('aucun_lit')}</span>`}</div>
           <div class="ligne" style="margin-top:6px"><input placeholder="${D('code_lit', { ex: `${un.type_code}-${ch.numero}C` })}" data-litcode="${ch.id}" style="width:230px" aria-label="${D('code_lit', { ex: '' })}"><button class="btn" data-lit-ch="${ch.id}">${D('ajouter_lit')}</button></div></div></div>`).join('') || `<p class="note">${D('aucune_chambre')}</p>`}</div>`).join('')}</div>`;
+    brancherNouvelEtab();
     $('#b-unite').onclick = (ev) => agir(ev.target, () => api('POST', '/admin/unites', { etablissement_id: etat.ctx, type_id: Number($('#s-type').value), nom: $('#s-nom').value }), t('admin.unite_ok'));
     corps.querySelectorAll('[data-ch]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', '/admin/chambres', { unite_id: Number(b.dataset.ch), numero: corps.querySelector(`[data-chnum="${b.dataset.ch}"]`).value }), t('admin.chambre_ok')); });
     corps.querySelectorAll('[data-lit-ch]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', '/admin/lits', { chambre_id: Number(b.dataset.litCh), code: corps.querySelector(`[data-litcode="${b.dataset.litCh}"]`).value }), t('admin.lit_ok')); });
@@ -1438,6 +1457,7 @@ async function vueAdmin() {
   }
 
   if (etat.adminOnglet === 'demo') await vueAdminDemo(corps);
+  if (etat.adminOnglet === 'import') await vueAdminImport(corps);
 }
 
 /* ---------------- Aide intégrée ---------------- */
@@ -1492,6 +1512,115 @@ function premiersPas(revoir) {
     etat.moi.utilisateur.premiers_pas_vus = true;
     api('POST', '/moi/premiers-pas').catch(() => {});
   }
+}
+
+/* ---------------- Administration : nouvel établissement et import CSV ---------------- */
+function formNouvelEtab() {
+  const I = (k, vars) => esc(t(`import.${k}`, vars));
+  return `<details class="panneau-c nouvel-etab"><summary><h3>${I('etab_titre')}</h3></summary><p class="note">${I('etab_aide')}</p>
+    <div class="ligne"><div class="champ"><label class="lbl" for="ne-code">${I('etab_code')}</label><input id="ne-code" maxlength="12" autocomplete="off" placeholder="HOP-A"></div>
+      <div class="champ"><label class="lbl" for="ne-nom">${I('etab_nom')}</label><input id="ne-nom" autocomplete="off"></div></div>
+    <div class="ligne"><div class="champ"><label class="lbl" for="ne-ville">${I('etab_ville')}</label><input id="ne-ville" autocomplete="off"></div>
+      <div class="champ"><label class="lbl" for="ne-adresse">${I('etab_adresse')}</label><input id="ne-adresse" autocomplete="off"></div></div>
+    <div class="ligne"><div class="champ"><label class="lbl" for="ne-lat">${I('etab_lat')}</label><input id="ne-lat" inputmode="decimal" placeholder="${nb(45.4)}"></div>
+      <div class="champ"><label class="lbl" for="ne-lon">${I('etab_lon')}</label><input id="ne-lon" inputmode="decimal" placeholder="${nb(-71.89, 2)}"></div>
+      <button class="btn pri" id="b-ne-creer">${I('etab_creer')}</button></div></details>`;
+}
+function brancherNouvelEtab() {
+  const b = $('#b-ne-creer');
+  if (!b) return;
+  b.onclick = () => agir(b, async () => {
+    const e = await api('POST', '/admin/etablissements', { code: $('#ne-code').value, nom: $('#ne-nom').value, ville: $('#ne-ville').value,
+      adresse: $('#ne-adresse').value, latitude: $('#ne-lat').value.replace(',', '.'), longitude: $('#ne-lon').value.replace(',', '.') });
+    const premier = !etat.ctx;
+    etat.moi = await api('GET', '/moi');
+    etat.ctx = e.id; ecrire('arrimo-ctx', e.id); majSelecteurCtx();
+    if (premier) { await demarrer(); allerA('admin'); }
+    return e;
+  }, (e) => t('import.etab_ok', { nom: e.nom }));
+}
+const TYPES_IMPORT = ['unites', 'chambres', 'lits', 'civieres', 'utilisateurs'];
+// Noms de colonnes des modèles : identifiants fixes du fichier, identiques dans les deux langues
+const COLONNES_IMPORT = { unites: 'unite;type_unite', chambres: 'unite;chambre', lits: 'unite;chambre;lit;isolement;pression_negative;ventilation;telemetrie',
+  civieres: 'civiere;categorie', utilisateurs: 'nom;courriel;role' };
+etat.imports = {};
+async function vueAdminImport(corps) {
+  const I = (k, vars) => esc(t(`import.${k}`, vars));
+  const carte = (type) => {
+    const x = etat.imports[type] || {};
+    const v = x.verif;
+    let res = '';
+    if (v && v.nb_erreurs) {
+      res = `<div class="import-res erreur-res"><p><b>${I('erreurs_titre', { n: v.nb_erreurs })}</b></p><div class="tableau"><table><thead><tr><th>${I('th_ligne')}</th><th>${I('th_colonne')}</th><th>${I('th_probleme')}</th></tr></thead><tbody>
+        ${v.erreurs.map((e) => `<tr><td class="num">${e.ligne}</td><td class="donnee">${esc(e.colonne || '—')}</td><td>${esc(t(`import.e.${e.code}`, { ...e.vars, colonne: e.colonne }))}</td></tr>`).join('')}</tbody></table></div></div>`;
+    } else if (v) {
+      res = `<div class="import-res"><p>${I('pret', { n: v.lignes })}</p><p class="note">${I('resume', { creer: v.resume.creer, maj: v.resume.maj, inchange: v.resume.inchange })}</p>
+        <button class="btn pri" data-imp-importer="${type}"${v.resume.creer + v.resume.maj ? '' : ' disabled'}>${I('importer')}</button></div>`;
+    }
+    return `<div class="panneau-c import-carte"><div><h3>${I(`t_${type}`)}</h3><p class="note">${t(`import.d_${type}`, { colonnes: `<code class="donnee">${esc(COLONNES_IMPORT[type])}</code>` })}</p></div>
+      <div class="ligne"><button class="btn" data-imp-modele="${type}">${icone('download')}${I('modele')}</button>
+        <label class="btn">${I('choisir')}<input type="file" accept=".csv,text/csv" data-imp-fichier="${type}" hidden></label>
+        <span class="note donnee">${esc(x.nom || '')}</span>
+        <button class="btn pri" data-imp-verifier="${type}"${x.contenu ? '' : ' disabled'}>${I('verifier')}</button></div>${res}</div>`;
+  };
+  corps.innerHTML = `<p class="note">${t('admin.etab_courant', { etab: esc(etabCtx().nom) })}</p>
+    <div class="panneau-c"><h3>${I('titre')}</h3><p>${I('intro')}</p><p class="note">${I('ordre')}</p></div>
+    <div class="pile" style="margin-top:16px">${TYPES_IMPORT.map(carte).join('')}</div>`;
+  corps.querySelectorAll('[data-imp-modele]').forEach((b) => {
+    b.onclick = async () => {
+      try {
+        const r = await fetch(`/api/admin/import/modeles/${b.dataset.impModele}`, { headers: { Authorization: `Bearer ${etat.token}`, 'X-Langue': langue } });
+        if (!r.ok) throw new Error(t('import.modele_impossible'));
+        telecharger(await r.blob(), `arrimo-${b.dataset.impModele}.csv`);
+      } catch (e) { toast(e.message, true); }
+    };
+  });
+  corps.querySelectorAll('[data-imp-fichier]').forEach((inp) => {
+    inp.onchange = async () => {
+      const f = inp.files[0];
+      if (!f) return;
+      if (f.size > 1024 * 1024) { toast(t('import.trop_gros'), true); return; }
+      etat.imports[inp.dataset.impFichier] = { nom: f.name, contenu: await f.text() };
+      rafraichir();
+    };
+  });
+  corps.querySelectorAll('[data-imp-verifier]').forEach((b) => {
+    const type = b.dataset.impVerifier;
+    b.onclick = () => agir(b, async () => {
+      etat.imports[type].verif = await api('POST', '/admin/import/verifier', { etablissement_id: etat.ctx, type, contenu: etat.imports[type].contenu });
+    });
+  });
+  corps.querySelectorAll('[data-imp-importer]').forEach((b) => {
+    const type = b.dataset.impImporter;
+    b.onclick = () => agir(b, async () => {
+      const x = etat.imports[type];
+      const r = await api('POST', '/admin/import/importer', { etablissement_id: etat.ctx, type, contenu: x.contenu, empreinte: x.verif.empreinte });
+      delete etat.imports[type];
+      if (r.comptes && r.comptes.length) montrerComptes(r.comptes);
+      return r;
+    }, (r) => t('import.fait', { creer: r.resume.creer, maj: r.resume.maj }));
+  });
+}
+/** Mots de passe temporaires des comptes créés : affichés une seule fois, liste téléchargeable une seule fois. */
+function montrerComptes(comptes) {
+  const I = (k, vars) => esc(t(`import.${k}`, vars));
+  modale(t('import.comptes_titre', { n: comptes.length }), `<p class="note">${I('comptes_aide')}</p>
+    <div class="tableau"><table><thead><tr><th>${I('th_nom')}</th><th>${I('th_courriel')}</th><th>${I('th_mdp')}</th></tr></thead><tbody>
+    ${comptes.map((c) => `<tr><td class="donnee">${esc(c.nom)}</td><td class="donnee">${esc(c.courriel)}</td><td class="num">${esc(c.mot_de_passe_temporaire)}</td></tr>`).join('')}</tbody></table></div>`,
+  [{ label: t('import.comptes_telecharger'), run: async () => {
+    const csv = `\ufeffnom;courriel;role;mot_de_passe_temporaire\r\n${comptes.map((c) => [c.nom, c.courriel, c.role, c.mot_de_passe_temporaire].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\r\n')}\r\n`;
+    telecharger(new Blob([csv], { type: 'text/csv' }), 'arrimo-comptes-a-transmettre.csv');
+    const b = [...document.querySelectorAll('#modale .actions .btn')].find((x) => x.textContent === t('import.comptes_telecharger'));
+    if (b) { b.disabled = true; b.textContent = t('import.comptes_telecharge'); }
+    return false;
+  } }, { label: t('general.fermer'), pri: true }]);
+}
+function telecharger(blob, nom) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = nom;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
 /* ---------------- Démonstration : remise à zéro (gestionnaire réseau, serveur de démonstration) ---------------- */

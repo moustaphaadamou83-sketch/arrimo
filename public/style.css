@@ -136,6 +136,7 @@ input[type=checkbox], input[type=radio] { min-height: 0; accent-color: var(--pri
 .marque small { color: #D7ECEF; font-size: var(--t-libelle); }
 .barre-droite { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e2); }
 .ctx { display: flex; align-items: center; gap: var(--e2); font-size: var(--t-libelle); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #D7ECEF; }
+.ctx[hidden] { display: none; }
 .ctx select { font-size: var(--t-texte); font-weight: 600; text-transform: none; letter-spacing: 0; max-width: 62vw; border-color: transparent; }
 .barre .btn, .barre .barre-langue { background: transparent; color: #fff; border-color: rgba(255, 255, 255, 0.4); }
 .barre .btn:hover { background: rgba(255, 255, 255, 0.14); border-color: #fff; }
@@ -450,3 +451,11 @@ label.item input[type=radio] { order: -1; width: 20px; height: 20px; flex: none;
 
 /* Bandeau de l'environnement de recette : ambre, distinct de la démonstration */
 .bandeau-demo.recette { background: var(--attention-fond); color: #78350F; border-bottom-color: var(--attention); }
+
+/* Import CSV : noms de colonnes affichés comme du code, coupés au besoin sur téléphone */
+.import-carte code { font-family: inherit; background: var(--doux); color: var(--principal); border-radius: 4px; padding: 0 4px; overflow-wrap: anywhere; }
+.import-res { display: flex; flex-direction: column; gap: var(--e2); align-items: flex-start; }
+.import-res p { margin: 0; }
+.import-res .tableau { width: 100%; }
+.nouvel-etab summary { cursor: pointer; list-style: none; }
+.nouvel-etab summary h3 { display: inline; }

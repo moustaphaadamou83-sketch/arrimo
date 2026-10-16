@@ -117,6 +117,13 @@ const MESSAGES = {
   partage_invalide: 'Partage invalide.',
   sh_non_configure: 'Activation SH non configurée sur ce serveur.',
   cle_sh_invalide: 'Clé SH invalide.',
+  // établissements et import CSV
+  code_etab_invalide: 'Code d’établissement invalide (2 à 12 lettres majuscules, chiffres ou tirets).',
+  code_etab_existe: 'Ce code d’établissement existe déjà.',
+  position_invalide: 'Position invalide : latitude entre -90 et 90, longitude entre -180 et 180.',
+  import_type_inconnu: 'Type d’import inconnu : unites, chambres, lits, civieres ou utilisateurs.',
+  import_erreurs: 'Le fichier contient {n|# erreur : corrigez-la|# erreurs : corrigez-les} et vérifiez de nouveau.',
+  import_fichier_change: 'Le fichier a changé depuis la vérification. Vérifiez-le de nouveau avant d’importer.',
   // connecteurs
   connecteur_reseau_gestionnaire: 'Seul le gestionnaire réseau crée un connecteur réseau.',
   connecteur_introuvable: 'Connecteur introuvable.',
@@ -129,11 +136,9 @@ const MESSAGES = {
   admission_impossible: 'Lit {code} à l’état {lit_etat} : impossible d’y admettre {ref}.',
 };
 
+/** Remplit un message (pluriels {n|un|plusieurs} et nombres selon le français, comme l'interface). */
 function formater(modele, vars = {}) {
-  return modele.replace(/\{(\w+)\}/g, (m, k) => {
-    if (vars[k] === undefined) return m;
-    return k.endsWith('_etat') ? (ETATS[vars[k]] || vars[k]) : String(vars[k]);
-  });
+  return require('../public/i18n/format').remplir('fr-CA', modele, vars, (k, v) => (k.endsWith('_etat') ? (ETATS[v] || v) : undefined));
 }
 
 module.exports = { MESSAGES, formater, ETATS };

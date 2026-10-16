@@ -253,6 +253,54 @@ function brancher(api, pool, route, entier) {
     });
   }));
 
+  /* ---------------------------------------------------------------- nouvel établissement (gestionnaire) */
+  api.post('/admin/etablissements', route(async (req) => {
+    exigerGestionnaire(req);
+    const b = req.body;
+    const code = String(b.code || '').trim().toUpperCase();
+    const nom = String(b.nom || '').trim();
+    const lat = Number(b.latitude); const lon = Number(b.longitude);
+    if (!/^[A-Z0-9-]{2,12}$/.test(code)) throw new ErreurHttp(400, 'code_etab_invalide');
+    if (!nom) throw new ErreurHttp(400, 'nom_requis');
+    if (!(lat >= -90 && lat <= 90) || !(lon >= -180 && lon <= 180) || b.latitude === '' || b.longitude === '') throw new ErreurHttp(400, 'position_invalide');
+    const partage = b.partage || 'complet';
+    if (!['complet', 'agrege', 'aucun'].includes(partage)) throw new ErreurHttp(400, 'partage_invalide');
+    const config = (await pool.query('SELECT id FROM config_pays ORDER BY id LIMIT 1')).rows[0];
+    if (!config) throw new ErreurHttp(400, 'config_introuvable');
+    return transaction(pool, async (c) => {
+      if ((await c.query('SELECT 1 FROM etablissements WHERE code = $1', [code])).rows[0]) throw new ErreurHttp(409, 'code_etab_existe');
+      // Créé inactif : l'activation suit l'implantation (console SH, partie C2)
+      const e = (await c.query(`INSERT INTO etablissements (code, nom, ville, adresse, latitude, longitude, config_id, partage, module_actif)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false) RETURNING id, code, nom, ville, adresse, partage, module_actif`,
+      [code, nom, String(b.ville || '').trim() || null, String(b.adresse || '').trim() || null, lat, lon, config.id, partage])).rows[0];
+      await journalAdmin(c, req.utilisateur, 'Établissement créé', `${code} · ${nom}`, null, e.id);
+      return e;
+    });
+  }));
+
+  /* ---------------------------------------------------------------- import CSV (structure et comptes) */
+  const imp = require('./import');
+  api.get('/admin/import/modeles/:type', async (req, res, next) => {
+    try {
+      exigerAdmin(req);
+      const texte = imp.modele(req.params.type);
+      res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="arrimo-${req.params.type}.csv"` }).send(texte);
+    } catch (e) { next(e); }
+  });
+  api.post('/admin/import/verifier', route(async (req) => {
+    exigerAdmin(req);
+    const etab = entier(req.body.etablissement_id, 'etablissement_id');
+    await exigerEtabGerable(req.utilisateur, etab);
+    const v = await imp.verifier(pool, etab, String(req.body.type || ''), String(req.body.contenu || ''));
+    return { lignes: v.lignes, erreurs: v.erreurs.slice(0, 500), nb_erreurs: v.erreurs.length, actions: v.actions.slice(0, 500), resume: v.resume, empreinte: v.empreinte };
+  }));
+  api.post('/admin/import/importer', route(async (req) => {
+    exigerAdmin(req);
+    const etab = entier(req.body.etablissement_id, 'etablissement_id');
+    await exigerEtabGerable(req.utilisateur, etab);
+    return imp.importer(pool, req.utilisateur, etab, String(req.body.type || ''), String(req.body.contenu || ''), String(req.body.empreinte || ''), journalAdmin);
+  }));
+
   /* ---------------------------------------------------------------- rayon des alertes « disponibilité à côté » */
   api.put('/admin/etablissements/:id/rayon-alerte', route(async (req) => {
     exigerAdmin(req);

@@ -144,6 +144,10 @@ X-SH-Key: <SH_API_KEY>
 | GET | `/api/journal?etablissement_id=` | Journal |
 | GET/POST | `/api/notifications`, `/api/notifications/lues` | Notifications |
 | POST | `/api/assistant` | Question en langage courant |
+| POST | `/api/admin/etablissements` | Nouvel établissement (gestionnaire réseau ; créé inactif) |
+| GET | `/api/admin/import/modeles/{type}` | Modèle CSV vide : `unites`, `chambres`, `lits`, `civieres`, `utilisateurs` |
+| POST | `/api/admin/import/verifier` | Vérifie un CSV sans rien écrire : erreurs par ligne, créations, mises à jour, empreinte |
+| POST | `/api/admin/import/importer` | Importe un CSV vérifié (même empreinte), tout ou rien, journalisé ; renvoie les mots de passe temporaires des nouveaux comptes |
 
 ## Ce qui reste à faire avant un pilote réel
 
@@ -151,7 +155,6 @@ X-SH-Key: <SH_API_KEY>
 - Évaluation des facteurs relatifs à la vie privée (Loi 25) et test d’intrusion indépendant.
 - Connexion aux admissions, transferts et congés de l’établissement (HL7 ADT ou FHIR), pour que l’état des lits se mette à jour sans saisie.
 - Branchement réel du transport (M2) ; prévision par règles (congés prévus, nettoyages), à remplacer par un modèle entraîné sur l’historique réel d’un pilote.
-- Gestion des utilisateurs et de la structure (unités, chambres) par écran ; aujourd’hui par l’API gestionnaire ou en base.
 - Authentification unique (SSO) de l’établissement et double authentification.
 
 ## Environnements et mise en ligne
@@ -181,3 +184,11 @@ Pour passer à un autre domaine (ex. `arrimo.ca`) : enregistrement DNS, puis rel
 4. Pour une mise à jour : recopier le nouveau `arrimo.zip` et relancer la même commande ; la base est conservée.
 5. Commandes par environnement : `<nom>-sauvegarde`, `<nom>-restaurer <fichier.dump>`, `journalctl -u <nom>`, `journalctl -t <nom>-surveillance`
    (`<nom>` = `arrimo` ou `arrimo-recette`).
+
+## Import CSV (implantation d'un établissement)
+
+Administration → Import CSV. Ordre : unités, chambres, lits, civières, utilisateurs. Fichiers séparés par `;` (ou `,`), UTF-8, modèles téléchargeables.
+- La vérification ne change rien ; l'import est refusé tant qu'il reste une erreur ou si le fichier a changé depuis la vérification.
+- Tout ou rien, dans une transaction ; réimporter met à jour sans créer de doublon (clé : unité, chambre, lit, civière, courriel).
+- Refus de toute colonne ou valeur qui ressemble à une donnée de patient (référence, carte d'assurance maladie, nom, diagnostic).
+- Chaque import est inscrit au journal d'administration (comptes et empreinte du fichier) ; les nouveaux comptes reçoivent un mot de passe temporaire, montré une seule fois.

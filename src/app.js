@@ -28,6 +28,8 @@ function creerApp(pool) {
   app.disable('x-powered-by');
   app.set('trust proxy', 'loopback');   // derrière Nginx : l'adresse du client vient de X-Forwarded-For
   app.use('/api', limiteur());
+  // Import CSV : jusqu'à 1 Mo (même limite que Nginx) ; ailleurs 50 Ko
+  app.use('/api/admin/import', express.json({ limit: '1mb' }));
   app.use(express.json({ limit: '50kb' }));
   app.use((req, res, next) => {
     res.set({

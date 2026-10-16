@@ -191,10 +191,10 @@ window.ARRIMO_I18N.en.aide = {
       but: 'Accounts, units, rooms and beds, country configuration, connectors and the administration log.',
       gestes: [
         'First enable two-factor authentication in My account.',
-        'Create an account: a temporary password is shown only once; share it through a secure channel.',
-        'Reset the password of someone who forgot it.',
+        'Create an account, or reset the password of someone who forgot it: the temporary password is shown only once.',
         'Add units, rooms and beds, and tick their equipment.',
         'Create a connector for the hospital system; the key is shown only once.',
+        'CSV import: download a template, fill it, “Check” shows each error by line, then “Import” (all or nothing).',
       ],
       erreurs: [
         ['“Enable two-factor authentication”', 'Go to My account, scan the QR code, enter the 6-digit code.'],

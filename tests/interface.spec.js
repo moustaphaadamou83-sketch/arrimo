@@ -365,6 +365,17 @@ for (const L of LARGEURS) {
     await r.waitForSelector('#modale:not([hidden])');
     await verifier(r, L, '20-mot-de-passe-temporaire');
     await r.click('#modale .btn.pri');
+    // Import CSV : un fichier d'unités pour l'Hôpital X, vérifié puis importé
+    await r.click('[data-ao="import"]');
+    await r.waitForSelector('[data-imp-fichier="unites"]', { state: 'attached' });
+    await verifier(r, L, '20b-import');
+    await r.setInputFiles('[data-imp-fichier="unites"]', { name: 'unites.csv', mimeType: 'text/csv', buffer: Buffer.from(`unite;type_unite\nGériatrie ${L.nom};MED\n`) });
+    await r.waitForSelector('[data-imp-verifier="unites"]:not([disabled])');
+    await r.click('[data-imp-verifier="unites"]');
+    await r.waitForSelector('[data-imp-importer="unites"]:not([disabled])');
+    await verifier(r, L, '20c-import-verifie');
+    await r.click('[data-imp-importer="unites"]');
+    await toast(r, 'Import terminé');
     await r.click('[data-ao="journal"]');
     await r.waitForSelector('#admin-corps table');
     await verifier(r, L, '21-journal-administration');
@@ -535,7 +546,7 @@ test('interface en anglais : aucun texte français restant (noms propres except�
   await r.click('#b-2fa-ok');
   await toast(r, 'enabled');
   await onglet(r, 'admin');
-  for (const sous of ['utilisateurs', 'structure', 'config', 'connecteurs', 'journal']) {
+  for (const sous of ['utilisateurs', 'structure', 'import', 'config', 'connecteurs', 'journal']) {
     await r.click(`[data-ao="${sous}"]`);
     await r.waitForFunction((s) => document.querySelector(`[data-ao="${s}"]`)?.getAttribute('aria-pressed') === 'true' && document.querySelector('#admin-corps').children.length > 0, sous);
     await ecran(r, `15-admin-${sous}`);
@@ -575,5 +586,54 @@ test('bandeau de l’environnement : démonstration, recette (ambre), rien en pr
   } finally {
     if (avant.env === undefined) delete process.env.ARRIMO_ENV; else process.env.ARRIMO_ENV = avant.env;
     if (avant.demo === undefined) delete process.env.ARRIMO_DEMO; else process.env.ARRIMO_DEMO = avant.demo;
+  }
+});
+
+/* ------------------------------------------------------------------ environnement neuf (C1, C3) */
+test('environnement neuf : premier compte, mot de passe choisi, premier établissement créé', { timeout: 120000 }, async () => {
+  const { premierCompte } = require('../db/premier-compte');
+  const L = LARGEURS[0];
+  const avant = { env: process.env.ARRIMO_ENV, deuxfa: process.env.ARRIMO_2FA_ADMIN };
+  process.env.ARRIMO_ENV = 'recette';
+  process.env.ARRIMO_2FA_ADMIN = '0';
+  try {
+    for (const c of navigateur.contexts()) await c.close();
+    await viderBase(pool);
+    const temporaire = await premierCompte(pool, 'premier@recette.exemple', 'Gestionnaire de recette');
+    const page = await (await navigateur.newContext({ viewport: { width: L.width, height: L.height } })).newPage();
+    page.erreurs = [];
+    await page.goto(base);
+    await page.fill('#c-email', 'premier@recette.exemple'); await page.fill('#c-mdp', temporaire);
+    await page.click('#f-connexion button[type=submit]');
+    await page.waitForSelector('#f-mdp-temp:not([hidden])');
+    await page.fill('#t-actuel', temporaire); await page.fill('#t-nouveau', 'Recette-Arrimo-2026'); await page.fill('#t-confirme', 'Recette-Arrimo-2026');
+    await page.click('#f-mdp-temp button[type=submit]');
+    // Double authentification d'abord (obligatoire pour l'administration), puis la création du premier établissement
+    await fermerPremiersPas(page);
+    await page.waitForSelector('#b-2fa-prep');
+    await page.click('#b-2fa-prep');
+    await page.waitForSelector('#a-code');
+    const secret = (await page.textContent('#zone-2fa .num')).trim();
+    await page.fill('#a-code', totp.codePourPas(secret, totp.pasActuel()));
+    await page.click('#b-2fa-ok');
+    await toast(page, 'activée');
+    await page.click('#onglets [data-v="admin"]');
+    await page.waitForSelector('#ne-code');
+    assert.deepStrictEqual(await page.$$eval('#onglets button', (bs) => bs.filter((b) => !b.hidden).map((b) => b.dataset.v)), ['admin']);
+    assert.match(await page.textContent('#bandeau-demo'), /Recette/);
+    await fermerPremiersPas(page);
+    await verifier(page, { ...L, nom: 'environnements' }, 'recette-premier-etablissement');
+    await page.fill('#ne-code', 'HOP-A'); await page.fill('#ne-nom', 'Hôpital de recette A'); await page.fill('#ne-ville', 'Ville A');
+    await page.fill('#ne-lat', '45,5'); await page.fill('#ne-lon', '-72,1');
+    await page.click('#b-ne-creer');
+    await toast(page, 'est créé');
+    // L'établissement existe : l'application s'ouvre normalement (inactif jusqu'à la fin de l'implantation)
+    await page.waitForFunction(() => [...document.querySelectorAll('#onglets button')].filter((b) => !b.hidden).length > 5);
+    assert.strictEqual(await page.inputValue('#ctx'), String((await pool.query(`SELECT id FROM etablissements WHERE code = 'HOP-A'`)).rows[0].id));
+    page.erreurs = page.erreurs.filter((m) => !/40[13]/.test(m));
+    await page.context().close();
+  } finally {
+    if (avant.env === undefined) delete process.env.ARRIMO_ENV; else process.env.ARRIMO_ENV = avant.env;
+    if (avant.deuxfa === undefined) delete process.env.ARRIMO_2FA_ADMIN; else process.env.ARRIMO_2FA_ADMIN = avant.deuxfa;
   }
 });

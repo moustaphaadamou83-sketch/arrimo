@@ -191,10 +191,10 @@ window.ARRIMO_I18N.fr.aide = {
       but: 'Les comptes, les unités, chambres et lits, la configuration du pays, les connecteurs et le journal d’administration.',
       gestes: [
         'Activez d’abord la double authentification dans Mon compte.',
-        'Créez un compte : un mot de passe temporaire s’affiche une seule fois ; transmettez-le par un moyen sûr.',
-        'Réinitialisez le mot de passe d’une personne qui l’a oublié.',
+        'Créez un compte, ou réinitialisez le mot de passe d’une personne qui l’a oublié : le mot de passe temporaire s’affiche une seule fois.',
         'Ajoutez unités, chambres et lits, et cochez leur équipement.',
         'Créez un connecteur pour le système de l’hôpital ; la clé ne s’affiche qu’une fois.',
+        'Import CSV : téléchargez un modèle, remplissez-le, « Vérifier » montre chaque erreur par ligne, puis « Importer » (tout ou rien).',
       ],
       erreurs: [
         ['« Activez la double authentification »', 'Allez dans Mon compte, scannez le code QR, entrez le code à 6 chiffres.'],
