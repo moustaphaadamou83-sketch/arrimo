@@ -11,6 +11,9 @@ const t = require('./terrain');
 const copilote = require('./copilote');
 const cx = require('./connecteurs');
 const { langueDe, traducteurTypes, traduireTypes } = require('./langue');
+const { limiteur } = require('./limites');
+const motdepasse = require('./motdepasse');
+const courriel = require('./courriel');
 
 const entier = (v, nom) => {
   const n = Number(v);
@@ -21,6 +24,8 @@ const entier = (v, nom) => {
 function creerApp(pool) {
   const app = express();
   app.disable('x-powered-by');
+  app.set('trust proxy', 'loopback');   // derrière Nginx : l'adresse du client vient de X-Forwarded-For
+  app.use('/api', limiteur());
   app.use(express.json({ limit: '50kb' }));
   app.use((req, res, next) => {
     res.set({
@@ -49,11 +54,14 @@ function creerApp(pool) {
   /* ---------- connexion ---------- */
   api.post('/connexion', route((req) => connexion(pool, req.body.email, req.body.mot_de_passe)));
   api.post('/connexion/2fa', route((req) => connexion2fa(pool, req.body.jeton, req.body.code)));
+  api.post('/mot-de-passe/oubli', route((req) => motdepasse.demander(pool, req.body.email, req.langue)));
+  api.post('/mot-de-passe/reinitialiser', route((req) => motdepasse.reinitialiser(pool, req.body.jeton, req.body.nouveau)));
 
   /* ---------- informations publiques : serveur de démonstration, champs des pages légales ---------- */
   const CHAMPS_LEGAUX = ['entite', 'adresse', 'responsable', 'contact', 'duree_comptes', 'duree_journaux', 'duree_references', 'hebergeur', 'entente'];
   api.get('/public', (req, res) => res.json({
     demo: process.env.ARRIMO_DEMO === '1',
+    mot_de_passe_oublie: courriel.actif(),
     legal: Object.fromEntries(CHAMPS_LEGAUX.map((k) => [k, process.env[`ARRIMO_LEGAL_${k.toUpperCase()}`] || null]).filter(([, v]) => v)),
   }));
 
@@ -255,13 +263,13 @@ function creerApp(pool) {
   }));
 
   /* ---------- transferts ---------- */
-  api.get('/transferts', route((req) => s.listeTransferts(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
+  api.get('/transferts', route((req) => s.listeTransferts(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'), req.query)));
   api.post('/transferts', route((req) => s.creerTransfert(pool, req.utilisateur, req.body)));
   api.post('/transferts/:id/:etape', route((req) => s.avancerTransfert(pool, req.utilisateur,
     entier(req.params.id, 'id'), req.params.etape, req.body)));
 
   /* ---------- journal, notifications ---------- */
-  api.get('/journal', route((req) => s.lireJournal(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
+  api.get('/journal', route((req) => s.lireJournal(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'), req.query)));
   api.get('/notifications', route((req) => s.lireNotifications(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   api.post('/notifications/lues', route(async (req) => {
     const etab = entier(req.body.etablissement_id, 'etablissement_id');

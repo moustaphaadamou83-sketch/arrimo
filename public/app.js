@@ -169,7 +169,7 @@ $('#f-connexion').addEventListener('submit', async (e) => {
 });
 
 function montrerFormulaire(sel) {
-  ['#f-connexion', '#f-2fa', '#f-mdp-temp'].forEach((f) => { $(f).hidden = f !== sel; });
+  ['#f-connexion', '#f-2fa', '#f-mdp-temp', '#f-oubli', '#f-reinit'].forEach((f) => { $(f).hidden = f !== sel; });
   $('#ecran-connexion').hidden = false;
   $('#ecran-app').hidden = true;
 }
@@ -190,6 +190,33 @@ $('#f-2fa').addEventListener('submit', async (e) => {
   }
 });
 $('#b-retour-connexion').onclick = () => montrerFormulaire('#f-connexion');
+
+/* Mot de passe oublié : lien par courriel (visible seulement si l'envoi de courriels est configuré) */
+$('#b-oubli').onclick = () => { $('#o-email').value = $('#c-email').value; $('#o-message').hidden = true; $('#o-erreur').hidden = true; montrerFormulaire('#f-oubli'); $('#o-email').focus(); };
+$('#b-oubli-retour').onclick = () => montrerFormulaire('#f-connexion');
+$('#f-oubli').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('#o-erreur').hidden = true;
+  try {
+    await api('POST', '/mot-de-passe/oubli', { email: $('#o-email').value });
+    $('#o-message').textContent = t('connexion.oubli_envoye');
+    $('#o-message').hidden = false;
+  } catch (ex) { $('#o-erreur').textContent = ex.message; $('#o-erreur').hidden = false; }
+});
+let jetonReinit = null;
+$('#f-reinit').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const err = $('#r-erreur'); err.hidden = true;
+  try {
+    if ($('#r-nouveau').value !== $('#r-confirme').value) throw new Error(t('general.deux_mdp_differents'));
+    await api('POST', '/mot-de-passe/reinitialiser', { jeton: jetonReinit, nouveau: $('#r-nouveau').value });
+    ['#r-nouveau', '#r-confirme'].forEach((x) => { $(x).value = ''; });
+    jetonReinit = null;
+    montrerFormulaire('#f-connexion');
+    $('#c-erreur').hidden = true;
+    toast(t('connexion.reinit_ok'));
+  } catch (ex) { err.textContent = ex.message; err.hidden = false; }
+});
 $('#f-mdp-temp').addEventListener('submit', async (e) => {
   e.preventDefault();
   const err = $('#t-erreur'); err.hidden = true;
@@ -264,6 +291,7 @@ $('#ctx').onchange = async (e) => {
   etat.ctx = Number(e.target.value);
   ecrire('arrimo-ctx', etat.ctx);
   etat.filtreUnite = '*';
+  etat.suites = {};
   etat.recherche = { ...etat.recherche, res: null, choix: null };
   etat.reponse = '';
   await rafraichir();
@@ -530,7 +558,9 @@ function attente(x) {
 }
 async function vueTransferts() {
   const v = $('#v-transferts');
-  const trs = await api('GET', `/transferts?etablissement_id=${etat.ctx}`);
+  const page = await api('GET', `/transferts?etablissement_id=${etat.ctx}`);
+  const termine = (x) => ['recu', 'refuse'].includes(x.statut);
+  const { lignes: trs, plus } = avecSuite('transferts', page, page.filter(termine).length);
   const actif = etabCtx().module_actif;
   const cols = STATUTS.map(([k, c]) => {
     const items = trs.filter((x) => x.statut === k);
@@ -544,7 +574,8 @@ async function vueTransferts() {
       ${actif ? `<div class="actions">${actionsTransfert(x).map(([a, p]) => `<button class="btn${p ? ' pri' : ''}${a === 'refuser' ? ' dan' : ''}" data-tr="${x.id}" data-etape="${a}" data-num="${esc(x.numero)}">${esc(t(`transferts.${a}`))}</button>`).join('')}</div>` : ''}
     </div>`).join('') || `<div class="vide">${esc(t('transferts.aucun'))}</div>`}</div>`;
   }).join('');
-  v.innerHTML = `<div class="entete"><div><h2>${esc(t('transferts.titre', { etab: etabCtx().nom }))}</h2><p>${esc(t('transferts.intro'))}</p></div></div><div class="kanban">${cols}</div>`;
+  v.innerHTML = `<div class="entete"><div><h2>${esc(t('transferts.titre', { etab: etabCtx().nom }))}</h2><p>${esc(t('transferts.intro'))}</p></div></div><div class="kanban">${cols}</div>${plus ? boutonPlus('transferts') : ''}`;
+  brancherPlus(v, 'transferts', `/transferts?etablissement_id=${etat.ctx}`, trs.filter(termine));
   v.querySelectorAll('[data-tr]').forEach((b) => {
     b.onclick = () => {
       const id = b.dataset.tr; const etape = b.dataset.etape; const numero = b.dataset.num;
@@ -559,17 +590,40 @@ async function vueTransferts() {
   });
 }
 
+/* ---------------- Listes longues : pages de 300 lignes, « Afficher plus » ---------------- */
+const PAGE = 300;
+etat.suites = {};
+/** Ajoute aux lignes de la première page celles déjà chargées par « Afficher plus ». */
+function avecSuite(cle, premiere, nbPagine = premiere.length) {
+  const s = etat.suites[cle] || (etat.suites[cle] = { lignes: [], fin: false });
+  const vus = new Set(premiere.map((x) => x.id));
+  return { lignes: [...premiere, ...s.lignes.filter((x) => !vus.has(x.id))], plus: !s.fin && (s.lignes.length > 0 || nbPagine >= PAGE) };
+}
+const boutonPlus = (cle) => `<div class="plus"><button class="btn" data-plus="${cle}">${esc(t('journal.plus'))}</button></div>`;
+function brancherPlus(racine, cle, chemin, dernieres) {
+  const b = racine.querySelector(`[data-plus="${cle}"]`);
+  if (!b) return;
+  b.onclick = () => agir(b, async () => {
+    const der = dernieres[dernieres.length - 1];
+    const res = await api('GET', `${chemin}${chemin.includes('?') ? '&' : '?'}avant=${encodeURIComponent(der.curseur)}`);
+    const s = etat.suites[cle];
+    s.lignes.push(...res);
+    if (res.length < PAGE) s.fin = true;
+  });
+}
+
 /* ---------------- Journal ---------------- */
 const libelleAction = (groupe, a) => (aTrad(`${groupe}.${a}`) ? t(`${groupe}.${a}`) : a);
 async function vueJournal() {
-  const lignes = await api('GET', `/journal?etablissement_id=${etat.ctx}`);
+  const { lignes, plus } = avecSuite('journal', await api('GET', `/journal?etablissement_id=${etat.ctx}`));
   const etatLib = (k) => (k ? t(`etats.${k}`) : '—');
   $('#v-journal').innerHTML = `<div class="entete"><div><h2>${esc(t('journal.titre', { etab: etabCtx().nom }))}</h2><p>${esc(t('journal.intro'))}</p></div></div>
     <div class="tableau"><table><thead><tr><th>${esc(t('journal.date'))}</th><th>${esc(t('journal.utilisateur'))}</th><th>${esc(t('journal.action'))}</th><th>${esc(t('journal.lit'))}</th><th>${esc(t('journal.changement'))}</th><th>${esc(t('journal.detail'))}</th><th>${esc(t('journal.transfert'))}</th></tr></thead><tbody>${
   lignes.map((j) => `<tr><td class="mono">${heure(j.date)}</td><td class="donnee">${esc(j.utilisateur || t('general.systeme'))}</td><td${j.refuse ? ' class="refuse"' : ''}>${esc(libelleAction('journal_actions', j.action))}</td>
       <td class="mono">${esc(j.lit_code || '')}</td><td>${j.ancien_etat || j.nouvel_etat ? `${esc(etatLib(j.ancien_etat))} → ${esc(etatLib(j.nouvel_etat))}` : ''}</td>
       <td class="donnee">${esc(j.detail || '')}</td><td class="mono">${esc(j.transfert_numero || '')}</td></tr>`).join('') || `<tr><td colspan="7" class="muted">${esc(t('journal.aucune'))}</td></tr>`
-}</tbody></table></div>`;
+}</tbody></table></div>${plus ? boutonPlus('journal') : ''}`;
+  brancherPlus($('#v-journal'), 'journal', `/journal?etablissement_id=${etat.ctx}`, lignes);
 }
 
 /* ---------------- Paramètres ---------------- */
@@ -984,9 +1038,10 @@ async function vueAdmin() {
   }
 
   if (etat.adminOnglet === 'journal') {
-    const j = await api('GET', '/admin/journal');
+    const { lignes: j, plus } = avecSuite('admin-journal', await api('GET', '/admin/journal'));
     corps.innerHTML = `<div class="tableau"><table><thead><tr><th>${D('th_date')}</th><th>${D('th_par')}</th><th>${D('th_action')}</th><th>${D('th_cible')}</th><th>${D('th_detail')}</th><th>${D('th_etab')}</th></tr></thead><tbody>${j.map((x) => `<tr>
-      <td class="mono">${heure(x.date)}</td><td class="donnee">${esc(x.utilisateur || '')}</td><td>${esc(libelleAction('journal_admin_actions', x.action))}</td><td class="donnee">${esc(x.cible || '')}</td><td class="note donnee">${esc(x.detail || '')}</td><td class="note">${esc(x.etablissement || '')}</td></tr>`).join('') || `<tr><td colspan="6" class="muted">${D('aucune_action')}</td></tr>`}</tbody></table></div>`;
+      <td class="mono">${heure(x.date)}</td><td class="donnee">${esc(x.utilisateur || '')}</td><td>${esc(libelleAction('journal_admin_actions', x.action))}</td><td class="donnee">${esc(x.cible || '')}</td><td class="note donnee">${esc(x.detail || '')}</td><td class="note">${esc(x.etablissement || '')}</td></tr>`).join('') || `<tr><td colspan="6" class="muted">${D('aucune_action')}</td></tr>`}</tbody></table></div>${plus ? boutonPlus('admin-journal') : ''}`;
+    brancherPlus(corps, 'admin-journal', '/admin/journal', j);
   }
 
   if (etat.adminOnglet === 'demo') await vueAdminDemo(corps);
@@ -1064,8 +1119,17 @@ async function vueAdminDemo(corps) {
 
 /* ---------------- démarrage ---------------- */
 appliquerLangue();
-fetch('/api/public').then((r) => r.json()).then((p) => { $('#bandeau-demo').hidden = !p.demo; }).catch(() => {});
+fetch('/api/public').then((r) => r.json()).then((p) => { $('#bandeau-demo').hidden = !p.demo; $('#b-oubli').hidden = !p.mot_de_passe_oublie; }).catch(() => {});
 (async () => {
+  // Lien reçu par courriel : /?reinit=<jeton> ; le jeton est retiré de l'adresse aussitôt lu
+  const reinit = new URLSearchParams(location.search).get('reinit');
+  if (reinit) {
+    jetonReinit = reinit;
+    history.replaceState(null, '', location.pathname);
+    montrerFormulaire('#f-reinit');
+    $('#r-nouveau').focus();
+    return;
+  }
   etat.token = lire('arrimo-token');
   if (!etat.token) { $('#ecran-connexion').hidden = false; return; }
   try { await demarrer(); } catch { deconnecter(true); }

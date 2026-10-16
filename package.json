@@ -13,11 +13,14 @@
     "test": "node --test --test-concurrency=1 tests/api.test.js",
     "demo:deux": "node db/demo-deux.js",
     "demo:reset": "node db/reset.js deux",
-    "test:interface": "node --test --test-concurrency=1 tests/interface.spec.js"
+    "test:interface": "node --test --test-concurrency=1 tests/interface.spec.js",
+    "mesures": "node scripts/mesures.js",
+    "charge": "node scripts/charge.js"
   },
   "license": "UNLICENSED",
   "dependencies": {
     "express": "^4.21.2",
+    "nodemailer": "^6.9.16",
     "pg": "^8.13.1",
     "qrcode": "^1.5.4"
   },

@@ -12,6 +12,7 @@ const totp = require('./totp');
 const { journaliser } = require('./regles');
 const cx = require('./connecteurs');
 const demo = require('./demo');
+const s = require('./services');
 
 const ROLES = ['coordonnateur', 'entretien', 'admin_etab', 'gestionnaire'];
 
@@ -339,11 +340,12 @@ function brancher(api, pool, route, entier) {
   api.get('/admin/journal', route(async (req) => {
     exigerAdmin(req);
     const gerables = await etabsGerables(req.utilisateur);
+    const [d, i] = s.curseur(req.query.avant);
     const { rows } = await pool.query(
-      `SELECT j.*, u.nom AS utilisateur, e.nom AS etablissement FROM journal_admin j
+      `SELECT j.*, ${s.sqlCurseur('j.date', 'j.id')}, u.nom AS utilisateur, e.nom AS etablissement FROM journal_admin j
          LEFT JOIN utilisateurs u ON u.id = j.utilisateur_id LEFT JOIN etablissements e ON e.id = j.etablissement_id
-        WHERE $1 OR j.etablissement_id = ANY($2::int[]) OR j.utilisateur_id = $3
-        ORDER BY j.date DESC LIMIT 300`, [req.utilisateur.gestionnaire, gerables, req.utilisateur.id]);
+        WHERE ($1 OR j.etablissement_id = ANY($2::int[]) OR j.utilisateur_id = $3) AND ${s.sqlAvant('j.date', 'j.id', '$4', '$5')}
+        ORDER BY j.date DESC, j.id DESC LIMIT $6`, [req.utilisateur.gestionnaire, gerables, req.utilisateur.id, d, i, s.taillePage(req.query.limite)]);
     return rows;
   }));
 

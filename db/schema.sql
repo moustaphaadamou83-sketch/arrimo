@@ -316,5 +316,23 @@ CREATE TABLE IF NOT EXISTS demo_etat (
   reference  timestamptz NOT NULL DEFAULT now()
 );
 
+-- Pagination et temps de réponse : index (date DESC, id DESC) pour les journaux et les transferts
+CREATE INDEX IF NOT EXISTS journal_etab_date_id ON journal (etablissement_id, date DESC, id DESC);
+DROP INDEX IF EXISTS journal_etab_date;
+CREATE INDEX IF NOT EXISTS journal_admin_date_id ON journal_admin (date DESC, id DESC);
+CREATE INDEX IF NOT EXISTS transferts_origine ON transferts (origine_id, date_demande DESC);
+CREATE INDEX IF NOT EXISTS transferts_destination ON transferts (destination_id, date_demande DESC);
+CREATE INDEX IF NOT EXISTS journal_utilisateur_date ON journal (utilisateur_id, date DESC) WHERE utilisateur_id IS NOT NULL;
+
+-- Mot de passe oublié : jeton à usage unique, valable 30 minutes (seule son empreinte est gardée)
+CREATE TABLE IF NOT EXISTS jetons_mdp (
+  jeton_hash      text PRIMARY KEY,
+  utilisateur_id  int NOT NULL REFERENCES utilisateurs(id) ON DELETE CASCADE,
+  cree_le         timestamptz NOT NULL DEFAULT now(),
+  expire_le       timestamptz NOT NULL,
+  utilise_le      timestamptz
+);
+CREATE INDEX IF NOT EXISTS jetons_mdp_utilisateur ON jetons_mdp (utilisateur_id, cree_le DESC);
+
 -- Aide intégrée : la page « Premiers pas » n'est montrée qu'une fois
 ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS premiers_pas_vus boolean NOT NULL DEFAULT false;

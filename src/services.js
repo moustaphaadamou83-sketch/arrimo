@@ -356,35 +356,63 @@ async function avancerTransfert(pool, utilisateur, transfertId, etape, corps = {
   });
 }
 
-async function listeTransferts(pool, utilisateur, etabId) {
+/* Pagination : les listes longues sont servies par pages de 300 lignes au plus. Chaque ligne porte un « curseur »
+   (date en microsecondes|id) ; la page suivante se demande avec avant=<curseur de la dernière ligne>.
+   Stable même si de nouvelles lignes arrivent, et servi par les index (date DESC, id DESC). */
+const PAGE = 300;
+function curseur(avant) {
+  if (!avant) return [null, null];
+  const m = /^(\d{1,18})\|(\d{1,12})$/.exec(String(avant));
+  if (!m) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'avant' });
+  return [m[1], Number(m[2])];
+}
+// Expressions SQL : curseur d'une ligne, et condition « avant le curseur » ($d = microsecondes, $i = id)
+const sqlCurseur = (date, id) => `(EXTRACT(EPOCH FROM ${date}) * 1000000)::bigint::text || '|' || ${id} AS curseur`;
+const sqlAvant = (date, id, d, i) => `(${d}::bigint IS NULL OR (${date}, ${id}) < (timestamptz 'epoch' + ${d}::bigint * interval '1 microsecond', ${i}))`;
+const taillePage = (limite) => Math.min(Math.max(Number(limite) || PAGE, 1), PAGE);
+
+/** Transferts de l'établissement : tous ceux en cours, et les terminés (reçus, refusés) par pages. */
+async function listeTransferts(pool, utilisateur, etabId, { avant, limite } = {}) {
   exigerEtablissement(utilisateur, etabId);
-  const { rows } = await pool.query(
-    `SELECT t.*, o.nom AS origine_nom, d.nom AS destination_nom, ty.nom AS type_nom, l.code AS lit_code
+  const [d, i] = curseur(avant);
+  const select = `SELECT t.*, o.nom AS origine_nom, d.nom AS destination_nom, ty.nom AS type_nom, l.code AS lit_code
        FROM transferts t
        JOIN etablissements o ON o.id = t.origine_id
        JOIN etablissements d ON d.id = t.destination_id
        JOIN types_unite ty ON ty.id = t.type_id
-       LEFT JOIN lits l ON l.id = t.lit_id
-      WHERE t.origine_id = $1 OR t.destination_id = $1
-      ORDER BY t.urgent DESC, t.date_demande DESC
-      LIMIT 300`, [etabId]);
-  return rows;
+       LEFT JOIN lits l ON l.id = t.lit_id`;
+  const actifs = d ? { rows: [] } : await pool.query(
+    `${select} WHERE (t.origine_id = $1 OR t.destination_id = $1) AND t.statut NOT IN ('recu', 'refuse')
+      ORDER BY t.urgent DESC, t.date_demande DESC`, [etabId]);
+  const termines = await pool.query(
+    `${select.replace('SELECT t.*,', `SELECT t.*, ${sqlCurseur('t.date_demande', 't.id')},`)}
+      WHERE (t.origine_id = $1 OR t.destination_id = $1) AND t.statut IN ('recu', 'refuse') AND ${sqlAvant('t.date_demande', 't.id', '$2', '$3')}
+      ORDER BY t.date_demande DESC, t.id DESC LIMIT $4`, [etabId, d, i, taillePage(limite)]);
+  return [...actifs.rows, ...termines.rows];
 }
 
 /* ------------------------------------------------------------------ journal, notifications */
-async function lireJournal(pool, utilisateur, etabId) {
+/** Journal de l'établissement (ses lits et les transferts qui le concernent), du plus récent au plus ancien, par pages. */
+async function lireJournal(pool, utilisateur, etabId, { avant, limite } = {}) {
   exigerEtablissement(utilisateur, etabId);
+  const [d, i] = curseur(avant);
+  // Deux parties servies chacune par un index, puis fusion : les lits de l'établissement, et les transferts qui le concernent
   const { rows } = await pool.query(
-    `SELECT j.id, j.date, j.action, j.ancien_etat, j.nouvel_etat, j.detail, j.refuse,
+    `WITH page AS (
+       (SELECT id, date FROM journal WHERE etablissement_id = $1 AND ${sqlAvant('date', 'id', '$2', '$3')}
+         ORDER BY date DESC, id DESC LIMIT $4)
+       UNION
+       (SELECT j.id, j.date FROM journal j JOIN transferts t ON t.id = j.transfert_id
+         WHERE (t.origine_id = $1 OR t.destination_id = $1) AND ${sqlAvant('j.date', 'j.id', '$2', '$3')}
+         ORDER BY j.date DESC, j.id DESC LIMIT $4)
+       ORDER BY date DESC, id DESC LIMIT $4)
+     SELECT j.id, j.date, j.action, j.ancien_etat, j.nouvel_etat, j.detail, j.refuse, ${sqlCurseur('j.date', 'j.id')},
             l.code AS lit_code, u.nom AS utilisateur, t.numero AS transfert_numero
-       FROM journal j
+       FROM page JOIN journal j ON j.id = page.id
        LEFT JOIN lits l ON l.id = j.lit_id
        LEFT JOIN utilisateurs u ON u.id = j.utilisateur_id
        LEFT JOIN transferts t ON t.id = j.transfert_id
-      WHERE j.etablissement_id = $1
-         OR j.transfert_id IN (SELECT id FROM transferts WHERE origine_id = $1 OR destination_id = $1)
-      ORDER BY j.date DESC, j.id DESC
-      LIMIT 300`, [etabId]);
+      ORDER BY j.date DESC, j.id DESC`, [etabId, d, i, taillePage(limite)]);
   return rows;
 }
 
@@ -491,5 +519,5 @@ async function assistant(pool, utilisateur, etabId, question) {
 module.exports = {
   distanceKm, etablissement, capaciteReseau, recommander, litsEtablissement, litVisible,
   creerTransfert, avancerTransfert, listeTransferts, lireJournal, lireNotifications,
-  detecterBlocages, assistant, exigerActif, motifBlocage, niveauDepuis, lireBesoins, sqlBesoins, notifier, SQL_CAPACITE, risque,
+  detecterBlocages, assistant, exigerActif, motifBlocage, curseur, taillePage, sqlCurseur, sqlAvant, niveauDepuis, lireBesoins, sqlBesoins, notifier, SQL_CAPACITE, risque,
 };

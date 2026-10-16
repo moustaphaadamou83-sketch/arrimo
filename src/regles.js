@@ -68,8 +68,9 @@ async function changerEtat(client, pool, utilisateurId, litId, nouveau, opts = {
   } catch (err) {
     await client.query('ROLLBACK TO SAVEPOINT verrou_lit').catch(() => {});
     if (err.code === '55P03') {
-      await journaliserRefus(pool, { litId, utilisateurId, detail: 'Lit en cours de modification par un autre utilisateur' });
-      throw new ErreurHttp(409, 'lit_verrouille');
+      const e = new ErreurHttp(409, 'lit_verrouille');
+      e.apresAnnulation = (p) => journaliserRefus(p, { litId, utilisateurId, detail: 'Lit en cours de modification par un autre utilisateur' });
+      throw e;
     }
     throw err;
   }
@@ -78,9 +79,11 @@ async function changerEtat(client, pool, utilisateurId, litId, nouveau, opts = {
     throw new ErreurHttp(403, 'module_inactif', { etab: lit.etab_nom });
   }
 
+  // Le refus est journalisé par transaction() une fois la transaction annulée et sa connexion rendue
   const refuser = async (statut, detail, code, vars) => {
-    await journaliserRefus(pool, { litId, utilisateurId, detail, transfertId: opts.transfertId });
-    throw new ErreurHttp(statut, code, vars);
+    const e = new ErreurHttp(statut, code, vars);
+    e.apresAnnulation = (p) => journaliserRefus(p, { litId, utilisateurId, detail, transfertId: opts.transfertId });
+    throw e;
   };
 
   if (opts.versionAttendue != null && Number(opts.versionAttendue) !== lit.version) {

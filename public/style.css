@@ -59,6 +59,8 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .carte-connexion p { margin: 0 0 8px; }
 .carte-connexion label { font-size: 12px; color: var(--texte-2); margin-top: 6px; }
 .carte-connexion .btn { margin-top: 12px; }
+.lien { background: none; border: 0; color: var(--principal); font: inherit; font-size: 13px; text-decoration: underline; cursor: pointer; padding: 10px 0 0; align-self: center; min-height: 40px; }
+.succes-msg { color: var(--principal); background: var(--doux); border-radius: 6px; padding: 8px 10px; font-size: 13px; margin: 6px 0 0; }
 .erreur { color: var(--critique); font-size: 13px; margin: 6px 0 0; }
 
 /* Choix de la langue */
@@ -161,6 +163,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .fiche .actions .btn { padding: 4px 8px; font-size: 12px; }
 .alerte { font-size: 12px; color: var(--critique); }
 .urgent { color: var(--critique); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+.plus { display: flex; justify-content: center; margin-top: 12px; }
 .vide { font-size: 12px; color: var(--texte-2); text-align: center; padding: 14px 4px; }
 
 /* Tables */

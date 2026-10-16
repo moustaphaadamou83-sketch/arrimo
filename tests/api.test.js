@@ -8,6 +8,7 @@ const { creerPool } = require('../src/db');
 const { creerApp } = require('../src/app');
 const { seed, MOT_DE_PASSE_DEMO } = require('../db/seed');
 const { detecterBlocages } = require('../src/services');
+const { viderBase } = require('../db/vider');
 
 const URL_TEST = process.env.TEST_DATABASE_URL;
 let pool; let serveur; let base;
@@ -30,9 +31,7 @@ const litLibre = async (etab, t) => (await pool.query(
 test.before(async () => {
   assert.ok(URL_TEST, 'TEST_DATABASE_URL requis');
   pool = creerPool(URL_TEST);
-  await pool.query(`DROP TABLE IF EXISTS journal_admin, connexions_2fa, messages_connecteur, connecteurs, demandes_admission, notifications, journal, lits, transferts, chambres, unites, sessions,
-                    utilisateur_etablissements, utilisateurs, etablissements, types_unite, config_pays CASCADE;
-                    DROP SEQUENCE IF EXISTS transfert_seq; DROP FUNCTION IF EXISTS journal_immuable CASCADE;`);
+  await viderBase(pool);
   await seed(pool, { silencieux: true });
   process.env.SH_API_KEY = 'cle-de-test-sh-123456';
   serveur = creerApp(pool).listen(0);
@@ -406,9 +405,7 @@ test('proximité d’abord : le plus proche avec un lit adapté, sauf s’il dé
 
 test('démonstration Hôpital X / Hôpital Y : se crée et donne une situation présentable', async () => {
   const { demoDeux } = require('../db/demo-deux');
-  await pool.query(`DROP TABLE IF EXISTS journal_admin, connexions_2fa, messages_connecteur, connecteurs, demandes_admission, notifications, journal, lits, transferts, chambres, unites, sessions,
-                    utilisateur_etablissements, utilisateurs, etablissements, types_unite, config_pays CASCADE;
-                    DROP SEQUENCE IF EXISTS transfert_seq; DROP FUNCTION IF EXISTS journal_immuable CASCADE;`);
+  await viderBase(pool);
   const { ids } = await demoDeux(pool, { silencieux: true });
   const co = async (email) => (await appel(null, 'POST', '/connexion', { email, mot_de_passe: MOT_DE_PASSE_DEMO })).corps.token;
   tokens.x = await co('coordo.x@demo.arrimo');
@@ -635,6 +632,146 @@ test('pages légales : accessibles sans connexion, en français et en anglais ; 
   assert.strictEqual(p.statut, 200);
   assert.strictEqual(p.corps.demo, false);
   assert.deepStrictEqual(p.corps.legal, {});
+});
+
+test('robustesse : fréquence limitée par session, taille limitée, /api/sante jamais limitée', async () => {
+  const avant = process.env.API_LIMITE_SESSION;
+  process.env.API_LIMITE_SESSION = '20';
+  const srv = creerApp(pool).listen(0);
+  try {
+    const b = `http://127.0.0.1:${srv.address().port}/api`;
+    const h = { Authorization: `Bearer ${tokens.x}` };
+    const statuts = [];
+    for (let i = 0; i < 25; i += 1) statuts.push((await fetch(`${b}/moi`, { headers: h })).status);
+    assert.strictEqual(statuts.filter((x) => x === 200).length, 20);
+    const r = await fetch(`${b}/moi`, { headers: h });
+    assert.strictEqual(r.status, 429);
+    assert.strictEqual((await r.json()).code, 'trop_requetes');
+    assert.ok(Number(r.headers.get('retry-after')) > 0);
+    // Une autre session n'est pas touchée ; la surveillance non plus
+    assert.strictEqual((await fetch(`${b}/moi`, { headers: { Authorization: `Bearer ${tokens.y}` } })).status, 200);
+    for (let i = 0; i < 30; i += 1) assert.strictEqual((await fetch(`${b}/sante`)).status, 200);
+    // Corps de plus de 50 ko refusé avec un code clair
+    const gros = await fetch(`${b}/copilote/question`, { method: 'POST', headers: { Authorization: `Bearer ${tokens.y}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ q: 'x'.repeat(60000) }) });
+    assert.strictEqual(gros.status, 413);
+    assert.strictEqual((await gros.json()).code, 'requete_trop_grosse');
+  } finally {
+    srv.close();
+    if (avant === undefined) delete process.env.API_LIMITE_SESSION; else process.env.API_LIMITE_SESSION = avant;
+  }
+});
+
+test('pagination : journal et transferts au-delà de 300 lignes, sans doublon ni oubli', async () => {
+  const hx = await id('HX');
+  const lit = (await pool.query('SELECT id FROM lits WHERE etablissement_id = $1 LIMIT 1', [hx])).rows[0].id;
+  // 650 entrées de même horodatage : le cas le plus difficile pour un curseur
+  await pool.query(`INSERT INTO journal (lit_id, etablissement_id, action, detail, date)
+                    SELECT $1, $2, 'Création', 'essai pagination ' || g, now() - interval '40 days' FROM generate_series(1, 650) g`, [lit, hx]);
+  const attendu = (await pool.query(`SELECT count(*)::int AS n FROM journal j LEFT JOIN transferts t ON t.id = j.transfert_id
+                                      WHERE j.etablissement_id = $1 OR t.origine_id = $1 OR t.destination_id = $1`, [hx])).rows[0].n;
+  const vus = []; let avant = null; let pages = 0;
+  for (;;) {
+    const r = await appel('x', 'GET', `/journal?etablissement_id=${hx}${avant ? `&avant=${encodeURIComponent(avant)}` : ''}`);
+    assert.strictEqual(r.statut, 200);
+    assert.ok(r.corps.length <= 300);
+    pages += 1;
+    vus.push(...r.corps.map((x) => x.id));
+    if (r.corps.length < 300) break;
+    avant = r.corps[r.corps.length - 1].curseur;
+  }
+  assert.ok(pages >= 3);
+  assert.strictEqual(new Set(vus).size, vus.length, 'aucun doublon');
+  assert.strictEqual(vus.length, attendu, 'aucune ligne oubliée');
+  assert.strictEqual((await appel('x', 'GET', `/journal?etablissement_id=${hx}&avant=nimporte`)).corps.code, 'parametre_invalide');
+  // Transferts : tous ceux en cours toujours présents, les terminés par pages
+  const tr = await appel('x', 'GET', `/transferts?etablissement_id=${hx}&limite=5`);
+  const enCours = (await pool.query(`SELECT count(*)::int AS n FROM transferts WHERE (origine_id = $1 OR destination_id = $1) AND statut NOT IN ('recu', 'refuse')`, [hx])).rows[0].n;
+  assert.strictEqual(tr.corps.filter((x) => !['recu', 'refuse'].includes(x.statut)).length, enCours);
+  const termines = tr.corps.filter((x) => ['recu', 'refuse'].includes(x.statut));
+  assert.strictEqual(termines.length, 5);
+  const suite = await appel('x', 'GET', `/transferts?etablissement_id=${hx}&limite=5&avant=${encodeURIComponent(termines[4].curseur)}`);
+  assert.ok(suite.corps.every((x) => ['recu', 'refuse'].includes(x.statut)), 'la page suivante ne répète pas les transferts en cours');
+  assert.ok(suite.corps.every((x) => !termines.some((y) => y.id === x.id)));
+});
+
+test('mot de passe oublié : inactif sans courriel ; lien unique de 30 min ; même réponse que le compte existe ou non', async () => {
+  const courriel = require('../src/courriel');
+  assert.strictEqual((await appel(null, 'GET', '/public')).corps.mot_de_passe_oublie, false);
+  const off = await appel(null, 'POST', '/mot-de-passe/oubli', { email: 'urgence.y@demo.arrimo' });
+  assert.deepStrictEqual([off.statut, off.corps.code], [503, 'courriel_non_configure']);
+  const envoyes = [];
+  courriel.definirTransport(async (m) => { envoyes.push(m); });
+  process.env.ARRIMO_URL = 'https://arrimo.exemple.ca';
+  try {
+    assert.strictEqual((await appel(null, 'GET', '/public')).corps.mot_de_passe_oublie, true);
+    const existe = await appel(null, 'POST', '/mot-de-passe/oubli', { email: 'Urgence.Y@demo.arrimo' });
+    const inconnu = await appel(null, 'POST', '/mot-de-passe/oubli', { email: 'personne@demo.arrimo' });
+    assert.deepStrictEqual([existe.statut, existe.corps], [inconnu.statut, inconnu.corps], 'réponse identique');
+    await new Promise((r) => { setImmediate(r); });
+    assert.strictEqual(envoyes.length, 1);
+    assert.strictEqual(envoyes[0].a, 'urgence.y@demo.arrimo');
+    const jeton = /\?reinit=([0-9a-f]{64})/.exec(envoyes[0].texte)[1];
+    assert.match(envoyes[0].texte, /^Bonjour .*30 minutes/s);
+    assert.ok(!(await pool.query('SELECT 1 FROM jetons_mdp WHERE jeton_hash = $1', [jeton])).rows[0], 'seule l’empreinte du jeton est gardée');
+    // En anglais si demandé en anglais
+    await fetch(`${base}/api/mot-de-passe/oubli`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Langue': 'en' }, body: JSON.stringify({ email: 'urgence.y@demo.arrimo' }) });
+    await new Promise((r) => { setImmediate(r); });
+    assert.match(envoyes[1].texte, /^Hello .*valid for 30 minutes/s);
+    // Mot de passe trop faible, puis réussite, puis lien déjà utilisé
+    assert.strictEqual((await appel(null, 'POST', '/mot-de-passe/reinitialiser', { jeton, nouveau: 'court1' })).corps.code, 'mdp_faible');
+    const sess = (await appel(null, 'POST', '/connexion', { email: 'urgence.y@demo.arrimo', mot_de_passe: MOT_DE_PASSE_DEMO })).corps.token;
+    tokens.uy = sess;
+    const ok = await appel(null, 'POST', '/mot-de-passe/reinitialiser', { jeton, nouveau: 'Nouveau-mdp-2026' });
+    assert.strictEqual(ok.statut, 200, JSON.stringify(ok.corps));
+    assert.strictEqual((await appel('uy', 'GET', '/moi')).statut, 401, 'les sessions ouvertes sont fermées');
+    assert.strictEqual((await appel(null, 'POST', '/connexion', { email: 'urgence.y@demo.arrimo', mot_de_passe: 'Nouveau-mdp-2026' })).statut, 200);
+    assert.strictEqual((await appel(null, 'POST', '/mot-de-passe/reinitialiser', { jeton, nouveau: 'Encore-un-autre-2026' })).corps.code, 'jeton_invalide');
+    const jeton2 = /\?reinit=([0-9a-f]{64})/.exec(envoyes[1].texte)[1];
+    assert.strictEqual((await appel(null, 'POST', '/mot-de-passe/reinitialiser', { jeton: jeton2, nouveau: 'Encore-un-autre-2026' })).corps.code, 'jeton_invalide', 'les autres liens du compte sont annulés');
+    // Lien expiré au-delà de 30 minutes
+    await appel(null, 'POST', '/mot-de-passe/oubli', { email: 'urgence.y@demo.arrimo' });
+    await new Promise((r) => { setImmediate(r); });
+    const jeton3 = /\?reinit=([0-9a-f]{64})/.exec(envoyes[2].texte)[1];
+    await pool.query(`UPDATE jetons_mdp SET expire_le = now() - interval '1 minute' WHERE utilise_le IS NULL`);
+    assert.strictEqual((await appel(null, 'POST', '/mot-de-passe/reinitialiser', { jeton: jeton3, nouveau: 'Encore-un-autre-2026' })).corps.code, 'jeton_invalide');
+    // Au plus 3 liens par heure et par compte, sans le dire
+    const r4 = await appel(null, 'POST', '/mot-de-passe/oubli', { email: 'urgence.y@demo.arrimo' });
+    await new Promise((r) => { setImmediate(r); });
+    assert.deepStrictEqual([r4.statut, envoyes.length], [200, 3]);
+    const j = await pool.query(`SELECT detail FROM journal_admin WHERE action = 'Mot de passe réinitialisé' AND cible = 'urgence.y@demo.arrimo'`);
+    assert.deepStrictEqual(j.rows.map((x) => x.detail), ['par lien envoyé par courriel']);
+    await pool.query('UPDATE utilisateurs SET mot_de_passe_hash = $2 WHERE email = $1', ['urgence.y@demo.arrimo', require('../src/auth').hacher(MOT_DE_PASSE_DEMO)]);
+  } finally {
+    courriel.definirTransport(null);
+    delete process.env.ARRIMO_URL;
+  }
+});
+
+test('verrou des lits sous forte concurrence : plus de réservations que de connexions, aucun blocage, refus journalisés', async () => {
+  // Réservoir de 3 connexions et 12 réservations simultanées du même lit : chaque refus doit être journalisé
+  // sans attendre une connexion tenue par une autre transaction.
+  const petit = creerPool(URL_TEST);
+  petit.options.max = 3;
+  const srv = creerApp(petit).listen(0);
+  try {
+    const b = `http://127.0.0.1:${srv.address().port}/api`;
+    const hy = await id('HY');
+    const lit = await litLibre(hy);
+    const avant = (await pool.query('SELECT count(*)::int AS n FROM journal WHERE lit_id = $1 AND refuse', [lit.id])).rows[0].n;
+    const essais = Array.from({ length: 12 }, (_, i) => fetch(`${b}/lits/${lit.id}/action`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tokens.y}` },
+      body: JSON.stringify({ action: 'reserver', version: lit.version, patient_ref: `P-${60000 + i}` }) }).then((r) => r.status));
+    const delai = new Promise((_, rejet) => { setTimeout(() => rejet(new Error('blocage : les réservations ne se terminent pas')), 8000); });
+    const statuts = await Promise.race([Promise.all(essais), delai]);
+    assert.strictEqual(statuts.filter((x) => x === 200).length, 1);
+    assert.strictEqual(statuts.filter((x) => x === 409).length, 11);
+    const apres = (await pool.query('SELECT count(*)::int AS n FROM journal WHERE lit_id = $1 AND refuse', [lit.id])).rows[0].n;
+    assert.strictEqual(apres - avant, 11, 'chaque refus est journalisé');
+    await pool.query(`UPDATE lits SET etat = 'libre', patient_ref = NULL, version = version + 1 WHERE id = $1`, [lit.id]);
+  } finally {
+    srv.close();
+    await petit.end();
+  }
 });
 
 /* Ce test remet la base à zéro : il reste le dernier du fichier. */
