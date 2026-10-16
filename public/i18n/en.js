@@ -120,6 +120,7 @@ window.ARRIMO_I18N.en = {
     hs_bouton: 'Take out of service', hs_ok: '{code} out of service.', etat_ok: '{code}: {etat}',
   },
   transferts: {
+    tout_afficher: 'Show all ({n})',
     chambre_prete: 'Room ready', chambre_prete_ok: 'Room ready: the requester has been notified.', badge_prete: 'Room ready', a_preparer: 'Room to prepare',
     chambre_en_preparation: 'Room being prepared by the receiving facility', arrivee: 'Expected arrival around {heure}', dans: 'in {duree}', imminente: 'arriving now',
     retard: 'expected {duree} ago', besoins: 'Needs: {liste}',
@@ -151,6 +152,7 @@ window.ARRIMO_I18N.en = {
     note: 'Activation and sharing are managed from SH.', etab_ok: 'Facility updated.', partage_ok: 'Sharing updated.',
   },
   copilote: {
+    reseau_proches: 'The {n} closest facilities.', voir_national: 'See every facility on the national dashboard',
     vue_titre: 'Overview', v_lits: 'Free beds', v_lits_note: '{occ|none occupied|# occupied|# occupied} · {net|none to clean|# to clean|# to clean} · {fermes|none closed|# closed|# closed}',
     v_chambres: 'Free rooms', v_chambres_note: 'of {n|# room|# rooms}', v_civieres: 'ER', v_civieres_note: '{occ|no patients|# patient|# patients} for {fonc|# stretcher|# stretchers} · {h24} > 24 h',
     v_file: 'Waiting for a bed', v_file_note: '{n|no beds assigned|# bed assigned|# beds assigned}', v_transferts: 'Transfers in progress', v_transferts_note: '{e|no incoming|# incoming|# incoming} · {s|no outgoing|# outgoing|# outgoing}',

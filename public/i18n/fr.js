@@ -121,6 +121,7 @@ window.ARRIMO_I18N.fr = {
     hs_bouton: 'Mettre hors service', hs_ok: '{code} hors service.', etat_ok: '{code} : {etat}',
   },
   transferts: {
+    tout_afficher: 'Tout afficher ({n})',
     chambre_prete: 'Chambre prête', chambre_prete_ok: 'Chambre prête : le demandeur est avisé.', badge_prete: 'Chambre prête', a_preparer: 'Chambre à préparer',
     chambre_en_preparation: 'Chambre en préparation chez le receveur', arrivee: 'Arrivée prévue vers {heure}', dans: 'dans {duree}', imminente: 'arrivée imminente',
     retard: 'prévue il y a {duree}', besoins: 'Besoins : {liste}',
@@ -152,6 +153,7 @@ window.ARRIMO_I18N.fr = {
     note: 'L’activation et le partage se gèrent depuis SH.', etab_ok: 'Établissement mis à jour.', partage_ok: 'Partage mis à jour.',
   },
   copilote: {
+    reseau_proches: 'Les {n} établissements les plus proches.', voir_national: 'Voir tous les établissements au tableau national',
     vue_titre: 'Vue d’ensemble', v_lits: 'Lits libres', v_lits_note: '{occ|aucun occupé|# occupé|# occupés} · {net|aucun à nettoyer|# à nettoyer|# à nettoyer} · {fermes|aucun fermé|# fermé|# fermés}',
     v_chambres: 'Chambres libres', v_chambres_note: 'sur {n|# chambre|# chambres}', v_civieres: 'Urgence', v_civieres_note: '{occ|aucun patient|# patient|# patients} pour {fonc|# civière|# civières} · {h24} > 24 h',
     v_file: 'En attente d’un lit', v_file_note: '{n|aucun lit assigné|# lit assigné|# lits assignés}', v_transferts: 'Transferts en cours', v_transferts_note: '{e|aucun entrant|# entrant|# entrants} · {s|aucun sortant|# sortant|# sortants}',

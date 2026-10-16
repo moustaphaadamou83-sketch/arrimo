@@ -739,8 +739,11 @@ async function vueTransferts() {
   const { lignes: trs, plus } = avecSuite('transferts', page, page.filter(termine).length);
   const actif = etabCtx().module_actif;
   const cols = STATUTS.map(([k, c]) => {
-    const items = trs.filter((x) => x.statut === k);
-    return `<div class="col" style="--c:${c}"><h3>${esc(t(`statuts.${k}`))} <span class="num">${items.length}</span></h3>${items.map((x) => `<div class="fiche" style="--c:${x.urgent ? 'var(--critique)' : 'var(--secondaire)'}">
+    const tous = trs.filter((x) => x.statut === k);
+    // Transferts terminés (reçus, refusés) : les plus récents d'abord, le reste sur demande
+    const items = ['recu', 'refuse'].includes(k) && !etat.toutTermines ? tous.slice(0, 8) : tous;
+    const reste = tous.length - items.length;
+    return `<div class="col" style="--c:${c}"><h3>${esc(t(`statuts.${k}`))} <span class="num">${tous.length}</span></h3>${reste ? `<button class="btn discret" data-tout-termines>${esc(t('transferts.tout_afficher', { n: reste }))}</button>` : ''}${items.map((x) => `<div class="fiche" style="--c:${x.urgent ? 'var(--critique)' : 'var(--secondaire)'}">
       <div class="t"><b>${esc(x.numero)}</b>${x.urgent ? `<span class="urgent">${esc(t('transferts.urgent'))}</span>` : `<span class="note">${esc(t(x.destination_id === etat.ctx ? 'transferts.entrant' : 'transferts.sortant'))}</span>`}</div>
       <div style="font-size:12px">${esc(x.origine_nom)} → ${esc(x.destination_nom)}</div>
       <div class="note">${esc(x.type_nom)} · ${esc(t('transferts.lit'))} <span class="num">${esc(x.lit_code || '—')}</span> · <span class="num">${esc(x.patient_ref)}</span></div>
@@ -768,6 +771,7 @@ async function vueTransferts() {
       agir(b, () => api('POST', `/transferts/${id}/${etape}`), t({ accepter: 'transferts.accepte_ok', chambre_prete: 'transferts.chambre_prete_ok', transport: 'transferts.transport_ok', depart: 'transferts.depart_ok', reception: 'transferts.reception_ok' }[etape], { numero }));
     };
   });
+  v.querySelectorAll('[data-tout-termines]').forEach((b) => { b.onclick = () => { etat.toutTermines = true; rafraichir(); }; });
   majDecomptes();
 }
 const besoinsTransfert = (x) => BESOINS.filter((k) => x.besoins?.[k]).map((k) => t(`besoins.${k}`).toLowerCase()).join(', ');
@@ -907,11 +911,13 @@ async function vueCopilote() {
         <form id="f-copilote" class="ligne"><div class="champ" style="flex:1 1 200px"><label class="lbl" for="q">${C('question')}</label><input id="q" value="${esc(etat.question)}" placeholder="${esc(exemples[0])}" autocomplete="off"></div><button class="btn pri" type="submit">${C('demander')}</button></form>
         <div class="chips">${exemples.map((x, i) => `<button class="chip" data-ex="${i}">${esc(x)}</button>`).join('')}</div>
         ${etat.reponse ? `<div class="reponse">${esc(etat.reponse)}</div><span class="mode">${C(etat.modeReponse === 'ia' ? 'mode_ia' : 'mode_local')}</span>` : ''}</div>
-      <div class="panneau-c"><h3>${C('reseau')}</h3><div class="liste">${r.etablissements.map((e) => `<div class="item"><div><strong>${esc(e.nom)}</strong>${e.moi ? ` <span class="badge fort">${C('vous')}</span>` : ''}
+      <div class="panneau-c"><h3>${C('reseau')}</h3><p class="note">${C('reseau_proches', { n: Math.min(8, r.etablissements.length) })}</p><div class="liste">${r.etablissements.slice(0, 8).map((e) => `<div class="item"><div><strong>${esc(e.nom)}</strong>${e.moi ? ` <span class="badge fort">${C('vous')}</span>` : ''}
         <div class="note">${C('libres', { n: e.libres })}${e.en_attente != null ? C('en_attente', { n: e.en_attente }) : ''}${e.urgence ? C('urgence_taux', { n: pct(e.urgence.taux) }) : ''}${e.moi ? '' : ` · ${esc(t('general.km', { n: e.distance_km }))}`}</div></div>
         ${niveauHTML(e.niveau, ` · ${esc(pct(e.pression))}`)}</div>`).join('')}</div>
-        ${r.delestages.length ? `<h3 style="margin-top:6px">${C('delestages')}</h3><div class="liste">${r.delestages.map((d) => `<div class="item"><div><strong>${esc(d.de)} → ${esc(d.vers)}</strong><div class="note">${esc(d.type)} · ${esc(d.raison)}</div></div></div>`).join('')}</div>` : ''}</div>
+        <button class="btn discret" id="b-vers-national">${C('voir_national')}</button>
+        ${r.delestages.length ? `<h3 style="margin-top:6px">${C('delestages')}</h3><div class="liste">${r.delestages.slice(0, 6).map((d) => `<div class="item"><div><strong>${esc(d.de)} → ${esc(d.vers)}</strong><div class="note">${esc(d.type)} · ${esc(d.raison)}</div></div></div>`).join('')}</div>` : ''}</div>
     </div></div>`;
+  $('#b-vers-national').onclick = () => allerA('national');
   v.querySelectorAll('[data-reco]').forEach((btn) => { btn.onclick = () => executerProposition(etat.recos[Number(btn.dataset.reco)].action, btn); });
   const poser = (q) => agir(null, async () => {
     etat.question = q;
