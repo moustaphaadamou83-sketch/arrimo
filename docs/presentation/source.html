@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="fr-CA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arrimo · Projet pilote</title>
+<style>
+  :root {
+    --principal: #0E5E6F; --secondaire: #159895; --accent: #57C5B6; --fond: #F5F8FA; --carte: #FFFFFF;
+    --texte: #1F2937; --texte-2: #64748B; --bordure: #E2E8F0; --doux: #EEF4F6;
+    --critique: #DC2626; --attention: #F59E0B; --succes: #16A34A;
+    --police: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #0b2f37; color: var(--texte); font-family: var(--police); }
+  .diapo { width: 1280px; height: 720px; margin: 24px auto; background: var(--fond); position: relative; overflow: hidden;
+    display: flex; flex-direction: column; padding: 56px 72px 48px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35); }
+  .diapo > header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+  .surtitre { font-size: 15px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--secondaire); font-weight: 700; }
+  .num { font-family: var(--mono); font-size: 14px; color: var(--texte-2); }
+  h1 { font-size: 46px; line-height: 1.12; margin: 0 0 18px; color: var(--principal); letter-spacing: -0.015em; }
+  h2 { font-size: 22px; margin: 0 0 10px; color: var(--principal); }
+  p, li { font-size: 21px; line-height: 1.45; }
+  .lead { font-size: 25px; color: var(--texte); max-width: 1020px; margin: 0 0 26px; }
+  .marque { display: flex; align-items: center; gap: 12px; font-weight: 700; color: var(--principal); font-size: 20px; }
+  .bas { position: absolute; left: 72px; right: 72px; bottom: 24px; display: flex; justify-content: space-between; font-size: 13px; color: var(--texte-2); }
+  .bas a { color: var(--texte-2); }
+  .grille { display: grid; gap: 22px; }
+  .g3 { grid-template-columns: repeat(3, 1fr); } .g2 { grid-template-columns: repeat(2, 1fr); } .g4 { grid-template-columns: repeat(4, 1fr); }
+  .carte { background: var(--carte); border: 1px solid var(--bordure); border-radius: 14px; padding: 22px 24px; }
+  .chiffre { font-family: var(--mono); font-size: 54px; font-weight: 700; color: var(--principal); line-height: 1; margin-bottom: 10px; }
+  .carte p { font-size: 18px; margin: 0; color: var(--texte); }
+  .source { font-size: 13px; color: var(--texte-2); margin-top: 10px; }
+  ul.net { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+  ul.net li { padding-left: 30px; position: relative; font-size: 20px; }
+  ul.net li::before { content: ""; position: absolute; left: 0; top: 11px; width: 14px; height: 14px; border-radius: 4px; background: var(--secondaire); }
+  .avant { border-top: 6px solid var(--texte-2); } .apres { border-top: 6px solid var(--secondaire); }
+  .captures { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; flex: 1; min-height: 0; }
+  figure { margin: 0; background: var(--carte); border: 1px solid var(--bordure); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+  figure img { width: 100%; flex: 1; min-height: 0; object-fit: cover; object-position: top left; display: block; }
+  figcaption { font-size: 15px; padding: 8px 14px; color: var(--texte); border-top: 1px solid var(--bordure); }
+  figcaption b { color: var(--principal); }
+  .etapes { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; margin-top: 18px; position: relative; }
+  .etape { padding: 0 14px; position: relative; }
+  .etape .point { width: 22px; height: 22px; border-radius: 50%; background: var(--secondaire); border: 4px solid var(--fond); box-shadow: 0 0 0 2px var(--secondaire); position: relative; z-index: 1; }
+  .etapes::before { content: ""; position: absolute; left: 25px; right: 25px; top: 10px; height: 3px; background: var(--accent); }
+  .etape .mois { font-family: var(--mono); font-size: 14px; color: var(--secondaire); margin: 14px 0 4px; font-weight: 700; }
+  .etape h2 { font-size: 20px; }
+  .etape p { font-size: 16px; margin: 0; color: var(--texte); }
+  .bilan .point { background: var(--principal); box-shadow: 0 0 0 2px var(--principal); }
+  table { border-collapse: collapse; width: 100%; background: var(--carte); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 11px 18px; border-bottom: 1px solid var(--bordure); font-size: 18px; }
+  th { background: var(--doux); color: var(--principal); font-size: 14px; letter-spacing: 0.06em; text-transform: uppercase; }
+  tr:last-child td { border-bottom: 0; }
+  .classement { display: flex; flex-direction: column; gap: 12px; }
+  .hop { display: grid; grid-template-columns: 200px 1fr 150px; align-items: center; gap: 14px; background: var(--carte); border: 1px solid var(--bordure); border-radius: 12px; padding: 14px 18px; font-size: 18px; }
+  .hop.choisi { border: 2px solid var(--secondaire); }
+  .badge { font-size: 13px; border-radius: 10px; padding: 3px 10px; font-weight: 600; text-align: center; }
+  .b-vert { color: var(--succes); border: 1px solid var(--succes); } .b-rouge { color: var(--critique); border: 1px solid var(--critique); }
+  .b-reco { background: var(--secondaire); color: #fff; }
+  .titre-diapo { background: linear-gradient(160deg, var(--principal), var(--secondaire)); color: #fff; }
+  .titre-diapo h1, .titre-diapo .surtitre { color: #fff; }
+  .titre-diapo .lead { color: #E6F4F3; }
+  .titre-diapo .bas { color: #CDE7EA; }
+  .contact { font-size: 30px; font-weight: 600; margin: 8px 0; }
+  .note-demo { display: inline-block; background: var(--doux); color: var(--principal); border-radius: 8px; padding: 4px 10px; font-size: 14px; font-weight: 600; }
+  @media print {
+    @page { size: 1280px 720px; margin: 0; }
+    html, body { background: none; }
+    .diapo { margin: 0; box-shadow: none; page-break-after: always; break-after: page; }
+    .aide-nav { display: none; }
+  }
+  @media screen and (max-width: 1320px) { .diapo { transform-origin: top left; } }
+  .aide-nav { position: fixed; right: 16px; bottom: 12px; color: #CDE7EA; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<!-- 1. Le problème -->
+<section class="diapo">
+  <header><div class="marque">{{logo}} Arrimo</div><span class="num">1 / 10</span></header>
+  <div class="surtitre">Le problème</div>
+  <h1>Les patients attendent à l’urgence faute de voir où il reste un lit</h1>
+  <div class="grille g3" style="margin-top:10px">
+    <div class="carte"><div class="chiffre">16 h 48</div><p>Séjour moyen sur civière à l’urgence au Québec en 2025-2026, au-dessus de la cible ministérielle.</p>
+      <div class="source">Santé Montérégie ; MSSS, indicateur 000360</div></div>
+    <div class="carte"><div class="chiffre">8 %</div><p>Cible de lits occupés par des patients qui n’ont plus besoin de soins aigus (NSA). Chaque lit au-delà manque à l’urgence.</p>
+      <div class="source">AMUQ</div></div>
+    <div class="carte"><div class="chiffre" style="font-size:40px">Pas en temps réel</div><p>L’évaluation 2026 des transferts interhospitaliers relève que la disponibilité des lits n’est pas connue en temps réel et recommande d’interconnecter les systèmes.</p>
+      <div class="source">UETMIS CHUM et CHU de Québec, 2026</div></div>
+  </div>
+  <p style="margin-top:26px">Aujourd’hui, trouver un lit dans un autre hôpital passe encore souvent par une chaîne d’appels téléphoniques.</p>
+  <div class="bas"><span>Arrimo · Projet pilote</span><span>Sources détaillées en dernière diapositive</span></div>
+</section>
+
+<!-- 2. Ce qu'Arrimo change -->
+<section class="diapo">
+  <header><div class="marque">{{logo}} Arrimo</div><span class="num">2 / 10</span></header>
+  <div class="surtitre">Ce qu’Arrimo change</div>
+  <h1>Une vue partagée des lits, une décision en quelques clics</h1>
+  <div class="grille g2">
+    <div class="carte avant"><h2>Aujourd’hui</h2><ul class="net">
+      <li>Capacité découverte par téléphone et sur des tableaux blancs</li>
+      <li>Transferts organisés par une chaîne d’appels</li>
+      <li>Lits libérés mais pas encore nettoyés, sans priorité</li>
+      <li>Patients NSA et lits fermés peu visibles</li></ul></div>
+    <div class="carte apres"><h2>Avec Arrimo</h2><ul class="net">
+      <li>Lits dotés en personnel, par unité et par hôpital, en temps réel</li>
+      <li>L’hôpital le plus proche avec un lit adapté est proposé ; le lit est bloqué</li>
+      <li>Nettoyage dans l’ordre des patients qui attendent</li>
+      <li>Indicateurs mesurés avant et après</li></ul></div>
+  </div>
+  <p style="margin-top:22px">Arrimo est une couche de coordination : il se branche sur les systèmes existants, il ne les remplace pas.</p>
+  <div class="bas"><span>Arrimo · Projet pilote</span><span></span></div>
+</section>
+
+<!-- 3. Démonstration en 4 captures -->
+<section class="diapo" style="padding-bottom:40px">
+  <header><div class="marque">{{logo}} Arrimo</div><span class="num">3 / 10</span></header>
+  <div class="surtitre">Démonstration <span class="note-demo">Données fictives</span></div>
+  <div class="captures" style="margin-top:12px">
+    <figure><img src="{{img:copilote}}" alt="Copilote de l’Hôpital X"><figcaption><b>1. Copilote</b> · niveau rouge, recommandations classées</figcaption></figure>
+    <figure><img src="{{img:ailleurs}}" alt="Recherche d’un lit ailleurs"><figcaption><b>2. Chercher ailleurs</b> · l’hôpital le plus proche avec un lit adapté</figcaption></figure>
+    <figure><img src="{{img:transferts}}" alt="Suivi des transferts"><figcaption><b>3. Transfert</b> · accepté par le receveur, étape par étape</figcaption></figure>
+    <figure><img src="{{img:nettoyage}}" alt="Écran Nettoyage sur tablette"><figcaption><b>4. Nettoyage</b> · sur tablette, dans l’ordre des patients qui attendent</figcaption></figure>
+  </div>
+</section>
+
+<!-- 4. Copilote -->
+<section class="diapo">
+  <header><div class="marque">{{logo}} Arrimo</div><span class="num">4 / 10</span></header>
+  <div class="surtitre">Le Copilote</div>
+  <h1>Le Copilote propose, un humain décide</h1>
+  <div class="grille g3">
+    <div class="carte"><h2>Briefing</h2><p>Pour la réunion de gestion des lits : niveau d’alerte, patients en attente, lits à nettoyer, NSA, en une phrase.</p></div>
+    <div class="carte"><h2>Recommandations</h2><p>Classées Urgent, Important, À faire. Chacune explique pourquoi et propose une action.</p></div>
+    <div class="carte"><h2>Questions</h2><p>« Que faire en priorité ? », « Où trouver un lit de soins intensifs ? » : réponses tirées des données du réseau.</p></div>
+  </div>
+  <ul class="net" style="margin-top:26px">
+    <li>Aucune action automatique : chaque clic passe par les mêmes règles que l’interface, et chaque action est journalisée.</li>
+    <li>Fonctionne sans intelligence artificielle externe ; un mode IA facultatif ne reçoit jamais de référence patient.</li>
+  </ul>
+  <div class="bas"><span>Arrimo · Projet pilote</span><span></span></div>
+</section>
+
+<!-- 5. Proximité d'abord -->
+<section class="diapo">
+  <header><div class="marque">{{logo}} Arrimo</div><span class="num">5 / 10</span></header>
+  <div class="surtitre">Proximité d’abord</div>
+  <h1>Le plus proche qui a un lit adapté, sauf s’il déborde</h1>
+  <div class="grille" style="grid-template-columns: 1.25fr 1fr; align-items:start">
+    <div class="classement">
+      <div class="hop"><b>Hôpital A</b><span>18 km · 1 lit adapté · pression 112 %</span><span class="badge b-rouge">Rouge · recule</span></div>
+      <div class="hop choisi"><b>Hôpital B</b><span>31 km · 3 lits adaptés · pression 78 %</span><span class="badge b-reco">Recommandé</span></div>
+      <div class="hop"><b>Hôpital C</b><span>54 km · 6 lits adaptés · pression 70 %</span><span class="badge b-vert">Vert</span></div>
+      <p class="source" style="font-size:14px">Exemple illustratif.</p>
+    </div>
+    <ul class="net">
+      <li>Respecte les besoins du patient : isolement, pression négative, ventilation, télémétrie.</li>
+      <li>Un hôpital débordé recule dans le classement, pour ne pas l’étouffer.</li>
+      <li>La raison est affichée : temps de route, lits libres, niveau.</li>
+      <li>Un lit ne peut être pris qu’une fois : la deuxième réservation est refusée.</li>
+    </ul>
+  </div>
+  <div class="bas"><span>Arrimo · Projet pilote</span><span></span></div>
+</section>
+
+<!-- 6. Sécurité et conformité -->
+<section class="diapo">
+  <header><div class="marque">{{logo}} Arrimo</div><span class="num">6 / 10</span></header>
+  <div class="surtitre">Sécurité et conformité</div>
+  <h1>Aucune donnée clinique, tout est tracé</h1>
+  <div class="grille g3">
+    <div class="carte"><h2>Données</h2><p>Une référence patient seulement (P-00000) : ni nom, ni diagnostic. Chaque établissement choisit ce qu’il partage.</p></div>
+    <div class="carte"><h2>Traçabilité</h2><p>Chaque changement et chaque refus sont inscrits dans un journal qui ne peut être ni modifié ni supprimé.</p></div>
+    <div class="carte"><h2>Comptes</h2><p>Double authentification obligatoire pour l’administration, sessions fermées à la désactivation, sauvegardes quotidiennes vérifiées.</p></div>
+  </div>
+  <div class="carte" style="margin-top:22px"><h2>Avant toute donnée réelle</h2><p>Hébergement au Canada, évaluation des facteurs relatifs à la vie privée (Loi 25) et test d’intrusion indépendant.</p></div>
+  <div class="bas"><span>Arrimo · Projet pilote</span><span></span></div>
+</section>
+
+<!-- 7. Indicateurs mesurés -->
+<section class="diapo">
+  <header><div class="marque">{{logo}} Arrimo</div><span class="num">7 / 10</span></header>
+  <div class="surtitre">Indicateurs mesurés</div>
+  <h1>Mesurés un mois avant, puis chaque mois</h1>
+  <table>
+    <tr><th>Indicateur</th><th>Mesure</th><th>Pourquoi il compte</th></tr>
+    <tr><td>Délai de réponse à un transfert</td><td>De la demande à l’acceptation</td><td>Moins d’appels, décision plus rapide</td></tr>
+    <tr><td>Délai total de transfert</td><td>De la demande à l’arrivée</td><td>Patient pris en charge plus tôt</td></tr>
+    <tr><td>Attente avant lit assigné</td><td>De la demande d’admission au lit</td><td>Moins d’heures sur civière</td></tr>
+    <tr><td>Durée de nettoyage</td><td>Du départ au lit prêt</td><td>Lits remis en service plus vite</td></tr>
+    <tr><td>Taux NSA et jours d’attente</td><td>Lits occupés en attente d’une autre ressource</td><td>Rendre visibles les lits bloqués</td></tr>
+    <tr><td>Refus de transfert et motifs</td><td>Pas de lit, pas de personnel, plateau technique</td><td>Comprendre où le réseau bloque</td></tr>
+  </table>
+  <p class="source" style="font-size:15px">Les cibles sont fixées avec les établissements. Les indicateurs s’exportent en CSV.</p>
+  <div class="bas"><span>Arrimo · Projet pilote</span><span></span></div>
+</section>
+
+<!-- 8. Déroulement du pilote -->
+<section class="diapo">
+  <header><div class="marque">{{logo}} Arrimo</div><span class="num">8 / 10</span></header>
+  <div class="surtitre">Déroulement du pilote</div>
+  <h1>Six mois, deux à trois hôpitaux voisins</h1>
+  <div class="etapes">
+    <div class="etape"><div class="point"></div><div class="mois">Mois 0</div><h2>Préparation</h2><p>Entente, évaluation Loi 25, hébergement au Canada, unités et comptes.</p></div>
+    <div class="etape"><div class="point"></div><div class="mois">Mois 1</div><h2>Mesure de départ</h2><p>Relevé des indicateurs avant Arrimo.</p></div>
+    <div class="etape"><div class="point"></div><div class="mois">Mois 2</div><h2>Démarrage</h2><p>Formation, saisie par les équipes, accompagnement sur place.</p></div>
+    <div class="etape"><div class="point"></div><div class="mois">Mois 3 à 5</div><h2>Croisière</h2><p>Connexion aux admissions et congés si l’informatique est prête ; ajustements.</p></div>
+    <div class="etape bilan"><div class="point"></div><div class="mois">Mois 6</div><h2>Bilan</h2><p>Résultats comparés au départ : poursuivre, étendre ou arrêter.</p></div>
+  </div>
+  <p style="margin-top:40px">Unités visées : urgence, médecine, chirurgie, soins intensifs (à confirmer avec les équipes). Utilisateurs : coordination des lits, urgence, entretien.</p>
+  <div class="bas"><span>Arrimo · Projet pilote</span><span></span></div>
+</section>
+
+<!-- 9. Ce que nous demandons -->
+<section class="diapo">
+  <header><div class="marque">{{logo}} Arrimo</div><span class="num">9 / 10</span></header>
+  <div class="surtitre">Ce que nous demandons</div>
+  <h1>Trois engagements pour démarrer</h1>
+  <div class="grille g3">
+    <div class="carte"><div class="chiffre">1</div><p>Un établissement porteur et 1 à 2 établissements voisins prêts à partager leur capacité.</p></div>
+    <div class="carte"><div class="chiffre">2</div><p>Un répondant clinique (coordination des lits) et un répondant informatique.</p></div>
+    <div class="carte"><div class="chiffre">3</div><p>En fin de pilote, un accès aux indicateurs de départ pour comparer les résultats.</p></div>
+  </div>
+  <div class="bas"><span>Arrimo · Projet pilote</span><span></span></div>
+</section>
+
+<!-- 10. Contact -->
+<section class="diapo titre-diapo">
+  <header><div class="marque" style="color:#fff">{{logo}} Arrimo</div><span class="num" style="color:#CDE7EA">10 / 10</span></header>
+  <div class="surtitre">Contact</div>
+  <h1>Commençons par une démonstration de 10 minutes</h1>
+  <p class="contact">Moustafa Adamou</p>
+  <p class="contact" style="font-family:var(--mono);font-weight:500">514 569-3547</p>
+  <div class="lead" style="margin-top:30px;font-size:15px;line-height:1.6">
+    Sources : <a style="color:#fff" href="https://www.santemonteregie.qc.ca/est/nouvelles/des-delais-en-baisse-et-une-meilleure-utilisation-des-urgences">Santé Montérégie-Est, durée de séjour sur civière 2025-2026</a> ·
+    <a style="color:#fff" href="https://msss.gouv.qc.ca/repertoires/indicateurs-gestion/indicateur-000360/">MSSS, indicateur 000360 et cibles 2026</a> ·
+    <a style="color:#fff" href="https://amuq.qc.ca/amuq/nouvelles/amuqdansmedias-des-hopitaux-surcharges-par-des-patients-plus-complexes/">AMUQ, patients NSA et cible de 8 %</a> ·
+    <a style="color:#fff" href="https://www.chumontreal.qc.ca/sites/default/files/2026-05/Coordination%20des%20transferts%20interhospitaliers%20urgents%20et%20semi-urgents%20(0-24%20heures)%20au%20Que%CC%81bec%20_%20Version%20bref.pdf">UETMIS CHUM et CHU de Québec, coordination des transferts interhospitaliers (2026)</a>
+  </div>
+  <div class="bas"><span>Arrimo · Projet pilote</span><span>Démonstration sur données fictives</span></div>
+</section>
+
+<div class="aide-nav">← → pour naviguer · Ctrl+P pour un PDF</div>
+<script>
+  // Navigation au clavier, une diapositive à la fois ; mise à l'échelle sur les petits écrans
+  const diapos = [...document.querySelectorAll('.diapo')];
+  let i = 0;
+  const aller = (n) => { i = Math.max(0, Math.min(diapos.length - 1, n)); diapos[i].scrollIntoView({ behavior: 'smooth', block: 'center' }); };
+  document.addEventListener('keydown', (e) => {
+    if (['ArrowRight', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); aller(i + 1); }
+    if (['ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); aller(i - 1); }
+  });
+  function echelle() {
+    const k = Math.min(1, (window.innerWidth - 16) / 1280);
+    diapos.forEach((d) => { d.style.zoom = k < 1 ? k : ''; });
+  }
+  window.addEventListener('resize', echelle); echelle();
+</script>
+</body>
+</html>
