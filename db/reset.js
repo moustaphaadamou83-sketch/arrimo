@@ -7,6 +7,7 @@
 const { creerPool } = require('../src/db');
 const { seed } = require('./seed');
 const { demoDeux } = require('./demo-deux');
+const { viderBase } = require('./vider');
 
 if (process.env.NODE_ENV === 'production' && process.env.ARRIMO_DEMO !== '1') {
   console.error('Interdit en production. Sur un serveur de démonstration, définissez ARRIMO_DEMO=1.');
@@ -14,9 +15,7 @@ if (process.env.NODE_ENV === 'production' && process.env.ARRIMO_DEMO !== '1') {
 }
 const pool = creerPool(process.env.DATABASE_URL);
 (async () => {
-  await pool.query(`DROP TABLE IF EXISTS journal_admin, connexions_2fa, messages_connecteur, connecteurs, demandes_admission, notifications, journal, lits, transferts,
-                    chambres, unites, sessions, utilisateur_etablissements, utilisateurs, etablissements, types_unite, config_pays CASCADE;
-                    DROP SEQUENCE IF EXISTS transfert_seq; DROP FUNCTION IF EXISTS journal_immuable CASCADE;`);
+  await viderBase(pool);
   if (process.argv[2] === 'deux') await demoDeux(pool);
   else await seed(pool);
   await pool.end();

@@ -671,7 +671,7 @@ async function vueNettoyage() {
       <div class="note">${esc(l.unite)} · chambre ${esc(l.chambre)}${l.isolement ? ' · chambre d’isolement' : ''}</div>
       <div style="font-size:13px">${esc(l.raison)}</div>
       <div class="note">${l.nettoyage_debut ? `Commencé il y a ${depuis(l.nettoyage_debut)}` : `En attente depuis ${depuis(l.etat_depuis)}`}</div></div>
-      <div class="actions" style="display:flex;flex-direction:column;gap:6px">${l.nettoyage_debut ? '' : `<button class="btn" data-debut="${l.id}">Commencer</button>`}
+      <div class="actions">${l.nettoyage_debut ? '' : `<button class="btn" data-debut="${l.id}">Commencer</button>`}
         <button class="btn pri" data-fini="${l.id}" data-version="${l.version}" data-code="${esc(l.code)}">Terminé</button></div></div>`).join('') || '<p class="note">Aucun lit à nettoyer.</p>'}</div>`;
   v.querySelectorAll('[data-debut]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/nettoyage/${b.dataset.debut}/debut`), 'Nettoyage commencé.'); });
   v.querySelectorAll('[data-fini]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/lits/${b.dataset.fini}/action`, { action: 'nettoyage_ok', version: Number(b.dataset.version) }), `${b.dataset.code} est prêt.`); });
