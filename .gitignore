@@ -5,3 +5,4 @@ acces-demo.txt
 test-results/
 playwright-report/
 captures/
+docs/presentation/*.mp4
