@@ -10,6 +10,8 @@ const { creerTransfert, avancerTransfert, detecterBlocages } = require('../src/s
 
 const MOT_DE_PASSE_DEMO = process.env.DEMO_MOT_DE_PASSE || 'Demo-Arrimo-2026';
 
+const NOMS_EN = { SI: 'Intensive care', MED: 'Medicine', CHIR: 'Surgery', MAT: 'Maternity' };
+
 async function seed(pool, { silencieux = false } = {}) {
   await pool.query(fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8'));
   const deja = await pool.query('SELECT count(*)::int AS n FROM etablissements');
@@ -22,8 +24,8 @@ async function seed(pool, { silencieux = false } = {}) {
     const cfg = (await c.query(`INSERT INTO config_pays (code, nom) VALUES ('QC', 'Québec (Canada)') RETURNING id`)).rows[0].id;
     const types = {};
     for (const [code, nom, ordre] of [['SI', 'Soins intensifs', 1], ['MED', 'Médecine', 2], ['CHIR', 'Chirurgie', 3], ['MAT', 'Maternité', 4]]) {
-      types[code] = (await c.query('INSERT INTO types_unite (config_id, code, nom, ordre) VALUES ($1,$2,$3,$4) RETURNING id',
-        [cfg, code, nom, ordre])).rows[0].id;
+      types[code] = (await c.query('INSERT INTO types_unite (config_id, code, nom, ordre, nom_en) VALUES ($1,$2,$3,$4,$5) RETURNING id',
+        [cfg, code, nom, ordre, NOMS_EN[code]])).rows[0].id;
     }
     const etabs = [
       ['MB', 'Hôpital Mont-Bellevue', 'Sherbrooke', 45.40, -71.89, 'complet', true, ['SI', 'MED', 'CHIR', 'MAT'], 'tremblay', 'A. Tremblay'],

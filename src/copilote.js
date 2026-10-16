@@ -7,26 +7,29 @@
 const s = require('./services');
 const t = require('./terrain');
 const { exigerEtablissement } = require('./auth');
+const { tr, dico, traducteurTypes } = require('./langue');
 
-const NIVEAUX = { vert: 'Vert', jaune: 'Jaune', orange: 'Orange', rouge: 'Rouge' };
-
+/** Briefing de l'établissement : niveau d'alerte, résumé et recommandations classées, dans la langue de l'utilisateur. */
 async function briefing(pool, utilisateur, etabId) {
   exigerEtablissement(utilisateur, etabId);
+  const L = utilisateur.langue;
   const etab = await s.etablissement(pool, etabId);
   s.exigerActif(etab);
-  const [alerte, reseau, file, nettoyage, nsa, transferts, lits] = await Promise.all([
-    t.niveauAlerte(pool, etabId),
+  const [alerte, reseau, file, nettoyage, nsa, transferts, lits, nomType] = await Promise.all([
+    t.niveauAlerte(pool, etabId, L),
     s.capaciteReseau(pool, utilisateur, etabId),
     t.fileAdmission(pool, utilisateur, etabId),
     t.fileNettoyage(pool, utilisateur, etabId),
     t.listeNsa(pool, utilisateur, etabId),
     s.listeTransferts(pool, utilisateur, etabId),
     s.litsEtablissement(pool, utilisateur, etabId),
+    traducteurTypes(pool, L),
   ]);
   const cfg = etab.config;
   const moi = reseau.etablissements.find((e) => e.moi);
   const recos = [];
   const ajouter = (priorite, titre, raison, action = null) => recos.push({ priorite, titre, raison, action });
+  const type = (nom) => nomType(nom).toLowerCase();
 
   // 1. Patients qui attendent un lit (chaque lit proposé ne l'est qu'à un seul patient)
   const litsProposes = new Set();
@@ -34,51 +37,52 @@ async function briefing(pool, utilisateur, etabId) {
     const urgent = d.priorite === 'p1' || d.depasse;
     if (d.lit_suggere && !litsProposes.has(d.lit_suggere.id)) {
       litsProposes.add(d.lit_suggere.id);
-      ajouter(urgent ? 1 : 2, `Assigner le lit ${d.lit_suggere.code} à ${d.patient_ref}`,
-        `Attend un lit en ${d.type_nom.toLowerCase()} depuis ${d.attente_min} min (${d.priorite.toUpperCase()}, ${d.provenance}). Ce lit libre respecte ses besoins.`,
-        { type: 'assigner', demande_id: d.id, lit_id: d.lit_suggere.id, version: d.lit_suggere.version, libelle: 'Assigner ce lit' });
+      ajouter(urgent ? 1 : 2, tr(L, 'r_assigner', { lit: d.lit_suggere.code, ref: d.patient_ref }),
+        tr(L, 'r_assigner_raison', { type: type(d.type_nom), min: d.attente_min, prio: d.priorite.toUpperCase(), prov: dico(L, 'provenance')[d.provenance] }),
+        { type: 'assigner', demande_id: d.id, lit_id: d.lit_suggere.id, version: d.lit_suggere.version, libelle: tr(L, 'r_assigner_action') });
     } else {
       const rec = await s.recommander(pool, utilisateur, etabId, d.type_id, t.besoinsDemande(d));
       const sug = rec.suggestions.find((x) => x.libres);
       const netType = nettoyage.find((n) => n.type_nom === d.type_nom && !litsProposes.has(n.id));
       if (netType) litsProposes.add(netType.id);
       if (netType) {
-        ajouter(1, `Prioriser le nettoyage du lit ${netType.code}`,
-          `${d.patient_ref} attend un lit en ${d.type_nom.toLowerCase()} depuis ${d.attente_min} min et aucun lit adapté n’est libre. Ce lit sera le premier disponible.`,
-          netType.nettoyage_debut ? null : { type: 'debut_nettoyage', lit_id: netType.id, libelle: 'Lancer le nettoyage' });
+        ajouter(1, tr(L, 'r_nettoyer', { lit: netType.code }),
+          tr(L, 'r_nettoyer_raison', { ref: d.patient_ref, type: type(d.type_nom), min: d.attente_min }),
+          netType.nettoyage_debut ? null : { type: 'debut_nettoyage', lit_id: netType.id, libelle: tr(L, 'r_nettoyer_action') });
       }
       if (sug && (urgent || !netType)) {
-        ajouter(urgent ? 1 : 2, `Transférer ${d.patient_ref} vers ${sug.nom}`,
-          `Aucun lit adapté ici. ${sug.nom} : ${sug.raison}.${sug.pourquoi ? ` ${sug.pourquoi}.` : ''}`,
+        ajouter(urgent ? 1 : 2, tr(L, 'r_transferer', { ref: d.patient_ref, etab: sug.nom }),
+          tr(L, 'r_transferer_raison', { etab: sug.nom, raison: sug.raison, pourquoi: sug.pourquoi ? ` ${sug.pourquoi}.` : '' }),
           { type: 'transferer', demande_id: d.id, destination_id: sug.etablissement_id, lit_id: sug.lit?.id, version: sug.lit?.version,
-            libelle: `Demander le transfert à ${sug.nom}` });
+            libelle: tr(L, 'r_transferer_action', { etab: sug.nom }) });
       } else if (!sug && !netType) {
-        ajouter(1, `Aucun lit pour ${d.patient_ref}`, `Aucun lit adapté ici ni dans le rayon de ${cfg.rayon_km} km. Escaladez à la coordination régionale.`);
+        ajouter(1, tr(L, 'r_aucun', { ref: d.patient_ref }), tr(L, 'r_aucun_raison', { km: cfg.rayon_km }));
       }
     }
   }
 
   // 2. Transferts qui attendent une réponse de notre part
-  for (const tr of transferts) {
-    if (tr.statut === 'demande' && tr.destination_id === etabId) {
-      ajouter(tr.urgent ? 1 : 2, `Répondre à la demande ${tr.numero}`,
-        `${tr.origine_nom} attend votre réponse depuis ${Math.round((Date.now() - new Date(tr.date_demande)) / 60000)} min${tr.urgent ? ' (urgent)' : ''}. Lit ${tr.lit_code} déjà bloqué pour ce patient.`,
-        { type: 'transfert', transfert_id: tr.id, etape: 'accepter', libelle: 'Accepter' });
+  for (const tr0 of transferts) {
+    if (tr0.statut === 'demande' && tr0.destination_id === etabId) {
+      ajouter(tr0.urgent ? 1 : 2, tr(L, 'r_repondre', { numero: tr0.numero }),
+        tr(L, 'r_repondre_raison', { origine: tr0.origine_nom, min: Math.round((Date.now() - new Date(tr0.date_demande)) / 60000),
+          urgent: tr0.urgent ? tr(L, 'r_urgent') : '', lit: tr0.lit_code }),
+        { type: 'transfert', transfert_id: tr0.id, etape: 'accepter', libelle: tr(L, 'r_repondre_action') });
     }
-    if (tr.statut === 'validee' && tr.origine_id === etabId) {
-      ajouter(2, `Organiser le transport de ${tr.numero}`, `${tr.destination_nom} a accepté. Le lit est réservé.`,
-        { type: 'transfert', transfert_id: tr.id, etape: 'transport', libelle: 'Organiser le transport' });
+    if (tr0.statut === 'validee' && tr0.origine_id === etabId) {
+      ajouter(2, tr(L, 'r_transport', { numero: tr0.numero }), tr(L, 'r_transport_raison', { dest: tr0.destination_nom }),
+        { type: 'transfert', transfert_id: tr0.id, etape: 'transport', libelle: tr(L, 'r_transport_action') });
     }
   }
 
   // 3. Lits immobilisés sans raison
   for (const l of lits.filter((x) => x.blocage_niveau === 'eleve' && x.etat === 'reserve' && !x.transfert_numero)) {
-    ajouter(2, `Libérer la réservation du lit ${l.code}`, l.blocage_motif,
-      { type: 'lit', lit_id: l.id, action: 'annuler', version: l.version, libelle: 'Annuler la réservation' });
+    ajouter(2, tr(L, 'r_reservation', { lit: l.code }), l.blocage_motif,
+      { type: 'lit', lit_id: l.id, action: 'annuler', version: l.version, libelle: tr(L, 'r_reservation_action') });
   }
   for (const n of nettoyage.filter((x) => x.priorite !== 'haute' && Number(x.age_min) > 2 * x.nettoyage_cible_min)) {
-    ajouter(2, `Nettoyage en retard : ${n.code}`, `En attente depuis ${Math.round(Number(n.age_min))} min (cible ${n.nettoyage_cible_min} min).`,
-      { type: 'lit', lit_id: n.id, action: 'nettoyage_ok', version: n.version, libelle: 'Confirmer le nettoyage' });
+    ajouter(2, tr(L, 'r_net_retard', { lit: n.code }), tr(L, 'r_net_retard_raison', { min: Math.round(Number(n.age_min)), cible: n.nettoyage_cible_min }),
+      { type: 'lit', lit_id: n.id, action: 'nettoyage_ok', version: n.version, libelle: tr(L, 'r_net_retard_action') });
   }
 
   // 4. Congés des 12 prochaines heures : les confirmer tôt permet de planifier nettoyage et admissions
@@ -86,52 +90,52 @@ async function briefing(pool, utilisateur, etabId) {
   const congesJour = lits.filter((l) => l.etat === 'occupe' && l.sortie_prevue && new Date(l.sortie_prevue) <= finJour
     && new Date(l.sortie_prevue) >= Date.now() - 3600000 && l.conge_statut !== 'confirme' && !l.nsa_depuis);
   for (const l of congesJour.slice(0, 6)) {
-    ajouter(3, `Confirmer le congé du lit ${l.code}`, `Congé prévu à ${new Date(l.sortie_prevue).toLocaleTimeString('fr-CA', { hour: '2-digit', minute: '2-digit', timeZone: cfg.fuseau })}. Le confirmer permet de planifier le nettoyage et l’admission suivante.`,
-      { type: 'conge', lit_id: l.id, statut: 'confirme', libelle: 'Confirmer le congé' });
+    const heure = new Date(l.sortie_prevue).toLocaleTimeString(dico(L, 'locale'), { hour: '2-digit', minute: '2-digit', timeZone: cfg.fuseau });
+    ajouter(3, tr(L, 'r_conge', { lit: l.code }), tr(L, 'r_conge_raison', { heure }),
+      { type: 'conge', lit_id: l.id, statut: 'confirme', libelle: tr(L, 'r_conge_action') });
   }
-  const depasses = lits.filter((l) => l.etat === 'occupe' && l.blocage_motif && l.blocage_motif.startsWith('Congé prévu dépassé'));
+  const depasses = lits.filter((l) => l.etat === 'occupe' && l.blocage_code === 'conge_depasse');
   if (depasses.length) {
-    ajouter(2, `${depasses.length} congé(s) prévu(s) dépassé(s)`,
-      `Lits ${depasses.map((l) => l.code).join(', ')}. Vérifiez ce qui bloque la sortie (transport, hébergement, résultats) ou mettez à jour la date.`);
+    ajouter(2, tr(L, 'r_depasses', { n: depasses.length }), tr(L, 'r_depasses_raison', { lits: depasses.map((l) => l.code).join(', ') }));
   }
 
   // 5. NSA
   if (nsa.total && nsa.taux > nsa.cible) {
     const longs = nsa.lits.filter((l) => l.jours >= 30);
-    ajouter(2, `NSA : ${nsa.taux} % des lits occupés (cible ${nsa.cible} %)`,
-      `${nsa.total} patient(s) n’ont plus besoin de soins aigus${longs.length ? `, dont ${longs.length} depuis plus de 30 jours` : ''}. `
-      + `Orientations : ${Object.entries(nsa.par_orientation).map(([k, v]) => `${k} ${v}`).join(', ')}. Relancez le mécanisme d’accès à l’hébergement.`);
+    ajouter(2, tr(L, 'r_nsa', { taux: nsa.taux, cible: nsa.cible }),
+      tr(L, 'r_nsa_raison', { n: nsa.total, longs: longs.length ? tr(L, 'r_nsa_longs', { n: longs.length }) : '',
+        orient: Object.entries(nsa.par_orientation).map(([k, v]) => `${dico(L, 'orientation')[k] || k} ${v}`).join(', ') }));
   }
 
   // 6. Prévision de saturation et capacité perdue
   for (const u of moi.unites.filter((x) => x.risque === 'eleve')) {
     const rec = await s.recommander(pool, utilisateur, etabId, u.type_id);
     const sug = rec.suggestions.find((x) => x.libres);
-    ajouter(2, `${u.type_nom} : saturé, aucun lit prévu d’ici ${cfg.horizon_h} h`,
-      sug ? `Préparez des transferts sortants. Meilleure option : ${sug.nom} (${sug.raison}).` : 'Aucune place dans le rayon. Escaladez à la coordination régionale.');
+    ajouter(2, tr(L, 'r_sature', { type: nomType(u.type_nom), h: cfg.horizon_h }),
+      sug ? tr(L, 'r_sature_option', { etab: sug.nom, raison: sug.raison }) : tr(L, 'r_sature_aucun'));
   }
   if (alerte.fermes_personnel) {
-    ajouter(3, `${alerte.fermes_personnel} lit(s) fermé(s) faute de personnel`,
-      'Capacité perdue. À signaler à la direction des soins infirmiers si du personnel peut être redéployé.');
+    ajouter(3, tr(L, 'r_fermes', { n: alerte.fermes_personnel }), tr(L, 'r_fermes_raison'));
   }
 
   recos.sort((a, b) => a.priorite - b.priorite);
   const prevus = moi.unites.reduce((a, u) => a + (u.prevus || 0), 0);
   const libres = moi.unites.reduce((a, u) => a + u.libres, 0);
   const enAttente = file.filter((d) => d.statut === 'attente').length;
-  const resume = `Niveau ${NIVEAUX[alerte.niveau].toLowerCase()} (pression ${alerte.pression} %). `
-    + `${libres} lit(s) libre(s), ${prevus} prévu(s) d’ici ${cfg.horizon_h} h, ${enAttente} patient(s) en attente d’un lit`
-    + `${alerte.attente_longue ? `, dont ${alerte.attente_longue} depuis plus de ${Math.round(cfg.attente_admission_max_min / 60)} h` : ''}. `
-    + `${nettoyage.length} lit(s) à nettoyer, ${nsa.total} patient(s) NSA (${nsa.taux} %).`;
+  const resume = tr(L, 'resume', { niveau: dico(L, L === 'en' ? 'niveau_maj' : 'niveau')[alerte.niveau], p: alerte.pression, libres, prevus,
+    h: cfg.horizon_h, attente: enAttente, net: nettoyage.length, nsa: nsa.total, taux: nsa.taux,
+    longue: alerte.attente_longue ? tr(L, 'resume_longue', { n: alerte.attente_longue, h: Math.round(cfg.attente_admission_max_min / 60) }) : '' });
   return { etablissement: etab.nom, genere_le: new Date().toISOString(), alerte, resume, recommandations: recos };
 }
 
 /** Vue réseau : où ça déborde, où il reste de la place, et quels délestages proposer. */
 async function briefingReseau(pool, utilisateur, depuisId) {
+  const L = utilisateur.langue;
   const reseau = await s.capaciteReseau(pool, utilisateur, depuisId);
+  const nomType = await traducteurTypes(pool, L);
   const etabs = [];
   for (const e of reseau.etablissements) {
-    etabs.push({ ...e, alerte: await t.niveauAlerte(pool, e.id) });
+    etabs.push({ ...e, alerte: await t.niveauAlerte(pool, e.id, L) });
   }
   const tension = etabs.filter((e) => ['orange', 'rouge'].includes(e.alerte.niveau));
   const delestages = [];
@@ -142,8 +146,9 @@ async function briefingReseau(pool, utilisateur, depuisId) {
         .filter(({ u2 }) => u2 && u2.libres > 0)
         .sort((a, b) => a.x.distance_km - b.x.distance_km || b.u2.libres - a.u2.libres)[0];
       if (cible) {
-        delestages.push({ de: e.nom, vers: cible.x.nom, type: u.type_nom, libres_cible: cible.u2.libres,
-          raison: `${e.nom} est au niveau ${e.alerte.niveau} ; ${cible.x.nom}, le plus proche avec de la place, a ${cible.u2.libres} lit(s) libre(s) en ${u.type_nom.toLowerCase()}.` });
+        delestages.push({ de: e.nom, vers: cible.x.nom, type: nomType(u.type_nom), libres_cible: cible.u2.libres,
+          raison: tr(L, 'delestage', { de: e.nom, niveau: dico(L, 'niveau')[e.alerte.niveau], vers: cible.x.nom, n: cible.u2.libres,
+            type: nomType(u.type_nom).toLowerCase() }) });
       }
     }
   }
@@ -164,7 +169,7 @@ function sansPatients(objet) {
   }));
 }
 
-async function questionIa(contexte, question, fetchImpl = fetch) {
+async function questionIa(contexte, question, fetchImpl = fetch, langue = 'fr') {
   const cle = process.env.COPILOTE_IA_CLE;
   const r = await fetchImpl(process.env.COPILOTE_IA_URL || 'https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -172,7 +177,7 @@ async function questionIa(contexte, question, fetchImpl = fetch) {
     body: JSON.stringify({
       model: process.env.COPILOTE_IA_MODELE || 'claude-sonnet-5-5',
       max_tokens: 700,
-      system: 'Tu es le Copilote d’Arrimo, outil de gestion des lits et des transferts entre hôpitaux. Réponds en français, '
+      system: `Tu es le Copilote d’Arrimo, outil de gestion des lits et des transferts entre hôpitaux. ${tr(langue, 'ia_langue')}, `
         + 'brièvement, uniquement à partir des données fournies. Si l’information manque, dis-le. Ne donne jamais d’avis médical. '
         + 'Tu ne peux exécuter aucune action : propose, et rappelle que l’utilisateur valide dans Arrimo.',
       messages: [{ role: 'user', content: `Données actuelles (JSON) :\n${JSON.stringify(contexte)}\n\nQuestion : ${question}` }],
@@ -184,35 +189,41 @@ async function questionIa(contexte, question, fetchImpl = fetch) {
 }
 
 async function question(pool, utilisateur, etabId, q, fetchImpl) {
-  const qn = String(q).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const L = utilisateur.langue;
+  const qn = String(q).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   if (process.env.COPILOTE_IA_CLE) {
     try {
       const [b, r] = await Promise.all([briefing(pool, utilisateur, etabId), briefingReseau(pool, utilisateur, etabId)]);
-      const texte = await questionIa(sansPatients({ briefing: b, reseau: r }), q, fetchImpl);
+      const texte = await questionIa(sansPatients({ briefing: b, reseau: r }), q, fetchImpl, L);
       if (texte) return { reponse: texte, mode: 'ia' };
     } catch (e) {
       console.error('Copilote IA :', e.message);   // repli sur le mode local
     }
   }
-  if (/(nsa|hebergement|chsld)/.test(qn)) {
+  const orient = dico(L, 'orientation');
+  if (/(nsa|hebergement|chsld|\balc\b|placement|long-term)/.test(qn)) {
     const n = await t.listeNsa(pool, utilisateur, etabId);
-    return { mode: 'local', reponse: `${n.total} patient(s) NSA, soit ${n.taux} % des lits occupés (cible ${n.cible} %), pour ${n.jours_lits} jours-lits.\n`
-      + Object.entries(n.par_orientation).map(([k, v]) => `• ${k} : ${v}`).join('\n') };
+    return { mode: 'local', reponse: `${tr(L, 'q_nsa', { n: n.total, taux: n.taux, cible: n.cible, jl: n.jours_lits })}\n`
+      + Object.entries(n.par_orientation).map(([k, v]) => tr(L, 'q_ligne', { a: orient[k] || k, b: v })).join('\n') };
   }
-  if (/(attente|admission|urgence|civiere)/.test(qn)) {
+  if (/(attente|admission|urgence|civiere|waiting|emergency|stretcher|\ber\b)/.test(qn)) {
+    const nomType = await traducteurTypes(pool, L);
     const f = (await t.fileAdmission(pool, utilisateur, etabId)).filter((d) => d.statut === 'attente');
-    return { mode: 'local', reponse: f.length ? `${f.length} patient(s) attendent un lit :\n${f.map((d) => `• ${d.patient_ref} · ${d.type_nom} · ${d.priorite.toUpperCase()} · ${d.attente_min} min${d.lit_suggere ? ` · lit ${d.lit_suggere.code} disponible` : ' · aucun lit adapté ici'}`).join('\n')}` : 'Aucun patient en attente d’un lit.' };
+    return { mode: 'local', reponse: f.length ? `${tr(L, 'q_attente', { n: f.length })}\n${f.map((d) => tr(L, 'q_attente_ligne',
+      { ref: d.patient_ref, type: nomType(d.type_nom), prio: d.priorite.toUpperCase(), min: d.attente_min })
+      + (d.lit_suggere ? tr(L, 'q_attente_lit', { lit: d.lit_suggere.code }) : tr(L, 'q_attente_aucun_lit'))).join('\n')}` : tr(L, 'q_attente_vide') };
   }
-  if (/(nettoy|menage|entretien)/.test(qn)) {
+  if (/(nettoy|menage|entretien|clean|housekeep)/.test(qn)) {
     const n = await t.fileNettoyage(pool, utilisateur, etabId);
-    return { mode: 'local', reponse: n.length ? `Ordre de nettoyage recommandé :\n${n.map((x, i) => `${i + 1}. ${x.code} · ${x.raison}`).join('\n')}` : 'Aucun lit à nettoyer.' };
+    return { mode: 'local', reponse: n.length ? `${tr(L, 'q_nettoyage')}\n${n.map((x, i) => `${i + 1}. ${x.code} · ${x.raison}`).join('\n')}` : tr(L, 'q_nettoyage_vide') };
   }
-  if (/(alerte|niveau|deborde|saturation|surcapacite|reseau)/.test(qn)) {
+  if (/(alerte|niveau|deborde|saturation|surcapacite|reseau|alert|level|overflow|overcapacity|network)/.test(qn)) {
     const r = await briefingReseau(pool, utilisateur, etabId);
-    return { mode: 'local', reponse: r.etablissements.map((e) => `• ${e.nom} : niveau ${e.niveau} (pression ${e.pression} %), ${e.libres} lit(s) libre(s)`).join('\n')
-      + (r.delestages.length ? `\nDélestages possibles :\n${r.delestages.map((d) => `• ${d.de} → ${d.vers} (${d.type})`).join('\n')}` : '') };
+    const niv = dico(L, 'niveau');
+    return { mode: 'local', reponse: r.etablissements.map((e) => tr(L, 'q_reseau_ligne', { nom: e.nom, niveau: niv[e.niveau], p: e.pression, libres: e.libres })).join('\n')
+      + (r.delestages.length ? `\n${tr(L, 'q_delestages')}\n${r.delestages.map((d) => `• ${d.de} → ${d.vers} (${d.type})`).join('\n')}` : '') };
   }
-  if (/(quoi faire|priorit|recommand|briefing|resume|situation)/.test(qn)) {
+  if (/(quoi faire|priorit|recommand|briefing|resume|situation|what should|first|summary)/.test(qn)) {
     const b = await briefing(pool, utilisateur, etabId);
     return { mode: 'local', reponse: `${b.resume}\n${b.recommandations.slice(0, 5).map((r, i) => `${i + 1}. ${r.titre}`).join('\n')}` };
   }

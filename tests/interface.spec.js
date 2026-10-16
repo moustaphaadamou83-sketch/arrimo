@@ -233,3 +233,148 @@ for (const L of LARGEURS) {
     for (const p of [x, y, e, r]) await p.context().close();
   });
 }
+
+/* ------------------------------------------------------------------ version anglaise */
+// Texte français repéré : lettres accentuées ou mots courants du français
+const FRANCAIS = /[àâçéèêëîïôûùüÿœ]|\b(le|la|les|des|du|une|et|pour|dans|sur|avec|depuis|aucun|aucune|lits?|chambre|attente|libres?|occupés?|réservés?|vous|votre|nettoyer|établissements?|demande|refusé|journal|semaine|jours)\b/i;
+
+/** Textes visibles (et attributs lus par l'utilisateur), hors données saisies (classe « donnee ») et noms propres connus. */
+async function textesVisibles(page, noms) {
+  const morceaux = await page.evaluate(() => {
+    const vus = [];
+    const visible = (el) => el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
+    const marche = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let n = marche.nextNode(); n; n = marche.nextNode()) {
+      const el = n.parentElement;
+      if (!n.textContent.trim() || !visible(el) || el.closest('.donnee, script, style, svg')) continue;
+      vus.push(n.textContent.trim());
+    }
+    document.querySelectorAll('[placeholder], [title], [aria-label]').forEach((el) => {
+      if (!visible(el) || el.closest('.donnee')) return;
+      ['placeholder', 'title', 'aria-label'].forEach((a) => { if (el.getAttribute(a)) vus.push(el.getAttribute(a)); });
+    });
+    return vus;
+  });
+  return morceaux.map((m) => noms.reduce((x, nom) => x.split(nom).join(' '), m)).filter((m) => m.trim());
+}
+async function sansFrancais(page, noms, ecran) {
+  const restes = (await textesVisibles(page, noms)).filter((m) => FRANCAIS.test(m));
+  assert.deepStrictEqual([...new Set(restes)], [], `anglais/${ecran} : texte français restant`);
+  assert.deepStrictEqual(page.erreurs, [], `anglais/${ecran} : erreurs dans la console`);
+}
+
+test('interface en anglais : aucun texte français restant (noms propres exceptés)', { timeout: 240000 }, async () => {
+  for (const c of navigateur.contexts()) await c.close();
+  await viderBase(pool);
+  await demoDeux(pool, { silencieux: true });
+  // Noms propres et données saisies par les établissements : établissements, villes, unités, personnes, connecteurs, configuration
+  const noms = (await pool.query(`SELECT nom FROM etablissements UNION SELECT ville FROM etablissements UNION SELECT nom FROM unites
+    UNION SELECT nom FROM utilisateurs UNION SELECT nom FROM connecteurs UNION SELECT nom FROM config_pays UNION SELECT transport_libelle FROM config_pays`))
+    .rows.map((r) => r.nom).filter(Boolean).sort((a, b) => b.length - a.length);
+  const L = LARGEURS[0];
+  const ecran = async (page, nom) => { await sansFrancais(page, noms, nom); await verifier(page, { ...L, nom: 'anglais' }, nom); };
+
+  // Écran de connexion : choix de la langue, puis erreur traduite à partir du code du serveur
+  const accueil = await (await navigateur.newContext({ viewport: { width: L.width, height: L.height } })).newPage();
+  accueil.erreurs = [];
+  await accueil.goto(base);
+  await accueil.selectOption('#langue-connexion', 'en');
+  assert.strictEqual(await accueil.getAttribute('html', 'lang'), 'en-CA');
+  await accueil.fill('#c-email', 'coordo.x@demo.arrimo');
+  await accueil.fill('#c-mdp', 'mauvais-mot-de-passe');
+  await accueil.click('#f-connexion button[type=submit]');
+  await accueil.waitForSelector('#c-erreur:not([hidden])');
+  assert.strictEqual(await accueil.textContent('#c-erreur'), 'Incorrect email address or password.');
+  accueil.erreurs = accueil.erreurs.filter((e) => !/401/.test(e));   // la ressource refusée est normale ici
+  await ecran(accueil, '00-connexion');
+  // Le choix est mémorisé : rechargé, l'écran reste en anglais
+  await accueil.reload();
+  assert.strictEqual(await accueil.textContent('#f-connexion button[type=submit]'), 'Sign in');
+  await accueil.context().close();
+
+  const x = await ouvrir(L, 'coordo.x@demo.arrimo', 'en');
+  await x.waitForSelector('#v-copilote .niveau');
+  await ecran(x, '01-copilot');
+  for (let i = 0; i < 6; i += 1) {
+    await x.click(`#v-copilote [data-ex="${i}"]`);
+    await x.waitForSelector('#v-copilote .reponse');
+    await ecran(x, `02-question-${i}`);
+  }
+  for (const vue of ['reseau', 'lits', 'admissions', 'transferts', 'nettoyage', 'nsa', 'indicateurs', 'journal', 'params']) {
+    await onglet(x, vue);
+    await ecran(x, `03-${vue}`);
+  }
+  await onglet(x, 'reseau');
+  await x.click('#b-chercher');
+  await x.waitForSelector('#v-reseau [data-choix]');
+  await x.locator('#v-reseau [data-choix]').first().click();
+  await x.waitForSelector('#b-valider');
+  await ecran(x, '04-reseau-recherche');
+  await onglet(x, 'lits');
+  for (const action of ['reserver', 'conge', 'nsa', 'hors_service']) {
+    await x.locator(`#v-lits [data-action="${action}"]`).first().click();
+    await x.waitForSelector('#modale:not([hidden])');
+    await ecran(x, `05-modale-${action}`);
+    await x.keyboard.press('Escape');
+  }
+  // Erreur du serveur traduite : référence patient invalide
+  await x.locator('#v-lits [data-action="reserver"]').first().click();
+  await x.fill('#m-pat', 'Dupont');
+  await x.click('#modale .btn.pri');
+  await toast(x, 'Invalid patient reference. Expected format: P-00000.');
+  x.erreurs = x.erreurs.filter((m) => !/400/.test(m));   // refus attendu
+  await x.keyboard.press('Escape');
+  await onglet(x, 'admissions');
+  await x.locator('#v-admissions [data-a="ailleurs"]').first().click();
+  await x.waitForSelector('#modale:not([hidden])');
+  await ecran(x, '06-find-elsewhere');
+  await x.click('#modale .btn.pri');
+  await toast(x, 'sent to');
+  await x.click('#b-notif');
+  await x.waitForSelector('#panneau-notif:not([hidden])');
+  await ecran(x, '07-notifications');
+  await x.click('#b-fermer-notif');
+  await x.click('#b-compte');
+  await x.waitForSelector('#f-mdp');
+  await ecran(x, '08-my-account');
+
+  const y = await ouvrir(L, 'coordo.y@demo.arrimo', 'en');
+  await onglet(y, 'transferts');
+  await ecran(y, '09-transfers-y');
+  await y.click('#b-notif');
+  await y.waitForSelector('#panneau-notif:not([hidden])');
+  await ecran(y, '10-notifications-y');
+
+  const e = await ouvrir(L, 'entretien.x@demo.arrimo', 'en');
+  await e.waitForSelector('#v-nettoyage .net-item');
+  await ecran(e, '11-cleaning');
+
+  const r = await ouvrir(L, 'reseau@demo.arrimo', 'en');
+  await r.waitForSelector('#v-copilote .niveau');
+  await ecran(r, '12-copilot-network');
+  await onglet(r, 'admin');
+  await ecran(r, '13-admin-2fa');
+  await r.click('#b-vers-compte');
+  await r.click('#b-2fa-prep');
+  await r.waitForSelector('#a-code');
+  await ecran(r, '14-2fa');
+  const secret = (await r.textContent('#zone-2fa .mono')).trim();
+  await r.fill('#a-code', totp.codePourPas(secret, totp.pasActuel()));
+  await r.click('#b-2fa-ok');
+  await toast(r, 'enabled');
+  await onglet(r, 'admin');
+  for (const sous of ['utilisateurs', 'structure', 'config', 'connecteurs', 'journal']) {
+    await r.click(`[data-ao="${sous}"]`);
+    await r.waitForFunction((s) => document.querySelector(`[data-ao="${s}"]`)?.getAttribute('aria-pressed') === 'true' && document.querySelector('#admin-corps').children.length > 0, sous);
+    await ecran(r, `15-admin-${sous}`);
+  }
+  await r.click('[data-ao="utilisateurs"]');
+  await r.waitForSelector('#b-creer-compte');
+  await r.fill('#n-nom', 'Test account');
+  await r.fill('#n-email', 'test.en@demo.arrimo');
+  await r.click('#b-creer-compte');
+  await r.waitForSelector('#modale:not([hidden])');
+  await ecran(r, '16-temporary-password');
+
+  for (const p of [x, y, e, r]) await p.context().close();
+});

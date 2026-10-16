@@ -531,3 +531,64 @@ test('configuration pays : validation des seuils ; état du service', async () =
   assert.strictEqual(s.corps.etat, 'ok');
   assert.ok(!JSON.stringify(s.corps).includes('P-'));
 });
+
+/* ------------------------------------------------------------------ langues */
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+const { MESSAGES } = require('../src/erreurs');
+
+function dictionnaires() {
+  const bac = { window: {} };
+  for (const l of ['fr', 'en']) vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'public', 'i18n', `${l}.js`), 'utf8'), bac);
+  return bac.window.ARRIMO_I18N;
+}
+const cles = (o, p = '') => Object.entries(o).flatMap(([k, v]) => (v && typeof v === 'object' && !Array.isArray(v) ? cles(v, `${p}${k}.`) : [`${p}${k}`]));
+
+test('langues : dictionnaires FR et EN complets, chaque code d’erreur traduit', () => {
+  const { fr, en } = dictionnaires();
+  const sansErreurs = (l) => cles(l).filter((k) => !k.startsWith('erreurs.'));
+  assert.deepStrictEqual(sansErreurs(en).sort(), sansErreurs(fr).sort(), 'mêmes clés en français et en anglais');
+  assert.deepStrictEqual(Object.keys(en.erreurs).sort(), Object.keys(MESSAGES).sort(), 'chaque code d’erreur a sa traduction anglaise');
+  // Chaque code utilisé dans le code du serveur existe dans le catalogue
+  const src = fs.readdirSync(path.join(__dirname, '..', 'src')).map((f) => fs.readFileSync(path.join(__dirname, '..', 'src', f), 'utf8')).join('\n');
+  const utilises = [...src.matchAll(/new ErreurHttp\(\d+, '(\w+)'/g)].map((m) => m[1]);
+  assert.ok(utilises.length > 80);
+  assert.deepStrictEqual(utilises.filter((c) => !MESSAGES[c]), []);
+});
+
+test('langues : erreurs avec code stable, Copilote et notifications en anglais', async () => {
+  // La base contient ici la démonstration Hôpital X / Hôpital Y (test précédent)
+  const r = await appel(null, 'POST', '/connexion', { email: 'coordo.x@demo.arrimo', mot_de_passe: 'faux' });
+  assert.strictEqual(r.corps.code, 'identifiants_incorrects');
+  assert.strictEqual(r.corps.erreur, 'Adresse courriel ou mot de passe incorrect.');
+  const inv = await appel('x', 'GET', '/lits?etablissement_id=abc');
+  assert.deepStrictEqual([inv.corps.code, inv.corps.vars], ['parametre_invalide', { nom: 'etablissement_id' }]);
+
+  const hx = await id('HX'); const hy = await id('HY');
+  const noms = (await pool.query('SELECT nom FROM etablissements UNION SELECT ville FROM etablissements')).rows.map((x) => x.nom);
+  const francais = /[àâçéèêëîïôûùüÿœ]|\b(le|la|les|des|du|une|et|pour|dans|depuis|aucun|lits?|attente|libres?)\b/i;
+  const nettoyer = (txt) => noms.reduce((x, n) => x.split(n).join(' '), txt);
+  const b = await appel('x', 'GET', `/copilote/briefing?etablissement_id=${hx}&langue=en`);
+  assert.strictEqual(b.statut, 200);
+  const textes = [b.corps.resume, b.corps.alerte.protocole, ...b.corps.recommandations.flatMap((x) => [x.titre, x.raison, x.action?.libelle || ''])];
+  assert.deepStrictEqual(textes.map(nettoyer).filter((x) => francais.test(x)), []);
+  assert.match(b.corps.resume, /level \(pressure/);
+  // Questions en anglais, réponses en anglais
+  for (const q of ['What should we do first?', 'Who is waiting for a bed in the ER?', 'Where are the ALC patients?', 'Where can I find an ICU bed?',
+    'How many beds will free up by tonight?', 'Which beds are blocked here?', 'Is the network overflowing?']) {
+    const rep = await appel('x', 'POST', '/copilote/question', { etablissement_id: hx, question: q, langue: 'en' });
+    assert.strictEqual(rep.statut, 200, q);
+    assert.ok(!francais.test(nettoyer(rep.corps.reponse)), `${q} → ${rep.corps.reponse}`);
+  }
+  // Notification créée en français, lue dans chaque langue
+  const ty = await type('MED');
+  const lit = await litLibre(hy, ty);
+  const tr = await appel('x', 'POST', '/transferts', { origine_id: hx, destination_id: hy, type_id: ty, lit_id: lit.id, version: lit.version, patient_ref: 'P-54321' });
+  assert.strictEqual(tr.statut, 200, JSON.stringify(tr.corps));
+  const fr = await appel('y', 'GET', `/notifications?etablissement_id=${hy}`);
+  const en = await fetch(`${base}/api/notifications?etablissement_id=${hy}`, { headers: { Authorization: `Bearer ${tokens.y}`, 'X-Langue': 'en' } }).then((x) => x.json());
+  const n = (liste) => liste.find((x) => x.message.includes(tr.corps.numero)).message;
+  assert.match(n(fr.corps), /^Nouvelle demande .* : Médecine, lit/);
+  assert.match(n(en), /^New request .*: Medicine, bed/);
+});

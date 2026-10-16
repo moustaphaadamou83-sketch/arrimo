@@ -52,7 +52,7 @@ async function journaliserRefus(pool, v) {
  * opts : versionAttendue, patientRef, detail, transfertId, depuisTransfert
  */
 async function changerEtat(client, pool, utilisateurId, litId, nouveau, opts = {}) {
-  if (!ETATS[nouveau]) throw new ErreurHttp(400, 'État inconnu.');
+  if (!ETATS[nouveau]) throw new ErreurHttp(400, 'etat_inconnu');
   let lit;
   await client.query('SAVEPOINT verrou_lit');
   try {
@@ -69,43 +69,43 @@ async function changerEtat(client, pool, utilisateurId, litId, nouveau, opts = {
     await client.query('ROLLBACK TO SAVEPOINT verrou_lit').catch(() => {});
     if (err.code === '55P03') {
       await journaliserRefus(pool, { litId, utilisateurId, detail: 'Lit en cours de modification par un autre utilisateur' });
-      throw new ErreurHttp(409, 'Ce lit est en cours de modification par quelqu’un d’autre. Réessayez.');
+      throw new ErreurHttp(409, 'lit_verrouille');
     }
     throw err;
   }
-  if (!lit) throw new ErreurHttp(404, 'Lit introuvable.');
+  if (!lit) throw new ErreurHttp(404, 'lit_introuvable');
   if (!lit.module_actif) {
-    throw new ErreurHttp(403, `Le module n'est pas activé pour ${lit.etab_nom}. L'activation se fait depuis SH.`);
+    throw new ErreurHttp(403, 'module_inactif', { etab: lit.etab_nom });
   }
 
-  const refuser = async (statut, detail, message) => {
+  const refuser = async (statut, detail, code, vars) => {
     await journaliserRefus(pool, { litId, utilisateurId, detail, transfertId: opts.transfertId });
-    throw new ErreurHttp(statut, message);
+    throw new ErreurHttp(statut, code, vars);
   };
 
   if (opts.versionAttendue != null && Number(opts.versionAttendue) !== lit.version) {
     await refuser(409, `Version ${opts.versionAttendue} attendue, version ${lit.version} trouvée : lit déjà modifié`,
-      `Le lit ${lit.code} vient d’être modifié par quelqu’un d’autre. Rafraîchissez et choisissez un autre lit.`);
+      'lit_deja_modifie', { code: lit.code });
   }
   if (!TRANSITIONS[lit.etat].includes(nouveau)) {
     await refuser(409, `Transition interdite : ${ETATS[lit.etat]} → ${ETATS[nouveau]}`,
-      `Transition interdite pour ${lit.code} : ${ETATS[lit.etat]} → ${ETATS[nouveau]}.`);
+      'transition_interdite', { code: lit.code, de_etat: lit.etat, vers_etat: nouveau });
   }
   if (lit.etat === 'reserve' && nouveau === 'libre' && lit.transfert_id && !opts.depuisTransfert) {
     const t = await client.query(`SELECT numero, statut FROM transferts WHERE id = $1`, [lit.transfert_id]);
     if (t.rows[0] && !['recu', 'refuse'].includes(t.rows[0].statut)) {
-      throw new ErreurHttp(409, `Ce lit est lié au transfert ${t.rows[0].numero} en cours. Refusez le transfert pour le libérer.`);
+      throw new ErreurHttp(409, 'lit_transfert_en_cours', { numero: t.rows[0].numero });
     }
   }
   const MOTIFS = ['personnel', 'equipement', 'travaux', 'infection', 'autre'];
   if (nouveau === 'indispo' && !MOTIFS.includes(opts.motif)) {
-    throw new ErreurHttp(400, 'Indiquez le motif : personnel, équipement, travaux, infection ou autre.');
+    throw new ErreurHttp(400, 'motif_requis');
   }
   let patientRef = null;
   if (nouveau === 'reserve') {
     patientRef = String(opts.patientRef || '').trim();
     if (!new RegExp(lit.reference_regex).test(patientRef)) {
-      throw new ErreurHttp(400, `Référence patient invalide. Format attendu : ${lit.reference_exemple}. N'inscrivez aucune information médicale.`);
+      throw new ErreurHttp(400, 'reference_invalide', { exemple: lit.reference_exemple });
     }
   }
 
@@ -116,6 +116,8 @@ async function changerEtat(client, pool, utilisateurId, litId, nouveau, opts = {
         etat_depuis = now(),
         blocage_niveau = NULL,
         blocage_motif = NULL,
+        blocage_code = NULL,
+        blocage_vars = NULL,
         patient_ref = CASE WHEN $2::text = 'reserve' THEN $3::text
                            WHEN $2::text IN ('libre', 'nettoyage', 'indispo') THEN NULL
                            ELSE patient_ref END,

@@ -23,7 +23,7 @@ const tentatives = new Map();
 function limiter(email) {
   const t = tentatives.get(email);
   if (t && t.bloqueJusqua > Date.now()) {
-    throw new ErreurHttp(429, 'Trop de tentatives. Réessayez dans quelques minutes.');
+    throw new ErreurHttp(429, 'trop_tentatives');
   }
 }
 function noterEchec(email) {
@@ -52,7 +52,7 @@ async function connexion(pool, email, motDePasse) {
   const u = rows[0];
   if (!u || !verifier(String(motDePasse || ''), u.mot_de_passe_hash)) {
     noterEchec(email);
-    throw new ErreurHttp(401, 'Adresse courriel ou mot de passe incorrect.');
+    throw new ErreurHttp(401, 'identifiants_incorrects');
   }
   tentatives.delete(email);
   if (u.totp_actif) {
@@ -67,14 +67,14 @@ async function connexion(pool, email, motDePasse) {
 async function connexion2fa(pool, jeton, code) {
   const r = await pool.query(
     `UPDATE connexions_2fa SET essais = essais + 1 WHERE jeton = $1 AND expire_le > now() RETURNING utilisateur_id, essais`, [String(jeton || '')]);
-  if (!r.rows[0]) throw new ErreurHttp(401, 'Étape expirée. Reprenez la connexion.');
+  if (!r.rows[0]) throw new ErreurHttp(401, 'etape_expiree');
   if (r.rows[0].essais > 5) {
     await pool.query('DELETE FROM connexions_2fa WHERE jeton = $1', [jeton]);
-    throw new ErreurHttp(429, 'Trop d’essais. Reprenez la connexion.');
+    throw new ErreurHttp(429, 'trop_essais');
   }
   const u = (await pool.query('SELECT * FROM utilisateurs WHERE id = $1 AND actif', [r.rows[0].utilisateur_id])).rows[0];
   const pas = u && verifierCode(u.totp_secret, code, u.totp_dernier_pas);
-  if (!pas) throw new ErreurHttp(401, 'Code incorrect. Vérifiez l’heure de votre téléphone et réessayez.');
+  if (!pas) throw new ErreurHttp(401, 'code_incorrect_heure');
   await pool.query('UPDATE utilisateurs SET totp_dernier_pas = $2 WHERE id = $1', [u.id, pas]);
   await pool.query('DELETE FROM connexions_2fa WHERE jeton = $1', [jeton]);
   return { token: await ouvrirSession(pool, u.id), mdp_temporaire: u.mdp_temporaire };
@@ -83,16 +83,16 @@ async function connexion2fa(pool, jeton, code) {
 function verifierRobustesse(mdp) {
   const m = String(mdp || '');
   if (m.length < 12 || !/[A-Za-zÀ-ÿ]/.test(m) || !/\d/.test(m)) {
-    throw new ErreurHttp(400, 'Le mot de passe doit contenir au moins 12 caractères, dont des lettres et des chiffres.');
+    throw new ErreurHttp(400, 'mdp_faible');
   }
 }
 
 /** Changement de mot de passe par l'utilisateur : ferme ses autres sessions. */
 async function changerMotDePasse(pool, utilisateur, actuel, nouveau) {
   const u = (await pool.query('SELECT mot_de_passe_hash FROM utilisateurs WHERE id = $1', [utilisateur.id])).rows[0];
-  if (!verifier(String(actuel || ''), u.mot_de_passe_hash)) throw new ErreurHttp(401, 'Mot de passe actuel incorrect.');
+  if (!verifier(String(actuel || ''), u.mot_de_passe_hash)) throw new ErreurHttp(401, 'mdp_actuel_incorrect');
   verifierRobustesse(nouveau);
-  if (actuel === nouveau) throw new ErreurHttp(400, 'Choisissez un mot de passe différent de l’actuel.');
+  if (actuel === nouveau) throw new ErreurHttp(400, 'mdp_identique');
   await pool.query('UPDATE utilisateurs SET mot_de_passe_hash = $2, mdp_temporaire = false WHERE id = $1', [utilisateur.id, hacher(nouveau)]);
   await pool.query('DELETE FROM sessions WHERE utilisateur_id = $1 AND token <> $2', [utilisateur.id, utilisateur.token]);
 }
@@ -111,7 +111,7 @@ function exigerSession(pool) {
     try {
       const entete = req.get('authorization') || '';
       const token = entete.startsWith('Bearer ') ? entete.slice(7) : null;
-      if (!token) throw new ErreurHttp(401, 'Connexion requise.');
+      if (!token) throw new ErreurHttp(401, 'connexion_requise');
       const { rows } = await pool.query(
         `SELECT u.id, u.nom, u.email, u.role, u.totp_actif, u.mdp_temporaire,
                 COALESCE(array_agg(ue.etablissement_id) FILTER (WHERE ue.etablissement_id IS NOT NULL), '{}') AS etabs
@@ -119,7 +119,7 @@ function exigerSession(pool) {
            LEFT JOIN utilisateur_etablissements ue ON ue.utilisateur_id = u.id
           WHERE s.token = $1 AND s.expire_le > now()
           GROUP BY u.id`, [token]);
-      if (!rows[0]) throw new ErreurHttp(401, 'Session expirée. Reconnectez-vous.');
+      if (!rows[0]) throw new ErreurHttp(401, 'session_expiree');
       req.utilisateur = { ...rows[0], token, gestionnaire: rows[0].role === 'gestionnaire',
         admin: ['gestionnaire', 'admin_etab'].includes(rows[0].role) };
       next();
@@ -133,7 +133,7 @@ function peutAgirPour(utilisateur, etablissementId) {
 
 function exigerEtablissement(utilisateur, etablissementId) {
   if (!peutAgirPour(utilisateur, etablissementId)) {
-    throw new ErreurHttp(403, "Vous n'avez pas accès à cet établissement.");
+    throw new ErreurHttp(403, 'etab_interdit');
   }
 }
 

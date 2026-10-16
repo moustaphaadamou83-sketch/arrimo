@@ -17,6 +17,7 @@ const MDP = process.env.DEMO_MOT_DE_PASSE || 'Demo-Arrimo-2026';
 const X = { code: 'HX', nom: process.env.DEMO_NOM_X || 'Hôpital X', ville: process.env.DEMO_VILLE_X || 'Ville X', lat: 45.40, lon: -71.89 };
 const Y = { code: 'HY', nom: process.env.DEMO_NOM_Y || 'Hôpital Y', ville: process.env.DEMO_VILLE_Y || 'Ville Y', lat: 45.27, lon: -72.15 };
 
+const NOMS_EN = { SI: 'Intensive care', MED: 'Medicine', CHIR: 'Surgery', MAT: 'Maternity' };
 // Plan des unités : [code type, nom, chambres, lits par chambre, étage, équipement]
 const PLAN = [
   ['SI', 'Soins intensifs', 8, 1, 1, { ventilation: true, telemetrie: true }],
@@ -42,7 +43,8 @@ async function demoDeux(pool, { silencieux = false } = {}) {
   await transaction(pool, async (c) => {
     const cfg = (await c.query(`INSERT INTO config_pays (code, nom) VALUES ('QC', 'Québec (Canada)') RETURNING id`)).rows[0].id;
     for (const [i, [code, nom]] of PLAN.entries()) {
-      types[code] = (await c.query('INSERT INTO types_unite (config_id, code, nom, ordre) VALUES ($1,$2,$3,$4) RETURNING id', [cfg, code, nom, i + 1])).rows[0].id;
+      types[code] = (await c.query('INSERT INTO types_unite (config_id, code, nom, ordre, nom_en) VALUES ($1,$2,$3,$4,$5) RETURNING id',
+        [cfg, code, nom, i + 1, NOMS_EN[code]])).rows[0].id;
     }
     for (const h of [X, Y]) {
       ids[h.code] = (await c.query(

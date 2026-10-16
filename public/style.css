@@ -61,6 +61,16 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .carte-connexion .btn { margin-top: 12px; }
 .erreur { color: var(--critique); font-size: 13px; margin: 6px 0 0; }
 
+/* Choix de la langue */
+.langue-connexion { position: absolute; top: 16px; right: 16px; }
+.langue-connexion select { background: rgba(255, 255, 255, 0.95); font-size: 13px; }
+.connexion { position: relative; }
+.barre .barre-langue { background: transparent; color: #fff; border-color: rgba(255, 255, 255, 0.35); font-size: 13px; padding: 6px 8px; }
+.barre .barre-langue option { color: var(--texte); }
+/* Bandeau du serveur de démonstration */
+.bandeau-demo { background: var(--doux); color: var(--principal); text-align: center; font-size: 12px; font-weight: 600; padding: 5px 16px;
+  letter-spacing: 0.04em; border-bottom: 1px solid var(--bordure); }
+
 /* Barre */
 .barre { background: var(--principal); color: #fff; position: sticky; top: 0; z-index: 5; }
 .barre-in, .onglets, .contenu, .bandeau { max-width: 1280px; margin: 0 auto; padding-left: 16px; padding-right: 16px; }

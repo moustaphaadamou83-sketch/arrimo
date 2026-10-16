@@ -6,44 +6,47 @@
 <title>Arrimo</title>
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="style.css">
+<script src="i18n/fr.js"></script>
+<script src="i18n/en.js"></script>
 </head>
 <body>
 
 <!-- Connexion -->
 <section id="ecran-connexion" class="connexion" hidden>
+  <div class="langue-connexion"><select class="choix-langue" id="langue-connexion" data-i18n-attr="aria-label:langue.choisir"></select></div>
   <form id="f-connexion" class="carte-connexion" novalidate>
     <img src="logo.svg" alt="" width="56" height="56">
     <h1>Arrimo</h1>
-    <p class="muted">Lits et transferts entre établissements</p>
-    <label for="c-email">Adresse courriel</label>
+    <p class="muted" data-i18n="connexion.sous_titre">Lits et transferts entre établissements</p>
+    <label for="c-email" data-i18n="connexion.courriel">Adresse courriel</label>
     <input id="c-email" type="email" autocomplete="username" required>
-    <label for="c-mdp">Mot de passe</label>
+    <label for="c-mdp" data-i18n="connexion.mdp">Mot de passe</label>
     <input id="c-mdp" type="password" autocomplete="current-password" required>
     <p id="c-erreur" class="erreur" role="alert" hidden></p>
-    <button class="btn pri large" type="submit">Se connecter</button>
+    <button class="btn pri large" type="submit" data-i18n="connexion.se_connecter">Se connecter</button>
   </form>
   <form id="f-2fa" class="carte-connexion" novalidate hidden>
     <img src="logo.svg" alt="" width="56" height="56">
-    <h1>Code de vérification</h1>
-    <p class="muted">Ouvrez votre application d’authentification et entrez le code à 6 chiffres affiché pour Arrimo.</p>
-    <label for="c-code">Code</label>
+    <h1 data-i18n="connexion.code_titre">Code de vérification</h1>
+    <p class="muted" data-i18n="connexion.code_aide">Ouvrez votre application d’authentification et entrez le code à 6 chiffres affiché pour Arrimo.</p>
+    <label for="c-code" data-i18n="connexion.code">Code</label>
     <input id="c-code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required>
     <p id="c-erreur-2fa" class="erreur" role="alert" hidden></p>
-    <button class="btn pri large" type="submit">Valider</button>
-    <button class="btn large" type="button" id="b-retour-connexion">Retour</button>
+    <button class="btn pri large" type="submit" data-i18n="connexion.valider">Valider</button>
+    <button class="btn large" type="button" id="b-retour-connexion" data-i18n="general.retour">Retour</button>
   </form>
   <form id="f-mdp-temp" class="carte-connexion" novalidate hidden>
     <img src="logo.svg" alt="" width="56" height="56">
-    <h1>Choisissez votre mot de passe</h1>
-    <p class="muted">Vous utilisez un mot de passe temporaire. Choisissez-en un personnel : au moins 12 caractères, avec des lettres et des chiffres.</p>
-    <label for="t-actuel">Mot de passe temporaire</label>
+    <h1 data-i18n="connexion.temp_titre">Choisissez votre mot de passe</h1>
+    <p class="muted" data-i18n="connexion.temp_aide">Vous utilisez un mot de passe temporaire. Choisissez-en un personnel : au moins 12 caractères, avec des lettres et des chiffres.</p>
+    <label for="t-actuel" data-i18n="connexion.temp_actuel">Mot de passe temporaire</label>
     <input id="t-actuel" type="password" autocomplete="current-password" required>
-    <label for="t-nouveau">Nouveau mot de passe</label>
+    <label for="t-nouveau" data-i18n="connexion.nouveau">Nouveau mot de passe</label>
     <input id="t-nouveau" type="password" autocomplete="new-password" required>
-    <label for="t-confirme">Confirmer</label>
+    <label for="t-confirme" data-i18n="connexion.confirmer">Confirmer</label>
     <input id="t-confirme" type="password" autocomplete="new-password" required>
     <p id="t-erreur" class="erreur" role="alert" hidden></p>
-    <button class="btn pri large" type="submit">Enregistrer et continuer</button>
+    <button class="btn pri large" type="submit" data-i18n="connexion.temp_ok">Enregistrer et continuer</button>
   </form>
 </section>
 
@@ -53,31 +56,33 @@
     <div class="barre-in">
       <div class="marque"><img src="logo.svg" alt="" width="30" height="30"><div><strong>Arrimo</strong><small id="nom-utilisateur"></small></div></div>
       <div class="barre-droite">
-        <label class="ctx" for="ctx">Établissement
+        <label class="ctx" for="ctx"><span data-i18n="barre.etablissement">Établissement</span>
           <select id="ctx"></select>
         </label>
-        <button class="btn icone" id="b-notif" aria-label="Notifications" title="Notifications">
+        <select class="choix-langue barre-langue" id="langue-barre" data-i18n-attr="aria-label:langue.choisir"></select>
+        <button class="btn icone" id="b-notif" aria-label="Notifications" title="Notifications" data-i18n-attr="aria-label:barre.notifications;title:barre.notifications">
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3a1.5 1.5 0 0 0-3 0v1.16A7 7 0 0 0 5 11v5l-2 2v1h18v-1Z"/></svg>
           <span id="n-notif" class="pastille" hidden>0</span>
         </button>
-        <button class="btn" id="b-compte">Mon compte</button>
-        <button class="btn" id="b-deconnexion">Déconnexion</button>
+        <button class="btn" id="b-compte" data-i18n="barre.mon_compte">Mon compte</button>
+        <button class="btn" id="b-deconnexion" data-i18n="barre.deconnexion">Déconnexion</button>
       </div>
     </div>
     <nav class="onglets" id="onglets" role="tablist">
-      <button role="tab" data-v="copilote" aria-selected="true">Copilote</button>
-      <button role="tab" data-v="reseau" aria-selected="false">Réseau</button>
-      <button role="tab" data-v="lits" aria-selected="false">Lits</button>
-      <button role="tab" data-v="admissions" aria-selected="false">Admissions <span class="n" id="n-adm">0</span></button>
-      <button role="tab" data-v="transferts" aria-selected="false">Transferts <span class="n" id="n-tr">0</span></button>
-      <button role="tab" data-v="nettoyage" aria-selected="false">Nettoyage <span class="n" id="n-net">0</span></button>
-      <button role="tab" data-v="nsa" aria-selected="false">NSA</button>
-      <button role="tab" data-v="indicateurs" aria-selected="false">Indicateurs</button>
-      <button role="tab" data-v="journal" aria-selected="false">Journal</button>
-      <button role="tab" data-v="params" aria-selected="false">Paramètres</button>
-      <button role="tab" data-v="admin" aria-selected="false" hidden>Administration</button>
+      <button role="tab" data-v="copilote" aria-selected="true" data-i18n="onglets.copilote">Copilote</button>
+      <button role="tab" data-v="reseau" aria-selected="false" data-i18n="onglets.reseau">Réseau</button>
+      <button role="tab" data-v="lits" aria-selected="false" data-i18n="onglets.lits">Lits</button>
+      <button role="tab" data-v="admissions" aria-selected="false"><span data-i18n="onglets.admissions">Admissions</span> <span class="n" id="n-adm">0</span></button>
+      <button role="tab" data-v="transferts" aria-selected="false"><span data-i18n="onglets.transferts">Transferts</span> <span class="n" id="n-tr">0</span></button>
+      <button role="tab" data-v="nettoyage" aria-selected="false"><span data-i18n="onglets.nettoyage">Nettoyage</span> <span class="n" id="n-net">0</span></button>
+      <button role="tab" data-v="nsa" aria-selected="false" data-i18n="onglets.nsa">NSA</button>
+      <button role="tab" data-v="indicateurs" aria-selected="false" data-i18n="onglets.indicateurs">Indicateurs</button>
+      <button role="tab" data-v="journal" aria-selected="false" data-i18n="onglets.journal">Journal</button>
+      <button role="tab" data-v="params" aria-selected="false" data-i18n="onglets.params">Paramètres</button>
+      <button role="tab" data-v="admin" aria-selected="false" hidden data-i18n="onglets.admin">Administration</button>
     </nav>
   </header>
+  <div id="bandeau-demo" class="bandeau-demo" hidden data-i18n="barre.demo">Démonstration · données fictives</div>
   <div id="bandeau" class="bandeau" hidden></div>
   <main class="contenu">
     <section id="v-copilote"></section>
@@ -93,7 +98,8 @@
     <section id="v-admin" hidden></section>
     <section id="v-compte" hidden></section>
   </main>
-  <aside id="panneau-notif" class="panneau" hidden aria-label="Notifications"></aside>
+  <aside id="panneau-notif" class="panneau" hidden aria-label="Notifications" data-i18n-attr="aria-label:barre.notifications"></aside>
+  <aside id="panneau-aide" class="panneau panneau-aide" hidden aria-label="Aide" data-i18n-attr="aria-label:barre.aide"></aside>
 </div>
 
 <div id="modale" class="modale" hidden></div>

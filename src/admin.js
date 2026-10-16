@@ -27,7 +27,7 @@ function brancher(api, pool, route, entier) {
   }));
 
   api.post('/moi/2fa/preparer', route(async (req) => {
-    if (req.utilisateur.totp_actif) throw new ErreurHttp(409, 'La double authentification est déjà active.');
+    if (req.utilisateur.totp_actif) throw new ErreurHttp(409, 'deja_2fa');
     const secret = totp.nouveauSecret();
     await pool.query('UPDATE utilisateurs SET totp_secret = $2, totp_dernier_pas = 0 WHERE id = $1', [req.utilisateur.id, secret]);
     const lien = totp.uri(secret, req.utilisateur.email);
@@ -36,18 +36,18 @@ function brancher(api, pool, route, entier) {
 
   api.post('/moi/2fa/activer', route(async (req) => {
     const u = (await pool.query('SELECT totp_secret, totp_actif FROM utilisateurs WHERE id = $1', [req.utilisateur.id])).rows[0];
-    if (u.totp_actif) throw new ErreurHttp(409, 'La double authentification est déjà active.');
-    if (!u.totp_secret) throw new ErreurHttp(400, 'Commencez par afficher le code QR.');
+    if (u.totp_actif) throw new ErreurHttp(409, 'deja_2fa');
+    if (!u.totp_secret) throw new ErreurHttp(400, 'qr_dabord');
     const pas = totp.verifierCode(u.totp_secret, req.body.code, 0);
-    if (!pas) throw new ErreurHttp(400, 'Code incorrect. Vérifiez l’heure de votre téléphone et réessayez.');
+    if (!pas) throw new ErreurHttp(400, 'code_incorrect_heure');
     await pool.query('UPDATE utilisateurs SET totp_actif = true, totp_dernier_pas = $2 WHERE id = $1', [req.utilisateur.id, pas]);
     await journalAdmin(pool, req.utilisateur, 'Double authentification activée', req.utilisateur.email, null);
   }));
 
   api.post('/moi/2fa/desactiver', route(async (req) => {
     const u = (await pool.query('SELECT totp_secret, totp_actif, totp_dernier_pas FROM utilisateurs WHERE id = $1', [req.utilisateur.id])).rows[0];
-    if (!u.totp_actif) throw new ErreurHttp(409, 'La double authentification n’est pas active.');
-    if (!totp.verifierCode(u.totp_secret, req.body.code, u.totp_dernier_pas)) throw new ErreurHttp(400, 'Code incorrect.');
+    if (!u.totp_actif) throw new ErreurHttp(409, 'pas_2fa');
+    if (!totp.verifierCode(u.totp_secret, req.body.code, u.totp_dernier_pas)) throw new ErreurHttp(400, 'code_incorrect');
     await pool.query('UPDATE utilisateurs SET totp_actif = false, totp_secret = NULL WHERE id = $1', [req.utilisateur.id]);
     await journalAdmin(pool, req.utilisateur, 'Double authentification désactivée', req.utilisateur.email, null);
   }));
@@ -55,20 +55,20 @@ function brancher(api, pool, route, entier) {
   /* ---------------------------------------------------------------- garde d'administration */
   const exigerAdmin = (req) => {
     const u = req.utilisateur;
-    if (!u.admin) throw new ErreurHttp(403, 'Réservé aux administrateurs.');
+    if (!u.admin) throw new ErreurHttp(403, 'reserve_admin');
     if (process.env.ARRIMO_2FA_ADMIN !== '0' && !u.totp_actif) {
-      throw new ErreurHttp(403, 'Activez la double authentification (Mon compte) pour accéder à l’administration.');
+      throw new ErreurHttp(403, 'admin_exige_2fa');
     }
   };
   const exigerGestionnaire = (req) => {
     exigerAdmin(req);
-    if (!req.utilisateur.gestionnaire) throw new ErreurHttp(403, 'Réservé au gestionnaire réseau.');
+    if (!req.utilisateur.gestionnaire) throw new ErreurHttp(403, 'reserve_gestionnaire');
   };
   const etabsGerables = async (u) => (u.gestionnaire
     ? (await pool.query('SELECT id FROM etablissements')).rows.map((r) => r.id)
     : u.etabs);
   const exigerEtabGerable = async (u, etabId) => {
-    if (!(await etabsGerables(u)).includes(Number(etabId))) throw new ErreurHttp(403, "Vous n'administrez pas cet établissement.");
+    if (!(await etabsGerables(u)).includes(Number(etabId))) throw new ErreurHttp(403, 'etab_non_administre');
   };
 
   /* ---------------------------------------------------------------- utilisateurs */
@@ -88,14 +88,14 @@ function brancher(api, pool, route, entier) {
   async function verifierCompte(req, b, existant = null) {
     const u = req.utilisateur;
     const role = b.role ?? existant?.role;
-    if (!ROLES.includes(role)) throw new ErreurHttp(400, 'Rôle inconnu.');
-    if (role === 'gestionnaire' && !u.gestionnaire) throw new ErreurHttp(403, 'Seul le gestionnaire réseau peut créer ce rôle.');
+    if (!ROLES.includes(role)) throw new ErreurHttp(400, 'role_inconnu');
+    if (role === 'gestionnaire' && !u.gestionnaire) throw new ErreurHttp(403, 'role_gestionnaire_interdit');
     const etabs = (b.etablissements ?? existant?.etablissements ?? []).map(Number);
-    if (role !== 'gestionnaire' && !etabs.length) throw new ErreurHttp(400, 'Rattachez le compte à au moins un établissement.');
+    if (role !== 'gestionnaire' && !etabs.length) throw new ErreurHttp(400, 'compte_sans_etab');
     const gerables = await etabsGerables(u);
-    if (etabs.some((e) => !gerables.includes(e))) throw new ErreurHttp(403, "Vous n'administrez pas tous ces établissements.");
+    if (etabs.some((e) => !gerables.includes(e))) throw new ErreurHttp(403, 'etabs_non_administres');
     if (existant && !u.gestionnaire && (existant.role === 'gestionnaire' || existant.etablissements.some((e) => !gerables.includes(e)))) {
-      throw new ErreurHttp(403, "Ce compte dépend d'un autre administrateur.");
+      throw new ErreurHttp(403, 'compte_autre_admin');
     }
     return { role, etabs };
   }
@@ -103,7 +103,7 @@ function brancher(api, pool, route, entier) {
     const r = await pool.query(
       `SELECT u.*, COALESCE(array_agg(ue.etablissement_id) FILTER (WHERE ue.etablissement_id IS NOT NULL), '{}') AS etablissements
          FROM utilisateurs u LEFT JOIN utilisateur_etablissements ue ON ue.utilisateur_id = u.id WHERE u.id = $1 GROUP BY u.id`, [id]);
-    if (!r.rows[0]) throw new ErreurHttp(404, 'Compte introuvable.');
+    if (!r.rows[0]) throw new ErreurHttp(404, 'compte_introuvable');
     return r.rows[0];
   }
 
@@ -111,13 +111,13 @@ function brancher(api, pool, route, entier) {
     exigerAdmin(req);
     const email = String(req.body.email || '').trim().toLowerCase();
     const nom = String(req.body.nom || '').trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ErreurHttp(400, 'Adresse courriel invalide.');
-    if (!nom) throw new ErreurHttp(400, 'Nom requis.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ErreurHttp(400, 'courriel_invalide');
+    if (!nom) throw new ErreurHttp(400, 'nom_requis');
     const { role, etabs } = await verifierCompte(req, req.body);
     const temporaire = motDePasseTemporaire();
     return transaction(pool, async (c) => {
       const deja = await c.query('SELECT 1 FROM utilisateurs WHERE email = $1', [email]);
-      if (deja.rows[0]) throw new ErreurHttp(409, 'Un compte existe déjà avec cette adresse.');
+      if (deja.rows[0]) throw new ErreurHttp(409, 'compte_existe');
       const u = (await c.query(
         `INSERT INTO utilisateurs (email, nom, mot_de_passe_hash, role, mdp_temporaire) VALUES ($1, $2, $3, $4, true) RETURNING id, email, nom, role`,
         [email, nom, hacher(temporaire), role])).rows[0];
@@ -131,7 +131,7 @@ function brancher(api, pool, route, entier) {
     exigerAdmin(req);
     const id = entier(req.params.id, 'id');
     const existant = await lireCompte(id);
-    if (id === req.utilisateur.id && req.body.actif === false) throw new ErreurHttp(400, 'Vous ne pouvez pas désactiver votre propre compte.');
+    if (id === req.utilisateur.id && req.body.actif === false) throw new ErreurHttp(400, 'desactiver_soi');
     const { role, etabs } = await verifierCompte(req, req.body, existant);
     return transaction(pool, async (c) => {
       const nom = req.body.nom !== undefined ? String(req.body.nom).trim() : existant.nom;
@@ -167,7 +167,7 @@ function brancher(api, pool, route, entier) {
     const etab = entier(req.query.etablissement_id, 'etablissement_id');
     await exigerEtabGerable(req.utilisateur, etab);
     const unites = (await pool.query(
-      `SELECT u.id, u.nom, t.nom AS type_nom, t.id AS type_id FROM unites u JOIN types_unite t ON t.id = u.type_id
+      `SELECT u.id, u.nom, t.nom AS type_nom, t.code AS type_code, t.id AS type_id FROM unites u JOIN types_unite t ON t.id = u.type_id
         WHERE u.etablissement_id = $1 ORDER BY t.ordre, u.nom`, [etab])).rows;
     const chambres = (await pool.query(
       `SELECT ch.id, ch.unite_id, ch.numero FROM chambres ch JOIN unites u ON u.id = ch.unite_id WHERE u.etablissement_id = $1 ORDER BY ch.numero`, [etab])).rows;
@@ -181,10 +181,10 @@ function brancher(api, pool, route, entier) {
     const etab = entier(req.body.etablissement_id, 'etablissement_id');
     await exigerEtabGerable(req.utilisateur, etab);
     const nom = String(req.body.nom || '').trim();
-    if (!nom) throw new ErreurHttp(400, 'Nom de l’unité requis.');
+    if (!nom) throw new ErreurHttp(400, 'nom_unite_requis');
     const ok = await pool.query(`SELECT 1 FROM types_unite t JOIN etablissements e ON e.config_id = t.config_id WHERE t.id = $1 AND e.id = $2`,
       [req.body.type_id, etab]);
-    if (!ok.rows[0]) throw new ErreurHttp(400, "Type d'unité inconnu pour ce pays.");
+    if (!ok.rows[0]) throw new ErreurHttp(400, 'type_unite_pays');
     const u = (await pool.query('INSERT INTO unites (etablissement_id, type_id, nom) VALUES ($1, $2, $3) RETURNING *', [etab, req.body.type_id, nom])).rows[0];
     await journalAdmin(pool, req.utilisateur, 'Unité créée', nom, null, etab);
     return u;
@@ -193,16 +193,16 @@ function brancher(api, pool, route, entier) {
   api.post('/admin/chambres', route(async (req) => {
     exigerAdmin(req);
     const unite = (await pool.query('SELECT * FROM unites WHERE id = $1', [entier(req.body.unite_id, 'unite_id')])).rows[0];
-    if (!unite) throw new ErreurHttp(404, 'Unité introuvable.');
+    if (!unite) throw new ErreurHttp(404, 'unite_introuvable');
     await exigerEtabGerable(req.utilisateur, unite.etablissement_id);
     const numero = String(req.body.numero || '').trim();
-    if (!numero) throw new ErreurHttp(400, 'Numéro de chambre requis.');
+    if (!numero) throw new ErreurHttp(400, 'numero_chambre_requis');
     try {
       const ch = (await pool.query('INSERT INTO chambres (unite_id, numero) VALUES ($1, $2) RETURNING *', [unite.id, numero])).rows[0];
       await journalAdmin(pool, req.utilisateur, 'Chambre créée', `${unite.nom} ${numero}`, null, unite.etablissement_id);
       return ch;
     } catch (e) {
-      if (e.code === '23505') throw new ErreurHttp(409, 'Cette chambre existe déjà dans l’unité.');
+      if (e.code === '23505') throw new ErreurHttp(409, 'chambre_existe');
       throw e;
     }
   }));
@@ -212,13 +212,13 @@ function brancher(api, pool, route, entier) {
     exigerAdmin(req);
     const ch = (await pool.query('SELECT ch.id, u.etablissement_id FROM chambres ch JOIN unites u ON u.id = ch.unite_id WHERE ch.id = $1',
       [entier(req.body.chambre_id, 'chambre_id')])).rows[0];
-    if (!ch) throw new ErreurHttp(404, 'Chambre introuvable.');
+    if (!ch) throw new ErreurHttp(404, 'chambre_introuvable');
     await exigerEtabGerable(req.utilisateur, ch.etablissement_id);
     const code = String(req.body.code || '').trim();
-    if (!/^[\w.-]{1,30}$/.test(code)) throw new ErreurHttp(400, 'Code de lit invalide (lettres, chiffres, tirets).');
+    if (!/^[\w.-]{1,30}$/.test(code)) throw new ErreurHttp(400, 'code_lit_invalide');
     return transaction(pool, async (c) => {
       const deja = await c.query('SELECT 1 FROM lits WHERE etablissement_id = $1 AND code = $2', [ch.etablissement_id, code]);
-      if (deja.rows[0]) throw new ErreurHttp(409, 'Ce code de lit existe déjà dans l’établissement.');
+      if (deja.rows[0]) throw new ErreurHttp(409, 'code_lit_existe');
       const eq = EQUIPEMENTS.map((k) => !!req.body[k]);
       const l = (await c.query(
         `INSERT INTO lits (chambre_id, unite_id, type_id, etablissement_id, code, isolement, pression_negative, ventilation, telemetrie)
@@ -234,7 +234,7 @@ function brancher(api, pool, route, entier) {
     exigerAdmin(req);
     const id = entier(req.params.id, 'id');
     const l = (await pool.query('SELECT * FROM lits WHERE id = $1', [id])).rows[0];
-    if (!l) throw new ErreurHttp(404, 'Lit introuvable.');
+    if (!l) throw new ErreurHttp(404, 'lit_introuvable');
     await exigerEtabGerable(req.utilisateur, l.etablissement_id);
     const eq = EQUIPEMENTS.map((k) => (req.body[k] !== undefined ? !!req.body[k] : l[k]));
     return transaction(pool, async (c) => {
@@ -261,26 +261,27 @@ function brancher(api, pool, route, entier) {
     for (const k of CHAMPS_CONFIG) {
       if (req.body[k] === undefined) continue;
       const n = Number(req.body[k]);
-      if (!Number.isInteger(n) || n <= 0 || n > 100000) throw new ErreurHttp(400, `Valeur invalide pour ${k}.`);
+      if (!Number.isInteger(n) || n <= 0 || n > 100000) throw new ErreurHttp(400, 'valeur_invalide', { champ: k });
       vals.push(n); sets.push(`${k} = $${vals.length}`);
     }
     if (req.body.facteur_route !== undefined) {
       const f = Number(req.body.facteur_route);
-      if (!(f >= 1 && f <= 3)) throw new ErreurHttp(400, 'Le facteur de route doit être entre 1 et 3.');
+      if (!(f >= 1 && f <= 3)) throw new ErreurHttp(400, 'facteur_route');
       vals.push(f); sets.push(`facteur_route = $${vals.length}`);
     }
-    if (req.body.protocoles !== undefined) {
-      const p = req.body.protocoles;
-      if (!p || ['vert', 'jaune', 'orange', 'rouge'].some((k) => typeof p[k] !== 'string')) throw new ErreurHttp(400, 'Protocoles incomplets.');
-      vals.push(JSON.stringify(p)); sets.push(`protocoles = $${vals.length}::jsonb`);
+    for (const champ of ['protocoles', 'protocoles_en']) {
+      if (req.body[champ] === undefined) continue;
+      const p = req.body[champ];
+      if (!p || ['vert', 'jaune', 'orange', 'rouge'].some((k) => typeof p[k] !== 'string')) throw new ErreurHttp(400, 'protocoles_incomplets');
+      vals.push(JSON.stringify(p)); sets.push(`${champ} = $${vals.length}::jsonb`);
     }
-    if (!sets.length) throw new ErreurHttp(400, 'Rien à modifier.');
+    if (!sets.length) throw new ErreurHttp(400, 'rien_a_modifier');
     // Tout ou rien : si la vérification échoue, rien n'est enregistré
     return transaction(pool, async (c) => {
       const r = (await c.query(`UPDATE config_pays SET ${sets.join(', ')} WHERE id = $1 RETURNING *`, vals)).rows[0];
-      if (!r) throw new ErreurHttp(404, 'Configuration introuvable.');
+      if (!r) throw new ErreurHttp(404, 'config_introuvable');
       if (!(r.seuil_jaune < r.seuil_orange && r.seuil_orange <= r.seuil_rouge)) {
-        throw new ErreurHttp(400, 'Les seuils doivent être croissants : jaune < orange ≤ rouge.');
+        throw new ErreurHttp(400, 'seuils_croissants');
       }
       await journalAdmin(c, req.utilisateur, 'Configuration modifiée', r.nom, sets.map((x) => x.split(' =')[0]).join(', '));
       return r;
@@ -302,7 +303,7 @@ function brancher(api, pool, route, entier) {
     exigerAdmin(req);
     const etab = req.body.etablissement_id ? entier(req.body.etablissement_id, 'etablissement_id') : null;
     if (etab) await exigerEtabGerable(req.utilisateur, etab);
-    else if (!req.utilisateur.gestionnaire) throw new ErreurHttp(403, 'Seul le gestionnaire réseau crée un connecteur réseau.');
+    else if (!req.utilisateur.gestionnaire) throw new ErreurHttp(403, 'connecteur_reseau_gestionnaire');
     const con = await cx.creerConnecteur(pool, req.body.nom, etab);
     await journalAdmin(pool, req.utilisateur, 'Connecteur créé', con.nom, null, etab);
     return con;
@@ -310,9 +311,9 @@ function brancher(api, pool, route, entier) {
   api.post('/admin/connecteurs/:id/revoquer', route(async (req) => {
     exigerAdmin(req);
     const c = (await pool.query('SELECT * FROM connecteurs WHERE id = $1', [entier(req.params.id, 'id')])).rows[0];
-    if (!c) throw new ErreurHttp(404, 'Connecteur introuvable.');
+    if (!c) throw new ErreurHttp(404, 'connecteur_introuvable');
     if (c.etablissement_id) await exigerEtabGerable(req.utilisateur, c.etablissement_id);
-    else if (!req.utilisateur.gestionnaire) throw new ErreurHttp(403, 'Réservé au gestionnaire réseau.');
+    else if (!req.utilisateur.gestionnaire) throw new ErreurHttp(403, 'reserve_gestionnaire');
     await pool.query('UPDATE connecteurs SET actif = false WHERE id = $1', [c.id]);
     await journalAdmin(pool, req.utilisateur, 'Connecteur révoqué', c.nom, null, c.etablissement_id);
   }));

@@ -6,6 +6,7 @@ const { transaction, ErreurHttp } = require('./db');
 const { exigerEtablissement } = require('./auth');
 const { changerEtat, journaliser } = require('./regles');
 const s = require('./services');
+const { tr, traducteurTypes } = require('./langue');
 
 const ORIENTATIONS = ['chsld', 'ri', 'readaptation', 'domicile', 'palliatif', 'autre'];
 const CONGES = ['prevu', 'confirme', 'attente_transport'];
@@ -17,9 +18,9 @@ async function modifierLitOccupe(pool, utilisateur, litId, champs, action, detai
       `SELECT l.*, e.module_actif FROM lits l JOIN etablissements e ON e.id = l.etablissement_id
         WHERE l.id = $1 FOR NO KEY UPDATE OF l`, [litId]);
     const lit = r.rows[0];
-    if (!lit) throw new ErreurHttp(404, 'Lit introuvable.');
-    if (!lit.module_actif) throw new ErreurHttp(403, "Le module n'est pas activé pour cet établissement.");
-    if (lit.etat !== 'occupe') throw new ErreurHttp(409, `Le lit ${lit.code} n'est pas occupé.`);
+    if (!lit) throw new ErreurHttp(404, 'lit_introuvable');
+    if (!lit.module_actif) throw new ErreurHttp(403, 'module_inactif_etab');
+    if (lit.etat !== 'occupe') throw new ErreurHttp(409, 'lit_non_occupe', { code: lit.code });
     const cles = Object.keys(champs);
     const sets = cles.map((k, i) => `${k} = $${i + 2}`).join(', ');
     const u = await c.query(`UPDATE lits SET ${sets} WHERE id = $1 RETURNING *`, [litId, ...cles.map((k) => champs[k])]);
@@ -29,7 +30,7 @@ async function modifierLitOccupe(pool, utilisateur, litId, champs, action, detai
 }
 
 async function designerNsa(pool, utilisateur, litId, orientation) {
-  if (!ORIENTATIONS.includes(orientation)) throw new ErreurHttp(400, 'Orientation NSA inconnue.');
+  if (!ORIENTATIONS.includes(orientation)) throw new ErreurHttp(400, 'orientation_inconnue');
   return modifierLitOccupe(pool, utilisateur, litId,
     { nsa_depuis: new Date(), nsa_orientation: orientation }, 'Désignation NSA', `Orientation : ${orientation}`);
 }
@@ -37,15 +38,15 @@ async function retirerNsa(pool, utilisateur, litId) {
   return modifierLitOccupe(pool, utilisateur, litId, { nsa_depuis: null, nsa_orientation: null }, 'Fin du statut NSA', null);
 }
 async function changerNsaOrientation(pool, utilisateur, litId, orientation) {
-  if (!ORIENTATIONS.includes(orientation)) throw new ErreurHttp(400, 'Orientation NSA inconnue.');
+  if (!ORIENTATIONS.includes(orientation)) throw new ErreurHttp(400, 'orientation_inconnue');
   return modifierLitOccupe(pool, utilisateur, litId, { nsa_orientation: orientation }, 'Orientation NSA modifiée', orientation);
 }
 async function majConge(pool, utilisateur, litId, statut, date) {
-  if (statut !== null && !CONGES.includes(statut)) throw new ErreurHttp(400, 'Statut de congé inconnu.');
+  if (statut !== null && !CONGES.includes(statut)) throw new ErreurHttp(400, 'conge_statut_inconnu');
   const champs = { conge_statut: statut };
   if (date !== undefined) {
     const d = date ? new Date(date) : null;
-    if (d && Number.isNaN(d.getTime())) throw new ErreurHttp(400, 'Date invalide.');
+    if (d && Number.isNaN(d.getTime())) throw new ErreurHttp(400, 'date_invalide');
     champs.sortie_prevue = d;
   }
   return modifierLitOccupe(pool, utilisateur, litId, champs, 'Congé mis à jour',
@@ -57,7 +58,7 @@ async function debuterNettoyage(pool, utilisateur, litId) {
   return transaction(pool, async (c) => {
     const { rows } = await c.query(
       `UPDATE lits SET nettoyage_debut = now() WHERE id = $1 AND etat = 'nettoyage' AND nettoyage_debut IS NULL RETURNING *`, [litId]);
-    if (!rows[0]) throw new ErreurHttp(409, 'Ce lit n’est pas en attente de nettoyage, ou le nettoyage a déjà commencé.');
+    if (!rows[0]) throw new ErreurHttp(409, 'nettoyage_impossible');
     await journaliser(c, { litId, utilisateurId: utilisateur.id, action: 'Nettoyage commencé' });
     return rows[0];
   });
@@ -79,12 +80,14 @@ async function fileNettoyage(pool, utilisateur, etabId) {
        JOIN types_unite t ON t.id = l.type_id
        JOIN etablissements e ON e.id = l.etablissement_id JOIN config_pays c ON c.id = e.config_id
       WHERE l.etablissement_id = $1 AND l.etat = 'nettoyage'`, [etabId]);
+  const L = utilisateur.langue;
+  const nomType = await traducteurTypes(pool, L);
   for (const r of rows) {
     const manque = Math.max(0, r.en_attente - r.libres_unite);
     r.priorite_score = manque * 100 + Number(r.age_min);
     r.priorite = manque > 0 ? 'haute' : Number(r.age_min) > r.nettoyage_cible_min ? 'moyenne' : 'normale';
-    r.raison = manque > 0 ? `${r.en_attente} patient(s) attendent un lit en ${r.type_nom.toLowerCase()}`
-      : Number(r.age_min) > r.nettoyage_cible_min ? `En attente depuis plus de ${r.nettoyage_cible_min} min` : 'Ordre d’arrivée';
+    r.raison = manque > 0 ? tr(L, 'net_attente', { n: r.en_attente, type: nomType(r.type_nom).toLowerCase() })
+      : Number(r.age_min) > r.nettoyage_cible_min ? tr(L, 'net_long', { min: r.nettoyage_cible_min }) : tr(L, 'net_ordre');
   }
   return rows.sort((a, b) => b.priorite_score - a.priorite_score);
 }
@@ -102,10 +105,10 @@ async function creerDemande(pool, utilisateur, b) {
   s.exigerActif(etab);
   const ref = String(b.patient_ref || '').trim();
   if (!new RegExp(etab.config.reference_regex).test(ref)) {
-    throw new ErreurHttp(400, `Référence patient invalide. Format attendu : ${etab.config.reference_exemple}. N'inscrivez aucune information médicale.`);
+    throw new ErreurHttp(400, 'reference_invalide', { exemple: etab.config.reference_exemple });
   }
   const type = await pool.query('SELECT id FROM types_unite WHERE id = $1 AND config_id = $2', [b.type_id, etab.config_id]);
-  if (!type.rows[0]) throw new ErreurHttp(400, "Type d'unité inconnu.");
+  if (!type.rows[0]) throw new ErreurHttp(400, 'type_unite_inconnu');
   const be = s.lireBesoins(b.besoins || b);
   const { rows } = await pool.query(
     `INSERT INTO demandes_admission (etablissement_id, provenance, type_id, patient_ref, priorite,
@@ -145,7 +148,7 @@ async function fileAdmission(pool, utilisateur, etabId) {
 async function lireDemande(c, utilisateur, id) {
   const r = await c.query('SELECT * FROM demandes_admission WHERE id = $1 FOR UPDATE', [id]);
   const d = r.rows[0];
-  if (!d) throw new ErreurHttp(404, 'Demande introuvable.');
+  if (!d) throw new ErreurHttp(404, 'demande_introuvable');
   exigerEtablissement(utilisateur, d.etablissement_id);
   return d;
 }
@@ -153,10 +156,10 @@ async function lireDemande(c, utilisateur, id) {
 async function assignerLit(pool, utilisateur, demandeId, litId, version) {
   return transaction(pool, async (c) => {
     const d = await lireDemande(c, utilisateur, demandeId);
-    if (d.statut !== 'attente') throw new ErreurHttp(409, 'Cette demande n’est plus en attente. Rafraîchissez la page.');
+    if (d.statut !== 'attente') throw new ErreurHttp(409, 'demande_plus_en_attente');
     const ok = await c.query(`SELECT l.id FROM lits l WHERE l.id = $1 AND l.etablissement_id = $2 AND l.type_id = $3${s.sqlBesoins(besoinsDemande(d))}`,
       [litId, d.etablissement_id, d.type_id]);
-    if (!ok.rows[0]) throw new ErreurHttp(400, 'Ce lit ne correspond pas au type d’unité ou aux besoins du patient.');
+    if (!ok.rows[0]) throw new ErreurHttp(400, 'lit_inadapte');
     const lit = await changerEtat(c, pool, utilisateur.id, litId, 'reserve',
       { versionAttendue: version, patientRef: d.patient_ref, detail: `Assigné à la demande d’admission n° ${d.id} (${d.provenance})` });
     const u = await c.query(`UPDATE demandes_admission SET statut = 'assignee', lit_id = $2, assignee_le = now() WHERE id = $1 RETURNING *`, [d.id, litId]);
@@ -167,7 +170,7 @@ async function assignerLit(pool, utilisateur, demandeId, litId, version) {
 async function admettreDemande(pool, utilisateur, demandeId) {
   return transaction(pool, async (c) => {
     const d = await lireDemande(c, utilisateur, demandeId);
-    if (d.statut !== 'assignee') throw new ErreurHttp(409, 'Assignez d’abord un lit.');
+    if (d.statut !== 'assignee') throw new ErreurHttp(409, 'assigner_dabord');
     await changerEtat(c, pool, utilisateur.id, d.lit_id, 'occupe', { detail: `Admission depuis ${d.provenance}` });
     const u = await c.query(`UPDATE demandes_admission SET statut = 'admise', terminee_le = now() WHERE id = $1 RETURNING *`, [d.id]);
     return u.rows[0];
@@ -177,7 +180,7 @@ async function admettreDemande(pool, utilisateur, demandeId) {
 async function annulerDemande(pool, utilisateur, demandeId) {
   return transaction(pool, async (c) => {
     const d = await lireDemande(c, utilisateur, demandeId);
-    if (!['attente', 'assignee'].includes(d.statut)) throw new ErreurHttp(409, 'Cette demande est déjà terminée.');
+    if (!['attente', 'assignee'].includes(d.statut)) throw new ErreurHttp(409, 'demande_terminee');
     if (d.statut === 'assignee') {
       await changerEtat(c, pool, utilisateur.id, d.lit_id, 'libre', { detail: `Demande d’admission n° ${d.id} annulée` });
     }
@@ -190,7 +193,7 @@ async function annulerDemande(pool, utilisateur, demandeId) {
 async function transfererDemande(pool, utilisateur, demandeId, b) {
   return transaction(pool, async (c) => {
     const d = await lireDemande(c, utilisateur, demandeId);
-    if (d.statut !== 'attente') throw new ErreurHttp(409, 'Cette demande n’est plus en attente.');
+    if (d.statut !== 'attente') throw new ErreurHttp(409, 'demande_plus_en_attente');
     const tr = await s.creerTransfert(pool, utilisateur, {
       origine_id: d.etablissement_id, destination_id: b.destination_id, type_id: d.type_id,
       lit_id: b.lit_id, version: b.version, patient_ref: d.patient_ref, urgent: d.priorite === 'p1',
@@ -202,9 +205,9 @@ async function transfererDemande(pool, utilisateur, demandeId, b) {
 }
 
 /* ------------------------------------------------------------------ niveaux d'alerte */
-async function niveauAlerte(db, etabId) {
+async function niveauAlerte(db, etabId, langue = 'fr') {
   const { rows } = await db.query(
-    `SELECT c.seuil_jaune, c.seuil_orange, c.seuil_rouge, c.attente_admission_max_min, c.protocoles,
+    `SELECT c.seuil_jaune, c.seuil_orange, c.seuil_rouge, c.attente_admission_max_min, c.protocoles, c.protocoles_en,
             count(l.*) FILTER (WHERE l.etat <> 'indispo')::int AS dotes,
             count(l.*) FILTER (WHERE l.etat = 'libre')::int AS libres,
             count(l.*) FILTER (WHERE l.etat = 'indispo' AND l.motif_indispo = 'personnel')::int AS fermes_personnel,
@@ -223,7 +226,8 @@ async function niveauAlerte(db, etabId) {
   else if (pression >= r.seuil_orange || r.attente_longue >= 1) niveau = 'orange';
   else if (pression >= r.seuil_jaune) niveau = 'jaune';
   return { niveau, pression, dotes: r.dotes, libres: r.libres, en_attente: r.en_attente,
-    attente_longue: r.attente_longue, fermes_personnel: r.fermes_personnel, protocole: r.protocoles[niveau] };
+    attente_longue: r.attente_longue, fermes_personnel: r.fermes_personnel,
+    protocole: (langue === 'en' && r.protocoles_en?.[niveau]) || r.protocoles[niveau] };
 }
 
 /* ------------------------------------------------------------------ NSA */
@@ -295,7 +299,7 @@ async function indicateurs(pool, utilisateur, etabId, jours = 30) {
     admissions: adm.rows[0],
     nettoyage: net.rows[0],
     nsa: { total: nsa.total, taux: nsa.taux, cible: nsa.cible, jours_lits: nsa.jours_lits, par_orientation: nsa.par_orientation },
-    alerte: await niveauAlerte(pool, etabId),
+    alerte: await niveauAlerte(pool, etabId, utilisateur.langue),
   };
 }
 

@@ -290,3 +290,22 @@ CREATE TABLE IF NOT EXISTS journal_admin (
 DROP TRIGGER IF EXISTS journal_admin_pas_de_modif ON journal_admin;
 CREATE TRIGGER journal_admin_pas_de_modif BEFORE UPDATE OR DELETE ON journal_admin
   FOR EACH ROW EXECUTE FUNCTION journal_immuable();
+
+-- Version 5 : interface en français et en anglais
+-- Nom anglais des types d'unité (repli sur le nom français)
+ALTER TABLE types_unite ADD COLUMN IF NOT EXISTS nom_en text;
+UPDATE types_unite SET nom_en = v.nom_en
+  FROM (VALUES ('SI', 'Intensive care'), ('MED', 'Medicine'), ('CHIR', 'Surgery'), ('MAT', 'Maternity')) AS v(code, nom_en)
+ WHERE types_unite.code = v.code AND types_unite.nom_en IS NULL;
+-- Protocoles par niveau d'alerte, en anglais
+ALTER TABLE config_pays ADD COLUMN IF NOT EXISTS protocoles_en jsonb NOT NULL DEFAULT '{
+  "vert": "Normal operations.",
+  "jaune": "Review today’s planned discharges and speed up cleaning.",
+  "orange": "Immediate bed management meeting, confirm discharges before noon, prepare outgoing transfers.",
+  "rouge": "Overcapacity plan: open surge beds, prioritize outgoing transfers, notify regional coordination."
+}';
+-- Notifications et blocages : code et variables, pour les afficher dans la langue de l'utilisateur
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS code text;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS vars jsonb;
+ALTER TABLE lits ADD COLUMN IF NOT EXISTS blocage_code text;
+ALTER TABLE lits ADD COLUMN IF NOT EXISTS blocage_vars jsonb;

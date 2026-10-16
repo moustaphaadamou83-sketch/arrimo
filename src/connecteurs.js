@@ -24,9 +24,9 @@ async function creerConnecteur(pool, nom, etablissementId) {
 }
 
 async function identifier(pool, cle) {
-  if (!cle) throw new ErreurHttp(401, 'Clé de connecteur manquante.');
+  if (!cle) throw new ErreurHttp(401, 'connecteur_cle_manquante');
   const { rows } = await pool.query('SELECT * FROM connecteurs WHERE cle_hash = $1 AND actif', [hacherCle(cle)]);
-  if (!rows[0]) throw new ErreurHttp(401, 'Clé de connecteur invalide.');
+  if (!rows[0]) throw new ErreurHttp(401, 'connecteur_cle_invalide');
   return rows[0];
 }
 
@@ -34,26 +34,26 @@ const EVENEMENTS = ['admission', 'transfert_interne', 'conge', 'conge_prevu'];
 
 /** Applique un événement. Idempotent : le même identifiant n'est appliqué qu'une fois. */
 async function recevoirEvenement(pool, connecteur, ev) {
-  if (!connecteur.etablissement_id) throw new ErreurHttp(403, 'Ce connecteur est en lecture seulement.');
+  if (!connecteur.etablissement_id) throw new ErreurHttp(403, 'connecteur_lecture');
   const identifiant = String(ev.identifiant || '').slice(0, 120);
-  if (!identifiant) throw new ErreurHttp(400, 'identifiant requis (ex. MSH-10 du message HL7).');
-  if (!EVENEMENTS.includes(ev.evenement)) throw new ErreurHttp(400, `evenement doit être : ${EVENEMENTS.join(', ')}.`);
+  if (!identifiant) throw new ErreurHttp(400, 'identifiant_requis');
+  if (!EVENEMENTS.includes(ev.evenement)) throw new ErreurHttp(400, 'evenement_invalide', { liste: EVENEMENTS.join(', ') });
 
   const deja = await pool.query('SELECT statut, detail FROM messages_connecteur WHERE connecteur_id = $1 AND identifiant = $2',
     [connecteur.id, identifiant]);
   if (deja.rows[0]) return { statut: 'deja_recu', detail: deja.rows[0].detail };
 
   const trouverLit = async (c, code) => {
-    const r = await c.query('SELECT id, etat, patient_ref, version FROM lits WHERE etablissement_id = $1 AND code = $2',
+    const r = await c.query('SELECT id, code, etat, patient_ref, version FROM lits WHERE etablissement_id = $1 AND code = $2',
       [connecteur.etablissement_id, String(code || '')]);
-    if (!r.rows[0]) throw new ErreurHttp(404, `Lit ${code} inconnu dans cet établissement.`);
+    if (!r.rows[0]) throw new ErreurHttp(404, 'lit_inconnu', { code });
     return r.rows[0];
   };
   const occuper = async (c, lit, ref, detail) => {
     if (lit.etat === 'occupe' && lit.patient_ref === ref) return;
     if (lit.etat === 'libre') await changerEtat(c, pool, null, lit.id, 'reserve', { patientRef: ref, detail });
     else if (!(lit.etat === 'reserve' && lit.patient_ref === ref)) {
-      throw new ErreurHttp(409, `Lit ${lit.id} à l’état ${lit.etat} : impossible d’y admettre ${ref}.`);
+      throw new ErreurHttp(409, 'admission_impossible', { code: lit.code, lit_etat: lit.etat, ref });
     }
     await changerEtat(c, pool, null, lit.id, 'occupe', { detail });
   };
@@ -78,7 +78,7 @@ async function recevoirEvenement(pool, connecteur, ev) {
       } else if (ev.evenement === 'conge_prevu') {
         const lit = await trouverLit(c, ev.lit);
         const d = new Date(ev.date);
-        if (Number.isNaN(d.getTime())) throw new ErreurHttp(400, 'date invalide.');
+        if (Number.isNaN(d.getTime())) throw new ErreurHttp(400, 'date_invalide');
         const u = await c.query(`UPDATE lits SET sortie_prevue = $2, conge_statut = 'prevu' WHERE id = $1 AND etat = 'occupe' RETURNING id`, [lit.id, d]);
         if (!u.rows[0]) { statut = 'ignore'; detail = `Lit ${ev.lit} non occupé`; return; }
         detail = `Congé prévu ${d.toISOString()} au lit ${ev.lit}`;

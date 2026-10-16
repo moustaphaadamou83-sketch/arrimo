@@ -1,6 +1,7 @@
 const { transaction, ErreurHttp } = require('./db');
 const { changerEtat, journaliser } = require('./regles');
 const { exigerEtablissement, peutAgirPour } = require('./auth');
+const { tr, dico, traducteurTypes } = require('./langue');
 
 /* ------------------------------------------------------------------ outils */
 function distanceKm(a, b) {
@@ -16,7 +17,7 @@ async function etablissement(db, id) {
     `SELECT e.*, row_to_json(c.*) AS config
        FROM etablissements e JOIN config_pays c ON c.id = e.config_id
       WHERE e.id = $1 AND e.actif`, [id]);
-  if (!rows[0]) throw new ErreurHttp(404, 'Établissement introuvable.');
+  if (!rows[0]) throw new ErreurHttp(404, 'etab_introuvable');
   return rows[0];
 }
 
@@ -35,13 +36,19 @@ function sqlBesoins(b, alias = 'l') {
 
 function exigerActif(etab) {
   if (!etab.module_actif) {
-    throw new ErreurHttp(403, `Le module n'est pas activé pour ${etab.nom}. L'activation se fait depuis SH.`);
+    throw new ErreurHttp(403, 'module_inactif', { etab: etab.nom });
   }
 }
 
-async function notifier(db, etablissementId, transfertId, message) {
-  await db.query(`INSERT INTO notifications (etablissement_id, transfert_id, message) VALUES ($1, $2, $3)`,
-    [etablissementId, transfertId, message]);
+/** Notification : le texte est conservé en français, le code et les variables servent à l'afficher dans chaque langue. */
+async function notifier(db, etablissementId, transfertId, code, vars) {
+  await db.query(`INSERT INTO notifications (etablissement_id, transfert_id, message, code, vars) VALUES ($1, $2, $3, $4, $5)`,
+    [etablissementId, transfertId, tr('fr', `notif.${code}`, vars), code, vars]);
+}
+
+/** Motif d'un blocage dans la langue de l'utilisateur (repli sur le texte enregistré). */
+function motifBlocage(langue, lit) {
+  return lit.blocage_code ? tr(langue, `blocage.${lit.blocage_code}`, lit.blocage_vars || {}) : lit.blocage_motif;
 }
 
 /* ------------------------------------------------------------------ capacité */
@@ -163,17 +170,20 @@ async function recommander(pool, utilisateur, depuisId, typeId, besoins = {}) {
   // Lits disponibles maintenant d'abord, puis du plus proche (pénalité de tension comprise) au plus loin
   res.sort((a, b) => ((b.libres > 0) - (a.libres > 0)) || (a.cout - b.cout) || (b.libres - a.libres));
   const premierLibre = res.find((x) => x.libres);
+  const L = utilisateur.langue;
+  const niv = dico(L, 'niveau');
   for (const x of res) {
-    const route = `≈ ${x.minutes_route} min de route (${x.distance_km} km)`;
-    const dispo = x.libres ? `${x.libres} lit(s) adapté(s) libre(s)` : `aucun lit libre, ${x.prevus} prévu(s) d’ici ${cfg.horizon_h} h`;
-    const tension = x.niveau === 'vert' ? 'niveau vert' : `niveau ${x.niveau}, pression ${x.pression} %`;
+    const route = tr(L, 'route', { min: x.minutes_route, km: x.distance_km });
+    const dispo = x.libres ? tr(L, 'dispo_libres', { n: x.libres }) : tr(L, 'dispo_prevus', { n: x.prevus, h: cfg.horizon_h });
+    const tension = x.niveau === 'vert' ? tr(L, 'tension_vert') : tr(L, 'tension', { niveau: niv[x.niveau], p: x.pression });
     x.raison = `${route} · ${dispo} · ${tension}`;
     if (x === premierLibre) {
       x.recommande = true;
       const plusProche = res.filter((y) => y.libres && y.distance_km < x.distance_km);
       x.pourquoi = plusProche.length
-        ? `Recommandé : ${plusProche.map((y) => y.nom).join(', ')} ${plusProche.length > 1 ? 'sont' : 'est'} plus proche${plusProche.length > 1 ? 's' : ''} mais en ${plusProche.map((y) => y.niveau).join('/')}`
-        : 'Recommandé : le plus proche avec un lit adapté';
+        ? tr(L, plusProche.length > 1 ? 'pourquoi_plusieurs' : 'pourquoi_un',
+          { noms: plusProche.map((y) => y.nom).join(', '), niveaux: plusProche.map((y) => niv[y.niveau]).join('/') })
+        : tr(L, 'pourquoi_proche');
     }
   }
   const loc = await pool.query(
@@ -190,7 +200,7 @@ async function litsEtablissement(pool, utilisateur, etabId) {
             l.blocage_niveau, l.blocage_motif, l.isolement, l.pression_negative, l.ventilation, l.telemetrie,
             l.motif_indispo, l.nsa_depuis, l.nsa_orientation, l.conge_statut, l.nettoyage_debut,
             ch.numero AS chambre, u.nom AS unite, t.code AS type_code,
-            t.id AS type_id, tr.numero AS transfert_numero
+            l.blocage_code, l.blocage_vars, t.id AS type_id, tr.numero AS transfert_numero
        FROM lits l
        JOIN chambres ch ON ch.id = l.chambre_id
        JOIN unites u ON u.id = l.unite_id
@@ -198,13 +208,14 @@ async function litsEtablissement(pool, utilisateur, etabId) {
        LEFT JOIN transferts tr ON tr.id = l.transfert_id
       WHERE l.etablissement_id = $1
       ORDER BY t.ordre, l.code`, [etabId]);
+  for (const r of rows) r.blocage_motif = motifBlocage(utilisateur.langue, r);
   return rows;
 }
 
 /** Vérifie que l'utilisateur peut agir sur ce lit. 404 sinon, pour ne rien révéler. */
 async function litVisible(pool, utilisateur, litId) {
   const { rows } = await pool.query('SELECT id, etablissement_id FROM lits WHERE id = $1', [litId]);
-  if (!rows[0] || !peutAgirPour(utilisateur, rows[0].etablissement_id)) throw new ErreurHttp(404, 'Lit introuvable.');
+  if (!rows[0] || !peutAgirPour(utilisateur, rows[0].etablissement_id)) throw new ErreurHttp(404, 'lit_introuvable');
   return rows[0];
 }
 
@@ -216,16 +227,16 @@ async function creerTransfert(pool, utilisateur, b, client = null) {
   exigerEtablissement(utilisateur, origineId);
   const origine = await etablissement(pool, origineId);
   exigerActif(origine);
-  if (origineId === destId) throw new ErreurHttp(400, 'Choisissez un autre établissement que le vôtre.');
+  if (origineId === destId) throw new ErreurHttp(400, 'autre_etab');
   const dest = await etablissement(pool, destId);
   exigerActif(dest);
   if (dest.partage === 'aucun' || dest.config_id !== origine.config_id) {
-    throw new ErreurHttp(403, 'Cet établissement ne partage pas sa capacité.');
+    throw new ErreurHttp(403, 'etab_ne_partage_pas');
   }
   const type = await pool.query('SELECT * FROM types_unite WHERE id = $1 AND config_id = $2', [typeId, origine.config_id]);
-  if (!type.rows[0]) throw new ErreurHttp(400, "Type d'unité inconnu.");
+  if (!type.rows[0]) throw new ErreurHttp(400, 'type_unite_inconnu');
   const distance = distanceKm(origine, dest);
-  if (distance > origine.config.rayon_km) throw new ErreurHttp(400, 'Établissement hors du rayon de suggestion.');
+  if (distance > origine.config.rayon_km) throw new ErreurHttp(400, 'hors_rayon');
 
   const besoins = lireBesoins(b.besoins || {});
   const filtre = sqlBesoins(besoins);
@@ -234,7 +245,7 @@ async function creerTransfert(pool, utilisateur, b, client = null) {
     if (dest.partage === 'complet' && b.lit_id) {
       const l = await c.query(`SELECT l.id FROM lits l WHERE l.id = $1 AND l.etablissement_id = $2 AND l.type_id = $3${filtre}`,
         [b.lit_id, destId, typeId]);
-      if (!l.rows[0]) throw new ErreurHttp(400, 'Lit proposé invalide ou ne répondant pas aux besoins du patient.');
+      if (!l.rows[0]) throw new ErreurHttp(400, 'lit_propose_invalide');
       litId = l.rows[0].id;
       version = b.version;
     } else {
@@ -242,7 +253,7 @@ async function creerTransfert(pool, utilisateur, b, client = null) {
       const l = await c.query(
         `SELECT l.id, l.version FROM lits l WHERE l.etablissement_id = $1 AND l.type_id = $2 AND l.etat = 'libre'${filtre}
           ORDER BY l.code LIMIT 1 FOR NO KEY UPDATE OF l SKIP LOCKED`, [destId, typeId]);
-      if (!l.rows[0]) throw new ErreurHttp(409, `Plus aucun lit libre à ${dest.nom}. Relancez la recherche.`);
+      if (!l.rows[0]) throw new ErreurHttp(409, 'plus_de_lit', { etab: dest.nom });
       litId = l.rows[0].id;
       version = l.rows[0].version;
     }
@@ -258,8 +269,8 @@ async function creerTransfert(pool, utilisateur, b, client = null) {
     await c.query('UPDATE lits SET transfert_id = $2 WHERE id = $1', [litId, tr.id]);
     await journaliser(c, { litId, utilisateurId: utilisateur.id, action: 'Référence transmise',
       detail: `${tr.patient_ref} → ${dest.nom}`, transfertId: tr.id });
-    await notifier(c, destId, tr.id,
-      `Nouvelle demande ${tr.numero}${tr.urgent ? ' (URGENT)' : ''} : ${type.rows[0].nom}, lit ${lit.code} réservé, depuis ${origine.nom}.`);
+    await notifier(c, destId, tr.id, 'transfert_demande',
+      { numero: tr.numero, urgent: tr.urgent ? ' (URGENT)' : '', type: type.rows[0].nom, lit: lit.code, origine: origine.nom });
     return { ...tr, lit_code: lit.code };
   };
   return client ? executer(client) : transaction(pool, executer);
@@ -275,7 +286,7 @@ const ETAPES = {
 
 async function avancerTransfert(pool, utilisateur, transfertId, etape, corps = {}) {
   const regle = ETAPES[etape];
-  if (!regle) throw new ErreurHttp(400, 'Action inconnue.');
+  if (!regle) throw new ErreurHttp(400, 'action_inconnue');
   return transaction(pool, async (c) => {
     const r = await c.query(
       `SELECT t.*, o.nom AS origine_nom, d.nom AS destination_nom, c.transport_libelle, l.code AS lit_code
@@ -287,21 +298,21 @@ async function avancerTransfert(pool, utilisateur, transfertId, etape, corps = {
         WHERE t.id = $1 FOR UPDATE OF t`, [transfertId]);
     const t = r.rows[0];
     if (!t || !(peutAgirPour(utilisateur, t.origine_id) || peutAgirPour(utilisateur, t.destination_id))) {
-      throw new ErreurHttp(404, 'Transfert introuvable.');
+      throw new ErreurHttp(404, 'transfert_introuvable');
     }
     const cote = regle.cote === 'origine' ? t.origine_id : t.destination_id;
     if (!peutAgirPour(utilisateur, cote)) {
-      throw new ErreurHttp(403, `Cette action revient à ${regle.cote === 'origine' ? t.origine_nom : t.destination_nom}.`);
+      throw new ErreurHttp(403, 'action_revient_a', { etab: regle.cote === 'origine' ? t.origine_nom : t.destination_nom });
     }
     if (!regle.de.includes(t.statut)) {
-      throw new ErreurHttp(409, `Le transfert ${t.numero} n’est plus au statut attendu. Rafraîchissez la page.`);
+      throw new ErreurHttp(409, 'transfert_statut', { numero: t.numero });
     }
     const maj = { statut: regle.vers };
-    let journal = null; let message = null; let dest = null;
+    let journal = null; let notif = null; let dest = null;
     if (etape === 'accepter') {
       maj.date_validation = 'now()';
       journal = 'Transfert validé';
-      dest = t.origine_id; message = `${t.destination_nom} accepte le transfert ${t.numero} (lit ${t.lit_code}).`;
+      dest = t.origine_id; notif = ['transfert_accepte', { dest: t.destination_nom, numero: t.numero, lit: t.lit_code }];
     } else if (etape === 'refuser') {
       if (t.lit_id) {
         const l = await c.query('SELECT etat FROM lits WHERE id = $1', [t.lit_id]);
@@ -312,21 +323,21 @@ async function avancerTransfert(pool, utilisateur, transfertId, etape, corps = {
       }
       maj.motif_refus = String(corps.motif || '').slice(0, 300) || null;
       maj.motif_refus_code = ['pas_de_lit', 'pas_de_personnel', 'plateau_technique', 'autre'].includes(corps.motif_code) ? corps.motif_code : 'autre';
-      dest = t.origine_id; message = `${t.destination_nom} refuse le transfert ${t.numero}. Cherchez un autre lit.`;
+      dest = t.origine_id; notif = ['transfert_refuse', { dest: t.destination_nom, numero: t.numero }];
     } else if (etape === 'transport') {
       maj.transport_info = t.urgent ? `${t.transport_libelle} prioritaire` : t.transport_libelle;
       journal = 'Transport organisé';
     } else if (etape === 'depart') {
       maj.date_depart = 'now()';
       journal = 'Départ confirmé';
-      dest = t.destination_id; message = `Le patient ${t.patient_ref} du transfert ${t.numero} est en route.`;
+      dest = t.destination_id; notif = ['transfert_depart', { ref: t.patient_ref, numero: t.numero }];
     } else if (etape === 'reception') {
       if (t.lit_id) {
         await changerEtat(c, pool, utilisateur.id, t.lit_id, 'occupe',
           { transfertId: t.id, detail: `Patient reçu (${t.numero})` });
       }
       maj.date_reception = 'now()';
-      dest = t.origine_id; message = `Patient ${t.patient_ref} reçu à ${t.destination_nom}.`;
+      dest = t.origine_id; notif = ['transfert_recu', { ref: t.patient_ref, dest: t.destination_nom }];
     }
     const cols = Object.keys(maj);
     const vals = [];
@@ -340,7 +351,7 @@ async function avancerTransfert(pool, utilisateur, transfertId, etape, corps = {
       await journaliser(c, { litId: t.lit_id, utilisateurId: utilisateur.id, action: journal,
         detail: maj.transport_info || t.numero, transfertId: t.id });
     }
-    if (dest) await notifier(c, dest, t.id, message);
+    if (dest) await notifier(c, dest, t.id, ...notif);
     return u.rows[0];
   });
 }
@@ -382,6 +393,10 @@ async function lireNotifications(pool, utilisateur, etabId) {
   const { rows } = await pool.query(
     `SELECT n.*, t.numero FROM notifications n LEFT JOIN transferts t ON t.id = n.transfert_id
       WHERE n.etablissement_id = $1 ORDER BY n.date DESC LIMIT 50`, [etabId]);
+  const nomType = await traducteurTypes(pool, utilisateur.langue);
+  for (const n of rows) {
+    if (n.code) n.message = tr(utilisateur.langue, `notif.${n.code}`, { ...n.vars, ...(n.vars?.type ? { type: nomType(n.vars.type) } : {}) });
+  }
   return rows;
 }
 
@@ -400,18 +415,20 @@ async function detecterBlocages(pool) {
   let changes = 0;
   for (const l of rows) {
     const age = Number(l.age_min);
-    let niveau = null; let motif = null;
+    let niveau = null; let code = null; let vars = null;
     if (l.etat === 'nettoyage' && age > 2 * l.nettoyage_cible_min) {
-      niveau = 'modere'; motif = `Nettoyage depuis ${Math.round(age)} min (cible ${l.nettoyage_cible_min} min)`;
+      niveau = 'modere'; code = 'nettoyage_long'; vars = { min: Math.round(age), cible: l.nettoyage_cible_min };
     } else if (l.etat === 'reserve' && age > l.reservation_max_min && !l.en_transfert) {
-      niveau = 'eleve'; motif = `Réservé depuis ${Math.round(age)} min sans admission`;
+      niveau = 'eleve'; code = 'reserve_long'; vars = { min: Math.round(age) };
     } else if (l.etat === 'occupe' && l.sortie_prevue && Number(l.retard_min) > l.marge_conge_min) {
-      niveau = 'modere'; motif = `Congé prévu dépassé de ${Math.floor(Number(l.retard_min) / 60)} h (attente d’hébergement ?)`;
+      niveau = 'modere'; code = 'conge_depasse'; vars = { h: Math.floor(Number(l.retard_min) / 60) };
     } else if (l.etat === 'indispo' && age > l.hors_service_max_h * 60) {
-      niveau = 'faible'; motif = `Hors service depuis ${Math.floor(age / 60)} h`;
+      niveau = 'faible'; code = 'hors_service_long'; vars = { h: Math.floor(age / 60) };
     }
+    const motif = code ? tr('fr', `blocage.${code}`, vars) : null;
     if (niveau !== l.blocage_niveau || motif !== l.blocage_motif) {
-      await pool.query('UPDATE lits SET blocage_niveau = $2, blocage_motif = $3 WHERE id = $1', [l.id, niveau, motif]);
+      await pool.query('UPDATE lits SET blocage_niveau = $2, blocage_motif = $3, blocage_code = $4, blocage_vars = $5 WHERE id = $1',
+        [l.id, niveau, motif, code, vars]);
       changes += 1;
     }
   }
@@ -424,55 +441,55 @@ function normaliser(s) {
 }
 
 async function assistant(pool, utilisateur, etabId, question) {
+  const L = utilisateur.langue;
   const reseau = await capaciteReseau(pool, utilisateur, etabId);
   const q = normaliser(question);
-  const types = await pool.query('SELECT id, code, nom FROM types_unite WHERE config_id = $1 ORDER BY ordre', [reseau.config.id]);
+  const types = await pool.query('SELECT id, code, nom, nom_en FROM types_unite WHERE config_id = $1 ORDER BY ordre', [reseau.config.id]);
+  const nomType = (t) => (L === 'en' && t.nom_en) || t.nom;
   const type = types.rows.find((t) => {
-    const n = normaliser(t.nom);
-    return q.includes(n.slice(0, 5)) || new RegExp(`\\b${normaliser(t.code)}\\b`).test(q);
-  }) || (/(intensi|\brea\b)/.test(q) && types.rows.find((t) => t.code === 'SI'))
-     || (/(accouch|obste)/.test(q) && types.rows.find((t) => t.code === 'MAT')) || null;
+    const noms = [normaliser(t.nom), normaliser(t.nom_en || t.nom)];
+    return noms.some((n) => q.includes(n.slice(0, 5))) || new RegExp(`\\b${normaliser(t.code)}\\b`).test(q);
+  }) || (/(intensi|\brea\b|\bicu\b)/.test(q) && types.rows.find((t) => t.code === 'SI'))
+     || (/(accouch|obste|deliver|birth)/.test(q) && types.rows.find((t) => t.code === 'MAT')) || null;
   const moi = reseau.etablissements.find((e) => e.moi);
+  const nomUnite = (u) => nomType(types.rows.find((t) => t.id === u.type_id) || { nom: u.type_nom });
 
-  if (/(bloqu|anomal|probleme|goulot|retard)/.test(q)) {
+  if (/(bloqu|anomal|probleme|goulot|retard|block|stuck|problem|bottleneck|delay)/.test(q)) {
     const { rows } = await pool.query(
-      `SELECT code, blocage_motif FROM lits WHERE etablissement_id = $1 AND blocage_niveau IS NOT NULL
+      `SELECT code, blocage_motif, blocage_code, blocage_vars FROM lits WHERE etablissement_id = $1 AND blocage_niveau IS NOT NULL
         ORDER BY CASE blocage_niveau WHEN 'eleve' THEN 0 WHEN 'modere' THEN 1 ELSE 2 END, code`, [etabId]);
     return rows.length
-      ? `${rows.length} blocage(s) à ${moi.nom} :\n${rows.map((r) => `• ${r.code} : ${r.blocage_motif}`).join('\n')}`
-      : `Aucun blocage détecté à ${moi.nom}.`;
+      ? `${tr(L, 'q_blocages', { n: rows.length, etab: moi.nom })}\n${rows.map((r) => tr(L, 'q_ligne', { a: r.code, b: motifBlocage(L, r) })).join('\n')}`
+      : tr(L, 'q_blocages_vide', { etab: moi.nom });
   }
-  if (/(prevu|bientot|liber|heure|ce soir|demain)/.test(q)) {
+  if (/(prevu|bientot|liber|heure|ce soir|demain|expected|soon|free up|tonight|tomorrow|hour)/.test(q)) {
     const unites = moi.unites.filter((u) => !type || u.type_id === type.id);
-    return `Lits qui devraient se libérer d’ici ${reseau.config.horizon_h} h à ${moi.nom} :\n`
-      + unites.map((u) => `• ${u.type_nom} : ${u.prevus}`).join('\n')
-      + '\nPrévision basée sur les congés prévus et les nettoyages en cours.';
+    return `${tr(L, 'q_prevus', { h: reseau.config.horizon_h, etab: moi.nom })}\n`
+      + unites.map((u) => tr(L, 'q_ligne', { a: nomUnite(u), b: u.prevus })).join('\n')
+      + `\n${tr(L, 'q_prevus_note')}`;
   }
-  if (/(\bou\b|proche|trouver|ailleurs|transf)/.test(q)) {
+  if (/(\bou\b|proche|trouver|ailleurs|transf|where|closest|nearest|find|elsewhere)/.test(q)) {
     const t = type || types.rows[0];
     const r = await recommander(pool, utilisateur, etabId, t.id);
     const s = r.suggestions.find((x) => x.libres);
-    if (!s) return `Aucun lit ${t.nom.toLowerCase()} libre dans le rayon de ${reseau.config.rayon_km} km.`;
-    return `Meilleure option en ${t.nom.toLowerCase()} : ${s.nom} (${s.ville}, ${s.distance_km} km), `
-      + `${s.libres} lit(s) libre(s), ${s.prevus} prévu(s).\nUtilisez « Chercher un lit ailleurs » pour réserver. `
-      + 'La réservation demande toujours une validation.';
+    if (!s) return tr(L, 'q_ou_aucun', { type: nomType(t).toLowerCase(), km: reseau.config.rayon_km });
+    return tr(L, 'q_ou', { type: nomType(t).toLowerCase(), etab: s.nom, ville: s.ville, km: s.distance_km, libres: s.libres, prevus: s.prevus });
   }
-  if (/(combien|libre|dispo|capacite|place)/.test(q)) {
+  if (/(combien|libre|dispo|capacite|place|how many|free|available|capacity|room|space)/.test(q)) {
     const lignes = types.rows.filter((t) => !type || t.id === type.id).map((t) => {
       const ici = moi.unites.find((u) => u.type_id === t.id);
       const reseauLibres = reseau.etablissements.reduce(
-        (s, e) => s + (e.unites.find((u) => u.type_id === t.id)?.libres || 0), 0);
-      return `• ${t.nom} : ${ici ? `${ici.libres} libre(s) ici, ` : 'pas d’unité ici, '}${reseauLibres} dans le réseau`;
+        (n, e) => n + (e.unites.find((u) => u.type_id === t.id)?.libres || 0), 0);
+      return ici ? tr(L, 'q_combien', { type: nomType(t), ici: ici.libres, reseau: reseauLibres })
+        : tr(L, 'q_combien_sans', { type: nomType(t), reseau: reseauLibres });
     });
     return lignes.join('\n');
   }
-  return 'Je peux répondre à des questions comme :\n• Combien de lits libres en soins intensifs ?\n'
-    + '• Où trouver un lit de chirurgie le plus proche ?\n• Quels lits bloquent chez nous ?\n'
-    + '• Combien de lits vont se libérer d’ici ce soir ?';
+  return tr(L, 'q_aide');
 }
 
 module.exports = {
   distanceKm, etablissement, capaciteReseau, recommander, litsEtablissement, litVisible,
   creerTransfert, avancerTransfert, listeTransferts, lireJournal, lireNotifications,
-  detecterBlocages, assistant, exigerActif, niveauDepuis, lireBesoins, sqlBesoins, notifier, SQL_CAPACITE, risque,
+  detecterBlocages, assistant, exigerActif, motifBlocage, niveauDepuis, lireBesoins, sqlBesoins, notifier, SQL_CAPACITE, risque,
 };

@@ -10,10 +10,11 @@ const s = require('./services');
 const t = require('./terrain');
 const copilote = require('./copilote');
 const cx = require('./connecteurs');
+const { langueDe, traducteurTypes, traduireTypes } = require('./langue');
 
 const entier = (v, nom) => {
   const n = Number(v);
-  if (!Number.isInteger(n) || n <= 0) throw new ErreurHttp(400, `Paramètre ${nom} invalide.`);
+  if (!Number.isInteger(n) || n <= 0) throw new ErreurHttp(400, 'parametre_invalide', { nom });
   return n;
 };
 
@@ -34,7 +35,14 @@ function creerApp(pool) {
   app.use(express.static(path.join(__dirname, '..', 'public')));
 
   const api = express.Router();
-  const route = (fn) => (req, res, next) => Promise.resolve(fn(req, res)).then((r) => res.json(r ?? { ok: true })).catch(next);
+  // Langue des textes produits par le serveur : paramètre « langue » (adresse ou corps) ou en-tête X-Langue (français par défaut)
+  api.use((req, res, next) => { req.langue = langueDe(req.query.langue || req.body?.langue || req.get('x-langue')); next(); });
+  const route = (fn) => (req, res, next) => Promise.resolve(fn(req, res))
+    .then(async (r) => {
+      // Noms des types d'unité dans la langue demandée
+      if (req.langue !== 'fr' && r && typeof r === 'object') traduireTypes(r, await traducteurTypes(pool, req.langue));
+      res.json(r ?? { ok: true });
+    }).catch(next);
 
   /* ---------- connexion ---------- */
   api.post('/connexion', route((req) => connexion(pool, req.body.email, req.body.mot_de_passe)));
@@ -55,9 +63,9 @@ function creerApp(pool) {
   api.put('/sh/etablissements/:code', route(async (req) => {
     const cle = process.env.SH_API_KEY;
     const fournie = String(req.get('x-sh-key') || '');
-    if (!cle) throw new ErreurHttp(503, 'Activation SH non configurée sur ce serveur.');
+    if (!cle) throw new ErreurHttp(503, 'sh_non_configure');
     const ok = fournie.length === cle.length && crypto.timingSafeEqual(Buffer.from(fournie), Buffer.from(cle));
-    if (!ok) throw new ErreurHttp(401, 'Clé SH invalide.');
+    if (!ok) throw new ErreurHttp(401, 'cle_sh_invalide');
     return majEtablissement('code', req.params.code, req.body);
   }));
 
@@ -65,13 +73,13 @@ function creerApp(pool) {
     const sets = []; const vals = [valeur];
     if (b.module_actif !== undefined) { vals.push(!!b.module_actif); sets.push(`module_actif = $${vals.length}`); }
     if (b.partage !== undefined) {
-      if (!['complet', 'agrege', 'aucun'].includes(b.partage)) throw new ErreurHttp(400, 'Partage invalide.');
+      if (!['complet', 'agrege', 'aucun'].includes(b.partage)) throw new ErreurHttp(400, 'partage_invalide');
       vals.push(b.partage); sets.push(`partage = $${vals.length}`);
     }
-    if (!sets.length) throw new ErreurHttp(400, 'Rien à modifier.');
+    if (!sets.length) throw new ErreurHttp(400, 'rien_a_modifier');
     const { rows } = await pool.query(
       `UPDATE etablissements SET ${sets.join(', ')} WHERE ${champ} = $1 RETURNING id, code, nom, partage, module_actif`, vals);
-    if (!rows[0]) throw new ErreurHttp(404, 'Établissement introuvable.');
+    if (!rows[0]) throw new ErreurHttp(404, 'etab_introuvable');
     return rows[0];
   }
 
@@ -93,6 +101,7 @@ function creerApp(pool) {
 
   /* ---------- tout le reste exige une session ---------- */
   api.use(exigerSession(pool));
+  api.use((req, res, next) => { req.utilisateur.langue = req.langue; next(); });
 
   // Le rôle entretien n'a accès qu'à l'écran Nettoyage
   api.use((req, res, next) => {
@@ -100,7 +109,7 @@ function creerApp(pool) {
     const ok = (req.method === 'GET' && ['/moi', '/nettoyage'].includes(req.path)) || req.path.startsWith('/moi/')
       || (req.method === 'POST' && (req.path === '/deconnexion' || /^\/nettoyage\/\d+\/debut$/.test(req.path)
         || (/^\/lits\/\d+\/action$/.test(req.path) && req.body && req.body.action === 'nettoyage_ok')));
-    return ok ? next() : next(new ErreurHttp(403, 'Votre rôle donne accès à l’écran Nettoyage seulement.'));
+    return ok ? next() : next(new ErreurHttp(403, 'role_entretien'));
   });
 
   // Mot de passe temporaire : le changer est la seule action permise
@@ -108,7 +117,7 @@ function creerApp(pool) {
     if (!req.utilisateur.mdp_temporaire) return next();
     const ok = (req.method === 'GET' && req.path === '/moi') || (req.method === 'PUT' && req.path === '/moi/mot-de-passe')
       || (req.method === 'POST' && req.path === '/deconnexion');
-    return ok ? next() : next(new ErreurHttp(403, 'Choisissez d’abord votre propre mot de passe.'));
+    return ok ? next() : next(new ErreurHttp(403, 'mdp_temporaire_dabord'));
   });
 
   api.post('/deconnexion', route(async (req) => {
@@ -127,7 +136,8 @@ function creerApp(pool) {
          FROM config_pays c LEFT JOIN types_unite t ON t.config_id = c.id
         WHERE c.id = ANY($1::int[]) GROUP BY c.id`, [[...new Set(rows.map((e) => e.config_id))]]);
     return { utilisateur: { id: u.id, nom: u.nom, email: u.email, role: u.role, admin: u.admin, gestionnaire: u.gestionnaire,
-      totp_actif: u.totp_actif, mdp_temporaire: u.mdp_temporaire }, etablissements: rows, configs: configs.rows };
+      totp_actif: u.totp_actif, mdp_temporaire: u.mdp_temporaire, premiers_pas_vus: u.premiers_pas_vus },
+    etablissements: rows, configs: configs.rows, demo: process.env.ARRIMO_DEMO === '1' };
   }));
 
   /* ---------- capacité, recherche, assistant ---------- */
@@ -148,7 +158,7 @@ function creerApp(pool) {
     await s.litVisible(pool, req.utilisateur, id);
     const action = String(req.body.action || '');
     const vers = ACTIONS_LIT[action];
-    if (!vers) throw new ErreurHttp(400, 'Action inconnue.');
+    if (!vers) throw new ErreurHttp(400, 'action_inconnue');
     return transaction(pool, (c) => changerEtat(c, pool, req.utilisateur.id, id, vers, {
       versionAttendue: req.body.version, patientRef: req.body.patient_ref,
       detail: DETAIL_ACTION[action] || (action === 'reserver' ? 'Réservation locale' : null),
@@ -190,7 +200,7 @@ function creerApp(pool) {
       case 'admettre': return t.admettreDemande(pool, req.utilisateur, id);
       case 'annuler': return t.annulerDemande(pool, req.utilisateur, id);
       case 'transferer': return t.transfererDemande(pool, req.utilisateur, id, req.body);
-      default: throw new ErreurHttp(400, 'Action inconnue.');
+      default: throw new ErreurHttp(400, 'action_inconnue');
     }
   }));
 
@@ -213,11 +223,11 @@ function creerApp(pool) {
     const id = entier(req.params.id, 'id');
     await s.litVisible(pool, req.utilisateur, id);
     const date = req.body.sortie_prevue ? new Date(req.body.sortie_prevue) : null;
-    if (date && Number.isNaN(date.getTime())) throw new ErreurHttp(400, 'Date invalide.');
+    if (date && Number.isNaN(date.getTime())) throw new ErreurHttp(400, 'date_invalide');
     return transaction(pool, async (c) => {
       const { rows } = await c.query(
         `UPDATE lits SET sortie_prevue = $2 WHERE id = $1 AND etat = 'occupe' RETURNING id, code, sortie_prevue`, [id, date]);
-      if (!rows[0]) throw new ErreurHttp(409, 'Le congé prévu ne se règle que sur un lit occupé.');
+      if (!rows[0]) throw new ErreurHttp(409, 'conge_lit_occupe');
       await journaliser(c, { litId: id, utilisateurId: req.utilisateur.id, action: 'Congé prévu modifié',
         detail: date ? date.toISOString() : 'retiré' });
       return rows[0];
@@ -228,9 +238,10 @@ function creerApp(pool) {
     const etab = entier(req.query.etablissement_id, 'etablissement_id');
     exigerEtablissement(req.utilisateur, etab);
     const { rows } = await pool.query(
-      `SELECT id, code, etat, version, blocage_niveau, blocage_motif FROM lits
+      `SELECT id, code, etat, version, blocage_niveau, blocage_motif, blocage_code, blocage_vars FROM lits
         WHERE etablissement_id = $1 AND blocage_niveau IS NOT NULL
         ORDER BY CASE blocage_niveau WHEN 'eleve' THEN 0 WHEN 'modere' THEN 1 ELSE 2 END, code`, [etab]);
+    for (const r of rows) r.blocage_motif = s.motifBlocage(req.langue, r);
     return rows;
   }));
 
@@ -263,10 +274,12 @@ function creerApp(pool) {
   // Erreurs : message clair pour l'utilisateur, détail technique seulement dans les journaux du serveur
   // eslint-disable-next-line no-unused-vars
   app.use((err, req, res, next) => {
-    if (err instanceof ErreurHttp) return res.status(err.statut).json({ erreur: err.message });
-    if (err.type === 'entity.parse.failed') return res.status(400).json({ erreur: 'Requête mal formée.' });
+    const repondre = (e) => res.status(e.statut).json({ erreur: e.message, code: e.code, ...(Object.keys(e.vars).length ? { vars: e.vars } : {}) });
+    if (err instanceof ErreurHttp) return repondre(err);
+    if (err.type === 'entity.parse.failed') return repondre(new ErreurHttp(400, 'requete_mal_formee'));
+    if (err.type === 'entity.too.large') return repondre(new ErreurHttp(413, 'requete_trop_grosse'));
     console.error(err);
-    return res.status(500).json({ erreur: 'Erreur interne. Réessayez ; si le problème persiste, contactez le support.' });
+    return repondre(new ErreurHttp(500, 'erreur_interne'));
   });
   return app;
 }
