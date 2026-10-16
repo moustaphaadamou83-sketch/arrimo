@@ -492,6 +492,61 @@ test('réseau de démonstration : 20 hôpitaux, un compte par hôpital, proximit
   }
 });
 
+test('disponibilité à côté : alerte aux hôpitaux proches qui en ont besoin, sans spam, rayon réglable, Copilote', async () => {
+  const { transaction } = require('../src/db');
+  const { changerEtat, changerEtatCiviere } = require('../src/regles');
+  const hx = await id('HX'); const hy = await id('HY'); const ha = await id('HA'); const hb = await id('HB');
+  const liberer = async (etab, typeCode) => {
+    const l = (await pool.query(`SELECT l.id FROM lits l JOIN types_unite t ON t.id = l.type_id WHERE l.etablissement_id = $1 AND t.code = $2 AND l.etat = 'occupe' AND l.nsa_depuis IS NULL LIMIT 1`, [etab, typeCode])).rows[0];
+    await transaction(pool, (c) => changerEtat(c, pool, null, l.id, 'nettoyage', {}));
+    await transaction(pool, (c) => changerEtat(c, pool, null, l.id, 'libre', {}));
+    return l.id;
+  };
+  const alertes = async (etab, code = 'dispo_lit') => (await pool.query(`SELECT message, vars FROM notifications WHERE etablissement_id = $1 AND code = $2 ORDER BY id`, [etab, code])).rows;
+  await pool.query(`DELETE FROM notifications WHERE code IN ('dispo_lit', 'dispo_civiere')`);
+  // Un lit de médecine se libère à 5 km de X, qui a des patients en attente de médecine : X est avisé, Y (25 km) ne l'est pas
+  await liberer(ha, 'MED');
+  let ax = await alertes(hx);
+  assert.strictEqual(ax.length, 1);
+  assert.match(ax[0].message, /^Lit de médecine libre à côté : Hôpital du Bois-Joli, 5 km, environ \d+\smin/);
+  assert.ok(!(await alertes(hy)).some((a) => a.vars.etab_id === ha), 'hors du rayon de Y');
+  // Pas de spam : un autre lit de médecine à côté dans les 10 minutes ne crée pas de nouvelle alerte
+  await liberer(hb, 'MED');
+  assert.strictEqual((await alertes(hx)).length, 1);
+  // Un autre type d'unité dont X a besoin : nouvelle alerte, regroupée (autres établissements proches avec de la place)
+  await liberer(hb, 'CHIR');
+  ax = await alertes(hx);
+  assert.strictEqual(ax.length, 2);
+  assert.match(ax[1].message, /^(Lit|\d+ lits) de chirurgie libres? à côté : Centre hospitalier Val-des-Cèdres, 5 km, environ \d+\smin \(et \d+ autres? établissements? proches?\)\.$/);
+  // Lu en anglais
+  const en = await fetch(`${base}/api/notifications?etablissement_id=${hx}`, { headers: { Authorization: `Bearer ${tokens.x}`, 'X-Langue': 'en' } }).then((r) => r.json());
+  assert.ok(en.some((n) => /^1 free medicine bed nearby: Hôpital du Bois-Joli, 5 km, about \d+\smin/.test(n.message)), en.map((n) => n.message).join(' | '));
+  // Civière régulière libérée à côté : X a des patients en corridor
+  const cv = (await pool.query(`SELECT id FROM civieres WHERE etablissement_id = $1 AND categorie = 'reguliere' AND etat = 'occupee'
+    AND NOT EXISTS (SELECT 1 FROM demandes_admission d WHERE d.civiere_id = civieres.id AND d.statut IN ('attente', 'assignee')) LIMIT 1`, [ha])).rows[0];
+  await transaction(pool, (c) => changerEtatCiviere(c, pool, null, cv.id, 'nettoyage', {}));
+  await transaction(pool, (c) => changerEtatCiviere(c, pool, null, cv.id, 'libre', {}));
+  assert.match((await alertes(hx, 'dispo_civiere'))[0].message, /^Civière libre à côté : urgence de Hôpital du Bois-Joli/);
+  // Le Copilote reprend l'alerte : transférer le patient qui attend un lit de médecine vers l'hôpital voisin
+  const b = (await appel('x', 'GET', `/copilote/briefing?etablissement_id=${hx}`)).corps;
+  const reco = b.recommandations.find((r) => /lit libre à côté/.test(r.titre));
+  assert.ok(reco && reco.action.type === 'transferer' && [ha, hb].includes(reco.action.destination_id), JSON.stringify(b.recommandations.map((r) => r.titre)));
+  // Rayon réglable par établissement (administrateur) : à 3 km, l'hôpital à 5 km n'avise plus X
+  const avant2fa = process.env.ARRIMO_2FA_ADMIN;
+  process.env.ARRIMO_2FA_ADMIN = '0';
+  try {
+    tokens.gest = (await appel(null, 'POST', '/connexion', { email: 'reseau@demo.arrimo', mot_de_passe: MOT_DE_PASSE_DEMO })).corps.token;
+    assert.strictEqual((await appel('x', 'PUT', `/admin/etablissements/${hx}/rayon-alerte`, { rayon_alerte_km: 3 })).statut, 403);
+    assert.strictEqual((await appel('gest', 'PUT', `/admin/etablissements/${hx}/rayon-alerte`, { rayon_alerte_km: 500 })).statut, 400);
+    assert.strictEqual((await appel('gest', 'PUT', `/admin/etablissements/${hx}/rayon-alerte`, { rayon_alerte_km: 3 })).corps.rayon_alerte_km, 3);
+    await liberer(ha, 'SI');
+    assert.ok(!(await alertes(hx)).some((a) => a.vars.type_nom === 'Soins intensifs'));
+    await appel('gest', 'PUT', `/admin/etablissements/${hx}/rayon-alerte`, { rayon_alerte_km: 10 });
+  } finally {
+    if (avant2fa === undefined) delete process.env.ARRIMO_2FA_ADMIN; else process.env.ARRIMO_2FA_ADMIN = avant2fa;
+  }
+});
+
 test('civières de l’urgence : états, verrou, demande liée, admission, changement de civière, réseau, Copilote, indicateurs', async () => {
   const hx = await id('HX'); const hy = await id('HY'); const med = await type('MED');
   const civ = async (qui, etab) => (await appel(qui, 'GET', `/civieres?etablissement_id=${etab}`)).corps;

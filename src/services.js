@@ -471,6 +471,9 @@ async function lireNotifications(pool, utilisateur, etabId) {
     if (!n.code) continue;
     const vars = { ...n.vars, ...(n.vars?.type ? { type: nomType(n.vars.type) } : {}) };
     if (vars.arrivee) vars.heure = heureLocale(utilisateur.langue, vars.arrivee, fuseau);
+    // Disponibilité à côté : type d'unité et temps de route dans la langue du lecteur
+    if (vars.type_nom) vars.type = nomType(vars.type_nom).toLowerCase();
+    if (vars.min != null) vars.duree = duree(utilisateur.langue, vars.min);
     n.message = tr(utilisateur.langue, `notif.${n.code}`, vars);
   }
   return rows;

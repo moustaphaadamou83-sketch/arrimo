@@ -36,6 +36,10 @@ Ouvrez deux fenêtres côte à côte : à gauche **hopital.x@demo.arrimo**, à d
 - Choisissez **Médecine**, cochez **Avec lit libre seulement**, limitez le temps de route à **1 h** ; ouvrez la **Carte** (couleur = niveau d'alerte).
 - **Transférer ici** sur un hôpital voisin sans compte : son équipe (simulée) accepte en une minute environ.
 
+- **Disponibilité à côté** : pendant la démo, quand un lit se libère dans un hôpital voisin (la simulation en libère régulièrement),
+  un bandeau apparaît en direct chez X, sans recharger la page : « Lit de médecine libre à côté : …, 5 km, environ 6 min », avec **Transférer ici**.
+  Au plus une alerte par type d'unité toutes les 10 minutes ; le rayon (10 km par défaut) se règle dans Paramètres.
+
 ## 6. Les lits qui ne tournent pas (Hôpital X)
 - Onglet **Nettoyage** : l'ordre est dicté par les patients qui attendent (une civière régulière passe en premier quand des patients sont en corridor).
   Sur une tablette, l'écran s'utilise d'une main. **Terminé** : le lit ou la civière redevient libre partout.

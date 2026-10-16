@@ -136,6 +136,8 @@ async function changerEtat(client, pool, utilisateurId, litId, nouveau, opts = {
         nettoyage_debut = NULL
       WHERE id = $1
       RETURNING *`, [litId, nouveau, patientRef, opts.sortiePrevue || null, nouveau === 'indispo' ? opts.motif : null]);
+  // Disponibilité à côté : les hôpitaux proches qui en ont besoin sont avisés (même transaction)
+  if (nouveau === 'libre') await require('./alertes').litLibere(client, litId);
 
   await journaliser(client, {
     litId, utilisateurId, action: 'Changement d’état', ancien: lit.etat, nouveau,
@@ -226,6 +228,7 @@ async function changerEtatCiviere(client, pool, utilisateurId, civiereId, nouvea
             motif_indispo = CASE WHEN $2::text = 'indispo' THEN $5::text ELSE NULL END
       WHERE id = $1 RETURNING *`,
     [cv.id, nouveau, patientRef, arrivee, nouveau === 'indispo' ? opts.motif : null]);
+  if (nouveau === 'libre') await require('./alertes').civiereLiberee(client, cv.id);
   await journaliser(client, {
     civiereId: cv.id, etablissementId: cv.etablissement_id, utilisateurId, action: 'Civière', ancien: cv.etat, nouveau,
     detail: opts.detail || (nouveau === 'occupee' ? `Référence ${patientRef}` : nouveau === 'indispo' ? `Motif : ${opts.motif}` : null),

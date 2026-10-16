@@ -101,7 +101,7 @@ async function api(methode, chemin, corps) {
   });
   let data = null;
   try { data = await r.json(); } catch { /* réponse vide */ }
-  if (r.status === 401 && etat.token) { deconnecter(true); }
+  if (r.status === 401 && etat.token && !etat.pause) { deconnecter(true); }
   if (!r.ok) {
     const e = new Error(messageErreur(data, r.status));
     e.code = data && data.code;
@@ -312,6 +312,7 @@ async function demarrer() {
   document.querySelectorAll('#onglets button').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.v === etat.vue)));
   document.querySelectorAll('.contenu > section').forEach((sec) => { sec.hidden = sec.id !== `v-${etat.vue}`; });
   await rafraichir();
+  veilleNotifs();
   if (!etat.moi.utilisateur.premiers_pas_vus) premiersPas();
   document.body.dataset.pret = '1';
 }
@@ -360,6 +361,46 @@ async function rafraichir() {
   }
 }
 setInterval(() => { if ($('#modale').hidden && document.visibilityState === 'visible') rafraichir(); }, 30000);
+
+/* ---------------- Notifications en direct : pastille et bandeau « disponibilité à côté », sans recharger la page ---------------- */
+async function veilleNotifs() {
+  if (!etat.token || !etat.moi || etat.pause || estEntretien() || document.visibilityState !== 'visible') return;
+  const ctx = etat.ctx;
+  const notifs = await api('GET', `/notifications?etablissement_id=${ctx}`).catch(() => null);
+  if (!notifs || ctx !== etat.ctx) return;
+  const nonLues = notifs.filter((n) => !n.lu).length;
+  $('#n-notif').hidden = !nonLues; $('#n-notif').textContent = nonLues;
+  etat.notifs = notifs;
+  const max = notifs.reduce((m, n) => Math.max(m, Number(n.id)), 0);
+  const dernier = etat.derniereNotif?.[ctx];
+  etat.derniereNotif = { ...(etat.derniereNotif || {}), [ctx]: max };
+  if (dernier == null) return;   // premier passage : rien n'est « nouveau »
+  const dispo = notifs.find((n) => Number(n.id) > dernier && !n.lu && ['dispo_lit', 'dispo_civiere'].includes(n.code));
+  if (dispo) montrerDispo(dispo);
+}
+setInterval(veilleNotifs, Number(window.ARRIMO_VEILLE_MS || 15000));
+function montrerDispo(n) {
+  const b = $('#bandeau-dispo');
+  const lit = n.code === 'dispo_lit';
+  b.innerHTML = `<div>${icone(lit ? 'bed-double' : 'siren')}<span>${esc(n.message)}</span>
+    <span class="actions-dispo">${lit ? `<button class="btn pri" id="b-dispo-ici">${esc(t('national.transferer_ici'))}</button>` : `<button class="btn" id="b-dispo-voir">${esc(t('dispo.voir'))}</button>`}
+    <button class="btn discret" id="b-dispo-fermer" aria-label="${esc(t('general.fermer'))}">${icone('x')}</button></span></div>`;
+  b.hidden = false;
+  $('#b-dispo-fermer').onclick = () => { b.hidden = true; };
+  const voir = $('#b-dispo-voir');
+  if (voir) voir.onclick = () => { b.hidden = true; allerA('national'); };
+  const ici = $('#b-dispo-ici');
+  if (ici) {
+    ici.onclick = async () => {
+      const r = await api('GET', `/national?depuis=${etat.ctx}&type_id=${n.vars.type_id}&avec_lit=1&taille=50`).catch((e) => { toast(e.message, true); return null; });
+      const x = r && r.etablissements.find((e) => e.id === Number(n.vars.etab_id));
+      if (!x) { toast(t('dispo.plus_libre'), true); b.hidden = true; return; }
+      b.hidden = true;
+      etat.national.type_id = String(n.vars.type_id);
+      transfererIci(x);
+    };
+  }
+}
 
 async function majCompteurs() {
   const net = await api('GET', `/nettoyage?etablissement_id=${etat.ctx}`);
@@ -791,7 +832,13 @@ async function vueParams() {
         ${gest ? `<div class="ligne"><select data-partage="${e.id}" aria-label="${P('partage')}">${options('partage', ['complet', 'agrege', 'aucun'], e.partage)}</select>
         <button class="btn${e.module_actif ? '' : ' pri'}" data-activer="${e.id}" data-val="${!e.module_actif}">${P(e.module_actif ? 'desactiver' : 'activer')}</button></div>` : ''}</div>`).join('')}</div>
         <p class="note">${P(gest ? 'note_gest' : 'note')}</p></div>
+      <div class="panneau-c"><h3>${P('alertes_titre')}</h3><p class="note">${P('alertes_aide')}</p>
+        ${etat.moi.utilisateur.admin ? `<div class="ligne"><div class="champ"><label class="lbl" for="p-rayon">${P('alertes_rayon')}</label>
+          <input id="p-rayon" type="number" min="1" max="200" inputmode="numeric" value="${etabCtx().rayon_alerte_km}"></div><button class="btn" id="b-rayon">${esc(t('general.enregistrer'))}</button></div>`
+    : `<p>${P('alertes_valeur', { km: etabCtx().rayon_alerte_km })}</p>`}</div>
     </div>`;
+  const br = $('#b-rayon');
+  if (br) br.onclick = () => agir(br, async () => { await api('PUT', `/admin/etablissements/${etat.ctx}/rayon-alerte`, { rayon_alerte_km: Number($('#p-rayon').value) }); await recharger(); }, t('params.alertes_ok'));
   const recharger = async () => { etat.moi = await api('GET', '/moi'); };
   document.querySelectorAll('[data-activer]').forEach((b) => {
     b.onclick = () => agir(b, async () => { await api('PUT', `/admin/etablissements/${b.dataset.activer}`, { module_actif: b.dataset.val === 'true' }); await recharger(); }, t('params.etab_ok'));
@@ -1407,12 +1454,13 @@ async function vueAdminDemo(corps) {
     <div><button class="btn dan" id="b-demo-zero">${D('demo_bouton')}</button></div></div>`;
   $('#b-demo-zero').onclick = () => modale(t('admin.demo_titre'), `<p>${D('demo_confirmer')}</p>`,
     [{ label: t('general.annuler') }, { label: t('admin.demo_bouton'), pri: true, run: async () => {
+      etat.pause = true;   // les sessions sont fermées par la remise à zéro : pas de « session expirée » entre-temps
       try {
         await api('POST', '/admin/demo/reinitialiser');
         deconnecter(true);
         $('#c-erreur').textContent = t('admin.demo_ok');
         return true;
-      } catch (e) { toast(e.message, true); return false; }
+      } catch (e) { toast(e.message, true); return false; } finally { etat.pause = false; }
     } }]);
 }
 

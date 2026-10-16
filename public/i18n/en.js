@@ -92,6 +92,7 @@ window.ARRIMO_I18N.en = {
     agrege_note: 'This facility only shares its number of free beds.',
     urgence: 'ER: {occ|no patients|# patient|# patients} for {fonc|# stretcher|# stretchers}', urgence_24h: '{n|none over 24 h|# over 24 h|# over 24 h}',
   },
+  dispo: { voir: 'See the national dashboard', plus_libre: 'This bed was just taken. Check the national dashboard.' },
   national: {
     titre: 'National dashboard', intro: 'Every facility that shares its capacity, from nearest to farthest from {etab}, with no distance limit.',
     inactif: 'The national dashboard is available once the module is enabled.', affichage: 'Display', liste: 'List', carte: 'Map',
@@ -137,6 +138,8 @@ window.ARRIMO_I18N.en = {
     aucune: 'No entries.', plus: 'Show more', fin: 'End of log.',
   },
   params: {
+    alertes_titre: '“Nearby availability” alerts', alertes_aide: 'You are notified live when a bed or stretcher frees up at a nearby hospital, only if patients are waiting here for that type of bed or your level is orange or red. At most one alert per unit type every 10 minutes.',
+    alertes_rayon: 'Alert radius (km)', alertes_valeur: 'Alert radius: {km} km.', alertes_ok: 'Alert radius saved.',
     titre: 'Settings', intro: 'Country configuration and activation per facility. These values are read by the module; none are hard-coded.',
     configuration: 'Configuration · {nom}', types: 'Unit types', rayon: 'Suggestion radius', horizon: 'Forecast horizon',
     nettoyage_cible: 'Cleaning target', reservation: 'Reservation without admission', reservation_val: '{duree} max', conge_depasse: 'Overdue discharge',

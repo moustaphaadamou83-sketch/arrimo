@@ -253,6 +253,20 @@ function brancher(api, pool, route, entier) {
     });
   }));
 
+  /* ---------------------------------------------------------------- rayon des alertes « disponibilité à côté » */
+  api.put('/admin/etablissements/:id/rayon-alerte', route(async (req) => {
+    exigerAdmin(req);
+    const etab = entier(req.params.id, 'id');
+    await exigerEtabGerable(req.utilisateur, etab);
+    const km = Number(req.body.rayon_alerte_km);
+    if (!Number.isInteger(km) || km < 1 || km > 200) throw new ErreurHttp(400, 'valeur_invalide', { champ: 'rayon_alerte_km' });
+    return transaction(pool, async (c) => {
+      const r = (await c.query('UPDATE etablissements SET rayon_alerte_km = $2 WHERE id = $1 RETURNING id, nom, rayon_alerte_km', [etab, km])).rows[0];
+      await journalAdmin(c, req.utilisateur, 'Établissement modifié', r.nom, `rayon des alertes ${km} km`, etab);
+      return r;
+    });
+  }));
+
   /* ---------------------------------------------------------------- civières de l'urgence */
   api.get('/admin/civieres', route(async (req) => {
     exigerAdmin(req);

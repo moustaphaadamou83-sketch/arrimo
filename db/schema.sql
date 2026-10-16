@@ -379,3 +379,10 @@ ALTER TABLE etablissements ADD COLUMN IF NOT EXISTS adresse text;
 
 -- Démonstration : charge visée de chaque hôpital sans compte (simulation douce)
 ALTER TABLE demo_etat ADD COLUMN IF NOT EXISTS simulation jsonb NOT NULL DEFAULT '{}';
+
+-- Alerte « disponibilité à côté » : rayon réglable par établissement (km)
+ALTER TABLE etablissements ADD COLUMN IF NOT EXISTS rayon_alerte_km int NOT NULL DEFAULT 10;
+DO $$ BEGIN
+  ALTER TABLE etablissements ADD CONSTRAINT etab_rayon_alerte CHECK (rayon_alerte_km BETWEEN 1 AND 200);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+CREATE INDEX IF NOT EXISTS notif_code_cle ON notifications (etablissement_id, code, date DESC) WHERE code IN ('dispo_lit', 'dispo_civiere');

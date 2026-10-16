@@ -421,3 +421,10 @@ label.item input[type=radio] { order: -1; width: 20px; height: 20px; flex: none;
 .pagination { display: flex; justify-content: center; gap: var(--e2); margin-top: var(--e4); }
 .carte-nat { height: 420px; border-radius: var(--rayon-carte); border: 1px solid var(--bordure); margin-bottom: var(--e2); }
 @media (max-width: 600px) { .carte-nat { height: 320px; } }
+
+/* Bandeau « disponibilité à côté » (notification en direct) */
+.bandeau-dispo > div { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e2) var(--e3); background: var(--carte); border: 1px solid var(--principal);
+  border-left: 6px solid var(--succes); border-radius: var(--rayon); padding: var(--e3) var(--e4); font-size: var(--t-texte); box-shadow: var(--ombre); }
+.bandeau-dispo > div > span:nth-child(2) { flex: 1 1 280px; }
+.bandeau-dispo .ic { color: var(--principal); }
+.actions-dispo { display: flex; align-items: center; gap: var(--e2); }

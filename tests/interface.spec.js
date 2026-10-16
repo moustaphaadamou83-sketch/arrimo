@@ -47,6 +47,7 @@ async function ouvrir(L, email, langue) {
   page.on('console', (m) => { if (m.type() === 'error') page.erreurs.push(m.text()); });
   page.on('pageerror', (e) => page.erreurs.push(String(e)));
   if (langue) await page.addInitScript((l) => { try { localStorage.setItem('arrimo-langue', l); } catch { /* */ } }, langue);
+  await page.addInitScript(() => { window.ARRIMO_VEILLE_MS = 1000; });   // notifications en direct : vérifiées chaque seconde pendant le test
   await page.goto(base);
   await page.fill('#c-email', email);
   await page.fill('#c-mdp', MDP);
@@ -221,6 +222,21 @@ for (const L of LARGEURS) {
     await x.click('#v-copilote [data-ex="3"]');
     await x.waitForFunction(() => /NSA/.test(document.querySelector('#v-copilote .reponse')?.textContent || ''));
     await verifier(x, L, '02-copilote-questions');
+
+    // 1 bis. Disponibilité à côté : un lit de médecine se libère à 5 km ; X est avisé en direct, sans recharger la page
+    const { transaction } = require('../src/db');
+    const { changerEtat } = require('../src/regles');
+    const litHA = (await pool.query(`SELECT l.id FROM lits l JOIN etablissements e ON e.id = l.etablissement_id JOIN types_unite t ON t.id = l.type_id
+      WHERE e.code = 'HA' AND t.code = 'MED' AND l.etat = 'occupe' AND l.nsa_depuis IS NULL LIMIT 1`)).rows[0];
+    await transaction(pool, (c) => changerEtat(c, pool, null, litHA.id, 'nettoyage', {}));
+    await transaction(pool, (c) => changerEtat(c, pool, null, litHA.id, 'libre', {}));
+    await x.waitForSelector('#bandeau-dispo:not([hidden]) #b-dispo-ici', { timeout: 10000 });
+    assert.match(await x.textContent('#bandeau-dispo'), /(Lit|\d+ lits) de médecine libres? à côté : Hôpital du Bois-Joli, 5 km/);
+    await verifier(x, L, '01c-disponibilite-a-cote');
+    await x.click('#b-dispo-ici');
+    await x.waitForSelector('#modale:not([hidden]) #m-npat');
+    await verifier(x, L, '01d-disponibilite-transferer');
+    await x.keyboard.press('Escape');
 
     // 2 bis. L'urgence de X : civières, corridor, séjours de plus de 24 h
     await onglet(x, 'urgence');

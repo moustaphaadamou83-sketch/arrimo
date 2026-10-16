@@ -63,6 +63,22 @@ async function briefing(pool, utilisateur, etabId) {
     }
   }
 
+  // 1 bis. Disponibilité à côté : alertes des 30 dernières minutes, encore valables, pour un patient qui attend ce type de lit
+  const alertes = (await pool.query(
+    `SELECT DISTINCT ON (n.vars->>'etab_id', n.vars->>'type_id') n.vars, n.date,
+            (SELECT count(*)::int FROM lits l WHERE l.etablissement_id = (n.vars->>'etab_id')::int AND l.type_id = (n.vars->>'type_id')::int AND l.etat = 'libre') AS libres
+       FROM notifications n WHERE n.etablissement_id = $1 AND n.code = 'dispo_lit' AND n.date > now() - interval '30 minutes'
+      ORDER BY n.vars->>'etab_id', n.vars->>'type_id', n.date DESC`, [etabId])).rows;
+  const dejaProposees = new Set(recos.filter((r) => r.action?.demande_id).map((r) => r.action.demande_id));
+  for (const a of alertes.filter((x) => x.libres > 0)) {
+    const d = file.find((x) => x.statut === 'attente' && x.type_id === Number(a.vars.type_id) && !x.lit_suggere && !dejaProposees.has(x.id));
+    if (!d) continue;
+    dejaProposees.add(d.id);
+    ajouter(d.priorite === 'p1' || d.depasse ? 1 : 2, tr(L, 'r_dispo', { type: nomType(a.vars.type_nom), etab: a.vars.etab, km: a.vars.km }),
+      tr(L, 'r_dispo_raison', { il_y_a: duree(L, (Date.now() - new Date(a.date)) / 60000), n: a.libres, ref: d.patient_ref, attente: duree(L, d.attente_min), route: duree(L, a.vars.min) }),
+      { type: 'transferer', demande_id: d.id, destination_id: Number(a.vars.etab_id), libelle: tr(L, 'r_transferer_action', { etab: a.vars.etab }) });
+  }
+
   // 2. Transferts qui attendent une réponse de notre part
   for (const tr0 of transferts) {
     if (tr0.statut === 'demande' && tr0.destination_id === etabId) {

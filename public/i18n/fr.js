@@ -93,6 +93,7 @@ window.ARRIMO_I18N.fr = {
     agrege_note: 'Cet établissement partage seulement le nombre de lits libres.',
     urgence: 'Urgence : {occ|aucun patient|# patient|# patients} pour {fonc|# civière|# civières}', urgence_24h: '{n|aucun depuis plus de 24 h|# depuis plus de 24 h|# depuis plus de 24 h}',
   },
+  dispo: { voir: 'Voir au tableau national', plus_libre: 'Ce lit vient d’être pris. Consultez le tableau national.' },
   national: {
     titre: 'Tableau national', intro: 'Tous les établissements qui partagent leur capacité, du plus proche au plus loin depuis {etab}, sans limite de distance.',
     inactif: 'Le tableau national est disponible une fois le module activé.', affichage: 'Affichage', liste: 'Liste', carte: 'Carte',
@@ -138,6 +139,8 @@ window.ARRIMO_I18N.fr = {
     aucune: 'Aucune entrée pour l’instant.', plus: 'Afficher plus', fin: 'Fin du journal.',
   },
   params: {
+    alertes_titre: 'Alertes « disponibilité à côté »', alertes_aide: 'Vous êtes avisé en direct quand un lit ou une civière se libère dans un hôpital proche, seulement si des patients attendent ce type de lit chez vous ou si votre niveau est orange ou rouge. Au plus une alerte par type d’unité toutes les 10 minutes.',
+    alertes_rayon: 'Rayon des alertes (km)', alertes_valeur: 'Rayon des alertes : {km} km.', alertes_ok: 'Rayon des alertes enregistré.',
     titre: 'Paramètres', intro: 'Configuration du pays et activation par établissement. Ces valeurs sont lues par le module ; aucune n’est codée en dur.',
     configuration: 'Configuration · {nom}', types: 'Types d’unité', rayon: 'Rayon de suggestion', horizon: 'Horizon de prévision',
     nettoyage_cible: 'Nettoyage cible', reservation: 'Réservation sans admission', reservation_val: '{duree} au plus', conge_depasse: 'Congé dépassé',

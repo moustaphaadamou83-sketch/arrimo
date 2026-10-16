@@ -147,7 +147,7 @@ function creerApp(pool) {
   api.get('/moi', route(async (req) => {
     const u = req.utilisateur;
     const { rows } = await pool.query(
-      `SELECT e.id, e.code, e.nom, e.ville, e.partage, e.module_actif, e.config_id
+      `SELECT e.id, e.code, e.nom, e.ville, e.partage, e.module_actif, e.config_id, e.rayon_alerte_km
          FROM etablissements e
         WHERE e.actif AND ($1 OR e.id = ANY($2::int[]))
         ORDER BY e.nom`, [u.gestionnaire, u.etabs]);
