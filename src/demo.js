@@ -12,9 +12,9 @@ const { viderCacheTypes } = require('./langue');
 const estDemo = () => process.env.ARRIMO_DEMO === '1';
 
 async function reinitialiser(pool) {
-  const { demoDeux } = require('../db/demo-deux');
+  const { demoReseau } = require('../db/demo-reseau');
   await viderBase(pool);
-  await demoDeux(pool, { silencieux: true });
+  await demoReseau(pool, { silencieux: true });
   viderCacheTypes();
 }
 

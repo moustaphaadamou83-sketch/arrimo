@@ -12,7 +12,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { creerPool } = require('../src/db');
 const { viderBase } = require('../db/vider');
-const { demoDeux } = require('../db/demo-deux');
+const { demoReseau } = require('../db/demo-reseau');
 
 const URL_BASE = process.env.CHARGE_DATABASE_URL || process.env.TEST_DATABASE_URL;
 const N = Number(process.env.CHARGE_UTILISATEURS || 50);
@@ -26,7 +26,7 @@ const centile = (v, p) => { const s = [...v].sort((a, b) => a - b); return s.len
   if (!URL_BASE) throw new Error('CHARGE_DATABASE_URL requis');
   const pool = creerPool(URL_BASE);
   await viderBase(pool);
-  const { ids } = await demoDeux(pool, { silencieux: true });
+  const { ids } = await demoReseau(pool, { silencieux: true, comptesRoles: true });
   const serveur = spawn(process.execPath, ['src/server.js'], {
     cwd: path.join(__dirname, '..'), stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, DATABASE_URL: URL_BASE, PORT: String(PORT), HOST: '127.0.0.1', NODE_ENV: 'production', ARRIMO_DEMO: '1' },
@@ -59,7 +59,7 @@ const centile = (v, p) => { const s = [...v].sort((a, b) => a - b); return s.len
   }
 
   // Sessions : coordination X et Y, urgence, entretien, réseau (une session par utilisateur virtuel)
-  const comptes = ['coordo.x', 'coordo.y', 'urgence.x', 'urgence.y', 'entretien.x', 'entretien.y', 'reseau'];
+  const comptes = ['hopital.x', 'hopital.y', 'entretien.x', 'entretien.y', 'reseau'];
   const vus = [];
   for (let i = 0; i < N; i += 1) {
     const email = `${comptes[i % comptes.length]}@demo.arrimo`;

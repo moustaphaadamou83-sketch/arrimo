@@ -23,7 +23,8 @@ Propriétaire : Moustafa Adamou. Langue de travail et de l’interface : **fran�
 - `src/copilote.js` briefing, recommandations, vue réseau, questions (mode local ; mode IA facultatif sans référence patient)
 - `src/connecteurs.js` réception d’événements HL7 ADT traduits en JSON, capacité réseau en lecture
 - `src/admin.js` mon compte, double authentification, administration · `src/totp.js` codes à 6 chiffres (RFC 6238)
-- `db/schema.sql` schéma (idempotent, rejouable) · `db/seed.js` démo réseau 6 établissements · `db/demo-deux.js` démo Hôpital X / Y
+- `db/schema.sql` schéma (idempotent, rejouable) · `db/seed.js` ancienne démo à 6 établissements (tests) · `db/demo-reseau.js` démo : réseau de 20 hôpitaux (comptes hopital.x, hopital.y, reseau)
+- `src/simulation.js` démo vivante : les hôpitaux sans compte évoluent toutes les 3 min (même règles, journalisé) · `src/national.js` tableau national par proximité
 - `public/` interface (`index.html`, `app.js`, `style.css`, `logo.svg`)
 - `deploy/installer.sh` installation serveur · `deploy/sauvegarde.sh`, `deploy/restaurer.sh`
 - Journaux `journal` et `journal_admin` **immuables** (déclencheurs PostgreSQL) : ne jamais contourner.

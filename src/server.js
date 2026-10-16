@@ -26,3 +26,9 @@ const tourner = () => demo.recaler(pool)
   .catch((e) => console.error('Détection des blocages :', e.message));
 tourner();
 setInterval(tourner, intervalle);
+
+// Démonstration : la capacité des hôpitaux sans compte évolue doucement (toutes les 3 minutes par défaut)
+const { simuler } = require('./simulation');
+if (demo.estDemo()) {
+  setInterval(() => simuler(pool).catch((e) => console.error('Simulation de la démo :', e.message)), Number(process.env.SIMULATION_MINUTES || 3) * 60000);
+}

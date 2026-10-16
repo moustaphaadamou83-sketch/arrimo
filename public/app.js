@@ -518,7 +518,7 @@ async function vueNational() {
       <span class="num">${esc(t('national.libres', { n: un.libres }))}</span><span class="note num">${un.prevus != null ? esc(t('national.prevus', { n: un.prevus, h: cfg.horizon_h })) : esc(t('national.prevus_inconnu'))}</span></div>`).join('');
     const peut = !x.moi && (!typeChoisi || x.unites.some((un) => un.type_id === typeChoisi.id && un.libres > 0));
     return `<article class="etab${x.moi ? ' moi' : ''}"><header><div><h3>${esc(x.nom)}</h3>
-        <div class="note">${esc([x.adresse, x.ville].filter(Boolean).join(', '))}</div>
+        <div class="note donnee">${esc([x.adresse, x.ville].filter(Boolean).join(', '))}</div>
         ${x.moi ? '' : `<div class="nat-route">${icone('map-pin')}<span class="num">${esc(t('national.route', { km: x.distance_km, duree: duree(x.minutes_route) }))}</span></div>`}</div>
         <div class="nat-etat">${x.moi ? `<span class="badge fort">${N('vous')}</span>` : `<span class="badge">${esc(t(`partage.${x.partage}`))}</span>`} ${niveauHTML(x.niveau, ` · ${esc(pct(x.pression))}`)}</div></header>
       <div class="nat-unites">${lignes || `<p class="note">${N('aucune_unite')}</p>`}</div>

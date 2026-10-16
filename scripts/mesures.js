@@ -8,7 +8,7 @@ const path = require('path');
 const { creerPool } = require('../src/db');
 const { creerApp } = require('../src/app');
 const { viderBase } = require('../db/vider');
-const { demoDeux } = require('../db/demo-deux');
+const { demoReseau } = require('../db/demo-reseau');
 const { SQL_CAPACITE } = require('../src/services');
 
 const URL_BASE = process.env.MESURE_DATABASE_URL || process.env.TEST_DATABASE_URL;
@@ -20,12 +20,12 @@ const centile = (v, p) => { const s = [...v].sort((a, b) => a - b); return s[Mat
   if (!URL_BASE) throw new Error('MESURE_DATABASE_URL requis');
   const pool = creerPool(URL_BASE);
   await viderBase(pool);
-  const { ids } = await demoDeux(pool, { silencieux: true });
+  const { ids } = await demoReseau(pool, { silencieux: true });
   process.env.API_LIMITE_SESSION = '100000';
   const srv = creerApp(pool).listen(0);
   const base = `http://127.0.0.1:${srv.address().port}/api`;
   const jeton = async (email) => (await (await fetch(`${base}/connexion`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, mot_de_passe: MDP }) })).json()).token;
-  const x = await jeton('coordo.x@demo.arrimo');
+  const x = await jeton('hopital.x@demo.arrimo');
   const r = await jeton('reseau@demo.arrimo');
   const hx = ids.HX;
   const si = (await pool.query(`SELECT id FROM types_unite WHERE code = 'SI'`)).rows[0].id;

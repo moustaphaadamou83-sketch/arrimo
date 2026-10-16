@@ -2,7 +2,7 @@
 # Installe Arrimo sur un serveur Ubuntu (22.04 ou 24.04), derrière Nginx en HTTPS.
 # Usage (en root, depuis le dossier qui contient arrimo.zip) :
 #   bash installer.sh arrimo.mondomaine.com          démonstration Hôpital X / Hôpital Y
-#   SCENARIO=reseau bash installer.sh ...            démonstration réseau de 6 établissements
+#   SCENARIO=six bash installer.sh ...               ancienne démonstration à 6 établissements (par défaut : réseau de 20 hôpitaux)
 # Avant : créer chez Namecheap un enregistrement DNS A « arrimo » vers l'adresse IP du serveur.
 set -euo pipefail
 
@@ -10,7 +10,7 @@ DOMAINE="${1:-}"
 PORT="${PORT:-3010}"
 DOSSIER=/opt/arrimo
 ARCHIVE="${ARCHIVE:-arrimo.zip}"
-SCENARIO="${SCENARIO:-deux}"
+SCENARIO="${SCENARIO:-demo}"
 
 [ "$(id -u)" -eq 0 ] || { echo "Lancez ce script en root (sudo)."; exit 1; }
 [ -n "$DOMAINE" ] || { echo "Usage : bash installer.sh arrimo.mondomaine.com"; exit 1; }
@@ -61,7 +61,7 @@ chown -R arrimo:arrimo "$DOSSIER"
 
 echo "== 4/7 Données de démonstration (fictives)"
 if [ "${NOUVELLE_INSTALLATION:-0}" = 1 ]; then
-  if [ "$SCENARIO" = reseau ]; then SCRIPT=db/seed.js; else SCRIPT=db/demo-deux.js; fi
+  if [ "$SCENARIO" = six ]; then SCRIPT=db/seed.js; else SCRIPT=db/demo-reseau.js; fi
   sudo -u arrimo bash -c "set -a; . $DOSSIER/.env; set +a; cd $DOSSIER && node $SCRIPT" | tee "$DOSSIER/acces-demo.txt"
   chmod 600 "$DOSSIER/acces-demo.txt"; chown arrimo:arrimo "$DOSSIER/acces-demo.txt"
 else

@@ -10,7 +10,7 @@ const { chromium } = require('playwright');
 const { creerPool } = require('../src/db');
 const { creerApp } = require('../src/app');
 const { viderBase } = require('../db/vider');
-const { demoDeux } = require('../db/demo-deux');
+const { demoReseau } = require('../db/demo-reseau');
 
 const MDP = process.env.DEMO_MOT_DE_PASSE || 'Demo-Arrimo-2026';
 const LARGEURS = [{ nom: 'ordinateur', width: 1366, height: 860 }, { nom: 'telephone', width: 390, height: 844, mobile: true }];
@@ -23,7 +23,7 @@ const ECRANS = ['copilote', 'indicateurs', 'lits', 'admissions'];
   process.env.ARRIMO_DEMO = '1';
   const pool = creerPool(process.env.TEST_DATABASE_URL);
   await viderBase(pool);
-  await demoDeux(pool, { silencieux: true });
+  await demoReseau(pool, { silencieux: true, comptesRoles: true });
   await pool.query('UPDATE utilisateurs SET premiers_pas_vus = true');
   const serveur = creerApp(pool).listen(0);
   const base = `http://127.0.0.1:${serveur.address().port}`;
@@ -40,7 +40,7 @@ const ECRANS = ['copilote', 'indicateurs', 'lits', 'admissions'];
   };
   for (const langue of ['fr', 'en']) {
     for (const L of LARGEURS) {
-      const p = await ouvrir(L, langue, 'coordo.x@demo.arrimo');
+      const p = await ouvrir(L, langue, 'hopital.x@demo.arrimo');
       for (const e of ECRANS) {
         await p.click(`#onglets [data-v="${e}"]`);
         await p.waitForFunction((v) => document.querySelector(`#v-${v}`).children.length > 0 && !document.querySelector(`#v-${v}`).hidden, e);

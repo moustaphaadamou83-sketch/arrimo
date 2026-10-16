@@ -376,3 +376,6 @@ ALTER TABLE transferts ADD COLUMN IF NOT EXISTS arrivee_prevue timestamptz;
 
 -- Tableau de bord national : adresse affichée (fictive en démonstration)
 ALTER TABLE etablissements ADD COLUMN IF NOT EXISTS adresse text;
+
+-- Démonstration : charge visée de chaque hôpital sans compte (simulation douce)
+ALTER TABLE demo_etat ADD COLUMN IF NOT EXISTS simulation jsonb NOT NULL DEFAULT '{}';

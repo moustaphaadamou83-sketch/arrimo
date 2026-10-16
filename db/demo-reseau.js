@@ -1,9 +1,12 @@
 /**
- * Démonstration à deux hôpitaux (données entièrement fictives).
- *   Hôpital X : sous pression (urgence pleine, soins intensifs saturés, NSA élevés)
- *   Hôpital Y : a de la place, reçoit les transferts
+ * Démonstration : un réseau de 20 hôpitaux fictifs (noms, villes, adresses et positions inventés ; aucune donnée réelle).
+ *   Hôpital X : sous pression (urgence débordée, soins intensifs saturés, NSA élevés) — compte hopital.x@demo.arrimo
+ *   Hôpital Y : a de la place, reçoit les transferts — compte hopital.y@demo.arrimo
+ *   18 autres hôpitaux sans compte, de charges variées : 3 à moins de 10 km de X, 2 à moins de 10 km de Y, 13 entre 10 et 150 km.
+ *   Leur capacité évolue d'elle-même (src/simulation.js) pour que la démo vive. Compte réseau : reseau@demo.arrimo.
+ * Pour la démo, un seul compte par hôpital gère tout (lits, civières, urgence, nettoyage, transferts) ; les rôles restent dans le produit.
  * Noms modifiables : DEMO_NOM_X, DEMO_VILLE_X, DEMO_NOM_Y, DEMO_VILLE_Y.
- * Usage : node db/demo-deux.js  (base vide)    ou    npm run demo:reset  (remet la démo à zéro)
+ * Usage : node db/demo-reseau.js  (base vide)    ou    npm run demo:reset  (remet la démo à zéro)
  */
 const fs = require('fs');
 const path = require('path');
@@ -14,8 +17,30 @@ const { creerDemande } = require('../src/terrain');
 const { creerConnecteur } = require('../src/connecteurs');
 
 const MDP = process.env.DEMO_MOT_DE_PASSE || 'Demo-Arrimo-2026';
-const X = { code: 'HX', nom: process.env.DEMO_NOM_X || 'Hôpital X', ville: process.env.DEMO_VILLE_X || 'Ville X', lat: 45.40, lon: -71.89 };
-const Y = { code: 'HY', nom: process.env.DEMO_NOM_Y || 'Hôpital Y', ville: process.env.DEMO_VILLE_Y || 'Ville Y', lat: 45.27, lon: -72.15 };
+const X = { code: 'HX', nom: process.env.DEMO_NOM_X || 'Hôpital X', ville: process.env.DEMO_VILLE_X || 'Ville X', adresse: '1200, boulevard des Érables', lat: 45.40, lon: -71.89 };
+const Y = { code: 'HY', nom: process.env.DEMO_NOM_Y || 'Hôpital Y', ville: process.env.DEMO_VILLE_Y || 'Ville Y', adresse: '85, rue du Lac-Clair', lat: 45.27, lon: -72.15 };
+// Les 18 autres hôpitaux : [code, nom, ville, adresse, latitude, longitude, partage, taille (× plan), charge (0 à 1), civières [régulières, débordement, patients]]
+// Distances depuis X (45,40 ; -71,89) : HA 4,5 km, HB 5,4 km, HC 6,6 km ; depuis Y : HD 4,5 km, HE 5,4 km ; les autres de 19 à 125 km.
+const AUTRES = [
+  ['HA', 'Hôpital du Bois-Joli', 'Bois-Joli', '410, rue des Merisiers', 45.430, -71.930, 'complet', 0.6, 0.78, [8, 2, 6]],
+  ['HB', 'Centre hospitalier Val-des-Cèdres', 'Val-des-Cèdres', '22, chemin du Moulin', 45.360, -71.850, 'complet', 0.8, 0.96, [10, 4, 13]],
+  ['HC', 'Hôpital Sainte-Aurore', 'Sainte-Aurore-des-Monts', '3005, boulevard Laurier-Est', 45.455, -71.860, 'agrege', 0.5, 0.7, [6, 2, 4]],
+  ['HD', 'Hôpital de la Pointe-aux-Hérons', 'Pointe-aux-Hérons', '17, rue du Quai', 45.300, -72.110, 'complet', 0.5, 0.65, [6, 2, 3]],
+  ['HE', 'Centre de santé Lac-Brunet', 'Lac-Brunet', '940, route des Pins', 45.235, -72.200, 'complet', 0.4, 0.88, [5, 2, 6]],
+  ['HF', 'Hôpital de Rivière-Claire', 'Rivière-Claire', '5, place de l’Église', 45.520, -71.700, 'complet', 0.7, 0.72, [8, 2, 6]],
+  ['HG', 'Hôpital régional du Mont-Argent', 'Mont-Argent', '1500, avenue du Sommet', 45.200, -71.600, 'complet', 1.0, 0.92, [16, 6, 21]],
+  ['HH', 'Centre hospitalier des Trois-Pins', 'Trois-Pins', '260, rue Principale', 45.650, -72.050, 'complet', 0.6, 0.6, [8, 2, 4]],
+  ['HI', 'Hôpital Saint-Aurèle', 'Saint-Aurèle', '77, rang du Ruisseau', 45.100, -72.400, 'complet', 0.5, 0.82, [6, 2, 6]],
+  ['HJ', 'Hôpital de Beaurivage-Nord', 'Beaurivage-Nord', '1010, rue de la Rivière', 45.800, -71.950, 'agrege', 0.6, 0.75, [8, 2, 7]],
+  ['HK', 'Centre hospitalier du Haut-Fleuri', 'Haut-Fleuri', '48, boulevard du Parc', 45.400, -72.600, 'complet', 0.8, 0.98, [12, 4, 16]],
+  ['HL', 'Hôpital des Collines-Bleues', 'Collines-Bleues', '330, montée des Bleuets', 45.000, -71.800, 'complet', 0.5, 0.55, [6, 2, 2]],
+  ['HM', 'Hôpital de Saint-Clovis-du-Lac', 'Saint-Clovis-du-Lac', '12, rue des Pionniers', 45.900, -71.400, 'complet', 0.6, 0.85, [8, 2, 8]],
+  ['HN', 'Centre hospitalier Grand-Héron', 'Grand-Héron', '2400, boulevard des Hérons', 45.600, -73.000, 'complet', 1.0, 0.94, [18, 6, 24]],
+  ['HO', 'Hôpital de Val-Saint-Rémi', 'Val-Saint-Rémi', '61, rue Notre-Dame', 46.200, -71.900, 'complet', 0.7, 0.68, [8, 2, 5]],
+  ['HP', 'Hôpital du Bassin-Doré', 'Bassin-Doré', '150, avenue des Tilleuls', 45.350, -73.400, 'complet', 0.9, 0.8, [12, 4, 11]],
+  ['HQ', 'Centre hospitalier de Lac-aux-Outardes', 'Lac-aux-Outardes', '7, chemin du Lac', 46.400, -72.500, 'aucun', 0.5, 0.7, [6, 2, 4]],
+  ['HR', 'Hôpital de la Haute-Clairière', 'Haute-Clairière', '880, rue Champêtre', 46.500, -71.600, 'complet', 0.6, 0.62, [8, 2, 4]],
+].map(([code, nom, ville, adresse, lat, lon, partage, taille, charge, civ]) => ({ code, nom, ville, adresse, lat, lon, partage, taille, charge, civ }));
 
 const NOMS_EN = { SI: 'Intensive care', MED: 'Medicine', CHIR: 'Surgery', MAT: 'Maternity' };
 // Plan des unités : [code type, nom, chambres, lits par chambre, étage, équipement]
@@ -32,7 +57,7 @@ let graine = 4242;
 const rnd = () => { graine = (graine * 1103515245 + 12345) % 2147483648; return graine / 2147483648; };
 const ref = () => `P-${String(10000 + Math.floor(rnd() * 89999))}`;
 
-async function demoDeux(pool, { silencieux = false } = {}) {
+async function demoReseau(pool, { silencieux = false, comptesRoles = false } = {}) {
   await pool.query(fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8'));
   if ((await pool.query('SELECT count(*)::int AS n FROM etablissements')).rows[0].n) {
     throw new Error('La base contient déjà des données. Utilisez npm run demo:reset pour repartir de zéro.');
@@ -46,22 +71,25 @@ async function demoDeux(pool, { silencieux = false } = {}) {
       types[code] = (await c.query('INSERT INTO types_unite (config_id, code, nom, ordre, nom_en) VALUES ($1,$2,$3,$4,$5) RETURNING id',
         [cfg, code, nom, i + 1, NOMS_EN[code]])).rows[0].id;
     }
-    for (const h of [X, Y]) {
+    for (const h of [X, Y, ...AUTRES]) {
       ids[h.code] = (await c.query(
-        `INSERT INTO etablissements (code, nom, ville, latitude, longitude, config_id, partage, module_actif)
-         VALUES ($1,$2,$3,$4,$5,$6,'complet',true) RETURNING id`, [h.code, h.nom, h.ville, h.lat, h.lon, cfg])).rows[0].id;
-      const sfx = h.code === 'HX' ? 'x' : 'y';
-      for (const [login, nom, role] of [
-        [`coordo.${sfx}`, `Coordination des lits · ${h.nom}`, 'coordonnateur'],
-        [`urgence.${sfx}`, `Urgence · ${h.nom}`, 'coordonnateur'],
-        [`entretien.${sfx}`, `Entretien · ${h.nom}`, 'entretien'],
-      ]) {
-        const u = (await c.query('INSERT INTO utilisateurs (email, nom, mot_de_passe_hash, role) VALUES ($1,$2,$3,$4) RETURNING id',
-          [`${login}@demo.arrimo`, nom, hash, role])).rows[0].id;
-        await c.query('INSERT INTO utilisateur_etablissements VALUES ($1,$2)', [u, ids[h.code]]);
+        `INSERT INTO etablissements (code, nom, ville, adresse, latitude, longitude, config_id, partage, module_actif)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,true) RETURNING id`, [h.code, h.nom, h.ville, h.adresse, h.lat, h.lon, cfg, h.partage || 'complet'])).rows[0].id;
+      // Un seul compte par hôpital pour la démo (X et Y) ; les comptes par rôle ne servent qu'aux tests
+      if (h === X || h === Y) {
+        const sfx = h.code === 'HX' ? 'x' : 'y';
+        const comptes = [[`hopital.${sfx}`, h.nom, 'coordonnateur']];
+        if (comptesRoles) comptes.push([`entretien.${sfx}`, `Entretien · ${h.nom}`, 'entretien']);
+        for (const [login, nom, role] of comptes) {
+          const u = (await c.query('INSERT INTO utilisateurs (email, nom, mot_de_passe_hash, role) VALUES ($1,$2,$3,$4) RETURNING id',
+            [`${login}@demo.arrimo`, nom, hash, role])).rows[0].id;
+          await c.query('INSERT INTO utilisateur_etablissements VALUES ($1,$2)', [u, ids[h.code]]);
+        }
       }
-      // Unités, chambres, lits
-      for (const [code, nom, nbCh, nbLits, etage, equip] of PLAN) {
+      // Unités, chambres, lits (les autres hôpitaux : plan réduit selon leur taille ; les plus petits n'ont pas de soins intensifs)
+      for (const [code, nom, nbChPlan, nbLits, etage, equip] of PLAN) {
+        const nbCh = h.taille ? Math.round(nbChPlan * h.taille) : nbChPlan;
+        if (!nbCh || (h.taille && h.taille < 0.6 && code === 'SI')) continue;
         const unite = (await c.query('INSERT INTO unites (etablissement_id, type_id, nom) VALUES ($1,$2,$3) RETURNING id', [ids[h.code], types[code], nom])).rows[0].id;
         const lits = [];
         for (let ch = 1; ch <= nbCh; ch += 1) {
@@ -69,7 +97,7 @@ async function demoDeux(pool, { silencieux = false } = {}) {
           const chambre = (await c.query('INSERT INTO chambres (unite_id, numero) VALUES ($1,$2) RETURNING id', [unite, num])).rows[0].id;
           for (let k = 0; k < nbLits; k += 1) lits.push({ chambre, code: `${code}-${num}${nbLits > 1 ? 'AB'[k] : ''}`, ch });
         }
-        const charge = CHARGE[h.code][code];
+        const charge = CHARGE[h.code] ? CHARGE[h.code][code] : Math.min(1, h.charge + (code === 'SI' ? 0.08 : code === 'MAT' ? -0.12 : 0));
         for (const [i, l] of lits.entries()) {
           // Chez Y, les premières chambres (isolement, pression négative) restent libres : elles servent au scénario de transfert
           const p = h.code === 'HY' ? 1 - (i + 1) / lits.length : i / lits.length;
@@ -87,7 +115,7 @@ async function demoDeux(pool, { silencieux = false } = {}) {
               etat === 'nettoyage' ? 10 + Math.floor(rnd() * 40) : etat === 'reserve' ? 15 + Math.floor(rnd() * 40) : 60 + Math.floor(rnd() * 4000),
               etat === 'occupe' ? new Date(Date.now() + (6 + Math.floor(rnd() * 90)) * 3600000) : null,
               isole, l.ch === 1, !!equip.ventilation, !!equip.telemetrie || (code === 'MED' && l.ch <= 3),
-              etat === 'indispo' ? (h.code === 'HX' ? 'personnel' : 'equipement') : null]);
+              etat === 'indispo' ? (h.code === 'HX' || h.charge > 0.9 ? 'personnel' : 'equipement') : null]);
           lits[i].id = r.rows[0].id;
           await c.query(`INSERT INTO journal (lit_id, etablissement_id, action, nouvel_etat, detail, date)
                          VALUES ($1,$2,'Création',$3,'Données de démonstration', now() - interval '31 days')`, [r.rows[0].id, ids[h.code], etat]);
@@ -116,7 +144,7 @@ async function demoDeux(pool, { silencieux = false } = {}) {
                    WHERE id IN (SELECT id FROM lits WHERE etablissement_id = $1 AND type_id = $2 AND etat = 'libre' ORDER BY code DESC LIMIT 2)`, [ids.HX, types.CHIR]);
 
     // Deux mois d'historique terminé pour les indicateurs et leur tendance (le mois le plus ancien est un peu moins bon)
-    const coordo = async (sfx) => (await c.query('SELECT id FROM utilisateurs WHERE email = $1', [`coordo.${sfx}@demo.arrimo`])).rows[0].id;
+    const coordo = async (sfx) => (await c.query('SELECT id FROM utilisateurs WHERE email = $1', [`hopital.${sfx}@demo.arrimo`])).rows[0].id;
     const ux = await coordo('x'); const uy = await coordo('y');
     for (let j = 1; j <= 58; j += 1) {
       const ancien = j > 30;
@@ -148,10 +176,10 @@ async function demoDeux(pool, { silencieux = false } = {}) {
     }
     // nettoyages mesurés : paires « nettoyage » puis « libre » dans le journal
     const pourNettoyage = (await c.query(
-      `SELECT id, etablissement_id FROM (SELECT id, etablissement_id, row_number() OVER (PARTITION BY etablissement_id ORDER BY id) AS n FROM lits) x
+      `SELECT id, etablissement_id, n FROM (SELECT id, etablissement_id, row_number() OVER (PARTITION BY etablissement_id ORDER BY id) AS n FROM lits) x
         WHERE n <= 50 ORDER BY n, etablissement_id`)).rows;
     for (const [i, l] of pourNettoyage.entries()) {
-      const ancien = i >= 50;
+      const ancien = Number(l.n) > 25;
       const jour = 1 + (i % 27) + (ancien ? 30 : 0);
       const duree = (l.etablissement_id === ids.HX ? 70 + (i * 7) % 60 : 35 + (i * 5) % 25) + (ancien ? 15 : 0);
       await c.query(`INSERT INTO journal (lit_id, etablissement_id, action, ancien_etat, nouvel_etat, detail, date)
@@ -162,10 +190,16 @@ async function demoDeux(pool, { silencieux = false } = {}) {
       [l.id, l.etablissement_id, jour, duree]);
     }
     await c.query(`INSERT INTO utilisateurs (email, nom, mot_de_passe_hash, role) VALUES ('reseau@demo.arrimo', 'Coordination régionale (démo)', $1, 'gestionnaire')`, [hash]);
+    // Charge visée de chaque hôpital sans compte : la simulation la maintient à peu près (src/simulation.js)
+    await c.query(`INSERT INTO demo_etat (id, reference, simulation) VALUES (1, now(), $1)
+                   ON CONFLICT (id) DO UPDATE SET reference = now(), simulation = EXCLUDED.simulation`,
+    [JSON.stringify(Object.fromEntries(AUTRES.map((h) => [h.code, { lits: h.charge, civ: h.civ[2] }])))]);
 
     // Civières de l'urgence. X : urgence débordée (patients en corridor, séjours de plus de 24 h et 48 h). Y : de la place.
     // [régulières, débordement, patients sur civière, heures sur civière (les premiers) ]
     const URG = { HX: [18, 8, 24, [56, 50, 38, 31, 27, 26, 22, 19, 16, 14, 12, 11, 9, 8, 7, 6, 5, 4, 3.5, 3, 2.5, 2, 1.5, 1]], HY: [12, 4, 8, [20, 9, 7, 5, 4, 3, 2, 1]] };
+    // Autres hôpitaux : durées sur civière de 1 à 40 h selon la charge
+    for (const h of AUTRES) URG[h.code] = [h.civ[0], h.civ[1], h.civ[2], Array.from({ length: h.civ[2] }, (_, k) => Math.max(0.5, (h.charge > 0.9 ? 40 : 20) * (1 - k / h.civ[2])))];
     for (const [code, [nReg, nDeb, nOcc, heures]] of Object.entries(URG)) {
       const civs = [];
       for (let i = 1; i <= nReg; i += 1) civs.push({ code: `URG-${String(i).padStart(2, '0')}`, categorie: 'reguliere' });
@@ -189,7 +223,7 @@ async function demoDeux(pool, { silencieux = false } = {}) {
                        VALUES ($1, $2, 'Création', $3, 'Données de démonstration', now() - interval '31 days')`, [cv.id, ids[code], etat]);
       }
       // Séjours terminés du dernier mois : durée moyenne sur civière (X ≈ 20 h, Y ≈ 8 h)
-      for (let j = 0; j < 80; j += 1) {
+      for (let j = 0; j < (['HX', 'HY'].includes(code) ? 80 : 20); j += 1) {
         const cv = civs[j % civs.length];
         const ancien = j >= 40;
         const duree = (code === 'HX' ? 8 + ((j * 7) % 30) : 3 + ((j * 5) % 11)) + (ancien ? 4 : 0);
@@ -209,9 +243,9 @@ async function demoDeux(pool, { silencieux = false } = {}) {
       JOIN utilisateur_etablissements ue ON ue.utilisateur_id = u.id WHERE email = $1 GROUP BY u.id`, [email]);
     return { ...r.rows[0], gestionnaire: false };
   };
-  const urgX = await utilisateur('urgence.x@demo.arrimo');
-  const coX = await utilisateur('coordo.x@demo.arrimo');
-  const coY = await utilisateur('coordo.y@demo.arrimo');
+  const coX = await utilisateur('hopital.x@demo.arrimo');
+  const urgX = coX;
+  const coY = await utilisateur('hopital.y@demo.arrimo');
   // File d'attente à l'urgence de X
   const file = [
     ['SI', 'p1', 380, { ventilation: true }], ['MED', 'p2', 300, {}], ['MED', 'p1', 140, { isolement: true }],
@@ -225,10 +259,21 @@ async function demoDeux(pool, { silencieux = false } = {}) {
     await pool.query('UPDATE demandes_admission SET cree_le = now() - make_interval(mins => $2) WHERE id = $1', [d.id, ilya]);
   }
   // Une demande à l'urgence de Y aussi
-  const urgY = await utilisateur('urgence.y@demo.arrimo');
+  const urgY = coY;
   const civY = (await pool.query(`SELECT id FROM civieres WHERE etablissement_id = $1 AND etat = 'occupee' ORDER BY arrivee_le DESC LIMIT 1 OFFSET 5`, [ids.HY])).rows[0];
   const dY = await creerDemande(pool, urgY, { etablissement_id: ids.HY, type_id: types.CHIR, priorite: 'p2', provenance: 'urgence', civiere_id: civY.id });
   await pool.query(`UPDATE demandes_admission SET cree_le = now() - interval '35 minutes' WHERE id = $1`, [dY.id]);
+  // Files d'attente des autres hôpitaux chargés : patients sur civière qui attendent un lit
+  for (const h of AUTRES.filter((x) => x.charge >= 0.85)) {
+    const systeme = { id: null, role: 'coordonnateur', etabs: [ids[h.code]], gestionnaire: false };
+    const civs = (await pool.query(`SELECT id FROM civieres WHERE etablissement_id = $1 AND etat = 'occupee' ORDER BY arrivee_le LIMIT $2`,
+      [ids[h.code], Math.round((h.charge - 0.8) * 30)])).rows;
+    for (const [k, cv] of civs.entries()) {
+      const d = await creerDemande(pool, systeme, { etablissement_id: ids[h.code], type_id: types[k % 3 === 2 ? 'CHIR' : 'MED'], priorite: k % 4 === 0 ? 'p1' : 'p2',
+        provenance: 'urgence', civiere_id: cv.id });
+      await pool.query('UPDATE demandes_admission SET cree_le = now() - make_interval(mins => $2) WHERE id = $1', [d.id, 30 + k * 55]);
+    }
+  }
   // Transferts en cours entre X et Y, à différentes étapes
   const t1 = await creerTransfert(pool, coX, { origine_id: ids.HX, destination_id: ids.HY, type_id: types.MED, patient_ref: ref(), urgent: false });
   void t1;   // en attente de la réponse de Y
@@ -241,22 +286,18 @@ async function demoDeux(pool, { silencieux = false } = {}) {
                     arrivee_prevue = now() - interval '15 minutes' + make_interval(mins => minutes_route) WHERE id = $1`, [t2.id]);
   await pool.query(`UPDATE transferts SET date_demande = now() - interval '25 minutes' WHERE id = $1`, [t1.id]);
   await detecterBlocages(pool);
-  await pool.query('INSERT INTO demo_etat (id, reference) VALUES (1, now()) ON CONFLICT (id) DO UPDATE SET reference = now()');
+  await pool.query('UPDATE demo_etat SET reference = now() WHERE id = 1');
   const conX = await creerConnecteur(pool, `Interface ADT · ${X.nom} (démo)`, ids.HX);
   const conR = await creerConnecteur(pool, 'Coordination régionale (démo, lecture)', null);
 
   const acces = [
-    'ARRIMO · DÉMONSTRATION À DEUX HÔPITAUX (données fictives)',
+    'ARRIMO · DÉMONSTRATION · RÉSEAU DE 20 HÔPITAUX (données fictives)',
     `Mot de passe de tous les comptes : ${MDP}`,
     '',
-    `${X.nom} (sous pression)`,
-    '  coordo.x@demo.arrimo     coordination des lits (Copilote, lits, transferts, NSA, indicateurs)',
-    '  urgence.x@demo.arrimo    urgence (file d’admission)',
-    '  entretien.x@demo.arrimo  entretien (écran Nettoyage seulement)',
-    `${Y.nom} (a de la place)`,
-    '  coordo.y@demo.arrimo · urgence.y@demo.arrimo · entretien.y@demo.arrimo',
-    'Réseau',
+    `  hopital.x@demo.arrimo    ${X.nom} (sous pression) : lits, civières, urgence, nettoyage, transferts`,
+    `  hopital.y@demo.arrimo    ${Y.nom} (a de la place)`,
     '  reseau@demo.arrimo       coordination régionale (tous les établissements)',
+    'Les 18 autres hôpitaux n’ont pas de compte : leur capacité évolue d’elle-même.',
     '',
     `Clé du connecteur ADT de ${X.nom} : ${conX.cle}`,
     `Clé du connecteur réseau (lecture) : ${conR.cle}`,
@@ -267,6 +308,6 @@ async function demoDeux(pool, { silencieux = false } = {}) {
 
 if (require.main === module) {
   const pool = creerPool(process.env.DATABASE_URL);
-  demoDeux(pool).then(() => pool.end()).catch((e) => { console.error(e.message); pool.end(); process.exit(1); });
+  demoReseau(pool).then(() => pool.end()).catch((e) => { console.error(e.message); pool.end(); process.exit(1); });
 }
-module.exports = { demoDeux };
+module.exports = { demoReseau };

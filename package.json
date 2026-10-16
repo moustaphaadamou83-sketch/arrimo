@@ -11,8 +11,8 @@
     "db:seed": "node db/seed.js",
     "db:reset": "node db/reset.js",
     "test": "node --test --test-concurrency=1 tests/api.test.js",
-    "demo:deux": "node db/demo-deux.js",
-    "demo:reset": "node db/reset.js deux",
+    "demo:reseau": "node db/demo-reseau.js",
+    "demo:reset": "node db/reset.js demo",
     "test:interface": "node --test --test-concurrency=1 tests/interface.spec.js",
     "mesures": "node scripts/mesures.js",
     "charge": "node scripts/charge.js"

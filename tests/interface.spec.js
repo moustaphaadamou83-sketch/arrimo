@@ -15,7 +15,7 @@ const { chromium } = require('playwright');
 const { creerPool } = require('../src/db');
 const { creerApp } = require('../src/app');
 const { viderBase } = require('../db/vider');
-const { demoDeux } = require('../db/demo-deux');
+const { demoReseau } = require('../db/demo-reseau');
 const totp = require('../src/totp');
 
 const URL_TEST = process.env.INTERFACE_DATABASE_URL || process.env.TEST_DATABASE_URL;
@@ -168,7 +168,7 @@ for (const L of LARGEURS) {
   test(`guide de démonstration complet · ${L.nom} (${L.width} px)`, { timeout: 240000 }, async () => {
     for (const c of navigateur.contexts()) await c.close();   // fenêtres d'un essai précédent
     await viderBase(pool);
-    await demoDeux(pool, { silencieux: true });
+    await demoReseau(pool, { silencieux: true, comptesRoles: true });
 
     // 0. Écran de connexion
     const accueil = await (await navigateur.newContext({ viewport: { width: L.width, height: L.height }, isMobile: !!L.mobile, hasTouch: !!L.tactile })).newPage();
@@ -193,20 +193,20 @@ for (const L of LARGEURS) {
     const pp = await navigateur.newContext({ viewport: { width: L.width, height: L.height }, isMobile: !!L.mobile, hasTouch: !!L.tactile });
     const p1 = await pp.newPage(); p1.erreurs = [];
     await p1.goto(base);
-    await p1.fill('#c-email', 'urgence.x@demo.arrimo'); await p1.fill('#c-mdp', MDP);
+    await p1.fill('#c-email', 'hopital.x@demo.arrimo'); await p1.fill('#c-mdp', MDP);
     await p1.click('#f-connexion button[type=submit]');
     await p1.waitForSelector('#b-premiers-pas-ok');
     await verifier(p1, L, '00-premiers-pas');
     await p1.click('#b-premiers-pas-ok');
     await menu(p1, '#b-deconnexion');
-    await p1.fill('#c-email', 'urgence.x@demo.arrimo'); await p1.fill('#c-mdp', MDP);
+    await p1.fill('#c-email', 'hopital.x@demo.arrimo'); await p1.fill('#c-mdp', MDP);
     await p1.click('#f-connexion button[type=submit]');
     await p1.waitForSelector('body[data-pret="1"]');
     assert.ok(!(await p1.isVisible('#b-premiers-pas-ok')), 'premiers pas montrés une seule fois');
     await pp.close();
 
     // 1. Le problème : Copilote de l'Hôpital X
-    const x = await ouvrir(L, 'coordo.x@demo.arrimo');
+    const x = await ouvrir(L, 'hopital.x@demo.arrimo');
     await verifierAide(x, L, '01b-aide-coordination', 'coordonnateur');
     await x.waitForSelector('#v-copilote .niveau');
     assert.match(await x.textContent('#v-copilote .niveau'), /Rouge|Orange/);
@@ -243,7 +243,7 @@ for (const L of LARGEURS) {
     await x.click('#modale .btn.pri');
     await toast(x, 'envoyée');
 
-    const y = await ouvrir(L, 'coordo.y@demo.arrimo');
+    const y = await ouvrir(L, 'hopital.y@demo.arrimo');
     await onglet(y, 'transferts');
     await verifier(y, L, '05-transferts-y');
     await y.locator('#v-transferts [data-etape="accepter"]').first().click();
@@ -399,7 +399,7 @@ async function sansFrancais(page, noms, ecran) {
 test('interface en anglais : aucun texte français restant (noms propres exceptés)', { timeout: 240000 }, async () => {
   for (const c of navigateur.contexts()) await c.close();
   await viderBase(pool);
-  await demoDeux(pool, { silencieux: true });
+  await demoReseau(pool, { silencieux: true, comptesRoles: true });
   // Noms propres et données saisies par les établissements : établissements, villes, unités, personnes, connecteurs, configuration
   const noms = (await pool.query(`SELECT nom FROM etablissements UNION SELECT ville FROM etablissements UNION SELECT nom FROM unites
     UNION SELECT nom FROM utilisateurs UNION SELECT nom FROM connecteurs UNION SELECT nom FROM config_pays UNION SELECT transport_libelle FROM config_pays`))
@@ -413,7 +413,7 @@ test('interface en anglais : aucun texte français restant (noms propres except�
   await accueil.goto(base);
   await accueil.selectOption('#langue-connexion', 'en');
   assert.strictEqual(await accueil.getAttribute('html', 'lang'), 'en-CA');
-  await accueil.fill('#c-email', 'coordo.x@demo.arrimo');
+  await accueil.fill('#c-email', 'hopital.x@demo.arrimo');
   await accueil.fill('#c-mdp', 'mauvais-mot-de-passe');
   await accueil.click('#f-connexion button[type=submit]');
   await accueil.waitForSelector('#c-erreur:not([hidden])');
@@ -434,7 +434,7 @@ test('interface en anglais : aucun texte français restant (noms propres except�
   assert.strictEqual(await accueil.textContent('#f-connexion button[type=submit]'), 'Sign in');
   await accueil.context().close();
 
-  const x = await ouvrir(L, 'coordo.x@demo.arrimo', 'en');
+  const x = await ouvrir(L, 'hopital.x@demo.arrimo', 'en');
   await x.waitForSelector('#v-copilote .niveau');
   await ecran(x, '01-copilot');
   for (let i = 0; i < 6; i += 1) {
@@ -488,7 +488,7 @@ test('interface en anglais : aucun texte français restant (noms propres except�
   await x.waitForSelector('#f-mdp');
   await ecran(x, '08-my-account');
 
-  const y = await ouvrir(L, 'coordo.y@demo.arrimo', 'en');
+  const y = await ouvrir(L, 'hopital.y@demo.arrimo', 'en');
   await onglet(y, 'transferts');
   await ecran(y, '09-transfers-y');
   await y.click('#b-notif');

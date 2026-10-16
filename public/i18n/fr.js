@@ -264,7 +264,7 @@ window.ARRIMO_I18N.fr = {
     reseau_lect: 'Réseau (lecture)', cle_titre: 'Clé du connecteur : {nom}', cle_aide: 'À configurer dans le moteur d’interface de l’hôpital (en-tête X-Connecteur-Key) :',
     revoque_ok: 'Connecteur révoqué. Sa clé ne fonctionne plus.', connecteur_defaut: 'Connecteur',
     demo_titre: 'Remettre la démo à zéro',
-    demo_aide: 'Efface toutes les données de ce serveur de démonstration et recrée la situation de départ (Hôpital X sous pression, Hôpital Y avec de la place). Tous les comptes sont déconnectés ; les mots de passe de démonstration ne changent pas.',
+    demo_aide: 'Efface toutes les données de ce serveur de démonstration et recrée le réseau de départ : 20 hôpitaux fictifs, dont Hôpital X sous pression et Hôpital Y avec de la place. Tous les comptes sont déconnectés ; les mots de passe de démonstration ne changent pas.',
     demo_recalage: 'Entre deux présentations, les horloges de la démo sont recalées automatiquement quand personne ne l’utilise : les temps d’attente restent réalistes à toute heure. Une remise à zéro complète a lieu chaque nuit à 4 h.',
     demo_bouton: 'Remettre la démo à zéro', demo_confirmer: 'Toutes les actions faites pendant la démonstration seront effacées. Continuer ?',
     demo_ok: 'Démo remise à zéro. Reconnectez-vous.',

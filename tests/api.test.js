@@ -407,13 +407,13 @@ test('proximité d’abord : le plus proche avec un lit adapté, sauf s’il dé
   await pool.query(`DELETE FROM demandes_admission WHERE patient_ref LIKE 'P-5%' AND etablissement_id = $1`, [reco.etablissement_id]);
 });
 
-test('démonstration Hôpital X / Hôpital Y : se crée et donne une situation présentable', async () => {
-  const { demoDeux } = require('../db/demo-deux');
+test('démonstration : réseau de 20 hôpitaux : se crée et donne une situation présentable', async () => {
+  const { demoReseau } = require('../db/demo-reseau');
   await viderBase(pool);
-  const { ids } = await demoDeux(pool, { silencieux: true });
+  const { ids } = await demoReseau(pool, { silencieux: true, comptesRoles: true });
   const co = async (email) => (await appel(null, 'POST', '/connexion', { email, mot_de_passe: MOT_DE_PASSE_DEMO })).corps.token;
-  tokens.x = await co('coordo.x@demo.arrimo');
-  tokens.y = await co('coordo.y@demo.arrimo');
+  tokens.x = await co('hopital.x@demo.arrimo');
+  tokens.y = await co('hopital.y@demo.arrimo');
   tokens.ex = await co('entretien.x@demo.arrimo');
   const bx = await appel('x', 'GET', `/copilote/briefing?etablissement_id=${ids.HX}`);
   assert.strictEqual(bx.corps.alerte.niveau, 'rouge');
@@ -431,9 +431,65 @@ test('démonstration Hôpital X / Hôpital Y : se crée et donne une situation p
   const p1 = file.find((d) => d.priorite === 'p1' && d.besoin_isolement);
   const rec = await appel('x', 'GET', `/recherche?depuis=${ids.HX}&type_id=${p1.type_id}&isolement=1`);
   const s = rec.corps.suggestions.find((x) => x.libres);
+  assert.strictEqual(s.etablissement_id, ids.HY, 'Hôpital Y est proposé : les hôpitaux voisins n’ont plus de chambre d’isolement libre');
   const tr = await appel('x', 'POST', `/admissions/${p1.id}/transferer`, { destination_id: s.etablissement_id, lit_id: s.lit?.id, version: s.lit?.version });
   assert.strictEqual(tr.statut, 200, JSON.stringify(tr.corps));
   assert.strictEqual((await appel('y', 'POST', `/transferts/${tr.corps.id}/accepter`)).statut, 200);
+});
+
+test('réseau de démonstration : 20 hôpitaux, un compte par hôpital, proximité, simulation douce des hôpitaux sans compte', async () => {
+  const { distanceKm } = require('../src/services');
+  const { simuler } = require('../src/simulation');
+  const etabs = (await pool.query('SELECT id, code, nom, latitude, longitude, partage FROM etablissements WHERE actif')).rows;
+  assert.strictEqual(etabs.length, 20);
+  const x = etabs.find((e) => e.code === 'HX'); const y = etabs.find((e) => e.code === 'HY');
+  const d = (a, b) => distanceKm(a, b);
+  assert.ok(etabs.filter((e) => e !== x && d(x, e) < 10).length >= 3, 'plusieurs hôpitaux à moins de 10 km de X');
+  assert.ok(etabs.filter((e) => e !== y && d(y, e) < 10).length >= 2, 'plusieurs hôpitaux à moins de 10 km de Y');
+  assert.ok(etabs.every((e) => d(x, e) <= 150), 'tous à moins de 150 km');
+  assert.ok(etabs.filter((e) => d(x, e) > 10 && d(y, e) > 10).length >= 10);
+  // Un seul compte par hôpital (X, Y) et le compte réseau ; les autres hôpitaux n'ont pas de compte
+  const comptes = (await pool.query(`SELECT u.email, array_agg(ue.etablissement_id) AS etabs FROM utilisateurs u
+    LEFT JOIN utilisateur_etablissements ue ON ue.utilisateur_id = u.id WHERE u.email NOT LIKE 'entretien.%' GROUP BY u.email ORDER BY u.email`)).rows;
+  assert.deepStrictEqual(comptes.map((c) => c.email), ['hopital.x@demo.arrimo', 'hopital.y@demo.arrimo', 'reseau@demo.arrimo']);
+  // Chacun a des lits et des civières, avec des charges différentes
+  const charge = (await pool.query(`SELECT e.code, count(l.*) FILTER (WHERE l.etat <> 'indispo')::int AS dotes, count(l.*) FILTER (WHERE l.etat = 'libre')::int AS libres,
+      (SELECT count(*)::int FROM civieres c WHERE c.etablissement_id = e.id) AS civieres
+    FROM etablissements e JOIN lits l ON l.etablissement_id = e.id WHERE e.actif GROUP BY e.id`)).rows;
+  assert.strictEqual(charge.length, 20);
+  assert.ok(charge.every((c) => c.dotes >= 10 && c.civieres >= 6));
+  const niveaux = new Set((await appel('x', 'GET', `/national/carte?depuis=${x.id}`)).corps.map((p) => p.niveau));
+  assert.ok(niveaux.has('rouge') && niveaux.has('vert'), [...niveaux].join(','));
+
+  // Simulation : jamais hors démonstration ; X et Y ne bougent pas ; les autres vivent doucement
+  delete process.env.ARRIMO_DEMO;
+  assert.strictEqual(await simuler(pool), 0);
+  process.env.ARRIMO_DEMO = '1';
+  try {
+    const instantane = async () => (await pool.query(`SELECT 'l' || id AS k, version FROM lits WHERE etablissement_id IN ($1, $2)
+      UNION ALL SELECT 'c' || id, version FROM civieres WHERE etablissement_id IN ($1, $2) ORDER BY k`, [x.id, y.id])).rows;
+    const avant = await instantane();
+    // Un transfert vers un hôpital sans compte : son équipe (simulée) accepte, puis prépare la chambre
+    const ha = etabs.find((e) => e.code === 'HA');
+    const med = await type('MED');
+    const tr = (await appel('x', 'POST', '/transferts', { origine_id: x.id, destination_id: ha.id, type_id: med, patient_ref: 'P-90010' })).corps;
+    await pool.query(`UPDATE transferts SET date_demande = now() - interval '2 minutes' WHERE id = $1`, [tr.id]);
+    let total = 0;
+    for (let i = 0; i < 4; i += 1) total += await simuler(pool);
+    assert.ok(total >= 20, `${total} changements`);
+    assert.deepStrictEqual(await instantane(), avant, 'les hôpitaux qui ont un compte ne sont jamais touchés');
+    const j = await pool.query(`SELECT count(*)::int AS n FROM journal WHERE detail = 'Simulation de démonstration' AND utilisateur_id IS NULL`);
+    assert.ok(j.rows[0].n >= 10, 'chaque changement simulé est journalisé');
+    const t2 = (await pool.query('SELECT statut, date_chambre_prete FROM transferts WHERE id = $1', [tr.id])).rows[0];
+    assert.ok(t2.statut === 'validee' && t2.date_chambre_prete, JSON.stringify(t2));
+    // La charge de chaque hôpital simulé reste proche de sa charge de départ
+    const cibles = (await pool.query('SELECT simulation FROM demo_etat')).rows[0].simulation;
+    const apres = (await pool.query(`SELECT e.code, count(l.*) FILTER (WHERE l.etat <> 'indispo')::int AS dotes, count(l.*) FILTER (WHERE l.etat = 'libre')::int AS libres
+      FROM etablissements e JOIN lits l ON l.etablissement_id = e.id WHERE e.code = ANY($1::text[]) GROUP BY e.code`, [Object.keys(cibles)])).rows;
+    for (const a of apres) assert.ok(Math.abs((a.dotes - a.libres) / a.dotes - cibles[a.code].lits) < 0.2, `${a.code} : charge stable`);
+  } finally {
+    delete process.env.ARRIMO_DEMO;
+  }
 });
 
 test('civières de l’urgence : états, verrou, demande liée, admission, changement de civière, réseau, Copilote, indicateurs', async () => {
@@ -510,8 +566,9 @@ test('civières de l’urgence : états, verrou, demande liée, admission, chang
   assert.strictEqual((await pool.query('SELECT etat FROM civieres WHERE id = $1', [corridor.id])).rows[0].etat, 'nettoyage');
 
   // Transfert depuis l'urgence : au départ de l'ambulance, la civière part au nettoyage
-  const surCiv = (await appel('x', 'GET', `/admissions?etablissement_id=${hx}`)).corps.find((x) => x.civiere_code && x.type_id === med && x.statut === 'attente');
-  const rec = (await appel('x', 'GET', `/recherche?depuis=${hx}&type_id=${med}`)).corps.suggestions.find((x) => x.libres);
+  const surCiv = (await appel('x', 'GET', `/admissions?etablissement_id=${hx}`)).corps.find((x) => x.civiere_code && x.type_id === med && x.statut === 'attente'
+    && !x.besoin_isolement && !x.besoin_ventilation && !x.besoin_pression_negative && !x.besoin_telemetrie);
+  const rec = (await appel('x', 'GET', `/recherche?depuis=${hx}&type_id=${med}`)).corps.suggestions.find((x) => x.libres && x.etablissement_id === hy);
   const tr = await appel('x', 'POST', `/admissions/${surCiv.id}/transferer`, { destination_id: rec.etablissement_id, lit_id: rec.lit?.id, version: rec.lit?.version });
   assert.strictEqual(tr.statut, 200, JSON.stringify(tr.corps));
   for (const [qui, etape] of [['y', 'accepter'], ['x', 'transport']]) assert.strictEqual((await appel(qui, 'POST', `/transferts/${tr.corps.id}/${etape}`)).statut, 200);
@@ -823,15 +880,15 @@ test('mise en forme : pluriels, nombres et durées selon la langue ; aucun « (s
 });
 
 test('langues : erreurs avec code stable, Copilote et notifications en anglais', async () => {
-  // La base contient ici la démonstration Hôpital X / Hôpital Y (test précédent)
-  const r = await appel(null, 'POST', '/connexion', { email: 'coordo.x@demo.arrimo', mot_de_passe: 'faux' });
+  // La base contient ici la démonstration : réseau de 20 hôpitaux (test précédent)
+  const r = await appel(null, 'POST', '/connexion', { email: 'hopital.x@demo.arrimo', mot_de_passe: 'faux' });
   assert.strictEqual(r.corps.code, 'identifiants_incorrects');
   assert.strictEqual(r.corps.erreur, 'Adresse courriel ou mot de passe incorrect.');
   const inv = await appel('x', 'GET', '/lits?etablissement_id=abc');
   assert.deepStrictEqual([inv.corps.code, inv.corps.vars], ['parametre_invalide', { nom: 'etablissement_id' }]);
 
   const hx = await id('HX'); const hy = await id('HY');
-  const noms = (await pool.query('SELECT nom FROM etablissements UNION SELECT ville FROM etablissements')).rows.map((x) => x.nom);
+  const noms = (await pool.query('SELECT nom FROM etablissements UNION SELECT ville FROM etablissements')).rows.map((x) => x.nom).sort((a, b) => b.length - a.length);
   const francais = /[àâçéèêëîïôûùüÿœ]|\b(le|la|les|des|du|une|et|pour|dans|depuis|aucun|lits?|attente|libres?)\b/i;
   const nettoyer = (txt) => noms.reduce((x, n) => x.split(n).join(' '), txt);
   const b = await appel('x', 'GET', `/copilote/briefing?etablissement_id=${hx}&langue=en`);
@@ -965,50 +1022,50 @@ test('pagination : journal et transferts au-delà de 300 lignes, sans doublon ni
 test('mot de passe oublié : inactif sans courriel ; lien unique de 30 min ; même réponse que le compte existe ou non', async () => {
   const courriel = require('../src/courriel');
   assert.strictEqual((await appel(null, 'GET', '/public')).corps.mot_de_passe_oublie, false);
-  const off = await appel(null, 'POST', '/mot-de-passe/oubli', { email: 'urgence.y@demo.arrimo' });
+  const off = await appel(null, 'POST', '/mot-de-passe/oubli', { email: 'entretien.y@demo.arrimo' });
   assert.deepStrictEqual([off.statut, off.corps.code], [503, 'courriel_non_configure']);
   const envoyes = [];
   courriel.definirTransport(async (m) => { envoyes.push(m); });
   process.env.ARRIMO_URL = 'https://arrimo.exemple.ca';
   try {
     assert.strictEqual((await appel(null, 'GET', '/public')).corps.mot_de_passe_oublie, true);
-    const existe = await appel(null, 'POST', '/mot-de-passe/oubli', { email: 'Urgence.Y@demo.arrimo' });
+    const existe = await appel(null, 'POST', '/mot-de-passe/oubli', { email: 'Entretien.Y@demo.arrimo' });
     const inconnu = await appel(null, 'POST', '/mot-de-passe/oubli', { email: 'personne@demo.arrimo' });
     assert.deepStrictEqual([existe.statut, existe.corps], [inconnu.statut, inconnu.corps], 'réponse identique');
     await new Promise((r) => { setImmediate(r); });
     assert.strictEqual(envoyes.length, 1);
-    assert.strictEqual(envoyes[0].a, 'urgence.y@demo.arrimo');
+    assert.strictEqual(envoyes[0].a, 'entretien.y@demo.arrimo');
     const jeton = /\?reinit=([0-9a-f]{64})/.exec(envoyes[0].texte)[1];
     assert.match(envoyes[0].texte, /^Bonjour .*30 minutes/s);
     assert.ok(!(await pool.query('SELECT 1 FROM jetons_mdp WHERE jeton_hash = $1', [jeton])).rows[0], 'seule l’empreinte du jeton est gardée');
     // En anglais si demandé en anglais
-    await fetch(`${base}/api/mot-de-passe/oubli`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Langue': 'en' }, body: JSON.stringify({ email: 'urgence.y@demo.arrimo' }) });
+    await fetch(`${base}/api/mot-de-passe/oubli`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Langue': 'en' }, body: JSON.stringify({ email: 'entretien.y@demo.arrimo' }) });
     await new Promise((r) => { setImmediate(r); });
     assert.match(envoyes[1].texte, /^Hello .*valid for 30 minutes/s);
     // Mot de passe trop faible, puis réussite, puis lien déjà utilisé
     assert.strictEqual((await appel(null, 'POST', '/mot-de-passe/reinitialiser', { jeton, nouveau: 'court1' })).corps.code, 'mdp_faible');
-    const sess = (await appel(null, 'POST', '/connexion', { email: 'urgence.y@demo.arrimo', mot_de_passe: MOT_DE_PASSE_DEMO })).corps.token;
+    const sess = (await appel(null, 'POST', '/connexion', { email: 'entretien.y@demo.arrimo', mot_de_passe: MOT_DE_PASSE_DEMO })).corps.token;
     tokens.uy = sess;
     const ok = await appel(null, 'POST', '/mot-de-passe/reinitialiser', { jeton, nouveau: 'Nouveau-mdp-2026' });
     assert.strictEqual(ok.statut, 200, JSON.stringify(ok.corps));
     assert.strictEqual((await appel('uy', 'GET', '/moi')).statut, 401, 'les sessions ouvertes sont fermées');
-    assert.strictEqual((await appel(null, 'POST', '/connexion', { email: 'urgence.y@demo.arrimo', mot_de_passe: 'Nouveau-mdp-2026' })).statut, 200);
+    assert.strictEqual((await appel(null, 'POST', '/connexion', { email: 'entretien.y@demo.arrimo', mot_de_passe: 'Nouveau-mdp-2026' })).statut, 200);
     assert.strictEqual((await appel(null, 'POST', '/mot-de-passe/reinitialiser', { jeton, nouveau: 'Encore-un-autre-2026' })).corps.code, 'jeton_invalide');
     const jeton2 = /\?reinit=([0-9a-f]{64})/.exec(envoyes[1].texte)[1];
     assert.strictEqual((await appel(null, 'POST', '/mot-de-passe/reinitialiser', { jeton: jeton2, nouveau: 'Encore-un-autre-2026' })).corps.code, 'jeton_invalide', 'les autres liens du compte sont annulés');
     // Lien expiré au-delà de 30 minutes
-    await appel(null, 'POST', '/mot-de-passe/oubli', { email: 'urgence.y@demo.arrimo' });
+    await appel(null, 'POST', '/mot-de-passe/oubli', { email: 'entretien.y@demo.arrimo' });
     await new Promise((r) => { setImmediate(r); });
     const jeton3 = /\?reinit=([0-9a-f]{64})/.exec(envoyes[2].texte)[1];
     await pool.query(`UPDATE jetons_mdp SET expire_le = now() - interval '1 minute' WHERE utilise_le IS NULL`);
     assert.strictEqual((await appel(null, 'POST', '/mot-de-passe/reinitialiser', { jeton: jeton3, nouveau: 'Encore-un-autre-2026' })).corps.code, 'jeton_invalide');
     // Au plus 3 liens par heure et par compte, sans le dire
-    const r4 = await appel(null, 'POST', '/mot-de-passe/oubli', { email: 'urgence.y@demo.arrimo' });
+    const r4 = await appel(null, 'POST', '/mot-de-passe/oubli', { email: 'entretien.y@demo.arrimo' });
     await new Promise((r) => { setImmediate(r); });
     assert.deepStrictEqual([r4.statut, envoyes.length], [200, 3]);
-    const j = await pool.query(`SELECT detail FROM journal_admin WHERE action = 'Mot de passe réinitialisé' AND cible = 'urgence.y@demo.arrimo'`);
+    const j = await pool.query(`SELECT detail FROM journal_admin WHERE action = 'Mot de passe réinitialisé' AND cible = 'entretien.y@demo.arrimo'`);
     assert.deepStrictEqual(j.rows.map((x) => x.detail), ['par lien envoyé par courriel']);
-    await pool.query('UPDATE utilisateurs SET mot_de_passe_hash = $2 WHERE email = $1', ['urgence.y@demo.arrimo', require('../src/auth').hacher(MOT_DE_PASSE_DEMO)]);
+    await pool.query('UPDATE utilisateurs SET mot_de_passe_hash = $2 WHERE email = $1', ['entretien.y@demo.arrimo', require('../src/auth').hacher(MOT_DE_PASSE_DEMO)]);
   } finally {
     courriel.definirTransport(null);
     delete process.env.ARRIMO_URL;
@@ -1082,7 +1139,7 @@ test('démo toujours prête : remise à zéro refusée sans ARRIMO_DEMO=1, rése
     assert.strictEqual(await demo.recaler(pool, { calmeMin: 0 }), 0, 'rien à recaler juste après');
     // Si quelqu'un utilise la démo, on ne recale pas
     await pool.query(`UPDATE demo_etat SET reference = reference - interval '60 minutes'`);
-    await pool.query('UPDATE utilisateurs SET derniere_connexion = now() WHERE email = $1', ['coordo.x@demo.arrimo']);
+    await pool.query('UPDATE utilisateurs SET derniere_connexion = now() WHERE email = $1', ['hopital.x@demo.arrimo']);
     assert.strictEqual(await demo.recaler(pool, { calmeMin: 30 }), 0);
     delete process.env.ARRIMO_DEMO;
     assert.strictEqual(await demo.recaler(pool, { calmeMin: 0 }), 0, 'jamais hors démonstration');
