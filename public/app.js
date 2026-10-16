@@ -256,6 +256,7 @@ async function demarrer() {
   document.querySelectorAll('.contenu > section').forEach((sec) => { sec.hidden = sec.id !== `v-${etat.vue}`; });
   await rafraichir();
   if (!etat.moi.utilisateur.premiers_pas_vus) premiersPas();
+  document.body.dataset.pret = '1';
 }
 const estEntretien = () => etat.moi && etat.moi.utilisateur.role === 'entretien';
 
@@ -991,10 +992,60 @@ async function vueAdmin() {
   if (etat.adminOnglet === 'demo') await vueAdminDemo(corps);
 }
 
-/* Points d'extension remplis plus bas (aide, premiers pas, démo). */
+/* ---------------- Aide intégrée ---------------- */
+/** Écrans accessibles au rôle connecté (ceux dont l'onglet est visible, plus Mon compte). */
+const ecransDuRole = () => [...document.querySelectorAll('#onglets button')].filter((b) => !b.hidden).map((b) => b.dataset.v).concat('compte');
+
+function blocAide(cle, ouvert) {
+  const e = t(`aide.ecrans.${cle}`);
+  const erreurs = e.erreurs.length ? `<h4>${esc(t('aide.erreurs'))}</h4><dl class="aide-erreurs">${e.erreurs.map(([m, quoi]) => `<dt>${esc(m)}</dt><dd>${esc(quoi)}</dd>`).join('')}</dl>` : '';
+  return `<details class="aide-ecran" data-aide="${cle}"${ouvert ? ' open' : ''}><summary>${esc(ouvert ? t('aide.cet_ecran', { ecran: e.nom }) : e.nom)}</summary>
+    <h4>${esc(t('aide.a_quoi'))}</h4><p>${esc(e.but)}</p>
+    <h4>${esc(t('aide.gestes'))}</h4><ol>${e.gestes.map((g) => `<li>${esc(g)}</li>`).join('')}</ol>${erreurs}</details>`;
+}
+function afficherAide() {
+  const p = $('#panneau-aide');
+  const role = etat.moi.utilisateur.role;
+  const ecrans = ecransDuRole();
+  const actuel = ecrans.includes(etat.vue) ? etat.vue : ecrans[0];
+  const garderOuverts = [...p.querySelectorAll('details[open]')].map((d) => d.dataset.aide);
+  p.innerHTML = `<div class="entete"><h3>${esc(t('aide.titre'))}</h3><button class="btn" id="b-fermer-aide">${esc(t('aide.fermer'))}</button></div>
+    <section class="aide-role" data-role="${role}"><h4>${esc(t('aide.votre_role'))} · ${esc(t(`aide.roles.${role}.titre`))}</h4><p>${esc(t(`aide.roles.${role}.texte`))}</p></section>
+    ${blocAide(actuel, true)}
+    <h4 class="aide-autres">${esc(t('aide.autres'))}</h4>
+    ${ecrans.filter((k) => k !== actuel).map((k) => blocAide(k, garderOuverts.includes(k))).join('')}
+    <p class="note">${esc(t('aide.contact'))}</p>
+    <button class="btn" id="b-revoir-premiers-pas">${esc(t('aide.revoir'))}</button>`;
+  $('#b-fermer-aide').onclick = fermerAide;
+  $('#b-revoir-premiers-pas').onclick = () => { fermerAide(); premiersPas(true); };
+}
 function fermerAide() { const p = $('#panneau-aide'); if (p) p.hidden = true; }
-function afficherAide() {}
-function premiersPas() {}
+$('#b-aide').onclick = () => {
+  const p = $('#panneau-aide');
+  if (!p.hidden) { fermerAide(); return; }
+  $('#panneau-notif').hidden = true;
+  afficherAide();
+  p.hidden = false;
+  $('#b-fermer-aide').focus();
+};
+
+/** Premiers pas : affichés une seule fois (mémorisé côté serveur), puis accessibles depuis l'aide. */
+function premiersPas(revoir) {
+  const role = etat.moi.utilisateur.role;
+  const m = $('#modale');
+  m.innerHTML = `<div class="boite premiers-pas" role="dialog" aria-modal="true" aria-labelledby="pp-titre"><h3 id="pp-titre">${esc(t('aide.premiers_pas.titre'))}</h3>
+    <p>${esc(t('aide.premiers_pas.intro'))}</p>
+    <ol>${[...t(`aide.premiers_pas.roles.${role}`), ...t('aide.premiers_pas.commun')].map((x) => `<li>${esc(x)}</li>`).join('')}</ol>
+    <div class="actions"><button class="btn pri" id="b-premiers-pas-ok">${esc(t('aide.premiers_pas.ok'))}</button></div></div>`;
+  m.hidden = false;
+  $('#b-premiers-pas-ok').onclick = () => { m.hidden = true; };
+  $('#b-premiers-pas-ok').focus();
+  if (!revoir) {
+    etat.moi.utilisateur.premiers_pas_vus = true;
+    api('POST', '/moi/premiers-pas').catch(() => {});
+  }
+}
+
 async function vueAdminDemo() {}
 
 /* ---------------- démarrage ---------------- */

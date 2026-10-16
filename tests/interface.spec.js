@@ -50,13 +50,26 @@ async function ouvrir(L, email, langue) {
   await page.fill('#c-email', email);
   await page.fill('#c-mdp', MDP);
   await page.click('#f-connexion button[type=submit]');
-  await page.waitForSelector('#ecran-app:not([hidden])');
+  await page.waitForSelector('body[data-pret="1"]');
   await fermerPremiersPas(page);
   return page;
 }
 async function fermerPremiersPas(page) {
   const b = page.locator('#b-premiers-pas-ok');
   if (await b.isVisible().catch(() => false)) await b.click();
+}
+
+/** L'aide du rôle connecté : un bloc pour chaque onglet visible, l'écran actuel ouvert. */
+async function verifierAide(page, L, nom, role) {
+  await page.click('#b-aide');
+  await page.waitForSelector('#panneau-aide:not([hidden]) .aide-role');
+  assert.strictEqual(await page.getAttribute('#panneau-aide .aide-role', 'data-role'), role);
+  const onglets = await page.$$eval('#onglets button', (bs) => bs.filter((b) => !b.hidden).map((b) => b.dataset.v));
+  const aides = await page.$$eval('#panneau-aide [data-aide]', (ds) => ds.map((d) => d.dataset.aide));
+  for (const o of [...onglets, 'compte']) assert.ok(aides.includes(o), `${nom} : aide de l'écran ${o}`);
+  assert.ok(await page.isVisible('#panneau-aide details[open] ol li'), `${nom} : l'écran actuel est expliqué`);
+  await verifier(page, L, nom);
+  await page.click('#b-fermer-aide');
 }
 
 async function onglet(page, vue) {
@@ -119,8 +132,25 @@ for (const L of LARGEURS) {
     await verifier(accueil, L, '00-connexion');
     await accueil.context().close();
 
+    // Premiers pas : montrés à la première connexion seulement
+    const pp = await navigateur.newContext({ viewport: { width: L.width, height: L.height }, isMobile: !!L.mobile, hasTouch: !!L.tactile });
+    const p1 = await pp.newPage(); p1.erreurs = [];
+    await p1.goto(base);
+    await p1.fill('#c-email', 'urgence.x@demo.arrimo'); await p1.fill('#c-mdp', MDP);
+    await p1.click('#f-connexion button[type=submit]');
+    await p1.waitForSelector('#b-premiers-pas-ok');
+    await verifier(p1, L, '00-premiers-pas');
+    await p1.click('#b-premiers-pas-ok');
+    await p1.click('#b-deconnexion');
+    await p1.fill('#c-email', 'urgence.x@demo.arrimo'); await p1.fill('#c-mdp', MDP);
+    await p1.click('#f-connexion button[type=submit]');
+    await p1.waitForSelector('body[data-pret="1"]');
+    assert.ok(!(await p1.isVisible('#b-premiers-pas-ok')), 'premiers pas montrés une seule fois');
+    await pp.close();
+
     // 1. Le problème : Copilote de l'Hôpital X
     const x = await ouvrir(L, 'coordo.x@demo.arrimo');
+    await verifierAide(x, L, '01b-aide-coordination', 'coordonnateur');
     await x.waitForSelector('#v-copilote .niveau');
     assert.match(await x.textContent('#v-copilote .niveau'), /Rouge|Orange/);
     await verifier(x, L, '01-copilote-x');
@@ -164,6 +194,7 @@ for (const L of LARGEURS) {
       assert.ok(tailles.every((t) => t.h >= 48 && t.w >= 120), `Nettoyage : boutons trop petits pour le tactile ${JSON.stringify(tailles)}`);
     }
     await verifier(e, L, '07-nettoyage-entretien');
+    await verifierAide(e, L, '07b-aide-entretien', 'entretien');
     const premier = e.locator('#v-nettoyage .net-item').first();
     const debut = premier.locator('[data-debut]');
     if (await debut.count()) { await debut.click(); await toast(e, 'commencé'); }
@@ -202,6 +233,7 @@ for (const L of LARGEURS) {
     const r = await ouvrir(L, 'reseau@demo.arrimo');
     await r.waitForSelector('#v-copilote .niveau');
     await verifier(r, L, '17-copilote-reseau');
+    await verifierAide(r, L, '17b-aide-administration', 'gestionnaire');
 
     // 7. La sécurité : double authentification exigée, puis création d'un compte
     await onglet(r, 'admin');

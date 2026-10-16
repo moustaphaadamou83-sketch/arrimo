@@ -113,7 +113,7 @@ function exigerSession(pool) {
       const token = entete.startsWith('Bearer ') ? entete.slice(7) : null;
       if (!token) throw new ErreurHttp(401, 'connexion_requise');
       const { rows } = await pool.query(
-        `SELECT u.id, u.nom, u.email, u.role, u.totp_actif, u.mdp_temporaire,
+        `SELECT u.id, u.nom, u.email, u.role, u.totp_actif, u.mdp_temporaire, u.premiers_pas_vus,
                 COALESCE(array_agg(ue.etablissement_id) FILTER (WHERE ue.etablissement_id IS NOT NULL), '{}') AS etabs
            FROM sessions s JOIN utilisateurs u ON u.id = s.utilisateur_id AND u.actif
            LEFT JOIN utilisateur_etablissements ue ON ue.utilisateur_id = u.id

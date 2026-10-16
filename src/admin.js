@@ -26,6 +26,10 @@ function brancher(api, pool, route, entier) {
     await journalAdmin(pool, req.utilisateur, 'Mot de passe changé', req.utilisateur.email, null);
   }));
 
+  api.post('/moi/premiers-pas', route(async (req) => {
+    await pool.query('UPDATE utilisateurs SET premiers_pas_vus = true WHERE id = $1', [req.utilisateur.id]);
+  }));
+
   api.post('/moi/2fa/preparer', route(async (req) => {
     if (req.utilisateur.totp_actif) throw new ErreurHttp(409, 'deja_2fa');
     const secret = totp.nouveauSecret();

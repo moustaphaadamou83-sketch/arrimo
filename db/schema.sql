@@ -309,3 +309,6 @@ ALTER TABLE notifications ADD COLUMN IF NOT EXISTS code text;
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS vars jsonb;
 ALTER TABLE lits ADD COLUMN IF NOT EXISTS blocage_code text;
 ALTER TABLE lits ADD COLUMN IF NOT EXISTS blocage_vars jsonb;
+
+-- Aide intégrée : la page « Premiers pas » n'est montrée qu'une fois
+ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS premiers_pas_vus boolean NOT NULL DEFAULT false;

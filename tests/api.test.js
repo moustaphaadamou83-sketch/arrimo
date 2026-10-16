@@ -540,7 +540,7 @@ const { MESSAGES } = require('../src/erreurs');
 
 function dictionnaires() {
   const bac = { window: {} };
-  for (const l of ['fr', 'en']) vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'public', 'i18n', `${l}.js`), 'utf8'), bac);
+  for (const f of ['fr', 'en', 'aide.fr', 'aide.en']) vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'public', 'i18n', `${f}.js`), 'utf8'), bac);
   return bac.window.ARRIMO_I18N;
 }
 const cles = (o, p = '') => Object.entries(o).flatMap(([k, v]) => (v && typeof v === 'object' && !Array.isArray(v) ? cles(v, `${p}${k}.`) : [`${p}${k}`]));
@@ -591,4 +591,27 @@ test('langues : erreurs avec code stable, Copilote et notifications en anglais',
   const n = (liste) => liste.find((x) => x.message.includes(tr.corps.numero)).message;
   assert.match(n(fr.corps), /^Nouvelle demande .* : Médecine, lit/);
   assert.match(n(en), /^New request .*: Medicine, bed/);
+});
+
+test('aide : premiers pas mémorisés côté serveur, une seule fois', async () => {
+  const avant = await appel('x', 'GET', '/moi');
+  assert.strictEqual(avant.corps.utilisateur.premiers_pas_vus, false);
+  assert.strictEqual((await appel('x', 'POST', '/moi/premiers-pas')).statut, 200);
+  assert.strictEqual((await appel('x', 'GET', '/moi')).corps.utilisateur.premiers_pas_vus, true);
+  // Le rôle entretien peut aussi le marquer (route sous /moi/)
+  assert.strictEqual((await appel('ex', 'POST', '/moi/premiers-pas')).statut, 200);
+});
+
+test('aide : chaque écran a son aide complète, en français et en anglais, pour chaque rôle', () => {
+  const { fr, en } = dictionnaires();
+  const ecrans = ['copilote', 'reseau', 'lits', 'admissions', 'transferts', 'nettoyage', 'nsa', 'indicateurs', 'journal', 'params', 'admin', 'compte'];
+  for (const d of [fr, en]) {
+    for (const e of ecrans) {
+      const a = d.aide.ecrans[e];
+      assert.ok(a && a.nom && a.but && a.gestes.length >= 2 && a.gestes.length <= 5 && Array.isArray(a.erreurs), `aide ${e}`);
+    }
+    for (const r of ['coordonnateur', 'entretien', 'admin_etab', 'gestionnaire']) {
+      assert.ok(d.aide.roles[r].titre && d.aide.roles[r].texte && d.aide.premiers_pas.roles[r].length, `rôle ${r}`);
+    }
+  }
 });
