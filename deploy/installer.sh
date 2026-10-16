@@ -119,6 +119,28 @@ systemctl daemon-reload
 systemctl enable --now arrimo-sauvegarde.timer >/dev/null 2>&1
 systemctl start arrimo-sauvegarde.service && echo "   Première sauvegarde faite : $(ls -1t /var/backups/arrimo/*.dump | head -1)"
 
+echo "== 5c Surveillance (toutes les 5 minutes, échecs dans journalctl -t arrimo-surveillance)"
+install -m 750 "$DOSSIER/deploy/surveillance.sh" /usr/local/bin/arrimo-surveillance
+cat > /etc/systemd/system/arrimo-surveillance.service <<UNIT
+[Unit]
+Description=Surveillance d'Arrimo (/api/sante)
+[Service]
+Type=oneshot
+Environment=ARRIMO_URL_SANTE=https://$DOMAINE/api/sante
+ExecStart=/usr/local/bin/arrimo-surveillance
+UNIT
+cat > /etc/systemd/system/arrimo-surveillance.timer <<UNIT
+[Unit]
+Description=Surveillance d'Arrimo toutes les 5 minutes
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+[Install]
+WantedBy=timers.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now arrimo-surveillance.timer >/dev/null 2>&1
+
 echo "== 6/7 Nginx"
 echo 'limit_req_zone $binary_remote_addr zone=arrimo_connexion:10m rate=10r/m;' > /etc/nginx/conf.d/arrimo-limites.conf
 cat > /etc/nginx/sites-available/arrimo <<NGINX
