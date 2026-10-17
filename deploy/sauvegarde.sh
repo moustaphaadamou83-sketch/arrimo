@@ -18,7 +18,15 @@ sha256sum "$FICHIER" > "$FICHIER.sha256"
 
 find "$CIBLE" -name 'arrimo-*.dump*' -mtime +"$JOURS" -delete
 
-if [ -n "${SAUVEGARDE_DISTANTE:-}" ] && command -v rclone >/dev/null; then
-  rclone copy "$FICHIER" "$SAUVEGARDE_DISTANTE" && rclone copy "$FICHIER.sha256" "$SAUVEGARDE_DISTANTE"
-fi
 echo "Sauvegarde OK : $FICHIER ($(du -h "$FICHIER" | cut -f1))"
+# Copie externe (Backblaze B2) : un échec est signalé dans le journal système et fait échouer le service (visible dans systemctl)
+if [ -n "${SAUVEGARDE_DISTANTE:-}" ]; then
+  if command -v rclone >/dev/null && rclone copy "$FICHIER" "$SAUVEGARDE_DISTANTE" && rclone copy "$FICHIER.sha256" "$SAUVEGARDE_DISTANTE" \
+     && rclone lsf "$SAUVEGARDE_DISTANTE" | grep -qx "$(basename "$FICHIER")"; then
+    echo "Copie externe OK : $SAUVEGARDE_DISTANTE/$(basename "$FICHIER")"
+  else
+    logger -t arrimo-sauvegarde -p user.err "ÉCHEC de la copie externe vers $SAUVEGARDE_DISTANTE ($FICHIER)"
+    echo "ÉCHEC de la copie externe vers $SAUVEGARDE_DISTANTE (la sauvegarde locale est faite)"
+    exit 1
+  fi
+fi

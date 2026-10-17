@@ -1312,7 +1312,7 @@ test('installateur : noms propres à chaque environnement, domaine changeable ; 
   assert.deepStrictEqual(noms({ ARRIMO_ENV: 'sh', DOMAINE: 'arrimo.senseafri.com' }),
     ['arrimo-sh', '/opt/arrimo-sh', 'arrimo-sh', 'arrimo_sh', '3012', 'sh.arrimo.senseafri.com', '/var/backups/arrimo-sh'], 'console SH');
   assert.match(noms({ ARRIMO_ENV: 'essai', DOMAINE: 'x' })[0], /^erreur 1/);
-  for (const f of ['installer.sh', 'noms.sh', 'sauvegarde.sh', 'restaurer.sh', 'surveillance.sh', 'lien.sh']) {
+  for (const f of ['installer.sh', 'noms.sh', 'sauvegarde.sh', 'restaurer.sh', 'surveillance.sh', 'lien.sh', 'b2-configurer.sh']) {
     assert.strictEqual(spawnSync('bash', ['-n', `deploy/${f}`], { cwd: racine }).status, 0, f);
   }
   // Garde-fous de l'installateur, vérifiés dans le texte (il n'est jamais lancé par les tests : il installerait des paquets)

@@ -150,6 +150,7 @@ install -m 750 "$DOSSIER/deploy/sauvegarde.sh" /usr/local/lib/arrimo/sauvegarde.
 install -m 750 "$DOSSIER/deploy/restaurer.sh" /usr/local/lib/arrimo/restaurer.sh
 install -m 750 "$DOSSIER/deploy/surveillance.sh" /usr/local/lib/arrimo/surveillance.sh
 install -m 750 "$DOSSIER/deploy/lien.sh" /usr/local/lib/arrimo/lien.sh
+install -m 750 "$DOSSIER/deploy/b2-configurer.sh" /usr/local/bin/arrimo-b2-configurer
 printf '#!/usr/bin/env bash\nDOSSIER_APP=%s SAUVEGARDE_DOSSIER=%s exec /usr/local/lib/arrimo/sauvegarde.sh "$@"\n' "$DOSSIER" "$SAUVEGARDES" > "/usr/local/bin/$NOM-sauvegarde"
 printf '#!/usr/bin/env bash\nDOSSIER_APP=%s SERVICE=%s exec /usr/local/lib/arrimo/restaurer.sh "$@"\n' "$DOSSIER" "$NOM" > "/usr/local/bin/$NOM-restaurer"
 chmod 750 "/usr/local/bin/$NOM-sauvegarde" "/usr/local/bin/$NOM-restaurer"
