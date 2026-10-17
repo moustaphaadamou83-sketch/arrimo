@@ -386,3 +386,7 @@ DO $$ BEGIN
   ALTER TABLE etablissements ADD CONSTRAINT etab_rayon_alerte CHECK (rayon_alerte_km BETWEEN 1 AND 200);
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 CREATE INDEX IF NOT EXISTS notif_code_cle ON notifications (etablissement_id, code, date DESC) WHERE code IN ('dispo_lit', 'dispo_civiere');
+
+-- Partie C2 : lien propre à chaque hôpital (<sous_domaine>.<hôte de l'environnement>), réglé depuis la console SH
+ALTER TABLE etablissements ADD COLUMN IF NOT EXISTS sous_domaine text;
+CREATE UNIQUE INDEX IF NOT EXISTS etablissements_sous_domaine ON etablissements (sous_domaine) WHERE sous_domaine IS NOT NULL;

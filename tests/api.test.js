@@ -941,7 +941,7 @@ test('langues : dictionnaires FR et EN complets, chaque code d’erreur traduit'
   assert.deepStrictEqual(sansErreurs(en).sort(), sansErreurs(fr).sort(), 'mêmes clés en français et en anglais');
   assert.deepStrictEqual(Object.keys(en.erreurs).sort(), Object.keys(MESSAGES).sort(), 'chaque code d’erreur a sa traduction anglaise');
   // Chaque code utilisé dans le code du serveur existe dans le catalogue
-  const src = fs.readdirSync(path.join(__dirname, '..', 'src')).map((f) => fs.readFileSync(path.join(__dirname, '..', 'src', f), 'utf8')).join('\n');
+  const src = fs.readdirSync(path.join(__dirname, '..', 'src')).filter((f) => f.endsWith('.js')).map((f) => fs.readFileSync(path.join(__dirname, '..', 'src', f), 'utf8')).join('\n');
   const utilises = [...src.matchAll(/new ErreurHttp\(\d+, '(\w+)'/g)].map((m) => m[1]);
   assert.ok(utilises.length > 80);
   assert.deepStrictEqual(utilises.filter((c) => !MESSAGES[c]), []);
@@ -1309,8 +1309,10 @@ test('installateur : noms propres à chaque environnement, domaine changeable ; 
     ['arrimo-recette', '/opt/arrimo-recette', 'arrimo-recette', 'arrimo_recette', '3011', 'recette.arrimo.senseafri.com', '/var/backups/arrimo-recette']);
   assert.strictEqual(noms({ ARRIMO_ENV: 'recette', DOMAINE: 'Arrimo.CA' })[5], 'recette.arrimo.ca');
   assert.deepStrictEqual(noms({ ARRIMO_ENV: 'production', DOMAINE: 'arrimo.ca' }).slice(0, 6), ['arrimo', '/opt/arrimo', 'arrimo', 'arrimo', '3010', 'arrimo.ca']);
+  assert.deepStrictEqual(noms({ ARRIMO_ENV: 'sh', DOMAINE: 'arrimo.senseafri.com' }),
+    ['arrimo-sh', '/opt/arrimo-sh', 'arrimo-sh', 'arrimo_sh', '3012', 'sh.arrimo.senseafri.com', '/var/backups/arrimo-sh'], 'console SH');
   assert.match(noms({ ARRIMO_ENV: 'essai', DOMAINE: 'x' })[0], /^erreur 1/);
-  for (const f of ['installer.sh', 'noms.sh', 'sauvegarde.sh', 'restaurer.sh', 'surveillance.sh']) {
+  for (const f of ['installer.sh', 'noms.sh', 'sauvegarde.sh', 'restaurer.sh', 'surveillance.sh', 'lien.sh']) {
     assert.strictEqual(spawnSync('bash', ['-n', `deploy/${f}`], { cwd: racine }).status, 0, f);
   }
   // Garde-fous de l'installateur, vérifiés dans le texte (il n'est jamais lancé par les tests : il installerait des paquets)
@@ -1455,4 +1457,156 @@ test('import CSV : lecture robuste (guillemets, fins de ligne Windows, BOM) et v
   assert.deepStrictEqual(lireCsv('﻿a;b\r\n"x;y";"il dit ""oui"""\r\n'), [['a', 'b'], ['x;y', 'il dit "oui"']]);
   assert.deepStrictEqual(lireCsv('a,b\n1,2'), [['a', 'b'], ['1', '2']]);
   assert.deepStrictEqual(['oui', 'Non', '', 'X', 'vrai', '1', 'peut-être'].map(ouiNon), [true, false, false, true, true, true, null]);
+});
+
+/* ======================= Partie C2 : console SH ======================= */
+test('console SH : première connexion (mot de passe, double authentification), hôpital, implantation, import, activation, désactivation', async () => {
+  const { creerAppSh } = require('../src/sh/app');
+  const { premierCompteSh } = require('../db/sh-premier-compte');
+  const { viderBaseSh } = require('../db/sh-vider');
+  const http = require('http');
+  // Dans les tests, les tables de la console vivent dans la base de test (en production : base arrimo_sh séparée)
+  await viderBaseSh(pool);
+  const temporaire = await premierCompteSh(pool, 'sh@exemple.ca', 'Équipe SH');
+  await assert.rejects(premierCompteSh(pool, 'autre@exemple.ca', 'Autre'), /déjà des comptes/);
+  const cle = process.env.SH_API_KEY;
+  const serveurSh = creerAppSh(pool, { env: { SH_ENV_RECETTE_URL: base, SH_ENV_RECETTE_CLE: cle, SH_ENV_RECETTE_PUBLIC: 'https://recette.exemple.ca' } }).listen(0);
+  const baseSh = `http://127.0.0.1:${serveurSh.address().port}`;
+  let jeton = null;
+  const sh = async (methode, chemin, corps) => {
+    const r = await fetch(`${baseSh}/api${chemin}`, { method: methode, headers: { 'Content-Type': 'application/json', ...(jeton ? { Authorization: `Bearer ${jeton}` } : {}) }, body: corps ? JSON.stringify(corps) : undefined });
+    return { statut: r.status, corps: await r.json().catch(() => null) };
+  };
+  try {
+    // Première connexion : mot de passe à choisir, puis double authentification, avant tout le reste
+    assert.strictEqual((await sh('GET', '/hopitaux')).statut, 401);
+    jeton = (await sh('POST', '/connexion', { email: 'sh@exemple.ca', mot_de_passe: temporaire })).corps.token;
+    assert.match((await sh('GET', '/hopitaux')).corps.erreur, /propre mot de passe/);
+    assert.strictEqual((await sh('PUT', '/moi/mot-de-passe', { actuel: temporaire, nouveau: 'Console-SH-2026' })).statut, 200);
+    assert.match((await sh('GET', '/hopitaux')).corps.erreur, /double authentification/);
+    const { secret } = (await sh('POST', '/moi/2fa/preparer')).corps;
+    assert.strictEqual((await sh('POST', '/moi/2fa/activer', { code: totp.codePourPas(secret, totp.pasActuel()) })).statut, 200);
+    jeton = null;
+    const etape = (await sh('POST', '/connexion', { email: 'sh@exemple.ca', mot_de_passe: 'Console-SH-2026' })).corps;
+    assert.strictEqual(etape.etape, '2fa');
+    jeton = (await sh('POST', '/connexion/2fa', { jeton: etape.jeton, code: totp.codePourPas(secret, totp.pasActuel() + 1) })).corps.token;
+    assert.ok(jeton);
+    assert.deepStrictEqual((await sh('GET', '/moi')).corps.environnements.map((e) => e.code), ['recette']);
+
+    // Hôpital et projet d'implantation en 7 étapes
+    assert.strictEqual((await sh('POST', '/hopitaux', { nom: 'Sans code', environnement: 'recette', code_etab: 'x' })).statut, 400);
+    const h = (await sh('POST', '/hopitaux', { nom: 'Hôpital SH', ville: 'Ville SH', environnement: 'recette', code_etab: 'hop-sh', sous_domaine: 'hopital-sh',
+      latitude: '45,5', longitude: '-72,1', contact_nom: 'Contact', contact_courriel: 'contact@hopital.exemple' })).corps;
+    assert.strictEqual(h.code_etab, 'HOP-SH');
+    assert.strictEqual(h.statut, 'prospect');
+    assert.strictEqual((await sh('POST', '/hopitaux', { nom: 'Doublon', environnement: 'recette', code_etab: 'HOP-SH' })).statut, 409);
+    let f = (await sh('GET', `/hopitaux/${h.id}`)).corps;
+    assert.deepStrictEqual(f.etapes.map((e) => e.nom), ['Contrat', 'Configuration', 'Import des données', 'Tests', 'Formation', 'Go-live', 'Production']);
+    assert.strictEqual(f.lien, 'https://hopital-sh.recette.exemple.ca');
+    assert.strictEqual(f.peut_activer, false);
+    assert.strictEqual(f.distant, null, 'pas encore d’établissement dans la recette');
+    assert.match((await sh('POST', `/hopitaux/${h.id}/activation`)).corps.erreur, /Reliez/);
+
+    // Relier : l'établissement est créé, inactif, dans l'environnement, avec son lien propre ; journal de l'environnement
+    assert.strictEqual((await sh('POST', `/hopitaux/${h.id}/relier`)).corps.cree, true);
+    const e = (await pool.query(`SELECT id, module_actif, sous_domaine FROM etablissements WHERE code = 'HOP-SH'`)).rows[0];
+    assert.deepStrictEqual([e.module_actif, e.sous_domaine], [false, 'hopital-sh']);
+    assert.ok((await pool.query(`SELECT 1 FROM journal_admin WHERE etablissement_id = $1 AND action = 'Établissement créé' AND detail LIKE '%console SH · sh@exemple.ca%'`, [e.id])).rows[0]);
+    assert.strictEqual((await sh('POST', `/hopitaux/${h.id}/relier`)).corps.cree, false, 'relier deux fois ne crée pas de doublon');
+    f = (await sh('GET', `/hopitaux/${h.id}`)).corps;
+    assert.strictEqual(f.statut, 'implantation');
+    const element = (code) => f.etapes.flatMap((x) => x.verifications).find((x) => x.code === code);
+    assert.ok(element('etablissement_cree').faite && element('lien_defini').faite);
+    assert.strictEqual(element('etablissement_cree').par, 'sh@exemple.ca');
+
+    // Lien propre : hopital-sh.<hôte> mène à l'établissement (la page de connexion affiche son nom)
+    const avantDomaine = process.env.ARRIMO_DOMAINE;
+    process.env.ARRIMO_DOMAINE = 'exemple.ca';
+    const publicPour = (hote) => new Promise((ok, ko) => {
+      http.get(`${base}/api/public`, { headers: { Host: hote } }, (r) => { let d = ''; r.on('data', (x) => { d += x; }); r.on('end', () => ok(JSON.parse(d))); }).on('error', ko);
+    });
+    try {
+      assert.deepStrictEqual((await publicPour('hopital-sh.exemple.ca')).lien, { id: e.id, nom: 'Hôpital SH' });
+      assert.strictEqual((await publicPour('inconnu.exemple.ca')).lien, null);
+      assert.strictEqual((await publicPour('exemple.ca')).lien, null);
+    } finally { if (avantDomaine === undefined) delete process.env.ARRIMO_DOMAINE; else process.env.ARRIMO_DOMAINE = avantDomaine; }
+
+    // Import par la console : vérifier, importer ; seuls l'empreinte et les compteurs sont gardés ; l'élément se coche seul
+    const csv = 'unite;type_unite\nMédecine SH;MED\n';
+    const modele = await fetch(`${baseSh}/api/hopitaux/${h.id}/import/modeles/unites`, { headers: { Authorization: `Bearer ${jeton}` } });
+    assert.match(await modele.text(), /unite;type_unite/);
+    const v = (await sh('POST', `/hopitaux/${h.id}/import/verifier`, { type: 'unites', contenu: csv })).corps;
+    assert.deepStrictEqual(v.resume, { creer: 1, maj: 0, inchange: 0 });
+    assert.strictEqual((await sh('POST', `/hopitaux/${h.id}/import/importer`, { type: 'unites', contenu: `${csv}Chirurgie SH;CHIR\n`, empreinte: v.empreinte })).statut, 409, 'fichier changé depuis la vérification');
+    const imp = (await sh('POST', `/hopitaux/${h.id}/import/importer`, { type: 'unites', contenu: csv, empreinte: v.empreinte })).corps;
+    assert.strictEqual(imp.resume.creer, 1);
+    assert.ok((await pool.query(`SELECT 1 FROM unites WHERE etablissement_id = $1 AND nom = 'Médecine SH'`, [e.id])).rows[0]);
+    const ligne = (await pool.query('SELECT * FROM imports WHERE hopital_id = $1', [h.id])).rows[0];
+    assert.deepStrictEqual([ligne.type, ligne.creations, ligne.auteur, ligne.empreinte], ['unites', 1, 'sh@exemple.ca', v.empreinte]);
+    assert.ok(!Object.keys(ligne).includes('contenu'));
+    assert.ok((await pool.query(`SELECT 1 FROM journal_admin WHERE action = 'Import CSV' AND etablissement_id = $1 AND detail LIKE '%console SH%'`, [e.id])).rows[0]);
+    f = (await sh('GET', `/hopitaux/${h.id}`)).corps;
+    assert.ok(element('import_unites').faite);
+
+    // Activation : refusée tant que les étapes avant le go-live ne sont pas toutes cochées
+    assert.match((await sh('POST', `/hopitaux/${h.id}/activation`)).corps.erreur, /Activation impossible : \d+ éléments à cocher/);
+    assert.strictEqual((await sh('PUT', `/verifications/${element('module_active').id}`, { faite: true })).statut, 409, 'suit l’activation');
+    for (const x of f.etapes.filter((et) => et.rang < 6).flatMap((et) => et.verifications).filter((x) => !x.faite)) {
+      assert.strictEqual((await sh('PUT', `/verifications/${x.id}`, { faite: true })).statut, 200);
+    }
+    assert.strictEqual((await sh('PUT', `/etapes/${f.etapes[0].id}`, { date_prevue: '2026-11-02', responsable: 'Moustafa', notes: 'Signé.' })).statut, 200);
+    assert.strictEqual((await sh('PUT', `/etapes/${f.etapes[0].id}`, { date_prevue: '02/11/2026' })).statut, 400);
+    assert.strictEqual((await sh('POST', `/hopitaux/${h.id}/activation`)).statut, 200);
+    assert.strictEqual((await pool.query('SELECT module_actif FROM etablissements WHERE id = $1', [e.id])).rows[0].module_actif, true);
+    f = (await sh('GET', `/hopitaux/${h.id}`)).corps;
+    assert.strictEqual(f.statut, 'actif');
+    assert.ok(element('module_active').faite);
+    assert.strictEqual(f.etapes[0].responsable, 'Moustafa');
+    assert.ok(f.etapes[0].date_reelle, 'étape terminée : date réelle remplie');
+    assert.strictEqual(f.distant.module_actif, true);
+    assert.strictEqual(f.distant.unites, 1);
+
+    // Désactivation : motif obligatoire, inscrit dans le journal de l'environnement
+    assert.strictEqual((await sh('POST', `/hopitaux/${h.id}/desactivation`, { motif: '' })).statut, 400);
+    assert.strictEqual((await sh('POST', `/hopitaux/${h.id}/desactivation`, { motif: 'Fin du contrat' })).statut, 200);
+    assert.strictEqual((await pool.query('SELECT module_actif FROM etablissements WHERE id = $1', [e.id])).rows[0].module_actif, false);
+    assert.ok((await pool.query(`SELECT 1 FROM journal_admin WHERE etablissement_id = $1 AND detail LIKE '%module désactivé · motif : Fin du contrat%'`, [e.id])).rows[0]);
+    f = (await sh('GET', `/hopitaux/${h.id}`)).corps;
+    assert.strictEqual(f.statut, 'suspendu');
+    assert.deepStrictEqual(f.activations.map((a) => a.action), ['desactivation', 'activation']);
+    assert.strictEqual((await sh('PUT', `/hopitaux/${h.id}`, { statut: 'actif' })).statut, 409, 'le statut suit l’activation');
+    assert.strictEqual((await sh('PUT', `/hopitaux/${h.id}`, { code_etab: 'AUTRE' })).statut, 409, 'relié : le code ne change plus');
+    // Changer le lien propre le change aussi dans l'environnement
+    assert.strictEqual((await sh('PUT', `/hopitaux/${h.id}`, { sous_domaine: 'hopital-sh2' })).statut, 200);
+    assert.strictEqual((await pool.query('SELECT sous_domaine FROM etablissements WHERE id = $1', [e.id])).rows[0].sous_domaine, 'hopital-sh2');
+    assert.strictEqual((await sh('PUT', `/hopitaux/${h.id}`, { sous_domaine: 'sh' })).statut, 400, 'nom réservé');
+
+    // Liste : recherche, filtres, informations de l'environnement, jamais de référence patient
+    const liste = (await sh('GET', '/hopitaux?q=ville sh&statut=suspendu')).corps;
+    assert.deepStrictEqual(liste.map((x) => x.code_etab), ['HOP-SH']);
+    assert.strictEqual((await sh('GET', '/hopitaux?statut=actif')).corps.length, 0);
+    assert.doesNotMatch(JSON.stringify(liste), /P-\d{5}/);
+    assert.deepStrictEqual((await sh('GET', '/environnements')).corps.map((x) => [x.code, x.joignable]), [['recette', true]]);
+
+    // Équipe SH : comptes, mot de passe temporaire, pas d'action sur son propre compte
+    const m = (await sh('POST', '/equipe', { nom: 'Second membre', email: 'second@exemple.ca' })).corps;
+    assert.ok(m.mot_de_passe_temporaire);
+    assert.strictEqual((await sh('POST', '/equipe', { nom: 'Doublon', email: 'second@exemple.ca' })).statut, 409);
+    const equipe = (await sh('GET', '/equipe')).corps;
+    const moi = equipe.find((x) => x.email === 'sh@exemple.ca');
+    assert.strictEqual((await sh('PUT', `/equipe/${moi.id}`, { actif: false })).statut, 409);
+    assert.ok(!JSON.stringify(equipe).includes('mot_de_passe_hash') && !JSON.stringify(equipe).includes('totp_secret'));
+
+    // Journal SH : chaque action, immuable
+    const j = (await sh('GET', '/journal')).corps;
+    for (const a of ['Hôpital créé', 'Établissement créé', 'Import CSV', 'Élément coché', 'Module activé', 'Module désactivé', 'Compte SH créé']) assert.ok(j.some((x) => x.action === a), a);
+    await assert.rejects(pool.query('UPDATE sh_journal SET action = $1', ['x']), /ne peut pas être modifié/);
+    await assert.rejects(pool.query('DELETE FROM sh_journal'), /ne peut pas être modifié/);
+
+    // Clé de l'environnement : obligatoire
+    assert.strictEqual((await appel(null, 'GET', '/sh/etablissements', null, { 'X-SH-Key': 'mauvaise' })).statut, 401);
+  } finally {
+    serveurSh.close();
+    await pool.query(`UPDATE etablissements SET actif = false WHERE code = 'HOP-SH'`);
+  }
 });

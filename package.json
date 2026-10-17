@@ -15,7 +15,9 @@
     "demo:reset": "node db/reset.js demo",
     "test:interface": "node --test --test-concurrency=1 tests/interface.spec.js",
     "mesures": "node scripts/mesures.js",
-    "charge": "node scripts/charge.js"
+    "charge": "node scripts/charge.js",
+    "sh": "node src/sh/server.js",
+    "sh:premier-compte": "node db/sh-premier-compte.js"
   },
   "license": "UNLICENSED",
   "dependencies": {

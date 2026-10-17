@@ -637,3 +637,105 @@ test('environnement neuf : premier compte, mot de passe choisi, premier établis
     if (avant.deuxfa === undefined) delete process.env.ARRIMO_2FA_ADMIN; else process.env.ARRIMO_2FA_ADMIN = avant.deuxfa;
   }
 });
+
+/* ------------------------------------------------------------------ console SH (C2) */
+test('console SH : première connexion, hôpital, implantation, import, activation · 3 largeurs', { timeout: 300000 }, async () => {
+  const { creerAppSh } = require('../src/sh/app');
+  const { premierCompteSh } = require('../db/sh-premier-compte');
+  const { viderBaseSh } = require('../db/sh-vider');
+  const { configurationBase } = require('../db/configuration-base');
+  const avantCle = process.env.SH_API_KEY;
+  process.env.SH_API_KEY = 'cle-interface-sh-0123456789';
+  // Environnement « recette » vide (seulement la configuration de base) ; la console a ses tables dans la base de test
+  await viderBase(pool);
+  await pool.query(fs.readFileSync(path.join(__dirname, '..', 'db', 'schema.sql'), 'utf8'));
+  await configurationBase(pool);
+  const serveurSh = creerAppSh(pool, { env: { SH_ENV_RECETTE_URL: base, SH_ENV_RECETTE_CLE: process.env.SH_API_KEY, SH_ENV_RECETTE_PUBLIC: 'https://recette.arrimo.exemple' } }).listen(0);
+  const baseSh = `http://127.0.0.1:${serveurSh.address().port}`;
+  try {
+    for (const [i, L] of LARGEURS.entries()) {
+      for (const c of navigateur.contexts()) await c.close();
+      await viderBaseSh(pool);
+      const temporaire = await premierCompteSh(pool, 'sh@exemple.ca', 'Moustafa Adamou');
+      // Politique de sécurité appliquée (pas de bypassCSP) : un script en ligne serait bloqué et signalé
+      const page = await (await navigateur.newContext({ locale: 'fr-CA', viewport: { width: L.width, height: L.height }, hasTouch: !!L.tactile, isMobile: !!L.mobile })).newPage();
+      page.erreurs = [];
+      page.on('console', (m) => { if (m.type() === 'error') page.erreurs.push(m.text()); });
+      page.on('pageerror', (e) => page.erreurs.push(String(e)));
+      // waitForFunction évalue une chaîne : interdit par la politique de sécurité de la console ; on attend un sélecteur
+      const attendre = () => page.waitForSelector('body[data-pret="1"]', { state: 'attached' });
+      const rendu = async (fn) => { await page.evaluate(() => { document.body.dataset.pret = ''; }); await fn(); await attendre(); };
+      await page.goto(baseSh);
+      await page.waitForSelector('#f-connexion:not([hidden])');
+      await verifier(page, L, 'sh-01-connexion');
+      await page.fill('#c-email', 'sh@exemple.ca'); await page.fill('#c-mdp', temporaire);
+      await page.click('#f-connexion button[type=submit]');
+      await page.waitForSelector('#f-mdp-temp:not([hidden])');
+      await page.fill('#t-actuel', temporaire); await page.fill('#t-nouveau', 'Console-SH-2026'); await page.fill('#t-confirme', 'Console-SH-2026');
+      await page.click('#f-mdp-temp button[type=submit]');
+      await page.waitForSelector('#f-2fa-act:not([hidden])');
+      await page.click('#b-2fa-prep');
+      await page.waitForSelector('#a-code');
+      if (i === 0) await verifier(page, L, 'sh-02-double-authentification');
+      const secret = (await page.textContent('#zone-2fa .secret')).trim();
+      await page.fill('#a-code', totp.codePourPas(secret, totp.pasActuel()));
+      await page.click('#b-2fa-ok');
+      await page.waitForSelector('#ecran-app:not([hidden])');
+      await attendre();
+      await verifier(page, L, 'sh-03-hopitaux-vide');
+
+      // Nouvel hôpital (fiche), puis création de son établissement dans la recette
+      await page.click('#b-nouveau');
+      await page.fill('#h-nom', 'Hôpital de recette A'); await page.fill('#h-code', 'HOP-A'); await page.fill('#h-ville', 'Sherbrooke');
+      await page.fill('#h-lat', '45,4'); await page.fill('#h-lon', '-71,89'); await page.fill('#h-sd', 'hopital-a');
+      await page.fill('#h-cnom', 'Responsable A'); await page.fill('#h-ccourriel', 'responsable@hopital-a.exemple');
+      if (i === 0) await verifier(page, L, 'sh-04-nouvel-hopital');
+      await rendu(() => page.click('#modale .btn.pri'));
+      await page.waitForSelector('#b-relier');
+      await rendu(() => page.click('#b-relier'));
+      await toast(page, 'Établissement créé');
+      assert.strictEqual((await pool.query(`SELECT module_actif FROM etablissements WHERE code = 'HOP-A'`)).rows[0].module_actif, false);
+
+      // Import des unités par la console
+      await page.setInputFiles('[data-imp-fichier="unites"]', { name: 'unites.csv', mimeType: 'text/csv', buffer: Buffer.from('unite;type_unite\nMédecine 3;MED\nChirurgie 2;CHIR\n') });
+      await page.waitForSelector('[data-imp-verifier="unites"]:not([disabled])');
+      await rendu(() => page.click('[data-imp-verifier="unites"]'));
+      await rendu(() => page.click('[data-imp-importer="unites"]'));
+      await toast(page, 'Import fait');
+      await verifier(page, L, 'sh-05-fiche-implantation');
+
+      // Liste de vérification : tout cocher avant le go-live, puis activer
+      assert.ok(await page.isDisabled('#b-activer'));
+      for (let rang = 1; rang <= 5; rang += 1) {
+        for (;;) {
+          const ouvert = await page.$eval(`#etape-${rang}`, (d) => d.open);
+          if (!ouvert) await page.click(`#etape-${rang} summary`);
+          const c = page.locator(`#etape-${rang} [data-verif]:not(:checked):not([disabled])`).first();
+          if (!(await c.count())) break;
+          await rendu(() => c.check());
+        }
+      }
+      await page.waitForSelector('#b-activer:not([disabled])');
+      await page.click('#b-activer');
+      await page.waitForSelector('#modale:not([hidden])');
+      await rendu(() => page.click('#modale .btn.pri'));
+      await toast(page, 'Module activé');
+      assert.strictEqual((await pool.query(`SELECT module_actif FROM etablissements WHERE code = 'HOP-A'`)).rows[0].module_actif, true);
+      await verifier(page, L, 'sh-06-module-active');
+      await rendu(() => page.click('#b-retour-liste'));
+      assert.match(await page.textContent('#contenu'), /Actif/);
+      assert.match(await page.textContent('#contenu'), /hopital-a\.recette\.arrimo\.exemple/);
+      await verifier(page, L, 'sh-07-hopitaux');
+      await rendu(() => page.click('#onglets [data-v="journal"]'));
+      assert.match(await page.textContent('#contenu'), /Module activé/);
+      await verifier(page, L, 'sh-08-journal');
+      await rendu(() => page.click('#onglets [data-v="equipe"]'));
+      await verifier(page, L, 'sh-09-equipe');
+      await pool.query(`UPDATE etablissements SET actif = false, sous_domaine = NULL, code = 'HOP-A-' || id WHERE code = 'HOP-A'`);
+      await page.context().close();
+    }
+  } finally {
+    serveurSh.close();
+    if (avantCle === undefined) delete process.env.SH_API_KEY; else process.env.SH_API_KEY = avantCle;
+  }
+});

@@ -29,7 +29,7 @@ function creerApp(pool) {
   app.set('trust proxy', 'loopback');   // derrière Nginx : l'adresse du client vient de X-Forwarded-For
   app.use('/api', limiteur());
   // Import CSV : jusqu'à 1 Mo (même limite que Nginx) ; ailleurs 50 Ko
-  app.use('/api/admin/import', express.json({ limit: '1mb' }));
+  app.use(['/api/admin/import', '/api/sh/import'], express.json({ limit: '1mb' }));
   app.use(express.json({ limit: '50kb' }));
   app.use((req, res, next) => {
     res.set({
@@ -65,12 +65,14 @@ function creerApp(pool) {
 
   /* ---------- informations publiques : serveur de démonstration, champs des pages légales ---------- */
   const CHAMPS_LEGAUX = ['entite', 'adresse', 'responsable', 'contact', 'duree_comptes', 'duree_journaux', 'duree_references', 'hebergeur', 'entente'];
-  api.get('/public', (req, res) => res.json({
+  api.get('/public', route(async (req) => ({
     demo: env.estDemo(),
     environnement: env.environnement(),
     mot_de_passe_oublie: courriel.actif(),
     legal: Object.fromEntries(CHAMPS_LEGAUX.map((k) => [k, process.env[`ARRIMO_LEGAL_${k.toUpperCase()}`] || null]).filter(([, v]) => v)),
-  }));
+    // Lien propre d'un hôpital (hopital-x.<hôte>) : la connexion affiche son nom et ouvre son établissement
+    lien: await require('./sh-api').etablissementDuLien(pool, req.hostname, env.hote()),
+  })));
 
   /* ---------- surveillance : état du service et de la base (sans données) ---------- */
   api.get('/sante', async (req, res) => {
@@ -83,15 +85,8 @@ function creerApp(pool) {
     }
   });
 
-  /* ---------- activation depuis SH (clé de service) ---------- */
-  api.put('/sh/etablissements/:code', route(async (req) => {
-    const cle = process.env.SH_API_KEY;
-    const fournie = String(req.get('x-sh-key') || '');
-    if (!cle) throw new ErreurHttp(503, 'sh_non_configure');
-    const ok = fournie.length === cle.length && crypto.timingSafeEqual(Buffer.from(fournie), Buffer.from(cle));
-    if (!ok) throw new ErreurHttp(401, 'cle_sh_invalide');
-    return majEtablissement('code', req.params.code, req.body);
-  }));
+  /* ---------- console SH (clé de service de cet environnement) ---------- */
+  require('./sh-api').brancherSh(api, pool, route);
 
   async function majEtablissement(champ, valeur, b) {
     const sets = []; const vals = [valeur];

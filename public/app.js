@@ -62,6 +62,7 @@ function appliquerLangue() {
     el.dataset.i18nAttr.split(';').forEach((paire) => { const [attr, cle] = paire.split(':'); el.setAttribute(attr, t(cle)); });
   });
   document.querySelectorAll('select.choix-langue').forEach((s) => { s.value = langue; });
+  if (etat.lien) $('#c-lien').textContent = t('connexion.lien', { nom: etat.lien.nom });
 }
 function changerLangue(l) {
   if (!LANGUES.includes(l) || l === langue) return;
@@ -312,7 +313,8 @@ async function demarrer() {
     return;
   }
   const memo = Number(lire('arrimo-ctx'));
-  etat.ctx = etabs.some((e) => e.id === memo) ? memo : (etabs.find((e) => e.module_actif) || etabs[0]).id;
+  const duLien = etat.lien && etabs.some((e) => e.id === etat.lien.id) ? etat.lien.id : null;
+  etat.ctx = duLien || (etabs.some((e) => e.id === memo) ? memo : (etabs.find((e) => e.module_actif) || etabs[0]).id);
   majSelecteurCtx();
   $('#ecran-connexion').hidden = true;
   $('#ecran-app').hidden = false;
@@ -1650,7 +1652,14 @@ function bandeauEnvironnement(env) {
   b.classList.toggle('recette', env === 'recette');
   b.textContent = env === 'recette' ? t('barre.recette') : t('barre.demo');
 }
-fetch('/api/public').then((r) => r.json()).then((p) => { bandeauEnvironnement(p.environnement); $('#b-oubli').hidden = !p.mot_de_passe_oublie; }).catch(() => {});
+fetch('/api/public').then((r) => r.json()).then((p) => {
+  bandeauEnvironnement(p.environnement);
+  $('#b-oubli').hidden = !p.mot_de_passe_oublie;
+  // Lien propre d'un hôpital (hopital-x.<domaine>) : son nom à la connexion, son établissement à l'ouverture
+  etat.lien = p.lien || null;
+  $('#c-lien').hidden = !etat.lien;
+  if (etat.lien) $('#c-lien').textContent = t('connexion.lien', { nom: etat.lien.nom });
+}).catch(() => {});
 (async () => {
   // Lien reçu par courriel : /?reinit=<jeton> ; le jeton est retiré de l'adresse aussitôt lu
   const reinit = new URLSearchParams(location.search).get('reinit');

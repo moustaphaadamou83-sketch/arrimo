@@ -117,6 +117,7 @@ input[type=checkbox], input[type=radio] { min-height: 0; accent-color: var(--pri
   display: flex; flex-direction: column; gap: var(--e2); box-shadow: 0 20px 50px rgba(14, 94, 111, 0.25); }
 .carte-connexion h1 { font-size: var(--t-page); color: var(--principal); margin-top: var(--e2); }
 .carte-connexion p { margin: 0 0 var(--e2); }
+.carte-connexion .lien-hopital { font-weight: 600; color: var(--principal); }
 .carte-connexion label { font-size: var(--t-note); font-weight: 600; color: var(--texte); margin-top: var(--e2); }
 .carte-connexion .btn { margin-top: var(--e3); }
 .lien { border: 0; font: inherit; font-size: var(--t-note); cursor: pointer; padding: var(--e2) 0 0; align-self: center; min-height: 40px; }

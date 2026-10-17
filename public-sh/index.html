@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="fr-CA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Arrimo · Console SH</title>
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="sh.css">
+<script src="i18n/format.js"></script>
+<script src="i18n/fr.js"></script>
+</head>
+<body>
+<div class="bandeau-demo bandeau-sh">Console SH · accès réservé à l’équipe SH</div>
+
+<!-- Connexion -->
+<section id="ecran-connexion" class="connexion" hidden>
+  <form id="f-connexion" class="carte-connexion" novalidate>
+    <img src="logo.svg" alt="" width="56" height="56">
+    <h1>Console SH</h1>
+    <p class="muted">Implantation et activation d’Arrimo dans les hôpitaux clients</p>
+    <label for="c-email">Adresse courriel</label>
+    <input id="c-email" type="email" autocomplete="username" required>
+    <label for="c-mdp">Mot de passe</label>
+    <input id="c-mdp" type="password" autocomplete="current-password" required>
+    <p id="c-erreur" class="erreur" role="alert" hidden></p>
+    <button class="btn pri large" type="submit">Se connecter</button>
+  </form>
+  <form id="f-2fa" class="carte-connexion" novalidate hidden>
+    <img src="logo.svg" alt="" width="56" height="56">
+    <h1>Code de vérification</h1>
+    <p class="muted">Ouvrez votre application d’authentification et entrez le code à 6 chiffres affiché pour Arrimo SH.</p>
+    <label for="c-code">Code</label>
+    <input id="c-code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required>
+    <p id="c-erreur-2fa" class="erreur" role="alert" hidden></p>
+    <button class="btn pri large" type="submit">Valider</button>
+    <button class="btn large" type="button" id="b-retour">Retour</button>
+  </form>
+  <form id="f-mdp-temp" class="carte-connexion" novalidate hidden>
+    <img src="logo.svg" alt="" width="56" height="56">
+    <h1>Choisissez votre mot de passe</h1>
+    <p class="muted">Vous utilisez un mot de passe temporaire. Choisissez-en un personnel : au moins 12 caractères, avec des lettres et des chiffres.</p>
+    <label for="t-actuel">Mot de passe temporaire</label>
+    <input id="t-actuel" type="password" autocomplete="current-password" required>
+    <label for="t-nouveau">Nouveau mot de passe</label>
+    <input id="t-nouveau" type="password" autocomplete="new-password" required>
+    <label for="t-confirme">Confirmer</label>
+    <input id="t-confirme" type="password" autocomplete="new-password" required>
+    <p id="t-erreur" class="erreur" role="alert" hidden></p>
+    <button class="btn pri large" type="submit">Enregistrer et continuer</button>
+  </form>
+  <div id="f-2fa-act" class="carte-connexion" hidden>
+    <img src="logo.svg" alt="" width="56" height="56">
+    <h1>Double authentification</h1>
+    <p class="muted">Obligatoire pour la console SH. Installez une application d’authentification (Google Authenticator, Microsoft Authenticator, 1Password…), puis :</p>
+    <div id="zone-2fa"><button class="btn pri large" type="button" id="b-2fa-prep">Afficher le code QR</button></div>
+    <p id="a-erreur" class="erreur" role="alert" hidden></p>
+  </div>
+</section>
+
+<!-- Application -->
+<div id="ecran-app" hidden>
+  <header class="barre">
+    <div class="barre-in">
+      <div class="marque"><img src="logo.svg" alt="" width="30" height="30"><div><strong>Arrimo · Console SH</strong><small id="nom-utilisateur"></small></div></div>
+      <div class="barre-droite">
+        <button class="btn barre-btn" id="b-deconnexion"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-log-out"/></svg><span class="menu-libelle">Déconnexion</span></button>
+      </div>
+    </div>
+    <nav class="onglets" id="onglets" role="tablist">
+      <button role="tab" data-v="hopitaux" aria-selected="true"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-building-2"/></svg><span>Hôpitaux</span></button>
+      <button role="tab" data-v="journal" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-history"/></svg><span>Journal SH</span></button>
+      <button role="tab" data-v="equipe" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-users"/></svg><span>Équipe SH</span></button>
+      <button role="tab" data-v="compte" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-user"/></svg><span>Mon compte</span></button>
+    </nav>
+  </header>
+  <main class="contenu" id="contenu"></main>
+</div>
+
+<div id="modale" class="modale" hidden></div>
+<div id="toasts" class="toasts" aria-live="polite"></div>
+<script src="sh.js"></script>
+</body>
+</html>

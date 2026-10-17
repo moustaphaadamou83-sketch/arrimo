@@ -1,0 +1,49 @@
+/* Console SH : compléments à la charte d'Arrimo (style.css). Mêmes couleurs ; les couleurs de statut ne servent qu'aux statuts. */
+.bandeau-sh { background: var(--principal); color: #fff; border-bottom-color: var(--survol); }
+.s-actif { --c: var(--succes); } .s-implantation { --c: var(--info); } .s-prospect { --c: var(--inactif); } .s-suspendu { --c: var(--attention); }
+.envs { display: flex; flex-wrap: wrap; gap: var(--e2) var(--e5); margin-bottom: var(--e4); }
+.env { display: inline-flex; align-items: center; gap: var(--e2); }
+.filtres { margin-bottom: var(--e4); }
+.filtres .champ { flex: 1 1 180px; max-width: 320px; }
+.lien-ligne { min-height: 40px; font: inherit; font-weight: 600; color: var(--principal); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; text-decoration: underline; text-underline-offset: 3px; }
+.progres { width: 120px; height: 6px; border-radius: 3px; background: var(--doux); overflow: hidden; margin-bottom: var(--e1); }
+.progres i { display: block; height: 100%; background: var(--secondaire); }
+.retour { padding-left: 0; margin-bottom: var(--e2); }
+.secret { word-break: break-all; user-select: all; }
+.qr { width: 200px; max-width: 100%; background: #fff; padding: 6px; border: 1px solid var(--bordure); border-radius: var(--rayon); align-self: center; }
+.etapes-2fa { padding-left: 18px; margin: 0 0 var(--e2); }
+.boite.large { width: min(760px, 100%); }
+.form-modale, .form-fiche { display: flex; flex-direction: column; gap: var(--e3); margin-bottom: var(--e3); }
+.hopital-fiche { grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); }
+@media (max-width: 900px) { .hopital-fiche { grid-template-columns: minmax(0, 1fr); } }
+/* frise des 7 étapes */
+.frise { list-style: none; display: flex; flex-wrap: wrap; gap: var(--e2); padding: 0; margin: 0 0 var(--e5); counter-reset: none; }
+.frise li { flex: 1 1 120px; }
+.frise a { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; text-decoration: none; color: var(--texte); background: var(--carte);
+  border: 1px solid var(--bordure); border-radius: var(--rayon); padding: var(--e2) var(--e3); font-weight: 600; font-size: var(--t-note); height: 100%; }
+.frise li.en-cours a { border-color: var(--principal); box-shadow: 0 0 0 1px var(--principal); }
+.rond { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--doux); color: var(--principal); font-size: var(--t-libelle); font-weight: 700; flex: none; }
+.rond .ic { width: 14px; height: 14px; }
+.fait .rond, .etape.fini .rond { background: var(--principal); color: #fff; }
+.etapes { display: flex; flex-direction: column; gap: var(--e2); }
+.etape { border: 1px solid var(--bordure); border-radius: var(--rayon); padding: var(--e2) var(--e3); }
+.etape[open] { padding-bottom: var(--e3); }
+.etape summary { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e2) var(--e3); cursor: pointer; min-height: 36px; }
+.etape summary .titre { font-weight: 600; }
+.etape > :not(summary) { margin-top: var(--e3); }
+.cases-etape { display: flex; flex-direction: column; gap: var(--e2); }
+.cases-etape .case { align-items: flex-start; }
+.cases-etape .case input { margin-top: 2px; }
+textarea { font: inherit; width: 100%; border: 1px solid #CBD5E1; border-radius: var(--rayon); padding: var(--e2); resize: vertical; }
+.compteurs { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: var(--e2); margin-bottom: var(--e3); }
+.compteurs div { display: flex; flex-direction: column; background: var(--doux); border-radius: var(--rayon); padding: var(--e2) var(--e3); }
+.compteurs .v { font-size: 20px; font-weight: 650; }
+.manquants, .historique { margin: 0 0 var(--e3); padding-left: 18px; font-size: var(--t-note); }
+.historique { margin-top: var(--e3); }
+.imports { display: flex; flex-direction: column; gap: var(--e3); }
+.import-carte { border: 1px solid var(--bordure); border-radius: var(--rayon); padding: var(--e3); display: flex; flex-direction: column; gap: var(--e2); }
+.import-carte h4 { margin: 0; font-size: var(--t-carte); }
+.import-carte p { margin: 0; }
+table.compact { min-width: 0; }
+.ligne.serre { gap: 6px; }
+.compte { max-width: 480px; display: flex; flex-direction: column; gap: var(--e3); }

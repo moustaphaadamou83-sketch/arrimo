@@ -21,6 +21,28 @@ async function journalAdmin(db, u, action, cible, detail, etablissementId = null
     [u.id, etablissementId, action, cible, detail]);
 }
 
+/** Nouvel établissement, créé inactif (l'activation suit l'implantation, console SH). journaliser(c, etab) écrit l'entrée du journal. */
+async function creerEtablissement(pool, b, journaliserCreation) {
+  const code = String(b.code || '').trim().toUpperCase();
+  const nom = String(b.nom || '').trim();
+  const lat = Number(b.latitude); const lon = Number(b.longitude);
+  if (!/^[A-Z0-9-]{2,12}$/.test(code)) throw new ErreurHttp(400, 'code_etab_invalide');
+  if (!nom) throw new ErreurHttp(400, 'nom_requis');
+  if (!(lat >= -90 && lat <= 90) || !(lon >= -180 && lon <= 180) || b.latitude === '' || b.longitude === '' || b.latitude == null || b.longitude == null) throw new ErreurHttp(400, 'position_invalide');
+  const partage = b.partage || 'complet';
+  if (!['complet', 'agrege', 'aucun'].includes(partage)) throw new ErreurHttp(400, 'partage_invalide');
+  const config = (await pool.query('SELECT id FROM config_pays ORDER BY id LIMIT 1')).rows[0];
+  if (!config) throw new ErreurHttp(400, 'config_introuvable');
+  return transaction(pool, async (c) => {
+    if ((await c.query('SELECT 1 FROM etablissements WHERE code = $1', [code])).rows[0]) throw new ErreurHttp(409, 'code_etab_existe');
+    const e = (await c.query(`INSERT INTO etablissements (code, nom, ville, adresse, latitude, longitude, config_id, partage, module_actif)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false) RETURNING id, code, nom, ville, adresse, partage, module_actif`,
+    [code, nom, String(b.ville || '').trim() || null, String(b.adresse || '').trim() || null, lat, lon, config.id, partage])).rows[0];
+    await journaliserCreation(c, e);
+    return e;
+  });
+}
+
 function brancher(api, pool, route, entier) {
   /* ---------------------------------------------------------------- mon compte */
   api.put('/moi/mot-de-passe', route(async (req) => {
@@ -256,26 +278,7 @@ function brancher(api, pool, route, entier) {
   /* ---------------------------------------------------------------- nouvel établissement (gestionnaire) */
   api.post('/admin/etablissements', route(async (req) => {
     exigerGestionnaire(req);
-    const b = req.body;
-    const code = String(b.code || '').trim().toUpperCase();
-    const nom = String(b.nom || '').trim();
-    const lat = Number(b.latitude); const lon = Number(b.longitude);
-    if (!/^[A-Z0-9-]{2,12}$/.test(code)) throw new ErreurHttp(400, 'code_etab_invalide');
-    if (!nom) throw new ErreurHttp(400, 'nom_requis');
-    if (!(lat >= -90 && lat <= 90) || !(lon >= -180 && lon <= 180) || b.latitude === '' || b.longitude === '') throw new ErreurHttp(400, 'position_invalide');
-    const partage = b.partage || 'complet';
-    if (!['complet', 'agrege', 'aucun'].includes(partage)) throw new ErreurHttp(400, 'partage_invalide');
-    const config = (await pool.query('SELECT id FROM config_pays ORDER BY id LIMIT 1')).rows[0];
-    if (!config) throw new ErreurHttp(400, 'config_introuvable');
-    return transaction(pool, async (c) => {
-      if ((await c.query('SELECT 1 FROM etablissements WHERE code = $1', [code])).rows[0]) throw new ErreurHttp(409, 'code_etab_existe');
-      // Créé inactif : l'activation suit l'implantation (console SH, partie C2)
-      const e = (await c.query(`INSERT INTO etablissements (code, nom, ville, adresse, latitude, longitude, config_id, partage, module_actif)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false) RETURNING id, code, nom, ville, adresse, partage, module_actif`,
-      [code, nom, String(b.ville || '').trim() || null, String(b.adresse || '').trim() || null, lat, lon, config.id, partage])).rows[0];
-      await journalAdmin(c, req.utilisateur, 'Établissement créé', `${code} · ${nom}`, null, e.id);
-      return e;
-    });
+    return creerEtablissement(pool, req.body, (c, e) => journalAdmin(c, req.utilisateur, 'Établissement créé', `${e.code} · ${e.nom}`, null, e.id));
   }));
 
   /* ---------------------------------------------------------------- import CSV (structure et comptes) */
@@ -442,4 +445,4 @@ function brancher(api, pool, route, entier) {
   return { exigerGestionnaire, journalAdmin };
 }
 
-module.exports = { brancher, ROLES, verifierRobustesse };
+module.exports = { brancher, ROLES, verifierRobustesse, journalAdmin, creerEtablissement };

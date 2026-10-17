@@ -114,13 +114,29 @@ file d’admission (besoins, concurrence), transfert depuis la file, nettoyage e
 civières de l’urgence (verrou, demande liée, admission, changement de civière, partage), langues, aide, pages légales, pagination, limites.
 `npm run test:interface` : parcours du guide de démonstration dans Chromium, en largeur ordinateur, tablette et téléphone, et en anglais.
 
-## Activation depuis SH
+## Console SH (siège)
 
-```
-PUT /api/sh/etablissements/{code}
-X-SH-Key: <SH_API_KEY>
-{ "module_actif": true, "partage": "complet" }
-```
+Application séparée dans le même dépôt (`src/sh/`, `public-sh/`), servie sur `sh.<domaine>`, avec sa propre base (`arrimo_sh`, schéma `db/sh-schema.sql`).
+- Accès réservé à l'équipe SH : mot de passe à choisir puis double authentification **obligatoires dès la première connexion** ; journal SH immuable.
+- Hôpitaux clients (contact, environnement, statut, lien d'accès), projet d'implantation en 7 étapes (Contrat, Configuration, Import des données,
+  Tests, Formation, Go-live, Production) avec liste de vérification, dates, responsable et notes.
+- Activation du module seulement quand toutes les étapes avant le go-live sont cochées ; désactivation à tout moment, avec un motif.
+- La console parle à chaque environnement par son API (`/api/sh/*`, en-tête `X-SH-Key` = `SH_API_KEY` de l'environnement) :
+  structure, comptes et compteurs seulement, jamais de référence patient. Chaque action est aussi inscrite au journal d'administration
+  de l'environnement, avec le courriel du membre SH.
+- Lien propre d'un hôpital : `<sous-domaine>.<hôte>` (ex. `hopital-x.arrimo.ca`) ; la connexion affiche le nom de l'hôpital et ouvre son établissement.
+  Sur le serveur : DNS du sous-domaine, puis `arrimo-lien <sous-domaine>` (ou `arrimo-recette-lien`) pour le certificat HTTPS.
+
+Installation : `ARRIMO_ENV=sh PREMIER_COMPTE=<courriel> PREMIER_NOM="<nom>" bash installer.sh arrimo.senseafri.com`
+(relie la console à la démo et à la recette du même serveur ; une production ailleurs se relie avec `SH_ENV_PRODUCTION_URL`, `_CLE`, `_PUBLIC`).
+En local : `SH_DATABASE_URL=postgres:///arrimo_dev_sh SH_ENV_DEMO_URL=http://127.0.0.1:3010 SH_ENV_DEMO_CLE=<clé> npm run sh` (port 3012).
+
+| Méthode | Chemin (API d'un environnement, clé SH) | Rôle |
+|---|---|---|
+| GET/POST | `/api/sh/etablissements` | Établissements et compteurs ; nouvel établissement (inactif) |
+| PUT | `/api/sh/etablissements/{code}` | `module_actif` (+ `motif`), `partage`, `sous_domaine`, `par` |
+| GET | `/api/sh/import/modeles/{type}` | Modèle CSV |
+| POST | `/api/sh/import/verifier`, `/api/sh/import/importer` | Import CSV (`code`, `type`, `contenu`, `empreinte`, `par`) |
 
 ## API principale (session : `Authorization: Bearer <token>`)
 

@@ -9,7 +9,7 @@ window.ARRIMO_I18N.fr = {
     deux_mdp_differents: 'Les deux mots de passe ne correspondent pas.',
   },
   connexion: {
-    sous_titre: 'Lits et transferts entre établissements', courriel: 'Adresse courriel', mdp: 'Mot de passe', se_connecter: 'Se connecter',
+    sous_titre: 'Lits et transferts entre établissements', lien: 'Connexion à {nom}', courriel: 'Adresse courriel', mdp: 'Mot de passe', se_connecter: 'Se connecter',
     code_titre: 'Code de vérification', code_aide: 'Ouvrez votre application d’authentification et entrez le code à 6 chiffres affiché pour Arrimo.',
     code: 'Code', valider: 'Valider',
     temp_titre: 'Choisissez votre mot de passe',

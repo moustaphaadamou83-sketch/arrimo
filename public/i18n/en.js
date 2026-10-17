@@ -9,7 +9,7 @@ window.ARRIMO_I18N.en = {
     deux_mdp_differents: 'The two passwords do not match.',
   },
   connexion: {
-    sous_titre: 'Beds and transfers between facilities', courriel: 'Email address', mdp: 'Password', se_connecter: 'Sign in',
+    sous_titre: 'Beds and transfers between facilities', lien: 'Sign in to {nom}', courriel: 'Email address', mdp: 'Password', se_connecter: 'Sign in',
     code_titre: 'Verification code', code_aide: 'Open your authenticator app and enter the 6-digit code shown for Arrimo.',
     code: 'Code', valider: 'Verify',
     temp_titre: 'Choose your password',
@@ -424,6 +424,9 @@ window.ARRIMO_I18N.en = {
     partage_invalide: 'Invalid sharing.',
     sh_non_configure: 'SH activation is not configured on this server.',
     cle_sh_invalide: 'Invalid SH key.',
+    motif_desactivation: 'Give the reason for the deactivation.',
+    sous_domaine_invalide: 'Invalid link: lowercase letters, digits and hyphens (e.g. hospital-x).',
+    sous_domaine_pris: 'This link is already used by another facility.',
     connecteur_reseau_gestionnaire: 'Only the network manager can create a network connector.',
     connecteur_introuvable: 'Connector not found.',
     connecteur_cle_manquante: 'Missing connector key.',
