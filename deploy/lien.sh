@@ -11,5 +11,9 @@ NOMS=$(certbot certificates --cert-name "$HOTE" 2>/dev/null | sed -n 's/^ *Domai
 [ -n "$NOMS" ] || NOMS="$HOTE"
 case " $NOMS " in *" $SD.$HOTE "*) echo "https://$SD.$HOTE est déjà couvert par le certificat."; exit 0 ;; esac
 LISTE=$(printf '%s,' $NOMS "$SD.$HOTE"); LISTE=${LISTE%,}
+# Le site Nginx de l'environnement sert aussi ce nom (ajouté par son nom exact, jamais par un nom générique)
+SITE="${SITE:?SITE manquant}"
+grep -q "server_name .*[[:space:]]$SD\.$HOTE[ ;]" "$SITE" || sed -i "s|server_name \(.*\);|server_name \1 $SD.$HOTE;|" "$SITE"
+nginx -t -q && systemctl reload nginx
 certbot --nginx --cert-name "$HOTE" -d "$LISTE" --expand --non-interactive --agree-tos --register-unsafely-without-email --redirect -q
 echo "HTTPS actif : https://$SD.$HOTE"

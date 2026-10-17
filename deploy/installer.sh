@@ -155,7 +155,7 @@ printf '#!/usr/bin/env bash\nDOSSIER_APP=%s SERVICE=%s exec /usr/local/lib/arrim
 chmod 750 "/usr/local/bin/$NOM-sauvegarde" "/usr/local/bin/$NOM-restaurer"
 # Lien propre d'un hôpital (<sous-domaine>.<hôte>) : certificat HTTPS, voir deploy/lien.sh
 if [ "$ARRIMO_ENV" != sh ]; then
-  printf '#!/usr/bin/env bash\nHOTE=%s exec /usr/local/lib/arrimo/lien.sh "$@"\n' "$HOTE" > "/usr/local/bin/$NOM-lien"; chmod 750 "/usr/local/bin/$NOM-lien"
+  printf '#!/usr/bin/env bash\nHOTE=%s SITE=%s exec /usr/local/lib/arrimo/lien.sh "$@"\n' "$HOTE" "/etc/nginx/sites-available/$NOM" > "/usr/local/bin/$NOM-lien"; chmod 750 "/usr/local/bin/$NOM-lien"
 fi
 cat > "/etc/systemd/system/$NOM-sauvegarde.service" <<UNIT
 [Unit]
@@ -228,8 +228,10 @@ else
 fi
 
 echo "== 6/7 Nginx"
-# Démo, recette, production : aussi les liens propres des hôpitaux (<sous-domaine>.<hôte>)
-if [ "$ARRIMO_ENV" = sh ]; then NOMS_NGINX="$HOTE"; else NOMS_NGINX="$HOTE *.$HOTE"; fi
+# Noms servis : l'hôte et les liens propres des hôpitaux déjà ajoutés au certificat (<nom>-lien). Jamais de nom générique (*.hôte) :
+# certbot pourrait alors installer le certificat d'un autre environnement dans ce site.
+NOMS_CERT=$(certbot certificates --cert-name "$HOTE" 2>/dev/null | sed -n 's/^ *Domains: //p')
+NOMS_NGINX=$(printf '%s\n' "$HOTE" $NOMS_CERT | awk 'NF && !vu[$0]++' | paste -sd' ' -)
 echo 'limit_req_zone $binary_remote_addr zone=arrimo_connexion:10m rate=10r/m;' > /etc/nginx/conf.d/arrimo-limites.conf
 cat > "/etc/nginx/sites-available/$NOM" <<NGINX
 server {
@@ -251,8 +253,7 @@ nginx -t -q && systemctl reload nginx
 
 echo "== 7/7 Certificat HTTPS"
 # Garde les noms déjà couverts (liens propres des hôpitaux ajoutés par <nom>-lien)
-NOMS_CERT=$(certbot certificates --cert-name "$HOTE" 2>/dev/null | sed -n 's/^ *Domains: //p')
-LISTE_CERT=$(printf '%s\n' "$HOTE" $NOMS_CERT | awk 'NF && !vu[$0]++' | paste -sd, -)
+LISTE_CERT=$(printf '%s' "$NOMS_NGINX" | tr ' ' ',')
 if certbot --nginx --cert-name "$HOTE" -d "$LISTE_CERT" --expand --non-interactive --agree-tos --register-unsafely-without-email --redirect -q; then
   echo "   HTTPS actif."
 else

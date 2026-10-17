@@ -1321,6 +1321,8 @@ test('installateur : noms propres à chaque environnement, domaine changeable ; 
   assert.match(avantPaquets, /CONFIRMER_HEBERGEMENT_CANADA:-\}" = oui/, 'production : confirmation d’hébergement au Canada avant toute installation');
   assert.match(avantPaquets, /contient un autre environnement/, 'jamais un environnement par-dessus un autre');
   assert.match(inst, /NOUVELLE_INSTALLATION:-0\}" = 1 \] && \[ "\$ARRIMO_ENV" = demo \]/, 'données de démonstration en démo seulement');
+  assert.doesNotMatch(inst, /server_name[^;\n]*\*\./, 'jamais de nom générique dans Nginx : certbot y installerait le certificat d’un autre environnement');
+  assert.doesNotMatch(inst, /NOMS_NGINX="[^"]*\*/, 'jamais de nom générique dans Nginx');
 });
 
 test('premier compte d’un environnement vide : gestionnaire, mot de passe temporaire ; refusé s’il existe des comptes', async () => {
