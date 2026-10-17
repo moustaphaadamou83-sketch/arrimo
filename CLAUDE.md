@@ -62,7 +62,7 @@ Tout changement : ajouter ou adapter un test dans `tests/api.test.js`, puis `npm
 2. Pare-feu UFW : 22, 80, 443 (vérifier d’abord les ports utilisés par les autres sites).
 3. fail2ban pour SSH. 4. `apt upgrade`, unattended-upgrades, redémarrage, vérification d’Arrimo et des autres sites.
 5. Changer le mot de passe de démonstration (`DEMO_MOT_DE_PASSE` dans `.env`) puis remettre la démo à zéro ; récupérer `/opt/arrimo/acces-demo.txt` dans `~/Documents/arrimo-acces-demo.txt` (600) puis le supprimer du serveur.
-6. Sauvegardes externes : rclone vers Backblaze B2 (bucket `arrimo-sauvegardes`, clé d’application limitée) et `SAUVEGARDE_DISTANTE` dans `.env` ; vérifier qu’une sauvegarde arrive dans B2.
+6. Sauvegardes externes : FAIT le 2026-10-17. Bucket privé B2 `arrimo-sauvegardes` (us-east-005, chiffré), clé limitée à ce bucket dans `/root/.config/rclone/rclone.conf` (600), distant rclone `b2-arrimo`, dossiers demo/ recette/ sh/. Reconfigurer : `arrimo-b2-configurer` (saisie masquée). Restauration testée. Production : bucket au Canada à prévoir (Loi 25).
 7. Dépôt GitHub privé `arrimo` (sans `node_modules` ni `.env`) : FAIT le 2026-10-17, github.com/moustaphaadamou83-sketch/arrimo, clé de déploiement `/root/.ssh/arrimo_github` (hôte SSH `github-arrimo`), `git push` depuis /root/arrimo-dev.
 
 ### B. Finir le produit avant toute prise de contact
