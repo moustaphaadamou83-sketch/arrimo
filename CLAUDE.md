@@ -63,7 +63,7 @@ Tout changement : ajouter ou adapter un test dans `tests/api.test.js`, puis `npm
 3. fail2ban pour SSH. 4. `apt upgrade`, unattended-upgrades, redémarrage, vérification d’Arrimo et des autres sites.
 5. Changer le mot de passe de démonstration (`DEMO_MOT_DE_PASSE` dans `.env`) puis remettre la démo à zéro ; récupérer `/opt/arrimo/acces-demo.txt` dans `~/Documents/arrimo-acces-demo.txt` (600) puis le supprimer du serveur.
 6. Sauvegardes externes : rclone vers Backblaze B2 (bucket `arrimo-sauvegardes`, clé d’application limitée) et `SAUVEGARDE_DISTANTE` dans `.env` ; vérifier qu’une sauvegarde arrive dans B2.
-7. Dépôt GitHub privé `arrimo` (sans `node_modules` ni `.env`).
+7. Dépôt GitHub privé `arrimo` (sans `node_modules` ni `.env`) : FAIT le 2026-10-17, github.com/moustaphaadamou83-sketch/arrimo, clé de déploiement `/root/.ssh/arrimo_github` (hôte SSH `github-arrimo`), `git push` depuis /root/arrimo-dev.
 
 ### B. Finir le produit avant toute prise de contact
 État 2026-10-16 : B1 à B8 faits dans /root/arrimo-dev (non déployés). Restent : remarques de Moustafa sur l'interface, relecture des pages légales par un avocat, courriel professionnel pour activer B8.
