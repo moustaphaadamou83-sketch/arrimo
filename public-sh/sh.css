@@ -47,3 +47,6 @@ textarea { font: inherit; width: 100%; border: 1px solid #CBD5E1; border-radius:
 table.compact { min-width: 0; }
 .ligne.serre { gap: 6px; }
 .compte { max-width: 480px; display: flex; flex-direction: column; gap: var(--e3); }
+.roles-formation { display: flex; flex-direction: column; gap: var(--e2); }
+.generateur { background: var(--doux); border-radius: var(--rayon); padding: var(--e3); margin-bottom: var(--e3); display: flex; flex-direction: column; gap: var(--e2); }
+.generateur p { margin: 0; }

@@ -116,3 +116,31 @@ CREATE TRIGGER sh_journal_pas_de_modif BEFORE UPDATE OR DELETE ON sh_journal
 DROP TRIGGER IF EXISTS sh_journal_pas_de_vidage ON sh_journal;
 CREATE TRIGGER sh_journal_pas_de_vidage BEFORE TRUNCATE ON sh_journal
   FOR EACH STATEMENT EXECUTE FUNCTION sh_journal_immuable();
+
+-- Partie C4 : formation par rôle, go-live (recette → production)
+ALTER TABLE hopitaux ADD COLUMN IF NOT EXISTS golive_le timestamptz;
+ALTER TABLE hopitaux ADD COLUMN IF NOT EXISTS golive_par text;
+ALTER TABLE imports ADD COLUMN IF NOT EXISTS environnement text;
+
+-- Parcours de formation : une séance et une liste de vérification par rôle, cochée au fil de la formation
+CREATE TABLE IF NOT EXISTS formation_roles (
+  id          serial PRIMARY KEY,
+  hopital_id  int NOT NULL REFERENCES hopitaux(id) ON DELETE CASCADE,
+  role        text NOT NULL,
+  seance_le   date,
+  formateur   text,
+  personnes   int CHECK (personnes BETWEEN 0 AND 10000),
+  UNIQUE (hopital_id, role)
+);
+CREATE TABLE IF NOT EXISTS formation_elements (
+  id          serial PRIMARY KEY,
+  hopital_id  int NOT NULL REFERENCES hopitaux(id) ON DELETE CASCADE,
+  role        text NOT NULL,
+  rang        int NOT NULL,
+  code        text NOT NULL,
+  libelle     text NOT NULL,
+  faite       boolean NOT NULL DEFAULT false,
+  par         text,
+  quand       timestamptz,
+  UNIQUE (hopital_id, role, code)
+);

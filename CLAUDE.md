@@ -38,8 +38,8 @@ createdb arrimo && createdb arrimo_test
 npm install
 DATABASE_URL=postgres:///arrimo npm run demo:reset
 DATABASE_URL=postgres:///arrimo HOST=127.0.0.1 npm start        # http://localhost:3010
-TEST_DATABASE_URL=postgres:///arrimo_test npm test               # 52 tests, tous doivent passer
-TEST_DATABASE_URL=postgres:///arrimo_test npm run test:interface   # 7 tests dans Chromium (captures dans captures/)
+TEST_DATABASE_URL=postgres:///arrimo_test npm test               # 53 tests, tous doivent passer
+TEST_DATABASE_URL=postgres:///arrimo_test npm run test:interface   # 9 tests dans Chromium (captures dans captures/)
 ```
 Tout changement : ajouter ou adapter un test dans `tests/api.test.js`, puis `npm test` vert avant de déployer.
 

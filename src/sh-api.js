@@ -12,6 +12,8 @@ const crypto = require('crypto');
 const { ErreurHttp } = require('./db');
 const { journalAdmin, creerEtablissement } = require('./admin');
 const imp = require('./import');
+const formation = require('./formation');
+const env = require('./environnement');
 
 // Noms réservés : ne peuvent pas servir de lien d'hôpital
 const RESERVES = ['www', 'sh', 'recette', 'api', 'demo', 'admin', 'mail'];
@@ -46,8 +48,28 @@ function brancherSh(api, pool, route) {
               WHERE ue.etablissement_id = e.id) AS comptes
        FROM etablissements e WHERE e.actif ORDER BY e.nom`)).rows));
 
-  api.post('/sh/etablissements', sh((req) => creerEtablissement(pool, req.body,
-    (c, e) => journalAdmin(c, systeme, 'Établissement créé', `${e.code} · ${e.nom}`, parSh(req.body), e.id))));
+  api.post('/sh/etablissements', sh((req) => creerEtablissement(pool, req.body, async (c, e) => {
+    await journalAdmin(c, systeme, 'Établissement créé', `${e.code} · ${e.nom}`, parSh(req.body), e.id);
+    // Recette : l'établissement sert aux tests et à la formation, il est donc ouvert dès sa création.
+    // En production, il reste inactif jusqu'à l'activation par la console (étapes avant le go-live cochées).
+    if (env.environnement() === 'recette') {
+      await c.query('UPDATE etablissements SET module_actif = true WHERE id = $1', [e.id]);
+      e.module_actif = true;
+      await journalAdmin(c, systeme, 'Établissement modifié', e.nom, `module activé pour les tests et la formation (recette) · ${parSh(req.body)}`, e.id);
+    }
+  })));
+
+  /* ---------- C4 : formation (recette seulement), structure validée pour le go-live, comptes pour le rapport ---------- */
+  api.post('/sh/formation/generer', sh(async (req) => {
+    formation.exigerRecette();
+    const e = await etabParCode(req.body.code);
+    const n = await formation.generer(pool, e.id);
+    await journalAdmin(pool, systeme, 'Données de formation générées', e.nom,
+      `admissions : ${n.admissions} · congés prévus : ${n.conges} · nettoyages : ${n.nettoyages} · civières : ${n.civieres} · demandes de lit : ${n.demandes} · ${parSh(req.body)}`, e.id);
+    return n;
+  }));
+  api.get('/sh/etablissements/:code/structure', sh(async (req) => formation.exporterStructure(pool, (await etabParCode(req.params.code)).id)));
+  api.get('/sh/etablissements/:code/comptes', sh(async (req) => formation.comptes(pool, (await etabParCode(req.params.code)).id)));
 
   api.put('/sh/etablissements/:code', sh(async (req) => {
     const b = req.body || {};

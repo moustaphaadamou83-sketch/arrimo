@@ -1551,9 +1551,12 @@ test('console SH : première connexion (mot de passe, double authentification), 
     // Activation : refusée tant que les étapes avant le go-live ne sont pas toutes cochées
     assert.match((await sh('POST', `/hopitaux/${h.id}/activation`)).corps.erreur, /Activation impossible : \d+ éléments à cocher/);
     assert.strictEqual((await sh('PUT', `/verifications/${element('module_active').id}`, { faite: true })).statut, 409, 'suit l’activation');
-    for (const x of f.etapes.filter((et) => et.rang < 6).flatMap((et) => et.verifications).filter((x) => !x.faite)) {
+    const auto = ['formation_coordination', 'formation_entretien', 'formation_admin'];
+    for (const x of f.etapes.filter((et) => et.rang < 6).flatMap((et) => et.verifications).filter((x) => !x.faite && !auto.includes(x.code))) {
       assert.strictEqual((await sh('PUT', `/verifications/${x.id}`, { faite: true })).statut, 200);
     }
+    // Étape Formation : cochée par le parcours de formation, rôle par rôle
+    for (const el of f.formation.flatMap((r) => r.elements)) assert.strictEqual((await sh('PUT', `/formation/${el.id}`, { faite: true })).statut, 200);
     assert.strictEqual((await sh('PUT', `/etapes/${f.etapes[0].id}`, { date_prevue: '2026-11-02', responsable: 'Moustafa', notes: 'Signé.' })).statut, 200);
     assert.strictEqual((await sh('PUT', `/etapes/${f.etapes[0].id}`, { date_prevue: '02/11/2026' })).statut, 400);
     assert.strictEqual((await sh('POST', `/hopitaux/${h.id}/activation`)).statut, 200);
@@ -1563,6 +1566,8 @@ test('console SH : première connexion (mot de passe, double authentification), 
     assert.ok(element('module_active').faite);
     assert.strictEqual(f.etapes[0].responsable, 'Moustafa');
     assert.ok(f.etapes[0].date_reelle, 'étape terminée : date réelle remplie');
+    assert.strictEqual(f.etapes[0].date_prevue, '2026-11-02', 'date rendue telle quelle, sans décalage de fuseau');
+    assert.strictEqual(f.etapes[0].date_reelle, (await pool.query("SELECT to_char(now() AT TIME ZONE 'America/Toronto', 'YYYY-MM-DD') AS d")).rows[0].d, 'date du jour au Québec');
     assert.strictEqual(f.distant.module_actif, true);
     assert.strictEqual(f.distant.unites, 1);
 
@@ -1608,5 +1613,165 @@ test('console SH : première connexion (mot de passe, double authentification), 
   } finally {
     serveurSh.close();
     await pool.query(`UPDATE etablissements SET actif = false WHERE code = 'HOP-SH'`);
+  }
+});
+
+/* ======================= Partie C4 : formation et go-live ======================= */
+test('C4 : patients fictifs en recette seulement, formation par rôle, go-live sans donnée de test, rapport PDF', { timeout: 120000 }, async () => {
+  const { Pool } = require('pg');
+  const { creerAppSh } = require('../src/sh/app');
+  const { premierCompteSh } = require('../db/sh-premier-compte');
+  const { viderBaseSh } = require('../db/sh-vider');
+  const { configurationBase } = require('../db/configuration-base');
+  const { verifier: verifierMdp } = require('../src/auth');
+  // « Production » de test : une seconde instance d'Arrimo sur un schéma séparé de la base de test (base séparée en vrai)
+  await pool.query('DROP SCHEMA IF EXISTS prod_c4 CASCADE; CREATE SCHEMA prod_c4');
+  const poolProd = new Pool({ connectionString: URL_TEST, options: '-c search_path=prod_c4' });
+  await poolProd.query(fs.readFileSync(path.join(__dirname, '..', 'db', 'schema.sql'), 'utf8'));
+  await configurationBase(poolProd);
+  const serveurProd = creerApp(poolProd).listen(0);
+  const baseProd = `http://127.0.0.1:${serveurProd.address().port}`;
+  const cle = process.env.SH_API_KEY;
+  await viderBaseSh(pool);
+  const temporaire = await premierCompteSh(pool, 'sh@exemple.ca', 'Équipe SH');
+  const serveurSh = creerAppSh(pool, { env: { SH_ENV_RECETTE_URL: base, SH_ENV_RECETTE_CLE: cle, SH_ENV_PRODUCTION_URL: baseProd, SH_ENV_PRODUCTION_CLE: cle, SH_ENV_PRODUCTION_PUBLIC: 'https://arrimo.exemple' } }).listen(0);
+  const baseSh = `http://127.0.0.1:${serveurSh.address().port}`;
+  let jeton = null;
+  const sh = async (methode, chemin, corps) => {
+    const r = await fetch(`${baseSh}/api${chemin}`, { method: methode, headers: { 'Content-Type': 'application/json', ...(jeton ? { Authorization: `Bearer ${jeton}` } : {}) }, body: corps ? JSON.stringify(corps) : undefined });
+    return { statut: r.status, corps: await r.json().catch(() => null) };
+  };
+  const avantEnv = process.env.ARRIMO_ENV;
+  const enEnv = (e) => { if (e === undefined) delete process.env.ARRIMO_ENV; else process.env.ARRIMO_ENV = e; };
+  try {
+    jeton = (await sh('POST', '/connexion', { email: 'sh@exemple.ca', mot_de_passe: temporaire })).corps.token;
+    await sh('PUT', '/moi/mot-de-passe', { actuel: temporaire, nouveau: 'Console-SH-2026' });
+    const { secret } = (await sh('POST', '/moi/2fa/preparer')).corps;
+    await sh('POST', '/moi/2fa/activer', { code: totp.codePourPas(secret, totp.pasActuel()) });
+
+    // Recette : l'établissement est ouvert dès sa création (tests et formation)
+    enEnv('recette');
+    const h = (await sh('POST', '/hopitaux', { nom: 'Hôpital C4', ville: 'Ville C4', environnement: 'recette', code_etab: 'HOP-C4', sous_domaine: 'hopital-c4', latitude: 46.1, longitude: -71.2, contact_nom: 'Contact C4' })).corps;
+    assert.strictEqual((await sh('POST', `/hopitaux/${h.id}/relier`)).statut, 200);
+    const eRec = (await pool.query(`SELECT id, module_actif FROM etablissements WHERE code = 'HOP-C4'`)).rows[0];
+    assert.strictEqual(eRec.module_actif, true, 'recette : ouvert pour les tests et la formation');
+    const fichiers = {
+      unites: 'unite;type_unite\nMédecine C4;MED\nChirurgie C4;CHIR\n',
+      chambres: 'unite;chambre\nMédecine C4;101\nMédecine C4;102\nChirurgie C4;201\n',
+      lits: 'unite;chambre;lit;isolement;pression_negative;ventilation;telemetrie\nMédecine C4;101;C4-101A;oui;non;non;non\nMédecine C4;101;C4-101B;non;non;non;non\nMédecine C4;102;C4-102A;non;non;non;oui\nChirurgie C4;201;C4-201A;non;oui;non;non\nChirurgie C4;201;C4-201B;non;non;oui;non\n',
+      civieres: 'civiere;categorie\nC4-C1;reguliere\nC4-C2;reguliere\nC4-C3;debordement\n',
+      utilisateurs: 'nom;courriel;role\nCoordination C4;coord@c4.exemple;coordonnateur\nEntretien C4;entretien@c4.exemple;entretien\n',
+    };
+    let comptesRecette = [];
+    for (const [type, contenu] of Object.entries(fichiers)) {
+      const v = (await sh('POST', `/hopitaux/${h.id}/import/verifier`, { type, contenu })).corps;
+      assert.strictEqual(v.nb_erreurs, 0, `${type} : ${JSON.stringify(v.erreurs)}`);
+      const r = (await sh('POST', `/hopitaux/${h.id}/import/importer`, { type, contenu, empreinte: v.empreinte })).corps;
+      if (type === 'utilisateurs') comptesRecette = r.comptes;
+    }
+
+    // 1. Générateur de patients fictifs : recette seulement
+    const n = (await sh('POST', `/hopitaux/${h.id}/formation/generer`)).corps;
+    assert.ok(n.admissions >= 2 && n.civieres >= 1 && n.demandes >= 1, JSON.stringify(n));
+    const occupes = (await pool.query(`SELECT patient_ref FROM lits WHERE etablissement_id = $1 AND patient_ref IS NOT NULL`, [eRec.id])).rows;
+    assert.ok(occupes.length && occupes.every((l) => /^P-9\d{4}$/.test(l.patient_ref)), 'références fictives P-9xxxx');
+    assert.ok((await pool.query(`SELECT 1 FROM journal WHERE detail = 'Formation (données fictives)' AND lit_id IN (SELECT id FROM lits WHERE etablissement_id = $1)`, [eRec.id])).rows[0]);
+    assert.ok((await pool.query(`SELECT 1 FROM journal_admin WHERE action = 'Données de formation générées' AND etablissement_id = $1`, [eRec.id])).rows[0]);
+    for (const e of ['production', 'demo']) {
+      enEnv(e);
+      const r = await appel(null, 'POST', '/sh/formation/generer', { code: 'HOP-C4', par: 'test' }, { 'X-SH-Key': cle });
+      assert.strictEqual(r.statut, 403, `générateur refusé en ${e}`);
+      assert.strictEqual(r.corps.code, 'formation_recette_seulement');
+    }
+    enEnv('recette');
+
+    // 2. Parcours de formation : l'étape Formation se coche rôle par rôle
+    let f = (await sh('GET', `/hopitaux/${h.id}`)).corps;
+    assert.deepStrictEqual(f.formation.map((r) => r.role), ['coordination', 'urgence', 'entretien', 'administration']);
+    const element = (code) => f.etapes.flatMap((x) => x.verifications).find((x) => x.code === code);
+    assert.strictEqual((await sh('PUT', `/verifications/${element('formation_entretien').id}`, { faite: true })).statut, 409, 'suit le parcours de formation');
+    for (const el of f.formation.find((r) => r.role === 'entretien').elements) { const r = await sh('PUT', `/formation/${el.id}`, { faite: true }); assert.strictEqual(r.statut, 200, JSON.stringify(r.corps)); }
+    assert.strictEqual((await sh('PUT', `/hopitaux/${h.id}/formation/entretien`, { seance_le: '2026-11-10', formateur: 'Moustafa', personnes: 6 })).statut, 200);
+    f = (await sh('GET', `/hopitaux/${h.id}`)).corps;
+    assert.ok(element('formation_entretien').faite, JSON.stringify(f.etapes[4].verifications.map((v) => [v.code, v.faite])));
+    assert.ok(!element('formation_coordination').faite, JSON.stringify([element('formation_coordination'), (await pool.query('SELECT role, faite, count(*) FROM formation_elements WHERE hopital_id = $1 GROUP BY 1, 2', [h.id])).rows]));
+    assert.strictEqual(f.formation.find((r) => r.role === 'entretien').personnes, 6);
+    // Coordination seule ne suffit pas : l'urgence aussi
+    for (const el of f.formation.find((r) => r.role === 'coordination').elements) await sh('PUT', `/formation/${el.id}`, { faite: true });
+    f = (await sh('GET', `/hopitaux/${h.id}`)).corps;
+    assert.ok(!element('formation_coordination').faite, JSON.stringify([element('formation_coordination'), (await pool.query('SELECT role, faite, count(*) FROM formation_elements WHERE hopital_id = $1 GROUP BY 1, 2', [h.id])).rows]));
+    for (const el of f.formation.filter((r) => ['urgence', 'administration'].includes(r.role)).flatMap((r) => r.elements)) await sh('PUT', `/formation/${el.id}`, { faite: true });
+    f = (await sh('GET', `/hopitaux/${h.id}`)).corps;
+    assert.ok(element('formation_coordination').faite && element('formation_admin').faite);
+    // Décocher un élément décoche l'étape
+    const un = f.formation[0].elements[0];
+    await sh('PUT', `/formation/${un.id}`, { faite: false });
+    f = (await sh('GET', `/hopitaux/${h.id}`)).corps;
+    assert.ok(!element('formation_coordination').faite, JSON.stringify([element('formation_coordination'), (await pool.query('SELECT role, faite, count(*) FROM formation_elements WHERE hopital_id = $1 GROUP BY 1, 2', [h.id])).rows]));
+    await sh('PUT', `/formation/${un.id}`, { faite: true });
+
+    // 3. Go-live : refusé tant que les étapes avant le go-live ne sont pas cochées
+    assert.match((await sh('POST', `/hopitaux/${h.id}/golive`)).corps.erreur, /Go-live impossible/);
+    f = (await sh('GET', `/hopitaux/${h.id}`)).corps;
+    for (const x of f.etapes.filter((et) => et.rang < 6).flatMap((et) => et.verifications).filter((x) => !x.faite)) await sh('PUT', `/verifications/${x.id}`, { faite: true });
+    f = (await sh('GET', `/hopitaux/${h.id}`)).corps;
+    assert.strictEqual(f.golive.possible, true);
+    // Les deux instances partagent ce processus de test : la production se comporte en production pendant le go-live
+    enEnv('production');
+    const g = await sh('POST', `/hopitaux/${h.id}/golive`);
+    assert.strictEqual(g.statut, 200, JSON.stringify(g.corps));
+    // Structure et comptes en production, nouveaux mots de passe ; aucune donnée de test
+    assert.deepStrictEqual(g.corps.resultats.map((x) => [x.type, x.resume.creer]), [['unites', 2], ['chambres', 3], ['lits', 5], ['civieres', 3], ['utilisateurs', 2]]);
+    assert.strictEqual(g.corps.comptes.length, 2);
+    const eProd = (await poolProd.query(`SELECT id, module_actif, sous_domaine FROM etablissements WHERE code = 'HOP-C4'`)).rows[0];
+    assert.deepStrictEqual([eProd.module_actif, eProd.sous_domaine], [false, 'hopital-c4'], 'production : créé inactif, avec son lien');
+    const litsProd = (await poolProd.query('SELECT code, etat, patient_ref, isolement, telemetrie FROM lits WHERE etablissement_id = $1 ORDER BY code', [eProd.id])).rows;
+    assert.strictEqual(litsProd.length, 5);
+    assert.ok(litsProd.every((l) => l.etat === 'libre' && l.patient_ref == null), 'aucun patient de test en production');
+    assert.deepStrictEqual(litsProd.filter((l) => l.isolement || l.telemetrie).map((l) => l.code), ['C4-101A', 'C4-102A'], 'équipement repris');
+    assert.ok((await poolProd.query(`SELECT count(*)::int AS n FROM civieres WHERE etablissement_id = $1 AND etat = 'libre'`, [eProd.id])).rows[0].n === 3);
+    assert.strictEqual((await poolProd.query('SELECT count(*)::int AS n FROM demandes_admission')).rows[0].n, 0);
+    assert.strictEqual((await poolProd.query(`SELECT count(*)::int AS n FROM journal WHERE detail = 'Formation (données fictives)'`)).rows[0].n, 0);
+    for (const c of g.corps.comptes) {
+      const u = (await poolProd.query('SELECT mot_de_passe_hash, mdp_temporaire FROM utilisateurs WHERE email = $1', [c.courriel])).rows[0];
+      assert.ok(u.mdp_temporaire && verifierMdp(c.mot_de_passe_temporaire, u.mot_de_passe_hash));
+      const ancien = comptesRecette.find((x) => x.courriel === c.courriel).mot_de_passe_temporaire;
+      assert.notStrictEqual(c.mot_de_passe_temporaire, ancien, 'nouveau mot de passe temporaire');
+      assert.ok(!verifierMdp(ancien, u.mot_de_passe_hash));
+    }
+    f = (await sh('GET', `/hopitaux/${h.id}`)).corps;
+    assert.strictEqual(f.environnement, 'production');
+    assert.strictEqual(f.lien, 'https://hopital-c4.arrimo.exemple');
+    assert.ok(element('production_importee').faite && !element('module_active').faite);
+    assert.ok(f.golive_le && f.golive_par === 'sh@exemple.ca');
+    assert.strictEqual(f.imports.filter((i) => i.environnement === 'production').length, 5);
+    assert.strictEqual((await sh('POST', `/hopitaux/${h.id}/formation/generer`)).statut, 403, 'jamais de patients fictifs en production');
+    assert.strictEqual((await sh('POST', `/hopitaux/${h.id}/golive`)).statut, 409, 'go-live une seule fois');
+    // Activation en production
+    assert.strictEqual((await sh('POST', `/hopitaux/${h.id}/activation`)).statut, 200);
+    assert.strictEqual((await poolProd.query('SELECT module_actif FROM etablissements WHERE id = $1', [eProd.id])).rows[0].module_actif, true);
+
+    // 4. Rapport de go-live en PDF
+    const pdf = await fetch(`${baseSh}/api/hopitaux/${h.id}/rapport.pdf`, { headers: { Authorization: `Bearer ${jeton}` } });
+    assert.strictEqual(pdf.headers.get('content-type'), 'application/pdf');
+    const octets = Buffer.from(await pdf.arrayBuffer());
+    assert.strictEqual(octets.subarray(0, 5).toString(), '%PDF-');
+    assert.ok(octets.length > 5000);
+    fs.mkdirSync(path.join(__dirname, '..', 'captures', 'sh'), { recursive: true });
+    fs.writeFileSync(path.join(__dirname, '..', 'captures', 'sh', 'rapport-golive-complet.pdf'), octets);
+    assert.match(octets.toString('latin1'), /\/Count [1-9]/);
+    assert.ok((await sh('GET', '/journal')).corps.some((j) => j.action === 'Rapport de go-live téléchargé'));
+    assert.ok((await sh('GET', '/journal')).corps.some((j) => j.action === 'Go-live' && /nouveaux comptes : 2/.test(j.detail)));
+    // La console a son propre quota de requêtes (clé exacte) ; une fausse clé reste limitée comme un appel anonyme
+    const rafale = await Promise.all(Array.from({ length: 150 }, () => fetch(`${base}/api/sh/etablissements`, { headers: { 'X-SH-Key': cle } }).then((r) => r.status)));
+    assert.ok(rafale.every((x) => x === 200), 'console SH : pas bloquée à 120 requêtes par minute');
+    const fausses = await Promise.all(Array.from({ length: 130 }, () => fetch(`${base}/api/sh/etablissements`, { headers: { 'X-SH-Key': 'x'.repeat(cle.length) } }).then((r) => r.status)));
+    assert.ok(fausses.includes(429), 'fausse clé : limite anonyme');
+  } finally {
+    enEnv(avantEnv);
+    serveurSh.close(); serveurProd.close();
+    await poolProd.end();
+    await pool.query('DROP SCHEMA IF EXISTS prod_c4 CASCADE');
+    await pool.query(`UPDATE etablissements SET actif = false, sous_domaine = NULL WHERE code = 'HOP-C4'`);
   }
 });

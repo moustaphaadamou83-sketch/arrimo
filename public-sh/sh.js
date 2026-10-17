@@ -21,6 +21,8 @@ const messageImport = (e) => {
   const modele = ((window.ARRIMO_I18N || {}).fr || {}).import?.e?.[e.code];
   return modele ? F.remplir(L, modele, { ...e.vars, colonne: e.colonne }) : e.code;
 };
+// Éléments cochés par la console elle-même
+const AUTOMATIQUES = { module_active: 'suit le bouton Activer', formation_coordination: 'suit le parcours de formation', formation_entretien: 'suit le parcours de formation', formation_admin: 'suit le parcours de formation' };
 const statutHTML = (s) => `<span class="etat-niveau s-${s}">${esc(STATUTS[s] || s)}</span>`;
 
 const etat = { token: lire('sh-token'), moi: null, vue: 'hopitaux', hopital: null, filtres: { q: '', statut: '', environnement: '' }, imports: {}, jeton2fa: null };
@@ -179,6 +181,7 @@ async function afficher() {
     else vueCompte(v);
   } catch (e) { toast(e.message, true); }
   document.body.dataset.pret = '1';
+  document.body.dataset.rendus = String(Number(document.body.dataset.rendus || 0) + 1);   // repère pour les tests d'interface
 }
 
 /* ---------------- hôpitaux ---------------- */
@@ -253,7 +256,7 @@ async function vueHopital(v) {
   const etatEtab = !h.environnement_relie ? '<p class="note">Cet environnement n’est pas relié à la console.</p>'
     : d && d.injoignable ? '<p class="note">L’environnement ne répond pas pour l’instant.</p>'
       : !h.relie ? `<p>L’établissement n’existe pas encore dans l’environnement ${esc(ENVS[h.environnement])}.</p>
-          <button class="btn pri" id="b-relier">${icone('building-2')}Créer l’établissement</button><p class="note">Il est créé inactif, avec le code ${esc(h.code_etab)}. S’il existe déjà avec ce code, il est simplement relié.</p>`
+          <button class="btn pri" id="b-relier">${icone('building-2')}Créer l’établissement</button><p class="note">Code ${esc(h.code_etab)}. En recette, il est ouvert pour les tests et la formation ; ailleurs, il est créé inactif. S’il existe déjà avec ce code, il est simplement relié.</p>`
         : d ? `<div class="compteurs">${[['unites', 'unité', 'unités'], ['chambres', 'chambre', 'chambres'], ['lits', 'lit', 'lits'], ['civieres', 'civière', 'civières'], ['comptes', 'compte', 'comptes']]
           .map(([k, s, p]) => `<div><span class="v num">${nb(d[k])}</span><span class="note">${esc(d[k] > 1 ? p : s)}</span></div>`).join('')}</div>
           <p>Module ${d.module_actif ? '<span class="etat-niveau n-vert">activé</span>' : '<span class="etat-niveau">désactivé</span>'}</p>`
@@ -269,7 +272,10 @@ async function vueHopital(v) {
     <div class="deux hopital-fiche">
       <div class="pile">
         <div class="panneau-c"><h3>Établissement dans l’environnement</h3>${etatEtab}</div>
+        ${h.environnement === 'recette' || h.golive_le ? `<div class="panneau-c" id="golive"><h3>Go-live</h3>${blocGolive(h)}</div>` : ''}
         <div class="panneau-c"><h3>Activation du module</h3>${blocActivation(h)}</div>
+        <div class="panneau-c"><h3>Rapport de go-live</h3><p class="note">Établissement, dates des 7 étapes, imports, comptes (sans mot de passe), formation et responsables, avec signatures.</p>
+          <div><button class="btn" id="b-rapport">${icone('download')}Télécharger le rapport (PDF)</button></div></div>
         <div class="panneau-c"><h3>Fiche</h3><div class="form-fiche">${formHopital(h)}</div>
           <div class="ligne">${['prospect', 'implantation'].includes(h.statut) ? `<div class="champ"><label class="lbl" for="h-statut">Statut</label><select id="h-statut">${['prospect', 'implantation'].map((k) => `<option value="${k}"${h.statut === k ? ' selected' : ''}>${STATUTS[k]}</option>`).join('')}</select></div>` : ''}
           <button class="btn pri" id="b-enregistrer">Enregistrer la fiche</button></div>
@@ -277,13 +283,14 @@ async function vueHopital(v) {
       </div>
       <div class="pile">
         <div class="panneau-c"><h3>Projet d’implantation</h3><div class="etapes">${h.etapes.map(blocEtape).join('')}</div></div>
+        <div class="panneau-c" id="formation"><h3>Parcours de formation</h3>${blocFormation(h)}</div>
         <div class="panneau-c" id="imports"><h3>Import des données</h3>${h.relie ? blocImports(h) : '<p class="note">Créez d’abord l’établissement dans l’environnement.</p>'}</div>
       </div>
     </div>`;
 
   $('#b-retour-liste').onclick = () => { etat.hopital = null; afficher(); };
   const rel = $('#b-relier');
-  if (rel) rel.onclick = () => agir(rel, () => api('POST', `/hopitaux/${h.id}/relier`), (r) => (r.cree ? 'Établissement créé dans l’environnement (inactif).' : 'Établissement relié.'));
+  if (rel) rel.onclick = () => agir(rel, () => api('POST', `/hopitaux/${h.id}/relier`), (r) => (r.cree ? `Établissement créé dans l’environnement (${r.actif ? 'ouvert pour les tests et la formation' : 'inactif'}).` : 'Établissement relié.'));
   $('#b-enregistrer').onclick = (ev) => agir(ev.target, () => api('PUT', `/hopitaux/${h.id}`, { ...lireFormHopital(), ...($('#h-statut') ? { statut: $('#h-statut').value } : {}) }), 'Fiche enregistrée.');
   v.querySelectorAll('[data-verif]').forEach((c) => { c.onchange = () => agir(null, () => api('PUT', `/verifications/${c.dataset.verif}`, { faite: c.checked })); });
   v.querySelectorAll('[data-etape]').forEach((b) => {
@@ -305,6 +312,87 @@ async function vueHopital(v) {
     [{ label: 'Annuler' }, { label: 'Désactiver', dan: true, run: async () => { try { await api('POST', `/hopitaux/${h.id}/desactivation`, { motif: $('#d-motif').value }); toast('Module désactivé.'); afficher(); return true; } catch (e) { toast(e.message, true); return false; } } }]);
   }
   brancherImports(v, h);
+  brancherFormation(v, h);
+  $('#b-rapport').onclick = async (ev) => {
+    const b = ev.currentTarget;
+    b.disabled = true;
+    try {
+      const r = await fetch(`/api/hopitaux/${h.id}/rapport.pdf`, { headers: { Authorization: `Bearer ${etat.token}` } });
+      if (!r.ok) throw new Error((await r.json().catch(() => null))?.erreur || 'Rapport indisponible.');
+      telecharger(await r.blob(), `arrimo-rapport-golive-${h.code_etab}.pdf`);
+      toast('Rapport téléchargé.');
+    } catch (e) { toast(e.message, true); } finally { b.disabled = false; }
+  };
+  const gl = $('#b-golive');
+  if (gl) {
+    gl.onclick = () => modale(`Go-live de ${h.nom}`, `<p>La structure et les comptes validés en recette sont importés en production. Chaque compte reçoit un <b>nouveau</b> mot de passe temporaire.</p>
+      <p>Aucune donnée de test ne passe en production : ni patients, ni mouvements, ni journal. L’établissement de production est créé inactif ; vous l’activerez ensuite.</p>`,
+    [{ label: 'Annuler' }, { label: 'Passer en production', pri: true, run: async () => {
+      try {
+        const r = await api('POST', `/hopitaux/${h.id}/golive`);
+        toast('Go-live fait : l’hôpital est en production.');
+        await afficher();
+        if (r.comptes.length) setTimeout(() => montrerComptes(r.comptes), 50);
+        return true;
+      } catch (e) { toast(e.message, true); return false; }
+    } }]);
+  }
+}
+
+function blocGolive(h) {
+  if (h.golive_le) return `<p>Passé en production le ${esc(quand(h.golive_le))} par ${esc(h.golive_par)}.</p><p class="note">Structure et comptes importés depuis la recette, avec de nouveaux mots de passe temporaires. Les données de test sont restées en recette.</p>`;
+  const raison = !h.golive.production_reliee ? 'La production n’est pas encore reliée à la console (serveur au Canada à installer).'
+    : !h.relie ? 'Créez d’abord l’établissement dans la recette.' : h.manquants.length ? 'Toutes les étapes avant le go-live doivent être cochées.' : '';
+  return `<p>Importe en production la structure et les comptes validés en recette, avec de nouveaux mots de passe temporaires. Aucune donnée de test ne passe.</p>
+    ${raison ? `<p class="note">${esc(raison)}</p>` : ''}
+    <div><button class="btn pri" id="b-golive"${h.golive.possible ? '' : ' disabled aria-disabled="true"'}>Passer en production</button></div>`;
+}
+
+function blocFormation(h) {
+  const gen = h.environnement === 'recette'
+    ? `<div class="generateur"><p>Pour les séances : des patients et des mouvements fictifs (admissions, congés, nettoyages, civières, demandes de lit) dans la structure de l’hôpital.</p>
+        <p class="note">Recette seulement : jamais en production. Références fictives P-9xxxx.</p>
+        <div><button class="btn" id="b-generer"${h.relie ? '' : ' disabled'}>Générer des patients fictifs</button></div></div>` : '';
+  return `${gen}<p class="note">Cochez au fil des séances. Quand un rôle est terminé, l’étape Formation se coche seule.</p>
+    <div class="roles-formation">${h.formation.map((f) => {
+    const faits = f.elements.filter((e) => e.faite).length;
+    return `<details class="etape${faits === f.elements.length ? ' fini' : ''}"><summary><span class="rond">${faits === f.elements.length ? icone('check') : faits}</span><span class="titre">${esc(f.nom)}</span>
+      <span class="note">${faits}/${f.elements.length}${f.seance_le ? ` · séance le ${esc(jour(f.seance_le))}` : ''}</span></summary>
+      <div class="cases-etape">${f.elements.map((e) => `<label class="case"><input type="checkbox" data-formation="${e.id}"${e.faite ? ' checked' : ''}>
+        <span>${esc(e.libelle)}${e.faite && e.par ? `<span class="note"> · ${esc(e.par)}, ${esc(quand(e.quand))}</span>` : ''}</span></label>`).join('')}</div>
+      <div class="ligne"><div class="champ"><label class="lbl" for="fo-${f.role}-date">Séance</label><input id="fo-${f.role}-date" type="date" data-fo="${f.role}" data-k="seance_le" value="${esc(f.seance_le ? String(f.seance_le).slice(0, 10) : '')}"></div>
+        <div class="champ"><label class="lbl" for="fo-${f.role}-formateur">Formateur</label><input id="fo-${f.role}-formateur" data-fo="${f.role}" data-k="formateur" value="${esc(f.formateur || '')}"></div>
+        <div class="champ"><label class="lbl" for="fo-${f.role}-personnes">Personnes formées</label><input id="fo-${f.role}-personnes" type="number" min="0" inputmode="numeric" data-fo="${f.role}" data-k="personnes" value="${f.personnes ?? ''}"></div></div>
+      <div><button class="btn" data-fo-enregistrer="${f.role}">Enregistrer la séance</button></div></details>`;
+  }).join('')}</div>`;
+}
+
+function brancherFormation(v, h) {
+  v.querySelectorAll('[data-formation]').forEach((c) => {
+    c.onchange = () => { etat.ouvert = c.closest('details').querySelector('.titre').textContent; agir(null, () => api('PUT', `/formation/${c.dataset.formation}`, { faite: c.checked })); };
+  });
+  v.querySelectorAll('[data-fo-enregistrer]').forEach((b) => {
+    const role = b.dataset.foEnregistrer;
+    b.onclick = () => {
+      etat.ouvert = b.closest('details').querySelector('.titre').textContent;
+      const val = (k) => $(`[data-fo="${role}"][data-k="${k}"]`).value;
+      agir(b, () => api('PUT', `/hopitaux/${h.id}/formation/${role}`, { seance_le: val('seance_le'), formateur: val('formateur'), personnes: val('personnes') }), 'Séance enregistrée.');
+    };
+  });
+  // Le rôle en cours reste ouvert après l'enregistrement
+  if (etat.ouvert) v.querySelectorAll('.roles-formation details').forEach((d) => { if (d.querySelector('.titre').textContent === etat.ouvert) d.open = true; });
+  const gen = $('#b-generer');
+  if (gen) {
+    gen.onclick = () => modale('Générer des patients fictifs', `<p>Des patients et des mouvements fictifs sont ajoutés dans la recette de ${esc(h.nom)}, pour les séances de formation. Vous pouvez recommencer autant de fois que nécessaire.</p>`,
+      [{ label: 'Annuler' }, { label: 'Générer', pri: true, run: async () => {
+        try {
+          const n = await api('POST', `/hopitaux/${h.id}/formation/generer`);
+          toast(`Données de formation : ${pl('{n|aucune admission|# admission|# admissions}', { n: n.admissions })}, ${pl('{n|aucune civière occupée|# civière occupée|# civières occupées}', { n: n.civieres })}, ${pl('{n|aucune demande de lit|# demande de lit|# demandes de lit}', { n: n.demandes })}.`);
+          afficher();
+          return true;
+        } catch (e) { toast(e.message, true); return false; }
+      } }]);
+  }
 }
 
 function blocActivation(h) {
@@ -323,8 +411,8 @@ function blocEtape(e) {
   const ch = (k, lib, val, type = 'text') => `<div class="champ"><label class="lbl" for="e${e.id}-${k}">${lib}</label><input id="e${e.id}-${k}" type="${type}" data-e="${e.id}" data-k="${k}" value="${esc(val ? String(val).slice(0, 10) : '')}"></div>`;
   return `<details class="etape${fini ? ' fini' : ''}" id="etape-${e.rang}"${!fini && faits > 0 ? ' open' : ''}><summary><span class="rond">${fini ? icone('check') : e.rang}</span><span class="titre">${esc(e.nom)}</span>
       <span class="note">${faits}/${e.verifications.length}${e.date_reelle ? ` · terminée le ${esc(jour(e.date_reelle))}` : e.date_prevue ? ` · prévue le ${esc(jour(e.date_prevue))}` : ''}</span></summary>
-    <div class="cases-etape">${e.verifications.map((x) => `<label class="case"><input type="checkbox" data-verif="${x.id}"${x.faite ? ' checked' : ''}${x.code === 'module_active' ? ' disabled' : ''}>
-      <span>${esc(x.libelle)}${x.faite && x.par ? `<span class="note"> · ${esc(x.par)}, ${esc(quand(x.quand))}</span>` : ''}${x.code === 'module_active' ? '<span class="note"> · suit le bouton Activer</span>' : ''}</span></label>`).join('')}</div>
+    <div class="cases-etape">${e.verifications.map((x) => `<label class="case"><input type="checkbox" data-verif="${x.id}"${x.faite ? ' checked' : ''}${AUTOMATIQUES[x.code] ? ' disabled' : ''}>
+      <span>${esc(x.libelle)}${x.faite && x.par ? `<span class="note"> · ${esc(x.par)}, ${esc(quand(x.quand))}</span>` : ''}${AUTOMATIQUES[x.code] ? `<span class="note"> · ${esc(AUTOMATIQUES[x.code])}</span>` : ''}</span></label>`).join('')}</div>
     <div class="ligne">${ch('date_prevue', 'Date prévue', e.date_prevue, 'date')}${ch('date_reelle', 'Date réelle', e.date_reelle, 'date')}${ch('responsable', 'Responsable', e.responsable)}</div>
     <div class="champ"><label class="lbl" for="e${e.id}-notes">Notes</label><textarea id="e${e.id}-notes" rows="2" data-e="${e.id}" data-k="notes">${esc(e.notes || '')}</textarea></div>
     <div><button class="btn" data-etape="${e.id}">Enregistrer l’étape</button></div></details>`;
@@ -345,7 +433,7 @@ function blocImports(h) {
         <button class="btn pri" data-imp-importer="${type}"${v.resume.creer + v.resume.maj ? '' : ' disabled'}>Importer</button></div>`;
     }
     return `<div class="import-carte"><div><h4>${esc(TYPES[type])}</h4><p class="note">Colonnes : <code class="donnee">${esc(COLONNES[type])}</code>. ${esc(AIDE_TYPES[type])}</p>
-        ${dernier ? `<p class="note">Dernier import : ${esc(quand(dernier.quand))} · ${esc(dernier.auteur)} · ${esc(pl('{n|aucune création|# création|# créations}', { n: dernier.creations }))}</p>` : ''}</div>
+        ${dernier ? `<p class="note">Dernier import : ${esc(quand(dernier.quand))}${dernier.environnement ? ` · ${esc(ENVS[dernier.environnement])}` : ''} · ${esc(dernier.auteur)} · ${esc(pl('{n|aucune création|# création|# créations}', { n: dernier.creations }))}</p>` : ''}</div>
       <div class="ligne"><button class="btn" data-imp-modele="${type}">${icone('download')}Modèle</button>
         <label class="btn">Choisir le fichier<input type="file" accept=".csv,text/csv" data-imp-fichier="${type}" hidden></label>
         <span class="note donnee">${esc(x.nom || '')}</span>

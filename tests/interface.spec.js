@@ -589,6 +589,38 @@ test('bandeau de l’environnement : démonstration, recette (ambre), rien en pr
   }
 });
 
+/* ------------------------------------------------------------------ anglais sur tablette et téléphone */
+for (const L of LARGEURS.slice(1)) {
+  test(`interface en anglais · ${L.nom} (${L.width} px) : chaque écran, sans texte français ni débordement`, { timeout: 240000 }, async () => {
+    for (const c of navigateur.contexts()) await c.close();
+    await viderBase(pool);
+    await demoReseau(pool, { silencieux: true, comptesRoles: true });
+    const noms = (await pool.query(`SELECT nom FROM etablissements UNION SELECT ville FROM etablissements UNION SELECT nom FROM unites
+      UNION SELECT nom FROM utilisateurs UNION SELECT nom FROM connecteurs UNION SELECT nom FROM config_pays UNION SELECT transport_libelle FROM config_pays`))
+      .rows.map((r) => r.nom).filter(Boolean).sort((a, b) => b.length - a.length);
+    const ecran = async (page, nom) => { await sansFrancais(page, noms, `${L.nom}/${nom}`); await verifier(page, { ...L, nom: `anglais-${L.nom}` }, nom); };
+    const x = await ouvrir(L, 'hopital.x@demo.arrimo', 'en');
+    await x.waitForSelector('#v-copilote .niveau');
+    await ecran(x, '01-copilot');
+    for (const vue of ['reseau', 'national', 'lits', 'urgence', 'admissions', 'transferts', 'nettoyage', 'nsa', 'indicateurs', 'journal', 'params']) {
+      await onglet(x, vue);
+      await ecran(x, `03-${vue}`);
+    }
+    await menu(x, '#b-compte');
+    await x.waitForSelector('#v-compte:not([hidden]) h2');
+    await ecran(x, '04-account');
+    const e = await ouvrir(L, 'entretien.x@demo.arrimo', 'en');
+    await e.waitForSelector('#v-nettoyage:not([hidden])');
+    await ecran(e, '05-cleaning');
+    const r = await ouvrir(L, 'reseau@demo.arrimo', 'en');
+    await onglet(r, 'national');
+    await ecran(r, '06-national');
+    await onglet(r, 'admin');
+    await ecran(r, '07-admin');
+    for (const p of [x, e, r]) await p.context().close();
+  });
+}
+
 /* ------------------------------------------------------------------ environnement neuf (C1, C3) */
 test('environnement neuf : premier compte, mot de passe choisi, premier établissement créé', { timeout: 120000 }, async () => {
   const { premierCompte } = require('../db/premier-compte');
@@ -638,33 +670,54 @@ test('environnement neuf : premier compte, mot de passe choisi, premier établis
   }
 });
 
-/* ------------------------------------------------------------------ console SH (C2) */
-test('console SH : première connexion, hôpital, implantation, import, activation · 3 largeurs', { timeout: 300000 }, async () => {
+/* ------------------------------------------------------------------ console SH (C2, C4) */
+test('console SH : première connexion, hôpital, implantation, formation, go-live, activation, rapport · 3 largeurs', { timeout: 400000 }, async () => {
+  const { Pool } = require('pg');
   const { creerAppSh } = require('../src/sh/app');
   const { premierCompteSh } = require('../db/sh-premier-compte');
   const { viderBaseSh } = require('../db/sh-vider');
   const { configurationBase } = require('../db/configuration-base');
-  const avantCle = process.env.SH_API_KEY;
+  const avant = { cle: process.env.SH_API_KEY, env: process.env.ARRIMO_ENV, demo: process.env.ARRIMO_DEMO };
   process.env.SH_API_KEY = 'cle-interface-sh-0123456789';
-  // Environnement « recette » vide (seulement la configuration de base) ; la console a ses tables dans la base de test
+  delete process.env.ARRIMO_DEMO;
+  // Recette vide (configuration de base) et production de test sur un schéma séparé ; la console a ses tables dans la base de test
   await viderBase(pool);
-  await pool.query(fs.readFileSync(path.join(__dirname, '..', 'db', 'schema.sql'), 'utf8'));
+  const schema = fs.readFileSync(path.join(__dirname, '..', 'db', 'schema.sql'), 'utf8');
+  await pool.query(schema);
   await configurationBase(pool);
-  const serveurSh = creerAppSh(pool, { env: { SH_ENV_RECETTE_URL: base, SH_ENV_RECETTE_CLE: process.env.SH_API_KEY, SH_ENV_RECETTE_PUBLIC: 'https://recette.arrimo.exemple' } }).listen(0);
+  const poolProd = new Pool({ connectionString: URL_TEST, options: '-c search_path=prod_ui' });
+  const serveurProd = creerApp(poolProd).listen(0);
+  const env = (e) => { process.env.ARRIMO_ENV = e; };   // les deux instances partagent ce processus de test
+  const serveurSh = creerAppSh(pool, { env: {
+    SH_ENV_RECETTE_URL: base, SH_ENV_RECETTE_CLE: process.env.SH_API_KEY, SH_ENV_RECETTE_PUBLIC: 'https://recette.arrimo.exemple',
+    SH_ENV_PRODUCTION_URL: `http://127.0.0.1:${serveurProd.address().port}`, SH_ENV_PRODUCTION_CLE: process.env.SH_API_KEY, SH_ENV_PRODUCTION_PUBLIC: 'https://arrimo.exemple',
+  } }).listen(0);
   const baseSh = `http://127.0.0.1:${serveurSh.address().port}`;
   try {
     for (const [i, L] of LARGEURS.entries()) {
       for (const c of navigateur.contexts()) await c.close();
+      env('recette');
       await viderBaseSh(pool);
+      await pool.query('DROP SCHEMA IF EXISTS prod_ui CASCADE; CREATE SCHEMA prod_ui');
+      await poolProd.query(schema);
+      await configurationBase(poolProd);
       const temporaire = await premierCompteSh(pool, 'sh@exemple.ca', 'Moustafa Adamou');
       // Politique de sécurité appliquée (pas de bypassCSP) : un script en ligne serait bloqué et signalé
-      const page = await (await navigateur.newContext({ locale: 'fr-CA', viewport: { width: L.width, height: L.height }, hasTouch: !!L.tactile, isMobile: !!L.mobile })).newPage();
+      const page = await (await navigateur.newContext({ locale: 'fr-CA', viewport: { width: L.width, height: L.height }, hasTouch: !!L.tactile, isMobile: !!L.mobile, acceptDownloads: true })).newPage();
       page.erreurs = [];
       page.on('console', (m) => { if (m.type() === 'error') page.erreurs.push(m.text()); });
       page.on('pageerror', (e) => page.erreurs.push(String(e)));
       // waitForFunction évalue une chaîne : interdit par la politique de sécurité de la console ; on attend un sélecteur
       const attendre = () => page.waitForSelector('body[data-pret="1"]', { state: 'attached' });
-      const rendu = async (fn) => { await page.evaluate(() => { document.body.dataset.pret = ''; }); await fn(); await attendre(); };
+      // Attend un nouvel affichage complet après l'action (compteur d'affichages de la page)
+      const rendus = () => page.evaluate(() => Number(document.body.dataset.rendus || 0));
+      const rendu = async (fn) => {
+        const avantRendu = await rendus();
+        await fn();
+        for (let t = 0; t < 300 && (await rendus()) <= avantRendu; t += 1) await page.waitForTimeout(100);
+        await attendre();
+      };
+      const viderToasts = () => page.evaluate(() => { document.querySelector('#toasts').innerHTML = ''; });
       await page.goto(baseSh);
       await page.waitForSelector('#f-connexion:not([hidden])');
       await verifier(page, L, 'sh-01-connexion');
@@ -682,9 +735,10 @@ test('console SH : première connexion, hôpital, implantation, import, activati
       await page.click('#b-2fa-ok');
       await page.waitForSelector('#ecran-app:not([hidden])');
       await attendre();
+      await viderToasts();
       await verifier(page, L, 'sh-03-hopitaux-vide');
 
-      // Nouvel hôpital (fiche), puis création de son établissement dans la recette
+      // Nouvel hôpital (fiche), puis création de son établissement dans la recette (ouvert pour les tests et la formation)
       await page.click('#b-nouveau');
       await page.fill('#h-nom', 'Hôpital de recette A'); await page.fill('#h-code', 'HOP-A'); await page.fill('#h-ville', 'Sherbrooke');
       await page.fill('#h-lat', '45,4'); await page.fill('#h-lon', '-71,89'); await page.fill('#h-sd', 'hopital-a');
@@ -694,18 +748,53 @@ test('console SH : première connexion, hôpital, implantation, import, activati
       await page.waitForSelector('#b-relier');
       await rendu(() => page.click('#b-relier'));
       await toast(page, 'Établissement créé');
-      assert.strictEqual((await pool.query(`SELECT module_actif FROM etablissements WHERE code = 'HOP-A'`)).rows[0].module_actif, false);
+      assert.strictEqual((await pool.query(`SELECT module_actif FROM etablissements WHERE code = 'HOP-A'`)).rows[0].module_actif, true, 'recette : ouvert');
 
-      // Import des unités par la console
-      await page.setInputFiles('[data-imp-fichier="unites"]', { name: 'unites.csv', mimeType: 'text/csv', buffer: Buffer.from('unite;type_unite\nMédecine 3;MED\nChirurgie 2;CHIR\n') });
-      await page.waitForSelector('[data-imp-verifier="unites"]:not([disabled])');
-      await rendu(() => page.click('[data-imp-verifier="unites"]'));
-      await rendu(() => page.click('[data-imp-importer="unites"]'));
-      await toast(page, 'Import fait');
+      // Import par la console : unités, chambres, lits
+      const fichiers = {
+        unites: 'unite;type_unite\nMédecine 3;MED\nChirurgie 2;CHIR\n',
+        chambres: 'unite;chambre\nMédecine 3;301\nMédecine 3;302\nChirurgie 2;201\n',
+        lits: 'unite;chambre;lit;isolement;pression_negative;ventilation;telemetrie\nMédecine 3;301;MED-301A;non;non;non;oui\nMédecine 3;301;MED-301B;non;non;non;non\nMédecine 3;302;MED-302A;oui;non;non;non\nChirurgie 2;201;CHIR-201A;non;non;non;non\n',
+      };
+      for (const [type, contenu] of Object.entries(fichiers)) {
+        await rendu(() => page.setInputFiles(`[data-imp-fichier="${type}"]`, { name: `${type}.csv`, mimeType: 'text/csv', buffer: Buffer.from(contenu) }));
+        // Clic envoyé directement au bouton : sur téléphone, la page vient de se redessiner et défile encore
+        await rendu(() => page.locator(`[data-imp-verifier="${type}"]`).dispatchEvent('click'));
+        await rendu(() => page.locator(`[data-imp-importer="${type}"]`).dispatchEvent('click'));
+        await toast(page, 'Import fait').catch(async (e) => { throw new Error(`${L.nom} · import ${type} : ${await page.textContent('#toasts')} · ${e.message}`); });
+      }
+      await viderToasts();
       await verifier(page, L, 'sh-05-fiche-implantation');
 
-      // Liste de vérification : tout cocher avant le go-live, puis activer
-      assert.ok(await page.isDisabled('#b-activer'));
+      // Formation : patients fictifs dans la recette, puis le parcours rôle par rôle
+      await page.click('#b-generer');
+      await page.waitForSelector('#modale:not([hidden])');
+      await rendu(() => page.click('#modale .btn.pri'));
+      await toast(page, 'Données de formation');
+      const occupes = (await pool.query(`SELECT count(*)::int AS n FROM lits l JOIN etablissements e ON e.id = l.etablissement_id WHERE e.code = 'HOP-A' AND l.patient_ref LIKE 'P-9%'`)).rows[0].n;
+      assert.ok(occupes >= 2, 'patients fictifs dans la recette');
+      await viderToasts();
+      const roles = await page.$$eval('.roles-formation details', (ds) => ds.length);
+      assert.strictEqual(roles, 4);
+      for (let r = 0; r < roles; r += 1) {
+        for (;;) {
+          const d = page.locator('.roles-formation details').nth(r);
+          if (!(await d.evaluate((x) => x.open))) await d.locator('summary').click();
+          const c = d.locator('[data-formation]:not(:checked)').first();
+          if (!(await c.count())) break;
+          await rendu(() => c.check());
+        }
+      }
+      const entretien = page.locator('.roles-formation details').nth(2);
+      if (!(await entretien.evaluate((x) => x.open))) await entretien.locator('summary').click();
+      await entretien.locator('[data-k="personnes"]').fill('6');
+      await rendu(() => page.locator('.roles-formation details').nth(2).locator('[data-fo-enregistrer]').click());
+      await toast(page, 'Séance enregistrée');
+      await viderToasts();
+      await page.locator('#formation').scrollIntoViewIfNeeded();
+      await verifier(page, L, 'sh-06-formation');
+
+      // Liste de vérification : le reste des étapes avant le go-live
       for (let rang = 1; rang <= 5; rang += 1) {
         for (;;) {
           const ouvert = await page.$eval(`#etape-${rang}`, (d) => d.open);
@@ -715,27 +804,54 @@ test('console SH : première connexion, hôpital, implantation, import, activati
           await rendu(() => c.check());
         }
       }
+      assert.strictEqual(await page.locator('#etape-5 [data-verif]:checked').count(), 3, 'Formation cochée par le parcours');
+
+      // Go-live : la structure passe en production, pas les patients de formation
+      env('production');
+      await page.waitForSelector('#b-golive:not([disabled])');
+      await page.click('#b-golive');
+      await page.waitForSelector('#modale:not([hidden])');
+      if (i === 0) await verifier(page, L, 'sh-07-golive-confirmer');
+      await rendu(() => page.click('#modale .btn.pri'));
+      await toast(page, 'Go-live fait');
+      const prod = (await poolProd.query(`SELECT e.module_actif, count(l.*)::int AS lits, count(l.*) FILTER (WHERE l.patient_ref IS NOT NULL)::int AS occupes
+        FROM etablissements e LEFT JOIN lits l ON l.etablissement_id = e.id WHERE e.code = 'HOP-A' GROUP BY e.id`)).rows[0];
+      assert.deepStrictEqual(prod, { module_actif: false, lits: 4, occupes: 0 }, 'production : structure seulement, inactive');
       await page.waitForSelector('#b-activer:not([disabled])');
       await page.click('#b-activer');
       await page.waitForSelector('#modale:not([hidden])');
       await rendu(() => page.click('#modale .btn.pri'));
       await toast(page, 'Module activé');
-      assert.strictEqual((await pool.query(`SELECT module_actif FROM etablissements WHERE code = 'HOP-A'`)).rows[0].module_actif, true);
-      await verifier(page, L, 'sh-06-module-active');
+      assert.strictEqual((await poolProd.query(`SELECT module_actif FROM etablissements WHERE code = 'HOP-A'`)).rows[0].module_actif, true);
+      await viderToasts();
+      await verifier(page, L, 'sh-08-production-active');
+
+      // Rapport de go-live (PDF)
+      const [telechargement] = await Promise.all([page.waitForEvent('download'), page.click('#b-rapport')]);
+      assert.strictEqual(telechargement.suggestedFilename(), 'arrimo-rapport-golive-HOP-A.pdf');
+      const fichier = path.join(DOSSIER, 'sh', 'rapport-golive.pdf');
+      fs.mkdirSync(path.dirname(fichier), { recursive: true });
+      await telechargement.saveAs(fichier);
+      assert.strictEqual(fs.readFileSync(fichier).subarray(0, 5).toString(), '%PDF-');
+      await toast(page, 'Rapport téléchargé');
+
       await rendu(() => page.click('#b-retour-liste'));
       assert.match(await page.textContent('#contenu'), /Actif/);
-      assert.match(await page.textContent('#contenu'), /hopital-a\.recette\.arrimo\.exemple/);
-      await verifier(page, L, 'sh-07-hopitaux');
+      assert.match(await page.textContent('#contenu'), /hopital-a\.arrimo\.exemple/);
+      await viderToasts();
+      await verifier(page, L, 'sh-09-hopitaux');
       await rendu(() => page.click('#onglets [data-v="journal"]'));
-      assert.match(await page.textContent('#contenu'), /Module activé/);
-      await verifier(page, L, 'sh-08-journal');
+      assert.match(await page.textContent('#contenu'), /Go-live/);
+      await verifier(page, L, 'sh-10-journal');
       await rendu(() => page.click('#onglets [data-v="equipe"]'));
-      await verifier(page, L, 'sh-09-equipe');
+      await verifier(page, L, 'sh-11-equipe');
       await pool.query(`UPDATE etablissements SET actif = false, sous_domaine = NULL, code = 'HOP-A-' || id WHERE code = 'HOP-A'`);
       await page.context().close();
     }
   } finally {
-    serveurSh.close();
-    if (avantCle === undefined) delete process.env.SH_API_KEY; else process.env.SH_API_KEY = avantCle;
+    serveurSh.close(); serveurProd.close();
+    await poolProd.end();
+    await pool.query('DROP SCHEMA IF EXISTS prod_ui CASCADE');
+    for (const [k, v] of [['SH_API_KEY', avant.cle], ['ARRIMO_ENV', avant.env], ['ARRIMO_DEMO', avant.demo]]) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
   }
 });

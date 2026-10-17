@@ -427,6 +427,7 @@ window.ARRIMO_I18N.en = {
     motif_desactivation: 'Give the reason for the deactivation.',
     sous_domaine_invalide: 'Invalid link: lowercase letters, digits and hyphens (e.g. hospital-x).',
     sous_domaine_pris: 'This link is already used by another facility.',
+    formation_recette_seulement: 'Training data can only be generated in the test environment.',
     connecteur_reseau_gestionnaire: 'Only the network manager can create a network connector.',
     connecteur_introuvable: 'Connector not found.',
     connecteur_cle_manquante: 'Missing connector key.',

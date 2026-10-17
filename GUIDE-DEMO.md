@@ -53,6 +53,13 @@ Ouvrez deux fenêtres côte à côte : à gauche **hopital.x@demo.arrimo**, à d
 - Le Copilote montre le niveau de chaque hôpital et propose les délestages.
 - La sécurité, si on vous la demande : onglet **Administration**, la double authentification est exigée avant d'y entrer.
 
+## 9. Pour un hôpital qui veut se lancer : la console SH (https://sh.arrimo.senseafri.com)
+- Montrer la liste des hôpitaux, puis la fiche d'un hôpital : les 7 étapes, du contrat à la production.
+- Import des données : un fichier Excel par type (unités, chambres, lits, civières, comptes), vérifié avant d'écrire quoi que ce soit.
+- Formation : des patients fictifs en recette, puis la liste de vérification par rôle.
+- Go-live : la structure passe en production, jamais les données de test ; chaque compte reçoit un nouveau mot de passe temporaire.
+- Rapport de go-live en PDF, à signer avec l'hôpital.
+
 ## Questions fréquentes
 - **Données de patients ?** Aucune donnée clinique : une référence seulement. Le mode IA du Copilote ne reçoit aucune référence patient.
 - **Remplace-t-il nos systèmes ?** Non. Arrimo est une couche de coordination qui se branche sur les systèmes existants (HL7 ADT).

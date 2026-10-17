@@ -12,7 +12,8 @@ const { hacher, verifier, motDePasseTemporaire, verifierRobustesse } = require('
 const totp = require('../totp');
 const { limiteur } = require('../limites');
 const { version } = require('../../package.json');
-const { ETAPES, RANG_GOLIVE, ELEMENT_IMPORT, creerEtapes } = require('./etapes');
+const { ETAPES, RANG_GOLIVE, ELEMENT_IMPORT, FORMATION, ELEMENTS_AUTOMATIQUES, creerEtapes } = require('./etapes');
+const { rapportGolive } = require('./rapport');
 const { cibles, appeler, lienAcces, ErreurCible } = require('./cibles');
 
 /** Erreur de la console : statut HTTP et message en français (console interne, en français seulement). */
@@ -20,6 +21,8 @@ class ErreurSh extends Error {
   constructor(statut, message) { super(message); this.statut = statut; }
 }
 
+// Fuseau du Québec : date du jour d'une étape terminée
+const FUSEAU = process.env.SH_FUSEAU || 'America/Toronto';
 const DUREE_SESSION_H = Number(process.env.SH_SESSION_HEURES || 8);
 const STATUTS = ['prospect', 'implantation', 'actif', 'suspendu'];
 const TYPES_IMPORT = Object.keys(ELEMENT_IMPORT);
@@ -30,6 +33,8 @@ const RESERVES = ['www', 'sh', 'recette', 'api', 'demo', 'admin', 'mail'];
 const PUBLIC_SH = path.join(__dirname, '..', '..', 'public-sh');
 const PUBLIC = path.join(__dirname, '..', '..', 'public');
 
+// Colonnes « date » : PostgreSQL les rend en minuit local ; on renvoie AAAA-MM-JJ pour éviter tout décalage de fuseau
+const jourIso = (d) => (d instanceof Date ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : d);
 const texte = (v, max = 200) => { const s = String(v ?? '').trim(); return s ? s.slice(0, max) : null; };
 const entier = (v) => { const n = Number(v); if (!Number.isInteger(n) || n <= 0) throw new ErreurSh(400, 'Paramètre invalide.'); return n; };
 const dateOuNull = (v) => {
@@ -257,16 +262,26 @@ function creerAppSh(pool, { env = process.env } = {}) {
     return hopital(id);
   }));
 
-  api.get('/hopitaux/:id', route(async (req) => {
-    const h = await hopital(entier(req.params.id));
+  /** Fiche complète d'un hôpital (aussi utilisée par le rapport de go-live). */
+  async function fiche(id) {
+    await creerEtapes(pool, id);   // éléments ajoutés depuis la création de l'hôpital (rejouable)
+    const h = await hopital(id);
     const etapes = (await pool.query(`SELECT e.*, COALESCE(json_agg(v.* ORDER BY v.rang) FILTER (WHERE v.id IS NOT NULL), '[]') AS verifications
       FROM etapes e LEFT JOIN verifications v ON v.etape_id = e.id WHERE e.hopital_id = $1 GROUP BY e.id ORDER BY e.rang`, [h.id])).rows
-      .map((e) => ({ ...e, nom: ETAPES[e.rang - 1].nom }));
+      .map((e) => ({ ...e, date_prevue: jourIso(e.date_prevue), date_reelle: jourIso(e.date_reelle), nom: ETAPES[e.rang - 1].nom }));
     const imports = (await pool.query('SELECT * FROM imports WHERE hopital_id = $1 ORDER BY quand DESC LIMIT 50', [h.id])).rows;
     const activations = (await pool.query('SELECT * FROM activations WHERE hopital_id = $1 ORDER BY quand DESC LIMIT 50', [h.id])).rows;
     const manquants = etapes.filter((e) => e.rang < RANG_GOLIVE).flatMap((e) => e.verifications.filter((x) => !x.faite).map((x) => `${e.nom} : ${x.libelle}`));
-    return { ...presenter(h, await etablissementsDistants([h.environnement])), etapes, imports, activations, manquants, peut_activer: h.relie && !manquants.length };
-  }));
+    const roles = (await pool.query('SELECT * FROM formation_roles WHERE hopital_id = $1', [h.id])).rows;
+    const elements = (await pool.query('SELECT * FROM formation_elements WHERE hopital_id = $1 ORDER BY rang', [h.id])).rows;
+    for (const r of roles) r.seance_le = jourIso(r.seance_le);
+    const formation = FORMATION.map((f) => ({ ...roles.find((r) => r.role === f.role), role: f.role, nom: f.nom, elements: elements.filter((e) => e.role === f.role) }));
+    const production = ciblesSh().some((c) => c.code === 'production');
+    return { ...presenter(h, await etablissementsDistants([h.environnement])), etapes, imports, activations, manquants, formation,
+      peut_activer: h.relie && !manquants.length,
+      golive: { possible: h.environnement === 'recette' && h.relie && !manquants.length && production, production_reliee: production } };
+  }
+  api.get('/hopitaux/:id', route((req) => fiche(entier(req.params.id))));
 
   api.put('/hopitaux/:id', route(async (req) => {
     const avant = await hopital(entier(req.params.id));
@@ -301,8 +316,8 @@ function creerAppSh(pool, { env = process.env } = {}) {
     const r = (await c.query(`UPDATE verifications v SET faite = $3, par = CASE WHEN $3 THEN $4 ELSE NULL END, quand = CASE WHEN $3 THEN now() ELSE NULL END
       FROM etapes e WHERE e.id = v.etape_id AND e.hopital_id = $1 AND v.code = $2 AND v.faite <> $3 RETURNING v.etape_id`, [hopitalId, code, faite, u.email])).rows[0];
     if (r && faite) {
-      await c.query(`UPDATE etapes SET date_reelle = current_date WHERE id = $1 AND date_reelle IS NULL
-        AND NOT EXISTS (SELECT 1 FROM verifications WHERE etape_id = $1 AND NOT faite)`, [r.etape_id]);
+      await c.query(`UPDATE etapes SET date_reelle = (now() AT TIME ZONE $2)::date WHERE id = $1 AND date_reelle IS NULL
+        AND NOT EXISTS (SELECT 1 FROM verifications WHERE etape_id = $1 AND NOT faite)`, [r.etape_id, FUSEAU]);
       await c.query(`UPDATE hopitaux SET statut = 'implantation' WHERE id = $1 AND statut = 'prospect'`, [hopitalId]);
     }
     return r;
@@ -313,10 +328,10 @@ function creerAppSh(pool, { env = process.env } = {}) {
     const h = await hopital(entier(req.params.id));
     const c = cible(h.environnement);
     const existants = await appeler(c, 'GET', '/sh/etablissements');
-    let cree = false;
+    let cree = false; let actif = (existants.find((e) => e.code === h.code_etab) || {}).module_actif;
     if (!existants.some((e) => e.code === h.code_etab)) {
       if (h.latitude == null || h.longitude == null) throw new ErreurSh(400, 'Indiquez la position de l’hôpital (latitude et longitude) avant de créer son établissement.');
-      await appeler(c, 'POST', '/sh/etablissements', { code: h.code_etab, nom: h.nom, ville: h.ville, adresse: h.adresse, latitude: h.latitude, longitude: h.longitude, par: req.u.email });
+      actif = (await appeler(c, 'POST', '/sh/etablissements', { code: h.code_etab, nom: h.nom, ville: h.ville, adresse: h.adresse, latitude: h.latitude, longitude: h.longitude, par: req.u.email })).module_actif;
       cree = true;
     }
     if (h.sous_domaine) await appeler(c, 'PUT', `/sh/etablissements/${h.code_etab}`, { sous_domaine: h.sous_domaine, par: req.u.email });
@@ -326,7 +341,7 @@ function creerAppSh(pool, { env = process.env } = {}) {
       if (h.sous_domaine) await cocher(db, h.id, 'lien_defini', req.u);
       await journal(db, req.u, cree ? 'Établissement créé' : 'Établissement relié', `${h.code_etab} · ${h.nom}`, `environnement ${h.environnement}`, h.id);
     });
-    return { cree };
+    return { cree, actif: !!actif };
   }));
 
   /* ---------------------------------------------------------------- projet d'implantation */
@@ -349,6 +364,7 @@ function creerAppSh(pool, { env = process.env } = {}) {
       JOIN hopitaux h ON h.id = e.hopital_id WHERE v.id = $1`, [entier(req.params.id)])).rows[0];
     if (!x) throw new ErreurSh(404, 'Élément introuvable.');
     if (x.code === 'module_active') throw new ErreurSh(409, 'Cet élément suit l’activation du module : utilisez le bouton Activer.');
+    if (ELEMENTS_AUTOMATIQUES.includes(x.code)) throw new ErreurSh(409, 'Cet élément se coche avec le parcours de formation, rôle par rôle.');
     const faite = !!req.body.faite;
     await transaction(pool, async (c) => {
       await cocher(c, x.hopital_id, x.code, req.u, faite);
@@ -408,14 +424,117 @@ function creerAppSh(pool, { env = process.env } = {}) {
       { code: h.code_etab, type, contenu: String(req.body.contenu || ''), empreinte: String(req.body.empreinte || ''), par: req.u.email });
     // Gardé : l'empreinte et les compteurs. Jamais le contenu ni les mots de passe (rendus une seule fois au navigateur).
     await transaction(pool, async (c) => {
-      await c.query(`INSERT INTO imports (hopital_id, type, empreinte, lignes, creations, mises_a_jour, inchangees, auteur) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [h.id, type, String(req.body.empreinte).slice(0, 64), r.lignes, r.resume.creer, r.resume.maj, r.resume.inchange, req.u.email]);
+      await c.query(`INSERT INTO imports (hopital_id, type, empreinte, lignes, creations, mises_a_jour, inchangees, auteur, environnement) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [h.id, type, String(req.body.empreinte).slice(0, 64), r.lignes, r.resume.creer, r.resume.maj, r.resume.inchange, req.u.email, h.environnement]);
       await cocher(c, h.id, ELEMENT_IMPORT[type], req.u);
       await journal(c, req.u, 'Import CSV', `${h.code_etab} · ${type}`,
         `créations : ${r.resume.creer} · mises à jour : ${r.resume.maj} · inchangées : ${r.resume.inchange} · empreinte ${String(req.body.empreinte).slice(0, 12)}`, h.id);
     });
     return r;
   }));
+
+  /* ---------------------------------------------------------------- C4 : parcours de formation */
+  /** Un rôle entièrement coché coche l'élément de l'étape Formation qui lui correspond (et le décoche sinon). */
+  async function majFormation(c, hopitalId, u) {
+    for (const element of new Set(FORMATION.map((f) => f.element))) {
+      const roles = FORMATION.filter((f) => f.element === element).map((f) => f.role);
+      const reste = (await c.query('SELECT count(*)::int AS n FROM formation_elements WHERE hopital_id = $1 AND role = ANY($2::text[]) AND NOT faite', [hopitalId, roles])).rows[0].n;
+      await cocher(c, hopitalId, element, u, reste === 0);
+    }
+  }
+  api.put('/formation/:id', route(async (req) => {
+    const x = (await pool.query(`SELECT f.*, h.code_etab FROM formation_elements f JOIN hopitaux h ON h.id = f.hopital_id WHERE f.id = $1`, [entier(req.params.id)])).rows[0];
+    if (!x) throw new ErreurSh(404, 'Élément introuvable.');
+    const faite = !!req.body.faite;
+    await transaction(pool, async (c) => {
+      await c.query(`UPDATE formation_elements SET faite = $2, par = CASE WHEN $2 THEN $3 ELSE NULL END, quand = CASE WHEN $2 THEN now() ELSE NULL END WHERE id = $1`, [x.id, faite, req.u.email]);
+      await majFormation(c, x.hopital_id, req.u);
+      await journal(c, req.u, faite ? 'Formation cochée' : 'Formation décochée', `${x.code_etab} · ${FORMATION.find((f) => f.role === x.role).nom}`, x.libelle, x.hopital_id);
+    });
+  }));
+  api.put('/hopitaux/:id/formation/:role', route(async (req) => {
+    const h = await hopital(entier(req.params.id));
+    const f = FORMATION.find((x) => x.role === req.params.role);
+    if (!f) throw new ErreurSh(400, 'Rôle inconnu.');
+    const b = req.body;
+    const personnes = b.personnes === '' || b.personnes == null ? null : Number(b.personnes);
+    if (personnes != null && (!Number.isInteger(personnes) || personnes < 0 || personnes > 10000)) throw new ErreurSh(400, 'Nombre de personnes invalide.');
+    await creerEtapes(pool, h.id);
+    await pool.query('UPDATE formation_roles SET seance_le = $3, formateur = $4, personnes = $5 WHERE hopital_id = $1 AND role = $2',
+      [h.id, f.role, dateOuNull(b.seance_le), texte(b.formateur, 120), personnes]);
+    await journal(pool, req.u, 'Séance de formation modifiée', `${h.code_etab} · ${f.nom}`, null, h.id);
+  }));
+  /** Patients et mouvements fictifs pour la formation : recette seulement (refusé aussi par l'environnement lui-même). */
+  api.post('/hopitaux/:id/formation/generer', route(async (req) => {
+    const h = await hopital(entier(req.params.id));
+    if (h.environnement !== 'recette') throw new ErreurSh(403, 'Les données de formation ne peuvent être générées qu’en recette.');
+    if (!h.relie) throw new ErreurSh(409, 'Reliez d’abord l’hôpital à son établissement.');
+    const n = await appeler(cible('recette'), 'POST', '/sh/formation/generer', { code: h.code_etab, par: req.u.email });
+    await journal(pool, req.u, 'Données de formation générées', `${h.code_etab} · ${h.nom}`,
+      `admissions : ${n.admissions} · nettoyages : ${n.nettoyages} · civières : ${n.civieres} · demandes de lit : ${n.demandes}`, h.id);
+    return n;
+  }));
+
+  /* ---------------------------------------------------------------- C4 : go-live (recette → production) */
+  /**
+   * La structure et les comptes validés en recette sont importés en production, avec de nouveaux mots de passe temporaires.
+   * Aucune donnée de test ne passe : seuls les fichiers de structure (modèles d'import) sont lus en recette.
+   * L'établissement de production est créé inactif ; l'activation suit, avec le bouton Activer.
+   */
+  api.post('/hopitaux/:id/golive', route(async (req) => {
+    const h = await hopital(entier(req.params.id));
+    if (h.environnement !== 'recette') throw new ErreurSh(409, 'Le go-live part d’un hôpital en recette.');
+    if (!h.relie) throw new ErreurSh(409, 'Reliez d’abord l’hôpital à son établissement.');
+    const manque = (await pool.query(`SELECT count(*)::int AS n FROM verifications v JOIN etapes e ON e.id = v.etape_id
+      WHERE e.hopital_id = $1 AND e.rang < $2 AND NOT v.faite`, [h.id, RANG_GOLIVE])).rows[0].n;
+    if (manque) throw new ErreurSh(409, `Go-live impossible : ${manque} élément${manque > 1 ? 's' : ''} à cocher avant le go-live.`);
+    const prod = ciblesSh().find((c) => c.code === 'production');
+    if (!prod) throw new ErreurSh(409, 'La production n’est pas encore reliée à la console (serveur au Canada à installer).');
+    if (h.latitude == null || h.longitude == null) throw new ErreurSh(400, 'Indiquez la position de l’hôpital avant le go-live.');
+    if ((await pool.query(`SELECT 1 FROM hopitaux WHERE environnement = 'production' AND id <> $1 AND (code_etab = $2 OR (sous_domaine IS NOT NULL AND sous_domaine = $3))`,
+      [h.id, h.code_etab, h.sous_domaine])).rows[0]) throw new ErreurSh(409, 'Un autre hôpital de production a déjà ce code ou ce lien.');
+    const structure = await appeler(cible('recette'), 'GET', `/sh/etablissements/${h.code_etab}/structure`);
+    if (!(await appeler(prod, 'GET', '/sh/etablissements')).some((e) => e.code === h.code_etab)) {
+      await appeler(prod, 'POST', '/sh/etablissements', { code: h.code_etab, nom: h.nom, ville: h.ville, adresse: h.adresse, latitude: h.latitude, longitude: h.longitude, par: req.u.email });
+    }
+    if (h.sous_domaine) await appeler(prod, 'PUT', `/sh/etablissements/${h.code_etab}`, { sous_domaine: h.sous_domaine, par: req.u.email });
+    const resultats = []; const comptes = [];
+    for (const type of TYPES_IMPORT) {
+      const contenu = structure[type] || '';
+      if (contenu.trim().split('\n').length < 2) { resultats.push({ type, lignes: 0, resume: { creer: 0, maj: 0, inchange: 0 } }); continue; }
+      const v = await appeler(prod, 'POST', '/sh/import/verifier', { code: h.code_etab, type, contenu });
+      if (v.nb_erreurs) {
+        const e = v.erreurs[0];
+        throw new ErreurSh(409, `Go-live arrêté au fichier « ${type} » : ${v.nb_erreurs} erreur${v.nb_erreurs > 1 ? 's' : ''} en production (ligne ${e.ligne}, ${e.colonne || ''} : ${e.code}). Ce qui précède est déjà importé ; corrigez puis relancez le go-live.`);
+      }
+      const r = await appeler(prod, 'POST', '/sh/import/importer', { code: h.code_etab, type, contenu, empreinte: v.empreinte, par: req.u.email });
+      await pool.query(`INSERT INTO imports (hopital_id, type, empreinte, lignes, creations, mises_a_jour, inchangees, auteur, environnement) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'production')`,
+        [h.id, type, v.empreinte, r.lignes, r.resume.creer, r.resume.maj, r.resume.inchange, req.u.email]);
+      resultats.push({ type, lignes: r.lignes, resume: r.resume });
+      if (r.comptes) comptes.push(...r.comptes);
+    }
+    await transaction(pool, async (c) => {
+      await c.query(`UPDATE hopitaux SET environnement = 'production', relie = true, golive_le = now(), golive_par = $2 WHERE id = $1`, [h.id, req.u.email]).catch(unique);
+      await cocher(c, h.id, 'production_importee', req.u);
+      await cocher(c, h.id, 'module_active', req.u, false);   // en production, le module reste à activer
+      await journal(c, req.u, 'Go-live', `${h.code_etab} · ${h.nom}`,
+        `recette → production · ${resultats.map((x) => `${x.type} : ${x.lignes}`).join(' · ')} · nouveaux comptes : ${comptes.length}`, h.id);
+    });
+    return { resultats, comptes };
+  }));
+
+  /** Rapport de go-live en PDF. */
+  api.get('/hopitaux/:id/rapport.pdf', async (req, res, next) => {
+    try {
+      const f = await fiche(entier(req.params.id));
+      const c = ciblesSh().find((x) => x.code === f.environnement);
+      let comptes = null;
+      if (c && f.relie) comptes = await appeler(c, 'GET', `/sh/etablissements/${f.code_etab}/comptes`).catch(() => null);
+      const pdf = await rapportGolive({ hopital: f, etapes: f.etapes, imports: f.imports, activations: f.activations, comptes, formation: f.formation, genere_par: req.u.email });
+      await journal(pool, req.u, 'Rapport de go-live téléchargé', `${f.code_etab} · ${f.nom}`, null, f.id);
+      res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="arrimo-rapport-golive-${f.code_etab}.pdf"` }).send(pdf);
+    } catch (e) { next(e); }
+  });
 
   /* ---------------------------------------------------------------- journal SH */
   api.get('/journal', route(async (req) => {

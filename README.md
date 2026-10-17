@@ -127,6 +127,17 @@ Application séparée dans le même dépôt (`src/sh/`, `public-sh/`), servie su
 - Lien propre d'un hôpital : `<sous-domaine>.<hôte>` (ex. `hopital-x.arrimo.ca`) ; la connexion affiche le nom de l'hôpital et ouvre son établissement.
   Sur le serveur : DNS du sous-domaine, puis `arrimo-lien <sous-domaine>` (ou `arrimo-recette-lien`) pour le certificat HTTPS.
 
+### Formation et go-live (C4)
+- **Patients fictifs pour la formation** : bouton de la console (étape Formation), recette seulement ; refusé en démonstration et en production
+  par l'environnement lui-même. Admissions, congés prévus, nettoyages, civières et demandes de lit, références `P-9xxxx`, tout passe par `src/regles.js`.
+- **Parcours de formation** : une liste de vérification par rôle (coordination, urgence, entretien, administration), avec date de séance,
+  formateur et nombre de personnes ; un rôle terminé coche l'élément correspondant de l'étape Formation.
+- **Go-live** : la structure et les comptes validés en recette (exportés au format des modèles CSV) sont importés en production, avec de
+  nouveaux mots de passe temporaires remis une seule fois. Ni patients, ni mouvements, ni journal ne passent. L'établissement de production
+  est créé inactif, puis activé avec le bouton Activer. En recette, l'établissement est ouvert dès sa création, pour les tests et la formation.
+- **Rapport de go-live (PDF)** : établissement, dates des 7 étapes, imports, comptes (sans mot de passe), formation, responsables et signatures.
+- API des environnements ajoutée : `POST /api/sh/formation/generer`, `GET /api/sh/etablissements/{code}/structure`, `GET /api/sh/etablissements/{code}/comptes`.
+
 Installation : `ARRIMO_ENV=sh PREMIER_COMPTE=<courriel> PREMIER_NOM="<nom>" bash installer.sh arrimo.senseafri.com`
 (relie la console à la démo et à la recette du même serveur ; une production ailleurs se relie avec `SH_ENV_PRODUCTION_URL`, `_CLE`, `_PUBLIC`).
 En local : `SH_DATABASE_URL=postgres:///arrimo_dev_sh SH_ENV_DEMO_URL=http://127.0.0.1:3010 SH_ENV_DEMO_CLE=<clé> npm run sh` (port 3012).

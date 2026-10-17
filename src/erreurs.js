@@ -120,6 +120,7 @@ const MESSAGES = {
   motif_desactivation: 'Indiquez le motif de la désactivation.',
   sous_domaine_invalide: 'Lien invalide : lettres minuscules, chiffres et tirets (ex. hopital-x).',
   sous_domaine_pris: 'Ce lien est déjà utilisé par un autre établissement.',
+  formation_recette_seulement: 'Les données de formation ne peuvent être générées qu’en recette.',
   // établissements et import CSV
   code_etab_invalide: 'Code d’établissement invalide (2 à 12 lettres majuscules, chiffres ou tirets).',
   code_etab_existe: 'Ce code d’établissement existe déjà.',
