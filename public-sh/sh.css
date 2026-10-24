@@ -2,7 +2,7 @@
 .bandeau-sh { background: var(--principal); color: #fff; border-bottom-color: var(--survol); }
 .bandeau-sh { display:flex; align-items:center; justify-content:center; gap:12px; flex-wrap:wrap; }
 .select-langue { display:inline-flex; align-items:center; gap:6px; font-weight:600; }
-.select-langue select { color:var(--encre); border-radius:6px; padding:4px 7px; }
+.select-langue select { color:var(--texte); background:#fff; border-radius:6px; padding:4px 7px; }
 .s-actif { --c: var(--succes); } .s-implantation { --c: var(--info); } .s-prospect { --c: var(--inactif); } .s-suspendu { --c: var(--attention); }
 .envs { display: flex; flex-wrap: wrap; gap: var(--e2) var(--e5); margin-bottom: var(--e4); }
 .env { display: inline-flex; align-items: center; gap: var(--e2); }
@@ -66,3 +66,34 @@ table.compact { min-width: 0; }
 .cartes-kpi .carte { display: flex; flex-direction: column; gap: var(--e2); }
 .cartes-kpi strong { font-size: 1.6rem; color: var(--principal); }
 @media (max-width: 700px) { .site-sh, .contact-sh, .module-sh { flex-direction: column; align-items: stretch; } .module-sh select { width: 100%; } }
+/* Écrans ERP (erp.js) : mêmes jetons que la charte ; les couleurs de statut ne servent qu'aux statuts. */
+.ligne.serre { gap: var(--e2); align-items: center; }
+.cloche { position: relative; }
+.liste-notifs, .liste-simple { list-style: none; padding: 0; margin: 0 0 var(--e3); display: flex; flex-direction: column; gap: var(--e2); }
+.liste-notifs li { display: flex; flex-direction: column; gap: 2px; padding: var(--e2) var(--e3); border: 1px solid var(--bordure); border-radius: var(--rayon); }
+.liste-notifs li.non-lue { border-color: var(--principal); background: var(--doux); }
+.liste-simple li { padding: var(--e2) 0; border-bottom: 1px solid var(--bordure); overflow-wrap: anywhere; }
+.agenda { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--e3); }
+.agenda > li { background: var(--carte); border: 1px solid var(--bordure); border-radius: var(--rayon); padding: var(--e3) var(--e4); }
+.agenda > li.aujourdhui { border-color: var(--principal); box-shadow: 0 0 0 1px var(--principal); }
+.agenda h3 { margin: 0 0 var(--e2); font-size: var(--t-carte); }
+.agenda ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--e1); }
+.mois-cal { min-width: 9em; text-align: center; text-transform: capitalize; }
+.grille-rapports { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); gap: var(--e4); }
+.barres { list-style: none; padding: 0; margin: 0 0 var(--e3); display: flex; flex-direction: column; gap: var(--e2); }
+.barres li { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(60px, 2fr) auto; gap: var(--e2); align-items: center; font-size: var(--t-note); }
+.barre-fond { height: 8px; background: var(--doux); border-radius: 4px; overflow: hidden; }
+.barre-fond i { display: block; height: 100%; background: var(--secondaire); }
+.progres.large { width: 100%; height: 8px; margin-bottom: var(--e4); }
+.ligne-devis { padding-bottom: var(--e3); margin-bottom: var(--e3); border-bottom: 1px solid var(--bordure); }
+.ligne-devis .champ { flex: 1 1 140px; }
+.membres { border: 1px solid var(--bordure); border-radius: var(--rayon); padding: var(--e3); max-height: 320px; overflow-y: auto; }
+.matrice { margin-top: var(--e4); }
+.matrice summary { cursor: pointer; font-weight: 600; min-height: 40px; display: flex; align-items: center; }
+.complement-hopital { margin-top: var(--e4); }
+.seance { border-top: 1px solid var(--bordure); padding: var(--e2) 0; }
+.seance summary { cursor: pointer; min-height: 40px; display: flex; align-items: center; flex-wrap: wrap; gap: var(--e1); }
+@media (max-width: 700px) { .barres li { grid-template-columns: minmax(0, 1fr) auto; } .barres .barre-fond { grid-column: 1 / -1; grid-row: 2; } .mois-cal { min-width: 0; } }
+.boite .champ { min-width: 0; }
+.boite select, .boite input:not([type=checkbox]):not([type=radio]) { max-width: 100%; }
+.ligne-devis select { width: 100%; }

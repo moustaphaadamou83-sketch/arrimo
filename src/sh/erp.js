@@ -6,10 +6,10 @@
  */
 const fs = require('fs');
 const { transaction } = require('../db');
-const { lignesPropres, taxesPour, totaux, prochainNumero, ajouterMois, ajouterJours, cents, versMontant } = require('./montants');
+const { lignesPropres, totaux, prochainNumero, ajouterMois, ajouterJours, cents, versMontant, jourDe } = require('./montants');
 const { documentCommercial, date: dateFr } = require('./pdf-erp');
 const documents = require('./documents');
-const { notifier, comptesAvecRoles } = require('./automatisations');
+const { notifier, nombre } = require('./automatisations');
 const { montantsDevis, taxesClient, aujourdhui, jourOuNull } = require('./commercial');
 const { PERMISSIONS, ROLES_SH } = require('./permissions');
 const { verifierEnvironnements } = require('./supervision');
@@ -17,7 +17,7 @@ const { verifierEnvironnements } = require('./supervision');
 const texte = (x, max = 500) => String(x ?? '').trim().slice(0, max) || null;
 const idPositif = (x) => Number.isSafeInteger(Number(x)) && Number(x) > 0 ? Number(x) : null;
 const erreur = (statut, message) => Object.assign(new Error(message), { statut });
-const jour = (d) => (d == null ? null : d instanceof Date ? d.toLocaleDateString('en-CA') : String(d).slice(0, 10));
+const jour = jourDe;
 const PERIODES_MOIS = { mensuel: 1, annuel: 12 };
 const ROLES_FACTURATION = ['administration', 'finance'];
 
@@ -291,7 +291,7 @@ function brancher(api, pool, route, journal, { cibles, appeler, env }) {
         if (!uid || !(await c.query('SELECT 1 FROM sh_utilisateurs WHERE id=$1', [uid])).rowCount) throw erreur(400, 'Membre inconnu.');
         await c.query('INSERT INTO sh_equipes_membres(equipe_id,utilisateur_id,chef) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [e.id, uid, m.chef === true]);
       }
-      await journal(c, req.u, id ? 'Équipe modifiée' : 'Équipe créée', nom, `${membres.length} membre(s)`);
+      await journal(c, req.u, id ? 'Équipe modifiée' : 'Équipe créée', nom, nombre(membres.length, 'membre'));
       return e;
     }).catch((e) => { if (e.code === '23505') throw erreur(409, 'Une équipe porte déjà ce nom.'); throw e; });
   }
@@ -446,7 +446,7 @@ function brancher(api, pool, route, journal, { cibles, appeler, env }) {
           ...(await pool.query('SELECT t.*, h.nom hopital FROM sh_support_tickets t JOIN hopitaux h ON h.id=t.hopital_id ORDER BY t.cree_le')).rows
             .map((t) => [t.id, t.hopital, t.type, t.gravite, t.priorite, t.statut, t.cree_le?.toISOString(), t.resolu_le?.toISOString()])];
       } else throw erreur(400, 'Section d’export inconnue : factures, pipeline ou support.');
-      await journal(pool, req.u, 'Export de rapport', section, `${lignes.length - 1} ligne(s)`);
+      await journal(pool, req.u, 'Export de rapport', section, nombre(lignes.length - 1, 'ligne'));
       res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="arrimo-sh-${section}.csv"` }).send(`﻿${csv(lignes)}\r\n`);
     } catch (e) { next(e); }
   });
@@ -502,7 +502,7 @@ function brancher(api, pool, route, journal, { cibles, appeler, env }) {
           [s.id, nom, texte(p.courriel, 200), texte(p.role_arrimo, 40)]);
         ajoutes += r.rowCount;
       }
-      await journal(c, req.u, 'Participants ajoutés à une séance', s.titre, `${ajoutes} participant(s)`, s.hopital_id);
+      await journal(c, req.u, 'Participants ajoutés à une séance', s.titre, nombre(ajoutes, 'participant'), s.hopital_id);
     });
     return { ajoutes };
   }));
@@ -526,7 +526,7 @@ function brancher(api, pool, route, journal, { cibles, appeler, env }) {
     const retard = (await pool.query(`SELECT id, titre FROM sh_taches WHERE responsable_id=$1 AND statut<>'terminee' AND echeance < now()::date`, [req.u.id])).rows;
     const jourJ = aujourdhui();
     if (retard.length) {
-      await notifier(pool, req.u.id, { type: 'rappel', titre: `${retard.length} tâche(s) en retard`, lien: 'taches', cle: `retard-${jourJ}` });
+      await notifier(pool, req.u.id, { type: 'rappel', titre: `${nombre(retard.length, 'tâche')} en retard`, lien: 'taches', cle: `retard-${jourJ}` });
     }
     const non_lues = (await pool.query('SELECT count(*)::int n FROM sh_notifications WHERE utilisateur_id=$1 AND lu_le IS NULL', [req.u.id])).rows[0].n;
     return { non_lues, notifications: retard.length ? (await pool.query('SELECT * FROM sh_notifications WHERE utilisateur_id=$1 ORDER BY lu_le NULLS FIRST, cree_le DESC LIMIT 50', [req.u.id])).rows : rows };

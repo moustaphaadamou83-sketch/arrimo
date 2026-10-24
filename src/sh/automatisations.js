@@ -35,4 +35,7 @@ async function terminerTacheAuto(db, hopitalId, code, u) {
   return rows;
 }
 
-module.exports = { notifier, comptesAvecRoles, terminerTacheAuto };
+/** « 1 facture », « 3 factures » (journal et notifications : jamais de « (s) »). */
+const nombre = (n, singulier, pluriel = `${singulier}s`) => `${n} ${Math.abs(n) > 1 ? pluriel : singulier}`;
+
+module.exports = { notifier, comptesAvecRoles, terminerTacheAuto, nombre };

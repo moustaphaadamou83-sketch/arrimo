@@ -79,10 +79,13 @@ function ajouterMois(jourIso, mois) {
   cible.setUTCDate(Math.min(j, dernier));
   return cible.toISOString().slice(0, 10);
 }
+/** AAAA-MM-JJ d'une colonne « date » lue par pg (minuit local) ou d'une chaîne. */
+const jourDe = (d) => (d == null ? null : d instanceof Date
+  ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : String(d).slice(0, 10));
 function ajouterJours(jourIso, jours) {
   const d = new Date(`${String(jourIso).slice(0, 10)}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + jours);
   return d.toISOString().slice(0, 10);
 }
 
-module.exports = { PERIODICITES, codeRegion, lignesPropres, taxesPour, totaux, prochainNumero, ajouterMois, ajouterJours, cents, versMontant };
+module.exports = { jourDe, PERIODICITES, codeRegion, lignesPropres, taxesPour, totaux, prochainNumero, ajouterMois, ajouterJours, cents, versMontant };

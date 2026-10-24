@@ -24,7 +24,8 @@
     "sh:premier-compte": "node db/sh-premier-compte.js",
     "presentation:locale": "node scripts/presentation-locale.cjs",
     "presentation:valider": "node scripts/valider-presentation.cjs",
-    "test:sh-erp": "node --test --test-concurrency=1 tests/sh-erp.test.cjs"
+    "test:sh-erp": "node --test --test-concurrency=1 tests/sh-erp.test.cjs",
+    "test:sh-erp-interface": "node --test tests/sh-erp.interface.spec.cjs"
   },
   "license": "UNLICENSED",
   "dependencies": {

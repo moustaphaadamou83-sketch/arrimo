@@ -1,8 +1,8 @@
 'use strict';
 
 const { transaction } = require('../db');
-const { lignesPropres, taxesPour, totaux, ajouterMois, ajouterJours } = require('./montants');
-const { notifier, comptesAvecRoles } = require('./automatisations');
+const { lignesPropres, taxesPour, totaux, ajouterMois, ajouterJours, jourDe } = require('./montants');
+const { notifier, comptesAvecRoles, nombre } = require('./automatisations');
 
 const STATUTS_OPP = new Set(['qualification', 'analyse', 'proposition', 'negociation', 'gagnee', 'perdue']);
 const PRIORITES = ['basse', 'normale', 'haute', 'urgente'];
@@ -269,7 +269,7 @@ function brancher(api, pool, route, journal) {
       }
       const hopital = old.hopital_id || old.org_hopital || null;
       if (old.statut !== 'signe') {
-        const debut = old.date_debut ? (old.date_debut instanceof Date ? old.date_debut.toLocaleDateString('en-CA') : String(old.date_debut).slice(0, 10)) : aujourdhui();
+        const debut = jourDe(old.date_debut) || aujourdhui();
         const fin = ajouterJours(ajouterMois(debut, old.duree_mois || 12), -1);
         await c.query(`UPDATE sh_contrats SET statut='signe',signe_par=$2,document_ref=$3,document_id=$4,signe_le=now(),date_debut=$5,date_fin=$6,
           renouvellement_le=$7,hopital_id=$8 WHERE id=$1`, [id, signataire, docRef, documentId, debut, fin, ajouterJours(fin, -(old.preavis_jours ?? 60)), hopital]);
@@ -287,7 +287,7 @@ function brancher(api, pool, route, journal) {
       const abonnements = []; let factureInitiale = null;
       if (devis) {
         const { lignes } = await montantsDevis(c, devis);
-        const debut = contrat.date_debut.toLocaleDateString('en-CA');
+        const debut = jourDe(contrat.date_debut);
         for (const periodicite of ['mensuel', 'annuel']) {
           const ls = lignes.filter((l) => l.periodicite === periodicite);
           if (!ls.length) continue;
@@ -307,7 +307,7 @@ function brancher(api, pool, route, journal) {
       }
       if (abonnements.length || factureInitiale) {
         await notifier(c, await comptesAvecRoles(c, ['finance', 'administration']), { type: 'facturation',
-          titre: `Contrat ${old.reference} signé : ${abonnements.length} abonnement(s)${factureInitiale ? ' et une facture de frais uniques à émettre' : ''}`, lien: 'facturation', cle: `contrat-signe-${id}` });
+          titre: `Contrat ${old.reference} signé : ${nombre(abonnements.length, 'abonnement')}${factureInitiale ? ' et une facture de frais uniques à émettre' : ''}`, lien: 'facturation', cle: `contrat-signe-${id}` });
       }
       await journal(c, req.u, 'Contrat marqué signé', old.reference, `signataire déclaré : ${signataire}; document : ${docRef}; projet ${project.id}`, hopital);
       return { contrat, projet: project, taches_creees: MODELE_TACHES.length, abonnements_crees: abonnements.length, facture_initiale: factureInitiale?.id || null };

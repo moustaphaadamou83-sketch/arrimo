@@ -200,20 +200,12 @@ async function demarrer() {
   $('#ecran-connexion').hidden = true;
   $('#ecran-app').hidden = false;
   $('#nom-utilisateur').textContent = u.nom;
-  $('#onglets [data-v="equipe"]').hidden = u.role !== 'administration';
-  $('#onglets [data-v="journal"]').hidden = !['administration', 'implantation', 'support'].includes(u.role);
-  $('#onglets [data-v="crm"]').hidden = !['administration','commercial'].includes(u.role);
-  $('#onglets [data-v="contrats"]').hidden = !['administration','commercial','implantation','support'].includes(u.role);
-  $('#onglets [data-v="projets"]').hidden = !['administration','implantation','support'].includes(u.role);
-  $('#onglets [data-v="support"]').hidden = !['administration','support','implantation'].includes(u.role);
-  if (($('#onglets [data-v="crm"]').hidden && etat.vue==='crm') || ($('#onglets [data-v="contrats"]').hidden && etat.vue==='contrats') || ($('#onglets [data-v="projets"]').hidden&&etat.vue==='projets') || ($('#onglets [data-v="support"]').hidden&&etat.vue==='support')) etat.vue='hopitaux';
-  if (u.role !== 'administration' && etat.vue === 'equipe') etat.vue = 'hopitaux';
-  if (!['administration', 'implantation', 'support'].includes(u.role) && etat.vue === 'journal') etat.vue = 'hopitaux';
+  reglerOnglets();
   afficher();
 }
 
 /* ---------------- navigation ---------------- */
-document.querySelectorAll('#onglets button').forEach((b) => { b.onclick = () => { etat.vue = b.dataset.v; etat.hopital = null; afficher(); }; });
+document.querySelectorAll('#onglets button').forEach((b) => { b.onclick = () => { etat.vue = b.dataset.v; etat.hopital = null; etat.projet = null; afficher(); }; });
 async function afficher() {
   if (!etat.moi) return;
   document.querySelectorAll('#onglets button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.v === etat.vue)));
@@ -225,9 +217,14 @@ async function afficher() {
     else if (etat.vue === 'projets') await vueProjets(v);
     else if (etat.vue === 'taches') await vueTaches(v);
     else if (etat.vue === 'support') await vueSupport(v);
-    else if (etat.vue === 'hopitaux') await (etat.hopital ? vueHopital(v) : vueHopitaux(v));
+    else if (etat.vue === 'facturation') await vueFacturation(v);
+    else if (etat.vue === 'calendrier') await vueCalendrier(v);
+    else if (etat.vue === 'documents') await vueDocuments(v);
+    else if (etat.vue === 'hebergement') await vueHebergement(v);
+    else if (etat.vue === 'rapports') await vueRapports(v);
+    else if (etat.vue === 'hopitaux') { if (etat.hopital) { await vueHopital(v); await completerHopital(v, { id: etat.hopital, relie: true }); } else await vueHopitaux(v); }
     else if (etat.vue === 'journal') await vueJournal(v);
-    else if (etat.vue === 'equipe') await vueEquipe(v);
+    else if (etat.vue === 'equipe') { await vueEquipe(v); await completerEquipe(v); }
     else vueCompte(v);
   } catch (e) { toast(e.message, true); }
   traduireNoeuds(v);
@@ -244,61 +241,6 @@ $('#sh-langue').onchange = async () => {
   traduireNoeuds(document);
   if (etat.moi && !$('#ecran-app').hidden) await afficher();
 };
-
-/* ---------------- outils ERP (indicateurs calculés depuis les API, aucune valeur de démonstration) ---------------- */
-const bouton = (libelle, action, classe='btn') => `<button class="${classe}" data-action="${action}">${esc(libelle)}</button>`;
-function tableSH(headers, rows) { return `<div class="tableau"><table><thead><tr>${headers.map(x=>`<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${rows||'<tr><td colspan="8" class="note">Aucune donnée enregistrée.</td></tr>'}</tbody></table></div>`; }
-async function vueAccueil(v) {
-  const [hs,os,ps,ts] = await Promise.all([
-    api('GET','/hopitaux').catch(()=>[]), api('GET','/crm/opportunites').catch(()=>[]),
-    api('GET','/projets').catch(()=>[]), api('GET','/taches?moi=1').catch(()=>[]),
-  ]);
-  const cartes=[['Établissements',hs.length],['Opportunités ouvertes',os.filter(x=>!['gagnee','perdue'].includes(x.statut)).length],['Projets en cours',ps.filter(x=>x.statut==='en_cours'||x.statut==='planification').length],['Mes tâches ouvertes',ts.filter(x=>x.statut!=='terminee').length]];
-  const retards=ts.filter(x=>x.statut!=='terminee'&&x.echeance&&new Date(x.echeance)<new Date()).length, bloques=ps.filter(x=>x.statut==='bloque').length;
-  v.innerHTML=`<div class="entete"><div><h2>Accueil</h2><p>Indicateurs calculés depuis les données SH accessibles à votre rôle.</p></div></div><div class="cartes-kpi">${cartes.map(([n,x])=>`<article class="carte"><span class="note">${esc(n)}</span><strong>${esc(x)}</strong></article>`).join('')}</div><div class="carte"><h3>À suivre</h3><p>${esc(pl('{n|# tâche attribuée en retard|# tâches attribuées en retard}',{n:retards}))}</p><p>${esc(pl('{n|# projet marqué bloqué|# projets marqués bloqués}',{n:bloques}))}</p></div>`;
-}
-async function vueCRM(v) {
-  const [orgs,opps,hs,contracts]=await Promise.all([api('GET','/crm/organisations'),api('GET','/crm/opportunites'),api('GET','/hopitaux'),api('GET','/crm/contrats')]);
-  const enriched=await Promise.all(opps.map(async o=>({...o,devis:await api('GET',`/crm/opportunites/${o.id}/devis`)})));
-  const previsions={};for(const o of opps.filter(x=>!['gagnee','perdue'].includes(x.statut)&&x.montant!=null)){previsions[o.devise]=(previsions[o.devise]||0)+Number(o.montant)*Number(o.probabilite)/100;}
-  const libellePrevision=Object.keys(previsions).length?`Prévision pondérée : ${Object.entries(previsions).map(([devise,total])=>`${new Intl.NumberFormat('fr-CA',{style:'currency',currency:devise}).format(total)}`).join(' · ')} (valeur × probabilité)`:'Aucune opportunité ouverte avec une valeur enregistrée pour établir une prévision.';
-  const stages=[['qualification','Qualification'],['analyse','Analyse'],['proposition','Proposition'],['negociation','Négociation'],['gagnee','Gagnée'],['perdue','Perdue']];
-  const next={qualification:'analyse',analyse:'proposition',proposition:'negociation',negociation:'gagnee'};
-  const board=stages.map(([code,label])=>`<section class="sh-kanban-col"><h3>${esc(label)} <span>${enriched.filter(o=>o.statut===code).length}</span></h3>${enriched.filter(o=>o.statut===code).map(o=>{const d=o.devis[0],c=contracts.find(x=>x.opportunite_id===o.id);return `<article class="sh-kanban-card"><strong>${esc(o.titre)}</strong><p>${esc(o.organisation)}</p><p>${o.montant==null?'Valeur à confirmer':esc(`${o.montant} ${o.devise}`)} · probabilité ${o.probabilite}%</p>${d?`<p>Devis v${d.version} · ${esc(d.statut)}</p>`:''}${c?`<p>Contrat ${esc(c.reference)} · ${esc(c.statut)}</p>`:''}<div class="ligne serre">${next[code]?bouton('Avancer','crm-next'):''}${bouton('Créer un devis','crm-quote')}${d?.statut==='brouillon'&&etat.moi.utilisateur.role==='administration'?bouton('Approuver le devis','crm-approve'):''}${d&&['approuve','envoye','accepte'].includes(d.statut)&&!c?bouton('Préparer le contrat','crm-contract'):''}</div></article>`;}).join('')||'<p class="note">Aucune opportunité.</p>'}</section>`).join('');
-  const orgRows=orgs.map(o=>`<tr><td>${esc(o.nom)}</td><td>${esc(o.type)}</td><td>${o.contacts}</td><td>${o.opportunites}</td><td>${o.hopital_id?esc(hs.find(h=>h.id===o.hopital_id)?.nom||'Établissement lié'):bouton('Lier un établissement','crm-link')}</td></tr>`).join('');
-  v.innerHTML=`<div class="entete"><div><h2>CRM</h2><p>${esc(pl('{n|# organisation|# organisations}',{n:orgs.length}))} · ${esc(pl('{n|# opportunité enregistrée|# opportunités enregistrées}',{n:opps.length}))}. ${esc(libellePrevision)}</p></div><div>${bouton('Nouvelle organisation','crm-org','btn pri')} ${bouton('Nouvelle opportunité','crm-opp')}</div></div><h3>Pipeline commercial</h3><div class="sh-kanban">${board}</div><h3>Organisations et contacts</h3>${tableSH(['Organisation','Type','Contacts','Opportunités','Établissement'],orgRows)}`;
-  v.querySelector('[data-action="crm-org"]').onclick=()=>modale('Nouvelle organisation',`<div class="champ"><label class="lbl" for="crm-nom">Nom</label><input id="crm-nom" required></div><div class="champ"><label class="lbl" for="crm-site">Site Web</label><input id="crm-site" type="url"></div>`,[{label:'Annuler'},{label:'Créer',pri:true,run:async()=>{await api('POST','/crm/organisations',{nom:$('#crm-nom',document).value,site_web:$('#crm-site',document).value});await afficher();}}]);
-  v.querySelector('[data-action="crm-opp"]').onclick=()=>{if(!orgs.length){toast('Créez d’abord une organisation dans le CRM.',true);return;}modale('Nouvelle opportunité',`<div class="champ"><label class="lbl" for="opp-org">Organisation</label><select id="opp-org">${orgs.map(o=>`<option value="${o.id}">${esc(o.nom)}</option>`).join('')}</select></div><div class="champ"><label class="lbl" for="opp-titre">Titre</label><input id="opp-titre" required></div><div class="champ"><label class="lbl" for="opp-valeur">Valeur estimée</label><input id="opp-valeur" type="number" min="0" step="0.01"></div>`,[{label:'Annuler'},{label:'Créer',pri:true,run:async()=>{await api('POST','/crm/opportunites',{organisation_id:Number($('#opp-org',document).value),titre:$('#opp-titre',document).value,montant:$('#opp-valeur',document).value||null});await afficher();}}]);};
-  v.querySelectorAll('[data-action="crm-link"]').forEach((b,i)=>b.onclick=()=>{const org=orgs.filter(o=>!o.hopital_id)[i];if(!hs.length){toast('Créez d’abord la fiche établissement.',true);return;}modale('Lier à une fiche établissement',`<p>Associe cette organisation CRM à une fiche existante; aucune fiche ni aucun compte Arrimo ne sera créé.</p><div class="champ"><label class="lbl" for="crm-hop">Établissement</label><select id="crm-hop">${hs.map(h=>`<option value="${h.id}">${esc(h.nom)}</option>`).join('')}</select></div>`,[{label:'Annuler'},{label:'Lier',pri:true,run:async()=>{await api('PUT',`/crm/organisations/${org.id}/etablissement`,{hopital_id:Number($('#crm-hop',document).value)});await afficher();}}]);});
-  v.querySelectorAll('[data-action="crm-next"]').forEach((b,i)=>b.onclick=async()=>{const o=enriched.filter(x=>next[x.statut])[i];await agir(b,()=>api('PUT',`/crm/opportunites/${o.id}`,{statut:next[o.statut],probabilite:next[o.statut]==='gagnee'?100:Math.max(o.probabilite,40)}));});
-  v.querySelectorAll('[data-action="crm-quote"]').forEach((b,i)=>b.onclick=()=>{const o=enriched[i];modale('Nouveau devis versionné',`<div class="champ"><label class="lbl" for="q-desc">Prestation</label><input id="q-desc" required></div><div class="ligne"><div class="champ"><label class="lbl" for="q-qty">Quantité</label><input id="q-qty" type="number" min="0.01" step="0.01" value="1"></div><div class="champ"><label class="lbl" for="q-prix">Prix unitaire (CAD)</label><input id="q-prix" type="number" min="0" step="0.01"></div></div><p class="note">Le devis est un brouillon. Aucun envoi ni signature électronique n’est simulé.</p>`,[{label:'Annuler'},{label:'Créer le brouillon',pri:true,run:async()=>{await api('POST',`/crm/opportunites/${o.id}/devis`,{lignes:[{description:$('#q-desc',document).value,quantite:Number($('#q-qty',document).value),prix_unitaire:Number($('#q-prix',document).value)}]});await afficher();}}]);});
-  v.querySelectorAll('[data-action="crm-approve"]').forEach((b,i)=>b.onclick=async()=>{const o=enriched.filter(x=>x.devis[0]?.statut==='brouillon')[i],d=o.devis[0];await agir(b,()=>api('POST',`/crm/devis/${d.id}/valider`));});
-  v.querySelectorAll('[data-action="crm-contract"]').forEach((b,i)=>b.onclick=async()=>{const o=enriched.filter(x=>x.devis[0]&&['approuve','envoye','accepte'].includes(x.devis[0].statut)&&!contracts.some(c=>c.opportunite_id===x.id))[i];await agir(b,()=>api('POST',`/crm/opportunites/${o.id}/contrats`,{devis_id:o.devis[0].id}),'Contrat préparé.');});
-}
-async function vueContrats(v) {
-  const cs=await api('GET','/crm/contrats');
-  const lines=cs.map(c=>`<tr><td>${esc(c.reference)}</td><td>${esc(c.client)}</td><td>Devis v${esc(c.devis_version||'—')}</td><td>${esc(c.statut)}</td><td>${esc(c.renouvellement_le||'—')}</td><td>${c.statut==='signe'?'—':etat.moi.utilisateur.role==='administration'?bouton('Enregistrer signature','contract-sign'): 'Validation réservée à l’administration'}</td></tr>`).join('');
-  v.innerHTML=`<div class="entete"><div><h2>Devis et contrats</h2><p>Les devis sont versionnés. L’enregistrement d’une signature exige une référence de document vérifiable; aucune signature électronique n’est simulée.</p></div></div>${tableSH(['Référence','Client','Devis','Statut','Renouvellement','Action'],lines)}`;
-  v.querySelectorAll('[data-action="contract-sign"]').forEach((b,i)=>b.onclick=()=>{const c=cs.filter(x=>x.statut!=='signe')[i];modale('Enregistrer la signature',`<div class="champ"><label class="lbl" for="signe-par">Nom du signataire autorisé</label><input id="signe-par"></div><div class="champ"><label class="lbl" for="signe-doc">Référence du document signé</label><input id="signe-doc"></div><p class="note">Ce formulaire journalise une signature déjà obtenue hors Arrimo.SH.</p>`,[{label:'Annuler'},{label:'Enregistrer',pri:true,run:async()=>{await api('POST',`/crm/contrats/${c.id}/signe`,{signataire:$('#signe-par',document).value,document_ref:$('#signe-doc',document).value});await afficher();}}]);});
-}
-async function vueProjets(v) {
-  const ps=await api('GET','/projets');const hs=await api('GET','/hopitaux');
-  const lignes=ps.map(p=>`<tr><td>${esc(p.nom)}</td><td>${esc(p.hopital)}</td><td>${esc(p.statut)}</td><td>${p.taches}</td><td>${p.avancement}%</td><td>${esc(p.echeance||'—')}</td></tr>`).join('');
-  v.innerHTML=`<div class="entete"><div><h2>Projets</h2><p>Projets d’implantation liés aux établissements enregistrés.</p></div>${bouton('Nouveau projet','projet-new','btn pri')}</div>${tableSH(['Projet','Établissement','Statut','Tâches','Avancement','Échéance'],lignes)}`;
-  v.querySelector('[data-action="projet-new"]').onclick=()=>{if(!hs.length){toast('Créez d’abord la fiche de l’établissement.',true);return;}modale('Nouveau projet',`<div class="champ"><label class="lbl" for="pr-hop">Établissement</label><select id="pr-hop">${hs.map(h=>`<option value="${h.id}">${esc(h.nom)}</option>`).join('')}</select></div><div class="champ"><label class="lbl" for="pr-nom">Nom du projet</label><input id="pr-nom"></div><div class="champ"><label class="lbl" for="pr-date">Échéance</label><input id="pr-date" type="date"></div>`,[{label:'Annuler'},{label:'Créer',pri:true,run:async()=>{await api('POST','/projets',{hopital_id:Number($('#pr-hop',document).value),nom:$('#pr-nom',document).value,echeance:$('#pr-date',document).value||null});await afficher();}}]);};
-}
-async function vueTaches(v) {
-  const [ts,ps,eq]=await Promise.all([api('GET','/taches'),api('GET','/projets'),api('GET','/equipe').catch(()=>[])]);
-  const lignes=ts.map(t=>`<tr><td>${esc(t.titre)}</td><td>${esc(t.projet)}</td><td>${esc(t.hopital)}</td><td>${esc(t.statut)}</td><td>${esc(t.priorite)}</td><td>${esc(t.responsable||'—')}</td><td>${esc(t.echeance||'—')}</td></tr>`).join('');
-  v.innerHTML=`<div class="entete"><div><h2>Tâches</h2><p>Attribution, priorité et échéances des projets d’implantation.</p></div>${bouton('Nouvelle tâche','task-new','btn pri')}</div>${tableSH(['Tâche','Projet','Établissement','Statut','Priorité','Responsable','Échéance'],lignes)}`;
-  v.querySelector('[data-action="task-new"]').onclick=()=>{if(!ps.length){toast('Créez d’abord un projet.',true);return;}modale('Nouvelle tâche',`<div class="champ"><label class="lbl" for="t-projet">Projet</label><select id="t-projet">${ps.map(p=>`<option value="${p.id}">${esc(p.nom)}</option>`).join('')}</select></div><div class="champ"><label class="lbl" for="t-titre">Titre</label><input id="t-titre"></div><div class="champ"><label class="lbl" for="t-resp">Responsable</label><select id="t-resp"><option value="">Non assigné</option>${eq.map(m=>`<option value="${m.id}">${esc(m.nom)} · ${esc(m.role)}</option>`).join('')}</select></div><div class="champ"><label class="lbl" for="t-date">Échéance</label><input id="t-date" type="date"></div>`,[{label:'Annuler'},{label:'Créer',pri:true,run:async()=>{await api('POST',`/projets/${$('#t-projet',document).value}/taches`,{titre:$('#t-titre',document).value,responsable_id:$('#t-resp',document).value||null,echeance:$('#t-date',document).value||null});await afficher();}}]);};
-}
-async function vueSupport(v) {
-  const [items,hs]=await Promise.all([api('GET','/support/tickets'),api('GET','/hopitaux')]);
-  const lignes=items.map(t=>`<tr><td>${esc(t.titre)}</td><td>${esc(t.hopital)}</td><td>${esc(t.statut)}</td><td>${esc(t.priorite)}</td><td>${esc(t.responsable||'—')}</td><td>${esc(quand(t.cree_le))}</td></tr>`).join('');
-  v.innerHTML=`<div class="entete"><div><h2>Support</h2><p>${esc(pl('{n|# ticket enregistré|# tickets enregistrés}',{n:items.length}))}.</p></div>${bouton('Nouveau ticket','ticket-new','btn pri')}</div>${tableSH(['Sujet','Établissement','Statut','Priorité','Responsable','Créé'],lignes)}`;
-  v.querySelector('[data-action="ticket-new"]').onclick=()=>{if(!hs.length){toast('Aucun établissement enregistré.',true);return;}modale('Nouveau ticket',`<div class="champ"><label class="lbl" for="tk-hop">Établissement</label><select id="tk-hop">${hs.map(h=>`<option value="${h.id}">${esc(h.nom)}</option>`).join('')}</select></div><div class="champ"><label class="lbl" for="tk-titre">Sujet</label><input id="tk-titre"></div><div class="champ"><label class="lbl" for="tk-desc">Description</label><textarea id="tk-desc"></textarea></div>`,[{label:'Annuler'},{label:'Créer',pri:true,run:async()=>{await api('POST','/support/tickets',{hopital_id:Number($('#tk-hop',document).value),titre:$('#tk-titre',document).value,description:$('#tk-desc',document).value});await afficher();}}]);};
-}
 
 /* ---------------- hôpitaux ---------------- */
 const champ = (id, libelle, valeur, attrs = '') => `<div class="champ"><label class="lbl" for="${id}">${esc(libelle)}</label><input id="${id}" value="${esc(valeur ?? '')}" autocomplete="off" ${attrs}></div>`;
@@ -359,7 +301,9 @@ function blocDossier(h) {
 async function vueHopitaux(v) {
   const f = etat.filtres;
   const qs = new URLSearchParams(Object.entries(f).filter(([, x]) => x)).toString();
-  const [liste, envs] = await Promise.all([api('GET', `/hopitaux${qs ? `?${qs}` : ''}`), api('GET', '/environnements')]);
+  // L'état des environnements est réservé à l'administration, à l'implantation et au support
+  const voitEnvs = ['administration', 'implantation', 'support'].includes(etat.moi.utilisateur.role);
+  const [liste, envs] = await Promise.all([api('GET', `/hopitaux${qs ? `?${qs}` : ''}`), voitEnvs ? api('GET', '/environnements') : []]);
   v.innerHTML = `<div class="entete"><div><h2>Hôpitaux clients</h2><p>Chaque hôpital suit un assistant en 6 étapes. Les 7 étapes de contrôle existantes restent conservées sous le capot, et le module ne s’active qu’après validation des prérequis.</p></div>
       <button class="btn pri" id="b-nouveau">${icone('plus')}Nouvel hôpital</button></div>
     <div class="envs">${envs.map((e) => `<span class="env"><span class="etat-niveau ${e.joignable ? 'n-vert' : 'n-rouge'}">${esc(e.nom)}</span>
@@ -724,12 +668,12 @@ async function vueEquipe(v) {
     <div class="deux"><div class="panneau-c"><h3>Nouveau membre</h3>
         <div class="champ"><label class="lbl" for="m-nom">Nom</label><input id="m-nom" autocomplete="off"></div>
         <div class="champ"><label class="lbl" for="m-email">Courriel</label><input id="m-email" type="email" autocomplete="off"></div>
-        <div class="champ"><label class="lbl" for="m-role">Rôle</label><select id="m-role"><option value="support">Support</option><option value="commercial">Commercial</option><option value="implantation">Implantation</option><option value="formation">Formation</option><option value="administration">Administration</option></select></div>
+        <div class="champ"><label class="lbl" for="m-role">Rôle</label><select id="m-role"><option value="support">Support</option><option value="commercial">Commercial</option><option value="implantation">Implantation</option><option value="formation">Formation</option><option value="finance">Finance</option><option value="administration">Administration</option></select></div>
         <button class="btn pri" id="b-membre">Envoyer l’invitation</button>
         <p class="note">La personne choisit son propre mot de passe avec un lien individuel à usage unique. Aucun mot de passe n’est affiché.</p></div>
       <div><div class="tableau"><table><thead><tr><th>Membre</th><th>Rôle et sécurité</th><th>Dernière connexion</th><th></th></tr></thead><tbody>
       ${equipe.map((m) => `<tr><td><span class="donnee">${esc(m.nom)}</span>${m.actif ? '' : ' <span class="badge">Désactivé</span>'}<div class="note">${esc(m.email)}</div></td>
-        <td><select data-role="${m.id}"${m.id === moi.id ? ' disabled' : ''}>${['administration', 'commercial', 'implantation', 'formation', 'support'].map((r) => `<option value="${r}"${m.role === r ? ' selected' : ''}>${r}</option>`).join('')}</select><div class="note">${m.totp_actif ? 'Double authentification' : 'Double authentification à activer'}</div></td>
+        <td><select data-role="${m.id}"${m.id === moi.id ? ' disabled' : ''}>${['administration', 'commercial', 'implantation', 'formation', 'support', 'finance'].map((r) => `<option value="${r}"${m.role === r ? ' selected' : ''}>${r}</option>`).join('')}</select><div class="note">${m.totp_actif ? 'Double authentification' : 'Double authentification à activer'}</div></td>
         <td class="note">${m.derniere_connexion ? esc(quand(m.derniere_connexion)) : 'Jamais'}</td>
         <td>${m.id === moi.id ? '<span class="note">Vous</span>' : `<div class="ligne serre"><button class="btn" data-reinit="${m.id}" data-nom="${esc(m.nom)}">Envoyer un lien</button>
           <button class="btn${m.actif ? ' dan' : ''}" data-actif="${m.id}" data-val="${!m.actif}">${m.actif ? 'Désactiver' : 'Réactiver'}</button></div>`}</td></tr>`).join('')}</tbody></table></div>

@@ -1,4 +1,7 @@
 /** Démarrage de la console SH (sh.<domaine>). Variables : SH_DATABASE_URL (ou DATABASE_URL), PORT (3012), HOST, SH_ENV_* (voir cibles.js). */
+// Les colonnes « date » deviennent minuit dans le fuseau du processus : en UTC, le JSON garde le bon jour.
+// Les dates métier (aujourd'hui, échéances) sont calculées explicitement dans SH_FUSEAU.
+process.env.TZ = 'UTC';
 const fs = require('fs');
 const path = require('path');
 const { creerPool } = require('../db');

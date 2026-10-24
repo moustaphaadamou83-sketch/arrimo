@@ -6,6 +6,8 @@
  *
  *   TEST_DATABASE_URL=postgres:///arrimo_test node --test tests/sh-erp.test.cjs
  */
+// Comme le service (src/sh/server.js) : processus en UTC, dates métier dans le fuseau du Québec.
+process.env.TZ = 'UTC';
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');

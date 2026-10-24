@@ -20,7 +20,7 @@ const { autoriser, ROLES_SH } = require('./permissions');
 const invitations = require('./invitations');
 const commercial = require('./commercial');
 const erp = require('./erp');
-const { terminerTacheAuto } = require('./automatisations');
+const { terminerTacheAuto, nombre } = require('./automatisations');
 const xlsx = require('./xlsx');
 const { lireCsv } = require('../import');
 
@@ -471,7 +471,7 @@ function creerAppSh(pool, { env = process.env } = {}) {
             [h.id,siteId,nom,texte(x.fonction,120),courriel,texte(x.telephone,40),categorie]);
         }
       }
-      await journal(c, req.u, 'Dossier établissement modifié', `${h.code_etab} · ${h.nom}`, `${sites.length} site(s), ${contacts.length} contact(s)`, h.id);
+      await journal(c, req.u, 'Dossier établissement modifié', `${h.code_etab} · ${h.nom}`, `${nombre(sites.length, 'site')}, ${nombre(contacts.length, 'contact')}`, h.id);
     });
     return fiche(h.id);
   }));
@@ -495,7 +495,7 @@ function creerAppSh(pool, { env = process.env } = {}) {
           [h.id,m.code,m.licence,JSON.stringify(m.parametres||{}),req.u.email]);
       }
       if (choisis.size) await terminerTacheAuto(c, h.id, 'modules', req.u);
-      await journal(c,req.u,'Catalogue de modules modifié',`${h.code_etab} · ${h.nom}`,`${choisis.size} licence(s) souscrite(s)`,h.id);
+      await journal(c,req.u,'Catalogue de modules modifié',`${h.code_etab} · ${h.nom}`,`${nombre(choisis.size, 'licence souscrite', 'licences souscrites')}`,h.id);
     });
     return fiche(h.id);
   }));
@@ -605,7 +605,7 @@ function creerAppSh(pool, { env = process.env } = {}) {
       const existants = await appeler(cible(h.environnement), 'GET', `/sh/etablissements/${h.code_etab}/comptes`);
       const demandes = Number(v.resume?.creer || 0);
       if (existants.length + demandes > h.utilisateurs_autorises) throw new ErreurSh(409,
-        `Quota dépassé : ${existants.length} compte(s) existent déjà et ${demandes} nouveau(x) seraient ajoutés; autorisation ${h.utilisateurs_autorises}.`);
+        `Quota dépassé : ${nombre(existants.length, 'compte existant', 'comptes existants')}, ${nombre(demandes, 'nouveau', 'nouveaux')} à ajouter ; autorisation : ${h.utilisateurs_autorises}.`);
     }
     return v;
   }

@@ -75,6 +75,7 @@
     <div class="barre-in">
       <div class="marque"><img src="logo.svg" alt="" width="30" height="30"><div><strong>Arrimo · Console SH</strong><small id="nom-utilisateur"></small></div></div>
       <div class="barre-droite">
+        <button class="btn barre-btn cloche" id="b-notifications" type="button" aria-label="Notifications"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-bell"/></svg><span class="menu-libelle">Notifications</span><span class="pastille" id="pastille-notifications" hidden>0</span></button>
         <button class="btn barre-btn" id="b-deconnexion"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-log-out"/></svg><span class="menu-libelle">Déconnexion</span></button>
       </div>
     </div>
@@ -82,10 +83,15 @@
       <button role="tab" data-v="accueil" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-chart-column"/></svg><span>Accueil</span></button>
       <button role="tab" data-v="crm" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-clipboard-list"/></svg><span>CRM</span></button>
       <button role="tab" data-v="contrats" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-shield-check"/></svg><span>Devis et contrats</span></button>
+      <button role="tab" data-v="facturation" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-chart-column"/></svg><span>Facturation</span></button>
       <button role="tab" data-v="hopitaux" aria-selected="true"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-building-2"/></svg><span>Hôpitaux</span></button>
       <button role="tab" data-v="projets" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-clipboard-list"/></svg><span>Projets</span></button>
       <button role="tab" data-v="taches" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-check"/></svg><span>Tâches</span></button>
+      <button role="tab" data-v="calendrier" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-clock"/></svg><span>Calendrier</span></button>
       <button role="tab" data-v="support" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-circle-help"/></svg><span>Support</span></button>
+      <button role="tab" data-v="documents" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-download"/></svg><span>Documents</span></button>
+      <button role="tab" data-v="hebergement" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-network"/></svg><span>Hébergement</span></button>
+      <button role="tab" data-v="rapports" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-chart-column"/></svg><span>Rapports</span></button>
       <button role="tab" data-v="journal" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-history"/></svg><span>Journal SH</span></button>
       <button role="tab" data-v="equipe" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-users"/></svg><span>Équipe SH</span></button>
       <button role="tab" data-v="compte" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-user"/></svg><span>Mon compte</span></button>
@@ -97,5 +103,6 @@
 <div id="modale" class="modale" hidden></div>
 <div id="toasts" class="toasts" aria-live="polite"></div>
 <script src="sh.js"></script>
+<script src="erp.js"></script>
 </body>
 </html>

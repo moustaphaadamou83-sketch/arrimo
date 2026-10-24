@@ -28,3 +28,24 @@ window.ARRIMO_SH_I18N.en = {
   'Progression':'Progress','Créé':'Created','Enregistrer et fermer':'Save and close','Fermer':'Close','Annuler':'Cancel','Envoyer':'Send',
   'La langue préférée est enregistrée dans votre compte SH.':'Your preferred language is saved to your SH account.'
 };
+// Écrans ERP (erp.js) : libellés d'onglets, titres, actions et statuts courants.
+Object.assign(window.ARRIMO_SH_I18N.en, {
+  'Facturation':'Billing','Calendrier':'Calendar','Documents':'Documents','Hébergement':'Hosting','Rapports':'Reports','Notifications':'Notifications',
+  'Pipeline commercial':'Sales pipeline','Relances à faire':'Follow-ups to do','Organisations':'Organizations','Nouvelle organisation':'New organization','Nouvelle opportunité':'New opportunity',
+  'Avancer':'Advance','Devis':'Quote','Relance':'Follow-up','Perdue':'Lost','Fait':'Done','Créer la fiche établissement':'Create hospital record',
+  'Contrats':'Contracts','Soumettre':'Submit','Approuver':'Approve','Marquer envoyé':'Mark as sent','Accepté':'Accepted','Refusé':'Declined','Préparer le contrat':'Prepare contract',
+  'Détail':'Details','Prêt à signer':'Ready to sign','Enregistrer la signature':'Record signature','Renouveler':'Renew','Résilier':'Terminate',
+  'Factures':'Invoices','Abonnements':'Subscriptions','Grille tarifaire':'Price list','Générer les factures dues':'Generate due invoices','Nouvelle facture':'New invoice','Export CSV':'CSV export',
+  'Émettre':'Issue','Paiement':'Payment','Annuler':'Cancel','Facturer la période':'Bill the period','Suspendre':'Suspend','Réactiver':'Reactivate','Ajouter ou modifier un tarif':'Add or edit a price',
+  'Revenu mensuel récurrent':'Monthly recurring revenue','Encaissé ce mois':'Collected this month','Solde à recevoir':'Outstanding balance','En retard':'Overdue','Abonnements à facturer':'Subscriptions to bill',
+  'Nouveau projet':'New project','Nouvelle tâche':'New task','Nouveau jalon':'New milestone','Jalons':'Milestones','Modifier':'Edit','Marquer atteint':'Mark reached','← Tous les projets':'← All projects',
+  'Mes tâches seulement':'My tasks only','Commentaires':'Comments','Publier':'Post','suit la console':'follows the console',
+  '← Mois précédent':'← Previous month','Mois suivant →':'Next month →','Aucune échéance ce mois-ci.':'No due dates this month.',
+  'Nouveau ticket':'New ticket','Attribués à moi':'Assigned to me','Échanges':'Messages','Historique':'History','Envoyer le message':'Send message',
+  'Déposer un document':'Upload a document','Télécharger':'Download','Nouvelle version':'New version','Versions':'Versions','Archiver':'Archive','Aucun document accessible.':'No accessible documents.',
+  'Vérifier maintenant':'Check now','Équipes':'Teams','Nouvelle équipe':'New team','Séances de formation':'Training sessions','Planifier une séance':'Schedule a session',
+  'Suivi de l’établissement':'Hospital follow-up','Mes prochaines tâches':'My next tasks','Mes tâches ouvertes':'My open tasks','Mes tâches en retard':'My overdue tasks',
+  'Tout marquer comme lu':'Mark all as read','Fermer':'Close','Enregistrer':'Save','Créer':'Create','Aucune notification.':'No notifications.',
+  'Brouillon':'Draft','Émise':'Issued','Payée':'Paid','Payée en partie':'Partly paid','Annulée':'Cancelled','À faire':'To do','En cours':'In progress','Bloquée':'Blocked','Terminée':'Done',
+  'Ouvert':'Open','En attente':'Pending','Résolu':'Resolved','Fermé':'Closed','Basse':'Low','Normale':'Normal','Haute':'High','Urgente':'Urgent',
+});
