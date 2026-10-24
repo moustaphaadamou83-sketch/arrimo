@@ -1,0 +1,7 @@
+[Unit]
+Description=Sauvegarde nocturne de la démo publique A/B/C
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+[Install]
+WantedBy=timers.target

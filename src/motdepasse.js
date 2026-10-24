@@ -5,7 +5,7 @@
  */
 const crypto = require('crypto');
 const { transaction, ErreurHttp } = require('./db');
-const { hacher, verifierRobustesse } = require('./auth');
+const { hacherAsync, verifierRobustesse } = require('./auth');
 const { tr } = require('./langue');
 const courriel = require('./courriel');
 
@@ -42,7 +42,7 @@ async function reinitialiser(pool, jeton, nouveau) {
         WHERE j.jeton_hash = $1 AND j.utilise_le IS NULL AND j.expire_le > now() FOR UPDATE OF j`, [empreinte(jeton)])).rows[0];
     if (!j) throw new ErreurHttp(400, 'jeton_invalide');
     await c.query('UPDATE jetons_mdp SET utilise_le = now() WHERE utilisateur_id = $1 AND utilise_le IS NULL', [j.utilisateur_id]);
-    await c.query('UPDATE utilisateurs SET mot_de_passe_hash = $2, mdp_temporaire = false, invitation_en_attente = false WHERE id = $1', [j.utilisateur_id, hacher(nouveau)]);
+    await c.query('UPDATE utilisateurs SET mot_de_passe_hash = $2, mdp_temporaire = false, invitation_en_attente = false WHERE id = $1', [j.utilisateur_id, await hacherAsync(nouveau)]);
     await c.query('DELETE FROM sessions WHERE utilisateur_id = $1', [j.utilisateur_id]);
     await c.query(`INSERT INTO journal_admin (utilisateur_id, action, cible, detail) VALUES ($1, 'Mot de passe réinitialisé', $2, 'par lien envoyé par courriel')`,
       [j.utilisateur_id, j.email]);

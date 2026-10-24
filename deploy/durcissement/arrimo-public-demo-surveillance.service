@@ -1,0 +1,7 @@
+[Unit]
+Description=Surveillance de la démo publique A/B/C (/api/sante)
+[Service]
+Type=oneshot
+Environment=ARRIMO_URL_SANTE=https://demo.arrimo.senseafri.com/api/sante
+Environment=SURVEILLANCE_NOM=arrimo-public-demo-surveillance
+ExecStart=/usr/local/lib/arrimo/surveillance.sh

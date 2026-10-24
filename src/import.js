@@ -13,7 +13,7 @@
  */
 const crypto = require('crypto');
 const { transaction, ErreurHttp } = require('./db');
-const { hacher, motDePasseTemporaire } = require('./auth');
+const { hacherAsync, motDePasseTemporaire } = require('./auth');
 const { journaliser } = require('./regles');
 
 const MAX_LIGNES = 5000;
@@ -312,7 +312,7 @@ async function importer(pool, utilisateur, etabId, type, contenu, empreinte, jou
       } else if (type === 'utilisateurs' && d.action === 'creer') {
         const temporaire = options.invitations ? require('node:crypto').randomBytes(32).toString('hex') : motDePasseTemporaire();
         const u = (await c.query(`INSERT INTO utilisateurs (email, nom, mot_de_passe_hash, role, mdp_temporaire, invitation_en_attente) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-          [d.email, d.nom, hacher(temporaire), d.role, !options.invitations, !!options.invitations])).rows[0];
+          [d.email, d.nom, await hacherAsync(temporaire), d.role, !options.invitations, !!options.invitations])).rows[0];
         await c.query('INSERT INTO utilisateur_etablissements VALUES ($1, $2)', [u.id, etabId]);
         comptes.push({ nom: d.nom, courriel: d.email, role: d.role, invitation_en_attente: !!options.invitations,
           ...(!options.invitations ? { mot_de_passe_temporaire: temporaire } : {}) });

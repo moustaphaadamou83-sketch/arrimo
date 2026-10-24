@@ -1,0 +1,5 @@
+[Unit]
+Description=Sauvegarde nocturne de la démo publique A/B/C
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/arrimo-public-demo-sauvegarde

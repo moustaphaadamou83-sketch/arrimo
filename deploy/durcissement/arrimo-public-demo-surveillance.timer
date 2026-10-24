@@ -1,0 +1,7 @@
+[Unit]
+Description=Surveillance de la démo publique A/B/C toutes les 5 minutes
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+[Install]
+WantedBy=timers.target

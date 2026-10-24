@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+DOSSIER_APP=/opt/arrimo-demo/shared SAUVEGARDE_DOSSIER=/var/backups/arrimo-public-demo exec /usr/local/lib/arrimo/sauvegarde.sh "$@"

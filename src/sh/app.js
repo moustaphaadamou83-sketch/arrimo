@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const express = require('express');
 const QRCode = require('qrcode');
 const { transaction, ErreurHttp } = require('../db');
-const { hacher, verifier, motDePasseTemporaire, verifierRobustesse } = require('../auth');
+const { hacherAsync, verifierAsync, motDePasseTemporaire, verifierRobustesse } = require('../auth');
 const totp = require('../totp');
 const { limiteur } = require('../limites');
 const { version } = require('../../package.json');
@@ -113,7 +113,7 @@ function creerAppSh(pool, { env = process.env } = {}) {
     if (t && t.bloque > Date.now()) throw new ErreurSh(429, 'Trop de tentatives. Réessayez dans quelques minutes.');
     const u = (await pool.query('SELECT * FROM sh_utilisateurs WHERE email = $1 AND actif', [email])).rows[0];
     // Adresse inconnue : même calcul qu'un mauvais mot de passe (pas d'énumération des comptes par le temps de réponse)
-    const motDePasseOk = verifier(String(req.body.mot_de_passe || ''), u ? u.mot_de_passe_hash : `${'0'.repeat(32)}:${'0'.repeat(128)}`);
+    const motDePasseOk = await verifierAsync(String(req.body.mot_de_passe || ''), u ? u.mot_de_passe_hash : `${'0'.repeat(32)}:${'0'.repeat(128)}`);
     if (!u || !motDePasseOk) {
       const n = (t ? t.n : 0) + 1;
       tentatives.set(email, n >= 5 ? { n: 0, bloque: Date.now() + 15 * 60000 } : { n, bloque: 0 });
@@ -184,10 +184,10 @@ function creerAppSh(pool, { env = process.env } = {}) {
   }));
   api.put('/moi/mot-de-passe', route(async (req) => {
     const u = (await pool.query('SELECT mot_de_passe_hash FROM sh_utilisateurs WHERE id = $1', [req.u.id])).rows[0];
-    if (!verifier(String(req.body.actuel || ''), u.mot_de_passe_hash)) throw new ErreurSh(401, 'Mot de passe actuel incorrect.');
+    if (!(await verifierAsync(String(req.body.actuel || ''), u.mot_de_passe_hash))) throw new ErreurSh(401, 'Mot de passe actuel incorrect.');
     verifierRobustesse(req.body.nouveau);
     if (req.body.actuel === req.body.nouveau) throw new ErreurSh(400, 'Choisissez un mot de passe différent de l’actuel.');
-    await pool.query('UPDATE sh_utilisateurs SET mot_de_passe_hash = $2, mdp_temporaire = false WHERE id = $1', [req.u.id, hacher(req.body.nouveau)]);
+    await pool.query('UPDATE sh_utilisateurs SET mot_de_passe_hash = $2, mdp_temporaire = false WHERE id = $1', [req.u.id, await hacherAsync(req.body.nouveau)]);
     await pool.query('DELETE FROM sh_sessions WHERE utilisateur_id = $1 AND token <> $2', [req.u.id, req.u.token]);
     await journal(pool, req.u, 'Mot de passe changé', req.u.email, null);
   }));

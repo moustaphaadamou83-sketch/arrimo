@@ -1,7 +1,7 @@
 'use strict';
 const crypto = require('node:crypto');
 const { transaction, ErreurHttp } = require('../db');
-const { hacher, verifierRobustesse } = require('../auth');
+const { hacherAsync, verifierRobustesse } = require('../auth');
 const courriel = require('../courriel');
 const { empreinte } = require('./security');
 
@@ -67,12 +67,12 @@ async function consommer(pool, { jeton, nouveau }, env = process.env) {
     if (i.utilisateur_id) {
       u = (await c.query(`UPDATE sh_utilisateurs SET nom=$2, role=$3, mot_de_passe_hash=$4, mdp_temporaire=false,
         actif=true, totp_secret=NULL, totp_actif=false, totp_dernier_pas=0 WHERE id=$1 RETURNING id,email`,
-      [i.utilisateur_id, i.nom, i.role, hacher(nouveau)])).rows[0];
+      [i.utilisateur_id, i.nom, i.role, await hacherAsync(nouveau)])).rows[0];
     } else {
       const conflict = (await c.query('SELECT 1 FROM sh_utilisateurs WHERE lower(email)=$1', [i.email.toLowerCase()])).rowCount;
       if (conflict) throw new ErreurHttp(409, 'membre_sh_existant');
       u = (await c.query(`INSERT INTO sh_utilisateurs (email,nom,role,mot_de_passe_hash,mdp_temporaire,actif)
-        VALUES ($1,$2,$3,$4,false,true) RETURNING id,email`, [i.email, i.nom, i.role, hacher(nouveau)])).rows[0];
+        VALUES ($1,$2,$3,$4,false,true) RETURNING id,email`, [i.email, i.nom, i.role, await hacherAsync(nouveau)])).rows[0];
     }
     await c.query('UPDATE sh_invitations SET utilise_le=now() WHERE id=$1', [i.id]);
     await c.query('UPDATE sh_invitations SET revoquee_le=now() WHERE lower(email)=$1 AND id<>$2 AND utilise_le IS NULL AND revoquee_le IS NULL', [i.email.toLowerCase(), i.id]);

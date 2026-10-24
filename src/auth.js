@@ -27,6 +27,21 @@ function hacher(motDePasse) {
   return `${sel}:${hash}`;
 }
 
+// Versions asynchrones : le calcul scrypt (~50 ms) se fait dans le pool de threads de libuv au lieu de bloquer
+// la boucle d'événements ; sans cela, 500 connexions simultanées figent toutes les requêtes du serveur.
+const scryptAsync = (mdp, sel) => new Promise((ok, ko) => crypto.scrypt(mdp, sel, 64, (e, k) => (e ? ko(e) : ok(k))));
+async function hacherAsync(motDePasse) {
+  const sel = crypto.randomBytes(16).toString('hex');
+  return `${sel}:${(await scryptAsync(motDePasse, sel)).toString('hex')}`;
+}
+async function verifierAsync(motDePasse, stocke) {
+  const [sel, hash] = String(stocke).split(':');
+  if (!sel || !hash) return false;
+  const calcule = await scryptAsync(motDePasse, sel);
+  const attendu = Buffer.from(hash, 'hex');
+  return attendu.length === calcule.length && crypto.timingSafeEqual(attendu, calcule);
+}
+
 function verifier(motDePasse, stocke) {
   const [sel, hash] = String(stocke).split(':');
   if (!sel || !hash) return false;
@@ -68,7 +83,7 @@ async function connexion(pool, email, motDePasse) {
   limiter(email);
   const { rows } = await pool.query('SELECT * FROM utilisateurs WHERE email = $1 AND actif AND NOT invitation_en_attente', [email]);
   const u = rows[0];
-  const motDePasseOk = verifier(String(motDePasse || ''), u ? u.mot_de_passe_hash : HASH_FACTICE);
+  const motDePasseOk = await verifierAsync(String(motDePasse || ''), u ? u.mot_de_passe_hash : HASH_FACTICE);
   if (!u || !motDePasseOk) {
     noterEchec(email);
     throw new ErreurHttp(401, 'identifiants_incorrects');
@@ -109,10 +124,10 @@ function verifierRobustesse(mdp) {
 /** Changement de mot de passe par l'utilisateur : ferme ses autres sessions. */
 async function changerMotDePasse(pool, utilisateur, actuel, nouveau) {
   const u = (await pool.query('SELECT mot_de_passe_hash FROM utilisateurs WHERE id = $1', [utilisateur.id])).rows[0];
-  if (!verifier(String(actuel || ''), u.mot_de_passe_hash)) throw new ErreurHttp(401, 'mdp_actuel_incorrect');
+  if (!(await verifierAsync(String(actuel || ''), u.mot_de_passe_hash))) throw new ErreurHttp(401, 'mdp_actuel_incorrect');
   verifierRobustesse(nouveau);
   if (actuel === nouveau) throw new ErreurHttp(400, 'mdp_identique');
-  await pool.query('UPDATE utilisateurs SET mot_de_passe_hash = $2, mdp_temporaire = false WHERE id = $1', [utilisateur.id, hacher(nouveau)]);
+  await pool.query('UPDATE utilisateurs SET mot_de_passe_hash = $2, mdp_temporaire = false WHERE id = $1', [utilisateur.id, await hacherAsync(nouveau)]);
   await pool.query('DELETE FROM sessions WHERE utilisateur_id = $1 AND NOT (token = ANY($2::text[]))', [utilisateur.id, formesJeton(utilisateur.token)]);
 }
 
@@ -156,5 +171,5 @@ function exigerEtablissement(utilisateur, etablissementId) {
   }
 }
 
-module.exports = { empreinteJeton, formesJeton, chiffrerSecretMfa, lireSecretMfa, hacher, verifier, connexion, connexion2fa, changerMotDePasse, verifierRobustesse, motDePasseTemporaire,
+module.exports = { hacherAsync, verifierAsync, empreinteJeton, formesJeton, chiffrerSecretMfa, lireSecretMfa, hacher, verifier, connexion, connexion2fa, changerMotDePasse, verifierRobustesse, motDePasseTemporaire,
   exigerSession, peutAgirPour, exigerEtablissement };

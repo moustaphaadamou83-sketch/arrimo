@@ -7,7 +7,7 @@
  */
 const QRCode = require('qrcode');
 const { transaction, ErreurHttp } = require('./db');
-const { hacher, changerMotDePasse, verifierRobustesse, motDePasseTemporaire, chiffrerSecretMfa, lireSecretMfa } = require('./auth');
+const { hacherAsync, changerMotDePasse, verifierRobustesse, motDePasseTemporaire, chiffrerSecretMfa, lireSecretMfa } = require('./auth');
 const totp = require('./totp');
 const { journaliser } = require('./regles');
 const cx = require('./connecteurs');
@@ -276,7 +276,7 @@ function brancher(api, pool, route, entier, options = {}) {
       if (deja.rows[0]) throw new ErreurHttp(409, 'compte_existe');
       const u = (await c.query(
         `INSERT INTO utilisateurs (email, nom, mot_de_passe_hash, role, mdp_temporaire) VALUES ($1, $2, $3, $4, true) RETURNING id, email, nom, role`,
-        [email, nom, hacher(temporaire), role])).rows[0];
+        [email, nom, await hacherAsync(temporaire), role])).rows[0];
       for (const e of etabs) await c.query('INSERT INTO utilisateur_etablissements VALUES ($1, $2)', [u.id, e]);
       await journalAdmin(c, req.utilisateur, 'Compte créé', email, `Rôle ${role}`, etabs[0] || null);
       return { ...u, etablissements: etabs, mot_de_passe_temporaire: temporaire };
@@ -310,7 +310,7 @@ function brancher(api, pool, route, entier, options = {}) {
     const temporaire = motDePasseTemporaire();
     await pool.query(
       `UPDATE utilisateurs SET mot_de_passe_hash = $2, mdp_temporaire = true, totp_actif = CASE WHEN $3 THEN false ELSE totp_actif END,
-              totp_secret = CASE WHEN $3 THEN NULL ELSE totp_secret END WHERE id = $1`, [id, hacher(temporaire), !!req.body.reinitialiser_2fa]);
+              totp_secret = CASE WHEN $3 THEN NULL ELSE totp_secret END WHERE id = $1`, [id, await hacherAsync(temporaire), !!req.body.reinitialiser_2fa]);
     await pool.query('DELETE FROM sessions WHERE utilisateur_id = $1', [id]);
     await journalAdmin(pool, req.utilisateur, 'Mot de passe réinitialisé', existant.email, req.body.reinitialiser_2fa ? 'avec double authentification' : null,
       existant.etablissements[0] || null);
