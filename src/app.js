@@ -336,9 +336,16 @@ function creerApp(pool) {
       if (!rows[0]) throw new ErreurHttp(409, 'conge_lit_occupe');
       await journaliser(c, { litId: id, utilisateurId: req.utilisateur.id, action: 'Congé prévu modifié',
         detail: date ? date.toISOString() : 'retiré' });
+      await t.synchroniserConge(c, id, req.utilisateur.id);
       return rows[0];
     });
   }));
+
+  /* ---------- congés par lit, blocages explicables, fraîcheur ---------- */
+  const vig = require('./vigilance');
+  api.get('/conges', route((req) => vig.conges(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'), {
+    horizon: req.query.horizon, jour: req.query.jour, unite: req.query.unite, statut: req.query.statut })));
+  api.get('/vigilance', route((req) => vig.blocages(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
 
   api.get('/blocages', route(async (req) => {
     const etab = entier(req.query.etablissement_id, 'etablissement_id');

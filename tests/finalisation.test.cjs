@@ -175,3 +175,55 @@ test('admissions simultanées de la même demande depuis deux écrans : une seul
   const occ = await pool.query(`SELECT count(*)::int n FROM journal WHERE lit_id = $1 AND nouvel_etat = 'occupe' AND NOT refuse`, [l.id]);
   assert.strictEqual(occ.rows[0].n, 1);
 });
+
+test('congés par lit : prévu, confirmé, retard sans libération automatique, départ réel ; alertes explicables', async () => {
+  const sl = await id('SL'); const med = await type('MED');
+  const l = await litLibre(sl, med);
+  await appel('bouchard', 'POST', `/lits/${l.id}/action`, { action: 'reserver', version: l.version, patient_ref: 'P-72001' });
+  await appel('bouchard', 'POST', `/lits/${l.id}/action`, { action: 'admettre' });
+  const dans2h = new Date(Date.now() + 2 * 3600000).toISOString();
+  assert.strictEqual((await appel('bouchard', 'PUT', `/lits/${l.id}/conge`, { statut: 'prevu', sortie_prevue: dans2h })).statut, 200);
+  let c = await appel('bouchard', 'GET', `/conges?etablissement_id=${sl}&horizon=4`);
+  assert.strictEqual(c.statut, 200, JSON.stringify(c.corps));
+  let ligne = c.corps.lignes.find((x) => x.lit === l.code);
+  assert.ok(ligne, 'le lit est listé par son numéro');
+  assert.strictEqual(ligne.statut, 'prevu'); assert.strictEqual(ligne.etat, 'occupe'); assert.strictEqual(ligne.disponibilite_estimee, null);
+  assert.ok(ligne.chambre && ligne.unite);
+  assert.ok(c.corps.resume[4].lits.includes(l.code));
+  assert.ok(c.corps.donnees_lues_le && c.corps.controle_periodique);
+  await appel('bouchard', 'PUT', `/lits/${l.id}/conge`, { statut: 'confirme' });
+  ligne = (await appel('bouchard', 'GET', `/conges?etablissement_id=${sl}&statut=confirme`)).corps.lignes.find((x) => x.lit === l.code);
+  assert.ok(ligne.disponibilite_estimee && ligne.disponibilite_estimee_regle, 'estimation justifiée pour un congé confirmé');
+  // Heure dépassée : vérification nécessaire, le lit reste occupé
+  await appel('bouchard', 'PUT', `/lits/${l.id}/conge`, { statut: 'confirme', sortie_prevue: new Date(Date.now() - 90 * 60000).toISOString() });
+  ligne = (await appel('bouchard', 'GET', `/conges?etablissement_id=${sl}&statut=retard`)).corps.lignes.find((x) => x.lit === l.code);
+  assert.strictEqual(ligne.verification, 'verification_necessaire');
+  assert.strictEqual((await lit(l.id)).etat, 'occupe');
+  const v = await appel('bouchard', 'GET', `/vigilance?etablissement_id=${sl}`);
+  const al = v.corps.alertes.find((a) => a.type === 'conge_retarde' && a.ressource === l.code);
+  assert.ok(al, 'alerte de congé retardé');
+  for (const k of ['etablissement', 'unite', 'duree_min', 'evenement', 'seuil', 'cause', 'action', 'responsable', 'actualise_le']) assert.ok(al[k] != null, k);
+  assert.strictEqual(al.cause.nature, 'hypothese', 'une hypothèse n’est pas présentée comme un fait');
+  // Départ réel : historique « réalisé » avec l'heure
+  await appel('bouchard', 'POST', `/lits/${l.id}/action`, { action: 'liberer' });
+  const h = (await pool.query(`SELECT statut, depart_reel_le FROM conges WHERE lit_id = $1 ORDER BY id DESC LIMIT 1`, [l.id])).rows[0];
+  assert.strictEqual(h.statut, 'realise'); assert.ok(h.depart_reel_le);
+  ligne = (await appel('bouchard', 'GET', `/conges?etablissement_id=${sl}`)).corps.lignes.find((x) => x.lit === l.code);
+  assert.strictEqual(ligne.statut, 'realise');
+});
+
+test('vigilance : réservation prolongée identifiée sans annulation automatique', async () => {
+  const sl = await id('SL'); const chir = await type('CHIR');
+  const l = await litLibre(sl, chir);
+  await appel('bouchard', 'POST', `/lits/${l.id}/action`, { action: 'reserver', version: l.version, patient_ref: 'P-72002' });
+  await pool.query(`UPDATE lits SET etat_depuis = now() - interval '4 hours' WHERE id = $1`, [l.id]);
+  const v = await appel('bouchard', 'GET', `/vigilance?etablissement_id=${sl}`);
+  const al = v.corps.alertes.find((a) => a.type === 'reservation_prolongee' && a.ressource === l.code);
+  assert.ok(al); assert.match(al.titre, /Réservé depuis 4 h sans admission enregistrée/);
+  assert.match(al.action, /maintenue/);
+  assert.strictEqual((await lit(l.id)).etat, 'reserve', 'rien n’est annulé automatiquement');
+  assert.ok(v.corps.regles_couleurs.eleve);
+  // Isolation : un autre établissement ne lit pas ces alertes
+  assert.strictEqual((await appel('tremblay', 'GET', `/vigilance?etablissement_id=${sl}`)).statut, 403);
+  assert.strictEqual((await appel('tremblay', 'GET', `/conges?etablissement_id=${sl}`)).statut, 403);
+});

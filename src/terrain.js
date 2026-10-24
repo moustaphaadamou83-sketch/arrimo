@@ -22,7 +22,7 @@ function groupeAgeDepuisNaissance(naissance, maintenant = new Date()) {
 }
 
 /** Modifie un attribut d'un lit occupé sans changer son état, sous verrou, avec journal. */
-async function modifierLitOccupe(pool, utilisateur, litId, champs, action, detail) {
+async function modifierLitOccupe(pool, utilisateur, litId, champs, action, detail, apres) {
   return transaction(pool, async (c) => {
     const r = await c.query(
       `SELECT l.*, e.module_actif FROM lits l JOIN etablissements e ON e.id = l.etablissement_id
@@ -35,6 +35,7 @@ async function modifierLitOccupe(pool, utilisateur, litId, champs, action, detai
     const sets = cles.map((k, i) => `${k} = $${i + 2}`).join(', ');
     const u = await c.query(`UPDATE lits SET ${sets} WHERE id = $1 RETURNING *`, [litId, ...cles.map((k) => champs[k])]);
     await journaliser(c, { litId, utilisateurId: utilisateur.id, action, detail });
+    if (apres) await apres(c);
     return u.rows[0];
   });
 }
@@ -51,6 +52,27 @@ async function changerNsaOrientation(pool, utilisateur, litId, orientation) {
   if (!ORIENTATIONS.includes(orientation)) throw new ErreurHttp(400, 'orientation_inconnue');
   return modifierLitOccupe(pool, utilisateur, litId, { nsa_orientation: orientation }, 'Orientation NSA modifiée', orientation);
 }
+/**
+ * Historique des congés : la ligne ouverte du lit suit son congé actuel (prévu, confirmé, reporté) ;
+ * sans congé, elle est fermée comme « annulé ». Appelée dans la transaction qui modifie le lit.
+ */
+async function synchroniserConge(c, litId, utilisateurId, source = 'manuel') {
+  const l = (await c.query('SELECT etablissement_id, patient_ref, sortie_prevue, conge_statut, etat FROM lits WHERE id = $1', [litId])).rows[0];
+  const ouvert = (await c.query(`SELECT id FROM conges WHERE lit_id = $1 AND statut IN ('prevu', 'confirme', 'attente_transport', 'reporte') FOR UPDATE`, [litId])).rows[0];
+  if (!l || l.etat !== 'occupe' || (!l.sortie_prevue && !l.conge_statut)) {
+    if (ouvert) await c.query(`UPDATE conges SET statut = 'annule', maj_le = now(), maj_par = $2 WHERE id = $1`, [ouvert.id, utilisateurId || null]);
+    return;
+  }
+  const statut = l.conge_statut || 'prevu';
+  if (ouvert) {
+    await c.query(`UPDATE conges SET statut = $2, sortie_prevue = $3, maj_le = now(), maj_par = $4, source = $5 WHERE id = $1`,
+      [ouvert.id, statut, l.sortie_prevue, utilisateurId || null, source]);
+  } else {
+    await c.query(`INSERT INTO conges (lit_id, etablissement_id, patient_ref, sortie_prevue, statut, maj_par, source) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [litId, l.etablissement_id, l.patient_ref, l.sortie_prevue, statut, utilisateurId || null, source]);
+  }
+}
+
 async function majConge(pool, utilisateur, litId, statut, date) {
   if (statut !== null && !CONGES.includes(statut)) throw new ErreurHttp(400, 'conge_statut_inconnu');
   const champs = { conge_statut: statut };
@@ -60,7 +82,8 @@ async function majConge(pool, utilisateur, litId, statut, date) {
     champs.sortie_prevue = d;
   }
   return modifierLitOccupe(pool, utilisateur, litId, champs, 'Congé mis à jour',
-    `${statut || 'aucun'}${champs.sortie_prevue ? ` · ${champs.sortie_prevue.toISOString()}` : ''}`);
+    `${statut || 'aucun'}${champs.sortie_prevue ? ` · ${champs.sortie_prevue.toISOString()}` : ''}`,
+    (c) => synchroniserConge(c, litId, utilisateur.id));
 }
 
 /* ------------------------------------------------------------------ nettoyage */
@@ -274,6 +297,21 @@ async function admettreDepuisLit(c, pool, utilisateur, litId, version) {
     if (t && !['recu', 'refuse'].includes(t.statut)) throw new ErreurHttp(409, 'admission_par_transfert', { code: lit.code, numero: t.numero });
   }
   return changerEtat(c, pool, utilisateur.id, litId, 'occupe', { versionAttendue: version, detail: 'Admission locale' });
+}
+
+/**
+ * Admission reçue d'une intégration (connecteur ADT) : la demande active du patient (assignée à ce lit, ou en attente)
+ * est finalisée dans la même transaction, pour que la file d'admission reste exacte.
+ */
+async function synchroniserDemandeAdmise(c, pool, litId, ref, detail) {
+  const lit = (await c.query('SELECT code, etablissement_id FROM lits WHERE id = $1', [litId])).rows[0];
+  const d = (await c.query(`SELECT * FROM demandes_admission WHERE etablissement_id = $1 AND patient_ref = $2 AND statut IN ('attente', 'assignee')
+    ORDER BY (lit_id = $3) DESC NULLS LAST, id LIMIT 1 FOR UPDATE`, [lit.etablissement_id, ref, litId])).rows[0];
+  if (!d) return null;
+  await cv.libererPourDemande(c, pool, null, d, detail || `Patient admis au lit ${lit.code}`);
+  await c.query(`UPDATE demandes_admission SET statut = 'admise', lit_id = $2, terminee_le = now() WHERE id = $1`, [d.id, litId]);
+  await parcoursPatient(c, d, 'hospitalise');
+  return d.id;
 }
 
 /** Réservation annulée depuis la fiche Lit : la demande d'admission liée revient dans la file, sans perdre son ancienneté. */
@@ -512,6 +550,6 @@ function indicateursCsv(ind) {
 module.exports = {
   designerNsa, retirerNsa, changerNsaOrientation, majConge, debuterNettoyage, fileNettoyage,
   creerDemande, fileAdmission, assignerLit, admettreDemande, annulerDemande, transfererDemande,
-  admettreDepuisLit, annulerDepuisLit, reserverDepuisLit,
+  admettreDepuisLit, annulerDepuisLit, reserverDepuisLit, synchroniserConge, synchroniserDemandeAdmise,
   niveauAlerte, listeNsa, indicateurs, indicateursCsv, besoinsDemande, ORIENTATIONS, groupeAgeDepuisNaissance,
 };

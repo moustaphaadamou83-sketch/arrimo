@@ -138,6 +138,11 @@ async function changerEtat(client, pool, utilisateurId, litId, nouveau, opts = {
         nettoyage_debut = NULL
       WHERE id = $1
       RETURNING *`, [litId, nouveau, patientRef, opts.sortiePrevue || null, nouveau === 'indispo' ? opts.motif : null]);
+  // Départ réel : le congé ouvert du lit est marqué réalisé, avec l'heure réelle (historique des congés)
+  if (lit.etat === 'occupe' && nouveau === 'nettoyage') {
+    await client.query(`UPDATE conges SET statut = 'realise', depart_reel_le = now(), maj_le = now(), maj_par = $2
+      WHERE lit_id = $1 AND statut IN ('prevu', 'confirme', 'attente_transport', 'reporte')`, [litId, utilisateurId || null]);
+  }
   // Disponibilité à côté : les hôpitaux proches qui en ont besoin sont avisés (même transaction)
   if (nouveau === 'libre') await require('./alertes').litLibere(client, litId);
 

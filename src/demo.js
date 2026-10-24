@@ -25,6 +25,8 @@ const HORLOGES = {
   demandes_admission: ['cree_le', 'assignee_le', 'terminee_le'],
   transferts: ['date_demande', 'date_validation', 'date_depart', 'date_reception', 'date_chambre_prete', 'arrivee_prevue'],
   notifications: ['date'],
+  conges: ['sortie_prevue', 'depart_reel_le', 'cree_le', 'maj_le'],
+  patients: ['arrivee_le', 'cree_le', 'modifie_le'],
 };
 
 /** Recale la démo si elle est inactive depuis `calmeMin` minutes. Retourne le décalage appliqué, en minutes (0 sinon). */

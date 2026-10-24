@@ -56,6 +56,7 @@ async function recevoirEvenement(pool, connecteur, ev) {
       throw new ErreurHttp(409, 'admission_impossible', { code: lit.code, lit_etat: lit.etat, ref });
     }
     await changerEtat(c, pool, null, lit.id, 'occupe', { detail });
+    await require('./terrain').synchroniserDemandeAdmise(c, pool, lit.id, ref, detail);
   };
 
   let statut = 'applique'; let detail = '';
@@ -81,6 +82,7 @@ async function recevoirEvenement(pool, connecteur, ev) {
         if (Number.isNaN(d.getTime())) throw new ErreurHttp(400, 'date_invalide');
         const u = await c.query(`UPDATE lits SET sortie_prevue = $2, conge_statut = 'prevu' WHERE id = $1 AND etat = 'occupe' RETURNING id`, [lit.id, d]);
         if (!u.rows[0]) { statut = 'ignore'; detail = `Lit ${ev.lit} non occupé`; return; }
+        await require('./terrain').synchroniserConge(c, lit.id, null, 'integration');
         detail = `Congé prévu ${d.toISOString()} au lit ${ev.lit}`;
       }
     });

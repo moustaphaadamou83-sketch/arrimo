@@ -22,7 +22,12 @@ const intervalle = Number(process.env.BLOCAGES_MINUTES || 15) * 60000;
 const tourner = () => demo.recaler(pool)
   .then((min) => { if (min) console.log(`Démo recalée de ${min} min.`); })
   .catch((e) => console.error('Recalage de la démo :', e.message))
-  .then(() => detecterBlocages(pool))
+  .then(async () => {
+    const debut = Date.now();
+    const changes = await detecterBlocages(pool);
+    // Heure réelle du contrôle : l'interface affiche « dernier contrôle », jamais « données actualisées » sans lecture
+    await require('./vigilance').noterControle(pool, 'blocages', debut, { lits_modifies: changes });
+  })
   .catch((e) => console.error('Détection des blocages :', e.message));
 tourner();
 setInterval(tourner, intervalle);
