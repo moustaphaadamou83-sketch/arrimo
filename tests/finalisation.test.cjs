@@ -255,3 +255,45 @@ test('OG transversal : congé d’un lit précis, numéros exacts, contexte, sou
   const r7 = await q('bouchard', sl, 'De quel lit tu parles, celui-ci ?');
   assert.ok(r7.reponse.length > 10);
 });
+
+test('administration et SH : spécialité du catalogue, lits avec groupe d’âge, civière d’isolement, import, modules par établissement', async () => {
+  const sl = await id('SL');
+  const cfg = (await pool.query('SELECT config_id FROM etablissements WHERE id = $1', [sl])).rows[0].config_id;
+  const a = async (m, c, b) => appel('reseau', m, c, b);
+  const sp = await a('POST', '/admin/specialites', { config_id: cfg, code: 'PED' });
+  assert.strictEqual(sp.statut, 200, JSON.stringify(sp.corps)); assert.strictEqual(sp.corps.groupe_age, 'pediatrique');
+  assert.strictEqual((await a('POST', '/admin/specialites', { config_id: cfg, code: 'INCONNUE' })).corps.code, 'specialite_inconnue');
+  assert.strictEqual((await appel('bouchard', 'POST', '/admin/specialites', { config_id: cfg, code: 'SIP' })).statut, 403);
+  const u = await a('POST', '/admin/unites', { etablissement_id: sl, type_id: sp.corps.id, nom: 'Pédiatrie test' });
+  assert.strictEqual(u.statut, 200, JSON.stringify(u.corps));
+  const ch = await a('POST', '/admin/chambres', { unite_id: u.corps.id, numero: '901', capacite_declaree: 2 });
+  const l1 = await a('POST', '/admin/lits', { chambre_id: ch.corps.id, code: 'PED-901A' });
+  assert.strictEqual(l1.corps.groupe_age, 'pediatrique', 'groupe d’âge hérité du type');
+  const l2 = await a('POST', '/admin/lits', { chambre_id: ch.corps.id, code: 'PED-901B', groupe_age: 'tous' });
+  assert.strictEqual(l2.corps.groupe_age, 'tous');
+  assert.strictEqual((await a('POST', '/admin/lits', { chambre_id: ch.corps.id, code: 'PED-901C' })).corps.code, 'structure_capacite_depassee');
+  const cv = await a('POST', '/admin/civieres', { etablissement_id: sl, code: 'ISO-T1', categorie: 'isolement' });
+  assert.strictEqual(cv.statut, 200, JSON.stringify(cv.corps));
+  // Import : colonne groupe_age
+  const contenu = 'unite;chambre;lit;groupe_age\nPédiatrie test;901;PED-901B;neonatal\n';
+  const v = await a('POST', '/admin/import/verifier', { etablissement_id: sl, type: 'lits', contenu });
+  assert.strictEqual(v.statut, 200, JSON.stringify(v.corps));
+  await a('POST', '/admin/import/importer', { etablissement_id: sl, type: 'lits', contenu, empreinte: v.corps.empreinte });
+  assert.strictEqual((await pool.query(`SELECT groupe_age FROM lits WHERE code = 'PED-901B'`)).rows[0].groupe_age, 'neonatal');
+  // Un adulte ne reçoit pas un lit pédiatrique ; un enfant oui
+  await pool.query(`UPDATE lits SET disponibilite_confirmee_le = now() WHERE code IN ('PED-901A', 'PED-901B')`);
+  const rAd = await appel('tremblay', 'GET', `/recherche?depuis=${await id('MB')}&type_id=${sp.corps.id}&groupe_age=adulte`);
+  assert.ok(!rAd.corps.suggestions.some((x) => x.etablissement_id === sl && x.libres > 0));
+  const rEnf = await appel('tremblay', 'GET', `/recherche?depuis=${await id('MB')}&type_id=${sp.corps.id}`);
+  assert.ok(rEnf.corps.suggestions.some((x) => x.etablissement_id === sl && x.libres_confirmes === 1), 'le type pédiatrique sert de groupe par défaut');
+  // Modules par établissement, réglés depuis la console SH
+  const cle = { 'X-SH-Key': 'cle-de-test-sh-finalisation' };
+  process.env.SH_API_KEY = 'cle-de-test-sh-finalisation';
+  const r = await fetch(`${base}/api/sh/etablissements/SL`, { method: 'PUT', headers: { 'content-type': 'application/json', ...cle }, body: JSON.stringify({ modules: { nsa: false }, vocation: 'general', par: 'sh@test' }) });
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual((await appel('bouchard', 'GET', `/nsa?etablissement_id=${sl}`)).corps.code, 'module_desactive');
+  const sp2 = await fetch(`${base}/api/sh/etablissements/SL/specialites`, { method: 'POST', headers: { 'content-type': 'application/json', ...cle }, body: JSON.stringify({ specialite: 'NEO', par: 'sh@test' }) });
+  assert.strictEqual((await sp2.json()).groupe_age, 'neonatal');
+  await pool.query(`UPDATE etablissements SET modules = '{}' WHERE id = $1`, [sl]);
+  assert.strictEqual((await appel('bouchard', 'GET', `/nsa?etablissement_id=${sl}`)).statut, 200);
+});

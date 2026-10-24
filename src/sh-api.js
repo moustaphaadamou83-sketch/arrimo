@@ -110,12 +110,35 @@ function brancherSh(api, pool, route) {
       if (sd && (await pool.query('SELECT 1 FROM etablissements WHERE sous_domaine = $1 AND id <> $2', [sd, e.id])).rows[0]) throw new ErreurHttp(409, 'sous_domaine_pris');
       vals.push(sd); sets.push(`sous_domaine = $${vals.length}`); detail.push(`lien ${sd || 'retiré'}`);
     }
+    // Configuration modulaire préparée par SH : modules désactivés (false) et vocation de l'établissement
+    if (b.modules !== undefined) {
+      const m = {};
+      for (const k of ['urgence', 'nsa', 'nettoyage', 'national']) if (b.modules && b.modules[k] === false) m[k] = false;
+      vals.push(m); sets.push(`modules = $${vals.length}::jsonb`); detail.push(`modules désactivés : ${Object.keys(m).join(', ') || 'aucun'}`);
+    }
+    if (b.vocation !== undefined) {
+      if (!['general', 'pediatrique', 'specialise'].includes(b.vocation)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'vocation' });
+      vals.push(b.vocation); sets.push(`vocation = $${vals.length}`); detail.push(`vocation ${b.vocation}`);
+    }
     if (!sets.length) throw new ErreurHttp(400, 'rien_a_modifier');
-    const r = (await pool.query(`UPDATE etablissements SET ${sets.join(', ')} WHERE id = $1 RETURNING id, code, nom, partage, module_actif, sous_domaine`, vals)).rows[0];
+    const r = (await pool.query(`UPDATE etablissements SET ${sets.join(', ')} WHERE id = $1 RETURNING id, code, nom, partage, module_actif, sous_domaine, modules, vocation`, vals)).rows[0];
     await journalAdmin(pool, systeme, 'Établissement modifié', r.nom, `${detail.join(' · ')} · ${parSh(b)}`, r.id);
     return r;
   }));
 
+  // Catalogue des spécialités et activation pour la configuration de l'établissement (types d'unité, groupe d'âge)
+  api.get('/sh/specialites', sh(async () => (await pool.query('SELECT * FROM specialites_catalogue ORDER BY ordre')).rows));
+  api.post('/sh/etablissements/:code/specialites', sh(async (req) => {
+    const e = await etabParCode(req.params.code);
+    const sp = (await pool.query('SELECT * FROM specialites_catalogue WHERE code = $1', [String(req.body?.specialite || '')])).rows[0];
+    if (!sp) throw new ErreurHttp(400, 'specialite_inconnue');
+    const cfg = (await pool.query('SELECT config_id FROM etablissements WHERE id = $1', [e.id])).rows[0].config_id;
+    const r = (await pool.query(`INSERT INTO types_unite (config_id, code, nom, nom_en, ordre, groupe_age, specialite) VALUES ($1,$2,$3,$4,$5,$6,$7)
+      ON CONFLICT (config_id, code) DO UPDATE SET groupe_age = EXCLUDED.groupe_age, specialite = EXCLUDED.specialite RETURNING id, code, nom, groupe_age`,
+    [cfg, sp.code, sp.nom, sp.nom_en, sp.ordre, sp.groupe_age, sp.famille])).rows[0];
+    await journalAdmin(pool, systeme, 'Spécialité activée', sp.nom, parSh(req.body || {}), e.id);
+    return r;
+  }));
   api.get('/sh/import/modeles/:type', async (req, res, next) => {
     try {
       exigerCle(req);

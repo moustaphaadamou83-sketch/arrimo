@@ -215,6 +215,7 @@ window.ARRIMO_I18N.fr = {
     lit_ok: 'Lit mis à jour.', conge_ok: 'Congé confirmé.', accepte_ok: 'Transfert accepté. Le demandeur est notifié.', transport_ok: 'Transport demandé.',
   },
   fin: {
+    modules_titre: 'Modules et vocation de l’établissement', modules_aide: 'Un module décoché n’a plus d’onglet ni d’accès pour cet établissement (ex. NSA pour un hôpital pédiatrique). Les capacités compatibles des autres établissements restent consultables.', vocation: 'Vocation', vocation_general: 'Hôpital général', vocation_pediatrique: 'Hôpital pédiatrique', vocation_specialise: 'Établissement spécialisé', modules_ok: 'Modules enregistrés.', specialites_titre: 'Catalogue des spécialités', specialites_aide: 'Catégories possibles, pas une organisation imposée : activez une spécialité pour que les établissements puissent y créer des unités. Le groupe d’âge sert à exclure les lits incompatibles.', specialite_ok: 'Spécialité activée.', 
     aucune_civiere: 'Aucune civière libre : libérez ou ajoutez une civière (corridor) avant d’enregistrer l’arrivée.', 
     titre: 'Congés et alertes · {etab}', intro: 'Les départs prévus lit par lit et les blocages expliqués. Un congé prévu n’est jamais un lit libre ; rien n’est libéré ni annulé automatiquement.',
     lu_a: 'Données lues à {heure}', controle: 'dernier contrôle périodique : {heure} (toutes les {min} min)', controle_jamais: 'aucun contrôle périodique enregistré',

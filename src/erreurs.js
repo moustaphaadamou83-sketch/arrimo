@@ -82,7 +82,7 @@ const MESSAGES = {
   civiere_patient_different: 'La civière {code} est occupée par {ref} : vérifiez la référence.',
   code_civiere_invalide: 'Code de civière invalide (lettres, chiffres, tirets).',
   code_civiere_existe: 'Ce code de civière existe déjà dans l’établissement.',
-  categorie_invalide: 'Catégorie de civière invalide : régulière ou débordement.',
+  categorie_invalide: 'Catégorie de civière invalide : régulière, débordement, isolement, pédiatrique ou fauteuil.',
   // admissions
   type_unite_inconnu: "Type d'unité inconnu.",
   demande_introuvable: 'Demande introuvable.',

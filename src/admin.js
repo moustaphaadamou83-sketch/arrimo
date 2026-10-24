@@ -129,7 +129,7 @@ function brancher(api, pool, route, entier, options = {}) {
         ch.attributs,ch.restrictions,ch.statut_operationnel,ch.actif,
         (SELECT count(*)::int FROM lits l WHERE l.chambre_id=ch.id AND l.actif) AS lits_calcules
         FROM chambres ch JOIN unites u ON u.id=ch.unite_id WHERE u.etablissement_id=$1 ORDER BY u.nom,ch.numero`, [etab]),
-      pool.query(`SELECT id,chambre_id,unite_id,code,etat,categorie,attributs,actif,disponibilite_confirmee_le,isolement,pression_negative,ventilation,telemetrie
+      pool.query(`SELECT id,chambre_id,unite_id,code,etat,categorie,attributs,actif,disponibilite_confirmee_le,isolement,pression_negative,ventilation,telemetrie,groupe_age
         FROM lits WHERE etablissement_id=$1 ORDER BY code`, [etab]),
       pool.query('SELECT id,code,categorie,etat,unite_id,attributs,actif FROM civieres WHERE etablissement_id=$1 ORDER BY code', [etab]),
     ]);
@@ -419,10 +419,14 @@ function brancher(api, pool, route, entier, options = {}) {
       const deja = await c.query('SELECT 1 FROM lits WHERE etablissement_id = $1 AND code = $2', [ch.etablissement_id, code]);
       if (deja.rows[0]) throw new ErreurHttp(409, 'code_lit_existe');
       const eq = EQUIPEMENTS.map((k) => !!req.body[k]);
+      // Groupe d'âge : celui indiqué, sinon celui du type d'unité (pédiatrie → pédiatrique)
+      const groupe = req.body.groupe_age == null || req.body.groupe_age === '' ? null : String(req.body.groupe_age);
+      if (groupe && !['adulte', 'pediatrique', 'neonatal', 'tous'].includes(groupe)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'groupe_age' });
       const l = (await c.query(
-        `INSERT INTO lits (chambre_id, unite_id, type_id, etablissement_id, code, isolement, pression_negative, ventilation, telemetrie,categorie,attributs)
-         SELECT ch.id, u.id, u.type_id, u.etablissement_id, $2, $3, $4, $5, $6,$7,$8::jsonb FROM chambres ch JOIN unites u ON u.id = ch.unite_id
-          WHERE ch.id = $1 RETURNING *`, [ch.id, code, ...eq, String(req.body.categorie || '').trim() || null, attributsStructure(req.body.attributs)])).rows[0];
+        `INSERT INTO lits (chambre_id, unite_id, type_id, etablissement_id, code, isolement, pression_negative, ventilation, telemetrie,categorie,attributs,groupe_age)
+         SELECT ch.id, u.id, u.type_id, u.etablissement_id, $2, $3, $4, $5, $6,$7,$8::jsonb, COALESCE($9, t.groupe_age) FROM chambres ch JOIN unites u ON u.id = ch.unite_id
+           JOIN types_unite t ON t.id = u.type_id
+          WHERE ch.id = $1 RETURNING *`, [ch.id, code, ...eq, String(req.body.categorie || '').trim() || null, attributsStructure(req.body.attributs), groupe])).rows[0];
       await journaliser(c, { litId: l.id, utilisateurId: req.utilisateur.id, action: 'Création', nouveau: 'libre' });
       await journalAdmin(c, req.utilisateur, 'Lit créé', code, null, ch.etablissement_id);
       return l;
@@ -435,8 +439,10 @@ function brancher(api, pool, route, entier, options = {}) {
     if(!l) throw new ErreurHttp(404,'lit_introuvable'); await exigerEtabGerable(req.utilisateur,l.etablissement_id);
     const actif=req.body.actif===undefined?l.actif:!!req.body.actif;
     if(!actif && l.etat!=='indispo') throw new ErreurHttp(409,'structure_lit_occupe');
-    const r=(await pool.query(`UPDATE lits SET categorie=$2,attributs=$3::jsonb,actif=$4 WHERE id=$1 RETURNING id,code,chambre_id,unite_id,etat,categorie,attributs,actif`,
-      [id,req.body.categorie===undefined?l.categorie:(String(req.body.categorie||'').trim()||null),attributsStructure(req.body.attributs??l.attributs),actif])).rows[0];
+    const groupe=req.body.groupe_age===undefined?l.groupe_age:String(req.body.groupe_age);
+    if(!['adulte','pediatrique','neonatal','tous'].includes(groupe)) throw new ErreurHttp(400,'parametre_invalide',{nom:'groupe_age'});
+    const r=(await pool.query(`UPDATE lits SET categorie=$2,attributs=$3::jsonb,actif=$4,groupe_age=$5 WHERE id=$1 RETURNING id,code,chambre_id,unite_id,etat,categorie,attributs,actif,groupe_age`,
+      [id,req.body.categorie===undefined?l.categorie:(String(req.body.categorie||'').trim()||null),attributsStructure(req.body.attributs??l.attributs),actif,groupe])).rows[0];
     await journalAdmin(pool,req.utilisateur,'Lit modifié',l.code,`actif=${actif}`,l.etablissement_id); return r;
   }));
 
@@ -455,6 +461,34 @@ function brancher(api, pool, route, entier, options = {}) {
       await journalAdmin(c, req.utilisateur, 'Équipement du lit modifié', l.code, detail, l.etablissement_id);
       return r;
     });
+  }));
+
+  /* ---------------------------------------------------------------- catalogue des spécialités et modules (gestionnaire) */
+  // Une spécialité du catalogue devient un type d'unité de la configuration ; chaque établissement crée ensuite ses unités.
+  api.post('/admin/specialites', route(async (req) => {
+    exigerGestionnaire(req);
+    const cfg = entier(req.body.config_id, 'config_id');
+    const sp = (await pool.query('SELECT * FROM specialites_catalogue WHERE code = $1', [String(req.body.code || '')])).rows[0];
+    if (!sp) throw new ErreurHttp(400, 'specialite_inconnue');
+    const r = (await pool.query(`INSERT INTO types_unite (config_id, code, nom, nom_en, ordre, groupe_age, specialite) VALUES ($1,$2,$3,$4,$5,$6,$7)
+      ON CONFLICT (config_id, code) DO UPDATE SET groupe_age = EXCLUDED.groupe_age, specialite = EXCLUDED.specialite RETURNING *`,
+    [cfg, sp.code, sp.nom, sp.nom_en, sp.ordre, sp.groupe_age, sp.famille])).rows[0];
+    await journalAdmin(pool, req.utilisateur, 'Spécialité activée', sp.nom, `configuration ${cfg}`, null);
+    return r;
+  }));
+  // Modules activés et vocation d'un établissement : un hôpital pédiatrique n'a pas à utiliser les fonctions sans rapport
+  api.put('/admin/etablissements/:id/modules', route(async (req) => {
+    exigerGestionnaire(req);
+    const id = entier(req.params.id, 'id');
+    const MODULES = ['urgence', 'nsa', 'nettoyage', 'national'];
+    const modules = {};
+    for (const k of MODULES) if (req.body.modules && req.body.modules[k] === false) modules[k] = false;
+    const vocation = req.body.vocation || 'general';
+    if (!['general', 'pediatrique', 'specialise'].includes(vocation)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'vocation' });
+    const r = (await pool.query('UPDATE etablissements SET modules = $2::jsonb, vocation = $3 WHERE id = $1 RETURNING id, nom, modules, vocation', [id, modules, vocation])).rows[0];
+    if (!r) throw new ErreurHttp(404, 'etab_introuvable');
+    await journalAdmin(pool, req.utilisateur, 'Modules modifiés', r.nom, `${vocation} · désactivés : ${Object.keys(modules).join(', ') || 'aucun'}`, id);
+    return r;
   }));
 
   /* ---------------------------------------------------------------- nouvel établissement (gestionnaire) */
@@ -514,7 +548,7 @@ function brancher(api, pool, route, entier, options = {}) {
     const code = String(req.body.code || '').trim();
     if (!/^[\w.-]{1,30}$/.test(code)) throw new ErreurHttp(400, 'code_civiere_invalide');
     const categorie = req.body.categorie || 'reguliere';
-    if (!['reguliere', 'debordement'].includes(categorie)) throw new ErreurHttp(400, 'categorie_invalide');
+    if (!require('./civieres').CATEGORIES.includes(categorie)) throw new ErreurHttp(400, 'categorie_invalide');
     const uniteId = req.body.unite_id == null ? null : entier(req.body.unite_id, 'unite_id');
     if (uniteId && !(await pool.query('SELECT 1 FROM unites WHERE id=$1 AND etablissement_id=$2 AND actif', [uniteId, etab])).rows[0]) throw new ErreurHttp(400, 'structure_rattachement_invalide');
     return transaction(pool, async (c) => {

@@ -214,6 +214,7 @@ window.ARRIMO_I18N.en = {
     lit_ok: 'Bed updated.', conge_ok: 'Discharge confirmed.', accepte_ok: 'Transfer accepted. The requester is notified.', transport_ok: 'Transport requested.',
   },
   fin: {
+    modules_titre: 'Facility modules and profile', modules_aide: 'An unchecked module has no tab or access for this facility (e.g. ALC for a children’s hospital). Compatible capacity of other facilities stays visible.', vocation: 'Profile', vocation_general: 'General hospital', vocation_pediatrique: 'Children’s hospital', vocation_specialise: 'Specialised facility', modules_ok: 'Modules saved.', specialites_titre: 'Specialty catalogue', specialites_aide: 'Possible categories, not an imposed organisation: enable a specialty so facilities can create units for it. The age group is used to exclude incompatible beds.', specialite_ok: 'Specialty enabled.', 
     aucune_civiere: 'No free stretcher: free or add a (hallway) stretcher before recording the arrival.', 
     titre: 'Discharges and alerts · {etab}', intro: 'Planned departures bed by bed, and explained blockages. A planned discharge is never a free bed; nothing is freed or cancelled automatically.',
     lu_a: 'Data read at {heure}', controle: 'last periodic check: {heure} (every {min} min)', controle_jamais: 'no periodic check recorded yet',
@@ -446,7 +447,7 @@ window.ARRIMO_I18N.en = {
     civiere_patient_different: 'Stretcher {code} is occupied by {ref}: check the reference.',
     code_civiere_invalide: 'Invalid stretcher code (letters, digits, hyphens).',
     code_civiere_existe: 'This stretcher code already exists in the facility.',
-    categorie_invalide: 'Invalid stretcher category: regular or overflow.',
+    categorie_invalide: 'Invalid stretcher category: regular, overflow, isolation, paediatric or chair.',
     identifiants_incorrects: 'Incorrect email address or password.',
     trop_tentatives: 'Too many attempts. Try again in a few minutes.',
     etape_expiree: 'This step has expired. Please sign in again.',

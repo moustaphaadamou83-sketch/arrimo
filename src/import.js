@@ -18,7 +18,10 @@ const { journaliser } = require('./regles');
 
 const MAX_LIGNES = 5000;
 const ROLES = ['coordonnateur', 'entretien', 'admin_etab'];
-const CATEGORIES = { reguliere: 'reguliere', 'régulière': 'reguliere', regular: 'reguliere', debordement: 'debordement', 'débordement': 'debordement', corridor: 'debordement', overflow: 'debordement' };
+const CATEGORIES = { reguliere: 'reguliere', 'régulière': 'reguliere', regular: 'reguliere', debordement: 'debordement', 'débordement': 'debordement', corridor: 'debordement', overflow: 'debordement',
+  isolement: 'isolement', isolation: 'isolement', pediatrique: 'pediatrique', 'pédiatrique': 'pediatrique', paediatric: 'pediatrique', pediatric: 'pediatrique', fauteuil: 'fauteuil', chair: 'fauteuil' };
+const GROUPES_AGE = { adulte: 'adulte', adult: 'adulte', pediatrique: 'pediatrique', 'pédiatrique': 'pediatrique', pediatric: 'pediatrique', paediatric: 'pediatrique',
+  neonatal: 'neonatal', 'néonatal': 'neonatal', tous: 'tous', all: 'tous' };
 const EQUIPEMENTS = ['isolement', 'pression_negative', 'ventilation', 'telemetrie'];
 const CODE = /^[\w.-]{1,30}$/;
 const COURRIEL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -35,7 +38,7 @@ const MODELES = {
     exemples: [['Médecine 3e', '3', 'Nord'], ['Médecine 3e', '3S', 'Sud'], ['Soins intensifs', '1', '']] },
   chambres: { colonnes: ['unite', 'chambre', 'etage', 'type_chambre', 'capacite', 'accessible', 'attributs_json', 'restrictions_json', 'statut_operationnel', 'actif'], obligatoires: ['unite', 'chambre'],
     exemples: [['Médecine 3e', '301', '3', 'double', '2', 'non'], ['Médecine 3e', '302', '3', 'simple', '1', 'oui'], ['Soins intensifs', '101', '1', 'surveillance', '1', 'non']] },
-  lits: { colonnes: ['unite', 'chambre', 'lit', ...EQUIPEMENTS, 'categorie', 'attributs_json', 'actif'], obligatoires: ['unite', 'chambre', 'lit'],
+  lits: { colonnes: ['unite', 'chambre', 'lit', ...EQUIPEMENTS, 'categorie', 'attributs_json', 'actif', 'groupe_age'], obligatoires: ['unite', 'chambre', 'lit'],
     exemples: [['Médecine 3e', '301', 'MED-301A', 'oui', 'non', 'non', 'non', 'standard'], ['Médecine 3e', '301', 'MED-301B', 'non', 'non', 'non', 'oui', 'standard'],
       ['Soins intensifs', '101', 'SI-101', 'oui', 'oui', 'oui', 'oui', 'soins intensifs']] },
   civieres: { colonnes: ['civiere', 'categorie', 'unite', 'attributs_json', 'actif'], obligatoires: ['civiere', 'categorie'],
@@ -222,14 +225,16 @@ async function verifier(db, etabId, type, contenu) {
       }
       if (erreurs.length > avant) continue;
       cle = v.lit.toUpperCase();
-      const l = (await db.query('SELECT id, chambre_id, isolement, pression_negative, ventilation, telemetrie,categorie,attributs,actif,etat FROM lits WHERE etablissement_id = $1 AND upper(code) = $2', [etabId, cle])).rows[0];
+      const l = (await db.query('SELECT id, chambre_id, isolement, pression_negative, ventilation, telemetrie,categorie,attributs,actif,etat,groupe_age FROM lits WHERE etablissement_id = $1 AND upper(code) = $2', [etabId, cle])).rows[0];
       if (l && l.chambre_id !== ch.id) { err(n, 'chambre', 'lit_autre_chambre', { valeur: v.lit }); continue; }
       const ajouter = !l;
       if(ajouter&&ch.capacite_declaree!==null&&(litsParChambre.get(ch.id)||0)>=ch.capacite_declaree){err(n,'chambre','capacite_depassee',{valeur:ch.capacite_declaree});continue;}
       const attributs=objetJson(v.attributs_json,'attributs_json',n,l?.attributs);if(!attributs)continue;const actif=actifCsv(v.actif,l?.actif,n);const categorie=v.categorie||l?.categorie||null;
+      const groupeAge = v.groupe_age ? GROUPES_AGE[sansAccents(v.groupe_age)] : (l?.groupe_age || null);
+      if (v.groupe_age && !groupeAge) { err(n, 'groupe_age', 'parametre_invalide', { nom: 'groupe_age' }); continue; }
       if(l&&!actif&&l.etat!=='indispo'){err(n,'actif','structure_lit_occupe');continue;}
-      action = !l ? 'creer' : EQUIPEMENTS.some((e) => l[e] !== eq[e])||l.categorie!==categorie||JSON.stringify(l.attributs||{})!==JSON.stringify(attributs)||l.actif!==actif ? 'maj' : 'inchange';
-      d = { code: v.lit, chambre_id: ch.id, lit_id: l?.id, compter_lit:ajouter, categorie,attributs,actif, ...eq };
+      action = !l ? 'creer' : EQUIPEMENTS.some((e) => l[e] !== eq[e])||l.categorie!==categorie||JSON.stringify(l.attributs||{})!==JSON.stringify(attributs)||l.actif!==actif||(groupeAge&&l.groupe_age!==groupeAge) ? 'maj' : 'inchange';
+      d = { code: v.lit, chambre_id: ch.id, lit_id: l?.id, compter_lit:ajouter, categorie,attributs,actif, groupe_age: groupeAge, ...eq };
     } else if (type === 'civieres') {
       if (!CODE.test(v.civiere)) { err(n, 'civiere', 'code_invalide', { valeur: v.civiere }); continue; }
       const cat = CATEGORIES[sansAccents(v.categorie)] || CATEGORIES[String(v.categorie).toLowerCase()];
@@ -296,13 +301,14 @@ async function importer(pool, utilisateur, etabId, type, contenu, empreinte, jou
           [d.chambre_id,d.etage_id,d.type_chambre,d.capacite_declaree,d.accessible,JSON.stringify(d.attributs),JSON.stringify(d.restrictions),d.statut_operationnel,d.actif]);
       } else if (type === 'lits' && d.action === 'creer') {
         const l = (await c.query(
-          `INSERT INTO lits (chambre_id, unite_id, type_id, etablissement_id, code, categorie, isolement, pression_negative, ventilation, telemetrie,attributs,actif)
-           SELECT ch.id, u.id, u.type_id, u.etablissement_id, $2, $3,$4,$5,$6,$7,$8::jsonb,$9 FROM chambres ch JOIN unites u ON u.id = ch.unite_id
-            WHERE ch.id = $1 RETURNING id`, [d.chambre_id, d.code,d.categorie, d.isolement, d.pression_negative, d.ventilation, d.telemetrie,JSON.stringify(d.attributs),d.actif])).rows[0];
+          `INSERT INTO lits (chambre_id, unite_id, type_id, etablissement_id, code, categorie, isolement, pression_negative, ventilation, telemetrie,attributs,actif,groupe_age)
+           SELECT ch.id, u.id, u.type_id, u.etablissement_id, $2, $3,$4,$5,$6,$7,$8::jsonb,$9, COALESCE($10, t.groupe_age) FROM chambres ch JOIN unites u ON u.id = ch.unite_id
+             JOIN types_unite t ON t.id = u.type_id
+            WHERE ch.id = $1 RETURNING id`, [d.chambre_id, d.code,d.categorie, d.isolement, d.pression_negative, d.ventilation, d.telemetrie,JSON.stringify(d.attributs),d.actif,d.groupe_age])).rows[0];
         await journaliser(c, { litId: l.id, utilisateurId: utilisateur.id, action: 'Création', nouveau: 'libre', detail: 'Import CSV' });
       } else if (type === 'lits') {
-        await c.query('UPDATE lits SET categorie=$2,isolement = $3, pression_negative = $4, ventilation = $5, telemetrie = $6,attributs=$7::jsonb,actif=$8 WHERE id = $1',
-          [d.lit_id,d.categorie, d.isolement, d.pression_negative, d.ventilation, d.telemetrie,JSON.stringify(d.attributs),d.actif]);
+        await c.query('UPDATE lits SET categorie=$2,isolement = $3, pression_negative = $4, ventilation = $5, telemetrie = $6,attributs=$7::jsonb,actif=$8,groupe_age=COALESCE($9,groupe_age) WHERE id = $1',
+          [d.lit_id,d.categorie, d.isolement, d.pression_negative, d.ventilation, d.telemetrie,JSON.stringify(d.attributs),d.actif,d.groupe_age]);
         await journaliser(c, { litId: d.lit_id, utilisateurId: utilisateur.id, action: 'Équipement modifié', detail: 'Import CSV' });
       } else if (type === 'civieres' && d.action === 'creer') {
         const cv = (await c.query('INSERT INTO civieres (etablissement_id, code, categorie,unite_id,attributs,actif) VALUES ($1, $2, $3,$4,$5::jsonb,$6) RETURNING id', [etabId, d.code, d.categorie,d.unite_id,JSON.stringify(d.attributs),d.actif])).rows[0];

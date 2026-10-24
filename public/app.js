@@ -1564,7 +1564,7 @@ function modifierRessourceStructure(type, x, contexte = {}) {
     etage: [['nom','Nom',x.nom],['aile','Aile',x.aile||''],['attributs','Attributs JSON',fmt(x.attributs),'json'],['actif','Actif',x.actif,'bool']],
     unite: [['nom','Nom',x.nom],['departement_id','Département',x.departement_id||'','select',contexte.departements||[]],['service_id','Service',x.service_id||'','select',contexte.services||[]],['attributs','Attributs JSON',fmt(x.attributs),'json'],['actif','Actif',x.actif,'bool']],
     chambre: [['type_chambre','Type de chambre',x.type_chambre||''],['etage_id','Étage',x.etage_id||'','select',contexte.etages||[]],['capacite_declaree','Capacité déclarée',x.capacite_declaree??'','number'],['accessible','Accessible',x.accessible,'bool'],['statut_operationnel','État opérationnel',x.statut_operationnel,'select-val',['actif','maintenance','ferme']],['attributs','Attributs JSON',fmt(x.attributs),'json'],['restrictions','Restrictions JSON',fmt(x.restrictions),'json'],['actif','Actif',x.actif,'bool']],
-    lit: [['categorie','Catégorie',x.categorie||''],['attributs','Attributs JSON',fmt(x.attributs),'json'],['actif','Actif',x.actif,'bool'],['isolement','Isolement',x.isolement,'bool'],['pression_negative','Pression négative',x.pression_negative,'bool'],['ventilation','Ventilation',x.ventilation,'bool'],['telemetrie','Télémétrie',x.telemetrie,'bool']],
+    lit: [['categorie','Catégorie',x.categorie||''],['groupe_age',t('fin.groupe_age'),x.groupe_age||'adulte','select',[...GROUPES_AGE,'tous'].map((g)=>({id:g,nom:t(`fin.age_${g}`)}))],['attributs','Attributs JSON',fmt(x.attributs),'json'],['actif','Actif',x.actif,'bool'],['isolement','Isolement',x.isolement,'bool'],['pression_negative','Pression négative',x.pression_negative,'bool'],['ventilation','Ventilation',x.ventilation,'bool'],['telemetrie','Télémétrie',x.telemetrie,'bool']],
     civiere: [['unite_id','Unité',x.unite_id||'','select',contexte.unites||[]],['attributs','Attributs JSON',fmt(x.attributs),'json'],['actif','Actif',x.actif,'bool']],
   }[type];
   if (!champs) return;
@@ -1659,7 +1659,12 @@ async function vueAdmin() {
     const detail = await api('GET', `/admin/structure/detaillee?etablissement_id=${etat.ctx}`);
     const detailChambres = new Map(detail.chambres.map((x) => [x.id, x]));
     const detailLits = new Map(detail.lits.map((x) => [x.id, x]));
-    corps.innerHTML = `${u.gestionnaire ? formNouvelEtab() : ''}<p class="note">${t('admin.etab_courant', { etab: esc(etabCtx().nom) })}</p>
+    const ec = etabCtx(); const mods = ec.modules || {};
+    const panneauModules = u.gestionnaire ? `<details class="panneau-c" style="margin-bottom:14px"><summary>${esc(t('fin.modules_titre'))}</summary><p class="note">${esc(t('fin.modules_aide'))}</p>
+      <div class="ligne"><div class="champ"><label class="lbl" for="s-vocation">${esc(t('fin.vocation'))}</label><select id="s-vocation">${['general', 'pediatrique', 'specialise'].map((k) => `<option value="${k}"${(ec.vocation || 'general') === k ? ' selected' : ''}>${esc(t(`fin.vocation_${k}`))}</option>`).join('')}</select></div>
+      <div class="cases">${['urgence', 'nsa', 'nettoyage', 'national'].map((k) => `<label class="case"><input type="checkbox" data-module="${k}"${mods[k] === false ? '' : ' checked'}> ${esc(t(`onglets.${k}`))}</label>`).join('')}</div>
+      <button class="btn" id="b-modules">${esc(t('general.enregistrer'))}</button></div></details>` : '';
+    corps.innerHTML = `${u.gestionnaire ? formNouvelEtab() : ''}<p class="note">${t('admin.etab_courant', { etab: esc(etabCtx().nom) })}</p>${panneauModules}
       <details class="panneau-c" style="margin-bottom:14px"><summary>${D('structure_niveaux')}</summary><p class="note">${D('structure_aide')}</p>
         <div class="ligne"><div class="champ"><label class="lbl" for="s-dept-code">${D('code_departement')}</label><input id="s-dept-code" maxlength="30"></div><div class="champ"><label class="lbl" for="s-dept-nom">${D('nom_departement')}</label><input id="s-dept-nom"></div><div class="champ"><label class="lbl" for="s-dept-attrs">${D('attributs_json')}</label><input id="s-dept-attrs" placeholder='{"secteur":"adulte"}'></div><button class="btn" id="b-dept">${D('ajouter_departement')}</button></div>
         <div class="chips">${detail.departements.map(d=>`<span class="chip">${esc(d.code)} · ${esc(d.nom)}${d.actif?'':` · ${D('inactif')}`} <button class="btn discret" data-modifier="departement" data-id="${d.id}">Modifier</button></span>`).join('')||`<span class="note">${D('aucun_departement')}</span>`}</div>
@@ -1683,12 +1688,19 @@ async function vueAdmin() {
             <label class="case"><input type="checkbox" data-chaccess="${un.id}"> ${D('accessible')}</label><button class="btn" data-ch="${un.id}">${D('ajouter_chambre')}</button></div></div>
         ${un.chambres.map((ch) => { const meta=detailChambres.get(ch.id); return `<div class="item"><div style="flex:1 1 100%"><strong>${D('chambre', { n: ch.numero })}</strong>
           <div class="note">${esc(meta?.type_chambre||D('type_non_precise'))} · ${D('capacite_calculee',{n:meta?.lits_calcules??ch.lits.length})}${meta?.capacite_declaree?` / ${D('capacite_declaree',{n:meta.capacite_declaree})}`:''}${meta?.accessible?` · ${D('accessible')}`:''}${meta?.statut_operationnel&&meta.statut_operationnel!=='actif'?` · ${esc(D(meta.statut_operationnel))}`:''}${meta?.actif===false?` · ${D('inactif')}`:''} <button class="btn discret" data-modifier="chambre" data-id="${ch.id}">Modifier</button></div>
-            <div class="liste" style="margin-top:6px">${ch.lits.map((l) => { const ml=detailLits.get(l.id); return `<div class="ligne" style="justify-content:space-between;gap:8px"><span class="num">${esc(l.code)} <span class="note">${esc(t(`etats.${l.etat}`))}${ml?.categorie?` · ${esc(ml.categorie)}`:''}${ml?.actif===false?` · ${D('inactif')}`:''}</span>${ml?.attributs&&Object.keys(ml.attributs).length?`<span class="note">${esc(JSON.stringify(ml.attributs))}</span>`:''}</span><button class="btn discret" data-modifier="lit" data-id="${l.id}">Modifier</button>
+            <div class="liste" style="margin-top:6px">${ch.lits.map((l) => { const ml=detailLits.get(l.id); return `<div class="ligne" style="justify-content:space-between;gap:8px"><span class="num">${esc(l.code)} <span class="note">${esc(t(`etats.${l.etat}`))}${ml?.groupe_age&&ml.groupe_age!=='adulte'?` · ${esc(t(`fin.age_${ml.groupe_age}`))}`:''}${ml?.categorie?` · ${esc(ml.categorie)}`:''}${ml?.actif===false?` · ${D('inactif')}`:''}</span>${ml?.attributs&&Object.keys(ml.attributs).length?`<span class="note">${esc(JSON.stringify(ml.attributs))}</span>`:''}</span><button class="btn discret" data-modifier="lit" data-id="${l.id}">Modifier</button>
             <span class="cases">${BESOINS.map((k) => `<label class="case" title="${esc(t(`besoins.${k}`))}"><input type="checkbox" data-eq="${l.id}" data-k="${k}"${l[k] ? ' checked' : ''}> ${esc(t(`equipement_court.${k}`))}</label>`).join('')}</span></div>`; }).join('') || `<span class="note">${D('aucun_lit')}</span>`}</div>
           <div class="ligne" style="margin-top:6px"><input placeholder="${D('code_lit', { ex: `${un.type_code}-${ch.numero}C` })}" data-litcode="${ch.id}" style="width:180px" aria-label="${D('code_lit', { ex: '' })}">
             <input placeholder="${D('categorie_lit')}" data-litcat="${ch.id}" style="width:130px" aria-label="${D('categorie_lit')}">
+            <select data-litage="${ch.id}" aria-label="${esc(t('fin.groupe_age'))}"><option value="">${esc(t('fin.age_selon_type'))}</option>${[...GROUPES_AGE, 'tous'].map((g) => `<option value="${g}">${esc(t(`fin.age_${g}`))}</option>`).join('')}</select>
             <input placeholder="${D('attributs_json')}" data-litattrs="${ch.id}" style="width:200px" aria-label="${D('attributs_json')}">${BESOINS.map(k=>`<label class="case"><input type="checkbox" data-new-eq="${ch.id}" data-k="${k}"> ${esc(t(`equipement_court.${k}`))}</label>`).join('')}<button class="btn" data-lit-ch="${ch.id}">${D('ajouter_lit')}</button></div></div></div>`; }).join('') || `<p class="note">${D('aucune_chambre')}</p>`}</div>`).join('')}</div>`;
     brancherNouvelEtab();
+    const bm = $('#b-modules');
+    if (bm) bm.onclick = (ev) => agir(ev.target, async () => {
+      const modules = {}; corps.querySelectorAll('[data-module]').forEach((x) => { modules[x.dataset.module] = x.checked; });
+      await api('PUT', `/admin/etablissements/${etat.ctx}/modules`, { modules, vocation: $('#s-vocation').value });
+      etat.moi = await api('GET', '/moi'); appliquerModules();
+    }, t('fin.modules_ok'));
     const lireJson = (el) => { try { return el?.value ? JSON.parse(el.value) : {}; } catch { throw new Error(t('admin.attributs_json_invalides')); } };
     $('#b-dept').onclick=(ev)=>agir(ev.target,()=>api('POST','/admin/departements',{etablissement_id:etat.ctx,code:$('#s-dept-code').value,nom:$('#s-dept-nom').value,attributs:lireJson($('#s-dept-attrs'))}),t('admin.departement_ok'));
     $('#b-service').onclick=(ev)=>agir(ev.target,()=>api('POST','/admin/services',{etablissement_id:etat.ctx,code:$('#s-serv-code').value,nom:$('#s-serv-nom').value,departement_id:$('#s-serv-dept').value||null,attributs:lireJson($('#s-serv-attrs'))}),t('admin.service_ok'));
@@ -1701,7 +1713,7 @@ async function vueAdmin() {
       const attrs=corps.querySelector(`[data-litattrs="${b.dataset.litCh}"]`).value; let attributs={};
       try { attributs=attrs?JSON.parse(attrs):{}; } catch { toast(t('admin.attributs_json_invalides'),true); return; }
       const equip=Object.fromEntries([...corps.querySelectorAll(`[data-new-eq="${b.dataset.litCh}"]`)].map(x=>[x.dataset.k,x.checked]));
-      return agir(b, () => api('POST', '/admin/lits', { chambre_id: Number(b.dataset.litCh), code: corps.querySelector(`[data-litcode="${b.dataset.litCh}"]`).value,categorie:corps.querySelector(`[data-litcat="${b.dataset.litCh}"]`).value,attributs,...equip }), t('admin.lit_ok'));
+      return agir(b, () => api('POST', '/admin/lits', { chambre_id: Number(b.dataset.litCh), code: corps.querySelector(`[data-litcode="${b.dataset.litCh}"]`).value,categorie:corps.querySelector(`[data-litcat="${b.dataset.litCh}"]`).value,groupe_age:corps.querySelector(`[data-litage="${b.dataset.litCh}"]`).value||null,attributs,...equip }), t('admin.lit_ok'));
     }; });
     corps.querySelectorAll('[data-eq]').forEach((c) => { c.onchange = () => agir(null, () => api('PUT', `/admin/lits/${c.dataset.eq}/equipement`, { [c.dataset.k]: c.checked }), t('admin.equipement_ok')); });
     // Civières de l'urgence
@@ -1709,7 +1721,7 @@ async function vueAdmin() {
     corps.insertAdjacentHTML('beforeend', `<div class="panneau-c" style="margin-top:14px"><h3>${D('civieres')}</h3><p class="note">${D('civieres_aide')}</p>
       <div class="chips">${civs.map((c) => `<span class="chip num">${esc(c.code)} · ${esc(t(`urgence.cat_${c.categorie}`))} · ${esc(t(`etats.${c.etat}`))}${c.actif?'':` · ${D('inactif')}`} <button class="btn discret" data-civiere-modifier="${c.id}">Modifier</button></span>`).join('') || `<span class="note">${D('aucune_civiere')}</span>`}</div>
       <div class="ligne"><div class="champ"><label class="lbl" for="s-civ-code">${D('code_civiere')}</label><input id="s-civ-code" placeholder="URG-01" autocomplete="off"></div>
-        <div class="champ"><label class="lbl" for="s-civ-cat">${D('categorie')}</label><select id="s-civ-cat">${['reguliere', 'debordement'].map((k) => `<option value="${k}">${esc(t(`urgence.cat_${k}`))}</option>`).join('')}</select></div>
+        <div class="champ"><label class="lbl" for="s-civ-cat">${D('categorie')}</label><select id="s-civ-cat">${CAT_CIVIERES.map((k) => `<option value="${k}">${esc(t(`urgence.cat_${k}`))}</option>`).join('')}</select></div>
         <div class="champ"><label class="lbl" for="s-civ-unit">${D('unite')}</label><select id="s-civ-unit"><option value="">${D('sans_departement')}</option>${detail.unites.map(x=>`<option value="${x.id}">${esc(x.nom)}</option>`).join('')}</select></div>
         <div class="champ"><label class="lbl" for="s-civ-attrs">${D('attributs_json')}</label><input id="s-civ-attrs" placeholder='{"moniteur":true}'></div>
         <button class="btn" id="b-civiere">${D('ajouter_civiere')}</button></div></div>`);
@@ -1729,10 +1741,18 @@ async function vueAdmin() {
       'seuil_civieres_jaune', 'seuil_civieres_orange', 'seuil_civieres_rouge', 'nettoyage_civiere_cible_min'];
     const niveaux = ['vert', 'jaune', 'orange', 'rouge'];
     const protocoles = (c, cle, attr) => niveaux.map((n) => `<div class="champ"><label class="lbl" for="${attr}-${c.id}-${n}">${esc(t(`niveaux.${n}`))}</label><textarea id="${attr}-${c.id}-${n}" data-${attr}="${n}" rows="2" class="donnee">${esc((c[cle] || {})[n] || '')}</textarea></div>`).join('');
-    corps.innerHTML = cfgs.map((c) => `<form class="panneau-c" data-cfg="${c.id}"><h3 class="donnee">${esc(c.nom)}</h3><div class="grille" style="gap:10px">${champs.map((k) => `<div class="champ"><label class="lbl" for="cfg-${c.id}-${k}">${D(`champs.${k}`)}</label><input id="cfg-${c.id}-${k}" data-k="${k}" value="${esc(c[k])}" inputmode="decimal"></div>`).join('')}</div>
+    const catalogue = await api('GET', '/specialites');
+    const blocSpecialites = (c) => { const presents = (etat.moi.configs.find((x) => x.id === c.id)?.types || []).map((x) => x.code);
+      return `<div class="panneau-c"><h3>${esc(t('fin.specialites_titre'))}</h3><p class="note">${esc(t('fin.specialites_aide'))}</p><div class="chips">${catalogue.map((sp) => presents.includes(sp.code)
+        ? `<span class="chip" aria-pressed="true">${esc(langue === 'en' ? sp.nom_en : sp.nom)} · ${esc(t(`fin.age_${sp.groupe_age}`))}</span>`
+        : `<button class="chip" data-spec="${esc(sp.code)}" data-cfgspec="${c.id}">+ ${esc(langue === 'en' ? sp.nom_en : sp.nom)} · ${esc(t(`fin.age_${sp.groupe_age}`))}</button>`).join('')}</div></div>`; };
+    corps.innerHTML = cfgs.map((c) => `${blocSpecialites(c)}<form class="panneau-c" data-cfg="${c.id}"><h3 class="donnee">${esc(c.nom)}</h3><div class="grille" style="gap:10px">${champs.map((k) => `<div class="champ"><label class="lbl" for="cfg-${c.id}-${k}">${D(`champs.${k}`)}</label><input id="cfg-${c.id}-${k}" data-k="${k}" value="${esc(c[k])}" inputmode="decimal"></div>`).join('')}</div>
       <h3>${D('protocoles')}</h3>${protocoles(c, 'protocoles', 'pr')}
       <h3>${D('protocoles_en')}</h3>${protocoles(c, 'protocoles_en', 'pren')}
       <button class="btn pri" type="submit">${esc(t('general.enregistrer'))}</button></form>`).join('');
+    corps.querySelectorAll('[data-spec]').forEach((b) => { b.onclick = () => agir(b, async () => {
+      await api('POST', '/admin/specialites', { config_id: Number(b.dataset.cfgspec), code: b.dataset.spec }); etat.moi = await api('GET', '/moi');
+    }, t('fin.specialite_ok')); });
     corps.querySelectorAll('[data-cfg]').forEach((f) => {
       f.onsubmit = (e) => {
         e.preventDefault();
