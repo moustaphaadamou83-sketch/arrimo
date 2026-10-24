@@ -1,0 +1,30 @@
+/* Dictionnaire de l'interface de la console SH. Les clés reprennent le texte français source. */
+window.ARRIMO_SH_I18N = window.ARRIMO_SH_I18N || {};
+window.ARRIMO_SH_I18N.en = {
+  'Console SH · accès réservé à l’équipe SH':'SH Console · restricted to the SH team',
+  'Implantation et activation d’Arrimo dans les hôpitaux clients':'Arrimo implementation and activation for client hospitals',
+  'Adresse courriel':'Email address','Mot de passe':'Password','Se connecter':'Sign in','Code de vérification':'Verification code',
+  'Ouvrez votre application d’authentification et entrez le code à 6 chiffres affiché pour Arrimo SH.':'Open your authenticator app and enter the 6-digit code for Arrimo SH.',
+  'Valider':'Confirm','Retour':'Back','Choisissez votre mot de passe':'Choose your password',
+  'Vous utilisez un mot de passe temporaire. Choisissez-en un personnel : au moins 12 caractères, avec des lettres et des chiffres.':'You are using a temporary password. Choose a personal password with at least 12 characters, including letters and numbers.',
+  'Mot de passe temporaire':'Temporary password','Nouveau mot de passe':'New password','Confirmer':'Confirm','Enregistrer et continuer':'Save and continue',
+  'Activer votre accès SH':'Activate your SH access','Choisissez un mot de passe personnel. Ce lien est à usage unique et expire après 24 heures.':'Choose a personal password. This single-use link expires after 24 hours.',
+  'Activer mon accès':'Activate my access','Double authentification':'Two-factor authentication',
+  'Obligatoire pour la console SH. Installez une application d’authentification (Google Authenticator, Microsoft Authenticator, 1Password…), puis :':'Required for the SH Console. Install an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password…), then:',
+  'Afficher le code QR':'Show QR code','Arrimo · Console SH':'Arrimo · SH Console','Déconnexion':'Sign out',
+  'Accueil':'Home','CRM':'CRM','Devis et contrats':'Quotes and contracts','Hôpitaux':'Hospitals','Projets':'Projects','Tâches':'Tasks','Support':'Support',
+  'Journal SH':'SH audit log','Équipe SH':'SH team','Mon compte':'My account','Établissements':'Facilities','Prospect':'Prospect','En implantation':'Implementation','Actif':'Active','Suspendu':'Suspended',
+  'Démonstration':'Demo','Recette':'Staging','Production':'Production','À suivre':'Follow-up','Nouvelle organisation':'New organization','Nouvelle opportunité':'New opportunity',
+  'Pipeline commercial':'Sales pipeline','Organisations et contacts':'Organizations and contacts','Nouvelle tâche':'New task','Nouveau projet':'New project','Nouveau ticket':'New ticket',
+  'Aucune donnée enregistrée.':'No data recorded.','Aucune invitation en attente.':'No pending invitations.','Membre':'Member','Rôle et sécurité':'Role and security',
+  'Dernière connexion':'Last sign-in','Désactivé':'Disabled','Jamais':'Never','Vous':'You','Désactiver':'Deactivate','Réactiver':'Reactivate',
+  'Envoyer un lien':'Send a link','Envoyer l’invitation':'Send invitation','La personne choisit son propre mot de passe avec un lien individuel à usage unique. Aucun mot de passe n’est affiché.':'The invitee chooses a personal password using a single-use link. No password is displayed.',
+  'Invitations en attente':'Pending invitations','Destinataire':'Recipient','Expire':'Expires','Rôle':'Role','Enregistrer':'Save','Changer de mot de passe':'Change password',
+  'Mot de passe actuel':'Current password','Les deux mots de passe sont différents.':'The passwords do not match.','Au moins 12 caractères, avec des lettres et des chiffres. Vos autres sessions seront fermées.':'At least 12 characters, including letters and numbers. Your other sessions will be signed out.',
+  'La hiérarchie, les lits, civières et capacités enregistrés sont affichés ici.':'The saved hierarchy, beds, stretchers and capacities are shown here.',
+  'Services hospitaliers':'Hospital services','Unités':'Units','Étages et ailes':'Floors and wings','Chambres':'Rooms','Lits':'Beds','Civières de l’urgence':'Emergency stretchers',
+  'Aucune donnée disponible.':'No data available.','Code':'Code','Nom':'Name','Établissement':'Facility','Statut':'Status','Priorité':'Priority','Responsable':'Owner','Échéance':'Due date',
+  'Organisation':'Organization','Type':'Type','Contacts':'Contacts','Opportunités':'Opportunities','Action':'Action','Référence':'Reference','Client':'Client','Devis':'Quote',
+  'Progression':'Progress','Créé':'Created','Enregistrer et fermer':'Save and close','Fermer':'Close','Annuler':'Cancel','Envoyer':'Send',
+  'La langue préférée est enregistrée dans votre compte SH.':'Your preferred language is saved to your SH account.'
+};

@@ -1,0 +1,12 @@
+node_modules
+.env
+acces-demo.txt
+*.dump
+test-results/
+playwright-report/
+captures/
+docs/presentation/*.mp4
+
+.local/
+preuves/
+dependances-reference

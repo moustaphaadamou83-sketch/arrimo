@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="fr-CA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arrimo</title>
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="copilote.css">
+<script src="i18n/format.js"></script>
+<script src="i18n/fr.js"></script>
+<script src="i18n/en.js"></script>
+<script src="i18n/aide.fr.js"></script>
+<script src="i18n/aide.en.js"></script>
+</head>
+<body>
+<div id="bandeau-demo" class="bandeau-demo" hidden>Démonstration · données fictives</div>
+
+<!-- Connexion -->
+<section id="ecran-connexion" class="connexion" hidden>
+  <div class="langue-connexion"><select class="choix-langue" id="langue-connexion" data-i18n-attr="aria-label:langue.choisir"></select></div>
+  <form id="f-connexion" class="carte-connexion" novalidate>
+    <img src="logo.svg" alt="" width="56" height="56">
+    <h1>Arrimo</h1>
+    <p class="muted" data-i18n="connexion.sous_titre">Lits et transferts entre établissements</p>
+    <p class="lien-hopital" id="c-lien" hidden></p>
+    <label for="c-email" data-i18n="connexion.courriel">Adresse courriel</label>
+    <input id="c-email" type="email" autocomplete="username" required>
+    <label for="c-mdp" data-i18n="connexion.mdp">Mot de passe</label>
+    <input id="c-mdp" type="password" autocomplete="current-password" required>
+    <p id="c-erreur" class="erreur" role="alert" hidden></p>
+    <button class="btn pri large" type="submit" data-i18n="connexion.se_connecter">Se connecter</button>
+    <button class="lien" type="button" id="b-oubli" hidden data-i18n="connexion.oublie">Mot de passe oublié ?</button>
+    <nav class="liens-legaux"><a href="/confidentialite" data-i18n="pied.confidentialite">Confidentialité</a> · <a href="/conditions" data-i18n="pied.conditions">Conditions d’utilisation</a></nav>
+  </form>
+  <form id="f-2fa" class="carte-connexion" novalidate hidden>
+    <img src="logo.svg" alt="" width="56" height="56">
+    <h1 data-i18n="connexion.code_titre">Code de vérification</h1>
+    <p class="muted" data-i18n="connexion.code_aide">Ouvrez votre application d’authentification et entrez le code à 6 chiffres affiché pour Arrimo.</p>
+    <label for="c-code" data-i18n="connexion.code">Code</label>
+    <input id="c-code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required>
+    <p id="c-erreur-2fa" class="erreur" role="alert" hidden></p>
+    <button class="btn pri large" type="submit" data-i18n="connexion.valider">Valider</button>
+    <button class="btn large" type="button" id="b-retour-connexion" data-i18n="general.retour">Retour</button>
+  </form>
+  <form id="f-oubli" class="carte-connexion" novalidate hidden>
+    <img src="logo.svg" alt="" width="56" height="56">
+    <h1 data-i18n="connexion.oubli_titre">Mot de passe oublié</h1>
+    <p class="muted" data-i18n="connexion.oubli_aide">Entrez votre adresse courriel professionnelle.</p>
+    <label for="o-email" data-i18n="connexion.courriel">Adresse courriel</label>
+    <input id="o-email" type="email" autocomplete="username" required>
+    <p id="o-message" class="succes-msg" role="status" hidden></p>
+    <p id="o-erreur" class="erreur" role="alert" hidden></p>
+    <button class="btn pri large" type="submit" data-i18n="connexion.envoyer">Envoyer le lien</button>
+    <button class="btn large" type="button" id="b-oubli-retour" data-i18n="general.retour">Retour</button>
+  </form>
+  <form id="f-reinit" class="carte-connexion" novalidate hidden>
+    <img src="logo.svg" alt="" width="56" height="56">
+    <h1 data-i18n="connexion.reinit_titre">Nouveau mot de passe</h1>
+    <p class="muted" data-i18n="connexion.reinit_aide">Au moins 12 caractères, avec des lettres et des chiffres.</p>
+    <label for="r-nouveau" data-i18n="connexion.nouveau">Nouveau mot de passe</label>
+    <input id="r-nouveau" type="password" autocomplete="new-password" required>
+    <label for="r-confirme" data-i18n="connexion.confirmer">Confirmer</label>
+    <input id="r-confirme" type="password" autocomplete="new-password" required>
+    <p id="r-erreur" class="erreur" role="alert" hidden></p>
+    <button class="btn pri large" type="submit" data-i18n="general.enregistrer">Enregistrer</button>
+  </form>
+  <form id="f-mdp-temp" class="carte-connexion" novalidate hidden>
+    <img src="logo.svg" alt="" width="56" height="56">
+    <h1 data-i18n="connexion.temp_titre">Choisissez votre mot de passe</h1>
+    <p class="muted" data-i18n="connexion.temp_aide">Vous utilisez un mot de passe temporaire. Choisissez-en un personnel : au moins 12 caractères, avec des lettres et des chiffres.</p>
+    <label for="t-actuel" data-i18n="connexion.temp_actuel">Mot de passe temporaire</label>
+    <input id="t-actuel" type="password" autocomplete="current-password" required>
+    <label for="t-nouveau" data-i18n="connexion.nouveau">Nouveau mot de passe</label>
+    <input id="t-nouveau" type="password" autocomplete="new-password" required>
+    <label for="t-confirme" data-i18n="connexion.confirmer">Confirmer</label>
+    <input id="t-confirme" type="password" autocomplete="new-password" required>
+    <p id="t-erreur" class="erreur" role="alert" hidden></p>
+    <button class="btn pri large" type="submit" data-i18n="connexion.temp_ok">Enregistrer et continuer</button>
+  </form>
+</section>
+
+<!-- Application -->
+<div id="ecran-app" hidden>
+  <header class="barre">
+    <div class="barre-in">
+      <div class="marque"><img src="logo.svg" alt="" width="30" height="30"><div><strong>Arrimo</strong><small id="nom-utilisateur"></small></div></div>
+      <div class="barre-droite">
+        <label class="ctx" for="ctx"><span data-i18n="barre.etablissement">Établissement</span>
+          <select id="ctx"></select>
+        </label>
+        <button class="btn icone barre-btn" id="b-notif" aria-label="Notifications" title="Notifications" data-i18n-attr="aria-label:barre.notifications;title:barre.notifications">
+          <svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-bell"/></svg>
+          <span id="n-notif" class="pastille" hidden>0</span>
+        </button>
+        <div class="menu-compte">
+          <button class="btn barre-btn" id="b-menu" aria-haspopup="menu" aria-expanded="false" aria-controls="menu-compte">
+            <svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-circle-user-round"/></svg>
+            <span class="menu-libelle" data-i18n="barre.menu">Compte</span>
+            <svg class="ic petit" aria-hidden="true" focusable="false"><use href="icones.svg#i-chevron-down"/></svg>
+          </button>
+          <div class="menu" id="menu-compte" role="menu" hidden>
+            <p class="menu-qui" id="menu-qui"></p>
+            <button role="menuitem" class="menu-item" id="b-aide" aria-controls="panneau-aide"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-circle-help"/></svg><span data-i18n="barre.aide">Aide</span></button>
+            <button role="menuitem" class="menu-item" id="b-compte"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-user"/></svg><span data-i18n="barre.mon_compte">Mon compte</span></button>
+            <label class="menu-langue"><span data-i18n="langue.choisir">Langue</span>
+              <select class="choix-langue" id="langue-barre" data-i18n-attr="aria-label:langue.choisir"></select></label>
+            <button role="menuitem" class="menu-item" id="b-deconnexion"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-log-out"/></svg><span data-i18n="barre.deconnexion">Déconnexion</span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <nav class="onglets" id="onglets" role="tablist">
+      <button role="tab" data-v="copilote" aria-selected="true"><img class="og-nav-robot" src="og-robot.svg" width="22" height="22" alt=""><span data-i18n="onglets.copilote"></span></button>
+      <button role="tab" data-v="reseau" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-network"/></svg><span data-i18n="onglets.reseau"></span></button>
+      <button role="tab" data-v="national" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-map-pin"/></svg><span data-i18n="onglets.national"></span></button>
+      <button role="tab" data-v="lits" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-bed-double"/></svg><span data-i18n="onglets.lits"></span></button>
+      <button role="tab" data-v="urgence" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-siren"/></svg><span data-i18n="onglets.urgence"></span></button>
+      <button role="tab" data-v="admissions" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-clipboard-list"/></svg><span data-i18n="onglets.admissions"></span> <span class="n" id="n-adm">0</span></button>
+      <button role="tab" data-v="transferts" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-ambulance"/></svg><span data-i18n="onglets.transferts"></span> <span class="n" id="n-tr">0</span></button>
+      <button role="tab" data-v="nettoyage" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-spray-can"/></svg><span data-i18n="onglets.nettoyage"></span> <span class="n" id="n-net">0</span></button>
+      <button role="tab" data-v="nsa" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-hourglass"/></svg><span data-i18n="onglets.nsa"></span></button>
+      <button role="tab" data-v="indicateurs" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-chart-column"/></svg><span data-i18n="onglets.indicateurs"></span></button>
+      <button role="tab" data-v="journal" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-history"/></svg><span data-i18n="onglets.journal"></span></button>
+      <button role="tab" data-v="params" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-settings"/></svg><span data-i18n="onglets.params"></span></button>
+      <button role="tab" data-v="admin" aria-selected="false" hidden><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-shield-check"/></svg><span data-i18n="onglets.admin"></span></button>
+    </nav>
+  </header>
+  <div id="bandeau" class="bandeau" hidden></div>
+  <div id="bandeau-dispo" class="bandeau bandeau-dispo" role="status" aria-live="polite" hidden></div>
+  <main class="contenu">
+    <section id="v-copilote"></section>
+    <section id="v-reseau" hidden></section>
+    <section id="v-national" hidden></section>
+    <section id="v-lits" hidden></section>
+    <section id="v-urgence" hidden></section>
+    <section id="v-admissions" hidden></section>
+    <section id="v-transferts" hidden></section>
+    <section id="v-nettoyage" hidden></section>
+    <section id="v-nsa" hidden></section>
+    <section id="v-indicateurs" hidden></section>
+    <section id="v-journal" hidden></section>
+    <section id="v-params" hidden></section>
+    <section id="v-admin" hidden></section>
+    <section id="v-compte" hidden></section>
+  </main>
+  <footer class="pied"><nav class="liens-legaux"><a href="/confidentialite" data-i18n="pied.confidentialite">Confidentialité</a> · <a href="/conditions" data-i18n="pied.conditions">Conditions d’utilisation</a></nav></footer>
+  <button id="og-open" class="og-launcher" type="button" aria-haspopup="dialog" aria-controls="og-panel" data-i18n-attr="aria-label:og.ouvrir;title:og.ouvrir"><img src="og-robot.svg" width="44" height="44" alt=""><span>OG</span></button>
+  <dialog id="og-panel" aria-labelledby="og-title">
+    <div class="og-interieur">
+      <header class="og-entete"><img src="og-robot.svg" width="55" height="55" alt=""><div><h2 id="og-title">OG</h2><p data-i18n="og.sous_titre"></p></div><button id="og-close" class="btn" type="button" data-i18n-attr="aria-label:general.fermer" autofocus><svg class="ic" aria-hidden="true"><use href="icones.svg#i-x"/></svg></button></header>
+      <div id="og-contexte" class="og-contexte"></div>
+      <div id="og-messages" class="og-messages" role="log" aria-live="polite" aria-relevant="additions text" data-i18n-attr="aria-label:og.conversation"></div>
+      <section class="og-raccourcis"><h3 data-i18n="og.actions"></h3><div id="og-actions" class="og-actions"></div></section>
+      <form id="og-form" class="og-form"><label for="og-question" data-i18n="og.question"></label><div class="ligne"><input id="og-question" name="question" maxlength="500" autocomplete="off" required><button id="og-envoyer" class="btn pri" type="submit" data-i18n="og.envoyer"></button></div><p class="og-confidentialite" data-i18n="og.confidentialite"></p></form>
+    </div>
+  </dialog>
+  <aside id="panneau-notif" class="panneau" hidden aria-label="Notifications" data-i18n-attr="aria-label:barre.notifications"></aside>
+  <aside id="panneau-aide" class="panneau panneau-aide" hidden aria-label="Aide" data-i18n-attr="aria-label:barre.aide"></aside>
+</div>
+
+<div id="modale" class="modale" hidden></div>
+<div id="toasts" class="toasts" aria-live="polite"></div>
+<script src="app.js"></script>
+<script src="og.js"></script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+{
+  "name": "arrimo",
+  "version": "1.0.0",
+  "description": "Arrimo : lits hospitaliers et transferts interhospitaliers",
+  "main": "src/server.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "db:seed": "node db/seed.js",
+    "db:reset": "node db/reset.js",
+    "test": "node --test --test-concurrency=1 tests/api.test.js tests/courriel-transport.test.cjs tests/routage.test.cjs",
+    "demo:reseau": "node db/demo-reseau.js",
+    "demo:trio": "node db/demo-trio.js",
+    "demo:trio:reset": "node db/reset-demo-trio.js",
+    "test:demo-trio": "node --test --test-concurrency=1 tests/demo-trio.test.cjs",
+    "demo:reset": "node db/reset.js demo",
+    "test:interface": "node --test --test-concurrency=1 tests/interface.spec.js",
+    "test:structure-ui": "node --test --test-concurrency=1 tests/structure-ui.spec.cjs",
+    "mesures": "node scripts/mesures.js",
+    "charge": "node scripts/charge.js",
+    "sh": "node src/sh/server.js",
+    "sh:premier-compte": "node db/sh-premier-compte.js",
+    "presentation:locale": "node scripts/presentation-locale.cjs",
+    "presentation:valider": "node scripts/valider-presentation.cjs"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "express": "^4.22.3",
+    "nodemailer": "^10.2.1",
+    "pdfkit": "^0.15.0",
+    "pg": "^8.13.1",
+    "qrcode": "^1.5.4"
+  },
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "private": true,
+  "devDependencies": {
+    "playwright": "^1.64.1"
+  }
+}

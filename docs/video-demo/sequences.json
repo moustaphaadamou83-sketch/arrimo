@@ -1,0 +1,57 @@
+{
+  "titre": "Démonstration locale Arrimo — jeu de données fictif",
+  "origine": "Application Arrimo exécutée localement, base isolée créée pour cet enregistrement",
+  "duree_cible_secondes": 120,
+  "routeur": "Non configuré : aucune distance réelle présentée",
+  "sequences": [
+    {
+      "debut": 1.7,
+      "fin": 15,
+      "sequence": "accueil",
+      "titre": "Arrimo · vue d’ensemble",
+      "sous_titre": "Capacités, occupation et priorités réseau en un seul tableau de bord."
+    },
+    {
+      "debut": 15,
+      "fin": 35,
+      "sequence": "capacites",
+      "titre": "Lits et civières",
+      "sous_titre": "Le parcours respecte les états : occupé, nettoyage, disponible, puis confirmation."
+    },
+    {
+      "debut": 35,
+      "fin": 44,
+      "sequence": "og",
+      "titre": "OG · aide opérationnelle",
+      "sous_titre": "OG présente les priorités avec leur source; la décision reste au personnel."
+    },
+    {
+      "debut": 44,
+      "fin": 55,
+      "sequence": "recherche",
+      "titre": "Recherche de capacités",
+      "sous_titre": "L’écran réseau montre les capacités confirmées et précise que le trajet routier est indisponible."
+    },
+    {
+      "debut": 55,
+      "fin": 80,
+      "sequence": "transfert",
+      "titre": "Transfert interhospitalier",
+      "sous_titre": "Demande fictive : Hôpital X → Hôpital Y. Acceptation et préparation sont suivies; le départ attend un itinéraire vérifié."
+    },
+    {
+      "debut": 80,
+      "fin": 100,
+      "sequence": "blocage",
+      "titre": "Blocage · réponse et alternative",
+      "sous_titre": "Après un refus fictif, OG propose une recherche Plan B. Aucune destination n’est confirmée sans trajet fiable."
+    },
+    {
+      "debut": 100,
+      "fin": 120,
+      "sequence": "resultat",
+      "titre": "Arrimo · mieux coordonner",
+      "sous_titre": "Capacités actualisées, étapes tracées et décisions conservées aux équipes."
+    }
+  ]
+}

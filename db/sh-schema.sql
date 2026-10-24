@@ -1,0 +1,185 @@
+-- Console SH (siège) : base séparée (arrimo_sh). Idempotent, rejouable à chaque installation.
+-- Aucune donnée de patient : hôpitaux clients, projet d'implantation, imports (empreinte et compteurs), activations, journal.
+
+CREATE TABLE IF NOT EXISTS sh_utilisateurs (
+  id                 serial PRIMARY KEY,
+  email              text NOT NULL UNIQUE,
+  nom                text NOT NULL,
+  mot_de_passe_hash  text NOT NULL,
+  role               text NOT NULL DEFAULT 'support' CHECK (role IN ('administration', 'commercial', 'implantation', 'formation', 'support')),
+  langue             text NOT NULL DEFAULT 'fr' CONSTRAINT sh_utilisateurs_langue_chk CHECK (langue IN ('fr','en')),
+  mdp_temporaire     boolean NOT NULL DEFAULT true,
+  totp_secret        text,
+  totp_actif         boolean NOT NULL DEFAULT false,
+  totp_dernier_pas   bigint NOT NULL DEFAULT 0,
+  actif              boolean NOT NULL DEFAULT true,
+  cree_le            timestamptz NOT NULL DEFAULT now(),
+  derniere_connexion timestamptz
+);
+
+CREATE TABLE IF NOT EXISTS sh_sessions (
+  token           text PRIMARY KEY,
+  token_hache     boolean NOT NULL DEFAULT false,
+  utilisateur_id  int NOT NULL REFERENCES sh_utilisateurs(id) ON DELETE CASCADE,
+  expire_le       timestamptz NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sh_connexions_2fa (
+  jeton           text PRIMARY KEY,
+  jeton_hache     boolean NOT NULL DEFAULT false,
+  utilisateur_id  int NOT NULL REFERENCES sh_utilisateurs(id) ON DELETE CASCADE,
+  expire_le       timestamptz NOT NULL,
+  essais          int NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS sh_invitations (
+  id             bigserial PRIMARY KEY,
+  jeton_hache    text NOT NULL UNIQUE,
+  email          text NOT NULL,
+  nom            text NOT NULL,
+  role           text NOT NULL CHECK (role IN ('administration', 'commercial', 'implantation', 'formation', 'support')),
+  utilisateur_id int REFERENCES sh_utilisateurs(id),
+  cree_par       int REFERENCES sh_utilisateurs(id),
+  expire_le      timestamptz NOT NULL,
+  utilise_le     timestamptz,
+  revoquee_le    timestamptz,
+  cree_le        timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS sh_invitations_email ON sh_invitations (lower(email), cree_le DESC);
+
+CREATE TABLE IF NOT EXISTS sh_migrations (
+  version       integer PRIMARY KEY,
+  applique_le   timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS hopitaux (
+  id                 serial PRIMARY KEY,
+  nom                text NOT NULL,
+  adresse            text,
+  ville              text,
+  latitude           double precision CHECK (latitude BETWEEN -90 AND 90),
+  longitude          double precision CHECK (longitude BETWEEN -180 AND 180),
+  contact_nom        text,
+  contact_courriel   text,
+  contact_telephone  text,
+  environnement      text NOT NULL CHECK (environnement IN ('demo', 'recette', 'production')),
+  statut             text NOT NULL DEFAULT 'prospect' CHECK (statut IN ('prospect', 'implantation', 'actif', 'suspendu')),
+  code_etab          text NOT NULL CHECK (code_etab ~ '^[A-Z0-9-]{2,12}$'),
+  sous_domaine       text,
+  relie              boolean NOT NULL DEFAULT false,   -- l'établissement existe dans l'environnement
+  cree_le            timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (environnement, code_etab)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS hopitaux_sous_domaine ON hopitaux (environnement, sous_domaine) WHERE sous_domaine IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS sh_golive_operations (
+  id             bigserial PRIMARY KEY,
+  hopital_id     int NOT NULL REFERENCES hopitaux(id),
+  cible          text NOT NULL CHECK (cible IN ('recette', 'production')),
+  empreinte      text NOT NULL,
+  statut         text NOT NULL CHECK (statut IN ('en_cours', 'interrompu', 'termine')),
+  phase          text NOT NULL,
+  resultats      jsonb NOT NULL DEFAULT '{}'::jsonb,
+  code_erreur    text,
+  lance_par      text NOT NULL,
+  cree_le        timestamptz NOT NULL DEFAULT now(),
+  modifie_le     timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (hopital_id, cible, empreinte)
+);
+
+-- Projet d'implantation : 7 étapes par hôpital, chacune avec sa liste de vérification
+CREATE TABLE IF NOT EXISTS etapes (
+  id            serial PRIMARY KEY,
+  hopital_id    int NOT NULL REFERENCES hopitaux(id) ON DELETE CASCADE,
+  rang          int NOT NULL CHECK (rang BETWEEN 1 AND 7),
+  code          text NOT NULL,
+  date_prevue   date,
+  date_reelle   date,
+  responsable   text,
+  notes         text,
+  UNIQUE (hopital_id, rang)
+);
+CREATE TABLE IF NOT EXISTS verifications (
+  id         serial PRIMARY KEY,
+  etape_id   int NOT NULL REFERENCES etapes(id) ON DELETE CASCADE,
+  rang       int NOT NULL,
+  code       text NOT NULL,
+  libelle    text NOT NULL,
+  faite      boolean NOT NULL DEFAULT false,
+  par        text,
+  quand      timestamptz,
+  UNIQUE (etape_id, code)
+);
+
+-- Imports : empreinte du fichier et compteurs seulement (ni contenu, ni mot de passe)
+CREATE TABLE IF NOT EXISTS imports (
+  id          serial PRIMARY KEY,
+  hopital_id  int NOT NULL REFERENCES hopitaux(id) ON DELETE CASCADE,
+  type        text NOT NULL,
+  empreinte   text NOT NULL,
+  lignes      int NOT NULL,
+  creations   int NOT NULL,
+  mises_a_jour int NOT NULL,
+  inchangees  int NOT NULL,
+  auteur      text NOT NULL,
+  quand       timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS activations (
+  id          serial PRIMARY KEY,
+  hopital_id  int NOT NULL REFERENCES hopitaux(id) ON DELETE CASCADE,
+  action      text NOT NULL CHECK (action IN ('activation', 'desactivation')),
+  motif       text,
+  par         text NOT NULL,
+  quand       timestamptz NOT NULL DEFAULT now()
+);
+
+-- Journal SH immuable (même principe que les journaux d'Arrimo)
+CREATE TABLE IF NOT EXISTS sh_journal (
+  id              bigserial PRIMARY KEY,
+  date            timestamptz NOT NULL DEFAULT now(),
+  utilisateur_id  int REFERENCES sh_utilisateurs(id),
+  hopital_id      int REFERENCES hopitaux(id),
+  action          text NOT NULL,
+  cible           text,
+  detail          text
+);
+CREATE INDEX IF NOT EXISTS sh_journal_date ON sh_journal (date DESC, id DESC);
+CREATE OR REPLACE FUNCTION sh_journal_immuable() RETURNS trigger AS $$
+BEGIN
+  RAISE EXCEPTION 'Le journal SH ne peut pas être modifié ni supprimé';
+END $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS sh_journal_pas_de_modif ON sh_journal;
+CREATE TRIGGER sh_journal_pas_de_modif BEFORE UPDATE OR DELETE ON sh_journal
+  FOR EACH ROW EXECUTE FUNCTION sh_journal_immuable();
+DROP TRIGGER IF EXISTS sh_journal_pas_de_vidage ON sh_journal;
+CREATE TRIGGER sh_journal_pas_de_vidage BEFORE TRUNCATE ON sh_journal
+  FOR EACH STATEMENT EXECUTE FUNCTION sh_journal_immuable();
+
+-- Partie C4 : formation par rôle, go-live (recette → production)
+ALTER TABLE hopitaux ADD COLUMN IF NOT EXISTS golive_le timestamptz;
+ALTER TABLE hopitaux ADD COLUMN IF NOT EXISTS golive_par text;
+ALTER TABLE imports ADD COLUMN IF NOT EXISTS environnement text;
+
+-- Parcours de formation : une séance et une liste de vérification par rôle, cochée au fil de la formation
+CREATE TABLE IF NOT EXISTS formation_roles (
+  id          serial PRIMARY KEY,
+  hopital_id  int NOT NULL REFERENCES hopitaux(id) ON DELETE CASCADE,
+  role        text NOT NULL,
+  seance_le   date,
+  formateur   text,
+  personnes   int CHECK (personnes BETWEEN 0 AND 10000),
+  UNIQUE (hopital_id, role)
+);
+CREATE TABLE IF NOT EXISTS formation_elements (
+  id          serial PRIMARY KEY,
+  hopital_id  int NOT NULL REFERENCES hopitaux(id) ON DELETE CASCADE,
+  role        text NOT NULL,
+  rang        int NOT NULL,
+  code        text NOT NULL,
+  libelle     text NOT NULL,
+  faite       boolean NOT NULL DEFAULT false,
+  par         text,
+  quand       timestamptz,
+  UNIQUE (hopital_id, role, code)
+);
