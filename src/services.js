@@ -320,10 +320,12 @@ async function litsEtablissement(pool, utilisateur, etabId) {
     `SELECT l.id, l.code, l.etat, l.patient_ref, l.version, l.etat_depuis, l.sortie_prevue,
             l.blocage_niveau, l.blocage_motif, l.isolement, l.pression_negative, l.ventilation, l.telemetrie,
             l.motif_indispo, l.nsa_depuis, l.nsa_orientation, l.conge_statut, l.nettoyage_debut,
-            ch.numero AS chambre, u.nom AS unite, t.code AS type_code,
+            ch.numero AS chambre, u.nom AS unite, u.id AS unite_id, t.code AS type_code,
             l.blocage_code, l.blocage_vars, t.id AS type_id, tr.numero AS transfert_numero,
-            l.disponibilite_confirmee_le, conf.nom AS disponibilite_confirmee_par, cfg.confirmation_lit_validite_min
+            l.disponibilite_confirmee_le, conf.nom AS disponibilite_confirmee_par, cfg.confirmation_lit_validite_min, l.groupe_age,
+            CASE WHEN p.id IS NOT NULL THEN p.prenom || ' ' || left(p.nom, 1) || '.' END AS patient_nom_court
        FROM lits l
+       LEFT JOIN patients p ON p.etablissement_id = l.etablissement_id AND p.reference = l.patient_ref
        JOIN chambres ch ON ch.id = l.chambre_id
        JOIN unites u ON u.id = l.unite_id
        JOIN types_unite t ON t.id = l.type_id

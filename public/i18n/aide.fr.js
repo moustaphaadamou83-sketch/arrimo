@@ -129,6 +129,18 @@ window.ARRIMO_I18N.fr.aide = {
         ['« Le transfert … n’est plus au statut attendu »', 'Quelqu’un a déjà fait l’étape. La page se met à jour.'],
       ],
     },
+    vigilance: {
+      nom: 'Congés et alertes',
+      but: 'Voir lit par lit les départs prévus (avec leur statut, l’heure et la source) et les blocages expliqués : origine, seuil, fait ou hypothèse, action proposée et responsable.',
+      gestes: [
+        'Choisissez l’horizon (4 h, 12 h, 24 h, aujourd’hui, demain), puis filtrez par unité ou par statut.',
+        'Un congé en retard affiche « Vérification nécessaire » : vérifiez avec l’unité, puis enregistrez le départ ou mettez à jour le congé dans Lits.',
+        'Pour chaque alerte, lisez l’origine et le seuil, puis décidez de l’action proposée : rien n’est annulé automatiquement.',
+      ],
+      erreurs: [
+        ['Contrôle périodique en retard', 'Les chiffres restent lus en direct ; prévenez le soutien technique si le retard persiste.'],
+      ],
+    },
     nettoyage: {
       nom: 'Nettoyage',
       but: 'Les lits à nettoyer, dans l’ordre recommandé : les unités où des patients attendent un lit passent en premier.',

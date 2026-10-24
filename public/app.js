@@ -322,9 +322,7 @@ async function demarrer() {
   $('#ecran-connexion').hidden = true;
   $('#ecran-app').hidden = false;
   const entretien = estEntretien();
-  document.querySelectorAll('#onglets button').forEach((b) => {
-    b.hidden = (entretien && b.dataset.v !== 'nettoyage') || (b.dataset.v === 'admin' && !etat.moi.utilisateur.admin);
-  });
+  appliquerModules();
   $('#b-notif').hidden = entretien;
   if (entretien) etat.vue = 'nettoyage';
   document.querySelectorAll('#onglets button').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.v === etat.vue)));
@@ -335,6 +333,19 @@ async function demarrer() {
   document.body.dataset.pret = '1';
 }
 const estEntretien = () => etat.moi && etat.moi.utilisateur.role === 'entretien';
+/** Modules de l'établissement courant : un module désactivé (ex. NSA pour un hôpital pédiatrique) n'a pas d'onglet. */
+const MODULE_ONGLET = { urgence: 'urgence', nsa: 'nsa', nettoyage: 'nettoyage', national: 'national' };
+function appliquerModules() {
+  const entretien = estEntretien();
+  const mods = (etabCtx() && etabCtx().modules) || {};
+  document.querySelectorAll('#onglets button').forEach((b) => {
+    const mod = Object.keys(MODULE_ONGLET).find((k) => MODULE_ONGLET[k] === b.dataset.v);
+    b.hidden = (entretien && b.dataset.v !== 'nettoyage') || (b.dataset.v === 'admin' && !etat.moi.utilisateur.admin) || (mod && mods[mod] === false);
+  });
+  const cur = document.querySelector(`#onglets button[data-v="${etat.vue}"]`);
+  if (cur && cur.hidden && !entretien) { etat.vue = 'copilote'; document.querySelectorAll('.contenu > section').forEach((sec) => { sec.hidden = sec.id !== 'v-copilote'; }); }
+}
+const libelleAge = (g) => (g && g !== 'adulte' ? `<span class="badge age-${esc(g)}">${esc(t(`fin.age_${g}`))}</span>` : '');
 
 $('#ctx').onchange = async (e) => {
   etat.ctx = Number(e.target.value);
@@ -345,6 +356,7 @@ $('#ctx').onchange = async (e) => {
   etat.suites = {};
   etat.recherche = { ...etat.recherche, res: null, choix: null };
   etat.reponse = '';
+  appliquerModules();
   await rafraichir();
 };
 document.querySelectorAll('#onglets button').forEach((b) => {
@@ -370,7 +382,7 @@ async function rafraichir() {
     bandeau.innerHTML = !e || e.module_actif ? '' : `<div>${t('barre.bandeau_inactif', { etab: esc(e.nom) })}</div>`;
     await Promise.all([e ? majCompteurs() : null, ({
       copilote: vueCopilote, reseau: vueReseau, national: vueNational, lits: vueLits, urgence: vueUrgence, admissions: vueAdmissions, transferts: vueTransferts,
-      nettoyage: vueNettoyage, nsa: vueNsa, indicateurs: vueIndicateurs, journal: vueJournal, params: vueParams,
+      nettoyage: vueNettoyage, vigilance: vueVigilance, nsa: vueNsa, indicateurs: vueIndicateurs, journal: vueJournal, params: vueParams,
       admin: vueAdmin, compte: vueCompte,
     })[etat.vue]()]);
     if (!$('#panneau-aide').hidden) afficherAide();
@@ -458,6 +470,15 @@ function barre(rep, total) {
 }
 const casesBesoins = (attr, coches = {}) => BESOINS.map((k) => `<label class="case"><input type="checkbox" ${attr}="${k}"${coches[k] ? ' checked' : ''}> ${esc(t(`besoins.${k}`))}</label>`).join('');
 
+/** Lits du même type écartés par la recherche, avec la raison (groupe d'âge, équipement ou isolement). */
+function exclusionsHTML(x) {
+  if (!x || (!x.age && !x.besoins)) return '';
+  const p = [];
+  if (x.age) p.push(t('fin.exclus_age', { n: x.age }));
+  if (x.besoins) p.push(t('fin.exclus_besoins', { n: x.besoins }));
+  return `<div class="note">${esc(t('fin.exclus', { liste: p.join(' · ') }))}</div>`;
+}
+
 async function vueReseau() {
   const v = $('#v-reseau');
   const e = etabCtx();
@@ -483,7 +504,7 @@ async function vueReseau() {
       return `<div class="item${choisi ? ' choisi' : ''}"><div><strong>${esc(s.nom)}</strong>${s.recommande ? ` <span class="badge fort">${esc(t('reseau.recommande'))}</span>` : ''}${!s.libres_confirmes ? ` <span class="badge">${esc(t('reseau.prevision_seulement'))}</span>` : ''}
         <div class="note">${esc(s.ville)}${s.partage === 'agrege' ? esc(t('reseau.lit_par_receveur')) : s.lit ? esc(t('reseau.lit_code', { code: s.lit.code })) : ''}</div>
         <span class="badge">${esc(t(`reseau.confirmation_${s.confirmation.statut}`))}${s.confirmation.confirme_le ? ` · ${esc(heureCourte(s.confirmation.confirme_le))}` : ''}</span>
-        <div class="note num">${esc(s.raison)}${s.statut_route === 'calcule' ? ` · ${esc(t('reseau.route_actualisee', { heure: heureCourte(s.confirmation.route_actualise_le) }))}` : ''}</div>${s.pourquoi ? `<div class="note">${esc(s.pourquoi)}</div>` : ''}</div>
+        <div class="note num">${esc(s.raison)}${s.statut_route === 'calcule' ? ` · ${esc(t('reseau.route_actualisee', { heure: heureCourte(s.confirmation.route_actualise_le) }))}` : ''}</div>${s.pourquoi ? `<div class="note">${esc(s.pourquoi)}</div>` : ''}${exclusionsHTML(s.exclusions)}</div>
         ${s.libres_confirmes && s.statut_route === 'calcule' ? `<button class="btn${choisi ? ' pri' : ''}" data-choix="${s.etablissement_id}">${esc(t(choisi ? 'reseau.propose' : 'reseau.proposer'))}</button>` : ''}</div>`;
     }).join('') : `<p class="note">${esc(t('reseau.aucun_rayon', { km: cfg.rayon_km }))}</p>`;
     const suiviRoute = R.res.routage.disponible
@@ -524,6 +545,7 @@ async function vueReseau() {
       <div class="panneau-c"><div><h3>${esc(t('reseau.chercher_titre'))}</h3><p class="note">${esc(t('reseau.chercher_aide'))}</p></div>
         <div class="ligne"><div class="champ"><label class="lbl" for="r-type">${esc(t('reseau.type_unite'))}</label><select id="r-type">${cfg.types.map((ty) => `<option value="${ty.id}"${ty.id === R.type_id ? ' selected' : ''}>${esc(nomType(ty))}</option>`).join('')}</select></div>
         <div class="champ"><label class="lbl" for="r-pat">${esc(t('reseau.ref_patient'))}</label><input id="r-pat" placeholder="${esc(cfg.reference_exemple)}" value="${esc(R.patient_ref)}" autocomplete="off"></div></div>
+        <div class="ligne"><div class="champ"><label class="lbl" for="r-age">${esc(t('fin.groupe_age'))}</label><select id="r-age"><option value="">${esc(t('fin.age_selon_type'))}</option>${GROUPES_AGE.map((g) => `<option value="${g}"${R.groupe_age === g ? ' selected' : ''}>${esc(t(`fin.age_${g}`))}</option>`).join('')}</select></div></div>
         <div class="cases">${casesBesoins('data-besoin', R.besoins)}</div>
         <div class="ligne" style="justify-content:space-between"><label class="case"><input type="checkbox" id="r-urg"${R.urgent ? ' checked' : ''}> ${esc(t('reseau.urgent'))}</label><button class="btn pri" id="b-chercher">${esc(t('reseau.rechercher'))}</button></div>
         ${resHTML}${confirmHTML}</div>
@@ -533,8 +555,9 @@ async function vueReseau() {
   $('#r-type').onchange = (ev) => { R.type_id = Number(ev.target.value); R.res = null; R.choix = null; rafraichir(); };
   $('#r-pat').oninput = (ev) => { R.patient_ref = ev.target.value.trim(); };
   $('#r-urg').onchange = (ev) => { R.urgent = ev.target.checked; };
+  $('#r-age').onchange = (ev) => { R.groupe_age = ev.target.value || null; R.res = null; R.choix = null; };
   $('#b-chercher').onclick = (ev) => agir(ev.target, async () => {
-    R.res = await api('GET', `/recherche?depuis=${etat.ctx}&type_id=${R.type_id}${qsBesoins(R.besoins)}`);
+    R.res = await api('GET', `/recherche?depuis=${etat.ctx}&type_id=${R.type_id}${qsBesoins(R.besoins)}${R.groupe_age ? `&groupe_age=${R.groupe_age}` : ''}`);
     R.choix = null;
   });
   v.querySelectorAll('[data-choix]').forEach((b) => { b.onclick = async () => {
@@ -548,6 +571,7 @@ async function vueReseau() {
       const tr = await api('POST', '/transferts', {
         origine_id: etat.ctx, destination_id: R.choix.etablissement_id, type_id: R.type_id,
         lit_id: R.choix.lit?.id, version: R.choix.lit?.version, patient_ref: R.patient_ref, urgent: R.urgent, besoins: R.besoins,
+        groupe_age: R.groupe_age || undefined,
       });
       R.res = null; R.choix = null; R.patient_ref = '';
       return tr;
@@ -678,7 +702,9 @@ function transfererIci(x) {
 const options = (groupe, cles, choisi) => cles.map((k) => `<option value="${k}"${k === choisi ? ' selected' : ''}>${esc(t(`${groupe}.${k}`))}</option>`).join('');
 const ORIENTATIONS = ['chsld', 'ri', 'readaptation', 'domicile', 'palliatif', 'autre'];
 const MOTIFS = ['personnel', 'equipement', 'travaux', 'infection', 'autre'];
-const CONGES = ['prevu', 'confirme', 'attente_transport'];
+const CONGES = ['prevu', 'confirme', 'attente_transport', 'reporte'];
+const GROUPES_AGE = ['adulte', 'pediatrique', 'neonatal'];
+const CAT_CIVIERES = ['reguliere', 'pediatrique', 'isolement', 'fauteuil', 'debordement'];
 
 function brancherActionsLit(racine) {
   racine.querySelectorAll('[data-lit]').forEach((b) => {
@@ -743,8 +769,8 @@ async function vueLits() {
       <div class="t"><b>${esc(l.code)}</b><span class="note num" title="${esc(t('lits.depuis_titre'))}">${depuis(l.etat_depuis)}</span></div>
       <div class="note">${esc(t('lits.chambre', { unite: l.unite, ch: l.chambre }))}</div>
       ${l.etat === 'libre' ? `<div class="note"><span class="badge">${esc(t(`reseau.confirmation_${l.disponibilite_confirmation}`))}</span>${l.disponibilite_confirmee_le ? ` · ${esc(heure(l.disponibilite_confirmee_le))}${l.disponibilite_confirmee_par ? ` · ${esc(l.disponibilite_confirmee_par)}` : ''} · ${esc(t('lits.confirmation_validite', { min: l.confirmation_lit_validite_min }))}` : ''}</div>` : ''}
-      ${l.patient_ref ? `<div class="note">${t('lits.patient', { ref: esc(l.patient_ref) })}${l.transfert_numero ? ` · ${esc(l.transfert_numero)}` : ''}</div>` : ''}
-      ${attributs(l)}
+      ${l.patient_ref ? `<div class="note">${t('lits.patient', { ref: esc(l.patient_ref) })}${l.patient_nom_court ? ` · ${esc(l.patient_nom_court)}` : ''}${l.transfert_numero ? ` · ${esc(l.transfert_numero)}` : ''}</div>` : ''}
+      ${libelleAge(l.groupe_age)}${attributs(l)}
       ${l.nsa_depuis ? `<div><span class="nsa-tag">${esc(t('lits.nsa_tag', { depuis: depuis(l.nsa_depuis), orient: l.nsa_orientation ? t(`orientations.${l.nsa_orientation}`) : '' }))}</span></div>` : ''}
       ${l.sortie_prevue ? `<div class="note">${esc(t('lits.conge', { statut: t(`conges.${l.conge_statut || 'prevu'}`).toLowerCase(), heure: heure(l.sortie_prevue) }))}</div>` : ''}
       ${l.motif_indispo ? `<div class="note">${esc(t('lits.motif', { motif: t(`motifs.${l.motif_indispo}`) }))}</div>` : ''}
@@ -795,6 +821,7 @@ function actionsTransfert(x) {
   if (['validee', 'transport', 'en_route'].includes(x.statut) && dest && !x.date_chambre_prete) a.push(['chambre_prete', x.statut !== 'en_route']);
   return a;
 }
+const jourHeure = (iso) => heure(iso);
 const heureCourte = (iso) => new Date(iso).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit', timeZone: fuseau() });
 /** Compte à rebours jusqu'à l'heure d'arrivée prévue, mis à jour sans recharger la page. */
 function majDecomptes() {
@@ -1085,7 +1112,7 @@ async function vueUrgence() {
     const actions = (ACTIONS_CIV[c.etat] || []).filter(([a]) => !(a === 'demander' && c.demande_id) && !(a === 'deplacer' && !libres.length));
     return `<div class="fiche e-${c.etat}">
       <div class="t"><b>${esc(c.code)}</b><span class="note">${esc(t(`etats.${c.etat}`))}</span></div>
-      ${c.patient_ref ? `<div class="note">${t('lits.patient', { ref: esc(c.patient_ref) })} · <span class="${classeDuree(c.heures)}">${U('depuis_h', { duree: duree(c.heures * 60) })}</span></div>` : ''}
+      ${c.patient_ref ? `<div class="note">${t('lits.patient', { ref: esc(c.patient_ref) })}${c.patient_nom_court ? ` · ${esc(c.patient_nom_court)}` : ''} · <span class="${classeDuree(c.heures)}">${U('depuis_h', { duree: duree(c.heures * 60) })}</span></div>${libelleAge(c.groupe_age)}` : ''}
       ${c.demande_id ? `<div class="note">${c.demande_statut === 'assignee' ? t('urgence.lit_assigne', { code: esc(c.lit_code) }) : U('demande', { type: c.type_nom, prio: c.demande_priorite.toUpperCase() })}</div>`
     : c.etat === 'occupee' ? `<div class="alerte">${U('sans_demande')}</div>` : ''}
       ${c.motif_indispo ? `<div class="note">${esc(t('lits.motif', { motif: t(`motifs.${c.motif_indispo}`) }))}</div>` : ''}
@@ -1097,7 +1124,8 @@ async function vueUrgence() {
     const liste = civieres.filter((c) => c.categorie === cat);
     return liste.length ? `<h3>${U(`cat_${cat}`)} <span class="note num">${liste.filter((c) => c.etat === 'occupee').length} / ${liste.length}</span></h3><div class="civieres">${liste.map(carte).join('')}</div>` : '';
   };
-  v.innerHTML = `<div class="entete"><div><h2>${U('titre', { etab: etabCtx().nom })}</h2><p>${U('intro')}</p></div>
+  const boutonArrivee = actif && etat.moi.patients_fictifs ? `<button class="btn pri" id="b-arrivee"><svg class="ic" aria-hidden="true"><use href="icones.svg#i-plus"/></svg> ${esc(t('fin.arrivee'))}</button>` : '';
+  v.innerHTML = `<div class="entete"><div><h2>${U('titre', { etab: etabCtx().nom })}</h2><p>${U('intro')}</p>${boutonArrivee}</div>
     <div class="legende">${['libre', 'occupee', 'nettoyage', 'indispo'].map((k) => `<span><i class="f-${k === 'occupee' ? 'occupe' : k}"></i>${esc(t(`etats.${k}`))}</span>`).join('')}</div></div>
     <div class="tuiles">
       ${tuile({ lbl: t('urgence.taux'), val: pct(stats.taux), note: U('taux_note', { occ: stats.occupees, fonc: stats.fonctionnelles }),
@@ -1105,8 +1133,10 @@ async function vueUrgence() {
       ${tuile({ lbl: t('urgence.corridor'), val: nb(stats.en_corridor), note: U('corridor_note', { n: stats.libres }), etat: stats.en_corridor ? 'attention' : null })}
       ${tuile({ lbl: t('urgence.plus_24h'), val: nb(stats.plus_24h), note: U('plus_48h', { n: stats.plus_48h }), etat: stats.plus_48h ? 'critique' : stats.plus_24h ? 'attention' : null })}
       ${tuile({ lbl: t('urgence.duree'), val: duree((stats.duree_moy_h ?? 0) * 60), note: U('duree_note') })}</div>
-    ${groupe('reguliere')}${groupe('debordement')}
+    ${CAT_CIVIERES.map(groupe).join('')}
     <p class="note">${U('ref_seulement')}</p>`;
+  const ba = $('#b-arrivee');
+  if (ba) ba.onclick = () => (libres.length ? modaleArrivee(libres, cfg) : toast(t('fin.aucune_civiere'), true));
   v.querySelectorAll('[data-civ]').forEach((b) => {
     b.onclick = () => {
       const id = Number(b.dataset.civ); const a = b.dataset.a; const version = Number(b.dataset.version); const code = b.dataset.code;
@@ -1151,6 +1181,71 @@ async function vueUrgence() {
       agir(b, () => api('POST', `/civieres/${id}/action`, { action: a, version }), (x) => t('lits.etat_ok', { code: x.code, etat: t(`etats.${x.etat}`) }));
     };
   });
+}
+
+/** Arrivée à l'urgence (patient fictif, démonstration et recette) : identité minimale, civière, heure, demande de lit facultative. */
+function modaleArrivee(libres, cfg) {
+  const F = (k, vars) => esc(t(`fin.${k}`, vars));
+  const maintenant = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  modale(t('fin.arrivee'), `<p class="note">${F('arrivee_aide')}</p>
+    <div class="ligne"><div class="champ"><label class="lbl" for="m-prenom">${F('prenom')}</label><input id="m-prenom" autocomplete="off"></div>
+    <div class="champ"><label class="lbl" for="m-nom">${F('nom')}</label><input id="m-nom" autocomplete="off"></div></div>
+    <div class="ligne"><div class="champ"><label class="lbl" for="m-dn">${F('naissance')}</label><input id="m-dn" type="date"></div>
+    <div class="champ"><label class="lbl" for="m-refloc">${F('ref_locale')}</label><input id="m-refloc" autocomplete="off"></div></div>
+    <div class="ligne"><div class="champ"><label class="lbl" for="m-civ">${esc(t('admissions.civiere'))}</label><select id="m-civ">${libres.map((c) => `<option value="${c.id}" data-version="${c.version}">${esc(c.code)} · ${esc(t(`urgence.cat_${c.categorie}`))}</option>`).join('')}</select></div>
+    <div class="champ"><label class="lbl" for="m-heure">${F('heure_arrivee')}</label><input id="m-heure" type="datetime-local" value="${maintenant}"></div></div>
+    <div class="champ"><label class="lbl" for="m-dtype">${F('demande_lit')}</label><select id="m-dtype"><option value="">${F('pas_encore')}</option>${typesEtab(cfg).map((x) => `<option value="${x.id}">${esc(nomType(x))}</option>`).join('')}</select></div>
+    <label class="case"><input type="checkbox" id="m-doublon"> ${F('confirmer_doublon')}</label>`,
+  [{ label: t('general.annuler') }, { label: t('fin.enregistrer_arrivee'), pri: true, run: async () => {
+    const o = $('#m-civ').selectedOptions[0];
+    const corps = { etablissement_id: etat.ctx, civiere_id: Number(o.value), version: Number(o.dataset.version), prenom: $('#m-prenom').value, nom: $('#m-nom').value,
+      date_naissance: $('#m-dn').value, reference_locale: $('#m-refloc').value || undefined, arrivee_le: $('#m-heure').value ? new Date($('#m-heure').value).toISOString() : undefined,
+      confirmer_doublon: $('#m-doublon').checked };
+    if ($('#m-dtype').value) corps.demande = { type_id: Number($('#m-dtype').value), priorite: 'p2' };
+    return (await agir(null, () => api('POST', '/urgence/arrivees', corps), (r) => t('fin.arrivee_ok', { ref: r.patient.reference, code: r.civiere.code }))) !== null || false;
+  } }]);
+}
+
+/* ---------------- Congés et alertes : congés par lit, disponibilités prévues, blocages explicables ---------------- */
+async function vueVigilance() {
+  const v = $('#v-vigilance');
+  const F = (k, vars) => esc(t(`fin.${k}`, vars));
+  const f = etat.filtreConges || (etat.filtreConges = { horizon: '24', jour: '', unite: '', statut: '' });
+  const qs = new URLSearchParams({ etablissement_id: etat.ctx, ...(f.jour ? { jour: f.jour } : f.horizon ? { horizon: f.horizon } : {}), ...(f.unite ? { unite: f.unite } : {}), ...(f.statut ? { statut: f.statut } : {}) });
+  const [c, al, lits] = await Promise.all([api('GET', `/conges?${qs}`), api('GET', `/vigilance?etablissement_id=${etat.ctx}`), api('GET', `/lits?etablissement_id=${etat.ctx}`)]);
+  const unites = [...new Map(lits.map((l) => [l.unite_id, l.unite])).entries()];
+  const filtres = [['4', F('h4')], ['12', F('h12')], ['24', F('h24')], ['aujourdhui', F('aujourdhui')], ['demain', F('demain')]];
+  const fraicheur = `<p class="note">${F('lu_a', { heure: heure(c.donnees_lues_le) })} · ${c.controle_periodique.dernier_le ? F('controle', { heure: heure(c.controle_periodique.dernier_le), min: c.controle_periodique.periode_min }) : F('controle_jamais')}${c.controle_periodique.en_retard ? ` · <span class="alerte">${F('controle_retard')}</span>` : ''}</p>`;
+  const ligne = (x) => `<tr class="${x.verification ? 'retard' : ''}"><td><b class="num">${esc(x.lit)}</b></td><td>${esc(x.service || '—')}<div class="note">${esc(x.unite)}</div></td><td class="num">${esc(x.chambre)}</td>
+    <td>${esc(t(`etats.${x.etat}`))}</td><td>${x.sortie_prevue ? esc(jourHeure(x.sortie_prevue)) : '—'}</td>
+    <td><span class="badge${x.statut === 'confirme' ? ' fort' : ''}">${esc(t(`fin.statut_${x.statut}`))}</span>${x.verification ? `<div class="alerte">${F('verification', { duree: duree(x.retard_min) })}</div>` : ''}</td>
+    <td>${x.depart_reel_le ? esc(jourHeure(x.depart_reel_le)) : '—'}</td><td>${x.nettoyage_requis ? F('oui') : F('non')}</td>
+    <td>${x.disponibilite_estimee ? `${esc(heure(x.disponibilite_estimee))}<div class="note">${F('estimation')}</div>` : `<span class="note">${F('non_calculable')}</span>`}</td>
+    <td class="note">${esc(t(`fin.source_${x.source}`))}<div>${esc(jourHeure(x.derniere_maj))}${x.maj_par ? ` · ${esc(x.maj_par)}` : ''}</div></td></tr>`;
+  const resume = [4, 12, 24].map((h) => `<div><span class="lbl">${F('dans_h', { h })}</span><span class="gros num">${c.resume[h].confirmes + c.resume[h].prevus}</span><span class="note">${F('dont', { c: c.resume[h].confirmes, p: c.resume[h].prevus })}</span></div>`).join('');
+  const couleur = { eleve: 'critique', modere: 'attention', faible: 'info' };
+  const alertes = al.alertes.map((a) => `<div class="fiche alerte-vig" style="--c:var(--${couleur[a.niveau]})">
+      <div class="t"><b>${esc(a.titre)}</b><span class="risque ${a.niveau}">${esc(t(`blocages_niveaux.${a.niveau}`))}</span></div>
+      <div class="note">${esc(a.etablissement)} · ${esc(a.unite || '')}${a.chambre ? ` · ${F('chambre', { n: a.chambre })}` : ''} · ${F('depuis', { duree: duree(a.duree_min) })}</div>
+      <dl class="explication"><dt>${F('origine')}</dt><dd>${esc(a.evenement)}${a.dernier_evenement ? ` — ${F('dernier_evt', { action: a.dernier_evenement.action, heure: jourHeure(a.dernier_evenement.date) })}` : ''}</dd>
+      <dt>${F('seuil')}</dt><dd>${esc(a.seuil.regle)}</dd>
+      <dt>${a.cause.nature === 'fait' ? F('fait') : F('hypothese')}</dt><dd>${esc(a.cause.texte)}</dd>
+      <dt>${F('proposition')}</dt><dd>${esc(a.action)} <span class="note">(${esc(a.responsable)})</span></dd></dl></div>`).join('');
+  v.innerHTML = `<div class="entete"><div><h2>${F('titre', { etab: etabCtx().nom })}</h2><p>${F('intro')}</p>${fraicheur}</div></div>
+    <div class="resume">${resume}<div><span class="lbl">${F('retards')}</span><span class="gros num">${c.retards}</span><span class="note">${F('retards_note')}</span></div></div>
+    <div class="panneau-c"><h3>${F('conges_titre')}</h3>
+      <div class="chips">${filtres.map(([k, lib]) => `<button class="chip" aria-pressed="${(f.jour || f.horizon) === k}" data-fh="${k}">${lib}</button>`).join('')}</div>
+      <div class="ligne"><div class="champ"><label class="lbl" for="vg-unite">${F('unite')}</label><select id="vg-unite"><option value="">${F('toutes')}</option>${unites.map(([id, nom]) => `<option value="${id}"${String(id) === f.unite ? ' selected' : ''}>${esc(nom)}</option>`).join('')}</select></div>
+      <div class="champ"><label class="lbl" for="vg-statut">${F('statut')}</label><select id="vg-statut"><option value="">${F('tous')}</option>${['prevu', 'confirme', 'attente_transport', 'reporte', 'retard', 'realise', 'annule'].map((k) => `<option value="${k}"${f.statut === k ? ' selected' : ''}>${esc(t(`fin.statut_${k}`))}</option>`).join('')}</select></div></div>
+      ${c.lignes.length ? `<div class="tableau"><table><thead><tr><th>${F('lit')}</th><th>${F('service_unite')}</th><th>${F('chambre_col')}</th><th>${F('occupation')}</th><th>${F('conge_prevu')}</th><th>${F('statut')}</th><th>${F('depart_reel')}</th><th>${F('nettoyage')}</th><th>${F('dispo_estimee')}</th><th>${F('source')}</th></tr></thead><tbody>${c.lignes.map(ligne).join('')}</tbody></table></div>`
+    : `<p class="vide">${F('aucun_conge')}</p>`}
+      <p class="note">${esc(c.regles.deterministe)} ${esc(c.regles.retard)} ${esc(c.regles.estimation)}</p></div>
+    <div class="panneau-c"><h3>${F('alertes_titre', { n: al.alertes.length })}</h3><p class="note">${Object.values(al.regles_couleurs).map(esc).join(' ')}</p>
+      <div class="pile">${alertes || `<p class="vide">${F('aucune_alerte')}</p>`}</div></div>`;
+  v.querySelectorAll('[data-fh]').forEach((b) => { b.onclick = () => { const k = b.dataset.fh; if (['aujourdhui', 'demain'].includes(k)) { f.jour = k; f.horizon = ''; } else { f.horizon = k; f.jour = ''; } rafraichir(); }; });
+  $('#vg-unite').onchange = (e) => { f.unite = e.target.value; rafraichir(); };
+  $('#vg-statut').onchange = (e) => { f.statut = e.target.value; rafraichir(); };
+  const n = $('#n-vig'); if (n) { const k = al.alertes.filter((a) => a.niveau === 'eleve').length; n.hidden = !k; n.textContent = k; }
 }
 
 /* ---------------- Copilote : vue d'ensemble et prévisions ---------------- */
@@ -1204,6 +1299,12 @@ function tableauPrevisions(p) {
 }
 
 /* ---------------- Admissions ---------------- */
+/** Types d'unité proposés dans les formulaires : ceux qui existent dans l'établissement (sinon tout le catalogue de la configuration). */
+function typesEtab(cfg) {
+  const presents = (etabCtx() && etabCtx().types_presents) || [];
+  const l = cfg.types.filter((x) => presents.includes(x.id));
+  return l.length ? l : cfg.types;
+}
 async function vueAdmissions() {
   const v = $('#v-admissions');
   const actif = etabCtx().module_actif;
@@ -1213,6 +1314,7 @@ async function vueAdmissions() {
   const A = (k, vars) => esc(t(`admissions.${k}`, vars));
   const carte = (d) => `<div class="fiche" style="--c:${d.priorite === 'p1' ? 'var(--critique)' : d.depasse ? 'var(--attention)' : 'var(--secondaire)'}">
       <div class="t"><b>${esc(d.patient_ref)}</b><span class="${d.depasse ? 'urgent' : 'note num'}">${d.priorite.toUpperCase()} · ${depuis(d.cree_le)}</span></div>
+      ${d.patient_nom_court ? `<div class="note">${esc(d.patient_nom_court)}</div>` : ''}${libelleAge(d.groupe_age)}
       <div class="note">${esc(d.type_nom)} · ${esc(t(`provenances.${d.provenance}`).toLowerCase())} · ${esc(besoinsTexte(d))}</div>
       ${d.civiere_code ? `<div class="note">${t('admissions.sur_civiere', { code: esc(d.civiere_code) })} · <span class="${classeDuree(d.heures_civiere)}">${esc(t('urgence.depuis_h', { duree: duree(d.heures_civiere * 60) }))}</span></div>` : ''}
       ${d.statut === 'assignee' ? `<div class="note">${t('admissions.lit_assigne', { code: esc(d.lit_code) })}</div>` : d.lit_suggere ? `<div class="note">${t('admissions.lit_adapte', { code: esc(d.lit_suggere.code) })}</div>` : `<div class="alerte">${A('aucun_lit')}</div>`}
@@ -1225,7 +1327,8 @@ async function vueAdmissions() {
   const assignees = file.filter((d) => d.statut === 'assignee');
   v.innerHTML = `<div class="entete"><div><h2>${A('titre', { etab: etabCtx().nom })}</h2><p>${A('intro', { h: Math.round(cfg.attente_admission_max_min / 60) })}</p></div></div>
     <div class="deux"><div class="pile"><div class="panneau-c"><h3>${A('nouvelle')}</h3>
-      <div class="ligne"><div class="champ"><label class="lbl" for="a-type">${A('type_unite')}</label><select id="a-type">${cfg.types.map((x) => `<option value="${x.id}">${esc(nomType(x))}</option>`).join('')}</select></div>
+      <div class="ligne"><div class="champ"><label class="lbl" for="a-type">${A('type_unite')}</label><select id="a-type">${typesEtab(cfg).map((x) => `<option value="${x.id}">${esc(nomType(x))}</option>`).join('')}</select></div>
+      <div class="champ"><label class="lbl" for="a-age">${esc(t('fin.groupe_age'))}</label><select id="a-age"><option value="">${esc(t('fin.age_selon_type'))}</option>${GROUPES_AGE.map((g) => `<option value="${g}">${esc(t(`fin.age_${g}`))}</option>`).join('')}</select></div>
       <div class="champ"><label class="lbl" for="a-ref">${A('ref_patient')}</label><input id="a-ref" placeholder="${esc(cfg.reference_exemple)}" autocomplete="off"></div></div>
       ${sansDemande.length ? `<div class="champ"><label class="lbl" for="a-civ">${A('civiere')}</label><select id="a-civ"><option value="">${A('sans_civiere')}</option>${sansDemande.map((c) => `<option value="${c.id}" data-ref="${esc(c.patient_ref)}">${esc(c.code)} · ${esc(c.patient_ref)} · ${esc(t('urgence.depuis_h', { duree: duree(c.heures * 60) }))}</option>`).join('')}</select></div>` : ''}
       <div class="ligne"><div class="champ"><label class="lbl" for="a-prio">${A('priorite')}</label><select id="a-prio">${options('priorites_adm', ['p1', 'p2', 'p3'], 'p2')}</select></div>
@@ -1242,7 +1345,7 @@ async function vueAdmissions() {
     v.querySelectorAll('[data-abesoin]').forEach((c) => { besoins[c.dataset.abesoin] = c.checked; });
     const civ = $('#a-civ') ? Number($('#a-civ').value) || null : null;
     agir(ev.target, () => api('POST', '/admissions', { etablissement_id: etat.ctx, type_id: Number($('#a-type').value), patient_ref: $('#a-ref').value.trim(),
-      priorite: $('#a-prio').value, provenance: $('#a-prov').value, besoins, civiere_id: civ }), t('admissions.ajoutee'));
+      priorite: $('#a-prio').value, provenance: $('#a-prov').value, besoins, civiere_id: civ, groupe_age: $('#a-age').value || undefined }), t('admissions.ajoutee'));
   };
   const selCiv = $('#a-civ');
   if (selCiv) selCiv.onchange = () => { const o = selCiv.selectedOptions[0]; if (o && o.dataset.ref) { $('#a-ref').value = o.dataset.ref; $('#a-prov').value = 'urgence'; } };
@@ -1254,10 +1357,10 @@ async function vueAdmissions() {
       if (a === 'annuler') return agir(b, () => api('POST', `/admissions/${id}/annuler`), t('admissions.annule_ok'));
       const d = file.find((x) => String(x.id) === id);
       const be = {}; BESOINS.forEach((k) => { be[k] = d[`besoin_${k}`]; });
-      const res = await api('GET', `/recherche?depuis=${etat.ctx}&type_id=${d.type_id}${qsBesoins(be)}`).catch((e) => { toast(e.message, true); return null; });
+      const res = await api('GET', `/recherche?depuis=${etat.ctx}&type_id=${d.type_id}${qsBesoins(be)}&groupe_age=${d.groupe_age || 'adulte'}`).catch((e) => { toast(e.message, true); return null; });
       if (!res) return null;
       const sug = res.suggestions.filter((x) => x.libres);
-      modale(t('admissions.ailleurs_titre', { ref: d.patient_ref }), sug.length ? `<div class="liste">${sug.map((x, i) => `<label class="item"><div><strong>${esc(x.nom)}</strong>${x.recommande ? ` <span class="badge fort">${esc(t('reseau.recommande'))}</span>` : ''}<div class="note num">${esc(x.raison)}</div>${x.pourquoi ? `<div class="note">${esc(x.pourquoi)}</div>` : ''}</div><input type="radio" name="m-sug" value="${i}"${i === 0 ? ' checked' : ''}></label>`).join('')}</div>
+      modale(t('admissions.ailleurs_titre', { ref: d.patient_ref }), sug.length ? `<div class="liste">${sug.map((x, i) => `<label class="item"><div><strong>${esc(x.nom)}</strong>${x.recommande ? ` <span class="badge fort">${esc(t('reseau.recommande'))}</span>` : ''}<div class="note num">${esc(x.raison)}</div>${x.pourquoi ? `<div class="note">${esc(x.pourquoi)}</div>` : ''}${exclusionsHTML(x.exclusions)}</div><input type="radio" name="m-sug" value="${i}"${i === 0 ? ' checked' : ''}></label>`).join('')}</div>
         <p class="note">${A('ailleurs_aide', { besoins: besoinsTexte(d) })}</p>` : `<p>${A('ailleurs_aucun')}</p>`,
       sug.length ? [{ label: t('general.annuler') }, { label: t('admissions.demander_transfert'), pri: true, run: async () => {
         const x = sug[Number(($('input[name="m-sug"]:checked') || {}).value || 0)];

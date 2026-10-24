@@ -460,3 +460,12 @@ label.item input[type=radio] { order: -1; width: 20px; height: 20px; flex: none;
 .import-res .tableau { width: 100%; }
 .nouvel-etab summary { cursor: pointer; list-style: none; }
 .nouvel-etab summary h3 { display: inline; }
+
+/* Congés et alertes, groupes d'âge (finalisation) */
+.badge.age-pediatrique, .badge.age-neonatal, .badge.age-tous { background: #E0F2F1; color: var(--principal, #0E5E6F); margin: 2px 0; display: inline-block; }
+#v-vigilance .tableau td, #v-vigilance .tableau th { vertical-align: top; }
+#v-vigilance tr.retard td { background: #FFF7ED; }
+.alerte-vig .explication { display: grid; grid-template-columns: max-content 1fr; gap: 2px 10px; margin: 8px 0 0; font-size: .92em; }
+.alerte-vig .explication dt { font-weight: 600; color: var(--texte-2, #64748B); }
+.alerte-vig .explication dd { margin: 0; }
+@media (max-width: 640px) { .alerte-vig .explication { grid-template-columns: 1fr; } #v-vigilance .tableau { overflow-x: auto; } }

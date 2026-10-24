@@ -129,6 +129,18 @@ window.ARRIMO_I18N.en.aide = {
         ['“Transfer … is no longer at the expected status”', 'Someone already did this step. The page refreshes.'],
       ],
     },
+    vigilance: {
+      nom: 'Discharges and alerts',
+      but: 'See planned departures bed by bed (status, time and source) and explained blockages: origin, threshold, fact or hypothesis, suggested action and owner.',
+      gestes: [
+        'Pick the horizon (4 h, 12 h, 24 h, today, tomorrow), then filter by unit or status.',
+        'A late discharge shows “Check needed”: check with the unit, then record the departure or update the discharge in Beds.',
+        'For each alert, read the origin and threshold, then decide on the suggested action: nothing is cancelled automatically.',
+      ],
+      erreurs: [
+        ['Periodic check is late', 'Figures are still read live; tell technical support if the delay persists.'],
+      ],
+    },
     nettoyage: {
       nom: 'Cleaning',
       but: 'Beds to clean, in the recommended order: units where patients are waiting for a bed come first.',

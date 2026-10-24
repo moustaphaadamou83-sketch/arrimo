@@ -30,7 +30,7 @@ async function bornesJour(db, fuseau, decalage) {
 
 async function configEtab(db, etabId) {
   const r = await db.query(
-    `SELECT e.id, e.nom, c.* , e.id AS etab_id FROM etablissements e JOIN config_pays c ON c.id = e.config_id WHERE e.id = $1`, [etabId]);
+    `SELECT c.*, e.id AS etab_id, e.nom AS nom FROM etablissements e JOIN config_pays c ON c.id = e.config_id WHERE e.id = $1`, [etabId]);
   if (!r.rows[0]) throw new ErreurHttp(404, 'etab_introuvable');
   return r.rows[0];
 }
@@ -184,7 +184,7 @@ async function blocages(pool, utilisateur, etabId) {
       const r = Number(l.retard_min);
       ajouter({ ...base, type: 'conge_retarde', niveau: r > cfg.marge_conge_min ? 'modere' : 'faible', duree_min: Math.round(r), depuis: l.sortie_prevue,
         titre: `${l.code} — Congé prévu dépassé de ${dureeTexte(r)}, départ non enregistré.`,
-        evenement: `Congé prévu à ${new Date(l.sortie_prevue).toISOString()}`,
+        evenement: `Congé prévu le ${new Intl.DateTimeFormat('fr-CA', { timeZone: cfg.fuseau, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(l.sortie_prevue))}`,
         seuil: { valeur_min: 0, marge_min: cfg.marge_conge_min, regle: `Alerte dès l’heure dépassée ; niveau relevé après la marge configurée (${cfg.marge_conge_min} min).` },
         cause: { nature: 'hypothese', texte: 'Départ peut-être fait sans être saisi, ou congé reporté (transport, attente d’un résultat).' },
         action: 'Vérifier avec l’unité : enregistrer le départ, ou mettre à jour le congé (reporté, nouvelle heure). Le lit n’est pas libéré automatiquement.' });
