@@ -5,7 +5,7 @@ const { hacher, verifierRobustesse } = require('../auth');
 const courriel = require('../courriel');
 const { empreinte } = require('./security');
 
-const ROLES = ['administration', 'commercial', 'implantation', 'formation', 'support'];
+const { ROLES_SH: ROLES } = require('./permissions');
 const URL_INVITATION = (env) => {
   const base = String(env.SH_PUBLIC_URL || '').replace(/\/$/, '');
   if (!base) throw new ErreurHttp(503, 'url_console_sh_non_configuree');

@@ -19,6 +19,8 @@ const { empreinte, chiffrerSecret, dechiffrerSecret } = require('./security');
 const { autoriser, ROLES_SH } = require('./permissions');
 const invitations = require('./invitations');
 const commercial = require('./commercial');
+const erp = require('./erp');
+const { terminerTacheAuto } = require('./automatisations');
 const xlsx = require('./xlsx');
 const { lireCsv } = require('../import');
 
@@ -60,6 +62,7 @@ function creerAppSh(pool, { env = process.env } = {}) {
   app.set('trust proxy', 'loopback');
   app.use('/api', limiteur());
   app.use('/api/hopitaux/:id/import', express.json({ limit: '2mb' }));
+  app.use('/api/documents', express.json({ limit: '15mb' }));
   app.use(express.json({ limit: '50kb' }));
   app.use((req, res, next) => {
     res.set({
@@ -200,6 +203,7 @@ function creerAppSh(pool, { env = process.env } = {}) {
 
   // Modules commerciaux et de collaboration. Les mutations restent internes à SH et auditées.
   commercial.brancher(api, pool, route, journal);
+  erp.brancher(api, pool, route, journal, { cibles: () => ciblesSh(), appeler, env });
 
   /* ---------------------------------------------------------------- environnements */
   /** Établissements de chaque environnement (par code), ou null s'il ne répond pas. */
@@ -315,6 +319,34 @@ function creerAppSh(pool, { env = process.env } = {}) {
     return hopital(id);
   }));
 
+  /** Fiche établissement créée depuis l'organisation CRM (client signé ou prospect avancé) : liée, projets rattachés. */
+  api.post('/crm/organisations/:id/hopital', route(async (req) => {
+    const org = (await pool.query('SELECT * FROM sh_crm_organisations WHERE id = $1', [entier(req.params.id)])).rows[0];
+    if (!org) throw new ErreurSh(404, 'Organisation introuvable.');
+    if (org.hopital_id) throw new ErreurSh(409, 'Cette organisation a déjà sa fiche établissement.');
+    const decideur = (await pool.query('SELECT * FROM sh_crm_contacts WHERE organisation_id = $1 ORDER BY decideur DESC, id LIMIT 1', [org.id])).rows[0];
+    const v = champsHopital({ nom: org.nom, adresse: org.adresse, ville: org.ville, region: org.region, pays_code: org.pays_code,
+      contact_nom: decideur?.nom, contact_courriel: decideur?.courriel, contact_telephone: decideur?.telephone, ...req.body });
+    const id = await transaction(pool, async (c) => {
+      const h = (await c.query(`INSERT INTO hopitaux (nom, adresse, ville, contact_nom, contact_courriel, contact_telephone, environnement, code_etab, sous_domaine, latitude, longitude,
+        raison_sociale,identifiant_legal,pays_code,region,fuseau_horaire,utilisateurs_prevus,utilisateurs_autorises)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING id`,
+      [v.nom, v.adresse, v.ville, v.contact_nom, v.contact_courriel, v.contact_telephone, v.environnement, v.code_etab, v.sous_domaine, v.latitude, v.longitude,
+        v.raison_sociale, v.identifiant_legal, v.pays_code, v.region, v.fuseau_horaire, v.utilisateurs_prevus, v.utilisateurs_autorises]).catch(unique)).rows[0].id;
+      await creerEtapes(c, h);
+      await c.query(`UPDATE sh_crm_organisations SET hopital_id = $2, modifie_le = now() WHERE id = $1`, [org.id, h]);
+      await c.query('UPDATE sh_projets SET hopital_id = $2, modifie_le = now() WHERE organisation_id = $1 AND hopital_id IS NULL', [org.id, h]);
+      await c.query('UPDATE sh_contrats SET hopital_id = $2 WHERE hopital_id IS NULL AND opportunite_id IN (SELECT id FROM sh_opportunites WHERE organisation_id = $1)', [org.id, h]);
+      await c.query('UPDATE sh_factures SET hopital_id = $2 WHERE organisation_id = $1 AND hopital_id IS NULL', [org.id, h]);
+      // Contrat déjà signé : l'élément « Contrat signé » de l'étape 1 est coché.
+      if ((await c.query(`SELECT 1 FROM sh_contrats c JOIN sh_opportunites p ON p.id = c.opportunite_id WHERE p.organisation_id = $1 AND c.statut = 'signe'`, [org.id])).rowCount) await cocher(c, h, 'contrat_signe', req.u);
+      if (v.raison_sociale && v.identifiant_legal && v.contact_nom) await terminerTacheAuto(c, h, 'donnees_administratives', req.u);
+      await journal(c, req.u, 'Hôpital créé depuis le CRM', `${v.code_etab} · ${v.nom}`, `organisation ${org.id} · environnement ${v.environnement}`, h);
+      return h;
+    });
+    return hopital(id);
+  }));
+
   /** Fiche complète d'un hôpital (aussi utilisée par le rapport de go-live). */
   async function fiche(id) {
     await creerEtapes(pool, id);   // éléments ajoutés depuis la création de l'hôpital (rejouable)
@@ -387,6 +419,7 @@ function creerAppSh(pool, { env = process.env } = {}) {
       [avant.id, v.nom, v.adresse, v.ville, v.contact_nom, v.contact_courriel, v.contact_telephone, v.environnement, v.code_etab, v.sous_domaine,
         v.latitude, v.longitude, statut, v.raison_sociale, v.identifiant_legal, v.pays_code, v.region, v.fuseau_horaire, v.utilisateurs_prevus, v.utilisateurs_autorises]).catch(unique);
       if (v.sous_domaine && avant.relie) await cocher(c, avant.id, 'lien_defini', req.u);
+      if (v.raison_sociale && v.identifiant_legal && v.contact_nom) await terminerTacheAuto(c, avant.id, 'donnees_administratives', req.u);
       if (changes.length) await journal(c, req.u, 'Fiche modifiée', `${v.code_etab} · ${v.nom}`, changes.join(', '), avant.id);
     });
     return hopital(avant.id);
@@ -461,6 +494,7 @@ function creerAppSh(pool, { env = process.env } = {}) {
           ON CONFLICT(hopital_id,module_code) DO UPDATE SET licence=EXCLUDED.licence,parametres=EXCLUDED.parametres,modifie_par=EXCLUDED.modifie_par,modifie_le=now()`,
           [h.id,m.code,m.licence,JSON.stringify(m.parametres||{}),req.u.email]);
       }
+      if (choisis.size) await terminerTacheAuto(c, h.id, 'modules', req.u);
       await journal(c,req.u,'Catalogue de modules modifié',`${h.code_etab} · ${h.nom}`,`${choisis.size} licence(s) souscrite(s)`,h.id);
     });
     return fiche(h.id);
@@ -610,6 +644,10 @@ function creerAppSh(pool, { env = process.env } = {}) {
     await transaction(pool, async (c) => {
       await enregistrerImport(c, { hopitalId: h.id, type, empreinte: String(req.body.empreinte).slice(0, 64), lignes: r.lignes, resume: r.resume, auteur: req.u.email, environnement: h.environnement });
       await cocher(c, h.id, ELEMENT_IMPORT[type], req.u);
+      if (type === 'utilisateurs') await terminerTacheAuto(c, h.id, 'utilisateurs', req.u);
+      else if ((await c.query(`SELECT count(DISTINCT type)::int n FROM imports WHERE hopital_id = $1 AND type IN ('unites','chambres','lits')`, [h.id])).rows[0].n === 3) {
+        await terminerTacheAuto(c, h.id, 'import_structure', req.u);
+      }
       await journal(c, req.u, 'Import CSV', `${h.code_etab} · ${type}`,
         `créations : ${r.resume.creer} · mises à jour : ${r.resume.maj} · inchangées : ${r.resume.inchange} · empreinte ${String(req.body.empreinte).slice(0, 12)}`, h.id);
     });
@@ -624,6 +662,9 @@ function creerAppSh(pool, { env = process.env } = {}) {
       const reste = (await c.query('SELECT count(*)::int AS n FROM formation_elements WHERE hopital_id = $1 AND role = ANY($2::text[]) AND NOT faite', [hopitalId, roles])).rows[0].n;
       await cocher(c, hopitalId, element, u, reste === 0);
     }
+    const ouverts = (await c.query('SELECT count(*)::int AS n FROM formation_elements WHERE hopital_id = $1 AND NOT faite', [hopitalId])).rows[0].n;
+    const total = (await c.query('SELECT count(*)::int AS n FROM formation_elements WHERE hopital_id = $1', [hopitalId])).rows[0].n;
+    if (total && !ouverts) await terminerTacheAuto(c, hopitalId, 'formation', u);
   }
   api.put('/formation/:id', route(async (req) => {
     const x = (await pool.query(`SELECT f.*, h.code_etab FROM formation_elements f JOIN hopitaux h ON h.id = f.hopital_id WHERE f.id = $1`, [entier(req.params.id)])).rows[0];
@@ -766,6 +807,7 @@ function creerAppSh(pool, { env = process.env } = {}) {
     await transaction(pool, async (c) => {
       await c.query(`UPDATE hopitaux SET environnement = 'production', relie = true, golive_le = now(), golive_par = $2 WHERE id = $1`, [h.id, req.u.email]).catch(unique);
       await cocher(c, h.id, 'production_importee', req.u);
+      await terminerTacheAuto(c, h.id, 'golive', req.u);
       await cocher(c, h.id, 'module_active', req.u, false);   // en production, le module reste à activer
       await c.query("UPDATE sh_golive_operations SET statut='termine',phase='termine',code_erreur=NULL,modifie_le=now() WHERE id=$1", [operation.id]);
       await journal(c, req.u, 'Go-live', `${h.code_etab} · ${h.nom}`,
@@ -845,7 +887,9 @@ function creerAppSh(pool, { env = process.env } = {}) {
 
   // eslint-disable-next-line no-unused-vars
   app.use((err, req, res, next) => {
-    if (err instanceof ErreurSh || err instanceof ErreurCible || err instanceof ErreurHttp) return res.status(err.statut).json({ erreur: err.message, ...(err.code ? { code: err.code } : {}) });
+    // Erreurs métier des modules (statut HTTP explicite) : message rendu tel quel, comme les erreurs de la console.
+    const metier = Number.isInteger(err.statut) && err.statut >= 400 && err.statut < 600;
+    if (err instanceof ErreurSh || err instanceof ErreurCible || err instanceof ErreurHttp || metier) return res.status(err.statut).json({ erreur: err.message, ...(err.code && !metier ? { code: err.code } : {}) });
     if (err.type === 'entity.parse.failed') return res.status(400).json({ erreur: 'Requête mal formée.' });
     if (err.type === 'entity.too.large') return res.status(413).json({ erreur: 'Fichier trop gros (1 Mo au plus).' });
     console.error(err);

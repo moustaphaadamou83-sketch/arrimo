@@ -1,6 +1,9 @@
 /** Efface les tables de la console SH (bases de test seulement). */
 async function viderBaseSh(db) {
-  await db.query(`DROP TABLE IF EXISTS sh_hopital_modules, sh_contacts, sh_sites, sh_modules_catalogue CASCADE;
+  await db.query(`DROP TABLE IF EXISTS sh_supervision, sh_formation_participants, sh_formation_sessions, sh_notifications, sh_equipes_membres, sh_equipes,
+                    sh_support_evenements, sh_support_messages, sh_paiements, sh_factures, sh_abonnements, sh_compteurs, sh_contrats_renouvellements,
+                    sh_taxes, sh_tarifs CASCADE;
+                  DROP TABLE IF EXISTS sh_hopital_modules, sh_contacts, sh_sites, sh_modules_catalogue CASCADE;
                   DROP TABLE IF EXISTS sh_audit_metier, sh_documents, sh_support_tickets, sh_jalons, sh_taches_dependances,
                     sh_taches_commentaires, sh_taches, sh_projets, sh_contrats, sh_devis, sh_activites, sh_opportunites,
                     sh_crm_contacts, sh_crm_organisations CASCADE;

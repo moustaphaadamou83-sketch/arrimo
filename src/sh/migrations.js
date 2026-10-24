@@ -2,6 +2,7 @@
 const crypto = require('node:crypto');
 const { transaction } = require('../db');
 const { chiffrerSecret } = require('./security');
+const { ERP_VERSION, migrerErp } = require('./erp-migrations');
 
 const VERSION = 4;
 const LANGUE_VERSION = 5;
@@ -11,14 +12,23 @@ async function migrerSh(pool, env = process.env) {
   return transaction(pool, async (c) => {
     await c.query("SELECT pg_advisory_xact_lock(hashtext('arrimo-sh-migrations'))");
     await c.query('CREATE TABLE IF NOT EXISTS sh_migrations (version integer PRIMARY KEY, applique_le timestamptz NOT NULL DEFAULT now())');
+    const socle = await migrerSocle(c, env);
+    const erp = await migrerErp(c);
+    return { version: ERP_VERSION, appliquee: socle || erp };
+  });
+}
+
+/** Lots 1 à 5 (schéma publié le 24 octobre 2026), inchangés. Rend true si une version a été appliquée. */
+async function migrerSocle(c, env) {
+  {
     const langueFaite = await c.query('SELECT 1 FROM sh_migrations WHERE version = $1', [LANGUE_VERSION]);
-    if (langueFaite.rowCount) return { version: LANGUE_VERSION, appliquee: false };
+    if (langueFaite.rowCount) return false;
     const done = await c.query('SELECT 1 FROM sh_migrations WHERE version = $1', [VERSION]);
     if (done.rowCount) {
       await c.query("ALTER TABLE sh_utilisateurs ADD COLUMN IF NOT EXISTS langue text NOT NULL DEFAULT 'fr'");
       await c.query("DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='sh_utilisateurs_langue_chk') THEN ALTER TABLE sh_utilisateurs ADD CONSTRAINT sh_utilisateurs_langue_chk CHECK (langue IN ('fr','en')); END IF; END $$");
       await c.query('INSERT INTO sh_migrations(version) VALUES ($1) ON CONFLICT DO NOTHING', [LANGUE_VERSION]);
-      return { version: LANGUE_VERSION, appliquee: true };
+      return true;
     }
 
     // Lot 2 : compléments strictement additifs pour la fiche, les accès et les modules.
@@ -174,8 +184,8 @@ async function migrerSh(pool, env = process.env) {
     await c.query("ALTER TABLE sh_utilisateurs ADD COLUMN IF NOT EXISTS langue text NOT NULL DEFAULT 'fr'");
     await c.query("DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='sh_utilisateurs_langue_chk') THEN ALTER TABLE sh_utilisateurs ADD CONSTRAINT sh_utilisateurs_langue_chk CHECK (langue IN ('fr','en')); END IF; END $$");
     await c.query('INSERT INTO sh_migrations(version) VALUES ($1) ON CONFLICT DO NOTHING', [LANGUE_VERSION]);
-    return { version: LANGUE_VERSION, appliquee: true };
-  });
+    return true;
+  }
 }
 
-module.exports = { VERSION, LANGUE_VERSION, migrerSh };
+module.exports = { VERSION, LANGUE_VERSION, ERP_VERSION, migrerSh };
