@@ -249,7 +249,9 @@ async function verifier(db, etabId, type, contenu) {
       cle = courriel;
       const u = (await db.query(`SELECT u.id, u.nom, u.role, array_agg(ue.etablissement_id) FILTER (WHERE ue.etablissement_id IS NOT NULL) AS etabs
         FROM utilisateurs u LEFT JOIN utilisateur_etablissements ue ON ue.utilisateur_id = u.id WHERE u.email = $1 GROUP BY u.id`, [courriel])).rows[0];
-      if (u && (u.role === 'gestionnaire' || !(u.etabs || []).includes(etabId))) { err(n, 'courriel', 'courriel_autre_etab', { valeur: courriel }); continue; }
+      // Un compte existant n'est modifiable que s'il appartient à cet établissement seul : un compte partagé avec un autre
+      // établissement promu ici obtiendrait aussi des droits là-bas (même règle que la modification directe d'un compte).
+      if (u && (u.role === 'gestionnaire' || !(u.etabs || []).length || !(u.etabs || []).every((e) => e === etabId))) { err(n, 'courriel', 'courriel_autre_etab', { valeur: courriel }); continue; }
       action = !u ? 'creer' : u.nom !== v.nom || u.role !== role ? 'maj' : 'inchange';
       d = { email: courriel, nom: v.nom, role, utilisateur_id: u?.id };
     }
