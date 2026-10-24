@@ -10,7 +10,16 @@ const { tr, traducteurTypes, duree } = require('./langue');
 const cv = require('./civieres');
 
 const ORIENTATIONS = ['chsld', 'ri', 'readaptation', 'domicile', 'palliatif', 'autre'];
-const CONGES = ['prevu', 'confirme', 'attente_transport'];
+const CONGES = ['prevu', 'confirme', 'attente_transport', 'reporte'];
+const sqlAge = (alias, g) => s.sqlAge(alias, g);
+/** Groupe d'âge à partir de la date de naissance (fiche fictive) : moins de 28 jours néonatal, moins de 18 ans pédiatrique. */
+function groupeAgeDepuisNaissance(naissance, maintenant = new Date()) {
+  const n = new Date(naissance);
+  const jours = (maintenant - n) / 86400000;
+  if (jours < 28) return 'neonatal';
+  const age = maintenant.getFullYear() - n.getFullYear() - ((maintenant.getMonth() < n.getMonth() || (maintenant.getMonth() === n.getMonth() && maintenant.getDate() < n.getDate())) ? 1 : 0);
+  return age < 18 ? 'pediatrique' : 'adulte';
+}
 
 /** Modifie un attribut d'un lit occupé sans changer son état, sous verrou, avec journal. */
 async function modifierLitOccupe(pool, utilisateur, litId, champs, action, detail) {
@@ -111,6 +120,11 @@ async function fileNettoyage(pool, utilisateur, etabId) {
 }
 
 /* ------------------------------------------------------------------ file d'admission */
+/** État du parcours du patient fictif lié à une demande (s'il a une fiche). */
+async function parcoursPatient(c, d, etat) {
+  if (d.patient_id) await c.query('UPDATE patients SET parcours = $2, modifie_le = now() WHERE id = $1', [d.patient_id, etat]);
+}
+
 function besoinsDemande(d) {
   return { isolement: d.besoin_isolement, pression_negative: d.besoin_pression_negative,
     ventilation: d.besoin_ventilation, telemetrie: d.besoin_telemetrie };
@@ -132,17 +146,24 @@ async function creerDemande(pool, utilisateur, b) {
   const type = await pool.query('SELECT id FROM types_unite WHERE id = $1 AND config_id = $2', [b.type_id, etab.config_id]);
   if (!type.rows[0]) throw new ErreurHttp(400, 'type_unite_inconnu');
   const be = s.lireBesoins(b.besoins || b);
+  // Groupe d'âge : celui de la fiche du patient fictif s'il en a une, sinon celui indiqué, sinon celui du type d'unité
+  const patient = (await pool.query('SELECT id, date_naissance FROM patients WHERE etablissement_id = $1 AND reference = $2', [etabId, ref])).rows[0];
+  const groupeAge = patient ? groupeAgeDepuisNaissance(patient.date_naissance) : await s.groupeAgeEffectif(pool, type.rows[0].id, b.groupe_age);
+  const active = await pool.query(`SELECT id FROM demandes_admission WHERE etablissement_id = $1 AND patient_ref = $2 AND statut IN ('attente', 'assignee')`, [etabId, ref]);
+  if (active.rows[0]) throw new ErreurHttp(409, 'patient_deja_demande', { ref, numero: active.rows[0].id });
   try {
     const { rows } = await pool.query(
       `INSERT INTO demandes_admission (etablissement_id, provenance, type_id, patient_ref, priorite,
-         besoin_isolement, besoin_pression_negative, besoin_ventilation, besoin_telemetrie, cree_par, civiere_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+         besoin_isolement, besoin_pression_negative, besoin_ventilation, besoin_telemetrie, cree_par, civiere_id, groupe_age, patient_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
       [etabId, civiere ? 'urgence' : ['urgence', 'bloc', 'externe', 'autre'].includes(b.provenance) ? b.provenance : 'urgence', type.rows[0].id, ref,
         ['p1', 'p2', 'p3'].includes(b.priorite) ? b.priorite : 'p2',
-        be.isolement, be.pression_negative, be.ventilation, be.telemetrie, utilisateur.id, civiereId]);
+        be.isolement, be.pression_negative, be.ventilation, be.telemetrie, utilisateur.id, civiereId, groupeAge, patient?.id || null]);
+    if (patient) await pool.query(`UPDATE patients SET parcours = 'attente_lit', modifie_le = now() WHERE id = $1`, [patient.id]);
     return rows[0];
   } catch (e) {
     if (e.code === '23505' && civiere) throw new ErreurHttp(409, 'civiere_deja_demande', { code: civiere.code });
+    if (e.code === '23505') throw new ErreurHttp(409, 'patient_deja_demande', { ref });
     throw e;
   }
 }
@@ -168,7 +189,7 @@ async function fileAdmission(pool, utilisateur, etabId) {
     d.heures_civiere = d.heures_civiere == null ? null : Math.floor(Number(d.heures_civiere));
     if (d.statut === 'attente') {
       const l = await pool.query(
-        `SELECT l.id, l.code, l.version FROM lits l WHERE l.etablissement_id = $1 AND l.type_id = $2 AND l.etat = 'libre'${s.sqlBesoins(besoinsDemande(d))}
+        `SELECT l.id, l.code, l.version FROM lits l WHERE l.etablissement_id = $1 AND l.type_id = $2 AND l.etat = 'libre'${s.sqlBesoins(besoinsDemande(d))}${sqlAge('l', d.groupe_age)}
           ORDER BY l.isolement, l.pression_negative, l.ventilation, l.telemetrie, l.code LIMIT 1`, [etabId, d.type_id]);
       d.lit_suggere = l.rows[0] || null;
     }
@@ -188,26 +209,105 @@ async function assignerLit(pool, utilisateur, demandeId, litId, version) {
   return transaction(pool, async (c) => {
     const d = await lireDemande(c, utilisateur, demandeId);
     if (d.statut !== 'attente') throw new ErreurHttp(409, 'demande_plus_en_attente');
-    const ok = await c.query(`SELECT l.id FROM lits l WHERE l.id = $1 AND l.etablissement_id = $2 AND l.type_id = $3${s.sqlBesoins(besoinsDemande(d))}`,
+    const ok = await c.query(`SELECT l.id FROM lits l WHERE l.id = $1 AND l.etablissement_id = $2 AND l.type_id = $3${s.sqlBesoins(besoinsDemande(d))}${sqlAge('l', d.groupe_age)}`,
       [litId, d.etablissement_id, d.type_id]);
     if (!ok.rows[0]) throw new ErreurHttp(400, 'lit_inadapte');
     const lit = await changerEtat(c, pool, utilisateur.id, litId, 'reserve',
       { versionAttendue: version, patientRef: d.patient_ref, detail: `Assigné à la demande d’admission n° ${d.id} (${d.provenance})` });
     const u = await c.query(`UPDATE demandes_admission SET statut = 'assignee', lit_id = $2, assignee_le = now() WHERE id = $1 RETURNING *`, [d.id, litId]);
+    await parcoursPatient(c, d, 'lit_assigne');
     return { ...u.rows[0], lit_code: lit.code };
   });
+}
+
+/**
+ * Admission dans un lit : une seule opération métier, quel que soit l'écran (Admissions ou Lits).
+ * La demande passe à « admise », le lit à « occupé » et la civière du patient au nettoyage, dans la même transaction.
+ * Un lit déjà occupé par le même patient (ancienne désynchronisation) est seulement rattaché : jamais « occupé → occupé ».
+ */
+async function finaliserAdmission(c, pool, utilisateur, d, version) {
+  const avant = (await c.query('SELECT id, code, etat, patient_ref FROM lits WHERE id = $1', [d.lit_id])).rows[0];
+  let lit;
+  if (avant && avant.etat === 'occupe' && avant.patient_ref === d.patient_ref) {
+    lit = avant;
+    await journaliser(c, { litId: d.lit_id, utilisateurId: utilisateur.id, action: 'Admission synchronisée',
+      detail: `Demande d’admission n° ${d.id} : lit déjà occupé par ${d.patient_ref}` });
+  } else {
+    lit = await changerEtat(c, pool, utilisateur.id, d.lit_id, 'occupe',
+      { versionAttendue: version, detail: `Admission depuis ${d.provenance} (demande n° ${d.id})` });
+  }
+  // Le patient quitte sa civière : elle part au nettoyage
+  await cv.libererPourDemande(c, pool, utilisateur.id, d, `Patient admis au lit ${lit.code}`);
+  const u = await c.query(`UPDATE demandes_admission SET statut = 'admise', terminee_le = now() WHERE id = $1 RETURNING *`, [d.id]);
+  await parcoursPatient(c, d, 'hospitalise');
+  return { ...u.rows[0], lit_code: lit.code };
 }
 
 async function admettreDemande(pool, utilisateur, demandeId) {
   return transaction(pool, async (c) => {
     const d = await lireDemande(c, utilisateur, demandeId);
-    if (d.statut !== 'assignee') throw new ErreurHttp(409, 'assigner_dabord');
-    const lit = await changerEtat(c, pool, utilisateur.id, d.lit_id, 'occupe', { detail: `Admission depuis ${d.provenance}` });
-    // Le patient quitte sa civière : elle part au nettoyage
-    await cv.libererPourDemande(c, pool, utilisateur.id, d, `Patient admis au lit ${lit.code}`);
-    const u = await c.query(`UPDATE demandes_admission SET statut = 'admise', terminee_le = now() WHERE id = $1 RETURNING *`, [d.id]);
-    return u.rows[0];
+    // Idempotente : un second clic (ou un autre écran) ne refait rien
+    if (d.statut === 'admise') return { ...d, deja_admise: true };
+    if (d.statut === 'attente') throw new ErreurHttp(409, 'assigner_dabord');
+    if (d.statut !== 'assignee') throw new ErreurHttp(409, 'demande_terminee');
+    return finaliserAdmission(c, pool, utilisateur, d);
   });
+}
+
+/**
+ * « Admettre » depuis la fiche Lit : même opération que depuis Admissions.
+ * - lit assigné à une demande d'admission : la demande est finalisée (lit occupé, civière au nettoyage) ;
+ * - lit réservé pour un transfert en cours : l'admission se fait par la réception du transfert ;
+ * - réservation locale sans demande : le lit devient occupé.
+ */
+async function admettreDepuisLit(c, pool, utilisateur, litId, version) {
+  const d = (await c.query(`SELECT * FROM demandes_admission WHERE lit_id = $1 AND statut = 'assignee' FOR UPDATE`, [litId])).rows[0];
+  if (d) {
+    exigerEtablissement(utilisateur, d.etablissement_id);
+    const r = await finaliserAdmission(c, pool, utilisateur, d, version);
+    return { ...(await c.query('SELECT * FROM lits WHERE id = $1', [litId])).rows[0], demande: r };
+  }
+  const lit = (await c.query('SELECT code, etat, patient_ref, transfert_id FROM lits WHERE id = $1', [litId])).rows[0];
+  if (lit && lit.etat === 'occupe') throw new ErreurHttp(409, 'lit_deja_occupe', { code: lit.code });
+  if (lit && lit.transfert_id) {
+    const t = (await c.query('SELECT numero, statut FROM transferts WHERE id = $1', [lit.transfert_id])).rows[0];
+    if (t && !['recu', 'refuse'].includes(t.statut)) throw new ErreurHttp(409, 'admission_par_transfert', { code: lit.code, numero: t.numero });
+  }
+  return changerEtat(c, pool, utilisateur.id, litId, 'occupe', { versionAttendue: version, detail: 'Admission locale' });
+}
+
+/** Réservation annulée depuis la fiche Lit : la demande d'admission liée revient dans la file, sans perdre son ancienneté. */
+async function annulerDepuisLit(c, pool, utilisateur, litId, version) {
+  const d = (await c.query(`SELECT * FROM demandes_admission WHERE lit_id = $1 AND statut = 'assignee' FOR UPDATE`, [litId])).rows[0];
+  const lit = await changerEtat(c, pool, utilisateur.id, litId, 'libre', {
+    versionAttendue: version, detail: d ? `Réservation annulée : demande d’admission n° ${d.id} remise en attente` : 'Réservation annulée' });
+  if (d) {
+    await c.query(`UPDATE demandes_admission SET statut = 'attente', lit_id = NULL, assignee_le = NULL WHERE id = $1`, [d.id]);
+    await parcoursPatient(c, d, 'attente_lit');
+  }
+  return lit;
+}
+
+/**
+ * Réservation depuis la fiche Lit : si le patient a déjà une demande d'admission en attente, elle est assignée à ce lit
+ * (mêmes contrôles que depuis Admissions) pour que la file et le lit restent cohérents.
+ */
+async function reserverDepuisLit(c, pool, utilisateur, litId, version, patientRef) {
+  const ref = String(patientRef || '').trim();
+  const lit = (await c.query('SELECT etablissement_id FROM lits WHERE id = $1', [litId])).rows[0];
+  const d = lit && ref ? (await c.query(
+    `SELECT * FROM demandes_admission WHERE etablissement_id = $1 AND patient_ref = $2 AND statut IN ('attente', 'assignee') ORDER BY id LIMIT 1 FOR UPDATE`,
+    [lit.etablissement_id, ref])).rows[0] : null;
+  if (!d) return changerEtat(c, pool, utilisateur.id, litId, 'reserve', { versionAttendue: version, patientRef: ref, detail: 'Réservation locale' });
+  if (d.statut === 'assignee') throw new ErreurHttp(409, 'patient_deja_assigne', { ref, numero: d.id });
+  const ok = await c.query(`SELECT l.id FROM lits l WHERE l.id = $1 AND l.type_id = $2${s.sqlBesoins(besoinsDemande(d))}${sqlAge('l', d.groupe_age)}`,
+    [litId, d.type_id]);
+  if (!ok.rows[0]) throw new ErreurHttp(409, 'lit_inadapte_demande', { ref });
+  const r = await changerEtat(c, pool, utilisateur.id, litId, 'reserve',
+    { versionAttendue: version, patientRef: ref, detail: `Assigné à la demande d’admission n° ${d.id} (${d.provenance})` });
+  await c.query(`UPDATE demandes_admission SET statut = 'assignee', lit_id = $2, assignee_le = now() WHERE id = $1`, [d.id, litId]);
+  await parcoursPatient(c, d, 'lit_assigne');
+  return r;
 }
 
 async function annulerDemande(pool, utilisateur, demandeId) {
@@ -218,6 +318,7 @@ async function annulerDemande(pool, utilisateur, demandeId) {
       await changerEtat(c, pool, utilisateur.id, d.lit_id, 'libre', { detail: `Demande d’admission n° ${d.id} annulée` });
     }
     const u = await c.query(`UPDATE demandes_admission SET statut = 'annulee', terminee_le = now() WHERE id = $1 RETURNING *`, [d.id]);
+    await parcoursPatient(c, d, 'urgence');
     return u.rows[0];
   });
 }
@@ -230,9 +331,10 @@ async function transfererDemande(pool, utilisateur, demandeId, b) {
     const tr = await s.creerTransfert(pool, utilisateur, {
       origine_id: d.etablissement_id, destination_id: b.destination_id, type_id: d.type_id,
       lit_id: b.lit_id, version: b.version, patient_ref: d.patient_ref, urgent: d.priorite === 'p1',
-      besoins: besoinsDemande(d), demande_admission_id: d.id,
+      besoins: besoinsDemande(d), demande_admission_id: d.id, groupe_age: d.groupe_age,
     }, c);
     await c.query(`UPDATE demandes_admission SET statut = 'transferee', transfert_id = $2, terminee_le = now() WHERE id = $1`, [d.id, tr.id]);
+    await parcoursPatient(c, d, 'transfere');
     return tr;
   });
 }
@@ -410,5 +512,6 @@ function indicateursCsv(ind) {
 module.exports = {
   designerNsa, retirerNsa, changerNsaOrientation, majConge, debuterNettoyage, fileNettoyage,
   creerDemande, fileAdmission, assignerLit, admettreDemande, annulerDemande, transfererDemande,
-  niveauAlerte, listeNsa, indicateurs, indicateursCsv, besoinsDemande, ORIENTATIONS,
+  admettreDepuisLit, annulerDepuisLit, reserverDepuisLit,
+  niveauAlerte, listeNsa, indicateurs, indicateursCsv, besoinsDemande, ORIENTATIONS, groupeAgeDepuisNaissance,
 };

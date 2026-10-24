@@ -1,0 +1,177 @@
+/**
+ * Finalisation (démonstration du 27 octobre 2026) : cohérence Admissions / Lits / Urgences, congés par lit,
+ * blocages explicables, OG transversal, pédiatrie et groupes d'âge, patients fictifs.
+ * Base PostgreSQL de test (TEST_DATABASE_URL), données fictives seulement.
+ */
+const test = require('node:test');
+const assert = require('node:assert');
+const { creerPool } = require('../src/db');
+const { creerApp } = require('../src/app');
+const { viderBase } = require('../db/vider');
+const { seed, MOT_DE_PASSE_DEMO } = require('../db/seed');
+const routage = require('../src/routage');
+const totp = require('../src/totp');
+
+let pool; let serveur; let base;
+const tokens = {};
+
+function routeurFictif(url) {
+  const km = (a, b) => Math.round(Math.hypot(a[0] - b[0], a[1] - b[1]) * 111000);
+  const mat = String(url).match(/\/table\/v1\/[^/]+\/([^?]+)/);
+  if (mat) {
+    const p = mat[1].split(';').map((x) => x.split(',').map(Number));
+    return { ok: true, json: async () => ({ code: 'Ok', data_version: 'fixture', distances: [p.slice(1).map((x) => km(p[0], x))], durations: [p.slice(1).map((x) => Math.max(60, km(p[0], x) / 1000 * 60))] }) };
+  }
+  const r = String(url).match(/\/route\/v1\/[^/]+\/([^?]+)/);
+  if (r) {
+    const p = r[1].split(';').map((x) => x.split(',').map(Number));
+    return { ok: true, json: async () => ({ code: 'Ok', data_version: 'fixture', routes: [{ distance: km(p[0], p[1]), duration: Math.max(60, km(p[0], p[1]) / 1000 * 60), geometry: { type: 'LineString', coordinates: p } }] }) };
+  }
+  return { ok: false, json: async () => ({}) };
+}
+
+async function appel(qui, methode, chemin, corps) {
+  const r = await fetch(`${base}/api${chemin}`, {
+    method: methode,
+    headers: { 'Content-Type': 'application/json', ...(qui ? { Authorization: `Bearer ${tokens[qui]}` } : {}) },
+    body: corps ? JSON.stringify(corps) : undefined,
+  });
+  return { statut: r.status, corps: await r.json().catch(() => null) };
+}
+const id = async (code) => (await pool.query('SELECT id FROM etablissements WHERE code = $1', [code])).rows[0].id;
+const type = async (code) => (await pool.query('SELECT id FROM types_unite WHERE code = $1', [code])).rows[0].id;
+const lit = async (litId) => (await pool.query('SELECT * FROM lits WHERE id = $1', [litId])).rows[0];
+const demande = async (dId) => (await pool.query('SELECT * FROM demandes_admission WHERE id = $1', [dId])).rows[0];
+/** Un lit libre sans équipement particulier (préparé directement en base si l'hôpital fictif est saturé). */
+async function litLibre(etab, t) {
+  const q = () => pool.query(`SELECT id, version, code FROM lits WHERE etablissement_id = $1 AND type_id = $2 AND etat = 'libre'
+    AND NOT isolement AND NOT pression_negative AND NOT ventilation AND NOT telemetrie ORDER BY code LIMIT 1`, [etab, t]);
+  let r = (await q()).rows[0];
+  if (r) return r;
+  await pool.query(`UPDATE lits SET etat = 'libre', patient_ref = NULL, isolement = false, pression_negative = false, ventilation = false, telemetrie = false,
+      sortie_prevue = NULL, conge_statut = NULL, nsa_depuis = NULL, nsa_orientation = NULL, motif_indispo = NULL, transfert_id = NULL, version = version + 1
+    WHERE id = (SELECT l.id FROM lits l WHERE l.etablissement_id = $1 AND l.type_id = $2 AND l.transfert_id IS NULL
+      AND NOT EXISTS (SELECT 1 FROM demandes_admission d WHERE d.lit_id = l.id AND d.statut = 'assignee') ORDER BY (l.etat = 'occupe'), l.code LIMIT 1)`, [etab, t]);
+  r = (await q()).rows[0];
+  assert.ok(r, 'lit libre de test');
+  return r;
+}
+/** Une civière libre pour le patient (créée au besoin), puis le patient y est placé. */
+async function surCiviere(qui, etab, ref) {
+  let cv = (await pool.query(`SELECT id, version FROM civieres WHERE etablissement_id = $1 AND etat = 'libre' ORDER BY id LIMIT 1`, [etab])).rows[0];
+  if (!cv) cv = (await pool.query(`INSERT INTO civieres (etablissement_id, code) VALUES ($1, 'T-' || nextval('patient_seq')) RETURNING id, version`, [etab])).rows[0];
+  const r = await appel(qui, 'POST', `/civieres/${cv.id}/action`, { action: 'placer', version: cv.version, patient_ref: ref });
+  assert.strictEqual(r.statut, 200, JSON.stringify(r.corps));
+  return cv.id;
+}
+
+test.before(async () => {
+  process.env.ARRIMO_ROUTEUR_URL = 'http://routeur-fictif.test';
+  routage.definirFetchTest(async (url) => routeurFictif(url));
+  pool = creerPool(process.env.TEST_DATABASE_URL);
+  await viderBase(pool);
+  await seed(pool, { silencieux: true });
+  serveur = creerApp(pool).listen(0);
+  base = `http://127.0.0.1:${serveur.address().port}`;
+  const secret = totp.nouveauSecret();
+  await pool.query(`UPDATE utilisateurs SET totp_secret = $1, totp_actif = true, totp_dernier_pas = 0 WHERE email = 'reseau@demo.arrimo'`, [secret]);
+  for (const q of ['tremblay', 'bouchard', 'roy', 'reseau']) {
+    let r = await appel(null, 'POST', '/connexion', { email: `${q}@demo.arrimo`, mot_de_passe: MOT_DE_PASSE_DEMO });
+    if (r.corps?.etape === '2fa') r = await appel(null, 'POST', '/connexion/2fa', { jeton: r.corps.jeton, code: totp.codePourPas(secret, totp.pasActuel()) });
+    assert.strictEqual(r.statut, 200, q);
+    tokens[q] = r.corps.token;
+  }
+});
+test.after(async () => { serveur?.close(); await pool?.end(); routage.definirFetchTest(null); });
+
+test('admission depuis la fiche Lit : demande finalisée, lit occupé, civière au nettoyage ; idempotente', async () => {
+  const sl = await id('SL'); const med = await type('MED');
+  const cvId = await surCiviere('bouchard', sl, 'P-71001');
+  const d = await appel('bouchard', 'POST', '/admissions', { etablissement_id: sl, type_id: med, patient_ref: 'P-71001', civiere_id: cvId });
+  assert.strictEqual(d.statut, 200, JSON.stringify(d.corps));
+  // Une seconde demande active pour le même patient est refusée avec un message clair
+  const doublon = await appel('bouchard', 'POST', '/admissions', { etablissement_id: sl, type_id: med, patient_ref: 'P-71001' });
+  assert.strictEqual(doublon.statut, 409); assert.strictEqual(doublon.corps.code, 'patient_deja_demande');
+  const l = await litLibre(sl, med);
+  assert.strictEqual((await appel('bouchard', 'POST', `/admissions/${d.corps.id}/assigner`, { lit_id: l.id, version: l.version })).statut, 200);
+  // Le personnel admet depuis l'écran Lits (et non depuis Admissions)
+  const v = (await lit(l.id)).version;
+  const a = await appel('bouchard', 'POST', `/lits/${l.id}/action`, { action: 'admettre', version: v });
+  assert.strictEqual(a.statut, 200, JSON.stringify(a.corps));
+  assert.strictEqual((await lit(l.id)).etat, 'occupe');
+  assert.strictEqual((await demande(d.corps.id)).statut, 'admise', 'la demande quitte la file active');
+  assert.strictEqual((await pool.query('SELECT etat FROM civieres WHERE id = $1', [cvId])).rows[0].etat, 'nettoyage', 'la civière part au nettoyage');
+  const file = await appel('bouchard', 'GET', `/admissions?etablissement_id=${sl}`);
+  assert.ok(!file.corps.some((x) => x.id === d.corps.id));
+  // Second clic depuis Admissions : aucune transition « occupé → occupé », réponse idempotente
+  const a2 = await appel('bouchard', 'POST', `/admissions/${d.corps.id}/admettre`);
+  assert.strictEqual(a2.statut, 200); assert.strictEqual(a2.corps.deja_admise, true);
+  const a3 = await appel('bouchard', 'POST', `/lits/${l.id}/action`, { action: 'admettre' });
+  assert.strictEqual(a3.statut, 409); assert.strictEqual(a3.corps.code, 'lit_deja_occupe');
+  const occ = await pool.query(`SELECT count(*)::int n FROM journal WHERE lit_id = $1 AND nouvel_etat = 'occupe' AND NOT refuse`, [l.id]);
+  assert.strictEqual(occ.rows[0].n, 1, 'une seule admission journalisée');
+});
+
+test('réserver puis annuler depuis la fiche Lit : la demande suit (assignée, puis remise en attente)', async () => {
+  const sl = await id('SL'); const med = await type('MED');
+  const d = await appel('bouchard', 'POST', '/admissions', { etablissement_id: sl, type_id: med, patient_ref: 'P-71002', provenance: 'bloc' });
+  const l = await litLibre(sl, med);
+  const r = await appel('bouchard', 'POST', `/lits/${l.id}/action`, { action: 'reserver', version: l.version, patient_ref: 'P-71002' });
+  assert.strictEqual(r.statut, 200, JSON.stringify(r.corps));
+  let dm = await demande(d.corps.id);
+  assert.strictEqual(dm.statut, 'assignee'); assert.strictEqual(dm.lit_id, l.id);
+  // Un autre lit pour le même patient : refusé, il a déjà un lit assigné
+  const autre = await litLibre(sl, med);
+  const r2 = await appel('bouchard', 'POST', `/lits/${autre.id}/action`, { action: 'reserver', version: autre.version, patient_ref: 'P-71002' });
+  assert.strictEqual(r2.corps.code, 'patient_deja_assigne');
+  const an = await appel('bouchard', 'POST', `/lits/${l.id}/action`, { action: 'annuler', version: (await lit(l.id)).version });
+  assert.strictEqual(an.statut, 200);
+  dm = await demande(d.corps.id);
+  assert.strictEqual(dm.statut, 'attente'); assert.strictEqual(dm.lit_id, null);
+  assert.strictEqual((await lit(l.id)).etat, 'libre');
+  await appel('bouchard', 'POST', `/admissions/${d.corps.id}/annuler`);
+});
+
+test('ancienne désynchronisation (lit déjà occupé, demande encore assignée) : réparée sans transition interdite', async () => {
+  const sl = await id('SL'); const med = await type('MED');
+  const cvId = await surCiviere('bouchard', sl, 'P-71003');
+  const d = await appel('bouchard', 'POST', '/admissions', { etablissement_id: sl, type_id: med, patient_ref: 'P-71003', civiere_id: cvId });
+  const l = await litLibre(sl, med);
+  await appel('bouchard', 'POST', `/admissions/${d.corps.id}/assigner`, { lit_id: l.id, version: l.version });
+  // État produit par l'ancienne version : le lit est passé à « occupé » sans la demande
+  await pool.query(`UPDATE lits SET etat = 'occupe', version = version + 1 WHERE id = $1`, [l.id]);
+  const a = await appel('bouchard', 'POST', `/admissions/${d.corps.id}/admettre`);
+  assert.strictEqual(a.statut, 200, JSON.stringify(a.corps));
+  assert.strictEqual((await demande(d.corps.id)).statut, 'admise');
+  assert.strictEqual((await pool.query('SELECT etat FROM civieres WHERE id = $1', [cvId])).rows[0].etat, 'nettoyage');
+  const j = await pool.query(`SELECT 1 FROM journal WHERE lit_id = $1 AND action = 'Admission synchronisée'`, [l.id]);
+  assert.strictEqual(j.rowCount, 1);
+});
+
+test('lit réservé pour un transfert : l’admission se fait par la réception, pas depuis la fiche Lit', async () => {
+  const mb = await id('MB'); const sl = await id('SL'); const med = await type('MED');
+  await pool.query(`UPDATE lits SET disponibilite_confirmee_le = now() WHERE etablissement_id = $1 AND type_id = $2 AND etat = 'libre'`, [sl, med]);
+  const tr = await appel('tremblay', 'POST', '/transferts', { origine_id: mb, destination_id: sl, type_id: med, patient_ref: 'P-71004' });
+  assert.strictEqual(tr.statut, 200, JSON.stringify(tr.corps));
+  const a = await appel('bouchard', 'POST', `/lits/${tr.corps.lit_id}/action`, { action: 'admettre' });
+  assert.strictEqual(a.statut, 409); assert.strictEqual(a.corps.code, 'admission_par_transfert');
+  assert.strictEqual((await lit(tr.corps.lit_id)).etat, 'reserve');
+});
+
+test('admissions simultanées de la même demande depuis deux écrans : une seule admission', async () => {
+  const sl = await id('SL'); const chir = await type('CHIR');
+  const cvId = await surCiviere('bouchard', sl, 'P-71005');
+  const d = await appel('bouchard', 'POST', '/admissions', { etablissement_id: sl, type_id: chir, patient_ref: 'P-71005', civiere_id: cvId });
+  const l = await litLibre(sl, chir);
+  await appel('bouchard', 'POST', `/admissions/${d.corps.id}/assigner`, { lit_id: l.id, version: l.version });
+  const res = await Promise.all([
+    appel('bouchard', 'POST', `/admissions/${d.corps.id}/admettre`),
+    appel('bouchard', 'POST', `/lits/${l.id}/action`, { action: 'admettre' }),
+    appel('bouchard', 'POST', `/admissions/${d.corps.id}/admettre`),
+  ]);
+  assert.ok(res.every((r) => [200, 409].includes(r.statut)), JSON.stringify(res.map((r) => r.corps)));
+  assert.strictEqual((await lit(l.id)).etat, 'occupe');
+  assert.strictEqual((await demande(d.corps.id)).statut, 'admise');
+  const occ = await pool.query(`SELECT count(*)::int n FROM journal WHERE lit_id = $1 AND nouvel_etat = 'occupe' AND NOT refuse`, [l.id]);
+  assert.strictEqual(occ.rows[0].n, 1);
+});

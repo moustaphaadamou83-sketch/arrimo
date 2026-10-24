@@ -244,6 +244,10 @@ function creerApp(pool) {
     const action = String(req.body.action || '');
     const vers = ACTIONS_LIT[action];
     if (!vers) throw new ErreurHttp(400, 'action_inconnue');
+    // Admettre, réserver et annuler passent par les mêmes opérations que la file d'admission : lit, demande et civière restent cohérents
+    if (action === 'admettre') return transaction(pool, (c) => t.admettreDepuisLit(c, pool, req.utilisateur, id, req.body.version));
+    if (action === 'annuler') return transaction(pool, (c) => t.annulerDepuisLit(c, pool, req.utilisateur, id, req.body.version));
+    if (action === 'reserver') return transaction(pool, (c) => t.reserverDepuisLit(c, pool, req.utilisateur, id, req.body.version, req.body.patient_ref));
     return transaction(pool, (c) => changerEtat(c, pool, req.utilisateur.id, id, vers, {
       versionAttendue: req.body.version, patientRef: req.body.patient_ref,
       detail: DETAIL_ACTION[action] || (action === 'reserver' ? 'Réservation locale' : null),

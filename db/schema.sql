@@ -494,3 +494,130 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   ALTER TABLE civieres ADD CONSTRAINT civieres_unite_etab_fk FOREIGN KEY(unite_id,etablissement_id) REFERENCES unites(id,etablissement_id);
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ------------------------------------------------------------------
+-- Finalisation (démonstration du 27 octobre 2026) : ajouts seulement, rejouables, sans perte de données.
+-- ------------------------------------------------------------------
+-- Groupes d'âge : un lit pédiatrique ou néonatal n'est jamais proposé pour un adulte, et inversement.
+ALTER TABLE types_unite ADD COLUMN IF NOT EXISTS groupe_age text NOT NULL DEFAULT 'adulte';
+ALTER TABLE types_unite ADD COLUMN IF NOT EXISTS specialite text;
+ALTER TABLE lits ADD COLUMN IF NOT EXISTS groupe_age text NOT NULL DEFAULT 'adulte';
+ALTER TABLE demandes_admission ADD COLUMN IF NOT EXISTS groupe_age text NOT NULL DEFAULT 'adulte';
+ALTER TABLE transferts ADD COLUMN IF NOT EXISTS groupe_age text NOT NULL DEFAULT 'adulte';
+DO $$ BEGIN
+  ALTER TABLE types_unite ADD CONSTRAINT types_unite_groupe_age CHECK (groupe_age IN ('adulte', 'pediatrique', 'neonatal', 'tous'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE lits ADD CONSTRAINT lits_groupe_age CHECK (groupe_age IN ('adulte', 'pediatrique', 'neonatal', 'tous'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE demandes_admission ADD CONSTRAINT adm_groupe_age CHECK (groupe_age IN ('adulte', 'pediatrique', 'neonatal'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE transferts ADD CONSTRAINT transferts_groupe_age CHECK (groupe_age IN ('adulte', 'pediatrique', 'neonatal'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Catalogue extensible des spécialités : catégories possibles, activées établissement par établissement (pas une liste imposée).
+CREATE TABLE IF NOT EXISTS specialites_catalogue (
+  code        text PRIMARY KEY,
+  nom         text NOT NULL,
+  nom_en      text NOT NULL,
+  groupe_age  text NOT NULL CHECK (groupe_age IN ('adulte', 'pediatrique', 'neonatal', 'tous')),
+  famille     text NOT NULL,
+  ordre       int  NOT NULL DEFAULT 50
+);
+INSERT INTO specialites_catalogue (code, nom, nom_en, groupe_age, famille, ordre) VALUES
+  ('MED', 'Médecine générale', 'General medicine', 'adulte', 'medecine', 10),
+  ('CHIR', 'Chirurgie', 'Surgery', 'adulte', 'chirurgie', 11),
+  ('SI', 'Soins intensifs adultes', 'Adult intensive care', 'adulte', 'soins_intensifs', 12),
+  ('URG', 'Urgences', 'Emergency', 'adulte', 'urgence', 13),
+  ('MAT', 'Maternité', 'Maternity', 'adulte', 'maternite', 14),
+  ('PED', 'Pédiatrie générale', 'General paediatrics', 'pediatrique', 'medecine', 20),
+  ('URG-PED', 'Urgences pédiatriques', 'Paediatric emergency', 'pediatrique', 'urgence', 21),
+  ('SIP', 'Soins intensifs pédiatriques', 'Paediatric intensive care', 'pediatrique', 'soins_intensifs', 22),
+  ('NEO', 'Néonatologie', 'Neonatology', 'neonatal', 'neonatologie', 23),
+  ('SIN', 'Soins intensifs néonataux', 'Neonatal intensive care', 'neonatal', 'soins_intensifs', 24),
+  ('CHIR-PED', 'Chirurgie pédiatrique', 'Paediatric surgery', 'pediatrique', 'chirurgie', 25),
+  ('CARDIO-PED', 'Cardiologie pédiatrique', 'Paediatric cardiology', 'pediatrique', 'cardiologie', 26),
+  ('NEURO-PED', 'Neurologie pédiatrique', 'Paediatric neurology', 'pediatrique', 'neurologie', 27),
+  ('HEMONC-PED', 'Hématologie-oncologie pédiatrique', 'Paediatric haematology-oncology', 'pediatrique', 'hemato_onco', 28),
+  ('READ', 'Réadaptation', 'Rehabilitation', 'adulte', 'readaptation', 30),
+  ('GER', 'Gériatrie', 'Geriatrics', 'adulte', 'geriatrie', 31),
+  ('PSY', 'Psychiatrie', 'Psychiatry', 'adulte', 'psychiatrie', 32)
+ON CONFLICT (code) DO NOTHING;
+
+-- Modules activés par établissement (vide = tous les modules) et vocation (général, pédiatrique, spécialisé).
+ALTER TABLE etablissements ADD COLUMN IF NOT EXISTS modules jsonb NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE etablissements ADD COLUMN IF NOT EXISTS vocation text NOT NULL DEFAULT 'general';
+DO $$ BEGIN
+  ALTER TABLE etablissements ADD CONSTRAINT etab_vocation CHECK (vocation IN ('general', 'pediatrique', 'specialise'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Civières : autres catégories configurables (isolement, pédiatrique, fauteuil)
+ALTER TABLE civieres DROP CONSTRAINT IF EXISTS civieres_categorie_check;
+DO $$ BEGIN
+  ALTER TABLE civieres ADD CONSTRAINT civieres_categorie_check CHECK (categorie IN ('reguliere', 'debordement', 'isolement', 'pediatrique', 'fauteuil'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Congés : statut reporté en plus ; historique par lit (prévu, confirmé, reporté, annulé, départ réel)
+ALTER TABLE lits DROP CONSTRAINT IF EXISTS lits_conge_statut_check;
+DO $$ BEGIN
+  ALTER TABLE lits ADD CONSTRAINT lits_conge_statut_check CHECK (conge_statut IN ('prevu', 'confirme', 'attente_transport', 'reporte'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+CREATE TABLE IF NOT EXISTS conges (
+  id                serial PRIMARY KEY,
+  lit_id            int  NOT NULL REFERENCES lits(id),
+  etablissement_id  int  NOT NULL REFERENCES etablissements(id),
+  patient_ref       text NOT NULL,
+  sortie_prevue     timestamptz,
+  statut            text NOT NULL CHECK (statut IN ('prevu', 'confirme', 'attente_transport', 'reporte', 'annule', 'realise')),
+  depart_reel_le    timestamptz,
+  source            text NOT NULL DEFAULT 'manuel',
+  cree_le           timestamptz NOT NULL DEFAULT now(),
+  maj_le            timestamptz NOT NULL DEFAULT now(),
+  maj_par           int REFERENCES utilisateurs(id)
+);
+CREATE INDEX IF NOT EXISTS conges_etab_statut ON conges (etablissement_id, statut, sortie_prevue);
+CREATE UNIQUE INDEX IF NOT EXISTS conges_ouvert_unique ON conges (lit_id) WHERE statut IN ('prevu', 'confirme', 'attente_transport', 'reporte');
+
+-- Patients fictifs (démonstration et recette) : identification opérationnelle minimale, jamais dans les vues réseau.
+CREATE SEQUENCE IF NOT EXISTS patient_seq START 1000;
+CREATE TABLE IF NOT EXISTS patients (
+  id                 serial PRIMARY KEY,
+  etablissement_id   int  NOT NULL REFERENCES etablissements(id),
+  reference          text NOT NULL,
+  prenom             text NOT NULL,
+  nom                text NOT NULL,
+  date_naissance     date NOT NULL,
+  reference_locale   text,
+  source             text NOT NULL DEFAULT 'manuel' CHECK (source IN ('manuel', 'integration')),
+  arrivee_le         timestamptz,
+  parcours           text NOT NULL DEFAULT 'enregistre'
+                     CHECK (parcours IN ('enregistre', 'urgence', 'attente_lit', 'lit_assigne', 'hospitalise', 'transfere', 'sorti', 'annule')),
+  cree_par           int REFERENCES utilisateurs(id),
+  cree_le            timestamptz NOT NULL DEFAULT now(),
+  modifie_le         timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (etablissement_id, reference)
+);
+CREATE INDEX IF NOT EXISTS patients_rapprochement ON patients (etablissement_id, lower(nom), date_naissance);
+CREATE UNIQUE INDEX IF NOT EXISTS patients_ref_locale ON patients (etablissement_id, reference_locale) WHERE reference_locale IS NOT NULL;
+ALTER TABLE demandes_admission ADD COLUMN IF NOT EXISTS patient_id int REFERENCES patients(id);
+
+-- Synchronisation des admissions : un lit n'est assigné qu'à une demande ; un patient n'a qu'une demande active.
+-- Créés seulement si les données existantes le permettent (jamais d'échec de mise à jour sur des données anciennes).
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM demandes_admission WHERE statut = 'assignee' AND lit_id IS NOT NULL GROUP BY lit_id HAVING count(*) > 1) THEN
+    CREATE UNIQUE INDEX IF NOT EXISTS adm_lit_assigne_unique ON demandes_admission (lit_id) WHERE statut = 'assignee';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM demandes_admission WHERE statut IN ('attente', 'assignee') GROUP BY etablissement_id, patient_ref HAVING count(*) > 1) THEN
+    CREATE UNIQUE INDEX IF NOT EXISTS adm_patient_actif_unique ON demandes_admission (etablissement_id, patient_ref) WHERE statut IN ('attente', 'assignee');
+  END IF;
+END $$;
+
+-- Contrôles périodiques : heure réelle de la dernière exécution et de la dernière donnée lue
+CREATE TABLE IF NOT EXISTS controles (
+  nom          text PRIMARY KEY,
+  execute_le   timestamptz NOT NULL DEFAULT now(),
+  duree_ms     int,
+  resultat     jsonb NOT NULL DEFAULT '{}'::jsonb
+);

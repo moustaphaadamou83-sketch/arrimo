@@ -36,6 +36,20 @@ function sqlBesoins(b, alias = 'l') {
   return Object.entries(lireBesoins(b)).filter(([, v]) => v).map(([k]) => ` AND ${alias}.${k}`).join('');
 }
 
+/** Groupes d'âge : un lit « tous » convient à chacun ; sinon le groupe du lit doit être celui du patient. */
+const GROUPES_AGE = ['adulte', 'pediatrique', 'neonatal'];
+function sqlAge(alias = 'l', groupe) {
+  const g = GROUPES_AGE.includes(groupe) ? groupe : 'adulte';
+  return ` AND ${alias}.groupe_age IN ('${g}', 'tous')`;
+}
+/** Groupe d'âge retenu pour une recherche : celui du patient, sinon celui du type d'unité demandé (pédiatrie → pédiatrique). */
+async function groupeAgeEffectif(db, typeId, groupe) {
+  if (GROUPES_AGE.includes(groupe)) return groupe;
+  const r = await db.query('SELECT groupe_age FROM types_unite WHERE id = $1', [typeId]);
+  const g = r.rows[0]?.groupe_age;
+  return GROUPES_AGE.includes(g) ? g : 'adulte';
+}
+
 function exigerActif(etab) {
   if (!etab.module_actif) {
     throw new ErreurHttp(403, 'module_inactif', { etab: etab.nom });
@@ -173,7 +187,8 @@ async function recommander(pool, utilisateur, depuisId, typeId, besoins = {}) {
     g.dotes += r.dotes; g.libres += r.libres;
     global.set(r.etablissement_id, g);
   }
-  const filtre = sqlBesoins(besoins);
+  const groupeAge = await groupeAgeEffectif(pool, typeId, besoins.groupe_age);
+  const filtre = sqlBesoins(besoins) + sqlAge('l', groupeAge);
   const res = [];
   for (const r of rows) {
     if (r.etablissement_id === ici.id || r.type_id !== Number(typeId) || r.partage === 'aucun') continue;
@@ -187,6 +202,11 @@ async function recommander(pool, utilisateur, depuisId, typeId, besoins = {}) {
           max(l.disponibilite_confirmee_le) FILTER (WHERE l.etat = 'libre') AS derniere_confirmation
         FROM lits l JOIN etablissements e ON e.id = l.etablissement_id JOIN config_pays c ON c.id = e.config_id
         WHERE l.etablissement_id = $1 AND l.type_id = $2${filtre}`, [r.etablissement_id, r.type_id]);
+      // Exclusions expliquées : lits libres du même type écartés pour l'âge ou pour un besoin (équipement, isolement)
+      const ex = await pool.query(`SELECT count(*) FILTER (WHERE l.etat = 'libre' AND NOT (true${sqlAge('l', groupeAge)}))::int AS age,
+          count(*) FILTER (WHERE l.etat = 'libre' AND (true${sqlAge('l', groupeAge)}) AND NOT (true${sqlBesoins(besoins)}))::int AS besoins
+        FROM lits l WHERE l.etablissement_id = $1 AND l.type_id = $2`, [r.etablissement_id, r.type_id]);
+      r.exclusions = ex.rows[0];
       Object.assign(r, q.rows[0]);
     }
     if (!r.libres && !r.prevus) continue;
@@ -229,6 +249,7 @@ async function recommander(pool, utilisateur, depuisId, typeId, besoins = {}) {
         confirme_par: lit?.confirme_par || null, validite_min: cfg.confirmation_lit_validite_min,
       },
       niveau, pression, cout: d + penalite, lit,
+      exclusions: r.partage === 'complet' ? r.exclusions || null : null,
     });
   }
   let metaRoutage = { disponible: false, fournisseur: null, actualise_le: null };
@@ -281,7 +302,7 @@ async function recommander(pool, utilisateur, depuisId, typeId, besoins = {}) {
   const loc = await pool.query(
     `SELECT count(*) FILTER (WHERE l.etat = 'libre'${filtre})::int AS libres FROM lits l WHERE l.etablissement_id = $1 AND l.type_id = $2`,
     [ici.id, typeId]);
-  return { libres_ici: loc.rows[0].libres, suggestions: res, routage: metaRoutage,
+  return { libres_ici: loc.rows[0].libres, suggestions: res, routage: metaRoutage, groupe_age: groupeAge,
     origine: { latitude: Number(ici.latitude), longitude: Number(ici.longitude), nom: ici.nom },
     capacite_verifiee_le: new Date().toISOString() };
 }
@@ -365,7 +386,8 @@ async function creerTransfert(pool, utilisateur, b, client = null) {
   if (distance > origine.config.rayon_km && !b.hors_rayon) throw new ErreurHttp(400, 'hors_rayon');
 
   const besoins = lireBesoins(b.besoins || {});
-  const filtre = sqlBesoins(besoins);
+  const groupeAge = await groupeAgeEffectif(pool, typeId, b.groupe_age || b.besoins?.groupe_age);
+  const filtre = sqlBesoins(besoins) + sqlAge('l', groupeAge);
   const mesureRoute = await routage.itineraire(origine, dest);
   const executer = async (c) => {
     let litId; let version;
@@ -396,11 +418,11 @@ async function creerTransfert(pool, utilisateur, b, client = null) {
       versionAttendue: version, patientRef: b.patient_ref, detail: `Réservé pour un transfert depuis ${origine.nom}`,
     });
     const t = await c.query(
-      `INSERT INTO transferts (numero, patient_ref, origine_id, destination_id, type_id, lit_id, urgent, distance_km, demande_par, besoins, demande_admission_id, minutes_route, route_actualise_le, route_fournisseur, route_version_donnees)
-       VALUES ('TR-' || lpad(nextval('transfert_seq')::text, 5, '0'), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      `INSERT INTO transferts (numero, patient_ref, origine_id, destination_id, type_id, lit_id, urgent, distance_km, demande_par, besoins, demande_admission_id, minutes_route, route_actualise_le, route_fournisseur, route_version_donnees, groupe_age)
+       VALUES ('TR-' || lpad(nextval('transfert_seq')::text, 5, '0'), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        RETURNING *`,
       [lit.patient_ref, origineId, destId, typeId, litId, !!b.urgent, mesureRoute.distance_km, utilisateur.id, besoins, b.demande_admission_id || null,
-        mesureRoute.duree_min, mesureRoute.actualise_le, mesureRoute.fournisseur, mesureRoute.version_donnees]);
+        mesureRoute.duree_min, mesureRoute.actualise_le, mesureRoute.fournisseur, mesureRoute.version_donnees, groupeAge]);
     const tr = t.rows[0];
     await c.query('UPDATE lits SET transfert_id = $2 WHERE id = $1', [litId, tr.id]);
     await journaliser(c, { litId, utilisateurId: utilisateur.id, action: 'Référence transmise',
@@ -414,11 +436,11 @@ async function creerTransfert(pool, utilisateur, b, client = null) {
 
 /** Plan B après refus : alternatives revalidées pour le seul établissement d'origine. */
 async function alternativesTransfert(pool, utilisateur, transfertId) {
-  const { rows } = await pool.query('SELECT origine_id, destination_id, type_id, statut, patient_ref, urgent, besoins FROM transferts WHERE id = $1', [transfertId]);
+  const { rows } = await pool.query('SELECT origine_id, destination_id, type_id, statut, patient_ref, urgent, besoins, groupe_age FROM transferts WHERE id = $1', [transfertId]);
   const tr0 = rows[0];
   if (!tr0 || !peutAgirPour(utilisateur, tr0.origine_id)) throw new ErreurHttp(404, 'transfert_introuvable');
   if (tr0.statut !== 'refuse') throw new ErreurHttp(409, 'plan_b_apres_refus');
-  const recherche = await recommander(pool, utilisateur, tr0.origine_id, tr0.type_id, tr0.besoins || {});
+  const recherche = await recommander(pool, utilisateur, tr0.origine_id, tr0.type_id, { ...(tr0.besoins || {}), groupe_age: tr0.groupe_age });
   recherche.suggestions = recherche.suggestions.filter((x) => x.etablissement_id !== tr0.destination_id);
   const libre = recherche.suggestions.find((x) => x.libres_confirmes && x.statut_route === 'calcule');
   for (const x of recherche.suggestions) delete x.recommande;
@@ -746,5 +768,5 @@ async function assistant(pool, utilisateur, etabId, question) {
 module.exports = {
   distanceKm, minutesRoute, heureLocale, etablissement, capaciteReseau, recommander, alternativesTransfert, itineraireReseau, litsEtablissement, litVisible, confirmerDisponibilite,
   creerTransfert, avancerTransfert, definirServiceResponsable, relancerTransfert, listeTransferts, lireJournal, lireNotifications,
-  detecterBlocages, assistant, exigerActif, motifBlocage, curseur, taillePage, sqlCurseur, sqlAvant, niveauDepuis, lireBesoins, sqlBesoins, notifier, SQL_CAPACITE, risque,
+  detecterBlocages, assistant, exigerActif, motifBlocage, sqlAge, groupeAgeEffectif, GROUPES_AGE, curseur, taillePage, sqlCurseur, sqlAvant, niveauDepuis, lireBesoins, sqlBesoins, notifier, SQL_CAPACITE, risque,
 };

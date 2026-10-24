@@ -12,18 +12,18 @@ const { transaction, ErreurHttp } = require('./db');
 const { exigerEtablissement, peutAgirPour } = require('./auth');
 const { changerEtatCiviere, ACTIONS_CIVIERE, DETAIL_CIVIERE } = require('./regles');
 
-const CATEGORIES = ['reguliere', 'debordement'];
+const CATEGORIES = ['reguliere', 'debordement', 'isolement', 'pediatrique', 'fauteuil'];
 
 /** Statistiques des civières, par établissement (Map id → stats). Un établissement sans civière n'apparaît pas. */
 async function statsUrgence(db, etabIds) {
   const { rows } = await db.query(
     `SELECT etablissement_id,
             count(*)::int AS total,
-            count(*) FILTER (WHERE categorie = 'reguliere' AND etat <> 'indispo')::int AS fonctionnelles,
+            count(*) FILTER (WHERE categorie <> 'debordement' AND etat <> 'indispo')::int AS fonctionnelles,
             count(*) FILTER (WHERE categorie = 'debordement')::int AS debordement,
             count(*) FILTER (WHERE etat = 'occupee')::int AS occupees,
             count(*) FILTER (WHERE etat = 'occupee' AND categorie = 'debordement')::int AS en_corridor,
-            count(*) FILTER (WHERE etat = 'libre' AND categorie = 'reguliere')::int AS libres,
+            count(*) FILTER (WHERE etat = 'libre' AND categorie <> 'debordement')::int AS libres,
             count(*) FILTER (WHERE etat = 'nettoyage')::int AS nettoyage,
             count(*) FILTER (WHERE etat = 'indispo')::int AS indispo,
             count(*) FILTER (WHERE etat = 'occupee' AND arrivee_le < now() - interval '24 hours')::int AS plus_24h,
