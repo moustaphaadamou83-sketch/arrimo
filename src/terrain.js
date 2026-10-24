@@ -402,7 +402,9 @@ function indicateursCsv(ind) {
     else lignes.push([`${prefixe}${k}`, v ?? '']);
   });
   plat(ind);
-  return lignes.map((l) => l.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(';')).join('\n');
+  // Une cellule qui commence par = + - @ (hors nombre) serait évaluée comme une formule par le tableur : préfixée d'une apostrophe.
+  const cellule = (x) => { const v = String(x); return /^[=+\-@\t\r]/.test(v) && !/^-?\d+(\.\d+)?$/.test(v) ? `'${v}` : v; };
+  return lignes.map((l) => l.map((x) => `"${cellule(x).replace(/"/g, '""')}"`).join(';')).join('\n');
 }
 
 module.exports = {

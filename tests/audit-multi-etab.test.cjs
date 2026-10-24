@@ -304,3 +304,32 @@ test('authentification : jetons stockés hachés, fermeture des autres sessions,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer invente-${i}` }, body: JSON.stringify({ email: `inconnu${i}@audit.exemple`, mot_de_passe: 'x' }) }).then((x) => x.status)));
   assert.ok(essais.filter((s) => s === 429).length >= 1, `limite par IP appliquée malgré les jetons inventés : ${[...new Set(essais)]}`);
 });
+
+test('imports concurrents : le même fichier envoyé 5 fois en même temps ne crée aucun doublon ; fichier partiel refusé en entier', async () => {
+  const E = etabs[18]; const ja = jetons[comptes[E.id][2]];
+  const avant2fa = process.env.ARRIMO_2FA_ADMIN; process.env.ARRIMO_2FA_ADMIN = '0';
+  try {
+    const unites = 'unite;type_unite\nAudit concurrence A;MED\nAudit concurrence B;CHIR\n';
+    const v = (await appel(ja, 'POST', '/admin/import/verifier', { etablissement_id: E.id, type: 'unites', contenu: unites })).corps;
+    assert.strictEqual(v.nb_erreurs, 0, JSON.stringify(v));
+    const r = await Promise.all(Array.from({ length: 5 }, () => appel(ja, 'POST', '/admin/import/importer', { etablissement_id: E.id, type: 'unites', contenu: unites, empreinte: v.empreinte })));
+    assert.ok(r.some((x) => x.statut === 200), r.map((x) => `${x.statut}:${x.corps?.code}`).join(' '));
+    assert.strictEqual((await pool.query(`SELECT count(*)::int n FROM unites WHERE etablissement_id=$1 AND nom LIKE 'Audit concurrence%'`, [E.id])).rows[0].n, 2, 'aucun doublon');
+    // Une ligne invalide : rien n'est importé (tout ou rien)
+    const partiel = 'unite;chambre\nAudit concurrence A;901\nUnité inexistante;902\n';
+    const vp = (await appel(ja, 'POST', '/admin/import/verifier', { etablissement_id: E.id, type: 'chambres', contenu: partiel })).corps;
+    assert.ok(vp.nb_erreurs >= 1);
+    const ip = await appel(ja, 'POST', '/admin/import/importer', { etablissement_id: E.id, type: 'chambres', contenu: partiel, empreinte: vp.empreinte });
+    assert.notStrictEqual(ip.statut, 200);
+    assert.strictEqual((await pool.query(`SELECT count(*)::int n FROM chambres WHERE numero IN ('901','902')`)).rows[0].n, 0, 'aucune ligne partielle');
+    // Capacité déclarée : un lit de trop est refusé
+    const ch = 'unite;chambre;capacite\nAudit concurrence A;950;1\n';
+    const vc = (await appel(ja, 'POST', '/admin/import/verifier', { etablissement_id: E.id, type: 'chambres', contenu: ch })).corps;
+    if (!vc.nb_erreurs) await appel(ja, 'POST', '/admin/import/importer', { etablissement_id: E.id, type: 'chambres', contenu: ch, empreinte: vc.empreinte });
+    const lits = 'unite;chambre;lit\nAudit concurrence A;950;AUD-950A\nAudit concurrence A;950;AUD-950B\n';
+    const vl = (await appel(ja, 'POST', '/admin/import/verifier', { etablissement_id: E.id, type: 'lits', contenu: lits })).corps;
+    if (!vl.nb_erreurs) await appel(ja, 'POST', '/admin/import/importer', { etablissement_id: E.id, type: 'lits', contenu: lits, empreinte: vl.empreinte });
+    const cap = (await pool.query(`SELECT ch.capacite_declaree, (SELECT count(*)::int FROM lits l WHERE l.chambre_id=ch.id) n FROM chambres ch JOIN unites u ON u.id=ch.unite_id WHERE u.etablissement_id=$1 AND ch.numero='950'`, [E.id])).rows[0];
+    assert.ok(!cap || cap.capacite_declaree == null || cap.n <= cap.capacite_declaree, `capacité dépassée par import : ${JSON.stringify(cap)}`);
+  } finally { if (avant2fa === undefined) delete process.env.ARRIMO_2FA_ADMIN; else process.env.ARRIMO_2FA_ADMIN = avant2fa; }
+});
