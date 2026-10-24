@@ -1742,7 +1742,7 @@ test('import CSV : nouvel établissement, vérification ligne par ligne, import 
     const octets = Buffer.from(await m.arrayBuffer());
     assert.match(m.headers.get('content-type'), /text\/csv/);
     assert.deepStrictEqual([...octets.subarray(0, 3)], [0xEF, 0xBB, 0xBF], 'BOM pour Excel');
-    assert.ok(octets.subarray(3).toString('utf8').startsWith('unite;chambre;lit;isolement;pression_negative;ventilation;telemetrie;categorie;attributs_json;actif\r\n'));
+    assert.ok(octets.subarray(3).toString('utf8').startsWith('unite;chambre;lit;isolement;pression_negative;ventilation;telemetrie;categorie;attributs_json;actif;groupe_age\r\n'));
 
     // Vérification : erreurs ligne par ligne, rien n'est écrit
     v = (await verifier('unites', 'unite;type_unite;nom_patient\nMédecine;MED;x')).corps;

@@ -181,7 +181,7 @@ test('sessions navigateur séparées : tableaux A, B, C et réseau', async () =>
   const dossier = path.join(__dirname, '..', '.local', 'preuves-demo-trio');
   fs.mkdirSync(dossier, { recursive: true, mode: 0o700 });
   for (const [key, fichier] of [['a','dashboard-a.png'], ['b','dashboard-b.png'], ['c','dashboard-c.png'], ['reseau','dashboard-reseau.png']]) {
-    const contexte = await browser.newContext({ viewport: { width: 1366, height: 900 }, locale: 'fr-CA' });
+    const contexte = await browser.newContext({ bypassCSP: true, viewport: { width: 1366, height: 900 }, locale: 'fr-CA' });
     await contexte.addInitScript((token) => localStorage.setItem('arrimo-token', token), tokens[key]);
     const page = await contexte.newPage();
     await page.goto(base);
@@ -220,7 +220,7 @@ test('interface A/B/C : OG voit le blocage puis le lit confirmé après nettoyag
   const contexts = {};
   const pages = {};
   for (const key of ['a','b','c']) {
-    contexts[key] = await browser.newContext({ viewport: { width: 1440, height: 960 }, locale: 'fr-CA' });
+    contexts[key] = await browser.newContext({ bypassCSP: true, viewport: { width: 1440, height: 960 }, locale: 'fr-CA' });
     await contexts[key].addInitScript((token) => localStorage.setItem('arrimo-token', token), tokens[key]);
     pages[key] = await contexts[key].newPage();
     await pages[key].goto(base);
