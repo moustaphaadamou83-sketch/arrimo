@@ -468,3 +468,53 @@ test('journal : chaque étape du parcours est tracée, et le journal reste immua
     'Incident déclaré', 'Facture émise', 'Paiement enregistré', 'Document déposé', 'Participant validé', 'Équipe créée']) assert.ok(actions.has(a), `journal : ${a}`);
   await assert.rejects(pool.query(`UPDATE sh_journal SET action='x'`));
 });
+
+test('Go Live : pannes successives à la création, aux civières et aux comptes, reprises sans doublon ni état incohérent', async () => {
+  enEnv('recette');
+  const h = await ok('admin', 'POST', '/hopitaux', { nom: 'Hôpital E fictif', environnement: 'recette', code_etab: 'HOP-E', latitude: 46.4, longitude: -71.1, ville: 'Ville E', utilisateurs_autorises: 5 });
+  await ok('admin', 'POST', `/hopitaux/${h.id}/relier`);
+  const fichiers = { unites: 'unite;type_unite\nMédecine E;MED\n', chambres: 'unite;chambre\nMédecine E;301\n', lits: 'unite;chambre;lit\nMédecine E;301;E-301A\nMédecine E;301;E-301B\n',
+    civieres: 'civiere;categorie\nE-C1;reguliere\n', utilisateurs: 'nom;courriel;role\nCoordination E;coord@e.exemple;coordonnateur\nEntretien E;entretien@e.exemple;entretien\n' };
+  for (const [type, contenu] of Object.entries(fichiers)) {
+    const v = await ok('admin', 'POST', `/hopitaux/${h.id}/import/verifier`, { type, contenu });
+    await ok('admin', 'POST', `/hopitaux/${h.id}/import/importer`, { type, contenu, empreinte: v.empreinte });
+  }
+  // Étapes de contrôle validées directement (le parcours détaillé est couvert par le test d'activation)
+  await pool.query(`UPDATE verifications v SET faite=true, par='test', quand=now() FROM etapes e WHERE e.id=v.etape_id AND e.hopital_id=$1 AND e.rang < 6`, [h.id]);
+  await pool.query('UPDATE formation_elements SET faite=true WHERE hopital_id=$1', [h.id]);
+  const prodE = async () => (await poolProd.query(`SELECT (SELECT count(*)::int FROM etablissements WHERE code='HOP-E') etab,
+    (SELECT count(*)::int FROM lits l JOIN etablissements e ON e.id=l.etablissement_id WHERE e.code='HOP-E') lits,
+    (SELECT count(*)::int FROM civieres c JOIN etablissements e ON e.id=c.etablissement_id WHERE e.code='HOP-E') civieres,
+    (SELECT count(*)::int FROM utilisateurs u JOIN utilisateur_etablissements ue ON ue.utilisateur_id=u.id JOIN etablissements e ON e.id=ue.etablissement_id WHERE e.code='HOP-E') comptes`)).rows[0];
+  const original = global.fetch;
+  const pannes = [
+    ['création de l’établissement', (url, o) => url.endsWith('/api/sh/etablissements') && o.method === 'POST'],
+    ['import des civières', (url, o) => url.endsWith('/api/sh/import/importer') && JSON.parse(o.body).type === 'civieres'],
+    ['import des comptes', (url, o) => url.endsWith('/api/sh/import/importer') && JSON.parse(o.body).type === 'utilisateurs'],
+  ];
+  enEnv('production');
+  try {
+    for (const [nom, cible] of pannes) {
+      let declenchee = false;
+      global.fetch = async (url, o = {}) => {
+        if (!declenchee && String(url).startsWith(`${baseProd}/`) && cible(String(url), o)) { declenchee = true; return new Response(JSON.stringify({ erreur: `panne simulée : ${nom}` }), { status: 503, headers: { 'content-type': 'application/json' } }); }
+        return original(url, o);
+      };
+      const r = await appel(jetons.admin, 'POST', `/hopitaux/${h.id}/golive`);
+      global.fetch = original;
+      assert.ok(declenchee, `panne injectée : ${nom}`);
+      assert.strictEqual(r.statut, 502, `${nom} : ${JSON.stringify(r.corps)}`);
+      const op = (await pool.query(`SELECT statut FROM sh_golive_operations WHERE hopital_id=$1`, [h.id])).rows;
+      assert.deepStrictEqual(op.map((x) => x.statut), ['interrompu'], `${nom} : une seule opération, interrompue`);
+      assert.strictEqual((await pool.query('SELECT environnement FROM hopitaux WHERE id=$1', [h.id])).rows[0].environnement, 'recette', `${nom} : la fiche reste en recette`);
+      const p = await prodE();
+      assert.ok(p.etab <= 1 && p.lits <= 2 && p.civieres <= 1 && p.comptes <= 2, `${nom} : pas de doublon partiel ${JSON.stringify(p)}`);
+    }
+    const fin = await appel(jetons.admin, 'POST', `/hopitaux/${h.id}/golive`);
+    assert.strictEqual(fin.statut, 200, JSON.stringify(fin.corps));
+    assert.deepStrictEqual(await prodE(), { etab: 1, lits: 2, civieres: 1, comptes: 2 }, 'reprise complète, sans doublon');
+    assert.deepStrictEqual((await pool.query(`SELECT statut FROM sh_golive_operations WHERE hopital_id=$1`, [h.id])).rows.map((x) => x.statut), ['termine']);
+    assert.strictEqual((await pool.query('SELECT environnement FROM hopitaux WHERE id=$1', [h.id])).rows[0].environnement, 'production');
+    assert.strictEqual((await appel(jetons.admin, 'POST', `/hopitaux/${h.id}/golive`)).statut, 409, 'un second Go Live est refusé');
+  } finally { global.fetch = original; enEnv('recette'); }
+});
