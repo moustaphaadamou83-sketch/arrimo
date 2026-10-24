@@ -2,7 +2,7 @@ const path = require('path');
 const crypto = require('crypto');
 const express = require('express');
 const { transaction, ErreurHttp } = require('./db');
-const { connexion, connexion2fa, exigerSession, exigerEtablissement } = require('./auth');
+const { connexion, connexion2fa, exigerSession, exigerEtablissement, formesJeton } = require('./auth');
 const admin = require('./admin');
 const { version } = require('../package.json');
 const env = require('./environnement');
@@ -165,7 +165,13 @@ function creerApp(pool) {
   });
 
   api.post('/deconnexion', route(async (req) => {
-    await pool.query('DELETE FROM sessions WHERE token = $1', [req.utilisateur.token]);
+    await pool.query('DELETE FROM sessions WHERE token = ANY($1::text[])', [formesJeton(req.utilisateur.token)]);
+  }));
+  // Fermer toutes mes autres sessions (appareil perdu, poste partagé)
+  api.post('/moi/sessions/fermer', route(async (req) => {
+    const r = await pool.query('DELETE FROM sessions WHERE utilisateur_id = $1 AND NOT (token = ANY($2::text[]))', [req.utilisateur.id, formesJeton(req.utilisateur.token)]);
+    await admin.journalAdmin(pool, req.utilisateur, 'Autres sessions fermées', req.utilisateur.email, String(r.rowCount));
+    return { fermees: r.rowCount };
   }));
 
   api.get('/moi', route(async (req) => {

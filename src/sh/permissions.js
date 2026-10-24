@@ -9,6 +9,7 @@ const PERMISSIONS = {
   'POST /moi/2fa/preparer': ROLES_SH,
   'POST /moi/2fa/activer': ROLES_SH,
   'POST /deconnexion': ROLES_SH,
+  'POST /moi/sessions/fermer': ROLES_SH,
   'GET /environnements': ['administration', 'implantation', 'support'],
   'GET /hopitaux': ROLES_SH,
   'GET /hopitaux/:id': ROLES_SH,

@@ -112,7 +112,9 @@ function creerAppSh(pool, { env = process.env } = {}) {
     const t = tentatives.get(email);
     if (t && t.bloque > Date.now()) throw new ErreurSh(429, 'Trop de tentatives. Réessayez dans quelques minutes.');
     const u = (await pool.query('SELECT * FROM sh_utilisateurs WHERE email = $1 AND actif', [email])).rows[0];
-    if (!u || !verifier(String(req.body.mot_de_passe || ''), u.mot_de_passe_hash)) {
+    // Adresse inconnue : même calcul qu'un mauvais mot de passe (pas d'énumération des comptes par le temps de réponse)
+    const motDePasseOk = verifier(String(req.body.mot_de_passe || ''), u ? u.mot_de_passe_hash : `${'0'.repeat(32)}:${'0'.repeat(128)}`);
+    if (!u || !motDePasseOk) {
       const n = (t ? t.n : 0) + 1;
       tentatives.set(email, n >= 5 ? { n: 0, bloque: Date.now() + 15 * 60000 } : { n, bloque: 0 });
       throw new ErreurSh(401, 'Adresse courriel ou mot de passe incorrect.');
@@ -161,6 +163,11 @@ function creerAppSh(pool, { env = process.env } = {}) {
   });
 
   api.post('/deconnexion', route(async (req) => { await pool.query('DELETE FROM sh_sessions WHERE token = $1', [empreinte(req.u.token)]); }));
+  api.post('/moi/sessions/fermer', route(async (req) => {
+    const r = await pool.query('DELETE FROM sh_sessions WHERE utilisateur_id = $1 AND token <> $2', [req.u.id, empreinte(req.u.token)]);
+    await journal(pool, req.u, 'Autres sessions fermées', req.u.email, String(r.rowCount));
+    return { fermees: r.rowCount };
+  }));
   api.get('/moi', route(async (req) => ({
     utilisateur: { id: req.u.id, nom: req.u.nom, email: req.u.email, role: req.u.role, langue: req.u.langue || 'fr', mdp_temporaire: req.u.mdp_temporaire, totp_actif: req.u.totp_actif },
     environnements: ciblesSh().map((c) => ({ code: c.code, nom: c.nom, public: c.public })),

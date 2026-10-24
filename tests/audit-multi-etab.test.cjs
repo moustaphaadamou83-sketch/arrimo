@@ -273,3 +273,34 @@ test('élévation par import : un compte partagé avec un autre établissement n
     assert.strictEqual((await appel(ja, 'PUT', `/admin/utilisateurs/${partage}`, { role: 'admin_etab', etablissements: [A.id] })).statut, 403);
   } finally { if (avant2fa === undefined) delete process.env.ARRIMO_2FA_ADMIN; else process.env.ARRIMO_2FA_ADMIN = avant2fa; }
 });
+
+test('authentification : jetons stockés hachés, fermeture des autres sessions, MFA chiffrée, limiteur non contournable', async () => {
+  const totp = require('../src/totp');
+  const E = etabs[17]; const [e1, e2] = comptes[E.id];
+  // Jeton de session : seule l'empreinte est en base
+  const brut = jetons[e1];
+  assert.strictEqual((await pool.query('SELECT count(*)::int n FROM sessions WHERE token=$1', [brut])).rows[0].n, 0, 'aucun jeton brut en base');
+  assert.ok((await pool.query(`SELECT count(*)::int n FROM sessions WHERE token LIKE 'h:%'`)).rows[0].n >= 59);
+  // Deux sessions du même compte, puis « fermer mes autres sessions »
+  const autre = (await appel(null, 'POST', '/connexion', { email: e1, mot_de_passe: MDP })).corps.token;
+  const r = await appel(brut, 'POST', '/moi/sessions/fermer');
+  assert.deepStrictEqual([r.statut, r.corps.fermees], [200, 1]);
+  assert.strictEqual((await appel(autre, 'GET', '/moi')).statut, 401);
+  assert.strictEqual((await appel(brut, 'GET', '/moi')).statut, 200, 'la session courante reste ouverte');
+  // Secret MFA chiffré au repos quand la clé est configurée ; connexion en deux étapes
+  const avantCle = process.env.ARRIMO_MFA_ENCRYPTION_KEY; process.env.ARRIMO_MFA_ENCRYPTION_KEY = Buffer.alloc(32, 4).toString('base64');
+  try {
+    const j2 = jetons[e2];
+    const { secret } = (await appel(j2, 'POST', '/moi/2fa/preparer')).corps;
+    assert.match((await pool.query('SELECT totp_secret FROM utilisateurs WHERE email=$1', [e2])).rows[0].totp_secret, /^enc:v1:/);
+    assert.strictEqual((await appel(j2, 'POST', '/moi/2fa/activer', { code: totp.codePourPas(secret, totp.pasActuel()) })).statut, 200);
+    const etape = (await appel(null, 'POST', '/connexion', { email: e2, mot_de_passe: MDP })).corps;
+    assert.strictEqual((await pool.query('SELECT count(*)::int n FROM connexions_2fa WHERE jeton=$1', [etape.jeton])).rows[0].n, 0, 'jeton d’étape haché');
+    const fin = await appel(null, 'POST', '/connexion/2fa', { jeton: etape.jeton, code: totp.codePourPas(secret, totp.pasActuel() + 1) });
+    assert.strictEqual(fin.statut, 200, fin.texte);
+  } finally { if (avantCle === undefined) delete process.env.ARRIMO_MFA_ENCRYPTION_KEY; else process.env.ARRIMO_MFA_ENCRYPTION_KEY = avantCle; }
+  // Limiteur : 130 tentatives de connexion, chacune avec un jeton inventé différent, restent comptées par adresse IP (120/min)
+  const essais = await Promise.all(Array.from({ length: 130 }, (_, i) => fetch(`${base}/api/connexion`, { method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer invente-${i}` }, body: JSON.stringify({ email: `inconnu${i}@audit.exemple`, mot_de_passe: 'x' }) }).then((x) => x.status)));
+  assert.ok(essais.filter((s) => s === 429).length >= 1, `limite par IP appliquée malgré les jetons inventés : ${[...new Set(essais)]}`);
+});
