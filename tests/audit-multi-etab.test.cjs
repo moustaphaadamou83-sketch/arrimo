@@ -299,10 +299,6 @@ test('authentification : jetons stockés hachés, fermeture des autres sessions,
     const fin = await appel(null, 'POST', '/connexion/2fa', { jeton: etape.jeton, code: totp.codePourPas(secret, totp.pasActuel() + 1) });
     assert.strictEqual(fin.statut, 200, fin.texte);
   } finally { if (avantCle === undefined) delete process.env.ARRIMO_MFA_ENCRYPTION_KEY; else process.env.ARRIMO_MFA_ENCRYPTION_KEY = avantCle; }
-  // Limiteur : 130 tentatives de connexion, chacune avec un jeton inventé différent, restent comptées par adresse IP (120/min)
-  const essais = await Promise.all(Array.from({ length: 130 }, (_, i) => fetch(`${base}/api/connexion`, { method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer invente-${i}` }, body: JSON.stringify({ email: `inconnu${i}@audit.exemple`, mot_de_passe: 'x' }) }).then((x) => x.status)));
-  assert.ok(essais.filter((s) => s === 429).length >= 1, `limite par IP appliquée malgré les jetons inventés : ${[...new Set(essais)]}`);
 });
 
 test('imports concurrents : le même fichier envoyé 5 fois en même temps ne crée aucun doublon ; fichier partiel refusé en entier', async () => {
@@ -332,4 +328,28 @@ test('imports concurrents : le même fichier envoyé 5 fois en même temps ne cr
     const cap = (await pool.query(`SELECT ch.capacite_declaree, (SELECT count(*)::int FROM lits l WHERE l.chambre_id=ch.id) n FROM chambres ch JOIN unites u ON u.id=ch.unite_id WHERE u.etablissement_id=$1 AND ch.numero='950'`, [E.id])).rows[0];
     assert.ok(!cap || cap.capacite_declaree == null || cap.n <= cap.capacite_declaree, `capacité dépassée par import : ${JSON.stringify(cap)}`);
   } finally { if (avant2fa === undefined) delete process.env.ARRIMO_2FA_ADMIN; else process.env.ARRIMO_2FA_ADMIN = avant2fa; }
+});
+
+test('gestionnaire réseau : périmètre global, donc double authentification obligatoire avant toute action', async () => {
+  const totp = require('../src/totp');
+  const email = 'audit.reseau@audit.exemple';
+  await pool.query(`INSERT INTO utilisateurs (email, nom, mot_de_passe_hash, role) VALUES ($1,'Réseau audit',$2,'gestionnaire')`, [email, hacher(MDP)]);
+  const j = (await appel(null, 'POST', '/connexion', { email, mot_de_passe: MDP })).corps.token;
+  assert.strictEqual((await appel(j, 'GET', `/lits?etablissement_id=${etabs[0].id}`)).corps?.code, 'admin_exige_2fa', 'aucune lecture sans 2FA');
+  const lit = (await pool.query(`SELECT id, version FROM lits WHERE etablissement_id=$1 AND etat='libre' LIMIT 1`, [etabs[1].id])).rows[0];
+  assert.strictEqual((await appel(j, 'POST', `/lits/${lit.id}/action`, { action: 'reserver', version: lit.version, patient_ref: 'P-83001' })).statut, 403, 'aucune action sans 2FA');
+  assert.strictEqual((await appel(j, 'GET', '/moi')).statut, 200);
+  const { secret } = (await appel(j, 'POST', '/moi/2fa/preparer')).corps;
+  assert.strictEqual((await appel(j, 'POST', '/moi/2fa/activer', { code: totp.codePourPas(secret, totp.pasActuel()) })).statut, 200);
+  const e = (await appel(null, 'POST', '/connexion', { email, mot_de_passe: MDP })).corps;
+  const j2 = (await appel(null, 'POST', '/connexion/2fa', { jeton: e.jeton, code: totp.codePourPas(secret, totp.pasActuel() + 1) })).corps.token;
+  assert.strictEqual((await appel(j2, 'GET', `/lits?etablissement_id=${etabs[0].id}`)).statut, 200, 'avec 2FA : accès réseau');
+});
+
+
+test('limiteur : un jeton inventé par requête ne contourne pas la limite par IP des connexions (exécuté en dernier)', async () => {
+  // Limiteur : 130 tentatives de connexion, chacune avec un jeton inventé différent, restent comptées par adresse IP (120/min)
+  const essais = await Promise.all(Array.from({ length: 130 }, (_, i) => fetch(`${base}/api/connexion`, { method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer invente-${i}` }, body: JSON.stringify({ email: `inconnu${i}@audit.exemple`, mot_de_passe: 'x' }) }).then((x) => x.status)));
+  assert.ok(essais.filter((s) => s === 429).length >= 1, `limite par IP appliquée malgré les jetons inventés : ${[...new Set(essais)]}`);
 });

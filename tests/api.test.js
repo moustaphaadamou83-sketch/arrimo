@@ -83,8 +83,12 @@ test.before(async () => {
   process.env.SH_API_KEY = 'cle-de-test-sh-123456';
   serveur = creerApp(pool).listen(0);
   base = `http://127.0.0.1:${serveur.address().port}`;
+  // Le gestionnaire réseau doit avoir la double authentification (hors serveur de démonstration)
+  const secretReseau = totp.nouveauSecret();
+  await pool.query(`UPDATE utilisateurs SET totp_secret = $1, totp_actif = true, totp_dernier_pas = 0 WHERE email = 'reseau@demo.arrimo'`, [secretReseau]);
   for (const q of ['tremblay', 'bouchard', 'roy', 'cote', 'reseau']) {
-    const r = await appel(null, 'POST', '/connexion', { email: `${q}@demo.arrimo`, mot_de_passe: MOT_DE_PASSE_DEMO });
+    let r = await appel(null, 'POST', '/connexion', { email: `${q}@demo.arrimo`, mot_de_passe: MOT_DE_PASSE_DEMO });
+    if (r.corps?.etape === '2fa') r = await appel(null, 'POST', '/connexion/2fa', { jeton: r.corps.jeton, code: totp.codePourPas(secretReseau, totp.pasActuel()) });
     assert.strictEqual(r.statut, 200, `connexion ${q}`);
     tokens[q] = r.corps.token;
   }
