@@ -187,7 +187,8 @@ function creerApp(pool) {
   api.get('/moi', route(async (req) => {
     const u = req.utilisateur;
     const { rows } = await pool.query(
-      `SELECT e.id, e.code, e.nom, e.ville, e.partage, e.module_actif, e.config_id, e.rayon_alerte_km
+      `SELECT e.id, e.code, e.nom, e.ville, e.partage, e.module_actif, e.config_id, e.rayon_alerte_km, e.modules, e.vocation,
+              ARRAY(SELECT DISTINCT l.type_id FROM lits l WHERE l.etablissement_id = e.id) AS types_presents
          FROM etablissements e
         WHERE e.actif AND ($1 OR e.id = ANY($2::int[]))
         ORDER BY e.nom`, [u.gestionnaire, u.etabs]);
@@ -197,7 +198,8 @@ function creerApp(pool) {
         WHERE c.id = ANY($1::int[]) GROUP BY c.id`, [[...new Set(rows.map((e) => e.config_id))]]);
     return { utilisateur: { id: u.id, nom: u.nom, email: u.email, role: u.role, admin: u.admin, gestionnaire: u.gestionnaire,
       totp_actif: u.totp_actif, mdp_temporaire: u.mdp_temporaire, premiers_pas_vus: u.premiers_pas_vus },
-    etablissements: rows, configs: configs.rows, demo: env.estDemo(), environnement: env.environnement() };
+    etablissements: rows, configs: configs.rows, demo: env.estDemo(), environnement: env.environnement(),
+    patients_fictifs: ['demo', 'recette'].includes(env.environnement()) || process.env.ARRIMO_PATIENTS_FICTIFS === '1' };
   }));
 
   /* ---------- capacité, recherche, assistant ---------- */
@@ -206,6 +208,7 @@ function creerApp(pool) {
     entier(req.query.depuis, 'depuis'), entier(req.query.type_id, 'type_id'), {
       isolement: req.query.isolement === '1', pression_negative: req.query.pression_negative === '1',
       ventilation: req.query.ventilation === '1', telemetrie: req.query.telemetrie === '1',
+      groupe_age: req.query.groupe_age || undefined,
     })));
   api.get('/itineraire', route((req) => s.itineraireReseau(pool, req.utilisateur,
     entier(req.query.depuis, 'depuis'), entier(req.query.vers, 'vers'))));
@@ -258,7 +261,8 @@ function creerApp(pool) {
 
   /* ---------- NSA, congé, nettoyage ---------- */
   api.post('/lits/:id/nsa', route(async (req) => {
-    const id = entier(req.params.id, 'id'); await s.litVisible(pool, req.utilisateur, id);
+    const id = entier(req.params.id, 'id'); const v = await s.litVisible(pool, req.utilisateur, id);
+    await s.exigerModule(pool, v.etablissement_id, 'nsa');
     return t.designerNsa(pool, req.utilisateur, id, req.body.orientation);
   }));
   api.put('/lits/:id/nsa', route(async (req) => {
@@ -278,7 +282,11 @@ function creerApp(pool) {
     const id = entier(req.params.id, 'id'); await s.litVisible(pool, req.utilisateur, id);
     return t.debuterNettoyage(pool, req.utilisateur, id);
   }));
-  api.get('/nsa', route((req) => t.listeNsa(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
+  api.get('/nsa', route(async (req) => {
+    const etab = entier(req.query.etablissement_id, 'etablissement_id');
+    await s.exigerModule(pool, etab, 'nsa');
+    return t.listeNsa(pool, req.utilisateur, etab);
+  }));
 
   /* ---------- tableau de bord national par proximité ---------- */
   const nat = require('./national');
@@ -290,7 +298,11 @@ function creerApp(pool) {
   api.get('/national/carte', route((req) => nat.carte(pool, req.utilisateur, entier(req.query.depuis, 'depuis'))));
 
   /* ---------- civières de l'urgence ---------- */
-  api.get('/civieres', route((req) => civ.listeCivieres(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
+  api.get('/civieres', route(async (req) => {
+    const etab = entier(req.query.etablissement_id, 'etablissement_id');
+    await s.exigerModule(pool, etab, 'urgence');
+    return civ.listeCivieres(pool, req.utilisateur, etab);
+  }));
   api.post('/civieres/:id/action', route((req) => civ.actionCiviere(pool, req.utilisateur, entier(req.params.id, 'id'), String(req.body.action || ''), req.body)));
   api.post('/civieres/:id/deplacer', route((req) => civ.deplacer(pool, req.utilisateur, entier(req.params.id, 'id'),
     entier(req.body.vers_id, 'vers_id'), req.body.version)));
@@ -340,6 +352,14 @@ function creerApp(pool) {
       return rows[0];
     });
   }));
+
+  /* ---------- patients fictifs et arrivées à l'urgence (démonstration et recette seulement) ---------- */
+  const pat = require('./patients');
+  api.get('/patients', route((req) => pat.listePatients(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'), req.query.q)));
+  api.post('/patients', route((req) => pat.creerPatient(pool, req.utilisateur, entier(req.body.etablissement_id, 'etablissement_id'), req.body)));
+  api.put('/patients/:id', route((req) => pat.modifierPatient(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
+  api.post('/urgence/arrivees', route((req) => pat.enregistrerArrivee(pool, req.utilisateur, req.body)));
+  api.get('/specialites', route(async () => (await pool.query('SELECT * FROM specialites_catalogue ORDER BY ordre')).rows));
 
   /* ---------- congés par lit, blocages explicables, fraîcheur ---------- */
   const vig = require('./vigilance');

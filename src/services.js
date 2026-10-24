@@ -50,6 +50,12 @@ async function groupeAgeEffectif(db, typeId, groupe) {
   return GROUPES_AGE.includes(g) ? g : 'adulte';
 }
 
+/** Module désactivé pour un établissement (configuration modulaire : par défaut, tous les modules sont actifs). */
+async function exigerModule(db, etabId, module) {
+  const r = await db.query('SELECT modules FROM etablissements WHERE id = $1', [etabId]);
+  if (r.rows[0] && r.rows[0].modules && r.rows[0].modules[module] === false) throw new ErreurHttp(403, 'module_desactive', { module });
+}
+
 function exigerActif(etab) {
   if (!etab.module_actif) {
     throw new ErreurHttp(403, 'module_inactif', { etab: etab.nom });
@@ -768,5 +774,5 @@ async function assistant(pool, utilisateur, etabId, question) {
 module.exports = {
   distanceKm, minutesRoute, heureLocale, etablissement, capaciteReseau, recommander, alternativesTransfert, itineraireReseau, litsEtablissement, litVisible, confirmerDisponibilite,
   creerTransfert, avancerTransfert, definirServiceResponsable, relancerTransfert, listeTransferts, lireJournal, lireNotifications,
-  detecterBlocages, assistant, exigerActif, motifBlocage, sqlAge, groupeAgeEffectif, GROUPES_AGE, curseur, taillePage, sqlCurseur, sqlAvant, niveauDepuis, lireBesoins, sqlBesoins, notifier, SQL_CAPACITE, risque,
+  detecterBlocages, assistant, exigerActif, exigerModule, motifBlocage, sqlAge, groupeAgeEffectif, GROUPES_AGE, curseur, taillePage, sqlCurseur, sqlAvant, niveauDepuis, lireBesoins, sqlBesoins, notifier, SQL_CAPACITE, risque,
 };

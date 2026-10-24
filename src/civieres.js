@@ -71,14 +71,22 @@ async function listeCivieres(pool, utilisateur, etabId) {
   const { rows } = await pool.query(
     `SELECT cv.id, cv.code, cv.categorie, cv.etat, cv.patient_ref, cv.arrivee_le, cv.version, cv.etat_depuis, cv.motif_indispo,
             EXTRACT(EPOCH FROM (now() - cv.arrivee_le)) / 3600 AS heures,
-            d.id AS demande_id, d.statut AS demande_statut, d.priorite AS demande_priorite, t.nom AS type_nom, l.code AS lit_code
+            d.id AS demande_id, d.statut AS demande_statut, d.priorite AS demande_priorite, t.nom AS type_nom, l.code AS lit_code,
+            p.id AS patient_id, p.prenom AS patient_prenom, left(p.nom, 1) AS patient_initiale, p.date_naissance AS patient_naissance
        FROM civieres cv
+       LEFT JOIN patients p ON p.etablissement_id = cv.etablissement_id AND p.reference = cv.patient_ref
        LEFT JOIN demandes_admission d ON d.civiere_id = cv.id AND d.statut IN ('attente', 'assignee')
        LEFT JOIN types_unite t ON t.id = d.type_id
        LEFT JOIN lits l ON l.id = d.lit_id
       WHERE cv.etablissement_id = $1
       ORDER BY cv.categorie DESC, cv.code`, [etabId]);
-  for (const r of rows) r.heures = r.heures == null ? null : Math.floor(Number(r.heures) * 10) / 10;
+  const { groupeAgeDepuisNaissance } = require('./terrain');
+  for (const r of rows) {
+    r.heures = r.heures == null ? null : Math.floor(Number(r.heures) * 10) / 10;
+    // Nom abrégé (prénom + initiale) du patient fictif, seulement dans l'établissement ; jamais dans les vues réseau
+    if (r.patient_id) { r.patient_nom_court = `${r.patient_prenom} ${r.patient_initiale}.`; r.groupe_age = groupeAgeDepuisNaissance(r.patient_naissance); }
+    delete r.patient_prenom; delete r.patient_initiale; delete r.patient_naissance;
+  }
   const stats = (await statsUrgence(pool, [etabId])).get(etabId) || null;
   return { civieres: rows, stats };
 }

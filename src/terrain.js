@@ -198,8 +198,10 @@ async function fileAdmission(pool, utilisateur, etabId) {
     `SELECT d.*, t.nom AS type_nom, l.code AS lit_code, c.attente_admission_max_min,
             EXTRACT(EPOCH FROM (now() - d.cree_le)) / 60 AS attente_min,
             cv.code AS civiere_code, cv.categorie AS civiere_categorie,
-            EXTRACT(EPOCH FROM (now() - cv.arrivee_le)) / 3600 AS heures_civiere
+            EXTRACT(EPOCH FROM (now() - cv.arrivee_le)) / 3600 AS heures_civiere,
+            CASE WHEN p.id IS NOT NULL THEN p.prenom || ' ' || left(p.nom, 1) || '.' END AS patient_nom_court
        FROM demandes_admission d
+       LEFT JOIN patients p ON p.etablissement_id = d.etablissement_id AND p.reference = d.patient_ref
        JOIN types_unite t ON t.id = d.type_id
        JOIN etablissements e ON e.id = d.etablissement_id JOIN config_pays c ON c.id = e.config_id
        LEFT JOIN lits l ON l.id = d.lit_id

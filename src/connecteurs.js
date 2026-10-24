@@ -30,7 +30,7 @@ async function identifier(pool, cle) {
   return rows[0];
 }
 
-const EVENEMENTS = ['admission', 'transfert_interne', 'conge', 'conge_prevu'];
+const EVENEMENTS = ['admission', 'transfert_interne', 'conge', 'conge_prevu', 'arrivee_urgence'];
 
 /** Applique un événement. Idempotent : le même identifiant n'est appliqué qu'une fois. */
 async function recevoirEvenement(pool, connecteur, ev) {
@@ -76,6 +76,14 @@ async function recevoirEvenement(pool, connecteur, ev) {
         if (lit.etat !== 'occupe') { statut = 'ignore'; detail = `Lit ${ev.lit} déjà libéré`; return; }
         await changerEtat(c, pool, null, lit.id, 'nettoyage', { detail: `${connecteur.nom} : congé` });
         detail = `Congé du lit ${ev.lit}`;
+      } else if (ev.evenement === 'arrivee_urgence') {
+        // Arrivée à l'urgence transmise par le système de l'hôpital : référence seulement, civière désignée par son code
+        const deja = (await c.query(`SELECT code FROM civieres WHERE etablissement_id = $1 AND patient_ref = $2 AND etat = 'occupee'`, [connecteur.etablissement_id, ref])).rows[0];
+        if (deja) { statut = 'ignore'; detail = `${ref} déjà sur la civière ${deja.code}`; return; }
+        const cv = (await c.query('SELECT id, code FROM civieres WHERE etablissement_id = $1 AND code = $2', [connecteur.etablissement_id, String(ev.civiere || '')])).rows[0];
+        if (!cv) throw new ErreurHttp(404, 'civiere_introuvable');
+        await require('./regles').changerEtatCiviere(c, pool, null, cv.id, 'occupee', { patientRef: ref, arrivee: ev.date || null, detail: `${connecteur.nom} : arrivée à l’urgence` });
+        detail = `Arrivée ${ref} sur la civière ${cv.code} (source : ${connecteur.nom})`;
       } else if (ev.evenement === 'conge_prevu') {
         const lit = await trouverLit(c, ev.lit);
         const d = new Date(ev.date);

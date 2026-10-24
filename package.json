@@ -10,7 +10,7 @@
     "start": "node src/server.js",
     "db:seed": "node db/seed.js",
     "db:reset": "node db/reset.js",
-    "test": "node --test --test-concurrency=1 tests/api.test.js tests/courriel-transport.test.cjs tests/routage.test.cjs",
+    "test": "node --test --test-concurrency=1 tests/api.test.js tests/courriel-transport.test.cjs tests/routage.test.cjs tests/finalisation.test.cjs",
     "demo:reseau": "node db/demo-reseau.js",
     "demo:trio": "node db/demo-trio.js",
     "demo:trio:reset": "node db/reset-demo-trio.js",
@@ -25,7 +25,8 @@
     "presentation:locale": "node scripts/presentation-locale.cjs",
     "presentation:valider": "node scripts/valider-presentation.cjs",
     "test:sh-erp": "node --test --test-concurrency=1 tests/sh-erp.test.cjs",
-    "test:sh-erp-interface": "node --test tests/sh-erp.interface.spec.cjs"
+    "test:sh-erp-interface": "node --test tests/sh-erp.interface.spec.cjs",
+    "test:scenarios-abc": "node --test --test-concurrency=1 tests/scenarios-abc.test.cjs"
   },
   "license": "UNLICENSED",
   "dependencies": {
