@@ -227,3 +227,31 @@ test('vigilance : réservation prolongée identifiée sans annulation automatiqu
   assert.strictEqual((await appel('tremblay', 'GET', `/vigilance?etablissement_id=${sl}`)).statut, 403);
   assert.strictEqual((await appel('tremblay', 'GET', `/conges?etablissement_id=${sl}`)).statut, 403);
 });
+
+test('OG transversal : congé d’un lit précis, numéros exacts, contexte, sources ; permissions entre établissements', async () => {
+  const sl = await id('SL'); const mb = await id('MB'); const med = await type('MED');
+  const l = await litLibre(sl, med);
+  await appel('bouchard', 'POST', `/lits/${l.id}/action`, { action: 'reserver', version: l.version, patient_ref: 'P-73001' });
+  await appel('bouchard', 'POST', `/lits/${l.id}/action`, { action: 'admettre' });
+  await appel('bouchard', 'PUT', `/lits/${l.id}/conge`, { statut: 'prevu', sortie_prevue: new Date(Date.now() + 3 * 3600000).toISOString() });
+  const q = async (qui, etab, question) => (await appel(qui, 'POST', '/copilote/question', { etablissement_id: etab, question })).corps;
+  const r1 = await q('bouchard', sl, `Le lit ${l.code} a-t-il un congé prévu ou confirmé ?`);
+  assert.match(r1.reponse, new RegExp(`Lit ${l.code}`)); assert.match(r1.reponse, /Congé prévu/); assert.match(r1.reponse, /n’est pas libre/);
+  assert.ok(r1.sources.some((x) => x.module === 'Congés'), 'sources citées');
+  const r2 = await q('bouchard', sl, 'Quels lits vont se libérer dans les 4 prochaines heures ?');
+  assert.match(r2.reponse, new RegExp(l.code), 'numéro exact du lit');
+  const r3 = await q('bouchard', sl, 'Ce lit a-t-il un congé ?');
+  assert.match(r3.reponse, new RegExp(`Lit ${l.code}`), 'référence au contexte');
+  // Composée : deux intentions dans une même question
+  const r4 = await q('bouchard', sl, 'Combien de lits libres en chirurgie et quelles demandes de transfert attendent une réponse ?');
+  assert.deepStrictEqual(r4.intentions, ['lits_libres', 'transferts']);
+  // Un autre établissement n'obtient jamais le patient de SL
+  const r5 = await q('tremblay', mb, `Le lit ${l.code} a-t-il un congé prévu ?`);
+  assert.doesNotMatch(r5.reponse, /P-73001/);
+  assert.strictEqual((await appel('tremblay', 'POST', '/copilote/question', { etablissement_id: sl, question: 'État actuel ?' })).statut, 403);
+  // Données absentes : OG le dit, sans inventer
+  const r6 = await q('bouchard', sl, 'Le lit ZZZ-999 a-t-il un congé prévu ?');
+  assert.match(r6.reponse, /Je ne trouve pas de lit ZZZ-999/);
+  const r7 = await q('bouchard', sl, 'De quel lit tu parles, celui-ci ?');
+  assert.ok(r7.reponse.length > 10);
+});

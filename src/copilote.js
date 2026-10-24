@@ -376,6 +376,20 @@ async function questionIa(contexte, question, fetchImpl = fetch, langue = 'fr') 
 
 async function question(pool, utilisateur, etabId, q, fetchImpl) {
   const L = utilisateur.langue;
+  if (process.env.COPILOTE_IA_CLE && questionPredefinie(q)) return questionHistorique(pool, utilisateur, etabId, q, fetchImpl);
+  // OG transversal (français) : intentions et entités reconnues, outils métier autorisés ; sinon réponses historiques
+  if (L !== 'en') {
+    const og = require('./og-outils');
+    const r = await og.repondre(pool, utilisateur, etabId, q);
+    if (r) return r;
+    const h = await questionHistorique(pool, utilisateur, etabId, q, fetchImpl);
+    return h.reponse === tr(L, 'q_aide') ? { ...h, reponse: og.AIDE } : h;
+  }
+  return questionHistorique(pool, utilisateur, etabId, q, fetchImpl);
+}
+
+async function questionHistorique(pool, utilisateur, etabId, q, fetchImpl) {
+  const L = utilisateur.langue;
   const qn = String(q).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   if (process.env.COPILOTE_IA_CLE && questionPredefinie(q)) {
     try {
@@ -446,4 +460,4 @@ async function question(pool, utilisateur, etabId, q, fetchImpl) {
   return { mode: 'local', reponse: await s.assistant(pool, utilisateur, etabId, q) };
 }
 
-module.exports = { briefing, briefingReseau, question, sansPatients, questionIa, construirePlanCoordination };
+module.exports = { briefing, briefingReseau, question, questionHistorique, sansPatients, questionIa, construirePlanCoordination };

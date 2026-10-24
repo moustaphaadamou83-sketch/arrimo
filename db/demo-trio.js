@@ -31,6 +31,13 @@ async function preparerDemoTrio(pool, { silencieux = false, fichierAcces = ACCES
       [email, nom, hash])).rows[0];
     await pool.query('INSERT INTO utilisateur_etablissements (utilisateur_id, etablissement_id) VALUES ($1, $2)', [utilisateur.id, etab.id]);
   }
+  // Noms alignés sur les comptes : le compte « Hôpital A » ouvre bien « Hôpital A », etc.
+  await pool.query(`UPDATE etablissements SET nom = 'Hôpital A — Val-des-Pins' WHERE code = 'HX'`);
+  await pool.query(`UPDATE etablissements SET nom = 'Hôpital B — Mont-Clair' WHERE code = 'HY'`);
+  // Jeu pédiatrique fictif (centre pédiatrique, unités pédiatriques de C, patients fictifs) et congé prévu du lit MED-204A
+  const { ajouterPediatrie, congeMed204A } = require('./demo-pediatrie');
+  await ajouterPediatrie(pool, { hash });
+  await congeMed204A(pool);
   // Dans cette fixture fictive, la capacité de C est fraîchement confirmée par son compte coordonnateur dédié.
   await pool.query(`UPDATE lits SET disponibilite_confirmee_le = now(), disponibilite_confirmee_par =
     (SELECT id FROM utilisateurs WHERE email = 'hopital.c@demo.arrimo')
@@ -39,6 +46,7 @@ async function preparerDemoTrio(pool, { silencieux = false, fichierAcces = ACCES
     'ARRIMO — ACCÈS PRIVÉ DE DÉMONSTRATION A/B/C',
     'Comptes fictifs, uniquement pour la base de démonstration isolée.',
     ...COMPTES.map(([email]) => email),
+    'hopital.d@demo.arrimo (centre pédiatrique fictif)',
     'Gestionnaire réseau : reseau@demo.arrimo',
     `Mot de passe commun : ${mdp}`,
     'Ne pas réutiliser ni importer ces comptes dans un environnement réel.',
