@@ -959,9 +959,8 @@ function executerProposition(a, bouton) {
       const r = await api('GET', `/transferts/${a.transfert_id}/alternatives`);
       Object.assign(etat.recherche, { type_id: r.type_id, patient_ref: r.patient_ref, urgent: r.urgent,
         besoins: r.besoins, res: r, choix: null });
-      etat.vue = 'reseau';
       return r;
-    }, t('reseau.plan_b_carte'));
+    }, t('reseau.plan_b_carte')).then((r) => { if (r) allerA('reseau'); });   // ouvre l'écran Réseau sur les alternatives
     return;
   }
   if (a.type === 'recherche_reseau') {
@@ -969,9 +968,8 @@ function executerProposition(a, bouton) {
       const r = await api('GET', `/recherche?depuis=${etat.ctx}&type_id=${a.type_id}${qsBesoins(a.besoins || {})}`);
       Object.assign(etat.recherche, { type_id: a.type_id, patient_ref: a.patient_ref, urgent: !!a.urgent,
         besoins: a.besoins || {}, res: r, choix: null });
-      etat.vue = 'reseau';
       return r;
-    }, t('reseau.recherche_actualisee'));
+    }, t('reseau.recherche_actualisee')).then((r) => { if (r) allerA('reseau'); });
     return;
   }
   const faire = {
@@ -1216,7 +1214,7 @@ async function vueAdmissions() {
   const carte = (d) => `<div class="fiche" style="--c:${d.priorite === 'p1' ? 'var(--critique)' : d.depasse ? 'var(--attention)' : 'var(--secondaire)'}">
       <div class="t"><b>${esc(d.patient_ref)}</b><span class="${d.depasse ? 'urgent' : 'note num'}">${d.priorite.toUpperCase()} · ${depuis(d.cree_le)}</span></div>
       <div class="note">${esc(d.type_nom)} · ${esc(t(`provenances.${d.provenance}`).toLowerCase())} · ${esc(besoinsTexte(d))}</div>
-      ${d.civiere_code ? `<div class="note">${A('sur_civiere', { code: d.civiere_code })} · <span class="${classeDuree(d.heures_civiere)}">${esc(t('urgence.depuis_h', { duree: duree(d.heures_civiere * 60) }))}</span></div>` : ''}
+      ${d.civiere_code ? `<div class="note">${t('admissions.sur_civiere', { code: esc(d.civiere_code) })} · <span class="${classeDuree(d.heures_civiere)}">${esc(t('urgence.depuis_h', { duree: duree(d.heures_civiere * 60) }))}</span></div>` : ''}
       ${d.statut === 'assignee' ? `<div class="note">${t('admissions.lit_assigne', { code: esc(d.lit_code) })}</div>` : d.lit_suggere ? `<div class="note">${t('admissions.lit_adapte', { code: esc(d.lit_suggere.code) })}</div>` : `<div class="alerte">${A('aucun_lit')}</div>`}
       ${actif ? `<div class="actions">${d.statut === 'attente'
     ? `${d.lit_suggere ? `<button class="btn pri" data-adm="${d.id}" data-a="assigner" data-lit="${d.lit_suggere.id}" data-version="${d.lit_suggere.version}">${A('assigner', { code: d.lit_suggere.code })}</button>` : ''}
