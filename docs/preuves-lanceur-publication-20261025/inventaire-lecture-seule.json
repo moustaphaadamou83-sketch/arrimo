@@ -1,0 +1,29 @@
+{
+  "commit_candidat": "98712dfb9b20c2b5ae21903a3c154da52bff5aa6",
+  "mode": "audit_sans_ecriture",
+  "versions_locales": [
+    {
+      "environnement": "demo",
+      "domaine": "demo.arrimo.senseafri.com",
+      "release_active": "releases/arrimo-fin-2ed912745f6338e185c8c31bd0cb97385a9fce1d",
+      "version_active": "2ed912745f6338e185c8c31bd0cb97385a9fce1d",
+      "service": "arrimo-public-demo"
+    },
+    {
+      "environnement": "principal",
+      "domaine": "arrimo.senseafri.com",
+      "release_active": "releases/arrimo-fin-2ed912745f6338e185c8c31bd0cb97385a9fce1d",
+      "version_active": "2ed912745f6338e185c8c31bd0cb97385a9fce1d",
+      "service": "arrimo"
+    },
+    {
+      "environnement": "sh",
+      "domaine": "sh.arrimo.senseafri.com",
+      "release_active": "releases/arrimo-audit-9a67e96e2a3d0b537609435b17bc2833c8eb7417",
+      "version_active": "9a67e96e2a3d0b537609435b17bc2833c8eb7417",
+      "service": "arrimo-sh"
+    }
+  ],
+  "aucune_migration": true,
+  "aucun_deploiement": true
+}

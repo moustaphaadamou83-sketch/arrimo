@@ -1,0 +1,12 @@
+✔ worker accepte uniquement le nom PostgreSQL exact et local (14.3329ms)
+✔ worker refuse un hôte distant dans URL ou paramètres (27.314299ms)
+✔ worker refuse les options et paramètres PostgreSQL dupliqués (4.272645ms)
+✔ worker refuse les noms publics comme copies de restauration (0.687342ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 100.253112
