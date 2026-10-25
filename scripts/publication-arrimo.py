@@ -185,7 +185,9 @@ class Publication:
             if not 1024 <= port <= 65535: raise Refus('Port applicatif invalide')
             unite = self.commande('systemd-' + t, ['systemctl','show', service + '.service', '--property=ActiveState,User,Group,WorkingDirectory,ExecStart,EnvironmentFiles','--no-pager']).decode()
             v = dict(x.split('=',1) for x in unite.splitlines() if '=' in x)
-            if v.get('ActiveState') != 'active' or v.get('WorkingDirectory') != str(root / 'current') or v.get('EnvironmentFiles','').split(' (ignore_errors=')[0] != str(env_file) or v.get('EnvironmentFiles','').count('(ignore_errors=') != 1 or NODE not in v.get('ExecStart',''):
+            # systemctl show répète EnvironmentFiles une fois par fichier (unité puis drop-ins).
+            fichiers = [x.split('=',1)[1].split(' (ignore_errors=')[0] for x in unite.splitlines() if x.startswith('EnvironmentFiles=')]
+            if v.get('ActiveState') != 'active' or v.get('WorkingDirectory') != str(root / 'current') or not fichiers or fichiers[0] != str(env_file) or any(pathlib.Path(f).parent != root / 'shared' for f in fichiers) or NODE not in v.get('ExecStart',''):
                 raise Refus('Unité systemd inattendue : ' + t)
             if v.get('User') in ('', 'root', None): raise Refus('Compte applicatif dédié requis')
             nginx = pathlib.Path('/etc/nginx/sites-available') / service
