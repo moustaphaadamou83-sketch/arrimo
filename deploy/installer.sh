@@ -187,6 +187,8 @@ else
     sudo -u "$UTILISATEUR" bash -c "set -a; . $DOSSIER/.env; set +a; cd $DOSSIER && psql \"\$DATABASE_URL\" -v ON_ERROR_STOP=1 -q -f db/migrations/20261023_services_hospitaliers.sql" >/dev/null
     sudo -u "$UTILISATEUR" bash -c "set -a; . $DOSSIER/.env; set +a; cd $DOSSIER && psql \"\$DATABASE_URL\" -v ON_ERROR_STOP=1 -q -f db/migrations/20261023_structure_hospitaliere_detaillee.sql" >/dev/null
     sudo -u "$UTILISATEUR" bash -c "set -a; . $DOSSIER/.env; set +a; cd $DOSSIER && psql \"\$DATABASE_URL\" -v ON_ERROR_STOP=1 -q -f db/migrations/20261024_comptes_invitations.sql" >/dev/null
+    # Coordination : les deux migrations sont atomiques ; aucun seed ni remise à zéro.
+    sudo -u "$UTILISATEUR" bash -c "set -a; . $DOSSIER/.env; set +a; cd $DOSSIER && psql \"\$DATABASE_URL\" -v ON_ERROR_STOP=1 -q --single-transaction -f db/migrations/20261025-priorites.sql -f db/migrations/20261025-simulation.sql" >/dev/null
   fi
   if [ "${NOUVELLE_INSTALLATION:-0}" = 1 ]; then
     echo "   Base vide (aucune donnée de démonstration en $ARRIMO_ENV)."

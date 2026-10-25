@@ -46,3 +46,9 @@ Le lanceur existant a effectivement été exécuté par cette session. Rapport :
 Node réussit ; le contrôle des sous-processus échoue avec `EPERM`. Le lanceur s’arrête avant création de base (`bases_creees=[]`), sans migration ni publication. Les preuves JSON sont conservées dans `preuves-corrections-recette-20261025`. Aucun outil de session SSH distante ou de lancement serveur hors sandbox n’est exposé à cette session ; aucune tentative de contournement des restrictions n’a été effectuée.
 
 L’opération restante exige le lancement du script existant depuis la session SSH Contabo autorisée : `bash /root/arrimo-sh-erp/scripts/lancer-recette-ssh.sh`. Une recette complète est nécessaire, car les textes et services applicatifs ont été corrigés depuis 7177e22. Après réussite, restent les sauvegardes publiques restaurables, les migrations sur copies publiques et les contrôles du déploiement décrit plus haut. Cette commande ne publie rien et ne touche pas aux données publiques.
+
+## Correction de la préparation de publication
+
+L’audit du chemin réel de mise à jour a identifié une omission : `deploy/installer.sh` s’arrêtait aux migrations du 24 octobre. Il applique désormais aussi `20261025-priorites.sql` et `20261025-simulation.sql` dans une seule transaction PostgreSQL avec arrêt sur erreur, après les migrations existantes et sous le compte applicatif. Cette branche ne s’exécute que pour une mise à jour Arrimo hors SH ; elle n’exécute aucun seed. Les garde-fous de sauvegarde et de préflight existants restent requis.
+
+Vérifications réalisées pour cette correction : analyse du chemin conditionnel, `bash -n deploy/installer.sh` et `git diff --check`. L’exécution SQL de ce chemin sur copie et son exercice complet serveur restent requis : aucune validation réelle de l’installateur n’est revendiquée ici. Les 135 tests locaux ne sont pas relancés, car leurs sources applicatives sont inchangées depuis leur dernier succès.
