@@ -1,5 +1,7 @@
 # Arrimo VNext — état vérifié dans cette session, 25 octobre 2026
 
+> Rapport initial conservé pour historique. La reprise, les nouvelles fonctionnalités et l'inventaire corrigé du principal via `/opt/arrimo/current` sont dans [RAPPORT_REPRISE_VNEXT_2026-10-25.md](RAPPORT_REPRISE_VNEXT_2026-10-25.md).
+
 La mission complète n'est pas livrée. Ce rapport distingue les observations locales, les tests exécutés et les résultats historiques. Aucune donnée hospitalière ni donnée de démonstration n'a été modifiée dans cette session.
 
 ## Correctif développé et tests locaux

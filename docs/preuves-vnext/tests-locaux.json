@@ -1,0 +1,49 @@
+{
+  "date": "2026-10-25T03:01:50.848Z",
+  "type": "tests locaux sans PostgreSQL ni navigateur",
+  "sources_sha256": "58581c54ca1c1c38f839d8b793789d9f91c0dd926314c3bcbf95300289dca457",
+  "suites": [
+    {
+      "fichier": "priorites.test.cjs",
+      "reussis": 38,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "priorites-ui-contract.test.cjs",
+      "reussis": 11,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "configuration-operationnelle.test.cjs",
+      "reussis": 18,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "connecteurs-atomicite.test.cjs",
+      "reussis": 6,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "courriel-transport.test.cjs",
+      "reussis": 1,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "routage.test.cjs",
+      "reussis": 6,
+      "echecs": 0,
+      "ignores": 0
+    }
+  ],
+  "total": {
+    "reussis": 80,
+    "echecs": 0,
+    "ignores": 0,
+    "annules": 0
+  }
+}

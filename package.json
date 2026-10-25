@@ -14,6 +14,7 @@
     "test:vnext-local": "node scripts/test-vnext-local.cjs",
     "test:priorites-postgres": "node tests/priorites-postgres.test.cjs",
     "test:priorites-interface": "node tests/priorites.interface.spec.cjs",
+    "verifier:migration-priorites": "node scripts/verifier-migration-priorites.cjs",
     "demo:reseau": "node db/demo-reseau.js",
     "demo:trio": "node db/demo-trio.js",
     "demo:trio:reset": "node db/reset-demo-trio.js",
