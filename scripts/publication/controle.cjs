@@ -127,6 +127,8 @@ async function acces(p) {
   assert.ok(m.etablissements.length);return {role:m.utilisateur.role,etablissements:m.etablissements.map(e=>e.id),gestionnaire:m.utilisateur.gestionnaire};
 }
 async function navigateur(p) {
+  // Le briefing Copilote peut bloquer le basculement de vue sur un grand réseau (~30 s) : marge d'attente.
+  const ATTENTE_VUE = 60000;
   const { chromium } = require('playwright');
   const browser = await chromium.launch({ headless:true });
   const compteRendus = [];
@@ -152,7 +154,7 @@ async function navigateur(p) {
         await page.locator('#ecran-app:not([hidden])').waitFor({timeout:30000});
         for (const vue of ['accueil','hopitaux','crm','contrats','projets','taches','support']) {
           const tab = page.locator(`#onglets [data-v="${vue}"]`);
-          await tab.click(); await page.locator('#contenu h2').waitFor();
+          await tab.click(); await page.locator('#contenu h2').waitFor({timeout:ATTENTE_VUE});
         }
         for (const chemin of ['/hopitaux','/environnements','/journal']) await appel(chemin);
       } else {
@@ -167,7 +169,7 @@ async function navigateur(p) {
         }
         for (const vue of compte.nom==='reseau' ? ['reseau','national'] : ['copilote','admissions','lits','urgence','vigilance','nettoyage','nsa','transferts']) {
           const tab = page.locator(`#onglets [data-v="${vue}"]`);
-          await tab.click(); await page.locator(`#v-${vue}:not([hidden])`).waitFor();
+          await tab.click(); await page.locator(`#v-${vue}:not([hidden])`).waitFor({timeout:ATTENTE_VUE});
         }
         if (p.type==='demo') {
           const q = await ctx.request.post(p.base+'/api/copilote/question',{ headers, data:{etablissement_id:etab,question:'Quels lits sont disponibles et quelles demandes attendent un lit ?'} });
@@ -179,7 +181,7 @@ async function navigateur(p) {
       if (p.type==='demo') {
         const vue=compte.nom==='reseau'?'reseau':'copilote';
         await page.locator(`#onglets [data-v="${vue}"]`).click();
-        await page.locator(`#v-${vue}:not([hidden])`).waitFor();
+        await page.locator(`#v-${vue}:not([hidden])`).waitFor({timeout:ATTENTE_VUE});
         await page.screenshot({ path:path.join(p.captures,'dashboard-'+compte.nom+'.png'),fullPage:true });
       }
       compteRendus.push({ compte:compte.nom, navigateur:true, lectures_metier:true, erreurs_javascript:0 });
