@@ -1,0 +1,116 @@
+{
+  "commit": "98712dfb9b20c2b5ae21903a3c154da52bff5aa6",
+  "suites": [
+    {
+      "suite": "api",
+      "tests": 74,
+      "pass": 74,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "journal_sha256": "251e528955933b13589baf38f195b4d53503290d8cbb3f34b61b47e33d1f523f"
+    },
+    {
+      "suite": "priorites-sql",
+      "tests": 10,
+      "pass": 10,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "journal_sha256": "7650ab638400444e1d2e5cb8f6cc7fcba4191b7ec4e620cd8e3904fefb832b2b"
+    },
+    {
+      "suite": "interop-sql",
+      "tests": 10,
+      "pass": 10,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "journal_sha256": "4ceb0e51feb63cbfd45ac41357c4ebe8b67be235fcb920351f6e38866b3effb2"
+    },
+    {
+      "suite": "securite-multietablissement",
+      "tests": 13,
+      "pass": 13,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "journal_sha256": "e39b38b4ff8b7e9d2a382f245181baa79ae61cd31c5ecdc91ad54fe179111dd5"
+    },
+    {
+      "suite": "scenarios-abc",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "journal_sha256": "bc52a6b1f0d84158e502c217628a8c55bc5943c1242bdf067bb7ad80e2df3db4"
+    },
+    {
+      "suite": "dashboards-abc-reseau",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "journal_sha256": "07fe947d5cc81dbb460c98307a2ac1b1ce2a9367908f73dd8c681a322b4578c7"
+    },
+    {
+      "suite": "interface-parcours",
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "journal_sha256": "b08da38edbf45c885d5ce1f641877bf671e78f017e3466e248c241b36e830e38"
+    },
+    {
+      "suite": "priorites-navigateur",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "journal_sha256": "3cf746716a66ea9705382e63474fd669186d3ec7ee6f0b8772afcafa9eb79741"
+    },
+    {
+      "suite": "structure-navigateur",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "journal_sha256": "c31fcd4d3ffa236f91a800a8a3a502183460e82d474557d3dbf4a57f86311adb"
+    },
+    {
+      "suite": "sh-erp",
+      "tests": 19,
+      "pass": 19,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "journal_sha256": "9e2ed0c2b3daceeb9f775c61039b4f6fab37602d789f8009df1fc1c04ba8774f"
+    },
+    {
+      "suite": "sh-navigateur",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "journal_sha256": "60ad3709315f13c3fd6f7013e173b08533570de877ad29e0dfb392c181c46d04"
+    },
+    {
+      "suite": "securite-xss",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "journal_sha256": "4e83338ade9cfee5b8a16eb1220a7b7cf92853dafa58d92640f7ec2726b20daf"
+    }
+  ],
+  "tests_integres_reussis": 153,
+  "sauvegarde_fictive_sha256_verifiee": "4f9d348ba0ea0e7c8fbc6ae0171244a997ee3328e76d352cd9582d7d3f721596",
+  "publication_effectuee": false
+}

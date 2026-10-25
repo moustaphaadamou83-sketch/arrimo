@@ -1,0 +1,214 @@
+{
+  "date": "2026-10-25T08:25:10.399250+00:00",
+  "statut": "copie_validee",
+  "application_isolee": "/root/arrimo-recette-ssh-20261025T082510Z-1391873/application",
+  "bases_creees": [
+    "arrimo_recette_source_20261025082510_9ebedc",
+    "arrimo_vnext_restore_20261025082510_9ebedc",
+    "arrimo_test_20261025082510_9ebedc",
+    "arrimo_vnext_test_20261025082510_9ebedc",
+    "arrimo_simulation_test_20261025082510_9ebedc",
+    "arrimo_audit_multi_20261025082510_9ebedc",
+    "arrimo_demo_trio_scenarios_20261025082510_9ebedc",
+    "arrimo_demo_trio_ui_20261025082510_9ebedc",
+    "arrimo_interface_20261025082510_9ebedc",
+    "arrimo_vnext_ui_test_20261025082510_9ebedc",
+    "arrimo_demo_trio_structure_20261025082510_9ebedc",
+    "arrimo_sh_test_20261025082510_9ebedc",
+    "arrimo_sh_ui_test_20261025082510_9ebedc",
+    "arrimo_audit_xss_20261025082510_9ebedc"
+  ],
+  "etapes": [
+    {
+      "nom": "runtime-node",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "runtime-ipc",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "runtime-chromium",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "postgres-maintenance",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "creer-arrimo_recette_source",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "preparer-fictif-ancien-schema",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "sauvegarde-fictive",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "lecture-sauvegarde",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "creer-arrimo_vnext_restore",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "restauration-fictive",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "empreintes-source",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "empreintes-restauree",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "migrations-copie-restauree",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "creer-arrimo_test",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "api",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "creer-arrimo_vnext_test",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "priorites-sql",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "creer-arrimo_simulation_test",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "interop-sql",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "creer-arrimo_audit_multi",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "securite-multietablissement",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "creer-arrimo_demo_trio_scenarios",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "scenarios-abc",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "creer-arrimo_demo_trio_ui",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "dashboards-abc-reseau",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "creer-arrimo_interface",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "interface-parcours",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "creer-arrimo_vnext_ui_test",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "priorites-navigateur",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "creer-arrimo_demo_trio_structure",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "structure-navigateur",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "creer-arrimo_sh_test",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "sh-erp",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "creer-arrimo_sh_ui_test",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "sh-navigateur",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "creer-arrimo_audit_xss",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "securite-xss",
+      "sortie": 0,
+      "reussi": true
+    }
+  ],
+  "sauvegarde_fictive_restauree": true,
+  "copie_isolee_validee": true,
+  "publication_effectuee": false,
+  "migration_publique_effectuee": false,
+  "commit": "98712dfb9b20c2b5ae21903a3c154da52bff5aa6",
+  "sauvegarde_sha256": "4f9d348ba0ea0e7c8fbc6ae0171244a997ee3328e76d352cd9582d7d3f721596"
+}

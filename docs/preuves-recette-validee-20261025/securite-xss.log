@@ -1,0 +1,16 @@
+TAP version 13
+# Subtest: XSS stockée : aucune charge ne s’exécute, pour un autre hôpital ni pour le gestionnaire réseau
+ok 1 - XSS stockée : aucune charge ne s’exécute, pour un autre hôpital ni pour le gestionnaire réseau
+  ---
+  duration_ms: 55265.009062
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 56179.886294
