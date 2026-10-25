@@ -566,6 +566,11 @@ test('connecteur ADT : admission, congé, idempotence, isolation ; connecteur r�
   const con = await connecteurs.creerConnecteur(pool, 'Test ADT', mb);
   const lec = await connecteurs.creerConnecteur(pool, 'Test réseau', null);
   const libre = await litLibre(mb);
+  // Deux livraisons simultanées du même événement neuf : un seul accusé validé.
+  const simultane = { identifiant: 'MSG-CONCURRENT', evenement: 'conge', lit: libre.code };
+  const doublons = await Promise.all([1, 2].map(() => appel(null, 'POST', '/connecteurs/evenements', simultane, { 'X-Connecteur-Key': con.cle })));
+  assert.deepStrictEqual(doublons.map((r) => r.corps.statut).sort(), ['deja_recu', 'ignore']);
+  assert.strictEqual((await pool.query('SELECT count(*)::int AS n FROM messages_connecteur WHERE connecteur_id = $1 AND identifiant = $2', [con.id, simultane.identifiant])).rows[0].n, 1);
   const ev = { identifiant: 'MSG-0001', evenement: 'admission', lit: libre.code, patient_ref: 'P-80001' };
   assert.strictEqual((await appel(null, 'POST', '/connecteurs/evenements', ev, { 'X-Connecteur-Key': 'faux' })).statut, 401);
   const r1 = await appel(null, 'POST', '/connecteurs/evenements', ev, { 'X-Connecteur-Key': con.cle });

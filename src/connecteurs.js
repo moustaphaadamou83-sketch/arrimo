@@ -39,10 +39,6 @@ async function recevoirEvenement(pool, connecteur, ev) {
   if (!identifiant) throw new ErreurHttp(400, 'identifiant_requis');
   if (!EVENEMENTS.includes(ev.evenement)) throw new ErreurHttp(400, 'evenement_invalide', { liste: EVENEMENTS.join(', ') });
 
-  const deja = await pool.query('SELECT statut, detail FROM messages_connecteur WHERE connecteur_id = $1 AND identifiant = $2',
-    [connecteur.id, identifiant]);
-  if (deja.rows[0]) return { statut: 'deja_recu', detail: deja.rows[0].detail };
-
   const trouverLit = async (c, code) => {
     const r = await c.query('SELECT id, code, etat, patient_ref, version FROM lits WHERE etablissement_id = $1 AND code = $2',
       [connecteur.etablissement_id, String(code || '')]);
@@ -61,38 +57,55 @@ async function recevoirEvenement(pool, connecteur, ev) {
 
   let statut = 'applique'; let detail = '';
   try {
-    await transaction(pool, async (c) => {
-      const ref = String(ev.patient_ref || '').trim();
-      if (ev.evenement === 'admission') {
-        await occuper(c, await trouverLit(c, ev.lit), ref, `${connecteur.nom} : admission`);
-        detail = `Admission ${ref} au lit ${ev.lit}`;
-      } else if (ev.evenement === 'transfert_interne') {
-        const avant = await trouverLit(c, ev.lit_precedent);
-        if (avant.etat === 'occupe') await changerEtat(c, pool, null, avant.id, 'nettoyage', { detail: `${connecteur.nom} : transfert interne` });
-        await occuper(c, await trouverLit(c, ev.lit), ref, `${connecteur.nom} : transfert interne`);
-        detail = `Transfert interne ${ev.lit_precedent} → ${ev.lit}`;
-      } else if (ev.evenement === 'conge') {
-        const lit = await trouverLit(c, ev.lit);
-        if (lit.etat !== 'occupe') { statut = 'ignore'; detail = `Lit ${ev.lit} déjà libéré`; return; }
-        await changerEtat(c, pool, null, lit.id, 'nettoyage', { detail: `${connecteur.nom} : congé` });
-        detail = `Congé du lit ${ev.lit}`;
-      } else if (ev.evenement === 'arrivee_urgence') {
-        // Arrivée à l'urgence transmise par le système de l'hôpital : référence seulement, civière désignée par son code
-        const deja = (await c.query(`SELECT code FROM civieres WHERE etablissement_id = $1 AND patient_ref = $2 AND etat = 'occupee'`, [connecteur.etablissement_id, ref])).rows[0];
-        if (deja) { statut = 'ignore'; detail = `${ref} déjà sur la civière ${deja.code}`; return; }
-        const cv = (await c.query('SELECT id, code FROM civieres WHERE etablissement_id = $1 AND code = $2', [connecteur.etablissement_id, String(ev.civiere || '')])).rows[0];
-        if (!cv) throw new ErreurHttp(404, 'civiere_introuvable');
-        await require('./regles').changerEtatCiviere(c, pool, null, cv.id, 'occupee', { patientRef: ref, arrivee: ev.date || null, detail: `${connecteur.nom} : arrivée à l’urgence` });
-        detail = `Arrivée ${ref} sur la civière ${cv.code} (source : ${connecteur.nom})`;
-      } else if (ev.evenement === 'conge_prevu') {
-        const lit = await trouverLit(c, ev.lit);
-        const d = new Date(ev.date);
-        if (Number.isNaN(d.getTime())) throw new ErreurHttp(400, 'date_invalide');
-        const u = await c.query(`UPDATE lits SET sortie_prevue = $2, conge_statut = 'prevu' WHERE id = $1 AND etat = 'occupe' RETURNING id`, [lit.id, d]);
-        if (!u.rows[0]) { statut = 'ignore'; detail = `Lit ${ev.lit} non occupé`; return; }
-        await require('./terrain').synchroniserConge(c, lit.id, null, 'integration');
-        detail = `Congé prévu ${d.toISOString()} au lit ${ev.lit}`;
-      }
+    return await transaction(pool, async (c) => {
+      // Sérialiser les livraisons concurrentes, même quand aucune ligne de journal
+      // n'existe encore. Le verrou est libéré au COMMIT ou au ROLLBACK.
+      await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', [JSON.stringify(['arrimo-connecteur', connecteur.id, identifiant])]);
+      const deja = await c.query('SELECT statut, detail FROM messages_connecteur WHERE connecteur_id = $1 AND identifiant = $2',
+        [connecteur.id, identifiant]);
+      if (deja.rows[0] && deja.rows[0].statut !== 'rejete') return { statut: 'deja_recu', detail: deja.rows[0].detail };
+
+      // Les retours anticipés des événements ignorés doivent aussi être journalisés.
+      await (async () => {
+        const ref = String(ev.patient_ref || '').trim();
+        if (ev.evenement === 'admission') {
+          await occuper(c, await trouverLit(c, ev.lit), ref, `${connecteur.nom} : admission`);
+          detail = `Admission ${ref} au lit ${ev.lit}`;
+        } else if (ev.evenement === 'transfert_interne') {
+          const avant = await trouverLit(c, ev.lit_precedent);
+          if (avant.etat === 'occupe') await changerEtat(c, pool, null, avant.id, 'nettoyage', { detail: `${connecteur.nom} : transfert interne` });
+          await occuper(c, await trouverLit(c, ev.lit), ref, `${connecteur.nom} : transfert interne`);
+          detail = `Transfert interne ${ev.lit_precedent} → ${ev.lit}`;
+        } else if (ev.evenement === 'conge') {
+          const lit = await trouverLit(c, ev.lit);
+          if (lit.etat !== 'occupe') { statut = 'ignore'; detail = `Lit ${ev.lit} déjà libéré`; return; }
+          await changerEtat(c, pool, null, lit.id, 'nettoyage', { detail: `${connecteur.nom} : congé` });
+          detail = `Congé du lit ${ev.lit}`;
+        } else if (ev.evenement === 'arrivee_urgence') {
+          // Arrivée à l'urgence transmise par le système de l'hôpital : référence seulement, civière désignée par son code
+          const deja = (await c.query(`SELECT code FROM civieres WHERE etablissement_id = $1 AND patient_ref = $2 AND etat = 'occupee'`, [connecteur.etablissement_id, ref])).rows[0];
+          if (deja) { statut = 'ignore'; detail = `${ref} déjà sur la civière ${deja.code}`; return; }
+          const cv = (await c.query('SELECT id, code FROM civieres WHERE etablissement_id = $1 AND code = $2', [connecteur.etablissement_id, String(ev.civiere || '')])).rows[0];
+          if (!cv) throw new ErreurHttp(404, 'civiere_introuvable');
+          await require('./regles').changerEtatCiviere(c, pool, null, cv.id, 'occupee', { patientRef: ref, arrivee: ev.date || null, detail: `${connecteur.nom} : arrivée à l’urgence` });
+          detail = `Arrivée ${ref} sur la civière ${cv.code} (source : ${connecteur.nom})`;
+        } else if (ev.evenement === 'conge_prevu') {
+          const lit = await trouverLit(c, ev.lit);
+          const d = new Date(ev.date);
+          if (Number.isNaN(d.getTime())) throw new ErreurHttp(400, 'date_invalide');
+          const u = await c.query(`UPDATE lits SET sortie_prevue = $2, conge_statut = 'prevu' WHERE id = $1 AND etat = 'occupe' RETURNING id`, [lit.id, d]);
+          if (!u.rows[0]) { statut = 'ignore'; detail = `Lit ${ev.lit} non occupé`; return; }
+          await require('./terrain').synchroniserConge(c, lit.id, null, 'integration');
+          detail = `Congé prévu ${d.toISOString()} au lit ${ev.lit}`;
+        }
+      })();
+      // L'effet métier et son accusé de réception sont atomiques. Un rejet peut
+      // être rejoué après correction, sans bloquer définitivement l'identifiant.
+      await c.query(`INSERT INTO messages_connecteur (connecteur_id, identifiant, evenement, statut, detail) VALUES ($1,$2,$3,$4,$5)
+                    ON CONFLICT (connecteur_id, identifiant) DO UPDATE
+                    SET evenement = EXCLUDED.evenement, statut = EXCLUDED.statut, detail = EXCLUDED.detail
+                    WHERE messages_connecteur.statut = 'rejete'`, [connecteur.id, identifiant, ev.evenement, statut, detail]);
+      return { statut, detail };
     });
   } catch (err) {
     statut = 'rejete';
@@ -101,9 +114,6 @@ async function recevoirEvenement(pool, connecteur, ev) {
                       ON CONFLICT DO NOTHING`, [connecteur.id, identifiant, ev.evenement, statut, detail]);
     throw err;
   }
-  await pool.query(`INSERT INTO messages_connecteur (connecteur_id, identifiant, evenement, statut, detail) VALUES ($1,$2,$3,$4,$5)
-                    ON CONFLICT DO NOTHING`, [connecteur.id, identifiant, ev.evenement, statut, detail]);
-  return { statut, detail };
 }
 
 /** Capacité agrégée de tous les établissements qui partagent (connecteur réseau). Aucun lit, aucun patient. */
