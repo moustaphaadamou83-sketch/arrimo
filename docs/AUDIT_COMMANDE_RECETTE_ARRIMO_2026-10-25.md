@@ -40,3 +40,5 @@ Les migrations ajoutent deux tables de priorités, des colonnes/contraintes de v
 - Une restauration fictive réussie ne vaut pas vérification d'une sauvegarde fraîche de la démo publique. Publication, sauvegarde publique restaurable, rollback applicatif et contrôle public restent des étapes ultérieures distinctes.
 
 La commande remise à l'utilisateur fixe Node 24 et le module Playwright découverts, choisit un dossier de sortie unique, conserve les journaux en mode privé et utilise `nohup` pour survivre à une coupure SSH. Elle affiche le rapport à la fin. Elle ne touche pas aux scénarios publics A/B/C.
+
+Cette commande est `bash /root/arrimo-sh-erp/scripts/lancer-recette-ssh.sh`. Le wrapper a été vérifié par `bash -n`, sans relancer la recette dans le sandbox. Il affiche aussi les dernières lignes des journaux d'étapes échouées, déjà expurgés par le lanceur Python. Le processus de recette continue après une éventuelle coupure SSH ; les chemins des journaux sont affichés dès le démarrage.
