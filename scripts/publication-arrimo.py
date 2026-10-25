@@ -113,6 +113,10 @@ class Publication:
         self.environnement['NODE_PATH'] = str((RACINE / 'node_modules').resolve())
         self.envs = {}; self.comptes = {}; self.infos = {}; self.preparees = {}; self.active = None
         self.selection = [t for t, *_ in CIBLES]
+        # Cibles dont la vérification navigateur AUTHENTIFIÉE est laissée au titulaire du compte :
+        # on saute uniquement la connexion et la navigation connectée, jamais les sauvegardes,
+        # les migrations sur copie, le smoke test local ni la santé/SHA-256 publics.
+        self.verif_manuelle = [t for t, *_ in CIBLES if t in os.environ.get('ARRIMO_PUBLICATION_VERIF_MANUELLE','').split(',')]
         self.sauver()
 
     def sauver(self):
@@ -311,6 +315,11 @@ class Publication:
                 m = re.search(r'^Mot de passe commun : (.+)$',f.read_text(),re.M)
                 if m: mdp_demo = m[1]
         for t in self.selection:
+            if t in self.verif_manuelle:
+                # Aucune connexion : la vérification authentifiée sera faite par le titulaire après publication.
+                self.comptes[t] = []
+                self.etat['environnements'][t]['verification_navigateur'] = 'manuelle_requise'
+                continue
             comptes = donnees.get(t)
             if not comptes:
                 if t == 'demo': comptes = [{'nom':n,'email':e,'password':mdp_demo} for n,e in [('a','hopital.a@demo.arrimo'),('b','hopital.b@demo.arrimo'),('c','hopital.c@demo.arrimo'),('reseau','reseau@demo.arrimo')]]
@@ -347,6 +356,7 @@ class Publication:
 
     def verifier_acces_navigateurs(self):
         for t in self.selection:
+            if t in self.verif_manuelle: continue
             captures=self.sortie/('captures-avant-'+t);captures.mkdir(mode=0o700)
             self.worker('navigateur-avant-'+t,{'operation':'navigateur','type':t,'base':'https://'+self.infos[t]['hote'],'comptes':self.comptes[t],'captures':str(captures)})
 
@@ -429,6 +439,10 @@ class Publication:
         asset='sh.js' if t=='sh' else 'app.js'; rep='public-sh' if t=='sh' else 'public'
         b=self.http('https://'+i['hote'],'/'+asset+'?arrimo_release='+CANDIDAT)
         if hashlib.sha256(b).hexdigest()!=sha(self.code/rep/asset): raise Refus('Version des assets publics incorrecte')
+        if t in self.verif_manuelle:
+            # Santé publique et empreinte de l'asset vérifiées sans compte ; la navigation
+            # authentifiée (compte Administration + MFA) est laissée au titulaire.
+            return {'sante':sante,'asset_sha256':hashlib.sha256(b).hexdigest(),'verification_navigateur':'manuelle_requise'}
         captures=self.sortie/('captures-'+t);captures.mkdir(exist_ok=True,mode=0o700)
         # Les requêtes et la navigation passent par une connexion normale et des rôles existants.
         r=self.worker('navigateur-public-'+t,{'operation':'navigateur','type':t,'base':'https://'+i['hote'],'comptes':self.comptes[t],'captures':str(captures)})
