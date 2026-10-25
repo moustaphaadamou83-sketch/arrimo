@@ -121,10 +121,10 @@ class Publication:
             f.write(json.dumps(self.etat, ensure_ascii=False, indent=2) + '\n');f.flush();os.fsync(f.fileno())
         tmp.chmod(0o600); os.replace(tmp, self.sortie / 'rapport.json')
 
-    def commande(self, nom, argv, env=None, entree=None, secret=False, timeout=600):
+    def commande(self, nom, argv, env=None, entree=None, secret=False, timeout=600, cwd=None):
         # Ne jamais journaliser argv, env ou les corps de connexion : URL, mots de passe et jetons privés.
         try:
-            r = subprocess.run(argv, input=entree, capture_output=True, env=env or self.environnement, timeout=timeout, cwd=RACINE)
+            r = subprocess.run(argv, input=entree, capture_output=True, env=env or self.environnement, timeout=timeout, cwd=cwd or RACINE)
         except subprocess.TimeoutExpired:
             raise Refus(nom + ' : délai dépassé')
         if not secret:
@@ -352,14 +352,15 @@ class Publication:
         else:
             for f in cible.rglob('*'):
                 if not f.is_symlink():shutil.chown(f,user=i['user'],group=i['group'])
-            self.commande('dependances-'+t,['runuser','-u',i['user'],'--','/usr/bin/env','PATH='+str(pathlib.Path(NODE).parent)+':/usr/bin:/bin','npm','ci','--omit=dev','--prefix',str(cible)],timeout=600)
+            # cwd dans la release (sous /opt) : le compte de service ne peut pas traverser le dépôt sous /root.
+            self.commande('dependances-'+t,['runuser','-u',i['user'],'--','/usr/bin/env','PATH='+str(pathlib.Path(NODE).parent)+':/usr/bin:/bin','npm','ci','--omit=dev','--prefix',str(cible)],timeout=600,cwd=str(cible))
         # Code non modifiable par le service ; dépendances historiques conservées et non purgées.
         for dossier, dirs, fichiers in os.walk(cible,followlinks=False):
             shutil.chown(dossier,user='root',group=i['group']);os.chmod(dossier,0o750)
             for nom in fichiers:
                 f=pathlib.Path(dossier)/nom
                 if not f.is_symlink():shutil.chown(f,user='root',group=i['group']);f.chmod(0o750 if f.stat().st_mode & 0o111 else 0o640)
-        self.commande('lecture-runtime-'+t,['runuser','-u',i['user'],'--',NODE,'-e',"require(process.argv[1]+'/node_modules/pg');require(process.argv[1]+'/node_modules/express')",str(cible)])
+        self.commande('lecture-runtime-'+t,['runuser','-u',i['user'],'--',NODE,'-e',"require(process.argv[1]+'/node_modules/pg');require(process.argv[1]+'/node_modules/express')",str(cible)],cwd=str(cible))
         return rid
 
     def controle_public(self,t):
