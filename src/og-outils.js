@@ -127,7 +127,7 @@ function litsMentionnes(question, lits) {
 /* ------------------------------------------------------------------ intentions (indices pondérés) */
 const INTENTIONS = [
   ['etat', [[/(etat actuel|etat de (mon|notre|l) ?(hopital|etablissement)|situation (actuelle|generale)|comment (va|se porte)|vue d ensemble|tableau de bord)/, 3], [/(\betat\b|resume)/, 1]]],
-  ['priorites', [[/(priorit|plus urgent|que (dois|devons|faut)|quoi faire|par ou commencer|situations? (prioritaires?|critiques?))/, 3]]],
+  ['priorites', [[/(priorit|classement|rang des demandes|ordre des demandes|plus urgent|que (dois|devons|faut)|quoi faire|par ou commencer|situations? (prioritaires?|critiques?))/, 3]]],
   ['actions', [[/(actions?.{0,25}(attendu|a faire|a mener|a realiser)|qu (est-ce qu|est ce qu)? ?on doit faire|que (devons|doit) (nous|on|l equipe) faire|taches?|attendu\w* de (notre|mon|l) equipe|a faire aujourd|liste de travail)/, 4]]],
   ['lit', [[/\blit\b.*(conge|prevu|confirme|etat|statut|reserv|occup)|(conge|statut|etat) du lit/, 2]]],
   ['conges', [[/(conges?|sorties? prevues?|departs? prevus?|vont se liberer|se liberer|liberations?|liberes? (aujourd|demain|ce soir|dans)|libereront|disponibilites? prevues?)/, 3]]],
@@ -173,6 +173,8 @@ function choisir(scores, entites) {
   }
   if (has('non_confirmes')) { a.delete('lits_libres'); }
   if (has('pourquoi')) { a.delete('transferts'); a.delete('reseau'); a.delete('lits_libres'); a.delete('destination'); }
+  if (has('priorites') && /(demand|admission|classement|rang|ordre)/.test(entites.qn)
+    && !/(transfert|hopital [abc]|etablissement [abc]|plutot que|au lieu de)/.test(entites.qn)) a.delete('pourquoi');
   if (has('destination')) { a.delete('lits_libres'); a.delete('reseau'); if (has('pediatrie')) a.delete('destination'); }
   if (has('pediatrie') && (a.get('pediatrie').sc < 2) && !has('lits_libres')) a.delete('pediatrie');
   if (has('pediatrie') && has('lits_libres') && /etablissement|hopitaux|reseau|ailleurs/.test(entites.qn)) a.delete('lits_libres');
@@ -282,6 +284,14 @@ async function repondre(pool, utilisateur, etabId, question, { historique } = {}
       faits.push('compteurs lus en direct dans la base');
     },
     async priorites() {
+      if (/(demand|patient|admission|classement|class\w*|rang|ordre)/.test(qn)) {
+        const file = await charger('file', () => t.fileAdmission(pool, utilisateur, etabId), 'Admissions et priorités validées');
+        const attente = file.filter((d) => d.statut === 'attente');
+        blocs.push(attente.length ? ['Demandes en attente : priorités validées selon le référentiel de l’établissement, puis demandes à valider.',
+          ...attente.slice(0, entites.nombre || 20).map((d, i) => `${i + 1}. Demande ${d.id} · ${d.patient_ref} · ${d.type_nom} · ${d.priorite_affichage}. ${d.priorite_explication}${d.lit_suggere ? ` Lit compatible proposé : ${d.lit_suggere.code} (âge, unité et équipements demandés).` : ' Aucun lit compatible libre local.'}`),
+          'OG ne valide ni ne modifie les priorités. L’équipe confirme toute attribution.'].join('\n') : 'Aucune demande en attente.');
+        return;
+      }
       const b = await charger('briefing', () => require('./copilote').briefing(pool, utilisateur, etabId), 'Recommandations OG');
       const n = entites.nombre || 3;
       const recos = b.recommandations.slice(0, n);
@@ -389,7 +399,7 @@ async function repondre(pool, utilisateur, etabId, question, { historique } = {}
         blocs.push(`Aucune demande de lit n’attend depuis plus de ${duree(seuil || 0)} (durée comptée depuis la demande de lit).${longs.length ? `\nÀ noter : ${longs.map((d) => `${d.patient_ref} est sur civière (${d.civiere_code}) depuis ${duree(d.heures_civiere * 60)}`).join(' ; ')}.` : ''}`);
         return;
       }
-      blocs.push([`${f.length} patients attendent un lit${seuil ? ` depuis plus de ${duree(seuil)}` : ''} (durée depuis la demande de lit) :`, ...f.map((d) => `• ${d.patient_ref} · ${d.type_nom} · ${d.priorite.toUpperCase()} · attend depuis ${duree(d.attente_min)}${d.civiere_code ? ` · civière ${d.civiere_code}` : ''}${d.lit_suggere ? ` · lit compatible libre : ${d.lit_suggere.code}` : ' · aucun lit compatible libre ici'}`)].join('\n'));
+      blocs.push([`${f.length} patients attendent un lit${seuil ? ` depuis plus de ${duree(seuil)}` : ''} (durée depuis la demande de lit) :`, ...f.map((d) => `• ${d.patient_ref} · ${d.type_nom} · ${d.priorite_affichage} · attend depuis ${duree(d.attente_min)}${d.civiere_code ? ` · civière ${d.civiere_code}` : ''}${d.lit_suggere ? ` · lit compatible libre : ${d.lit_suggere.code}` : ' · aucun lit compatible libre ici'} · ${d.priorite_explication}`)].join('\n'));
       if (f.some((d) => !d.lit_suggere)) actions.push('Pour les demandes sans lit compatible ici : « Chercher ailleurs » dans Admissions.');
     },
     async civieres() {

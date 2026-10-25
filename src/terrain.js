@@ -199,9 +199,11 @@ async function fileAdmission(pool, utilisateur, etabId) {
             EXTRACT(EPOCH FROM (now() - d.cree_le)) / 60 AS attente_min,
             cv.code AS civiere_code, cv.categorie AS civiere_categorie,
             EXTRACT(EPOCH FROM (now() - cv.arrivee_le)) / 3600 AS heures_civiere,
-            CASE WHEN p.id IS NOT NULL THEN p.prenom || ' ' || left(p.nom, 1) || '.' END AS patient_nom_court
+            CASE WHEN p.id IS NOT NULL THEN p.prenom || ' ' || left(p.nom, 1) || '.' END AS patient_nom_court,
+            validateur.nom AS priorite_validateur_nom
        FROM demandes_admission d
        LEFT JOIN patients p ON p.etablissement_id = d.etablissement_id AND p.reference = d.patient_ref
+       LEFT JOIN utilisateurs validateur ON validateur.id = d.priorite_validee_par
        JOIN types_unite t ON t.id = d.type_id
        JOIN etablissements e ON e.id = d.etablissement_id JOIN config_pays c ON c.id = e.config_id
        LEFT JOIN lits l ON l.id = d.lit_id
@@ -219,7 +221,9 @@ async function fileAdmission(pool, utilisateur, etabId) {
       d.lit_suggere = l.rows[0] || null;
     }
   }
-  return rows;
+  const priorites = require('./priorites');
+  const { referentiel } = await priorites.referentiel(pool, utilisateur, etabId);
+  return priorites.organiserFile(rows, referentiel);
 }
 
 async function lireDemande(c, utilisateur, id) {
@@ -370,7 +374,7 @@ async function transfererDemande(pool, utilisateur, demandeId, b) {
     if (d.statut !== 'attente') throw new ErreurHttp(409, 'demande_plus_en_attente');
     const tr = await s.creerTransfert(pool, utilisateur, {
       origine_id: d.etablissement_id, destination_id: b.destination_id, type_id: d.type_id,
-      lit_id: b.lit_id, version: b.version, patient_ref: d.patient_ref, urgent: d.priorite === 'p1',
+      lit_id: b.lit_id, version: b.version, patient_ref: d.patient_ref, urgent: b.urgent === true,
       besoins: besoinsDemande(d), demande_admission_id: d.id, groupe_age: d.groupe_age,
     }, c);
     await c.query(`UPDATE demandes_admission SET statut = 'transferee', transfert_id = $2, terminee_le = now() WHERE id = $1`, [d.id, tr.id]);

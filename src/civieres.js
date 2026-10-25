@@ -72,20 +72,30 @@ async function listeCivieres(pool, utilisateur, etabId) {
     `SELECT cv.id, cv.code, cv.categorie, cv.etat, cv.patient_ref, cv.arrivee_le, cv.version, cv.etat_depuis, cv.motif_indispo,
             EXTRACT(EPOCH FROM (now() - cv.arrivee_le)) / 3600 AS heures,
             d.id AS demande_id, d.statut AS demande_statut, d.priorite AS demande_priorite, t.nom AS type_nom, l.code AS lit_code,
+            d.priorite_code, d.priorite_libelle, d.priorite_rang, d.priorite_revision, d.priorite_validee_par, d.priorite_validee_le,
+            validateur.nom AS priorite_validateur_nom,
             p.id AS patient_id, p.prenom AS patient_prenom, left(p.nom, 1) AS patient_initiale, p.date_naissance AS patient_naissance
        FROM civieres cv
        LEFT JOIN patients p ON p.etablissement_id = cv.etablissement_id AND p.reference = cv.patient_ref
        LEFT JOIN demandes_admission d ON d.civiere_id = cv.id AND d.statut IN ('attente', 'assignee')
+       LEFT JOIN utilisateurs validateur ON validateur.id = d.priorite_validee_par
        LEFT JOIN types_unite t ON t.id = d.type_id
        LEFT JOIN lits l ON l.id = d.lit_id
       WHERE cv.etablissement_id = $1
       ORDER BY cv.categorie DESC, cv.code`, [etabId]);
   const { groupeAgeDepuisNaissance } = require('./terrain');
+  const priorites = require('./priorites');
+  const { referentiel } = await priorites.referentiel(pool, utilisateur, etabId);
   for (const r of rows) {
     r.heures = r.heures == null ? null : Math.floor(Number(r.heures) * 10) / 10;
     // Nom abrégé (prénom + initiale) du patient fictif, seulement dans l'établissement ; jamais dans les vues réseau
     if (r.patient_id) { r.patient_nom_court = `${r.patient_prenom} ${r.patient_initiale}.`; r.groupe_age = groupeAgeDepuisNaissance(r.patient_naissance); }
     delete r.patient_prenom; delete r.patient_initiale; delete r.patient_naissance;
+    if (r.demande_id) {
+      const priorite = priorites.presenterPriorite(r, referentiel);
+      r.demande_priorite_affichage = priorite.priorite_affichage;
+      r.demande_priorite_explication = priorite.priorite_explication;
+    }
   }
   const stats = (await statsUrgence(pool, [etabId])).get(etabId) || null;
   return { civieres: rows, stats };

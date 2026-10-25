@@ -308,6 +308,13 @@ function creerApp(pool) {
     entier(req.body.vers_id, 'vers_id'), req.body.version)));
 
   /* ---------- file d'admission ---------- */
+  const priorites = require('./priorites');
+  api.get('/admissions/referentiel', route((req) => priorites.referentiel(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
+  api.put('/admissions/referentiel', route((req) => priorites.configurer(pool, req.utilisateur, entier(req.body.etablissement_id, 'etablissement_id'), req.body)));
+  api.get('/admissions/habilitations', route((req) => priorites.habilitations(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
+  api.put('/admissions/habilitations/:utilisateurId', route((req) => priorites.habiliter(pool, req.utilisateur,
+    entier(req.body.etablissement_id, 'etablissement_id'), entier(req.params.utilisateurId, 'utilisateurId'), req.body)));
+  api.post('/admissions/:id/priorite', route((req) => priorites.valider(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   api.get('/admissions', route((req) => t.fileAdmission(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   api.post('/admissions', route((req) => t.creerDemande(pool, req.utilisateur, req.body)));
   api.post('/admissions/:id/:etape', route(async (req) => {

@@ -9,7 +9,7 @@
  *   POST /api/sh/import/verifier | importer      import CSV (mêmes règles que l'administration)
  */
 const crypto = require('crypto');
-const { ErreurHttp } = require('./db');
+const { ErreurHttp, transaction } = require('./db');
 const { journalAdmin, creerEtablissement } = require('./admin');
 const imp = require('./import');
 const formation = require('./formation');
@@ -41,6 +41,28 @@ function brancherSh(api, pool, route) {
   };
 
   api.get('/sh/capacites', sh(async () => ({ api: 1, invitationsSecurisees: true, courrielActif: courriel.actif() })));
+
+  api.get('/sh/etablissements/:code/configuration-operationnelle', sh(async (req) => {
+    const e = await etabParCode(req.params.code);
+    const etat = (await pool.query('SELECT modules, vocation, config_id FROM etablissements WHERE id=$1', [e.id])).rows[0];
+    const catalogue = (await pool.query('SELECT code, nom, groupe_age FROM specialites_catalogue ORDER BY ordre')).rows;
+    const specialites = (await pool.query('SELECT code, nom, groupe_age FROM types_unite WHERE config_id=$1 ORDER BY ordre', [etat.config_id])).rows;
+    const referentiel = (await pool.query('SELECT revision, categories, approuve_le FROM admission_referentiels WHERE etablissement_id=$1', [e.id])).rows[0] || null;
+    return { modules: etat.modules, vocation: etat.vocation, version: require('./configuration-operationnelle').empreinte(etat), catalogue, specialites, referentiel_priorites: referentiel };
+  }));
+  api.put('/sh/etablissements/:code/configuration-operationnelle', sh(async (req) => {
+    const configuration = require('./configuration-operationnelle');
+    const b = configuration.normaliser(req.body);
+    const e = await etabParCode(req.params.code);
+    return transaction(pool, async (c) => {
+      const avant = (await c.query('SELECT modules, vocation FROM etablissements WHERE id=$1 FOR UPDATE', [e.id])).rows[0];
+      if (typeof req.body.version !== 'string' || req.body.version !== configuration.empreinte(avant)) throw new ErreurHttp(409, 'configuration_operationnelle_conflit');
+      const modules = configuration.fusionner(avant.modules, b.modules);
+      const r = (await c.query('UPDATE etablissements SET modules=$2::jsonb, vocation=$3 WHERE id=$1 RETURNING modules,vocation', [e.id, modules, b.vocation])).rows[0];
+      await journalAdmin(c, systeme, 'Configuration opérationnelle SH modifiée', e.nom, `${JSON.stringify({ avant, apres: r })} · ${parSh(req.body)}`, e.id);
+      return { ...r, version: configuration.empreinte(r) };
+    });
+  }));
 
   api.get('/sh/etablissements', sh(async () => (await pool.query(
     `SELECT e.id, e.code, e.nom, e.ville, e.adresse, e.partage, e.module_actif, e.sous_domaine,

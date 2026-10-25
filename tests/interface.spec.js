@@ -227,6 +227,8 @@ for (const L of LARGEURS) {
     await verifier(x, L, '01e-copilote-regroupements');
     const reco = x.locator('.reco', { hasText: 'maternité' }).first();
     await reco.locator('button').click();
+    await x.waitForSelector('#modale:not([hidden])');
+    await x.click('#modale .actions .pri');
     await toast(x, 'Lit assigné');
     await x.click('#v-copilote [data-ex="0"]');
     await x.waitForSelector('#v-copilote .reponse');

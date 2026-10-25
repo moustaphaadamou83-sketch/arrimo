@@ -41,14 +41,14 @@ async function briefing(pool, utilisateur, etabId) {
   // 1. Patients qui attendent un lit (chaque lit proposé ne l'est qu'à un seul patient)
   const litsProposes = new Set();
   for (const d of file.filter((x) => x.statut === 'attente')) {
-    const urgent = d.priorite === 'p1' || d.depasse;
+    const urgent = d.depasse; // seuil opérationnel ; aucune gravité clinique déduite d'une ancienne valeur P1
     if (d.lit_suggere && !litsProposes.has(d.lit_suggere.id)) {
       litsProposes.add(d.lit_suggere.id);
       ajouter(urgent ? 1 : 2, tr(L, 'r_assigner', { lit: d.lit_suggere.code, ref: d.patient_ref }),
-        tr(L, 'r_assigner_raison', { type: type(d.type_nom), duree: duree(L, d.attente_min), prio: d.priorite.toUpperCase(), prov: dico(L, 'provenance')[d.provenance] }),
+        tr(L, 'r_assigner_raison', { type: type(d.type_nom), duree: duree(L, d.attente_min), prio: d.priorite_affichage, prov: dico(L, 'provenance')[d.provenance] }),
         { type: 'assigner', demande_id: d.id, lit_id: d.lit_suggere.id, version: d.lit_suggere.version, libelle: tr(L, 'r_assigner_action') });
     } else {
-      const rec = await s.recommander(pool, utilisateur, etabId, d.type_id, t.besoinsDemande(d));
+      const rec = await s.recommander(pool, utilisateur, etabId, d.type_id, { ...t.besoinsDemande(d), groupe_age: d.groupe_age });
       plansCoordination.push(construirePlanCoordination(d, rec, L, nomType(d.type_nom)));
       const sug = rec.suggestions.find((x) => x.libres_confirmes && x.statut_route === 'calcule');
       const netType = nettoyage.find((n) => n.type_nom === d.type_nom && !litsProposes.has(n.id));
@@ -81,9 +81,9 @@ async function briefing(pool, utilisateur, etabId) {
     const d = file.find((x) => x.statut === 'attente' && x.type_id === Number(a.vars.type_id) && !x.lit_suggere && !dejaProposees.has(x.id));
     if (!d) continue;
     dejaProposees.add(d.id);
-    ajouter(d.priorite === 'p1' || d.depasse ? 1 : 2, tr(L, 'r_dispo', { type: nomType(a.vars.type_nom), etab: a.vars.etab, km: a.vars.km }),
+    ajouter(d.depasse ? 1 : 2, tr(L, 'r_dispo', { type: nomType(a.vars.type_nom), etab: a.vars.etab, km: a.vars.km }),
       tr(L, 'r_dispo_raison', { il_y_a: duree(L, (Date.now() - new Date(a.date)) / 60000), n: a.libres, ref: d.patient_ref, attente: duree(L, d.attente_min) }),
-      { type: 'recherche_reseau', demande_id: d.id, type_id: d.type_id, patient_ref: d.patient_ref, urgent: d.priorite === 'p1', besoins: d.besoins || {}, libelle: tr(L, 'r_dispo_action') });
+      { type: 'recherche_reseau', demande_id: d.id, type_id: d.type_id, patient_ref: d.patient_ref, groupe_age: d.groupe_age, besoins: t.besoinsDemande(d), libelle: tr(L, 'r_dispo_action') });
   }
 
   // 2. Transferts qui attendent une réponse de notre part
@@ -439,7 +439,7 @@ async function questionHistorique(pool, utilisateur, etabId, q, fetchImpl) {
     const nomType = await traducteurTypes(pool, L);
     const f = (await t.fileAdmission(pool, utilisateur, etabId)).filter((d) => d.statut === 'attente');
     return { mode: 'local', reponse: f.length ? `${tr(L, 'q_attente', { n: f.length })}\n${f.map((d) => tr(L, 'q_attente_ligne',
-      { ref: d.patient_ref, type: nomType(d.type_nom), prio: d.priorite.toUpperCase(), duree: duree(L, d.attente_min) })
+      { ref: d.patient_ref, type: nomType(d.type_nom), prio: d.priorite_affichage, duree: duree(L, d.attente_min) })
       + (d.lit_suggere ? tr(L, 'q_attente_lit', { lit: d.lit_suggere.code }) : tr(L, 'q_attente_aucun_lit'))).join('\n')}` : tr(L, 'q_attente_vide') };
   }
   if (/(nettoy|menage|entretien|clean|housekeep)/.test(qn)) {

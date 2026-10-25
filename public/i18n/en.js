@@ -2,6 +2,31 @@
 window.ARRIMO_I18N = window.ARRIMO_I18N || {};
 window.ARRIMO_I18N.en = {
   langue: { nom: 'English', court: 'EN', choisir: 'Language', locale: 'en-CA' },
+  priorites_ui: {
+    "titre": "Priorities and allocation",
+    "regle": "Only explicitly validated priorities are ranked. For equal ranks, the oldest request comes first. Waiting time does not determine severity. Allocation remains a human decision.",
+    "revision": "Approved reference: version {n}.",
+    "absent": "No approved reference. Requests await validation; no clinical scale is assumed.",
+    "valider": "Validate priority",
+    "habilitations": "Professional authorizations",
+    "configurer": "Approve reference",
+    "confirmation_og": "This action will change data. Review the proposal and confirm as an authorized user.",
+    "transport_urgent": "Urgent transport confirmed by the team (independent of admission rank)",
+    "responsabilite": "Choose a category from the approved reference. OG does not validate or change this decision.",
+    "categorie": "Category",
+    "rang": "Rank",
+    "motif": "Operational reason (no identifying clinical information)",
+    "attestation": "I confirm that I am authorized and validate this priority.",
+    "contexte_change": "The facility changed. Close this dialog and reload.",
+    "enregistre": "Validation saved.",
+    "configuration_aide": "Define 2 to 12 categories approved by your facility. The lowest rank comes first. Leave unused rows empty. Each new version requires revalidating previously ranked requests. This form does not define an official triage scale.",
+    "attestation_referentiel": "As an authorized professional and administrator, I approve this reference for this facility.",
+    "habilitation_aide": "Grant this right only after verifying professional authorization. Administrator or network membership is insufficient. Every grant or revocation is logged.",
+    "compte": "Account",
+    "autoriser": "Allow priority validation in this facility",
+    "attestation_habilitation": "I verified professional authorization and confirm the requested grant or revocation.",
+    "creation": "This indication does not validate a priority. Then use “Validate priority” with an authorized account."
+},
   general: {
     annuler: 'Cancel', fermer: 'Close', retour: 'Back', enregistrer: 'Save', confirmer: 'Confirm', copier: 'Copy', copie: 'Copied.',
     copier_manuel: 'Select the text to copy it.', fait: 'Done.', aucun: 'None', aucune: 'None', jamais: 'Never', systeme: 'System',
@@ -54,7 +79,7 @@ window.ARRIMO_I18N.en = {
   equipement_court: { isolement: 'ISO', pression_negative: 'NP', ventilation: 'VENT', telemetrie: 'TELE' },
   niveaux: { vert: 'Green', jaune: 'Yellow', orange: 'Orange', rouge: 'Red' },
   prios: { 1: 'Urgent', 2: 'Important', 3: 'To do' },
-  priorites_adm: { p1: 'P1 · immediate', p2: 'P2 · prompt', p3: 'P3 · can be planned' },
+  priorites_adm: { p1: 'P1 · unvalidated indication', p2: 'P2 · unvalidated indication', p3: 'P3 · unvalidated indication' },
   provenances: { urgence: 'Emergency', bloc: 'Operating room', externe: 'External', autre: 'Other' },
   risques: { eleve: 'Full', modere: 'Strained', faible: 'Available' },
   blocages_niveaux: { eleve: 'Priority', modere: 'To check', faible: 'Info' },
@@ -399,6 +424,16 @@ window.ARRIMO_I18N.en = {
   },
   // Messages d'erreur du serveur, par code (src/erreurs.js)
   erreurs: {
+    configuration_operationnelle_invalide: "Invalid configuration: only the four operational modules and facility type can be changed.",
+    configuration_operationnelle_conflit: "The configuration changed. Reload before publishing.",
+    priorites_referentiel_invalide: "Define 2 to 12 categories with unique codes and ranks and required labels.",
+    priorites_motif_requis: "An operational reason of 1 to 500 characters is required, without identifying clinical information.",
+    priorites_version_requise: "The displayed request version is required. Reload the queue.",
+    priorites_confirmation_requise: "Explicitly confirm your professional or administrative validation.",
+    priorites_non_habilite: "This account has no active priority validation authorization in this facility.",
+    priorites_conflit: "The request or reference changed. Reload before validating.",
+    priorites_code_inconnu: "This category is not in the approved reference.",
+
     structure_attributs_invalides: 'Attributes must be a valid configuration object and must not contain patient data fields.',
     structure_code_nom_invalides: 'Enter a valid code and name for this resource.',
     structure_code_existe: 'This code already exists at this facility level.',

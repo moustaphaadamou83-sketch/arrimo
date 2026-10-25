@@ -985,16 +985,16 @@ function executerProposition(a, bouton) {
     agir(bouton, async () => {
       const r = await api('GET', `/transferts/${a.transfert_id}/alternatives`);
       Object.assign(etat.recherche, { type_id: r.type_id, patient_ref: r.patient_ref, urgent: r.urgent,
-        besoins: r.besoins, res: r, choix: null });
+        besoins: r.besoins, groupe_age: r.groupe_age || null, res: r, choix: null });
       return r;
     }, t('reseau.plan_b_carte')).then((r) => { if (r) allerA('reseau'); });   // ouvre l'écran Réseau sur les alternatives
     return;
   }
   if (a.type === 'recherche_reseau') {
     agir(bouton, async () => {
-      const r = await api('GET', `/recherche?depuis=${etat.ctx}&type_id=${a.type_id}${qsBesoins(a.besoins || {})}`);
+      const r = await api('GET', `/recherche?depuis=${etat.ctx}&type_id=${a.type_id}${qsBesoins(a.besoins || {})}${a.groupe_age ? `&groupe_age=${encodeURIComponent(a.groupe_age)}` : ''}`);
       Object.assign(etat.recherche, { type_id: a.type_id, patient_ref: a.patient_ref, urgent: !!a.urgent,
-        besoins: a.besoins || {}, res: r, choix: null });
+        besoins: a.besoins || {}, groupe_age: a.groupe_age || null, res: r, choix: null });
       return r;
     }, t('reseau.recherche_actualisee')).then((r) => { if (r) allerA('reseau'); });
     return;
@@ -1018,7 +1018,9 @@ function executerProposition(a, bouton) {
   }
   const messages = { assigner: 'copilote.assigner_ok', debut_nettoyage: 'copilote.nettoyage_ok', lit: 'copilote.lit_ok', civiere: 'copilote.civiere_ok', deplacer: 'copilote.deplace_ok',
     conge: 'copilote.conge_ok', transfert: { accepter: 'copilote.accepte_ok', chambre_prete: 'transferts.chambre_prete_ok' }[a.etape] || 'copilote.transport_ok' };
-  agir(bouton, faire, t(messages[a.type] || 'general.fait'));
+  modale(t('general.confirmer'), `<p>${esc(a.libelle || t(messages[a.type] || 'general.fait'))}</p><p class="note">${esc(t('priorites_ui.confirmation_og'))}</p>`,
+    [{ label: t('general.annuler') }, { label: t('general.confirmer'), pri: true,
+      run: async () => (await agir(null, faire, t(messages[a.type] || 'general.fait'))) !== null || false }]);
 }
 
 /* ---------------- Copilote ---------------- */
@@ -1113,7 +1115,7 @@ async function vueUrgence() {
     return `<div class="fiche e-${c.etat}">
       <div class="t"><b>${esc(c.code)}</b><span class="note">${esc(t(`etats.${c.etat}`))}</span></div>
       ${c.patient_ref ? `<div class="note">${t('lits.patient', { ref: esc(c.patient_ref) })}${c.patient_nom_court ? ` · ${esc(c.patient_nom_court)}` : ''} · <span class="${classeDuree(c.heures)}">${U('depuis_h', { duree: duree(c.heures * 60) })}</span></div>${libelleAge(c.groupe_age)}` : ''}
-      ${c.demande_id ? `<div class="note">${c.demande_statut === 'assignee' ? t('urgence.lit_assigne', { code: esc(c.lit_code) }) : U('demande', { type: c.type_nom, prio: c.demande_priorite.toUpperCase() })}</div>`
+      ${c.demande_id ? `<div class="note">${c.demande_statut === 'assignee' ? t('urgence.lit_assigne', { code: esc(c.lit_code) }) : U('demande', { type: c.type_nom, prio: c.demande_priorite_affichage })}</div><div class="note">${esc(c.demande_priorite_explication)}</div>`
     : c.etat === 'occupee' ? `<div class="alerte">${U('sans_demande')}</div>` : ''}
       ${c.motif_indispo ? `<div class="note">${esc(t('lits.motif', { motif: t(`motifs.${c.motif_indispo}`) }))}</div>` : ''}
       ${c.etat !== 'occupee' ? `<div class="note num" title="${esc(t('lits.depuis_titre'))}">${depuis(c.etat_depuis)}</div>` : ''}
@@ -1309,11 +1311,12 @@ async function vueAdmissions() {
   const v = $('#v-admissions');
   const actif = etabCtx().module_actif;
   const cfg = configCtx();
-  const [file, urg] = await Promise.all([api('GET', `/admissions?etablissement_id=${etat.ctx}`), api('GET', `/civieres?etablissement_id=${etat.ctx}`)]);
+  const [file, urg, priorites] = await Promise.all([api('GET', `/admissions?etablissement_id=${etat.ctx}`), api('GET', `/civieres?etablissement_id=${etat.ctx}`), api('GET', `/admissions/referentiel?etablissement_id=${etat.ctx}`)]);
   const sansDemande = urg.civieres.filter((c) => c.etat === 'occupee' && !c.demande_id);
   const A = (k, vars) => esc(t(`admissions.${k}`, vars));
-  const carte = (d) => `<div class="fiche" style="--c:${d.priorite === 'p1' ? 'var(--critique)' : d.depasse ? 'var(--attention)' : 'var(--secondaire)'}">
-      <div class="t"><b>${esc(d.patient_ref)}</b><span class="${d.depasse ? 'urgent' : 'note num'}">${d.priorite.toUpperCase()} · ${depuis(d.cree_le)}</span></div>
+  const carte = (d) => `<div class="fiche" style="--c:${d.depasse ? 'var(--attention)' : 'var(--secondaire)'}">
+      <div class="t"><b>${esc(d.patient_ref)}</b><span class="${d.depasse ? 'urgent' : 'note num'}">${esc(d.priorite_affichage)} · ${depuis(d.cree_le)}</span></div>
+      <p class="note">${esc(d.priorite_explication)}</p>
       ${d.patient_nom_court ? `<div class="note">${esc(d.patient_nom_court)}</div>` : ''}${libelleAge(d.groupe_age)}
       <div class="note">${esc(d.type_nom)} · ${esc(t(`provenances.${d.provenance}`).toLowerCase())} · ${esc(besoinsTexte(d))}</div>
       ${d.civiere_code ? `<div class="note">${t('admissions.sur_civiere', { code: esc(d.civiere_code) })} · <span class="${classeDuree(d.heures_civiere)}">${esc(t('urgence.depuis_h', { duree: duree(d.heures_civiere * 60) }))}</span></div>` : ''}
@@ -1322,10 +1325,14 @@ async function vueAdmissions() {
     ? `${d.lit_suggere ? `<button class="btn pri" data-adm="${d.id}" data-a="assigner" data-lit="${d.lit_suggere.id}" data-version="${d.lit_suggere.version}">${A('assigner', { code: d.lit_suggere.code })}</button>` : ''}
            <button class="btn${d.lit_suggere ? '' : ' pri'}" data-adm="${d.id}" data-a="ailleurs">${A('chercher_ailleurs')}</button>`
     : `<button class="btn pri" data-adm="${d.id}" data-a="admettre">${A('admettre')}</button>`}
+        ${priorites.peut_valider && priorites.referentiel ? `<button class="btn" data-adm="${d.id}" data-a="priorite">${esc(t('priorites_ui.valider'))}</button>` : ''}
         <button class="btn dan" data-adm="${d.id}" data-a="annuler">${A('annuler')}</button></div>` : ''}</div>`;
   const attenteF = file.filter((d) => d.statut === 'attente');
   const assignees = file.filter((d) => d.statut === 'assignee');
   v.innerHTML = `<div class="entete"><div><h2>${A('titre', { etab: etabCtx().nom })}</h2><p>${A('intro', { h: Math.round(cfg.attente_admission_max_min / 60) })}</p></div></div>
+    <div class="panneau-c"><h3>${esc(t('priorites_ui.titre'))}</h3><p>${esc(t('priorites_ui.regle'))}</p>
+      <p class="note">${esc(priorites.referentiel ? t('priorites_ui.revision', { n: priorites.referentiel.revision }) : t('priorites_ui.absent'))}</p>
+      ${etat.moi.utilisateur.admin ? `<div class="actions"><button class="btn" id="p-habilitations">${esc(t('priorites_ui.habilitations'))}</button>${priorites.peut_valider ? `<button class="btn" id="p-referentiel">${esc(t('priorites_ui.configurer'))}</button>` : ''}</div>` : ''}</div>
     <div class="deux"><div class="pile"><div class="panneau-c"><h3>${A('nouvelle')}</h3>
       <div class="ligne"><div class="champ"><label class="lbl" for="a-type">${A('type_unite')}</label><select id="a-type">${typesEtab(cfg).map((x) => `<option value="${x.id}">${esc(nomType(x))}</option>`).join('')}</select></div>
       <div class="champ"><label class="lbl" for="a-age">${esc(t('fin.groupe_age'))}</label><select id="a-age"><option value="">${esc(t('fin.age_selon_type'))}</option>${GROUPES_AGE.map((g) => `<option value="${g}">${esc(t(`fin.age_${g}`))}</option>`).join('')}</select></div>
@@ -1334,6 +1341,7 @@ async function vueAdmissions() {
       <div class="ligne"><div class="champ"><label class="lbl" for="a-prio">${A('priorite')}</label><select id="a-prio">${options('priorites_adm', ['p1', 'p2', 'p3'], 'p2')}</select></div>
       <div class="champ"><label class="lbl" for="a-prov">${A('provenance')}</label><select id="a-prov">${options('provenances', ['urgence', 'bloc', 'externe', 'autre'])}</select></div></div>
       <div class="cases">${casesBesoins('data-abesoin')}</div>
+      <p class="note">${esc(t('priorites_ui.creation'))}</p>
       <button class="btn pri" id="b-demande"${actif ? '' : ' disabled'}>${A('ajouter')}</button>
       <p class="note">${A('ref_seulement')}</p></div></div>
     <div class="kanban" style="margin-top:0;grid-auto-columns:minmax(260px,1fr)">
@@ -1348,10 +1356,13 @@ async function vueAdmissions() {
       priorite: $('#a-prio').value, provenance: $('#a-prov').value, besoins, civiere_id: civ, groupe_age: $('#a-age').value || undefined }), t('admissions.ajoutee'));
   };
   const selCiv = $('#a-civ');
+  if ($('#p-habilitations')) $('#p-habilitations').onclick = () => gererHabilitationsPriorites();
+  if ($('#p-referentiel')) $('#p-referentiel').onclick = () => configurerPriorites(priorites.referentiel);
   if (selCiv) selCiv.onchange = () => { const o = selCiv.selectedOptions[0]; if (o && o.dataset.ref) { $('#a-ref').value = o.dataset.ref; $('#a-prov').value = 'urgence'; } };
   v.querySelectorAll('[data-adm]').forEach((b) => {
     b.onclick = async () => {
       const id = b.dataset.adm; const a = b.dataset.a;
+      if (a === 'priorite') return validerPriorite(file.find((d) => String(d.id) === id), priorites.referentiel);
       if (a === 'assigner') return agir(b, () => api('POST', `/admissions/${id}/assigner`, { lit_id: Number(b.dataset.lit), version: Number(b.dataset.version) }), t('admissions.assigne_ok'));
       if (a === 'admettre') return agir(b, () => api('POST', `/admissions/${id}/admettre`), t('admissions.admis_ok'));
       if (a === 'annuler') return agir(b, () => api('POST', `/admissions/${id}/annuler`), t('admissions.annule_ok'));
@@ -1361,10 +1372,10 @@ async function vueAdmissions() {
       if (!res) return null;
       const sug = res.suggestions.filter((x) => x.libres);
       modale(t('admissions.ailleurs_titre', { ref: d.patient_ref }), sug.length ? `<div class="liste">${sug.map((x, i) => `<label class="item"><div><strong>${esc(x.nom)}</strong>${x.recommande ? ` <span class="badge fort">${esc(t('reseau.recommande'))}</span>` : ''}<div class="note num">${esc(x.raison)}</div>${x.pourquoi ? `<div class="note">${esc(x.pourquoi)}</div>` : ''}${exclusionsHTML(x.exclusions)}</div><input type="radio" name="m-sug" value="${i}"${i === 0 ? ' checked' : ''}></label>`).join('')}</div>
-        <p class="note">${A('ailleurs_aide', { besoins: besoinsTexte(d) })}</p>` : `<p>${A('ailleurs_aucun')}</p>`,
+        <p class="note">${A('ailleurs_aide', { besoins: besoinsTexte(d) })}</p><label><input type="checkbox" id="m-transfert-urgent"> ${esc(t('priorites_ui.transport_urgent'))}</label>` : `<p>${A('ailleurs_aucun')}</p>`,
       sug.length ? [{ label: t('general.annuler') }, { label: t('admissions.demander_transfert'), pri: true, run: async () => {
         const x = sug[Number(($('input[name="m-sug"]:checked') || {}).value || 0)];
-        return (await agir(null, () => api('POST', `/admissions/${id}/transferer`, { destination_id: x.etablissement_id, lit_id: x.lit?.id, version: x.lit?.version }), (tr) => t('admissions.transfert_ok', { numero: tr.numero, etab: x.nom }))) !== null || false;
+        return (await agir(null, () => api('POST', `/admissions/${id}/transferer`, { destination_id: x.etablissement_id, lit_id: x.lit?.id, version: x.lit?.version, urgent: $('#m-transfert-urgent').checked }), (tr) => t('admissions.transfert_ok', { numero: tr.numero, etab: x.nom }))) !== null || false;
       } }] : [{ label: t('general.fermer') }]);
       return null;
     };
@@ -1372,6 +1383,64 @@ async function vueAdmissions() {
 }
 
 /* ---------------- Nettoyage ---------------- */
+function validerPriorite(d, referentiel) {
+  const etab = etat.ctx;
+  const P = (k) => esc(t(`priorites_ui.${k}`));
+  modale(t('priorites_ui.valider'), `<p>${esc(etabCtx().nom)} · ${esc(d.patient_ref)}</p>
+    <p class="note">${P('responsabilite')}</p><label class="lbl" for="p-categorie">${P('categorie')}</label>
+    <select id="p-categorie"><option value="">${P('categorie')}</option>${referentiel.categories.map((p) => `<option value="${esc(p.code)}"${p.code === d.priorite_code ? ' selected' : ''}>${esc(p.libelle)} · ${p.rang}</option>`).join('')}</select>
+    <label class="lbl" for="p-motif">${P('motif')}</label><textarea id="p-motif" maxlength="500"></textarea>
+    <label><input type="checkbox" id="p-confirmation"> ${P('attestation')}</label>`,
+  [{ label: t('general.annuler') }, { label: t('general.confirmer'), pri: true, run: async () => {
+    if (etat.ctx !== etab) { toast(t('priorites_ui.contexte_change'), true); return false; }
+    return (await agir(null, () => api('POST', `/admissions/${d.id}/priorite`, { code: $('#p-categorie').value,
+      revision: referentiel.revision, version: d.priorite_version, motif: $('#p-motif').value,
+      confirmation: $('#p-confirmation').checked }), t('priorites_ui.enregistre'))) !== null || false;
+  } }]);
+}
+function configurerPriorites(referentiel) {
+  const etab = etat.ctx;
+  const categories = referentiel?.categories || [];
+  const P = (k) => esc(t(`priorites_ui.${k}`));
+  modale(t('priorites_ui.configurer'), `<p>${esc(etabCtx().nom)}</p><p class="note">${P('configuration_aide')}</p>
+    <div class="pile">${Array.from({ length: 12 }, (_, i) => {
+    const p = categories[i];
+    return `<div class="ligne" data-p-categorie="${esc(p?.code || `nouveau_${i + 1}`)}"><input aria-label="${P('categorie')} ${i + 1}" data-p-libelle maxlength="80" value="${esc(p?.libelle || '')}" placeholder="${P('categorie')}"><input aria-label="${P('rang')} ${i + 1}" data-p-rang type="number" min="1" max="100" value="${p?.rang || ''}" placeholder="${P('rang')}"></div>`;
+  }).join('')}</div>
+    <label class="lbl" for="p-motif">${P('motif')}</label><textarea id="p-motif" maxlength="500"></textarea>
+    <label><input type="checkbox" id="p-confirmation"> ${P('attestation_referentiel')}</label>`,
+  [{ label: t('general.annuler') }, { label: t('general.enregistrer'), pri: true, run: async () => {
+    if (etat.ctx !== etab) { toast(t('priorites_ui.contexte_change'), true); return false; }
+    const nouvelles = [...document.querySelectorAll('[data-p-categorie]')].filter((row) => row.querySelector('[data-p-libelle]').value.trim() || row.querySelector('[data-p-rang]').value)
+      .map((row) => ({ code: row.dataset.pCategorie, libelle: row.querySelector('[data-p-libelle]').value, rang: Number(row.querySelector('[data-p-rang]').value) }));
+    return (await agir(null, () => api('PUT', '/admissions/referentiel', { etablissement_id: etab, revision: referentiel?.revision || 0,
+      categories: nouvelles, motif: $('#p-motif').value, confirmation: $('#p-confirmation').checked }), t('priorites_ui.enregistre'))) !== null || false;
+  } }]);
+}
+async function gererHabilitationsPriorites() {
+  const etab = etat.ctx;
+  const donnees = await Promise.all([api('GET', '/admin/utilisateurs'), api('GET', `/admissions/habilitations?etablissement_id=${etab}`)]).catch((e) => { toast(e.message, true); return null; });
+  if (!donnees || etat.ctx !== etab) return;
+  const [comptes, habilitations] = donnees;
+  const eligibles = comptes.filter((u) => (u.actif || habilitations.some((h) => h.utilisateur_id === u.id)) && u.role !== 'entretien' && (u.role === 'gestionnaire' || u.etablissements.includes(etab)));
+  const P = (k) => esc(t(`priorites_ui.${k}`));
+  modale(t('priorites_ui.habilitations'), `<p>${esc(etabCtx().nom)}</p><p class="note">${P('habilitation_aide')}</p>
+    <label class="lbl" for="p-compte">${P('compte')}</label><select id="p-compte">${eligibles.map((u) => `<option value="${u.id}">${esc(u.nom)} · ${esc(u.email)}</option>`).join('')}</select>
+    <label><input type="checkbox" id="p-active"> ${P('autoriser')}</label>
+    <label class="lbl" for="p-motif">${P('motif')}</label><textarea id="p-motif" maxlength="500"></textarea>
+    <label><input type="checkbox" id="p-confirmation"> ${P('attestation_habilitation')}</label>`,
+  [{ label: t('general.annuler') }, { label: t('general.enregistrer'), pri: true, run: async () => {
+    if (etat.ctx !== etab) { toast(t('priorites_ui.contexte_change'), true); return false; }
+    return (await agir(null, () => api('PUT', `/admissions/habilitations/${$('#p-compte').value}`, {
+      etablissement_id: etab, active: $('#p-active').checked, motif: $('#p-motif').value,
+      version: habilitations.find((h) => h.utilisateur_id === Number($('#p-compte').value))?.version || 0,
+      confirmation: $('#p-confirmation').checked }), t('priorites_ui.enregistre'))) !== null || false;
+  } }]);
+  const selectionner = () => { $('#p-active').checked = !!habilitations.find((h) => h.utilisateur_id === Number($('#p-compte').value))?.active; };
+  $('#p-compte').onchange = selectionner;
+  selectionner();
+}
+
 async function vueNettoyage() {
   const v = $('#v-nettoyage');
   const liste = await api('GET', `/nettoyage?etablissement_id=${etat.ctx}`);

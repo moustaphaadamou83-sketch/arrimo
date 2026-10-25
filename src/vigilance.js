@@ -224,7 +224,7 @@ async function blocages(pool, utilisateur, etabId) {
       WHERE d.etablissement_id = $1 AND d.statut = 'attente' AND d.cree_le < now() - make_interval(mins => $2)`, [etabId, cfg.attente_admission_max_min])).rows;
   for (const d of dem) {
     ajouter({ genre: 'demande', ressource_id: d.id, ressource: `Demande n° ${d.id} (${d.patient_ref})`, unite: d.type_nom, chambre: null,
-      depuis: d.cree_le, duree_min: Math.round(Number(d.attente_min)), type: 'attente_admission', niveau: d.priorite === 'p1' ? 'eleve' : 'modere',
+      depuis: d.cree_le, duree_min: Math.round(Number(d.attente_min)), type: 'attente_admission', niveau: 'modere',
       titre: `${d.patient_ref} attend un lit de ${d.type_nom.toLowerCase()} depuis ${dureeTexte(Number(d.attente_min))}${d.civiere ? ` (civière ${d.civiere})` : ''}.`,
       evenement: 'Création de la demande de lit',
       seuil: { valeur_min: cfg.attente_admission_max_min, regle: `Attente maximale configurée (${cfg.attente_admission_max_min} min).` },

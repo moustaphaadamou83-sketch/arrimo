@@ -284,6 +284,31 @@ function friseSixEtapes(h) {
   }).join('')}</ol>`;
 }
 
+async function configurationOperationnelle(h) {
+  const config = await api('GET', `/hopitaux/${h.id}/configuration-operationnelle`).catch((e) => { toast(e.message, true); return null; });
+  if (!config || etat.hopital !== h.id) return;
+  const noms = { urgence: 'Urgences et civières', nsa: 'NSA', nettoyage: 'Nettoyage', national: 'Vue nationale' };
+  const actives = new Set(config.specialites.map((s) => s.code));
+  modale('Configuration hospitalière Arrimo', `<p>${esc(h.nom)} · ${esc(ENVS[h.environnement])}</p>
+    <label class="lbl" for="co-vocation">Vocation</label><select id="co-vocation">${[['general','Hôpital général'],['pediatrique','Hôpital pédiatrique'],['specialise','Établissement spécialisé']].map(([k, nom]) => `<option value="${k}"${config.vocation === k ? ' selected' : ''}>${nom}</option>`).join('')}</select>
+    <div class="pile">${Object.entries(noms).map(([k, nom]) => `<label><input type="checkbox" data-co-module="${k}"${config.modules?.[k] !== false ? ' checked' : ''}> ${nom}</label>`).join('')}</div>
+    <p class="note">Désactiver un module masque son accès et conserve ses données. Les licences ERP restent gérées dans leur catalogue.</p>
+    <h4>Catalogue des spécialités</h4><p class="note">Ajouter une spécialité la rend configurable ; cela ne crée aucun lit ni capacité. Le catalogue est partagé par les établissements de la même configuration.</p>
+    <div class="pile">${config.catalogue.map((s) => `<div class="ligne"><span>${esc(s.nom)} · ${esc(s.groupe_age)}</span>${actives.has(s.code) ? '<span class="note">Disponible</span>' : `<button class="btn" data-co-specialite="${esc(s.code)}">Ajouter au catalogue</button>`}</div>`).join('')}</div>
+    <h4>Référentiel de priorités approuvé</h4>${config.referentiel_priorites ? `<p class="note">Version ${config.referentiel_priorites.revision} · ${esc(config.referentiel_priorites.approuve_le)}</p><ul>${config.referentiel_priorites.categories.map((p) => `<li>${p.rang} · ${esc(p.libelle)}</li>`).join('')}</ul>` : '<p class="note">Aucun référentiel approuvé dans Arrimo.</p>'}
+    <p class="note">Les référentiels de priorité et leurs habilitations sont validés dans Arrimo par les professionnels concernés ; aucune priorité patient n’est attribuée depuis cette fenêtre.</p>`,
+  [{ label: 'Annuler' }, { label: 'Publier la configuration', pri: true, run: async () => {
+    if (etat.hopital !== h.id) { toast('L’établissement sélectionné a changé. Rechargez la fiche.', true); return false; }
+    const modules = Object.fromEntries([...document.querySelectorAll('[data-co-module]')].map((x) => [x.dataset.coModule, x.checked]));
+    return (await agir(null, () => api('PUT', `/hopitaux/${h.id}/configuration-operationnelle`, { modules, vocation: $('#co-vocation').value, version: config.version }), 'Configuration hospitalière publiée.')) !== null || false;
+  } }]);
+  $('#modale').querySelectorAll('[data-co-specialite]').forEach((b) => { b.onclick = () => {
+    const sp = config.catalogue.find((s) => s.code === b.dataset.coSpecialite);
+    modale('Ajouter une spécialité au catalogue', `<p>${esc(sp.nom)} · ${esc(h.nom)}</p><p class="note">Cette modification concerne le catalogue partagé de cette configuration. Elle ne modifie aucune occupation.</p>`,
+      [{ label: 'Annuler' }, { label: 'Confirmer', pri: true, run: async () => (await agir(null, () => api('POST', `/hopitaux/${h.id}/specialites`, { specialite: sp.code }), 'Spécialité ajoutée au catalogue.')) !== null || false }]);
+  }; });
+}
+
 function blocModules(h) {
   return `<p class="note">Catalogue et licences consignés dans SH. L'activation fonctionnelle des modules dépend des capacités réellement exposées par Arrimo.</p>
     <div class="pile">${(h.modules || []).map((m) => `<div class="module-sh"><div><b>${esc(m.nom)}</b><div class="note">${esc(m.description)} · dépendances : ${m.dependances.length ? esc(m.dependances.join(', ')) : 'aucune'}</div></div>
@@ -370,6 +395,7 @@ async function vueHopital(v) {
           ${h.relie ? '<p class="note">Relié à son établissement : l’environnement et le code ne changent plus.</p>' : ''}</div>
         <div class="panneau-c"><h3>Sites et responsables</h3>${blocDossier(h)}</div>
         <div class="panneau-c" id="modules"><h3>Modules et licences</h3>${blocModules(h)}</div>
+        ${etat.moi.utilisateur.role === 'administration' && h.relie ? '<div class="panneau-c"><h3>Configuration hospitalière Arrimo</h3><p class="note">Consulter et régler les modules opérationnels, la vocation et le catalogue des spécialités. Les occupations, demandes, transferts et historiques sont conservés. Les priorités sont approuvées dans Arrimo par les professionnels habilités.</p><button class="btn" id="b-configuration-operationnelle">Configurer dans Arrimo</button></div>' : ''}
         <div class="panneau-c"><h3>Comptes de l’établissement</h3><p>${nb(h.utilisateurs_prevus)} prévus · ${nb(h.utilisateurs_autorises)} autorisés · ${h.comptes.invites == null ? '—' : nb(h.comptes.invites)} invités · ${h.comptes.actifs == null ? '—' : nb(h.comptes.actifs)} activés</p>${h.comptes.par_role ? `<ul>${Object.entries(h.comptes.par_role).map(([role,x])=>`<li>${esc(role)} : ${nb(x.invites)} invité(s), ${nb(x.actifs)} activé(s)</li>`).join('')}</ul>` : ''}<p class="note">Les comptes invités et activés sont lus depuis l’environnement relié; aucune donnée d’authentification n’est affichée.</p></div>
       </div>
       <div class="pile">
@@ -397,6 +423,7 @@ async function vueHopital(v) {
   $('#b-ajout-contact').onclick=()=>ajouterLigne('#liste-contacts','contact-sh',[['nom','Nom du contact'],['fonction','Fonction'],['courriel','Courriel'],['telephone','Téléphone'],['categorie','Catégorie']]);
   $('#b-dossier').onclick=(ev)=>agir(ev.currentTarget,()=>api('PUT',`/hopitaux/${h.id}/dossier`,{sites:lireLignes('#liste-sites','site-sh'),contacts:lireLignes('#liste-contacts','contact-sh')}),'Dossier établissement enregistré.');
   $('#b-modules').onclick=(ev)=>agir(ev.currentTarget,()=>api('PUT',`/hopitaux/${h.id}/modules`,{modules:[...v.querySelectorAll('[data-module]')].map((x)=>({code:x.dataset.module,licence:x.value,parametres:JSON.parse(v.querySelector(`[data-param="${CSS.escape(x.dataset.module)}"]`).value)}))}),'Catalogue enregistré.');
+  if ($('#b-configuration-operationnelle')) $('#b-configuration-operationnelle').onclick = () => configurationOperationnelle(h);
   v.querySelectorAll('[data-verif]').forEach((c) => { c.onchange = () => agir(null, () => api('PUT', `/verifications/${c.dataset.verif}`, { faite: c.checked })); });
   v.querySelectorAll('[data-etape]').forEach((b) => {
     b.onclick = () => {

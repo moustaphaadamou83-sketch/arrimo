@@ -483,6 +483,26 @@ function creerAppSh(pool, { env = process.env } = {}) {
     return fiche(h.id);
   }));
 
+  api.get('/hopitaux/:id/configuration-operationnelle', route(async (req) => {
+    const h = await hopital(entier(req.params.id));
+    return appeler(cible(h.environnement), 'GET', `/sh/etablissements/${encodeURIComponent(h.code_etab)}/configuration-operationnelle`);
+  }));
+  api.put('/hopitaux/:id/configuration-operationnelle', route(async (req) => {
+    const h = await hopital(entier(req.params.id));
+    const b = require('../configuration-operationnelle').normaliser(req.body);
+    const resultat = await appeler(cible(h.environnement), 'PUT', `/sh/etablissements/${encodeURIComponent(h.code_etab)}/configuration-operationnelle`,
+      { ...b, version: req.body.version, par: req.u.email });
+    await journal(pool, req.u, 'Configuration opérationnelle publiée', h.code_etab, JSON.stringify(b), h.id);
+    return resultat;
+  }));
+  api.post('/hopitaux/:id/specialites', route(async (req) => {
+    const h = await hopital(entier(req.params.id));
+    if (typeof req.body.specialite !== 'string' || !/^[A-Z][A-Z0-9_-]{0,29}$/.test(req.body.specialite)) throw new ErreurSh(400, 'Spécialité invalide.');
+    const resultat = await appeler(cible(h.environnement), 'POST', `/sh/etablissements/${encodeURIComponent(h.code_etab)}/specialites`,
+      { specialite: req.body.specialite, par: req.u.email });
+    await journal(pool, req.u, 'Spécialité activée dans Arrimo', h.code_etab, req.body.specialite, h.id);
+    return resultat;
+  }));
   api.put('/hopitaux/:id/modules', route(async (req) => {
     const h=await hopital(entier(req.params.id)); const modules=Array.isArray(req.body.modules)?req.body.modules:[];
     if (modules.length>30) throw new ErreurSh(400,'Trop de modules dans la requête.');
