@@ -1,4 +1,4 @@
-# Recette, publication conditionnelle et démonstration VNext
+# Recette, publication conditionnelle et démonstration Arrimo
 
 Cette procédure n'a pas été exécutée sur les environnements publics. Elle ne constitue pas une autorisation de passer un contrôle échoué. L'autorisation de publication utilisateur existe ; les prérequis techniques restent obligatoires.
 

@@ -1,4 +1,4 @@
-# Arrimo VNext — reprise du 25 octobre 2026
+# Arrimo — reprise du 25 octobre 2026
 
 ## Verdict
 

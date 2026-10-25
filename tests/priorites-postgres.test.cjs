@@ -22,8 +22,8 @@ test('recette réelle : migration, validation professionnelle, concurrence et ad
   const restaurer = require('./routeur-fictif.cjs').activer(); t.after(restaurer);
   const migration = fs.readFileSync(require.resolve('../db/migrations/20261025-priorites.sql'), 'utf8');
   const schema = fs.readFileSync(require.resolve('../db/schema.sql'), 'utf8');
-  assert.ok(schema.endsWith(migration));
-  await pool.query(schema.slice(0, -migration.length));
+  assert.ok(schema.includes(migration));
+  await pool.query(schema.replace(migration, ""));
   // Le seed applique aussi le schéma courant ; l'ancien schéma a été créé avant.
   await require('../db/seed').seed(pool, { silencieux: true });
   const etab = (await pool.query("SELECT * FROM etablissements WHERE code = 'MB'")).rows[0];

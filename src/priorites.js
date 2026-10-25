@@ -97,10 +97,10 @@ async function habilitations(pool, u, etab) {
   exigerAdministration(u, etab);
   return (await pool.query('SELECT utilisateur_id, active, version, modifie_le FROM admission_habilitations WHERE etablissement_id=$1', [etab])).rows;
 }
-async function valider(pool, u, demandeId, b) {
+async function valider(pool, u, demandeId, b, client = null) {
   const version = versionAttendue(b.version); const motif = texteMotif(b.motif);
   if (b.confirmation !== true) throw new ErreurHttp(400, 'priorites_confirmation_requise');
-  return transaction(pool, async (c) => {
+  const executer = async (c) => {
     const d = (await c.query('SELECT * FROM demandes_admission WHERE id = $1 FOR UPDATE', [demandeId])).rows[0];
     if (!d) throw new ErreurHttp(404, 'demande_introuvable');
     await exigerHabilitation(c, u, d.etablissement_id);
@@ -118,7 +118,8 @@ async function valider(pool, u, demandeId, b) {
       detail: JSON.stringify({ demande_id: d.id, avant: { code: d.priorite_code, revision: d.priorite_revision, version },
         apres: { ...p, revision: r.revision, version: version + 1 }, motif }) });
     return maj.rows[0];
-  });
+  };
+  return client ? executer(client) : transaction(pool, executer);
 }
 /** Le délai départage seulement des demandes de même rang ; il ne détermine jamais la gravité. */
 function presenterPriorite(d, r) {

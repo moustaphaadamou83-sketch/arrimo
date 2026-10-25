@@ -4,7 +4,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { run } = require('node:test');
 const racine = path.resolve(__dirname, '..');
-const fichiers = ['priorites.test.cjs', 'priorites-ui-contract.test.cjs', 'configuration-operationnelle.test.cjs',
+const fichiers = ['simulation-connecteurs.test.cjs', 'priorites.test.cjs', 'priorites-ui-contract.test.cjs', 'configuration-operationnelle.test.cjs',
   'connecteurs-atomicite.test.cjs', 'courriel-transport.test.cjs', 'routage.test.cjs'];
 function empreinteSources() {
   const chemins = [];

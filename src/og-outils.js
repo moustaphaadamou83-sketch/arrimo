@@ -126,6 +126,7 @@ function litsMentionnes(question, lits) {
 
 /* ------------------------------------------------------------------ intentions (indices pondérés) */
 const INTENTIONS = [
+  ['synchronisation', [[/(synchron|synchro|connecteur|interoper|evenements? (extern|simul))/, 4]]],
   ['etat', [[/(etat actuel|etat de (mon|notre|l) ?(hopital|etablissement)|situation (actuelle|generale)|comment (va|se porte)|vue d ensemble|tableau de bord)/, 3], [/(\betat\b|resume)/, 1]]],
   ['priorites', [[/(priorit|classement|rang des demandes|ordre des demandes|plus urgent|que (dois|devons|faut)|quoi faire|par ou commencer|situations? (prioritaires?|critiques?))/, 3]]],
   ['actions', [[/(actions?.{0,25}(attendu|a faire|a mener|a realiser)|qu (est-ce qu|est ce qu)? ?on doit faire|que (devons|doit) (nous|on|l equipe) faire|taches?|attendu\w* de (notre|mon|l) equipe|a faire aujourd|liste de travail)/, 4]]],
@@ -282,6 +283,12 @@ async function repondre(pool, utilisateur, etabId, question, { historique } = {}
       if (v.alertes.length) lignes.push(`• Alertes : ${v.alertes.length} (${v.alertes.filter((x) => x.niveau === 'eleve').length} bloquantes). Demandez « Quelles alertes bloquent notre unité ? » pour le détail.`);
       blocs.push(lignes.join('\n'));
       faits.push('compteurs lus en direct dans la base');
+    },
+    async synchronisation() {
+      const rapport = await charger('simulation', () => require('./simulation-connecteurs').supervision(pool, utilisateur, etabId), 'Journal des connecteurs simulés');
+      blocs.push(rapport.connecteurs.length ? ['Connecteurs fictifs de votre établissement :', ...rapport.connecteurs.map((c) =>
+        `• ${c.nom} : ${c.appliques} événements appliqués, ${c.en_attente} en attente, ${c.a_verifier} conflits ou rejets à vérifier. Dernière date source appliquée : ${c.derniere_date_source ? quand(c.derniere_date_source) : 'aucune'}. Dernier traitement Arrimo : ${c.dernier_traitement ? quand(c.dernier_traitement) : 'aucun'}.`),
+        'Une lecture actuelle ne prouve pas que la source est fraîche. Les événements en attente ne sont pas appliqués ; leur rejeu exige le compte qui les a confirmés. Aucune intégration hospitalière réelle n’est attestée.'].join('\n') : 'Aucun connecteur simulé configuré pour cet établissement. Aucune intégration réelle n’est attestée.');
     },
     async priorites() {
       if (/(demand|patient|admission|classement|class\w*|rang|ordre)/.test(qn)) {

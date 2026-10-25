@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { recevoirEvenement } = require('../src/connecteurs');
 
-function baseSimulee({ journal = null, panneJournal = false, litAbsent = false } = {}) {
+function baseSimulee({ journal = null, panneJournal = false, litAbsent = false, simule = false } = {}) {
   const appels = [];
   let enTransaction = false;
   let sauvegarde;
@@ -12,6 +12,7 @@ function baseSimulee({ journal = null, panneJournal = false, litAbsent = false }
     if (sql === 'BEGIN') { enTransaction = true; sauvegarde = journal; }
     else if (sql === 'COMMIT') enTransaction = false;
     else if (sql === 'ROLLBACK') { journal = sauvegarde; enTransaction = false; }
+    else if (sql.startsWith('SELECT connecteur_id FROM connecteurs_simulation_config')) return { rows: simule ? [{ connecteur_id: 3 }] : [] };
     else if (sql.startsWith('SELECT statut')) {
       assert.ok(enTransaction);
       assert.ok(appels.some((x) => x.sql.includes('pg_advisory_xact_lock')));
@@ -77,4 +78,9 @@ test('connecteur réseau : écriture refusée avant toute transaction', async ()
   const pool = baseSimulee();
   await assert.rejects(recevoirEvenement(pool, { ...connecteur, etablissement_id: null }, evenement), { statut: 403 });
   assert.equal(pool.appels.length, 0);
+});
+test('clé de simulation : l’ancien point d’entrée ne contourne pas la session humaine', async () => {
+  const pool = baseSimulee({ simule: true });
+  await assert.rejects(recevoirEvenement(pool, connecteur, evenement), { statut: 403 });
+  assert.ok(!pool.appels.some((x) => x.sql.includes('FROM lits')));
 });

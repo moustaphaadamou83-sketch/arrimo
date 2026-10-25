@@ -22,8 +22,8 @@ function groupeAgeDepuisNaissance(naissance, maintenant = new Date()) {
 }
 
 /** Modifie un attribut d'un lit occupé sans changer son état, sous verrou, avec journal. */
-async function modifierLitOccupe(pool, utilisateur, litId, champs, action, detail, apres) {
-  return transaction(pool, async (c) => {
+async function modifierLitOccupe(pool, utilisateur, litId, champs, action, detail, apres, client = null) {
+  const executer = async (c) => {
     const r = await c.query(
       `SELECT l.*, e.module_actif FROM lits l JOIN etablissements e ON e.id = l.etablissement_id
         WHERE l.id = $1 FOR NO KEY UPDATE OF l`, [litId]);
@@ -37,7 +37,8 @@ async function modifierLitOccupe(pool, utilisateur, litId, champs, action, detai
     await journaliser(c, { litId, utilisateurId: utilisateur.id, action, detail });
     if (apres) await apres(c);
     return u.rows[0];
-  });
+  };
+  return client ? executer(client) : transaction(pool, executer);
 }
 
 async function designerNsa(pool, utilisateur, litId, orientation) {
@@ -73,7 +74,7 @@ async function synchroniserConge(c, litId, utilisateurId, source = 'manuel') {
   }
 }
 
-async function majConge(pool, utilisateur, litId, statut, date) {
+async function majConge(pool, utilisateur, litId, statut, date, client = null) {
   if (statut !== null && !CONGES.includes(statut)) throw new ErreurHttp(400, 'conge_statut_inconnu');
   const champs = { conge_statut: statut };
   if (date !== undefined) {
@@ -83,7 +84,7 @@ async function majConge(pool, utilisateur, litId, statut, date) {
   }
   return modifierLitOccupe(pool, utilisateur, litId, champs, 'Congé mis à jour',
     `${statut || 'aucun'}${champs.sortie_prevue ? ` · ${champs.sortie_prevue.toISOString()}` : ''}`,
-    (c) => synchroniserConge(c, litId, utilisateur.id));
+    (c) => synchroniserConge(c, litId, utilisateur.id), client);
 }
 
 /* ------------------------------------------------------------------ nettoyage */
@@ -153,36 +154,37 @@ function besoinsDemande(d) {
     ventilation: d.besoin_ventilation, telemetrie: d.besoin_telemetrie };
 }
 
-async function creerDemande(pool, utilisateur, b) {
+async function creerDemande(pool, utilisateur, b, client = null) {
+  const db = client || pool;
   const etabId = Number(b.etablissement_id);
   exigerEtablissement(utilisateur, etabId);
-  const etab = await s.etablissement(pool, etabId);
+  const etab = await s.etablissement(db, etabId);
   s.exigerActif(etab);
   // Patient sur civière à l'urgence : la demande est liée à sa civière (la référence vient de la civière)
   const civiereId = b.civiere_id ? Number(b.civiere_id) : null;
   if (b.civiere_id && !Number.isInteger(civiereId)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'civiere_id' });
-  const civiere = civiereId ? await cv.civierePourDemande(pool, etabId, civiereId, String(b.patient_ref || '').trim() || null) : null;
+  const civiere = civiereId ? await cv.civierePourDemande(db, etabId, civiereId, String(b.patient_ref || '').trim() || null) : null;
   const ref = civiere ? civiere.patient_ref : String(b.patient_ref || '').trim();
   if (!new RegExp(etab.config.reference_regex).test(ref)) {
     throw new ErreurHttp(400, 'reference_invalide', { exemple: etab.config.reference_exemple });
   }
-  const type = await pool.query('SELECT id FROM types_unite WHERE id = $1 AND config_id = $2', [b.type_id, etab.config_id]);
+  const type = await db.query('SELECT id FROM types_unite WHERE id = $1 AND config_id = $2', [b.type_id, etab.config_id]);
   if (!type.rows[0]) throw new ErreurHttp(400, 'type_unite_inconnu');
   const be = s.lireBesoins(b.besoins || b);
   // Groupe d'âge : celui de la fiche du patient fictif s'il en a une, sinon celui indiqué, sinon celui du type d'unité
-  const patient = (await pool.query('SELECT id, date_naissance FROM patients WHERE etablissement_id = $1 AND reference = $2', [etabId, ref])).rows[0];
-  const groupeAge = patient ? groupeAgeDepuisNaissance(patient.date_naissance) : await s.groupeAgeEffectif(pool, type.rows[0].id, b.groupe_age);
-  const active = await pool.query(`SELECT id FROM demandes_admission WHERE etablissement_id = $1 AND patient_ref = $2 AND statut IN ('attente', 'assignee')`, [etabId, ref]);
+  const patient = (await db.query('SELECT id, date_naissance FROM patients WHERE etablissement_id = $1 AND reference = $2', [etabId, ref])).rows[0];
+  const groupeAge = patient ? groupeAgeDepuisNaissance(patient.date_naissance) : await s.groupeAgeEffectif(db, type.rows[0].id, b.groupe_age);
+  const active = await db.query(`SELECT id FROM demandes_admission WHERE etablissement_id = $1 AND patient_ref = $2 AND statut IN ('attente', 'assignee')`, [etabId, ref]);
   if (active.rows[0]) throw new ErreurHttp(409, 'patient_deja_demande', { ref, numero: active.rows[0].id });
   try {
-    const { rows } = await pool.query(
+    const { rows } = await db.query(
       `INSERT INTO demandes_admission (etablissement_id, provenance, type_id, patient_ref, priorite,
          besoin_isolement, besoin_pression_negative, besoin_ventilation, besoin_telemetrie, cree_par, civiere_id, groupe_age, patient_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
       [etabId, civiere ? 'urgence' : ['urgence', 'bloc', 'externe', 'autre'].includes(b.provenance) ? b.provenance : 'urgence', type.rows[0].id, ref,
         ['p1', 'p2', 'p3'].includes(b.priorite) ? b.priorite : 'p2',
         be.isolement, be.pression_negative, be.ventilation, be.telemetrie, utilisateur.id, civiereId, groupeAge, patient?.id || null]);
-    if (patient) await pool.query(`UPDATE patients SET parcours = 'attente_lit', modifie_le = now() WHERE id = $1`, [patient.id]);
+    if (patient) await db.query(`UPDATE patients SET parcours = 'attente_lit', modifie_le = now() WHERE id = $1`, [patient.id]);
     return rows[0];
   } catch (e) {
     if (e.code === '23505' && civiere) throw new ErreurHttp(409, 'civiere_deja_demande', { code: civiere.code });
@@ -234,8 +236,8 @@ async function lireDemande(c, utilisateur, id) {
   return d;
 }
 
-async function assignerLit(pool, utilisateur, demandeId, litId, version) {
-  return transaction(pool, async (c) => {
+async function assignerLit(pool, utilisateur, demandeId, litId, version, client = null) {
+  const executer = async (c) => {
     const d = await lireDemande(c, utilisateur, demandeId);
     if (d.statut !== 'attente') throw new ErreurHttp(409, 'demande_plus_en_attente');
     const ok = await c.query(`SELECT l.id FROM lits l WHERE l.id = $1 AND l.etablissement_id = $2 AND l.type_id = $3${s.sqlBesoins(besoinsDemande(d))}${sqlAge('l', d.groupe_age)}`,
@@ -246,7 +248,8 @@ async function assignerLit(pool, utilisateur, demandeId, litId, version) {
     const u = await c.query(`UPDATE demandes_admission SET statut = 'assignee', lit_id = $2, assignee_le = now() WHERE id = $1 RETURNING *`, [d.id, litId]);
     await parcoursPatient(c, d, 'lit_assigne');
     return { ...u.rows[0], lit_code: lit.code };
-  });
+  };
+  return client ? executer(client) : transaction(pool, executer);
 }
 
 /**
@@ -272,15 +275,16 @@ async function finaliserAdmission(c, pool, utilisateur, d, version) {
   return { ...u.rows[0], lit_code: lit.code };
 }
 
-async function admettreDemande(pool, utilisateur, demandeId) {
-  return transaction(pool, async (c) => {
+async function admettreDemande(pool, utilisateur, demandeId, client = null) {
+  const executer = async (c) => {
     const d = await lireDemande(c, utilisateur, demandeId);
     // Idempotente : un second clic (ou un autre écran) ne refait rien
     if (d.statut === 'admise') return { ...d, deja_admise: true };
     if (d.statut === 'attente') throw new ErreurHttp(409, 'assigner_dabord');
     if (d.statut !== 'assignee') throw new ErreurHttp(409, 'demande_terminee');
     return finaliserAdmission(c, pool, utilisateur, d);
-  });
+  };
+  return client ? executer(client) : transaction(pool, executer);
 }
 
 /**
@@ -368,8 +372,8 @@ async function annulerDemande(pool, utilisateur, demandeId) {
 }
 
 /** Pas de lit adapté ici : la demande devient un transfert vers un autre établissement, dans la même transaction. */
-async function transfererDemande(pool, utilisateur, demandeId, b) {
-  return transaction(pool, async (c) => {
+async function transfererDemande(pool, utilisateur, demandeId, b, client = null) {
+  const executer = async (c) => {
     const d = await lireDemande(c, utilisateur, demandeId);
     if (d.statut !== 'attente') throw new ErreurHttp(409, 'demande_plus_en_attente');
     const tr = await s.creerTransfert(pool, utilisateur, {
@@ -380,7 +384,8 @@ async function transfererDemande(pool, utilisateur, demandeId, b) {
     await c.query(`UPDATE demandes_admission SET statut = 'transferee', transfert_id = $2, terminee_le = now() WHERE id = $1`, [d.id, tr.id]);
     await parcoursPatient(c, d, 'transfere');
     return tr;
-  });
+  };
+  return client ? executer(client) : transaction(pool, executer);
 }
 
 /* ------------------------------------------------------------------ niveaux d'alerte */

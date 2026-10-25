@@ -153,7 +153,7 @@ test('OG : questions sur le classement dirigées vers les priorités, sans expli
 });
 test('migration et schema restent identiques ; aucune validation rétroactive', () => {
   const migration = fs.readFileSync(require.resolve('../db/migrations/20261025-priorites.sql'), 'utf8');
-  assert.ok(fs.readFileSync(require.resolve('../db/schema.sql'), 'utf8').endsWith(migration));
+  assert.ok(fs.readFileSync(require.resolve('../db/schema.sql'), 'utf8').includes(migration));
   assert.ok(!/UPDATE\s+demandes_admission/i.test(migration));
 });
 test('traductions : nouvelles clés FR/EN et catalogue des erreurs cohérents', () => {

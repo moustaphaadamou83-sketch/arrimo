@@ -60,7 +60,9 @@ async function recevoirEvenement(pool, connecteur, ev) {
     return await transaction(pool, async (c) => {
       // Sérialiser les livraisons concurrentes, même quand aucune ligne de journal
       // n'existe encore. Le verrou est libéré au COMMIT ou au ROLLBACK.
-      await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', [JSON.stringify(['arrimo-connecteur', connecteur.id, identifiant])]);
+      await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`arrimo-connecteur:${connecteur.id}`]);
+      const simulation = await c.query('SELECT connecteur_id FROM connecteurs_simulation_config WHERE connecteur_id=$1', [connecteur.id]);
+      if (simulation.rows[0]) throw new ErreurHttp(403, 'simulation_session_requise');
       const deja = await c.query('SELECT statut, detail FROM messages_connecteur WHERE connecteur_id = $1 AND identifiant = $2',
         [connecteur.id, identifiant]);
       if (deja.rows[0] && deja.rows[0].statut !== 'rejete') return { statut: 'deja_recu', detail: deja.rows[0].detail };

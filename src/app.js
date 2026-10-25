@@ -174,6 +174,16 @@ function creerApp(pool) {
     return ok ? next() : next(new ErreurHttp(403, 'admin_exige_2fa'));
   });
 
+  const simulation = require('./simulation-connecteurs');
+  api.put('/connecteurs/simulation/:id/configuration', route((req) => simulation.configurer(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
+  api.post('/connecteurs/simulation/correspondances', route(async (req) => simulation.correspondance(pool, req.utilisateur, await cx.identifier(pool, req.get('x-connecteur-key')), req.body)));
+  api.post('/connecteurs/simulation/evenements', route(async (req, res) => {
+    const r = await simulation.recevoir(pool, req.utilisateur, await cx.identifier(pool, req.get('x-connecteur-key')), req.body);
+    res.status(r.http_status); return r;
+  }));
+  api.get('/connecteurs/simulation/journal', route(async (req) => simulation.journal(pool, req.utilisateur, await cx.identifier(pool, req.get('x-connecteur-key')))));
+  api.get('/connecteurs/simulation/supervision', route((req) => simulation.supervision(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
+
   api.post('/deconnexion', route(async (req) => {
     await pool.query('DELETE FROM sessions WHERE token = ANY($1::text[])', [formesJeton(req.utilisateur.token)]);
   }));

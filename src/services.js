@@ -477,10 +477,10 @@ const ETAPES = {
   reception: { de: ['en_route'], cote: 'destination', vers: 'recu' },
 };
 
-async function avancerTransfert(pool, utilisateur, transfertId, etape, corps = {}) {
+async function avancerTransfert(pool, utilisateur, transfertId, etape, corps = {}, client = null) {
   const regle = ETAPES[etape];
   if (!regle) throw new ErreurHttp(400, 'action_inconnue');
-  return transaction(pool, async (c) => {
+  const executer = async (c) => {
     const r = await c.query(
       `SELECT t.*, o.nom AS origine_nom, d.nom AS destination_nom, c.transport_libelle, c.fuseau, c.facteur_route, c.vitesse_kmh, l.code AS lit_code
          FROM transferts t
@@ -564,7 +564,8 @@ async function avancerTransfert(pool, utilisateur, transfertId, etape, corps = {
     }
     if (dest) await notifier(c, dest, t.id, ...notif);
     return u.rows[0];
-  });
+  };
+  return client ? executer(client) : transaction(pool, executer);
 }
 
 /** Désigne le service receveur chargé de traiter la demande. */

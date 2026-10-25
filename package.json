@@ -10,7 +10,7 @@
     "start": "node src/server.js",
     "db:seed": "node db/seed.js",
     "db:reset": "node db/reset.js",
-    "test": "node scripts/verifier-runtime-tests.cjs && node --test --test-concurrency=1 tests/api.test.js tests/courriel-transport.test.cjs tests/routage.test.cjs tests/finalisation.test.cjs tests/connecteurs-atomicite.test.cjs tests/priorites.test.cjs tests/priorites-ui-contract.test.cjs tests/configuration-operationnelle.test.cjs",
+    "test": "node scripts/verifier-runtime-tests.cjs && node --test --test-concurrency=1 tests/api.test.js tests/courriel-transport.test.cjs tests/routage.test.cjs tests/finalisation.test.cjs tests/connecteurs-atomicite.test.cjs tests/priorites.test.cjs tests/priorites-ui-contract.test.cjs tests/configuration-operationnelle.test.cjs tests/simulation-connecteurs.test.cjs",
     "test:vnext-local": "node scripts/test-vnext-local.cjs",
     "test:priorites-postgres": "node tests/priorites-postgres.test.cjs",
     "test:priorites-interface": "node tests/priorites.interface.spec.cjs",
@@ -30,7 +30,9 @@
     "presentation:valider": "node scripts/valider-presentation.cjs",
     "test:sh-erp": "node scripts/verifier-runtime-tests.cjs && node --test --test-concurrency=1 tests/sh-erp.test.cjs",
     "test:sh-erp-interface": "node scripts/verifier-runtime-tests.cjs && node --test tests/sh-erp.interface.spec.cjs",
-    "test:scenarios-abc": "node scripts/verifier-runtime-tests.cjs && node --test --test-concurrency=1 tests/scenarios-abc.test.cjs"
+    "test:scenarios-abc": "node scripts/verifier-runtime-tests.cjs && node --test --test-concurrency=1 tests/scenarios-abc.test.cjs",
+    "test:local": "node scripts/test-vnext-local.cjs",
+    "test:interop-postgres": "node tests/simulation-postgres.test.cjs"
   },
   "license": "UNLICENSED",
   "dependencies": {

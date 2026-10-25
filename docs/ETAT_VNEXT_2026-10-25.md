@@ -1,4 +1,4 @@
-# Arrimo VNext — état vérifié dans cette session, 25 octobre 2026
+# Arrimo — état vérifié dans cette session, 25 octobre 2026
 
 > Rapport initial conservé pour historique. La reprise, les nouvelles fonctionnalités et l'inventaire corrigé du principal via `/opt/arrimo/current` sont dans [RAPPORT_REPRISE_VNEXT_2026-10-25.md](RAPPORT_REPRISE_VNEXT_2026-10-25.md).
 
