@@ -196,6 +196,9 @@ class Publication:
             self.infos[t] = {'root':root,'actuel':actuel,'service':service,'hote':hote,'port':port,'user':v['User'],'group':v.get('Group') or v['User'],'env_file':env_file,'nginx':nginx}
             identite = self.pg('postgres-' + t, t, 'identite')
             self.infos[t]['role'] = identite['role']
+            # Propriétaire DDL des tables publiques : si ce n'est pas le rôle applicatif, la migration
+            # publique doit s'exécuter sous le propriétaire (ici postgres) puis réaccorder les droits au rôle app.
+            self.infos[t]['proprietaires'] = self.proprietaires_publics(identite['base'])
             self.etat['environnements'][t] = {'domaine':hote,'release_avant':actuel,'version_avant':self.version(root / actuel), 'base':identite['base'],'role':identite['role'],'sante_avant':self.sante(t),'publie':False}
             self.sauver()
         bases = [self.etat['environnements'][t]['base'] for t, *_ in CIBLES]
@@ -208,6 +211,64 @@ class Publication:
         # Le contrôle Chromium n'utilise aucun profil ni compte public.
         self.commande('runtime-chromium',[NODE,'-e',"require('playwright').chromium.launch({headless:true}).then(b=>b.close()).catch(()=>process.exitCode=1)"])
         self.sauver()
+
+    def proprietaires_publics(self, base):
+        if not re.fullmatch(r'[A-Za-z0-9_]+', base): raise Refus('Nom de base inattendu')
+        r = subprocess.run(['runuser','-u','postgres','--','psql','-X','-At','-v','ON_ERROR_STOP=1','-d',base,
+            '-c',"SELECT DISTINCT tableowner FROM pg_tables WHERE schemaname='public'"], capture_output=True, text=True, timeout=60)
+        if r.returncode != 0: raise Refus('Lecture des propriétaires publics impossible')
+        return sorted(x for x in r.stdout.splitlines() if x)
+
+    def migration_publique_proprietaire(self, t):
+        # Migration publique pour une base dont les tables ne sont PAS possédées par le rôle applicatif
+        # (ici propriétaire postgres) : exécutée sous le propriétaire via peer, avec garde d'intégrité
+        # des données sur les colonnes préexistantes, puis réattribution des droits DML au rôle app.
+        i = self.infos[t]; base = self.etat['environnements'][t]['base']; role = i['role']
+        if set(i['proprietaires']) - {'postgres'}: raise Refus('Propriétaire public inattendu : ' + t)
+        if not re.fullmatch(r'[a-z_][a-z0-9_]*', role): raise Refus('Rôle applicatif inattendu')
+        if t == 'sh': raise Refus('Migration propriétaire non prévue pour SH')
+        tmp = pathlib.Path('/var/tmp/arrimo-pubmig-' + self.sortie.name.rsplit('_',1)[-1] + '-' + t)
+        if tmp.exists(): shutil.rmtree(tmp)
+        tmp.mkdir(); tmp.chmod(0o755)
+        try:
+            chemins = []
+            for f in ['20261025-priorites.sql','20261025-simulation.sql']:
+                dst = tmp / f; shutil.copy2(self.code / 'db/migrations' / f, dst); dst.chmod(0o644)
+                chemins.append(str(dst).replace("'", "''"))
+            empreinte = ("md5(coalesce(string_agg(md5(row_to_json(x)::text), %L ORDER BY "
+                         "md5(row_to_json(x)::text)), %L))")
+            control = tmp / 'migration-publique.sql'
+            control.write_text(
+                "\\set ON_ERROR_STOP on\n"
+                "BEGIN;\n"
+                "SET LOCAL lock_timeout TO '10s';\n"
+                "SET LOCAL statement_timeout TO '300s';\n"
+                "CREATE TEMP TABLE _arrimo_av(t text PRIMARY KEY, cols text, n bigint, h text) ON COMMIT DROP;\n"
+                "DO $av$\nDECLARE r record; collist text; cnt bigint; hsh text;\nBEGIN\n"
+                "  FOR r IN SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename LOOP\n"
+                "    SELECT string_agg(quote_ident(column_name), ',' ORDER BY ordinal_position) INTO collist\n"
+                "      FROM information_schema.columns WHERE table_schema='public' AND table_name=r.tablename;\n"
+                "    EXECUTE format('SELECT count(*), " + empreinte + " FROM (SELECT %s FROM public.%I) x',\n"
+                "      '', '', collist, r.tablename) INTO cnt, hsh;\n"
+                "    INSERT INTO _arrimo_av VALUES (r.tablename, collist, cnt, hsh);\n"
+                "  END LOOP;\nEND $av$;\n"
+                "\\i '" + chemins[0] + "'\n"
+                "\\i '" + chemins[1] + "'\n"
+                "DO $ap$\nDECLARE a record; cnt bigint; hsh text;\nBEGIN\n"
+                "  FOR a IN SELECT * FROM _arrimo_av LOOP\n"
+                "    EXECUTE format('SELECT count(*), " + empreinte + " FROM (SELECT %s FROM public.%I) x',\n"
+                "      '', '', a.cols, a.t) INTO cnt, hsh;\n"
+                "    IF cnt <> a.n OR hsh IS DISTINCT FROM a.h THEN\n"
+                "      RAISE EXCEPTION 'Donnees existantes modifiees sur la table %', a.t;\n"
+                "    END IF;\n"
+                "  END LOOP;\nEND $ap$;\n"
+                "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO " + role + ";\n"
+                "GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO " + role + ";\n"
+                "COMMIT;\n")
+            control.chmod(0o644)
+            self.commande('migration-publique-'+t, ['runuser','-u','postgres','--','psql','-X','-v','ON_ERROR_STOP=1','-d',base,'-f',str(control)])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
 
     def version(self, code):
         propositions=[]
@@ -383,7 +444,11 @@ class Publication:
         e['phase']='bascule_en_cours';self.sauver()
         try:
             self.commande('arreter-'+t,['systemctl','stop',i['service']+'.service'])
-            self.pg('migration-publique-'+t,t,'migrer',code=str(self.code),env=self.envs[t],role=i['role'],public_autorise=True,preuves=self.preparees[t]['preuves'])
+            if set(i.get('proprietaires') or [i['role']]) <= {i['role']}:
+                self.pg('migration-publique-'+t,t,'migrer',code=str(self.code),env=self.envs[t],role=i['role'],public_autorise=True,preuves=self.preparees[t]['preuves'])
+            else:
+                if not all(self.preparees[t]['preuves'].get(k) for k in ['restauration','migration_copie','ancien_code']): raise Refus('Préflight copie non validé')
+                self.migration_publique_proprietaire(t)
             e['migration_publique']=True;self.sauver()
             self.commande('activer-'+t,['bash',str(RACINE/'deploy/releases.sh'),'activate',str(i['root']),rid,i['service']+'.service','http://127.0.0.1:'+str(i['port'])+'/api/sante'])
             e['controles_publics']=self.controle_public(t)
