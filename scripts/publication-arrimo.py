@@ -203,7 +203,8 @@ class Publication:
         admin = os.environ.get('ARRIMO_PUBLICATION_ADMIN_URL','postgresql:///postgres?host=/var/run/postgresql')
         if cible_pg(admin) not in ['postgres','template1']: raise Refus('Base de maintenance requise')
         self.admin = admin
-        self.worker('maintenance-postgres',{'operation':'identite','url':admin,'nom':cible_pg(admin)})
+        # Authentification peer locale : la maintenance s'exécute sous le compte système postgres, sans changer pg_hba.
+        self.commande('maintenance-postgres',['runuser','-u','postgres','--','psql','-X','-v','ON_ERROR_STOP=1','-d',cible_pg(admin),'-Atc','SELECT 1'])
         # Le contrôle Chromium n'utilise aucun profil ni compte public.
         self.commande('runtime-chromium',[NODE,'-e',"require('playwright').chromium.launch({headless:true}).then(b=>b.close()).catch(()=>process.exitCode=1)"])
         self.sauver()
@@ -314,7 +315,9 @@ class Publication:
         (b/'SHA256SUMS.json').write_text(json.dumps({f.name:sha(f) for f in b.iterdir() if f.is_file()},indent=2)+'\n')
         nom='arrimo_publication_restore_'+t+'_'+self.sortie.name.rsplit('-',1)[-1].lower()
         if len(nom)>63:raise Refus('Nom de copie trop long')
-        self.worker('creer-copie-'+t,{'operation':'creer-copie','url':self.admin,'nom':cible_pg(self.admin),'cible':nom,'proprietaire':i['role']})
+        if not re.fullmatch(r'[a-z_][a-z0-9_]*',i['role']):raise Refus('Rôle applicatif inattendu')
+        sql='CREATE DATABASE :"cible" OWNER :"proprietaire" TEMPLATE template0;\nREVOKE CONNECT ON DATABASE :"cible" FROM PUBLIC;\n'
+        self.commande('creer-copie-'+t,['runuser','-u','postgres','--','psql','-X','-v','ON_ERROR_STOP=1','-v','cible='+nom,'-v','proprietaire='+i['role'],'-d',cible_pg(self.admin)],entree=sql.encode())
         url = url_copie((self.envs[t].get('SH_DATABASE_URL') if t=='sh' else None) or self.envs[t]['DATABASE_URL'],nom)
         # Pas de --clean, --create ou restauration sur une base existante.
         u=urllib.parse.urlsplit(url);q=urllib.parse.parse_qs(u.query)
