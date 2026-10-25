@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-25T08:10:59.365882+00:00",
+  "statut": "bloque",
+  "application_isolee": "/root/arrimo-recette-ssh-20261025T081059Z-2/application",
+  "bases_creees": [],
+  "etapes": [
+    {
+      "nom": "runtime-node",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "runtime-ipc",
+      "sortie": 1,
+      "reussi": false
+    }
+  ],
+  "sauvegarde_fictive_restauree": false,
+  "copie_isolee_validee": false,
+  "publication_effectuee": false,
+  "migration_publique_effectuee": false,
+  "commit": "19fa8c02d7eaa5d41023a0f280f60f12d5f7ecd3",
+  "blocage": "Runtime non autorisé ou incomplet : aucune base créée"
+}
