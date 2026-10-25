@@ -74,8 +74,17 @@ async function base(p) {
       const snapshot = (await c.query('SELECT pg_export_snapshot() AS id')).rows[0].id;
       const cols = await colonnes(c);
       // Le dump ET les empreintes partagent le même snapshot malgré les écritures hospitalières concurrentes.
+      // libpq n'interprète pas une URL fournie via PGDATABASE : passer des variables PG* distinctes
+      // (le mot de passe reste hors de la ligne de commande).
+      const uu = new URL(p.url);
+      const envDump = { ...process.env, PGCONNECT_TIMEOUT: '10',
+        PGHOST: uu.searchParams.get('host') || uu.hostname || '/var/run/postgresql',
+        PGPORT: uu.port || '5432', PGDATABASE: p.nom };
+      if (uu.username) envDump.PGUSER = decodeURIComponent(uu.username);
+      if (uu.password) envDump.PGPASSWORD = decodeURIComponent(uu.password);
+      if (uu.searchParams.get('sslmode')) envDump.PGSSLMODE = uu.searchParams.get('sslmode');
       execFileSync('pg_dump', ['--format=custom','--no-owner','--snapshot='+snapshot,'--file='+p.dump], {
-        env: { ...process.env, PGDATABASE: p.url, PGCONNECT_TIMEOUT: '10' }, stdio: ['ignore','ignore','pipe'], timeout: 600000 });
+        env: envDump, stdio: ['ignore','ignore','pipe'], timeout: 600000 });
       const contenu = await empreintes(c, cols);
       await c.query('COMMIT');
       return { colonnes: cols, contenu };
