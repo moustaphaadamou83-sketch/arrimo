@@ -55,6 +55,31 @@ class ConfigurationServeurTest(unittest.TestCase):
             recette.configuration_pg('postgresql://compte:secret_fictif@distant/arrimo')
         self.assertNotIn('secret_fictif', str(erreur.exception))
 
+    def test_url_de_test_localhost_conserve_socket_unix(self):
+        u, q, host = recette.configuration_pg('postgresql:///postgres?host=/var/run/postgresql')
+        cible = recette.url_base_isolee(u, q, host, 'arrimo_demo_trio_recette_20261025')
+        p = recette.urllib.parse.urlsplit(cible)
+        self.assertEqual(p.hostname, 'localhost')
+        self.assertEqual(p.path, '/arrimo_demo_trio_recette_20261025')
+        self.assertEqual(recette.urllib.parse.parse_qs(p.query)['host'], ['/var/run/postgresql'])
+
+    def test_url_de_test_sans_socket_explicite_conserve_authentification_locale(self):
+        u, q, host = recette.configuration_pg('postgresql:///postgres')
+        cible = recette.url_base_isolee(u, q, host, 'arrimo_test_exemple')
+        self.assertEqual(recette.urllib.parse.urlsplit(cible).hostname, 'localhost')
+        self.assertEqual(recette.urllib.parse.parse_qs(recette.urllib.parse.urlsplit(cible).query)['host'], ['/var/run/postgresql'])
+
+    def test_url_de_test_preserve_compte_port_et_socket(self):
+        u, q, host = recette.configuration_pg('postgresql://compte@localhost:5433/postgres?host=/var/run/postgresql')
+        cible = recette.urllib.parse.urlsplit(recette.url_base_isolee(u, q, host, 'arrimo_test_exemple'))
+        self.assertEqual((cible.username, cible.port), ('compte', 5433))
+        self.assertEqual(recette.urllib.parse.parse_qs(cible.query)['host'], ['/var/run/postgresql'])
+
+    def test_url_de_test_refuse_nom_public(self):
+        u, q, host = recette.configuration_pg('postgresql:///postgres')
+        with self.assertRaises(ValueError):
+            recette.url_base_isolee(u, q, host, 'arrimo')
+
 
 if __name__ == '__main__':
     unittest.main()

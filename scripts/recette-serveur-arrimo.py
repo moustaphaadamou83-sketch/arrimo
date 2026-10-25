@@ -31,6 +31,16 @@ def configuration_pg(valeur):
     return u, q, host
 
 
+def url_base_isolee(u, q, host, nom):
+    if not re.fullmatch(r'arrimo_[a-z0-9_]{1,55}', nom):
+        raise ValueError('Nom de base de recette invalide')
+    # Les suites A/B/C exigent un hostname local explicite. Le paramètre host
+    # conserve la connexion UNIX réellement sélectionnée, sans passer en TCP.
+    parametres = {cle: valeurs[0] for cle, valeurs in q.items()}
+    parametres['host'] = host
+    return u.scheme + '://' + (u.netloc or 'localhost') + '/' + nom + '?' + urllib.parse.urlencode(parametres)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--sortie', required=True, type=pathlib.Path)
@@ -91,7 +101,7 @@ def main():
     nom_session = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%d%H%M%S') + '_' + secrets.token_hex(3)
 
     def url_base(nom):
-        return u.scheme + '://' + u.netloc + '/' + nom + ('?' + u.query if u.query else '')
+        return url_base_isolee(u, q, host, nom)
 
     def creer(prefixe):
         nom = prefixe + nom_session

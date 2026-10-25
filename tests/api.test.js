@@ -81,7 +81,7 @@ test.before(async () => {
   await viderBase(pool);
   await seed(pool, { silencieux: true });
   process.env.SH_API_KEY = 'cle-de-test-sh-123456';
-  serveur = creerApp(pool).listen(0);
+  serveur = creerApp(pool).listen(0, '127.0.0.1');
   base = `http://127.0.0.1:${serveur.address().port}`;
   // Le gestionnaire réseau doit avoir la double authentification (hors serveur de démonstration)
   const secretReseau = totp.nouveauSecret();
@@ -1346,7 +1346,7 @@ test('pages légales : accessibles sans connexion, en français et en anglais ; 
 test('robustesse : fréquence limitée par session, taille limitée, /api/sante jamais limitée', async () => {
   const avant = process.env.API_LIMITE_SESSION;
   process.env.API_LIMITE_SESSION = '20';
-  const srv = creerApp(pool).listen(0);
+  const srv = creerApp(pool).listen(0, '127.0.0.1');
   try {
     const b = `http://127.0.0.1:${srv.address().port}/api`;
     const h = { Authorization: `Bearer ${tokens.x}` };
@@ -1461,7 +1461,7 @@ test('verrou des lits sous forte concurrence : plus de réservations que de conn
   // sans attendre une connexion tenue par une autre transaction.
   const petit = creerPool(URL_TEST);
   petit.options.max = 3;
-  const srv = creerApp(petit).listen(0);
+  const srv = creerApp(petit).listen(0, '127.0.0.1');
   try {
     const b = `http://127.0.0.1:${srv.address().port}/api`;
     const hy = await id('HY');
@@ -1685,12 +1685,12 @@ test('installateur : noms propres à chaque environnement, domaine changeable ; 
   assert.match(releaseTest.stdout, /écritures conservées, base jamais restaurée/);
 });
 
-test('premier compte d’un environnement vide : gestionnaire, mot de passe temporaire ; refusé s’il existe des comptes', async () => {
+test('premier compte d’un environnement vide : gestionnaire, mot de passe temporaire ; refusé s’il existe des comptes', async (t) => {
   const { premierCompte } = require('../db/premier-compte');
   await assert.rejects(premierCompte(pool, 'premier@exemple.ca', 'Premier'), /déjà des comptes/);
-  const nomBase = `arrimo_test_premier_${process.pid}`;
-  await pool.query(`DROP DATABASE IF EXISTS ${nomBase}`);
+  const nomBase = `arrimo_test_premier_${require('node:crypto').randomBytes(12).toString('hex')}`;
   await pool.query(`CREATE DATABASE ${nomBase}`);
+  t.diagnostic(`Base auxiliaire fictive conservée : ${nomBase}`);
   const url = new URL(URL_TEST); url.pathname = `/${nomBase}`;
   const vide = creerPool(url.toString());
   try {
@@ -1704,7 +1704,6 @@ test('premier compte d’un environnement vide : gestionnaire, mot de passe temp
     await assert.rejects(premierCompte(vide, 'autre@exemple.ca', 'Autre'), /déjà des comptes/);
   } finally {
     await vide.end();
-    await pool.query(`DROP DATABASE IF EXISTS ${nomBase}`);
   }
 });
 
@@ -1870,7 +1869,7 @@ test('console SH : première connexion (mot de passe, double authentification), 
   const { premierCompteSh } = require('../db/sh-premier-compte');
   await assert.rejects(premierCompteSh(pool, 'autre@exemple.ca', 'Autre'), /compte ou une invitation existe déjà/);
   const cle = process.env.SH_API_KEY;
-  const serveurSh = creerAppSh(pool, { env: { SH_PUBLIC_URL: 'https://sh.test.invalid', SH_MFA_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'), SH_ENV_RECETTE_URL: base, SH_ENV_RECETTE_CLE: cle, SH_ENV_RECETTE_PUBLIC: 'https://recette.exemple.ca' } }).listen(0);
+  const serveurSh = creerAppSh(pool, { env: { SH_PUBLIC_URL: 'https://sh.test.invalid', SH_MFA_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'), SH_ENV_RECETTE_URL: base, SH_ENV_RECETTE_CLE: cle, SH_ENV_RECETTE_PUBLIC: 'https://recette.exemple.ca' } }).listen(0, '127.0.0.1');
   const baseSh = `http://127.0.0.1:${serveurSh.address().port}`;
   let jeton = null;
   const sh = async (methode, chemin, corps) => {
@@ -2065,13 +2064,13 @@ test('C4 : patients fictifs en recette seulement, formation par rôle, go-live s
   const poolProd = new Pool({ connectionString: URL_TEST, options: '-c search_path=prod_c4' });
   await poolProd.query(fs.readFileSync(path.join(__dirname, '..', 'db', 'schema.sql'), 'utf8'));
   await configurationBase(poolProd);
-  const serveurProd = creerApp(poolProd).listen(0);
+  const serveurProd = creerApp(poolProd).listen(0, '127.0.0.1');
   const baseProd = `http://127.0.0.1:${serveurProd.address().port}`;
   const cle = process.env.SH_API_KEY;
   await viderBaseSh(pool);
   const motDePasseSh = await creerPremierCompteShTest('sh@exemple.ca', 'Équipe SH');
   courierSh.definirTransport(async (m) => { courrielsSh.push(m); });
-  const serveurSh = creerAppSh(pool, { env: { SH_PUBLIC_URL: 'https://sh.test.invalid', SH_MFA_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'), SH_ENV_RECETTE_URL: base, SH_ENV_RECETTE_CLE: cle, SH_ENV_PRODUCTION_URL: baseProd, SH_ENV_PRODUCTION_CLE: cle, SH_ENV_PRODUCTION_PUBLIC: 'https://arrimo.exemple' } }).listen(0);
+  const serveurSh = creerAppSh(pool, { env: { SH_PUBLIC_URL: 'https://sh.test.invalid', SH_MFA_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'), SH_ENV_RECETTE_URL: base, SH_ENV_RECETTE_CLE: cle, SH_ENV_PRODUCTION_URL: baseProd, SH_ENV_PRODUCTION_CLE: cle, SH_ENV_PRODUCTION_PUBLIC: 'https://arrimo.exemple' } }).listen(0, '127.0.0.1');
   const baseSh = `http://127.0.0.1:${serveurSh.address().port}`;
   let jeton = null;
   const sh = async (methode, chemin, corps) => {

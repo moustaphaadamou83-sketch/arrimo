@@ -36,7 +36,7 @@ test.before(async () => {
   restaurerRouteur = routeurTest.activer();
   process.env.ARRIMO_DEMO = '1';   // serveur de démonstration : bandeau et remise à zéro
   pool = creerPool(URL_TEST);
-  serveur = creerApp(pool).listen(0);
+  serveur = creerApp(pool).listen(0, '127.0.0.1');
   base = `http://127.0.0.1:${serveur.address().port}`;
   navigateur = await chromium.launch();
 });
@@ -699,13 +699,13 @@ test('console SH : première connexion, hôpital, implantation, formation, go-li
   await pool.query(schema);
   await configurationBase(pool);
   const poolProd = new Pool({ connectionString: URL_TEST, options: '-c search_path=prod_ui' });
-  const serveurProd = creerApp(poolProd).listen(0);
+  const serveurProd = creerApp(poolProd).listen(0, '127.0.0.1');
   const env = (e) => { process.env.ARRIMO_ENV = e; };   // les deux instances partagent ce processus de test
   const serveurSh = creerAppSh(pool, { env: {
     SH_PUBLIC_URL: process.env.SH_PUBLIC_URL, SH_MFA_ENCRYPTION_KEY: process.env.SH_MFA_ENCRYPTION_KEY,
     SH_ENV_RECETTE_URL: base, SH_ENV_RECETTE_CLE: process.env.SH_API_KEY, SH_ENV_RECETTE_PUBLIC: 'https://recette.arrimo.exemple',
     SH_ENV_PRODUCTION_URL: `http://127.0.0.1:${serveurProd.address().port}`, SH_ENV_PRODUCTION_CLE: process.env.SH_API_KEY, SH_ENV_PRODUCTION_PUBLIC: 'https://arrimo.exemple',
-  } }).listen(0);
+  } }).listen(0, '127.0.0.1');
   const baseSh = `http://127.0.0.1:${serveurSh.address().port}`;
   try {
     for (const [i, L] of LARGEURS.entries()) {

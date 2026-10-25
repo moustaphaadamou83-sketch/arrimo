@@ -48,7 +48,7 @@ test.before(async () => {
       comptes[e.id].push(email);
     }
   }
-  serveur = creerApp(pool).listen(0); base = `http://127.0.0.1:${serveur.address().port}`;
+  serveur = creerApp(pool).listen(0, '127.0.0.1'); base = `http://127.0.0.1:${serveur.address().port}`;
 });
 test.after(async () => { serveur?.close(); await pool?.end(); restaurerRouteur?.(); });
 

@@ -43,7 +43,7 @@ test.before(async () => {
   await pool.query(`UPDATE notifications SET message=$1 WHERE id IN (SELECT id FROM notifications ORDER BY id LIMIT 5)`, [c()]).catch(() => {});
   await pool.query(`UPDATE lits SET nsa_orientation=$2 WHERE id=(SELECT id FROM lits WHERE etablissement_id=$1 AND etat='occupe' ORDER BY id LIMIT 1)`, [x, c()]).catch(() => {});
   await pool.query(`INSERT INTO connecteurs(nom, etablissement_id, cle_hash) VALUES($1,$2,'x')`, [c(), x]).catch(() => {});
-  serveur = creerApp(pool).listen(0); base = `http://127.0.0.1:${serveur.address().port}`;
+  serveur = creerApp(pool).listen(0, '127.0.0.1'); base = `http://127.0.0.1:${serveur.address().port}`;
   navigateur = await chromium.launch();
 });
 test.after(async () => { await navigateur?.close(); serveur?.close(); await pool?.end(); restaurer?.(); delete process.env.ARRIMO_2FA_ADMIN; });

@@ -32,7 +32,7 @@ test('formulaires de structure et dashboards A/B/C isolés', {timeout:180000}, a
       VALUES($1,$2,$3,'admin_etab',$4,true) RETURNING id`,[`admin.${letter.toLowerCase()}@demo.arrimo`,`Administrateur fictif ${letter}`,hacher(motsDePasse[letter]),secrets[letter]])).rows[0];
     await pool.query('INSERT INTO utilisateur_etablissements(utilisateur_id,etablissement_id) VALUES($1,$2)',[u.id,etab.id]);
   }
-  server=creerApp(pool).listen(0);base=`http://127.0.0.1:${server.address().port}`;browser=await chromium.launch();
+  server=creerApp(pool).listen(0, '127.0.0.1');base=`http://127.0.0.1:${server.address().port}`;browser=await chromium.launch();
   const ctx=await browser.newContext({viewport:{width:1440,height:1000},acceptDownloads:true});const page=await ctx.newPage();
   page.setDefaultTimeout(6000);
   const errs=[];page.on('pageerror',e=>errs.push(String(e)));page.on('console',m=>{if(m.type()==='error')errs.push(m.text())});
