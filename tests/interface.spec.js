@@ -757,7 +757,7 @@ test('console SH : première connexion, hôpital, implantation, formation, go-li
       // Écrans ERP Lot 3/4 : les vues affichent les données persistées et leurs états vides.
       for (const [vue, capture] of [['accueil','sh-12-accueil'],['crm','sh-13-crm'],['contrats','sh-14-devis-contrats'],['projets','sh-15-projets'],['taches','sh-16-taches'],['support','sh-17-support']]) {
         await page.click(`#onglets [data-v="${vue}"]`);
-        await page.waitForFunction((v) => document.querySelector('h2')?.textContent?.trim() === v, vue==='taches'?'Tâches':vue==='crm'?'CRM':vue==='accueil'?'Accueil':vue==='contrats'?'Devis et contrats':vue==='projets'?'Projets':'Support');
+        await page.getByRole('heading', { level: 2, name: vue==='taches'?'Tâches':vue==='crm'?'CRM':vue==='accueil'?'Accueil':vue==='contrats'?'Devis et contrats':vue==='projets'?'Projets':'Support', exact: true }).waitFor({ state: 'visible' });
         if (i === 0) await verifier(page, L, capture);
       }
       await page.click('#onglets [data-v="hopitaux"]');
@@ -795,7 +795,7 @@ test('console SH : première connexion, hôpital, implantation, formation, go-li
       await page.fill('#sh-structure-attributs_json', '{"batiment":"A"}');
       page.once('dialog', d => d.accept());
       await rendu(() => page.locator('#sh-structure-form button[type="submit"]').click());
-      await page.waitForFunction(() => document.querySelector('#sh-structure-resultat')?.textContent.includes('Enregistré'), { timeout: 10000 }).catch(async () => { throw new Error(`éditeur SH création: ${await page.locator('#sh-structure-resultat').textContent()}`); });
+      await page.locator('#sh-structure-resultat').filter({ hasText: 'Enregistré' }).waitFor({ state: 'visible', timeout: 10000 }).catch(async () => { throw new Error(`éditeur SH création: ${await page.locator('#sh-structure-resultat').textContent()}`); });
       assert.deepStrictEqual((await pool.query(`SELECT d.attributs,d.actif FROM departements d JOIN etablissements e ON e.id=d.etablissement_id WHERE e.code='HOP-A' AND d.code='SH-MANUEL'`)).rows[0], { attributs: { batiment: 'A' }, actif: true });
       await page.selectOption('#sh-structure-type', 'departements');
       await page.selectOption('#sh-structure-existant', { label: 'SH-MANUEL' });
@@ -803,7 +803,7 @@ test('console SH : première connexion, hôpital, implantation, formation, go-li
       await page.fill('#sh-structure-attributs_json', '{"batiment":"B"}');
       page.once('dialog', d => d.accept());
       await rendu(() => page.locator('#sh-structure-form button[type="submit"]').click());
-      await page.waitForFunction(() => document.querySelector('#sh-structure-resultat')?.textContent.includes('Enregistré'), { timeout: 10000 }).catch(async () => { throw new Error(`éditeur SH modification: ${await page.locator('#sh-structure-resultat').textContent()}`); });
+      await page.locator('#sh-structure-resultat').filter({ hasText: 'Enregistré' }).waitFor({ state: 'visible', timeout: 10000 }).catch(async () => { throw new Error(`éditeur SH modification: ${await page.locator('#sh-structure-resultat').textContent()}`); });
       assert.deepStrictEqual((await pool.query(`SELECT d.nom,d.attributs FROM departements d JOIN etablissements e ON e.id=d.etablissement_id WHERE e.code='HOP-A' AND d.code='SH-MANUEL'`)).rows[0], { nom: 'Département SH actualisé', attributs: { batiment: 'B' } });
       await viderToasts();
       await verifier(page, L, 'sh-05-fiche-implantation');

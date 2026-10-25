@@ -490,13 +490,13 @@ test('file d’admission : besoins respectés, assignation, admission ; concurre
   assert.strictEqual((await pool.query('SELECT etat, patient_ref FROM lits WHERE id = $1', [f2.lit_suggere.id])).rows[0].patient_ref, 'P-70001');
 });
 
-test('demande sans lit ici : transfert vers un autre hôpital avec les besoins du patient', async () => {
+test('demande sans lit ici : transfert avec besoins et urgence explicitement confirmée par l’équipe', async () => {
   const mb = await id('MB'); const si = await type('SI');
   const d = await appel('tremblay', 'POST', '/admissions', { etablissement_id: mb, type_id: si, patient_ref: 'P-70002', priorite: 'p1', besoins: { ventilation: true } });
   const rec = await appel('tremblay', 'GET', `/recherche?depuis=${mb}&type_id=${si}&ventilation=1`);
   const s = rec.corps.suggestions.find((x) => x.libres);
   assert.ok(s);
-  const tr = await appel('tremblay', 'POST', `/admissions/${d.corps.id}/transferer`, { destination_id: s.etablissement_id, lit_id: s.lit?.id, version: s.lit?.version });
+  const tr = await appel('tremblay', 'POST', `/admissions/${d.corps.id}/transferer`, { destination_id: s.etablissement_id, lit_id: s.lit?.id, version: s.lit?.version, urgent: true });
   assert.strictEqual(tr.statut, 200, JSON.stringify(tr.corps));
   assert.strictEqual(tr.corps.besoins.ventilation, true);
   assert.strictEqual(tr.corps.urgent, true);
@@ -748,7 +748,10 @@ test('disponibilité à côté : alerte aux hôpitaux proches qui en ont besoin,
   await liberer(ha, 'MED');
   let ax = await alertes(hx);
   assert.strictEqual(ax.length, 1);
-  assert.match(ax[0].message, /^Lit de médecine signalé libre à proximité : Hôpital du Bois-Joli\./);
+  const libresMedecine = (await pool.query(`SELECT count(*)::int AS n FROM lits WHERE etablissement_id=$1 AND type_id=$2 AND etat='libre'`, [ha, await type('MED')])).rows[0].n;
+  assert.ok(libresMedecine >= 1);
+  assert.strictEqual(ax[0].vars.n, libresMedecine, 'le message compte tous les lits libres actuels, pas seulement le dernier libéré');
+  assert.strictEqual(ax[0].message, require('../src/langue').tr('fr', 'notif.dispo_lit', { ...ax[0].vars, type: 'médecine' }));
   assert.ok(!(await alertes(hy)).some((a) => a.vars.etab_id === ha), 'hors du rayon de Y');
   // Pas de spam : un autre lit de médecine à côté dans les 10 minutes ne crée pas de nouvelle alerte
   await liberer(hb, 'MED');
@@ -764,7 +767,7 @@ test('disponibilité à côté : alerte aux hôpitaux proches qui en ont besoin,
     : new RegExp(`^${litsChirurgieSignales} lits de chirurgie signalés libres à proximité : Centre hospitalier Val-des-Cèdres\\.`));
   // Lu en anglais
   const en = await fetch(`${base}/api/notifications?etablissement_id=${hx}`, { headers: { Authorization: `Bearer ${tokens.x}`, 'X-Langue': 'en' } }).then((r) => r.json());
-  assert.ok(en.some((n) => /^1 bed of medicine reported free nearby: Hôpital du Bois-Joli\./.test(n.message)), en.map((n) => n.message).join(' | '));
+  assert.ok(en.some((n) => n.message === require('../src/langue').tr('en', 'notif.dispo_lit', { ...ax[0].vars, type: 'medicine' })), en.map((n) => n.message).join(' | '));
   // Civière régulière libérée à côté : X a des patients en corridor
   const cv = (await pool.query(`SELECT id FROM civieres WHERE etablissement_id = $1 AND categorie = 'reguliere' AND etat = 'occupee'
     AND NOT EXISTS (SELECT 1 FROM demandes_admission d WHERE d.civiere_id = civieres.id AND d.statut IN ('attente', 'assignee')) LIMIT 1`, [ha])).rows[0];

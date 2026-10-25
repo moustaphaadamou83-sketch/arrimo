@@ -15,6 +15,12 @@ spec.loader.exec_module(recette)
 
 
 class ConfigurationServeurTest(unittest.TestCase):
+    def test_api_controle_ses_modes_sans_heritage_demo_force(self):
+        e = {'ARRIMO_ENV': 'demo', 'ARRIMO_DEMO': '1', 'PATH': '/bin'}
+        self.assertEqual(recette.environnement_suite(e, 'api'), {'PATH': '/bin'})
+        self.assertEqual(recette.environnement_suite(e, 'priorites-sql'), e)
+        self.assertEqual(e['ARRIMO_ENV'], 'demo')
+
     def test_socket_local_existant_sans_identifiant_invente(self):
         u, _, host = recette.configuration_pg('postgresql:///postgres?host=/var/run/postgresql')
         self.assertIsNone(u.username)

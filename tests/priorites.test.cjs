@@ -165,3 +165,19 @@ test('traductions : nouvelles clés FR/EN et catalogue des erreurs cohérents', 
     assert.ok(fr.erreurs[cle]); assert.ok(en.erreurs[cle]);
   }
 });
+
+
+test('OG traduit uniquement le statut non validé et conserve les libellés professionnels', () => {
+  const { libellePriorite } = require('../src/langue');
+  assert.equal(libellePriorite({ priorite_validee: false, priorite_affichage: 'À valider' }, 'en'), 'Awaiting validation');
+  assert.equal(libellePriorite({ priorite_validee: false }, 'fr'), 'À valider');
+  assert.equal(libellePriorite({ priorite_validee: true, priorite_affichage: 'Priorité partenaire' }, 'en'), 'Priorité partenaire');
+});
+
+test('présentation anglaise des priorités et explications pour Admissions et Urgences', () => {
+  const nonValidee = p.presenterPriorite({ id: 1 }, ref, 'en');
+  assert.equal(nonValidee.priorite_affichage, 'Awaiting validation');
+  assert.match(nonValidee.priorite_explication, /^Clinical priority has not been validated/);
+  const ancienne = p.presenterPriorite({ priorite_validee_le: '2026-10-25T00:00:00Z' }, ref, 'en');
+  assert.match(ancienne.priorite_explication, /^Reference changed/);
+});

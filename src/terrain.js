@@ -225,7 +225,7 @@ async function fileAdmission(pool, utilisateur, etabId) {
   }
   const priorites = require('./priorites');
   const { referentiel } = await priorites.referentiel(pool, utilisateur, etabId);
-  return priorites.organiserFile(rows, referentiel);
+  return priorites.organiserFile(rows, referentiel, utilisateur.langue);
 }
 
 async function lireDemande(c, utilisateur, id) {

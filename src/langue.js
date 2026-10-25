@@ -10,6 +10,11 @@ const LANGUES = ['fr', 'en'];
 const TEXTES = {
   fr: {
     locale: 'fr-CA',
+    priorite_a_valider: 'À valider',
+    priorite_compte: 'compte {id}',
+    priorite_explication_validee: '{libelle} : rang {rang}, référentiel v{revision}, validé par {auteur} le {date}. À rang égal, ancienneté de la demande.',
+    priorite_explication_a_revalider: 'Référentiel modifié : validation professionnelle à renouveler ; aucun rang clinique appliqué.',
+    priorite_explication_non_validee: 'Priorité clinique non validée : aucun rang clinique appliqué. La valeur historique ne vaut pas validation.',
     niveau: { vert: 'vert', jaune: 'jaune', orange: 'orange', rouge: 'rouge' },
     niveau_maj: { vert: 'Vert', jaune: 'Jaune', orange: 'Orange', rouge: 'Rouge' },
     besoin: { isolement: 'isolement', pression_negative: 'pression négative', ventilation: 'ventilation', telemetrie: 'télémétrie' },
@@ -198,6 +203,11 @@ const TEXTES = {
   },
   en: {
     locale: 'en-CA',
+    priorite_a_valider: 'Awaiting validation',
+    priorite_compte: 'account {id}',
+    priorite_explication_validee: '{libelle}: rank {rang}, reference v{revision}, validated by {auteur} on {date}. Equal ranks are ordered by request time.',
+    priorite_explication_a_revalider: 'Reference changed: professional validation must be renewed; no clinical rank applied.',
+    priorite_explication_non_validee: 'Clinical priority has not been validated: no clinical rank applied. The historical value does not count as validation.',
     niveau: { vert: 'green', jaune: 'yellow', orange: 'orange', rouge: 'red' },
     niveau_maj: { vert: 'Green', jaune: 'Yellow', orange: 'Orange', rouge: 'Red' },
     besoin: { isolement: 'isolation', pression_negative: 'negative pressure', ventilation: 'ventilation', telemetrie: 'telemetry' },
@@ -422,4 +432,9 @@ function traduireTypes(valeur, nomType) {
   return valeur;
 }
 
-module.exports = { LANGUES, TEXTES, langueDe, tr, dico, traducteurTypes, traduireTypes, viderCacheTypes, nombre, pourcent, duree };
+/** Le libellé validé reste celui du référentiel professionnel, sans traduction inventée. */
+function libellePriorite(demande, langue) {
+  return demande.priorite_validee ? demande.priorite_affichage : tr(langue, 'priorite_a_valider');
+}
+
+module.exports = { libellePriorite, LANGUES, TEXTES, langueDe, tr, dico, traducteurTypes, traduireTypes, viderCacheTypes, nombre, pourcent, duree };

@@ -92,7 +92,7 @@ async function listeCivieres(pool, utilisateur, etabId) {
     if (r.patient_id) { r.patient_nom_court = `${r.patient_prenom} ${r.patient_initiale}.`; r.groupe_age = groupeAgeDepuisNaissance(r.patient_naissance); }
     delete r.patient_prenom; delete r.patient_initiale; delete r.patient_naissance;
     if (r.demande_id) {
-      const priorite = priorites.presenterPriorite(r, referentiel);
+      const priorite = priorites.presenterPriorite(r, referentiel, utilisateur.langue);
       r.demande_priorite_affichage = priorite.priorite_affichage;
       r.demande_priorite_explication = priorite.priorite_explication;
     }

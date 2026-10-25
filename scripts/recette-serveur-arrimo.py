@@ -88,6 +88,16 @@ def verifier_compatibilite_reprise(reprise):
         raise ValueError('Reprise partielle refusée : dépendances modifiées')
 
 
+def environnement_suite(environnement, nom):
+    e = dict(environnement)
+    # API teste explicitement les deux modes avec ARRIMO_DEMO ; ne pas forcer
+    # ARRIMO_ENV=demo qui a priorité et rendrait ses tests de refus inopérants.
+    if nom == 'api':
+        e.pop('ARRIMO_ENV', None)
+        e.pop('ARRIMO_DEMO', None)
+    return e
+
+
 def configuration_pg(valeur):
     u = urllib.parse.urlsplit(valeur)
     q = urllib.parse.parse_qs(u.query, strict_parsing=True)
@@ -252,7 +262,7 @@ def main():
             try:
                 base = creer(prefixe)
                 ok, texte = executer(nom, ['node','--test','--test-concurrency=1','--test-reporter=tap', *fichiers],
-                                     env=dict(test_env, **{variable: url_base(base)}), cwd=application)
+                                     env=dict(environnement_suite(test_env, nom), **{variable: url_base(base)}), cwd=application)
                 # Vérifier les résultats réels, pas seulement le code de sortie.
                 if not ok or not tap_valide(texte):
                     valides = False

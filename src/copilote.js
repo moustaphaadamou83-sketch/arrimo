@@ -7,7 +7,7 @@
 const s = require('./services');
 const t = require('./terrain');
 const { exigerEtablissement } = require('./auth');
-const { tr, dico, traducteurTypes, duree } = require('./langue');
+const { tr, dico, traducteurTypes, duree, libellePriorite } = require('./langue');
 const civ = require('./civieres');
 const prev = require('./previsions');
 const { questionPredefinie, agregatsIa } = require('./iaPrivee');
@@ -45,7 +45,7 @@ async function briefing(pool, utilisateur, etabId) {
     if (d.lit_suggere && !litsProposes.has(d.lit_suggere.id)) {
       litsProposes.add(d.lit_suggere.id);
       ajouter(urgent ? 1 : 2, tr(L, 'r_assigner', { lit: d.lit_suggere.code, ref: d.patient_ref }),
-        tr(L, 'r_assigner_raison', { type: type(d.type_nom), duree: duree(L, d.attente_min), prio: d.priorite_affichage, prov: dico(L, 'provenance')[d.provenance] }),
+        tr(L, 'r_assigner_raison', { type: type(d.type_nom), duree: duree(L, d.attente_min), prio: libellePriorite(d, L), prov: dico(L, 'provenance')[d.provenance] }),
         { type: 'assigner', demande_id: d.id, lit_id: d.lit_suggere.id, version: d.lit_suggere.version, libelle: tr(L, 'r_assigner_action') });
     } else {
       const rec = await s.recommander(pool, utilisateur, etabId, d.type_id, { ...t.besoinsDemande(d), groupe_age: d.groupe_age });
@@ -439,7 +439,7 @@ async function questionHistorique(pool, utilisateur, etabId, q, fetchImpl) {
     const nomType = await traducteurTypes(pool, L);
     const f = (await t.fileAdmission(pool, utilisateur, etabId)).filter((d) => d.statut === 'attente');
     return { mode: 'local', reponse: f.length ? `${tr(L, 'q_attente', { n: f.length })}\n${f.map((d) => tr(L, 'q_attente_ligne',
-      { ref: d.patient_ref, type: nomType(d.type_nom), prio: d.priorite_affichage, duree: duree(L, d.attente_min) })
+      { ref: d.patient_ref, type: nomType(d.type_nom), prio: libellePriorite(d, L), duree: duree(L, d.attente_min) })
       + (d.lit_suggere ? tr(L, 'q_attente_lit', { lit: d.lit_suggere.code }) : tr(L, 'q_attente_aucun_lit'))).join('\n')}` : tr(L, 'q_attente_vide') };
   }
   if (/(nettoy|menage|entretien|clean|housekeep)/.test(qn)) {

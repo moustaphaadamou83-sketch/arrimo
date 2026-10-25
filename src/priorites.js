@@ -2,6 +2,7 @@
 const { transaction, ErreurHttp } = require('./db');
 const { exigerEtablissement } = require('./auth');
 const { journaliser } = require('./regles');
+const { tr } = require('./langue');
 
 function categoriesValides(categories) {
   if (!Array.isArray(categories) || categories.length < 2 || categories.length > 12) throw new ErreurHttp(400, 'priorites_referentiel_invalide');
@@ -122,18 +123,19 @@ async function valider(pool, u, demandeId, b, client = null) {
   return client ? executer(client) : transaction(pool, executer);
 }
 /** Le délai départage seulement des demandes de même rang ; il ne détermine jamais la gravité. */
-function presenterPriorite(d, r) {
+function presenterPriorite(d, r, langue) {
   const categorie = r?.categories.find((p) => p.code === d.priorite_code && p.rang === d.priorite_rang);
   const validee = !!(d.priorite_validee_par && d.priorite_validee_le && r && d.priorite_revision === r.revision && categorie);
   const explication = validee
-    ? `${d.priorite_libelle} : rang ${d.priorite_rang}, référentiel v${d.priorite_revision}, validé par ${d.priorite_validateur_nom || `compte ${d.priorite_validee_par}`} le ${new Date(d.priorite_validee_le).toISOString()}. À rang égal, ancienneté de la demande.`
-    : d.priorite_validee_le ? 'Référentiel modifié : validation professionnelle à renouveler ; aucun rang clinique appliqué.'
-      : 'Priorité clinique non validée : aucun rang clinique appliqué. La valeur historique ne vaut pas validation.';
+    ? tr(langue, 'priorite_explication_validee', { libelle: d.priorite_libelle, rang: d.priorite_rang,
+      revision: d.priorite_revision, auteur: d.priorite_validateur_nom || tr(langue, 'priorite_compte', { id: d.priorite_validee_par }),
+      date: new Date(d.priorite_validee_le).toISOString() })
+    : tr(langue, d.priorite_validee_le ? 'priorite_explication_a_revalider' : 'priorite_explication_non_validee');
   return { ...d, priorite_validee: validee, priorite_a_revalider: !!d.priorite_validee_le && !validee,
-    priorite_affichage: validee ? d.priorite_libelle : 'À valider', priorite_explication: explication };
+    priorite_affichage: validee ? d.priorite_libelle : tr(langue, 'priorite_a_valider'), priorite_explication: explication };
 }
-function organiserFile(demandes, r) {
-  const file = demandes.map((d) => presenterPriorite(d, r));
+function organiserFile(demandes, r, langue) {
+  const file = demandes.map((d) => presenterPriorite(d, r, langue));
   return file.sort((a, b) => Number(b.priorite_validee) - Number(a.priorite_validee)
     || (a.priorite_validee && b.priorite_validee ? a.priorite_rang - b.priorite_rang : 0)
     || new Date(a.cree_le) - new Date(b.cree_le) || a.id - b.id);
