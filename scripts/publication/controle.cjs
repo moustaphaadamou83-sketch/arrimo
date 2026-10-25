@@ -17,7 +17,7 @@ function verifierCible(url, nom) {
   assert.ok([...u.searchParams.keys()].every((k) => ['host','sslmode','application_name'].includes(k)));
 }
 async function colonnes(c) {
-  const r = await c.query(`SELECT table_name, array_agg(column_name ORDER BY ordinal_position) AS cols FROM information_schema.columns
+  const r = await c.query(`SELECT table_name::text AS table_name, array_agg(column_name::text ORDER BY ordinal_position) AS cols FROM information_schema.columns
     WHERE table_schema='public' AND table_name IN (SELECT tablename FROM pg_tables WHERE schemaname='public') GROUP BY table_name ORDER BY table_name`);
   return Object.fromEntries(r.rows.map((x) => [x.table_name, x.cols]));
 }
