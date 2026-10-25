@@ -38,7 +38,7 @@ if not total.get('reussis') or any(total.get(k, 1) != 0 for k in ['echecs', 'ign
 commit = git('rev-parse', 'HEAD').decode().strip()
 destination = args.destination.resolve()
 destination.mkdir(parents=True, exist_ok=False)  # aucun artefact antérieur écrasé
-archive = destination / f'arrimo-vnext-candidat-{commit[:12]}.tar.gz'
+archive = destination / f'arrimo-candidat-{commit[:12]}.tar.gz'
 date = datetime.datetime.now(datetime.timezone.utc).isoformat()
 contenu = git('archive', '--format=tar', 'HEAD')
 with tarfile.open(fileobj=io.BytesIO(contenu), mode='r:') as source, tarfile.open(archive, mode='w:gz') as sortie:

@@ -1,0 +1,2 @@
+Exécution des suites isolées impossible : EPERM. Aucun test intégré déclaré réussi.
+Les tests indépendants restent disponibles avec npm run test:vnext-local.

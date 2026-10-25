@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-25T04:03:38.261912+00:00",
+  "statut": "bloque",
+  "application_isolee": "/root/arrimo-recette-controlee-20261025/application",
+  "bases_creees": [],
+  "etapes": [
+    {
+      "nom": "runtime-node",
+      "sortie": 0,
+      "reussi": true
+    },
+    {
+      "nom": "runtime-ipc",
+      "sortie": 1,
+      "reussi": false
+    }
+  ],
+  "sauvegarde_fictive_restauree": false,
+  "copie_isolee_validee": false,
+  "publication_effectuee": false,
+  "migration_publique_effectuee": false,
+  "commit": "ab8015b6d983ac0349395203e17d6a32f536879d",
+  "blocage": "Runtime non autorisé ou incomplet : aucune base créée"
+}
