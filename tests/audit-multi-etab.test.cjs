@@ -1,3 +1,4 @@
+const { demarrerServeur } = require('./serveur-test.cjs');
 /**
  * Audit : 20 établissements fictifs simultanés, 3 comptes par établissement, sur une base dédiée et jetable.
  * Isolation (accès croisés par identifiant sur chaque route), confidentialité de la capacité partagée,
@@ -48,7 +49,7 @@ test.before(async () => {
       comptes[e.id].push(email);
     }
   }
-  serveur = creerApp(pool).listen(0, '127.0.0.1'); base = `http://127.0.0.1:${serveur.address().port}`;
+  serveur = await demarrerServeur(creerApp(pool)); base = `http://127.0.0.1:${serveur.address().port}`;
 });
 test.after(async () => { serveur?.close(); await pool?.end(); restaurerRouteur?.(); });
 

@@ -53,7 +53,7 @@ test('priorités : validation humaine depuis Admissions, ordinateur/tablette/mob
         await carte.getByRole('button', { name: 'Valider la priorité' }).click();
         assert.equal((await pool.query('SELECT priorite_validee_par FROM demandes_admission WHERE id=$1', [d.id])).rows[0].priorite_validee_par, null);
         await page.selectOption('#p-categorie', 'planifiable_demo'); await page.fill('#p-motif', 'Choix humain fictif dans navigateur'); await page.check('#p-confirmation');
-        await page.click('#modale .actions .pri'); await page.waitForSelector('#modale[hidden]');
+        await page.click('#modale .actions .pri'); await page.waitForSelector('#modale', { state: 'hidden' });
         await page.waitForFunction((reference) => [...document.querySelectorAll('#v-admissions .fiche')].some((e) => e.textContent.includes(reference) && e.textContent.includes('Planifiable — fictif')), ref);
         const db = (await pool.query('SELECT priorite_code,priorite_validee_par,priorite_version FROM demandes_admission WHERE id=$1', [d.id])).rows[0];
         assert.deepEqual(db, { priorite_code: 'planifiable_demo', priorite_validee_par: u.id, priorite_version: 1 });

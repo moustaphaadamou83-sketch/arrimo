@@ -12,7 +12,7 @@ export PATH="/opt/arrimo-runtime/node-v24.22.1/bin:$PATH"
 export NODE_PATH="/root/arrimo-dev/node_modules"
 ARRIMO_RECETTE_SORTIE="/root/arrimo-recette-ssh-$(date -u +%Y%m%dT%H%M%SZ)-$$"
 printf 'Dossier de recette : %s\nJournal continu : %s.console.log\n' "$ARRIMO_RECETTE_SORTIE" "$ARRIMO_RECETTE_SORTIE"
-nohup /usr/bin/python3 -u scripts/recette-serveur-arrimo.py --sortie "$ARRIMO_RECETTE_SORTIE" > "$ARRIMO_RECETTE_SORTIE.console.log" 2>&1 < /dev/null &
+nohup /usr/bin/python3 -u scripts/recette-serveur-arrimo.py --sortie "$ARRIMO_RECETTE_SORTIE" "$@" > "$ARRIMO_RECETTE_SORTIE.console.log" 2>&1 < /dev/null &
 ARRIMO_RECETTE_PID=$!
 tail --pid="$ARRIMO_RECETTE_PID" -n +1 -f "$ARRIMO_RECETTE_SORTIE.console.log"
 wait "$ARRIMO_RECETTE_PID"

@@ -1,3 +1,4 @@
+const { demarrerServeur } = require('./serveur-test.cjs');
 /**
  * Console SH, écrans ERP dans un vrai navigateur (Chromium, Playwright), politique de sécurité appliquée.
  * Ordinateur, tablette et téléphone : chaque écran est contrôlé (débordement, contraste, boutons ≥ 40 px sur téléphone,
@@ -65,10 +66,10 @@ test.before(async () => {
   await viderBase(pool);
   await pool.query(fs.readFileSync(path.join(__dirname, '..', 'db', 'schema.sql'), 'utf8'));
   await configurationBase(pool);
-  serveur = creerApp(pool).listen(0, '127.0.0.1'); base = `http://127.0.0.1:${serveur.address().port}`;
+  serveur = await demarrerServeur(creerApp(pool)); base = `http://127.0.0.1:${serveur.address().port}`;
   dossierDocs = fs.mkdtempSync(path.join(os.tmpdir(), 'arrimo-sh-ui-docs-'));
-  serveurSh = creerAppSh(pool, { env: { SH_PUBLIC_URL: 'https://sh.test.invalid', SH_MFA_ENCRYPTION_KEY: CLE_MFA, SH_DOCUMENTS_DIR: dossierDocs,
-    SH_ENV_RECETTE_URL: base, SH_ENV_RECETTE_CLE: process.env.SH_API_KEY, SH_ENV_RECETTE_PUBLIC: 'https://recette.arrimo.exemple' } }).listen(0, '127.0.0.1');
+  serveurSh = await demarrerServeur(creerAppSh(pool, { env: { SH_PUBLIC_URL: 'https://sh.test.invalid', SH_MFA_ENCRYPTION_KEY: CLE_MFA, SH_DOCUMENTS_DIR: dossierDocs,
+    SH_ENV_RECETTE_URL: base, SH_ENV_RECETTE_CLE: process.env.SH_API_KEY, SH_ENV_RECETTE_PUBLIC: 'https://recette.arrimo.exemple' } }));
   baseSh = `http://127.0.0.1:${serveurSh.address().port}`;
   navigateur = await chromium.launch();
 });

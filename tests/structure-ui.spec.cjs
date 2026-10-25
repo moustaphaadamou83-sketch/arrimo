@@ -1,3 +1,4 @@
+const { demarrerServeur } = require('./serveur-test.cjs');
 /** Parcours navigateur isolé de configuration structurelle et visibilité A/B/C. */
 const test=require('node:test');
 const assert=require('node:assert/strict');
@@ -14,6 +15,7 @@ const totp=require('../src/totp');
 const URL=process.env.STRUCTURE_DATABASE_URL;
 const MDP=process.env.DEMO_MOT_DE_PASSE||'Demo-Arrimo-2026';
 let pool,server,browser,base;
+let dossierAcces;
 const captures=path.join(__dirname,'..','docs','captures-structure');
 
 test('formulaires de structure et dashboards A/B/C isolés', {timeout:180000}, async()=>{
@@ -23,7 +25,10 @@ test('formulaires de structure et dashboards A/B/C isolés', {timeout:180000}, a
   process.env.ARRIMO_DEMO='1';process.env.ARRIMO_2FA_ADMIN='1';
   pool=creerPool(URL); await viderBase(pool);
   await pool.query(fs.readFileSync(path.join(__dirname,'..','db','schema.sql'),'utf8'));
-  await preparerDemoTrio(pool,{silencieux:true,fichierAcces:path.join('/tmp','arrimo-test-acces.txt')});
+  const racineAcces=path.join(__dirname,'..','.local');
+  fs.mkdirSync(racineAcces,{recursive:true,mode:0o700});
+  dossierAcces=fs.mkdtempSync(path.join(racineAcces,'structure-recette-'));
+  await preparerDemoTrio(pool,{silencieux:true,fichierAcces:path.join(dossierAcces,'acces.txt')});
   const {hacher}=require('../src/auth');const secrets={A:totp.nouveauSecret(),B:totp.nouveauSecret(),C:totp.nouveauSecret()},motsDePasse={};
   for(const [letter,code] of Object.entries({A:'HX',B:'HY',C:'HC'})){
     const etab=(await pool.query('SELECT id FROM etablissements WHERE code=$1',[code])).rows[0];
@@ -32,7 +37,7 @@ test('formulaires de structure et dashboards A/B/C isolés', {timeout:180000}, a
       VALUES($1,$2,$3,'admin_etab',$4,true) RETURNING id`,[`admin.${letter.toLowerCase()}@demo.arrimo`,`Administrateur fictif ${letter}`,hacher(motsDePasse[letter]),secrets[letter]])).rows[0];
     await pool.query('INSERT INTO utilisateur_etablissements(utilisateur_id,etablissement_id) VALUES($1,$2)',[u.id,etab.id]);
   }
-  server=creerApp(pool).listen(0, '127.0.0.1');base=`http://127.0.0.1:${server.address().port}`;browser=await chromium.launch();
+  server=await demarrerServeur(creerApp(pool));base=`http://127.0.0.1:${server.address().port}`;browser=await chromium.launch();
   const ctx=await browser.newContext({viewport:{width:1440,height:1000},acceptDownloads:true});const page=await ctx.newPage();
   page.setDefaultTimeout(6000);
   const errs=[];page.on('pageerror',e=>errs.push(String(e)));page.on('console',m=>{if(m.type()==='error')errs.push(m.text())});

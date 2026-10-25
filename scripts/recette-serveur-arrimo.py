@@ -16,6 +16,76 @@ import tarfile
 import urllib.parse
 
 RACINE = pathlib.Path(__file__).resolve().parent.parent
+SUITES = [
+    ('api', 'arrimo_test_', 'TEST_DATABASE_URL', ['tests/api.test.js', 'tests/finalisation.test.cjs']),
+    ('priorites-sql', 'arrimo_vnext_test_', 'PRIORITES_TEST_DATABASE_URL', ['tests/priorites-postgres.test.cjs']),
+    ('interop-sql', 'arrimo_simulation_test_', 'SIMULATION_TEST_DATABASE_URL', ['tests/simulation-postgres.test.cjs']),
+    ('securite-multietablissement', 'arrimo_audit_multi_', 'AUDIT_DATABASE_URL', ['tests/audit-multi-etab.test.cjs']),
+    ('scenarios-abc', 'arrimo_demo_trio_scenarios_', 'TRIO_TEST_DATABASE_URL', ['tests/scenarios-abc.test.cjs']),
+    ('dashboards-abc-reseau', 'arrimo_demo_trio_ui_', 'TRIO_TEST_DATABASE_URL', ['tests/demo-trio.test.cjs']),
+    ('interface-parcours', 'arrimo_interface_', 'TEST_DATABASE_URL', ['tests/interface.spec.js']),
+    ('priorites-navigateur', 'arrimo_vnext_ui_test_', 'PRIORITES_UI_DATABASE_URL', ['tests/priorites.interface.spec.cjs']),
+    ('structure-navigateur', 'arrimo_demo_trio_structure_', 'STRUCTURE_DATABASE_URL', ['tests/structure-ui.spec.cjs']),
+    ('sh-erp', 'arrimo_sh_test_', 'TEST_DATABASE_URL', ['tests/sh-erp.test.cjs']),
+    ('sh-navigateur', 'arrimo_sh_ui_test_', 'TEST_DATABASE_URL', ['tests/sh-erp.interface.spec.cjs']),
+    ('securite-xss', 'arrimo_audit_xss_', 'AUDIT_DATABASE_URL', ['tests/audit-xss.spec.cjs']),
+]
+PREUVES_REQUISES = ['runtime-node', 'runtime-ipc', 'runtime-chromium', 'postgres-maintenance',
+                   'preparer-fictif-ancien-schema', 'sauvegarde-fictive', 'lecture-sauvegarde',
+                   'restauration-fictive', 'empreintes-source', 'empreintes-restauree', 'migrations-copie-restauree']
+
+
+def tap_valide(texte):
+    compte = re.search(rb'^# tests (\d+)\s*$', texte, re.M)
+    ignores = re.search(rb'^# skipped (\d+)\s*$', texte, re.M)
+    echecs = re.search(rb'^# fail (\d+)\s*$', texte, re.M)
+    annules = re.search(rb'^# cancelled (\d+)\s*$', texte, re.M)
+    fantome = re.search(rb'^# Subtest: tests/[^\n ]+\.(?:js|cjs)\s*$', texte, re.M)
+    return bool(compte and int(compte[1]) > 0 and ignores and int(ignores[1]) == 0
+                and echecs and int(echecs[1]) == 0 and annules and int(annules[1]) == 0 and not fantome)
+
+
+def examiner_reprise(chemin):
+    chemin = chemin.resolve()
+    precedent = json.loads(chemin.read_text())
+    if not re.fullmatch(r'[a-f0-9]{40}', precedent.get('commit', '')) or not precedent.get('sauvegarde_fictive_restauree'):
+        raise ValueError('Reprise refusée : commit ou restauration fictive non vérifié')
+    preuves = {e['nom']: e for e in precedent.get('preuves_heritees', [])}
+    preuves.update({e['nom']: {**e, 'origine': str(chemin)} for e in precedent.get('etapes', [])})
+    for nom in PREUVES_REQUISES:
+        if preuves.get(nom, {}).get('reussi') is not True:
+            raise ValueError('Reprise refusée : preuve manquante ou en échec : ' + nom)
+    selection = []
+    for suite in SUITES:
+        nom = suite[0]
+        if nom not in preuves:
+            raise ValueError('Reprise refusée : suite absente du rapport : ' + nom)
+        if preuves[nom].get('reussi') is True:
+            origine = pathlib.Path(preuves[nom]['origine']).parent
+            if not tap_valide((origine / (nom + '.log')).read_bytes()):
+                raise ValueError('Reprise refusée : journal de réussite non confirmé : ' + nom)
+        else:
+            selection.append(suite)
+    if not selection:
+        raise ValueError('Aucune étape en échec à reprendre')
+    sauvegarde = pathlib.Path(precedent.get('sauvegarde_origine', chemin.parent / 'copie-fictive.dump')).resolve()
+    if hashlib.sha256(sauvegarde.read_bytes()).hexdigest() != precedent.get('sauvegarde_sha256'):
+        raise ValueError('Reprise refusée : empreinte de sauvegarde différente')
+    return {'rapport': str(chemin), 'commit': precedent['commit'], 'selection': selection,
+            'preuves': [e for e in preuves.values() if e.get('reussi') is True],
+            'sauvegarde': str(sauvegarde), 'sauvegarde_sha256': precedent['sauvegarde_sha256']}
+
+
+def verifier_compatibilite_reprise(reprise):
+    # Une correction applicative ou une migration nouvelle impose une recette complète.
+    r = subprocess.run(['git', 'diff', '--quiet', reprise['commit'], 'HEAD', '--',
+                        'src', 'db', 'public', 'public-sh', 'package-lock.json'], cwd=RACINE)
+    if r.returncode != 0:
+        raise ValueError('Reprise partielle refusée : sources applicatives ou migrations modifiées ; recette complète requise')
+    ancien = json.loads(subprocess.run(['git', 'show', reprise['commit'] + ':package.json'], cwd=RACINE, capture_output=True, check=True).stdout)
+    courant = json.loads((RACINE / 'package.json').read_text())
+    if any(ancien.get(k) != courant.get(k) for k in ['dependencies', 'devDependencies', 'engines']):
+        raise ValueError('Reprise partielle refusée : dépendances modifiées')
 
 
 def configuration_pg(valeur):
@@ -45,6 +115,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--sortie', required=True, type=pathlib.Path)
     parser.add_argument('--reference', default='2ed912745f6338e185c8c31bd0cb97385a9fce1d')
+    parser.add_argument('--reprendre-echecs', type=pathlib.Path)
     args = parser.parse_args()
     # Authentification locale existante par défaut ; aucun compte ni droit créé.
     # Une URL protégée explicite permet de sélectionner un rôle déjà autorisé.
@@ -55,6 +126,9 @@ def main():
             raise ValueError('Prérequis absent : ' + commande)
     if subprocess.run(['git', 'status', '--porcelain'], cwd=RACINE, capture_output=True, check=True).stdout.strip():
         raise ValueError('Dépôt non propre : aucune recette d’un autre code que le commit courant')
+    reprise = examiner_reprise(args.reprendre_echecs) if args.reprendre_echecs else None
+    if reprise:
+        verifier_compatibilite_reprise(reprise)
     sortie = args.sortie.resolve()
     sortie.mkdir(parents=True, exist_ok=False)
     sortie.chmod(0o700)
@@ -62,6 +136,10 @@ def main():
                'application_isolee': str(sortie / 'application'), 'bases_creees': [], 'etapes': [],
                'sauvegarde_fictive_restauree': False, 'copie_isolee_validee': False,
                'publication_effectuee': False, 'migration_publique_effectuee': False}
+    if reprise:
+        rapport.update({'reprise_depuis': reprise['rapport'], 'preuves_heritees': reprise['preuves'],
+                        'sauvegarde_fictive_restauree': True, 'sauvegarde_origine': reprise['sauvegarde'],
+                        'sauvegarde_sha256': reprise['sauvegarde_sha256']})
     secret = urllib.parse.unquote(u.password or '')
 
     def sauver():
@@ -132,66 +210,51 @@ def main():
         ok, _ = executer('postgres-maintenance', ['psql', '-X', '-w', '-v', 'ON_ERROR_STOP=1', '-Atc', 'SELECT current_database(),current_user,version()'], env=pg_env)
         if not ok:
             raise RuntimeError('Connexion PostgreSQL refusée ; configuration serveur préservée')
-        source = creer('arrimo_recette_source_')
-        ancien = subprocess.run(['git', 'show', args.reference + ':db/schema.sql'], cwd=RACINE, capture_output=True, check=True).stdout
-        (sortie / 'schema-reference.sql').write_bytes(ancien)
-        e = dict(test_env, ARRIMO_FIXTURE_DATABASE_URL=url_base(source), ARRIMO_FIXTURE_SCHEMA=str(sortie / 'schema-reference.sql'))
-        ok, _ = executer('preparer-fictif-ancien-schema', ['node', 'scripts/preparer-base-fictive.cjs'], env=e, cwd=application)
-        if not ok:
-            raise RuntimeError('Préparation fictive échouée')
-        dump = sortie / 'copie-fictive.dump'
-        ok, _ = executer('sauvegarde-fictive', ['pg_dump', '-w', '--format=custom', '--file=' + str(dump), '--dbname=' + source], env=pg_env)
-        if not ok:
-            raise RuntimeError('Sauvegarde fictive échouée')
-        rapport['sauvegarde_sha256'] = hashlib.sha256(dump.read_bytes()).hexdigest()
-        ok, _ = executer('lecture-sauvegarde', ['pg_restore', '--list', str(dump)], env=pg_env)
-        if not ok:
-            raise RuntimeError('Sauvegarde illisible')
-        restauree = creer('arrimo_vnext_restore_')
-        ok, _ = executer('restauration-fictive', ['pg_restore', '-w', '--exit-on-error', '--no-owner', '--no-acl', '--dbname=' + restauree, str(dump)], env=pg_env)
-        if not ok:
-            raise RuntimeError('Restauration sur base neuve échouée')
-        # Même contenu et multiplicité, sans sortir les lignes pseudonymisées ni les hashes de comptes.
-        tables = ['etablissements','utilisateurs','utilisateur_etablissements','lits','civieres','demandes_admission','transferts','journal','patients','conges']
-        sql = ' UNION ALL '.join(f"SELECT '{t}',count(*)::text,md5(COALESCE(string_agg(md5(row_to_json(x)::text),'' ORDER BY md5(row_to_json(x)::text)),'')) FROM {t} x" for t in tables)
-        traces = []
-        for label, nom in [('source', source), ('restauree', restauree)]:
-            ok, empreintes = executer('empreintes-' + label, ['psql', '-X', '-w', '-v', 'ON_ERROR_STOP=1', '--dbname=' + nom, '-Atc', sql], env=pg_env)
+        if not reprise:
+            source = creer('arrimo_recette_source_')
+            ancien = subprocess.run(['git', 'show', args.reference + ':db/schema.sql'], cwd=RACINE, capture_output=True, check=True).stdout
+            (sortie / 'schema-reference.sql').write_bytes(ancien)
+            e = dict(test_env, ARRIMO_FIXTURE_DATABASE_URL=url_base(source), ARRIMO_FIXTURE_SCHEMA=str(sortie / 'schema-reference.sql'))
+            ok, _ = executer('preparer-fictif-ancien-schema', ['node', 'scripts/preparer-base-fictive.cjs'], env=e, cwd=application)
             if not ok:
-                raise RuntimeError('Empreinte de restauration non vérifiée')
-            traces.append(empreintes)
-        if traces[0] != traces[1]:
-            raise RuntimeError('Le contenu restauré ne correspond pas à la source fictive')
-        rapport['sauvegarde_fictive_restauree'] = True; sauver()
-        ok, _ = executer('migrations-copie-restauree', ['node', 'scripts/verifier-migration-priorites.cjs'],
-                         env=dict(test_env, ARRIMO_RESTORE_DATABASE_URL=url_base(restauree)), cwd=application)
-        if not ok:
-            raise RuntimeError('Migration refusée : aucune publication admissible')
-        suites = [
-            ('api', 'arrimo_test_', 'TEST_DATABASE_URL', ['tests/api.test.js','tests/finalisation.test.cjs']),
-            ('priorites-sql', 'arrimo_vnext_test_', 'PRIORITES_TEST_DATABASE_URL', ['tests/priorites-postgres.test.cjs']),
-            ('interop-sql', 'arrimo_simulation_test_', 'SIMULATION_TEST_DATABASE_URL', ['tests/simulation-postgres.test.cjs']),
-            ('securite-multietablissement', 'arrimo_audit_multi_', 'AUDIT_DATABASE_URL', ['tests/audit-multi-etab.test.cjs']),
-            ('scenarios-abc', 'arrimo_demo_trio_scenarios_', 'TRIO_TEST_DATABASE_URL', ['tests/scenarios-abc.test.cjs']),
-            ('dashboards-abc-reseau', 'arrimo_demo_trio_ui_', 'TRIO_TEST_DATABASE_URL', ['tests/demo-trio.test.cjs']),
-            ('interface-parcours', 'arrimo_interface_', 'TEST_DATABASE_URL', ['tests/interface.spec.js']),
-            ('priorites-navigateur', 'arrimo_vnext_ui_test_', 'PRIORITES_UI_DATABASE_URL', ['tests/priorites.interface.spec.cjs']),
-            ('structure-navigateur', 'arrimo_demo_trio_structure_', 'STRUCTURE_DATABASE_URL', ['tests/structure-ui.spec.cjs']),
-            ('sh-erp', 'arrimo_sh_test_', 'TEST_DATABASE_URL', ['tests/sh-erp.test.cjs']),
-            ('sh-navigateur', 'arrimo_sh_ui_test_', 'TEST_DATABASE_URL', ['tests/sh-erp.interface.spec.cjs']),
-            ('securite-xss', 'arrimo_audit_xss_', 'AUDIT_DATABASE_URL', ['tests/audit-xss.spec.cjs']),
-        ]
+                raise RuntimeError('Préparation fictive échouée')
+            dump = sortie / 'copie-fictive.dump'
+            ok, _ = executer('sauvegarde-fictive', ['pg_dump', '-w', '--format=custom', '--file=' + str(dump), '--dbname=' + source], env=pg_env)
+            if not ok:
+                raise RuntimeError('Sauvegarde fictive échouée')
+            rapport['sauvegarde_sha256'] = hashlib.sha256(dump.read_bytes()).hexdigest()
+            ok, _ = executer('lecture-sauvegarde', ['pg_restore', '--list', str(dump)], env=pg_env)
+            if not ok:
+                raise RuntimeError('Sauvegarde illisible')
+            restauree = creer('arrimo_vnext_restore_')
+            ok, _ = executer('restauration-fictive', ['pg_restore', '-w', '--exit-on-error', '--no-owner', '--no-acl', '--dbname=' + restauree, str(dump)], env=pg_env)
+            if not ok:
+                raise RuntimeError('Restauration sur base neuve échouée')
+            # Même contenu et multiplicité, sans sortir les lignes pseudonymisées ni les hashes de comptes.
+            tables = ['etablissements','utilisateurs','utilisateur_etablissements','lits','civieres','demandes_admission','transferts','journal','patients','conges']
+            sql = ' UNION ALL '.join(f"SELECT '{t}',count(*)::text,md5(COALESCE(string_agg(md5(row_to_json(x)::text),'' ORDER BY md5(row_to_json(x)::text)),'')) FROM {t} x" for t in tables)
+            traces = []
+            for label, nom in [('source', source), ('restauree', restauree)]:
+                ok, empreintes = executer('empreintes-' + label, ['psql', '-X', '-w', '-v', 'ON_ERROR_STOP=1', '--dbname=' + nom, '-Atc', sql], env=pg_env)
+                if not ok:
+                    raise RuntimeError('Empreinte de restauration non vérifiée')
+                traces.append(empreintes)
+            if traces[0] != traces[1]:
+                raise RuntimeError('Le contenu restauré ne correspond pas à la source fictive')
+            rapport['sauvegarde_fictive_restauree'] = True; sauver()
+            ok, _ = executer('migrations-copie-restauree', ['node', 'scripts/verifier-migration-priorites.cjs'],
+                             env=dict(test_env, ARRIMO_RESTORE_DATABASE_URL=url_base(restauree)), cwd=application)
+            if not ok:
+                raise RuntimeError('Migration refusée : aucune publication admissible')
+        suites = reprise['selection'] if reprise else SUITES
         valides = True
         for nom, prefixe, variable, fichiers in suites:
             try:
                 base = creer(prefixe)
                 ok, texte = executer(nom, ['node','--test','--test-concurrency=1','--test-reporter=tap', *fichiers],
                                      env=dict(test_env, **{variable: url_base(base)}), cwd=application)
-                # Une suite ignorée, vide ou dont le runner ne rapporte rien n'est jamais verte.
-                compte = re.search(rb'^# tests (\d+)\s*$', texte, re.M)
-                ignores = re.search(rb'^# skipped (\d+)\s*$', texte, re.M)
-                fichier_sans_tests = re.search(rb'^# Subtest: tests/[^\n ]+\.(?:js|cjs)\s*$', texte, re.M)
-                if not ok or not compte or int(compte[1]) < 1 or not ignores or int(ignores[1]) != 0 or fichier_sans_tests:
+                # Vérifier les résultats réels, pas seulement le code de sortie.
+                if not ok or not tap_valide(texte):
                     valides = False
                     rapport['etapes'][-1]['reussi'] = False
                     rapport['etapes'][-1]['cause'] = 'échec, tests absents ou tests ignorés'

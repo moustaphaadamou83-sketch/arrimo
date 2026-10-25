@@ -1,3 +1,4 @@
+const { demarrerServeur } = require('./serveur-test.cjs');
 /**
  * Finalisation (démonstration du 27 octobre 2026) : cohérence Admissions / Lits / Urgences, congés par lit,
  * blocages explicables, OG transversal, pédiatrie et groupes d'âge, patients fictifs.
@@ -71,7 +72,7 @@ test.before(async () => {
   pool = creerPool(process.env.TEST_DATABASE_URL);
   await viderBase(pool);
   await seed(pool, { silencieux: true });
-  serveur = creerApp(pool).listen(0, '127.0.0.1');
+  serveur = await demarrerServeur(creerApp(pool));
   base = `http://127.0.0.1:${serveur.address().port}`;
   const secret = totp.nouveauSecret();
   await pool.query(`UPDATE utilisateurs SET totp_secret = $1, totp_actif = true, totp_dernier_pas = 0 WHERE email = 'reseau@demo.arrimo'`, [secret]);

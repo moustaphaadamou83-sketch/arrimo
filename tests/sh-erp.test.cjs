@@ -1,3 +1,4 @@
+const { demarrerServeur } = require('./serveur-test.cjs');
 /**
  * Console SH : ERP de bout en bout, sur une vraie base PostgreSQL (TEST_DATABASE_URL), données fictives seulement.
  * Parcours : Prospect → Devis → Contrat → Projet → Tâches → Hôpital D → Import CSV/Excel → Utilisateurs → Modules
@@ -84,18 +85,18 @@ test.before(async () => {
   poolProd = new Pool({ connectionString: URL_TEST, options: '-c search_path=prod_erp' });
   await poolProd.query(schema);
   await configurationBase(poolProd);
-  serveur = creerApp(pool).listen(0, '127.0.0.1'); base = `http://127.0.0.1:${serveur.address().port}`;
-  serveurProd = creerApp(poolProd).listen(0, '127.0.0.1'); baseProd = `http://127.0.0.1:${serveurProd.address().port}`;
+  serveur = await demarrerServeur(creerApp(pool)); base = `http://127.0.0.1:${serveur.address().port}`;
+  serveurProd = await demarrerServeur(creerApp(poolProd)); baseProd = `http://127.0.0.1:${serveurProd.address().port}`;
   dossierDocs = fs.mkdtempSync(path.join(os.tmpdir(), 'arrimo-sh-docs-'));
   await viderBaseSh(pool);
   await premierCompteSh(pool, 'admin.erp@sh.exemple', 'Administration fictive');
   await invitations.consommer(pool, { jeton: dernierJeton(), nouveau: MDP }, process.env);
-  serveurSh = creerAppSh(pool, { env: {
+  serveurSh = await demarrerServeur(creerAppSh(pool, { env: {
     SH_PUBLIC_URL: 'https://sh.test.invalid', SH_MFA_ENCRYPTION_KEY: CLE_MFA, SH_DOCUMENTS_DIR: dossierDocs,
     SH_ENV_RECETTE_URL: base, SH_ENV_RECETTE_CLE: process.env.SH_API_KEY, SH_ENV_RECETTE_PUBLIC: 'https://recette.arrimo.exemple',
     SH_ENV_PRODUCTION_URL: baseProd, SH_ENV_PRODUCTION_CLE: process.env.SH_API_KEY, SH_ENV_PRODUCTION_PUBLIC: 'https://arrimo.exemple',
     SH_EMETTEUR_NOM: 'SH fictive inc.',
-  } }).listen(0, '127.0.0.1');
+  } }));
   baseSh = `http://127.0.0.1:${serveurSh.address().port}`;
   jetons.admin = await ouvrirSession('admin.erp@sh.exemple');
   // Personnel : un compte par rôle, chacun par invitation individuelle.
