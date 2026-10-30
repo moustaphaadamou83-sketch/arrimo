@@ -1,0 +1,210 @@
+{
+  "statut": "recette_reussie",
+  "publication_verifiee": false,
+  "etapes": [
+    {
+      "nom": "runtime-reel",
+      "reussi": true
+    },
+    {
+      "nom": "chromium-version-requise",
+      "reussi": true
+    },
+    {
+      "nom": "chromium-reel",
+      "reussi": true
+    },
+    {
+      "nom": "creer-api",
+      "reussi": true
+    },
+    {
+      "nom": "recette-api",
+      "reussi": true
+    },
+    {
+      "nom": "creer-priorites-sql",
+      "reussi": true
+    },
+    {
+      "nom": "recette-priorites-sql",
+      "reussi": true
+    },
+    {
+      "nom": "creer-interop-sql",
+      "reussi": true
+    },
+    {
+      "nom": "recette-interop-sql",
+      "reussi": true
+    },
+    {
+      "nom": "creer-securite-multietablissement",
+      "reussi": true
+    },
+    {
+      "nom": "recette-securite-multietablissement",
+      "reussi": true
+    },
+    {
+      "nom": "creer-scenarios-abc",
+      "reussi": true
+    },
+    {
+      "nom": "recette-scenarios-abc",
+      "reussi": true
+    },
+    {
+      "nom": "creer-dashboards-abc-reseau",
+      "reussi": true
+    },
+    {
+      "nom": "recette-dashboards-abc-reseau",
+      "reussi": true
+    },
+    {
+      "nom": "creer-interface-parcours",
+      "reussi": true
+    },
+    {
+      "nom": "recette-interface-parcours",
+      "reussi": true
+    },
+    {
+      "nom": "creer-priorites-navigateur",
+      "reussi": true
+    },
+    {
+      "nom": "recette-priorites-navigateur",
+      "reussi": true
+    },
+    {
+      "nom": "creer-structure-navigateur",
+      "reussi": true
+    },
+    {
+      "nom": "recette-structure-navigateur",
+      "reussi": true
+    },
+    {
+      "nom": "creer-sh-erp",
+      "reussi": true
+    },
+    {
+      "nom": "recette-sh-erp",
+      "reussi": true
+    },
+    {
+      "nom": "creer-sh-navigateur",
+      "reussi": true
+    },
+    {
+      "nom": "recette-sh-navigateur",
+      "reussi": true
+    },
+    {
+      "nom": "creer-securite-xss",
+      "reussi": true
+    },
+    {
+      "nom": "recette-securite-xss",
+      "reussi": true
+    },
+    {
+      "nom": "creer-og-postgres",
+      "reussi": true
+    },
+    {
+      "nom": "recette-og-postgres",
+      "reussi": true
+    },
+    {
+      "nom": "exercice-rollback",
+      "reussi": true
+    }
+  ],
+  "bases_isolees": [
+    "arrimo_test_83988b9cd0a466",
+    "arrimo_vnext_test_badbef9d9eed99",
+    "arrimo_simulation_test_f2387762a93603",
+    "arrimo_audit_multi_0a4feca2903798",
+    "arrimo_demo_trio_scenarios_ec9122499ed4e8",
+    "arrimo_demo_trio_ui_42d1e6e75b02dc",
+    "arrimo_interface_d967d8b645e0ea",
+    "arrimo_vnext_ui_test_35778ddce14402",
+    "arrimo_demo_trio_structure_4d57c58a906ffc",
+    "arrimo_sh_test_5b5bd394259d77",
+    "arrimo_sh_ui_test_ef21195f8fc88e",
+    "arrimo_audit_xss_6dc5f955f51a07",
+    "arrimo_og_test_488193ac4a2b10"
+  ],
+  "recette_dossier": "/var/tmp/arrimo-og-recette-20261026T200714Z_c1f7186c",
+  "recette_suites": [
+    {
+      "suite": "api",
+      "reussie": true,
+      "tests": 74
+    },
+    {
+      "suite": "priorites-sql",
+      "reussie": true,
+      "tests": 10
+    },
+    {
+      "suite": "interop-sql",
+      "reussie": true,
+      "tests": 10
+    },
+    {
+      "suite": "securite-multietablissement",
+      "reussie": true,
+      "tests": 13
+    },
+    {
+      "suite": "scenarios-abc",
+      "reussie": true,
+      "tests": 7
+    },
+    {
+      "suite": "dashboards-abc-reseau",
+      "reussie": true,
+      "tests": 4
+    },
+    {
+      "suite": "interface-parcours",
+      "reussie": true,
+      "tests": 9
+    },
+    {
+      "suite": "priorites-navigateur",
+      "reussie": true,
+      "tests": 4
+    },
+    {
+      "suite": "structure-navigateur",
+      "reussie": true,
+      "tests": 1
+    },
+    {
+      "suite": "sh-erp",
+      "reussie": true,
+      "tests": 19
+    },
+    {
+      "suite": "sh-navigateur",
+      "reussie": true,
+      "tests": 1
+    },
+    {
+      "suite": "securite-xss",
+      "reussie": true,
+      "tests": 1
+    },
+    {
+      "suite": "og-postgres",
+      "reussie": true,
+      "tests": 1
+    }
+  ],
+  "recette_integree_verifiee": true
+}

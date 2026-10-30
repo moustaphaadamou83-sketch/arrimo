@@ -1,0 +1,15 @@
+▶ cycle des projets : PostgreSQL isolé, archivage, restauration et suppression ciblée
+  ✔ rôles, clôture et périmètre contrôlés avant archivage (252.249842ms)
+  ✔ archive en lecture seule jusque dans PostgreSQL, puis restauration sans perte (240.821824ms)
+  ✔ demande motivée, confirmation, politique et durée de conservation obligatoires (81.854584ms)
+  ✔ production et dépendances interprojets refusées sans toucher au voisin (80.650229ms)
+  ✔ suppression ciblée, accès révoqués, établissement et historique conservés (133.302539ms)
+✔ cycle des projets : PostgreSQL isolé, archivage, restauration et suppression ciblée (2814.919049ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2885.537091

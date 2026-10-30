@@ -1,0 +1,456 @@
+TAP version 13
+# Subtest: connexion : mauvais mot de passe refusé, accès sans session refusé
+ok 1 - connexion : mauvais mot de passe refusé, accès sans session refusé
+  ---
+  duration_ms: 3690.436147
+  type: 'test'
+  ...
+# Subtest: console SH : chaque rôle est limité aux routes métier prévues
+ok 2 - console SH : chaque rôle est limité aux routes métier prévues
+  ---
+  duration_ms: 3.006435
+  type: 'test'
+  ...
+# Subtest: connexion : les échecs expirent après 15 minutes et le blocage reste effectif
+ok 3 - connexion : les échecs expirent après 15 minutes et le blocage reste effectif
+  ---
+  duration_ms: 1045.615534
+  type: 'test'
+  ...
+# Subtest: Copilote IA : aucun texte libre du contexte ni de la question ne quitte le serveur
+ok 4 - Copilote IA : aucun texte libre du contexte ni de la question ne quitte le serveur
+  ---
+  duration_ms: 79.772744
+  type: 'test'
+  ...
+# Subtest: Copilote IA : panne fournisseur et expiration reviennent au mode local
+ok 5 - Copilote IA : panne fournisseur et expiration reviennent au mode local
+  ---
+  duration_ms: 534.972407
+  type: 'test'
+  ...
+# Subtest: indicateurs : occupation patient, non-disponibilité et pression sont distinctes
+ok 6 - indicateurs : occupation patient, non-disponibilité et pression sont distinctes
+  ---
+  duration_ms: 49.923794
+  type: 'test'
+  ...
+# Subtest: cycle complet d’un lit, version et journal
+ok 7 - cycle complet d’un lit, version et journal
+  ---
+  duration_ms: 85.13521
+  type: 'test'
+  ...
+# Subtest: transition interdite refusée et journalisée
+ok 8 - transition interdite refusée et journalisée
+  ---
+  duration_ms: 27.150417
+  type: 'test'
+  ...
+# Subtest: un lit ne peut être pris qu’une fois : 10 réservations simultanées, une seule gagne
+ok 9 - un lit ne peut être pris qu’une fois : 10 réservations simultanées, une seule gagne
+  ---
+  duration_ms: 154.281401
+  type: 'test'
+  ...
+# Subtest: aucune donnée médicale : la référence doit respecter le format
+ok 10 - aucune donnée médicale : la référence doit respecter le format
+  ---
+  duration_ms: 18.627859
+  type: 'test'
+  ...
+# Subtest: journal immuable même en accès direct à la base
+ok 11 - journal immuable même en accès direct à la base
+  ---
+  duration_ms: 15.559178
+  type: 'test'
+  ...
+# Subtest: isolation : un établissement ne voit ni n’agit sur les lits d’un autre
+ok 12 - isolation : un établissement ne voit ni n’agit sur les lits d’un autre
+  ---
+  duration_ms: 30.76699
+  type: 'test'
+  ...
+# Subtest: capacité du réseau : respecte le partage complet, agrégé et aucun
+ok 13 - capacité du réseau : respecte le partage complet, agrégé et aucun
+  ---
+  duration_ms: 21.155199
+  type: 'test'
+  ...
+# Subtest: recherche, réservation et transfert complet avec le bon côté à chaque étape
+ok 14 - recherche, réservation et transfert complet avec le bon côté à chaque étape
+  ---
+  duration_ms: 199.266017
+  type: 'test'
+  ...
+# Subtest: version périmée : le lit proposé a été pris entre-temps
+ok 15 - version périmée : le lit proposé a été pris entre-temps
+  ---
+  duration_ms: 39.974045
+  type: 'test'
+  ...
+# Subtest: refus d’un transfert : le lit redevient libre ; annulation directe bloquée
+ok 16 - refus d’un transfert : le lit redevient libre ; annulation directe bloquée
+  ---
+  duration_ms: 115.349809
+  type: 'test'
+  ...
+# Subtest: OG : capacité périmée, service responsable, relance auditée et alternative après refus
+ok 17 - OG : capacité périmée, service responsable, relance auditée et alternative après refus
+  ---
+  duration_ms: 266.796968
+  type: 'test'
+  ...
+# Subtest: routeur indisponible : aucune mesure inventée et aucune demande de transfert créée
+ok 18 - routeur indisponible : aucune mesure inventée et aucune demande de transfert créée
+  ---
+  duration_ms: 50.626235
+  type: 'test'
+  ...
+# Subtest: établissement sans partage : impossible d’y envoyer un transfert
+ok 19 - établissement sans partage : impossible d’y envoyer un transfert
+  ---
+  duration_ms: 15.034219
+  type: 'test'
+  ...
+# Subtest: détection des blocages et prévision
+ok 20 - détection des blocages et prévision
+  ---
+  duration_ms: 94.133136
+  type: 'test'
+  ...
+# Subtest: Assistant Arrimo répond à partir des données
+ok 21 - Assistant Arrimo répond à partir des données
+  ---
+  duration_ms: 61.869785
+  type: 'test'
+  ...
+# Subtest: activation depuis SH : clé exigée ; module désactivé bloque les actions
+ok 22 - activation depuis SH : clé exigée ; module désactivé bloque les actions
+  ---
+  duration_ms: 72.496447
+  type: 'test'
+  ...
+# Subtest: hors service : le motif est obligatoire et compté dans les indicateurs
+ok 23 - hors service : le motif est obligatoire et compté dans les indicateurs
+  ---
+  duration_ms: 121.135807
+  type: 'test'
+  ...
+# Subtest: NSA : désignation, taux, et effacement automatique au départ du patient
+ok 24 - NSA : désignation, taux, et effacement automatique au départ du patient
+  ---
+  duration_ms: 107.300814
+  type: 'test'
+  ...
+# Subtest: file d’admission : besoins respectés, assignation, admission ; concurrence sur l’assignation
+ok 25 - file d’admission : besoins respectés, assignation, admission ; concurrence sur l’assignation
+  ---
+  duration_ms: 107.081114
+  type: 'test'
+  ...
+# Subtest: demande sans lit ici : transfert avec besoins et urgence explicitement confirmée par l’équipe
+ok 26 - demande sans lit ici : transfert avec besoins et urgence explicitement confirmée par l’équipe
+  ---
+  duration_ms: 95.897875
+  type: 'test'
+  ...
+# Subtest: nettoyage priorisé et rôle entretien limité à son écran
+ok 27 - nettoyage priorisé et rôle entretien limité à son écran
+  ---
+  duration_ms: 164.974978
+  type: 'test'
+  ...
+# Subtest: Copilote : briefing, recommandations exécutables, vue réseau
+ok 28 - Copilote : briefing, recommandations exécutables, vue réseau
+  ---
+  duration_ms: 408.592481
+  type: 'test'
+  ...
+# Subtest: Copilote mode IA : aucune référence patient n’est envoyée
+ok 29 - Copilote mode IA : aucune référence patient n’est envoyée
+  ---
+  duration_ms: 243.406189
+  type: 'test'
+  ...
+# Subtest: connecteur ADT : admission, congé, idempotence, isolation ; connecteur réseau en lecture
+ok 30 - connecteur ADT : admission, congé, idempotence, isolation ; connecteur réseau en lecture
+  ---
+  duration_ms: 269.271401
+  type: 'test'
+  ...
+# Subtest: indicateurs et export CSV
+ok 31 - indicateurs et export CSV
+  ---
+  duration_ms: 217.91695
+  type: 'test'
+  ...
+# Subtest: proximité d’abord : le plus proche avec un lit adapté, sauf s’il déborde
+ok 32 - proximité d’abord : le plus proche avec un lit adapté, sauf s’il déborde
+  ---
+  duration_ms: 238.456331
+  type: 'test'
+  ...
+# Subtest: démonstration : réseau de 20 hôpitaux : se crée et donne une situation présentable
+ok 33 - démonstration : réseau de 20 hôpitaux : se crée et donne une situation présentable
+  ---
+  duration_ms: 8011.421557
+  type: 'test'
+  ...
+# Subtest: réseau de démonstration : 20 hôpitaux, un compte par hôpital, proximité, simulation douce des hôpitaux sans compte
+ok 34 - réseau de démonstration : 20 hôpitaux, un compte par hôpital, proximité, simulation douce des hôpitaux sans compte
+  ---
+  duration_ms: 2112.505679
+  type: 'test'
+  ...
+# Subtest: disponibilité à côté : alerte aux hôpitaux proches qui en ont besoin, sans spam, rayon réglable, Copilote
+ok 35 - disponibilité à côté : alerte aux hôpitaux proches qui en ont besoin, sans spam, rayon réglable, Copilote
+  ---
+  duration_ms: 831.460067
+  type: 'test'
+  ...
+# Subtest: Copilote : vue complète, prévisions à 4 h, 12 h et 24 h avec marge, questions de prévision
+ok 36 - Copilote : vue complète, prévisions à 4 h, 12 h et 24 h avec marge, questions de prévision
+  ---
+  duration_ms: 1035.275044
+  type: 'test'
+  ...
+# Subtest: civières de l’urgence : états, verrou, demande liée, admission, changement de civière, réseau, Copilote, indicateurs
+ok 37 - civières de l’urgence : états, verrou, demande liée, admission, changement de civière, réseau, Copilote, indicateurs
+  ---
+  duration_ms: 1374.22998
+  type: 'test'
+  ...
+# Subtest: transfert sans dossier côté receveur : chambre prête, heure d’arrivée prévue, besoins transmis
+ok 38 - transfert sans dossier côté receveur : chambre prête, heure d’arrivée prévue, besoins transmis
+  ---
+  duration_ms: 343.156816
+  type: 'test'
+  ...
+# Subtest: tableau national : 200 établissements, tri par distance, filtres, partage agrégé, pagination, moins de 300 ms
+ok 39 - tableau national : 200 établissements, tri par distance, filtres, partage agrégé, pagination, moins de 300 ms
+  ---
+  duration_ms: 1052.68852
+  type: 'test'
+  ...
+# Subtest: administration : double authentification obligatoire, création de compte, mot de passe temporaire
+ok 40 - administration : double authentification obligatoire, création de compte, mot de passe temporaire
+  ---
+  duration_ms: 1030.393906
+  type: 'test'
+  ...
+# Subtest: admin d’établissement : limité à ses établissements ; structure hospitalière détaillée et équipement
+ok 41 - admin d’établissement : limité à ses établissements ; structure hospitalière détaillée et équipement
+  ---
+  duration_ms: 938.949122
+  type: 'test'
+  ...
+# Subtest: configuration pays : validation des seuils ; état du service
+ok 42 - configuration pays : validation des seuils ; état du service
+  ---
+  duration_ms: 36.228733
+  type: 'test'
+  ...
+# Subtest: langues : dictionnaires FR et EN complets, chaque code d’erreur traduit
+ok 43 - langues : dictionnaires FR et EN complets, chaque code d’erreur traduit
+  ---
+  duration_ms: 19.046639
+  type: 'test'
+  ...
+# Subtest: mise en forme : pluriels, nombres et durées selon la langue ; aucun « (s) » dans les textes
+ok 44 - mise en forme : pluriels, nombres et durées selon la langue ; aucun « (s) » dans les textes
+  ---
+  duration_ms: 11.520166
+  type: 'test'
+  ...
+# Subtest: langues : erreurs avec code stable, Copilote et notifications en anglais
+ok 45 - langues : erreurs avec code stable, Copilote et notifications en anglais
+  ---
+  duration_ms: 1331.044668
+  type: 'test'
+  ...
+# Subtest: aide : premiers pas mémorisés côté serveur, une seule fois
+ok 46 - aide : premiers pas mémorisés côté serveur, une seule fois
+  ---
+  duration_ms: 38.317727
+  type: 'test'
+  ...
+# Subtest: aide : chaque écran a son aide complète, en français et en anglais, pour chaque rôle
+ok 47 - aide : chaque écran a son aide complète, en français et en anglais, pour chaque rôle
+  ---
+  duration_ms: 4.420992
+  type: 'test'
+  ...
+# Subtest: pages légales : accessibles sans connexion, en français et en anglais ; informations publiques
+ok 48 - pages légales : accessibles sans connexion, en français et en anglais ; informations publiques
+  ---
+  duration_ms: 24.64672
+  type: 'test'
+  ...
+# Subtest: robustesse : fréquence limitée par session, taille limitée, /api/sante jamais limitée
+ok 49 - robustesse : fréquence limitée par session, taille limitée, /api/sante jamais limitée
+  ---
+  duration_ms: 270.215982
+  type: 'test'
+  ...
+# Subtest: pagination : journal et transferts au-delà de 300 lignes, sans doublon ni oubli
+ok 50 - pagination : journal et transferts au-delà de 300 lignes, sans doublon ni oubli
+  ---
+  duration_ms: 459.225187
+  type: 'test'
+  ...
+# Subtest: mot de passe oublié : inactif sans courriel ; lien unique de 30 min ; même réponse que le compte existe ou non
+ok 51 - mot de passe oublié : inactif sans courriel ; lien unique de 30 min ; même réponse que le compte existe ou non
+  ---
+  duration_ms: 379.405537
+  type: 'test'
+  ...
+# Subtest: verrou des lits sous forte concurrence : plus de réservations que de connexions, aucun blocage, refus journalisés
+ok 52 - verrou des lits sous forte concurrence : plus de réservations que de connexions, aucun blocage, refus journalisés
+  ---
+  duration_ms: 117.551736
+  type: 'test'
+  ...
+# Démo remise à zéro par gest.demo@demo.arrimo.
+# Subtest: démo toujours prête : remise à zéro refusée sans ARRIMO_DEMO=1, réservée au gestionnaire ; horloges recalées
+ok 53 - démo toujours prête : remise à zéro refusée sans ARRIMO_DEMO=1, réservée au gestionnaire ; horloges recalées
+  ---
+  duration_ms: 7358.226353
+  type: 'test'
+  ...
+# Subtest: environnements : démo, recette, production ; domaine en un seul réglage ; garde-fous
+ok 54 - environnements : démo, recette, production ; domaine en un seul réglage ; garde-fous
+  ---
+  duration_ms: 872.162982
+  type: 'test'
+  ...
+# Subtest: installateur : runtime Node 24 LTS isolé et vérifié sans modifier Node système
+ok 55 - installateur : runtime Node 24 LTS isolé et vérifié sans modifier Node système
+  ---
+  duration_ms: 2.508396
+  type: 'test'
+  ...
+# Subtest: restauration : l’ancien script ne peut plus écraser une base active
+ok 56 - restauration : l’ancien script ne peut plus écraser une base active
+  ---
+  duration_ms: 20.855171
+  type: 'test'
+  ...
+# Subtest: migration OG : deux exécutions conservent les lignes métier
+ok 57 - migration OG : deux exécutions conservent les lignes métier
+  ---
+  duration_ms: 43.303431
+  type: 'test'
+  ...
+# Subtest: migration invitations : ajoute la colonne de façon additive et idempotente
+ok 58 - migration invitations : ajoute la colonne de façon additive et idempotente
+  ---
+  duration_ms: 18.045242
+  type: 'test'
+  ...
+# Subtest: installateur : noms propres à chaque environnement, domaine changeable ; scripts valides
+ok 59 - installateur : noms propres à chaque environnement, domaine changeable ; scripts valides
+  ---
+  duration_ms: 25185.858435
+  type: 'test'
+  ...
+# Subtest: premier compte d’un environnement vide : gestionnaire, mot de passe temporaire ; refusé s’il existe des comptes
+ok 60 - premier compte d’un environnement vide : gestionnaire, mot de passe temporaire ; refusé s’il existe des comptes
+  ---
+  duration_ms: 3248.146642
+  type: 'test'
+  ...
+# Base auxiliaire fictive conservée : arrimo_test_premier_879a8db6c97def3cfbae8ac7
+# Subtest: import CSV : nouvel établissement, vérification ligne par ligne, import tout ou rien, réimport sans doublon, comptes temporaires
+ok 61 - import CSV : nouvel établissement, vérification ligne par ligne, import tout ou rien, réimport sans doublon, comptes temporaires
+  ---
+  duration_ms: 2427.900847
+  type: 'test'
+  ...
+# Subtest: import CSV : lecture robuste (guillemets, fins de ligne Windows, BOM) et valeurs oui/non
+ok 62 - import CSV : lecture robuste (guillemets, fins de ligne Windows, BOM) et valeurs oui/non
+  ---
+  duration_ms: 1.838487
+  type: 'test'
+  ...
+# Subtest: XLSX : génération de modèle, lecture, aperçu et correspondance de colonnes
+ok 63 - XLSX : génération de modèle, lecture, aperçu et correspondance de colonnes
+  ---
+  duration_ms: 10.762445
+  type: 'test'
+  ...
+# Subtest: console SH : première connexion (mot de passe, double authentification), hôpital, implantation, import, activation, désactivation
+ok 64 - console SH : première connexion (mot de passe, double authentification), hôpital, implantation, import, activation, désactivation
+  ---
+  duration_ms: 5746.045531
+  type: 'test'
+  ...
+# Subtest: C4 : patients fictifs en recette seulement, formation par rôle, go-live sans donnée de test, rapport PDF
+ok 65 - C4 : patients fictifs en recette seulement, formation par rôle, go-live sans donnée de test, rapport PDF
+  ---
+  duration_ms: 11359.757066
+  type: 'test'
+  ...
+# Subtest: admission depuis la fiche Lit : demande finalisée, lit occupé, civière au nettoyage ; idempotente
+ok 66 - admission depuis la fiche Lit : demande finalisée, lit occupé, civière au nettoyage ; idempotente
+  ---
+  duration_ms: 3868.761112
+  type: 'test'
+  ...
+# Subtest: réserver puis annuler depuis la fiche Lit : la demande suit (assignée, puis remise en attente)
+ok 67 - réserver puis annuler depuis la fiche Lit : la demande suit (assignée, puis remise en attente)
+  ---
+  duration_ms: 148.084107
+  type: 'test'
+  ...
+# Subtest: ancienne désynchronisation (lit déjà occupé, demande encore assignée) : réparée sans transition interdite
+ok 68 - ancienne désynchronisation (lit déjà occupé, demande encore assignée) : réparée sans transition interdite
+  ---
+  duration_ms: 113.893144
+  type: 'test'
+  ...
+# Subtest: lit réservé pour un transfert : l’admission se fait par la réception, pas depuis la fiche Lit
+ok 69 - lit réservé pour un transfert : l’admission se fait par la réception, pas depuis la fiche Lit
+  ---
+  duration_ms: 67.621078
+  type: 'test'
+  ...
+# Subtest: admissions simultanées de la même demande depuis deux écrans : une seule admission
+ok 70 - admissions simultanées de la même demande depuis deux écrans : une seule admission
+  ---
+  duration_ms: 148.081534
+  type: 'test'
+  ...
+# Subtest: congés par lit : prévu, confirmé, retard sans libération automatique, départ réel ; alertes explicables
+ok 71 - congés par lit : prévu, confirmé, retard sans libération automatique, départ réel ; alertes explicables
+  ---
+  duration_ms: 377.038576
+  type: 'test'
+  ...
+# Subtest: vigilance : réservation prolongée identifiée sans annulation automatique
+ok 72 - vigilance : réservation prolongée identifiée sans annulation automatique
+  ---
+  duration_ms: 110.986907
+  type: 'test'
+  ...
+# Subtest: OG transversal : congé d’un lit précis, numéros exacts, contexte, sources ; permissions entre établissements
+ok 73 - OG transversal : congé d’un lit précis, numéros exacts, contexte, sources ; permissions entre établissements
+  ---
+  duration_ms: 408.098352
+  type: 'test'
+  ...
+# Subtest: administration et SH : spécialité du catalogue, lits avec groupe d’âge, civière d’isolement, import, modules par établissement
+ok 74 - administration et SH : spécialité du catalogue, lits avec groupe d’âge, civière d’isolement, import, modules par établissement
+  ---
+  duration_ms: 814.019022
+  type: 'test'
+  ...
+1..74
+# tests 74
+# suites 0
+# pass 74
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 91763.972024

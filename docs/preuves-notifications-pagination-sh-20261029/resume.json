@@ -1,0 +1,148 @@
+{
+  "date": "2026-10-29T10:39:12.522050+00:00",
+  "sources_sha256": "ff10dd1a908e84df83828bb2efe284f4f3cb3010c524c7c292020ea696005317",
+  "migration_sh": 18,
+  "integration": {
+    "statut": "valide",
+    "suites": [
+      {
+        "suite": "erp",
+        "tests": 21,
+        "pass": 21,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "portail",
+        "tests": 9,
+        "pass": 9,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "acces",
+        "tests": 27,
+        "pass": 27,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "interface",
+        "tests": 1,
+        "pass": 1,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "restauration",
+        "tests": 1,
+        "pass": 1,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "cycle",
+        "tests": 6,
+        "pass": 6,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "api",
+        "tests": 65,
+        "pass": 65,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "scenarios",
+        "tests": 7,
+        "pass": 7,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "structure",
+        "tests": 1,
+        "pass": 1,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "priorites",
+        "tests": 10,
+        "pass": 10,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "interop",
+        "tests": 10,
+        "pass": 10,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "og-base",
+        "tests": 1,
+        "pass": 1,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "og",
+        "tests": 21,
+        "pass": 21,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      }
+    ],
+    "tests": 180,
+    "echecs": 0,
+    "ignores": 0
+  },
+  "locaux": {
+    "reussis": 212,
+    "echecs": 0,
+    "ignores": 0,
+    "annules": 0
+  },
+  "python": {
+    "tests": 75,
+    "echecs": 0,
+    "simulation": true
+  },
+  "syntaxe": {
+    "fichiers": 188,
+    "erreurs": []
+  },
+  "notifications_financieres": {
+    "fuite_reproduite_avant_correction": true,
+    "filtrage_envoi": true,
+    "retrait_perimetre": true,
+    "retrait_permission": true,
+    "historique_sans_client_masque": true,
+    "ecriture_lecture_autre_employe_refusee": true
+  },
+  "portail_client": {
+    "pagination": true,
+    "brouillons_en_memoire": true,
+    "reponse_tardive_apres_deconnexion_ignoree": true
+  },
+  "publication": false,
+  "environnements_reels_modifies": false,
+  "confidentialite_globale_toutes_notifications": false
+}

@@ -1,0 +1,15 @@
+✔ scénario 1 — admission interne : urgence, civière, demande, assignation, admission, civière au nettoyage, tableau et journal (11906.69562ms)
+✔ scénario 2 — congé : prévu, confirmé, visible par lit, OG, départ réel, nettoyage, disponibilité (297.018851ms)
+✔ scénario 3 — NSA : désignation, orientation réadaptation, suivi, compteurs, retrait (204.104253ms)
+✔ scénario 4 — transfert A → B de bout en bout : même numéro, lit réservé, chambre prête, transport, départ, réception (302.837636ms)
+✔ scénario 5 — refus de B, explication par OG, alternative C acceptée (299.128572ms)
+✔ scénario 6 — pédiatrie : aucun lit adulte proposé, groupe d’âge, équipements, droits, explication OG (212.766228ms)
+✔ scénario 7 — concurrence et sécurité : une seule réservation, pas de double admission, isolement, reprise (392.209379ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 13944.9484

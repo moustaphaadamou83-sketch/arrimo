@@ -1,0 +1,79 @@
+{
+  "statut": "publie",
+  "sources_sha256": "2293be092cab8cef33261cc38a9eb71d0e1ff9cd6eb1c3fc52353d44114b0052",
+  "application_sha256": "2c88ab716429263e7bf549b51d8a4db8d349ee7d69f81a030a976bdc17e8b87b",
+  "services": {
+    "principal": {
+      "publie": true,
+      "sante": {
+        "etat": "ok",
+        "base": "ok",
+        "version": "1.0.0"
+      },
+      "assets_verifies": 26,
+      "configuration_preservee": true,
+      "release": "pieces-jointes-20261029t1900",
+      "sauvegarde_fraiche_sha256": "eb830aed2725835ee9a5208e761dfaddaec2288deba22226030bab5d40b8c963"
+    },
+    "demo": {
+      "publie": true,
+      "sante": {
+        "etat": "ok",
+        "base": "ok",
+        "version": "1.0.0"
+      },
+      "assets_verifies": 26,
+      "configuration_preservee": true,
+      "release": "pieces-jointes-20261029t1900",
+      "sauvegarde_fraiche_sha256": "f0c3b5140b438a7170e9cf827b464c6d77cd020ae30e3ba168455bff6b67fcf5"
+    },
+    "recette": {
+      "publie": true,
+      "sante": {
+        "etat": "ok",
+        "base": "ok",
+        "version": "1.0.0"
+      },
+      "assets_verifies": 26,
+      "configuration_preservee": true,
+      "release": "pieces-jointes-20261029t1900",
+      "sauvegarde_fraiche_sha256": "cae4d6cf30af68e476eab589bdc45de6b6d9b31a400371769a544c90fabcf283"
+    },
+    "validation": {
+      "publie": true,
+      "sante": {
+        "etat": "ok",
+        "base": "ok",
+        "version": "1.0.0"
+      },
+      "assets_verifies": 26,
+      "configuration_preservee": true,
+      "release": "pieces-jointes-20261029t1900",
+      "sauvegarde_fraiche_sha256": "4ed9fd3f516017be83216d1b9836f91b2a76b3d1123069a35b8120b9c1c8b40b"
+    },
+    "sh": {
+      "publie": true,
+      "sante": {
+        "etat": "ok",
+        "base": "ok",
+        "version": "1.0.0"
+      },
+      "assets_verifies": 14,
+      "configuration_preservee": true,
+      "release": "pieces-jointes-20261029t1900",
+      "sauvegarde_fraiche_sha256": "402179c5af3ecfffc4c4efaebfa98db4d8fe310db4d4d276c3c111cbc0d4329c"
+    },
+    "sh-validation": {
+      "publie": true,
+      "sante": {
+        "etat": "ok",
+        "base": "ok",
+        "version": "1.0.0"
+      },
+      "assets_verifies": 14,
+      "configuration_preservee": true,
+      "release": "pieces-jointes-20261029t1900",
+      "sauvegarde_fraiche_sha256": "03e130323c92900fb1f6118e6d9cdec59ba853b918fbc5d9dbcf28f415600d15"
+    }
+  }
+}

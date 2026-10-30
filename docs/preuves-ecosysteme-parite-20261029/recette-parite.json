@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-29T17:28:03.767Z",
+  "sources_sha256": "379c026138e4fd7d54285230c29f2cdde9074570ef124deec3c80038599b15e6",
+  "dossier": "/root/arrimo-sh-erp/.local/preuves-sh-lot1/20261029172803_62f2e2",
+  "statut": "valide",
+  "suites": [
+    {
+      "suite": "parite",
+      "base": "arrimo_sh_lot1_test_20261029172803_62f2e2_parite",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    }
+  ],
+  "donnees_publiques_modifiees": false
+}

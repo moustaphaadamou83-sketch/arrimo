@@ -1,0 +1,17 @@
+▶ activation réelle SH et parité avec Hôpital B, sans données publiques
+  ✔ invitations consommées et connexions réelles de trois membres du personnel (622.486867ms)
+  ✔ mêmes modules et mêmes fichiers applicatifs pour B et le nouvel établissement (790.462763ms)
+  ✔ admission réelle, lit occupé, civière puis lit nettoyés avec le compte entretien (491.236436ms)
+  ✔ transfert du nouvel hôpital vers B par les comptes respectifs et réception effective (185.47647ms)
+  ✔ isolation en lecture, écriture, OG et permissions du personnel (140.09576ms)
+  ✔ connexion navigateur réelle et interface disponible identique FR/EN pour B et le nouveau (9964.5168ms)
+  ✔ bascule commune entre deux versions applicatives sans écrasement des configurations (433.404063ms)
+✔ activation réelle SH et parité avec Hôpital B, sans données publiques (43500.180635ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 44279.604751

@@ -1,0 +1,100 @@
+{
+  "date": "2026-10-29T10:32:11.755Z",
+  "sources_sha256": "ff10dd1a908e84df83828bb2efe284f4f3cb3010c524c7c292020ea696005317",
+  "dossier": "/root/arrimo-sh-erp/.local/preuves-sh-lot1/20261029103211_7fc17e",
+  "statut": "valide",
+  "suites": [
+    {
+      "suite": "erp",
+      "base": "arrimo_sh_lot1_test_20261029103211_7fc17e_erp",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "portail",
+      "base": "arrimo_sh_lot1_test_20261029103211_7fc17e_portail",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "acces",
+      "base": "arrimo_sh_lot1_test_20261029103211_7fc17e_acces",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "interface",
+      "base": "arrimo_sh_lot1_test_20261029103211_7fc17e_interface",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "restauration",
+      "base": "arrimo_sh_lot1_test_20261029103211_7fc17e_restauration",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "cycle",
+      "base": "arrimo_sh_lot1_test_20261029103211_7fc17e_cycle",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "api",
+      "base": "arrimo_sh_lot1_test_20261029103211_7fc17e_api",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "scenarios",
+      "base": "arrimo_demo_trio_test_20261029103211_7fc17e_scenarios",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "structure",
+      "base": "arrimo_demo_trio_test_20261029103211_7fc17e_structure",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "priorites",
+      "base": "arrimo_vnext_test_20261029103211_7fc17e_priorites",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "interop",
+      "base": "arrimo_simulation_test_20261029103211_7fc17e_interop",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "og-base",
+      "base": "arrimo_og_test_cf0b95deee4a",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "og",
+      "base": "arrimo_og_suivi_test_ab4f33e53bc4",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    }
+  ],
+  "donnees_publiques_modifiees": false
+}

@@ -1,0 +1,86 @@
+{
+  "statut": "publie",
+  "sources_sha256": "104310da295d5fe07f5400032462fc6e930194345b298c45966d7e4ef78c0cf5",
+  "application_sha256": "e3f6646abafea206003975b82020ce0819cfd16cd002204a6578faf308bcf23c",
+  "services": {
+    "principal": {
+      "publie": true,
+      "sante": {
+        "etat": "ok",
+        "base": "ok",
+        "version": "1.0.0"
+      },
+      "assets_verifies": 26,
+      "configuration_preservee": true,
+      "release": "courriels-support-20261029t1930",
+      "sauvegarde_fraiche_sha256": "1e1d5606b5aee3586a3bd9a463caec2b476a9421bf7035776220e6ab6afda966"
+    },
+    "demo": {
+      "publie": true,
+      "sante": {
+        "etat": "ok",
+        "base": "ok",
+        "version": "1.0.0"
+      },
+      "assets_verifies": 26,
+      "configuration_preservee": true,
+      "release": "courriels-support-20261029t1930",
+      "sauvegarde_fraiche_sha256": "d04b96304940b740fbd3c5f486fc3296e929cdf7fa05ae3289622d94f25af428"
+    },
+    "recette": {
+      "publie": true,
+      "sante": {
+        "etat": "ok",
+        "base": "ok",
+        "version": "1.0.0"
+      },
+      "assets_verifies": 26,
+      "configuration_preservee": true,
+      "release": "courriels-support-20261029t1930",
+      "sauvegarde_fraiche_sha256": "65f8eeaff9209c0394b6e9245d14475eb800166d1843c8bd7c3c53202007ed0b"
+    },
+    "validation": {
+      "publie": true,
+      "sante": {
+        "etat": "ok",
+        "base": "ok",
+        "version": "1.0.0"
+      },
+      "assets_verifies": 26,
+      "configuration_preservee": true,
+      "release": "courriels-support-20261029t1930",
+      "sauvegarde_fraiche_sha256": "87ed42a6c8ec39830ee94e839bbb6ba690a66413380833366cb752ac4c74ccd3"
+    },
+    "sh": {
+      "publie": true,
+      "sante": {
+        "etat": "ok",
+        "base": "ok",
+        "version": "1.0.0"
+      },
+      "assets_verifies": 14,
+      "configuration_preservee": true,
+      "release": "courriels-support-20261029t1930",
+      "sauvegarde_fraiche_sha256": "a62e2e28723e4ab5e1bae758fc41112510da9882d396dccfc57a082b35274ad8"
+    },
+    "sh-validation": {
+      "publie": true,
+      "sante": {
+        "etat": "ok",
+        "base": "ok",
+        "version": "1.0.0"
+      },
+      "assets_verifies": 14,
+      "configuration_preservee": true,
+      "release": "courriels-support-20261029t1930",
+      "sauvegarde_fraiche_sha256": "f2caf7ab1422c94c3f02a8235d7fd375cfa1a82370fb3bfbec958a7557928d0e"
+    }
+  },
+  "verification_postpublication": {
+    "sh_migration": 23,
+    "sh_file_courriels": 0,
+    "sh_validation_migration": 23,
+    "sh_validation_file_courriels": 0,
+    "courriel_reel_envoye": false
+  }
+}

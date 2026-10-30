@@ -1,0 +1,84 @@
+TAP version 13
+# Subtest: scénario 1 — admission interne : urgence, civière, demande, assignation, admission, civière au nettoyage, tableau et journal
+ok 1 - scénario 1 — admission interne : urgence, civière, demande, assignation, admission, civière au nettoyage, tableau et journal
+  ---
+  duration_ms: 6917.99506
+  type: 'test'
+  ...
+# Subtest: scénario 2 — congé : prévu, confirmé, visible par lit, OG, départ réel, nettoyage, disponibilité
+ok 2 - scénario 2 — congé : prévu, confirmé, visible par lit, OG, départ réel, nettoyage, disponibilité
+  ---
+  duration_ms: 296.255102
+  type: 'test'
+  ...
+# Subtest: scénario 3 — NSA : désignation, orientation réadaptation, suivi, compteurs, retrait
+ok 3 - scénario 3 — NSA : désignation, orientation réadaptation, suivi, compteurs, retrait
+  ---
+  duration_ms: 151.924755
+  type: 'test'
+  ...
+# Subtest: scénario 4 — transfert A → B de bout en bout : même numéro, lit réservé, chambre prête, transport, départ, réception
+ok 4 - scénario 4 — transfert A → B de bout en bout : même numéro, lit réservé, chambre prête, transport, départ, réception
+  ---
+  duration_ms: 450.866334
+  type: 'test'
+  ...
+# Subtest: scénario 5 — refus de B, explication par OG, alternative C acceptée
+ok 5 - scénario 5 — refus de B, explication par OG, alternative C acceptée
+  ---
+  duration_ms: 245.647985
+  type: 'test'
+  ...
+# Subtest: scénario 6 — pédiatrie : aucun lit adulte proposé, groupe d’âge, équipements, droits, explication OG
+not ok 6 - scénario 6 — pédiatrie : aucun lit adulte proposé, groupe d’âge, équipements, droits, explication OG
+  ---
+  duration_ms: 187.39253
+  type: 'test'
+  location: '/var/tmp/arrimo-og-recette-20261026T213228Z_aa068b09/application/tests/scenarios-abc.test.cjs:227:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /compatibilité clinique reste à valider/. Input:
+    
+    'Recherche d’un lit de pédiatrie générale depuis Hôpital A — Val-des-Pins — règle : capacité confirmée d’abord, puis niveau de tension, puis durée et distance routières.\n' +
+      'Établissement proposé maintenant : Hôpital C — Sainte-Aurore — Recommandé : le plus proche avec un lit adapté.\n' +
+      '• Centre pédiatrique des Érables (fictif) — rang 2 : 2 lit(s) confirmé(s), niveau vert, 12 min de route (11.6 km, routeur routeur de test fictif) ; lit partagé confirmé : PED-205B.\n' +
+      'Distance routière et durée viennent du routeur (sans trafic en temps réel) ; la décision et l’acceptation restent humaines.\n' +
+      'Toute disponibilité doit être revérifiée avant réservation. OG ne réserve aucun lit et ne déclenche aucune admission ni aucun transfert.\n' +
+      '\n' +
+      'Estimations : durée routière OSRM sans trafic.\n' +
+      'Sources : Lits, Transferts, Réseau (recherche) — lues à 17 h 35.'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: |-
+    Recherche d’un lit de pédiatrie générale depuis Hôpital A — Val-des-Pins — règle : capacité confirmée d’abord, puis niveau de tension, puis durée et distance routières.
+    Établissement proposé maintenant : Hôpital C — Sainte-Aurore — Recommandé : le plus proche avec un lit adapté.
+    • Centre pédiatrique des Érables (fictif) — rang 2 : 2 lit(s) confirmé(s), niveau vert, 12 min de route (11.6 km, routeur routeur de test fictif) ; lit partagé confirmé : PED-205B.
+    Distance routière et durée viennent du routeur (sans trafic en temps réel) ; la décision et l’acceptation restent humaines.
+    Toute disponibilité doit être revérifiée avant réservation. OG ne réserve aucun lit et ne déclenche aucune admission ni aucun transfert.
+    
+    Estimations : durée routière OSRM sans trafic.
+    Sources : Lits, Transferts, Réseau (recherche) — lues à 17 h 35.
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (/var/tmp/arrimo-og-recette-20261026T213228Z_aa068b09/application/tests/scenarios-abc.test.cjs:264:69)
+    process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: scénario 7 — concurrence et sécurité : une seule réservation, pas de double admission, isolement, reprise
+ok 7 - scénario 7 — concurrence et sécurité : une seule réservation, pas de double admission, isolement, reprise
+  ---
+  duration_ms: 381.998217
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 6
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 9009.868742

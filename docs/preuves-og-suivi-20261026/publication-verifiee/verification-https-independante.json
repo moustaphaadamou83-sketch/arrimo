@@ -1,0 +1,155 @@
+{
+  "url": "https://demo.arrimo.senseafri.com",
+  "resultats": [
+    {
+      "compte": "a",
+      "verifie": true,
+      "reponses": [
+        {
+          "question": "Où se trouve actuellement le patient P-43267 ?",
+          "reponse": "Patient P-43267 — transfert TR-00067 : Hôpital C — Sainte-Aurore → Hôpital A — Val-des-Pins.\nIdentifiant de suivi : admission n° 107.\nService demandé : Soins intensifs.\nStatut du transfert : Reçu.\nDemande d’admission à l’origine : transferee.\nSituation actuelle vérifiée : admis ; établissement Hôpital A — Val-des-Pins ; service Soins intensifs ; chambre 108 ; lit SI-108.\nStatut du lit : occupé. Admission à destination : admis.\nLe patient n’occupe plus la civière URG-02 de Hôpital C — Sainte-Aurore. Civière et lit hospitalier sont distincts.\nParcours enregistré :\n• 2026-10-26T20:54:19.252Z : Demande de lit.\n• 2026-10-26T21:00:31.723Z : Demande de transfert.\n• 2026-10-26T21:01:09.998Z : Acceptation.\n• 2026-10-26T21:01:11.930Z : Chambre prête.\n• 2026-10-26T21:02:07.721Z : Départ confirmé.\n• 2026-10-26T21:02:21.766Z : Réception.\nHistorique du transfert :\n• 2026-10-26T21:00:31.723Z : Référence transmise.\n• 2026-10-26T21:01:09.998Z : Transfert validé.\n• 2026-10-26T21:01:11.930Z : Chambre prête.\n• 2026-10-26T21:01:24.870Z : Transport organisé.\n• 2026-10-26T21:02:07.721Z : Civière.\n• 2026-10-26T21:02:07.721Z : Départ confirmé.\n• 2026-10-26T21:02:21.766Z : Changement d’état.\nTrajet estimé à la demande : 7.7 km ; 11 min ; OSRM Quebec demo - OSM 2026-10-22 (sans trafic en temps réel).\nTemps écoulé depuis la création du transfert : 56 min.\nDurée réelle du transport (départ → réception) : 0.2 min.",
+          "sources": [
+            {
+              "module": "Transferts communs (liens internes et état courant)",
+              "lu_le": "2026-10-26T21:56:31.311Z"
+            },
+            {
+              "module": "Journal du transfert commun",
+              "lu_le": "2026-10-26T21:56:31.311Z"
+            }
+          ]
+        },
+        {
+          "question": "Suivi du transfert TR-00067",
+          "reponse": "Patient P-43267 — transfert TR-00067 : Hôpital C — Sainte-Aurore → Hôpital A — Val-des-Pins.\nIdentifiant de suivi : admission n° 107.\nService demandé : Soins intensifs.\nStatut du transfert : Reçu.\nDemande d’admission à l’origine : transferee.\nSituation actuelle vérifiée : admis ; établissement Hôpital A — Val-des-Pins ; service Soins intensifs ; chambre 108 ; lit SI-108.\nStatut du lit : occupé. Admission à destination : admis.\nLe patient n’occupe plus la civière URG-02 de Hôpital C — Sainte-Aurore. Civière et lit hospitalier sont distincts.\nParcours enregistré :\n• 2026-10-26T20:54:19.252Z : Demande de lit.\n• 2026-10-26T21:00:31.723Z : Demande de transfert.\n• 2026-10-26T21:01:09.998Z : Acceptation.\n• 2026-10-26T21:01:11.930Z : Chambre prête.\n• 2026-10-26T21:02:07.721Z : Départ confirmé.\n• 2026-10-26T21:02:21.766Z : Réception.\nHistorique du transfert :\n• 2026-10-26T21:00:31.723Z : Référence transmise.\n• 2026-10-26T21:01:09.998Z : Transfert validé.\n• 2026-10-26T21:01:11.930Z : Chambre prête.\n• 2026-10-26T21:01:24.870Z : Transport organisé.\n• 2026-10-26T21:02:07.721Z : Civière.\n• 2026-10-26T21:02:07.721Z : Départ confirmé.\n• 2026-10-26T21:02:21.766Z : Changement d’état.\nTrajet estimé à la demande : 7.7 km ; 11 min ; OSRM Quebec demo - OSM 2026-10-22 (sans trafic en temps réel).\nTemps écoulé depuis la création du transfert : 56 min.\nDurée réelle du transport (départ → réception) : 0.2 min.",
+          "sources": [
+            {
+              "module": "Transferts communs (liens internes et état courant)",
+              "lu_le": "2026-10-26T21:56:31.355Z"
+            },
+            {
+              "module": "Journal du transfert commun",
+              "lu_le": "2026-10-26T21:56:31.355Z"
+            }
+          ]
+        },
+        {
+          "question": "Quel est le statut du lit SI-108 ?",
+          "reponse": "Lit SI-108 (Soins intensifs, chambre 108) : occupé depuis 54 min · patient P-43267.\n• Aucun congé prévu ni confirmé n’est enregistré pour ce lit.\n• Dernier événement : Changement d’état (Patient reçu (TR-00067)), aujourd’hui à 17 h 02.\n\nSources : Lits, Journal, Congés — lues à 17 h 56.",
+          "sources": [
+            {
+              "module": "Lits",
+              "lu_le": "2026-10-26T21:56:31.399Z"
+            },
+            {
+              "module": "Journal",
+              "lu_le": "2026-10-26T21:56:31.409Z"
+            },
+            {
+              "module": "Congés",
+              "lu_le": "2026-10-26T21:56:31.413Z"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "compte": "b",
+      "verifie": true,
+      "reponses": [
+        {
+          "question": "Où se trouve actuellement le patient P-43267 ?",
+          "reponse": "Aucune situation active accessible pour P-43267 dans Hôpital B — Mont-Clair. Une absence de résultat ne signifie pas que le patient n’existe pas ailleurs.",
+          "sources": [
+            {
+              "module": "Transferts communs (liens internes et état courant)",
+              "lu_le": "2026-10-26T21:56:31.601Z"
+            },
+            {
+              "module": "Lits, civières, dossiers et admissions de l’établissement autorisé",
+              "lu_le": "2026-10-26T21:56:31.601Z"
+            }
+          ]
+        },
+        {
+          "question": "Suivi du transfert TR-00067",
+          "reponse": "Aucun transfert accessible correspondant aux identifiants demandés. Aucune situation extérieure au périmètre autorisé n’est divulguée.",
+          "sources": [
+            {
+              "module": "Transferts communs (liens internes et état courant)",
+              "lu_le": "2026-10-26T21:56:31.632Z"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "compte": "c",
+      "verifie": true,
+      "reponses": [
+        {
+          "question": "Où se trouve actuellement le patient P-43267 ?",
+          "reponse": "Patient P-43267 — transfert TR-00067 : Hôpital C — Sainte-Aurore → Hôpital A — Val-des-Pins.\nIdentifiant de suivi : admission n° 107.\nService demandé : Soins intensifs.\nStatut du transfert : Reçu.\nDemande d’admission à l’origine : transferee.\nSituation actuelle vérifiée : admis ; établissement Hôpital A — Val-des-Pins ; service Soins intensifs ; chambre 108 ; lit SI-108.\nStatut du lit : occupé. Admission à destination : admis.\nLe patient n’occupe plus la civière URG-02 de Hôpital C — Sainte-Aurore. Civière et lit hospitalier sont distincts.\nParcours enregistré :\n• 2026-10-26T20:54:19.252Z : Demande de lit.\n• 2026-10-26T21:00:31.723Z : Demande de transfert.\n• 2026-10-26T21:01:09.998Z : Acceptation.\n• 2026-10-26T21:01:11.930Z : Chambre prête.\n• 2026-10-26T21:02:07.721Z : Départ confirmé.\n• 2026-10-26T21:02:21.766Z : Réception.\nHistorique du transfert :\n• 2026-10-26T21:00:31.723Z : Référence transmise.\n• 2026-10-26T21:01:09.998Z : Transfert validé.\n• 2026-10-26T21:01:11.930Z : Chambre prête.\n• 2026-10-26T21:01:24.870Z : Transport organisé.\n• 2026-10-26T21:02:07.721Z : Civière.\n• 2026-10-26T21:02:07.721Z : Départ confirmé.\n• 2026-10-26T21:02:21.766Z : Changement d’état.\nTrajet estimé à la demande : 7.7 km ; 11 min ; OSRM Quebec demo - OSM 2026-10-22 (sans trafic en temps réel).\nTemps écoulé depuis la création du transfert : 56 min.\nDurée réelle du transport (départ → réception) : 0.2 min.",
+          "sources": [
+            {
+              "module": "Transferts communs (liens internes et état courant)",
+              "lu_le": "2026-10-26T21:56:31.825Z"
+            },
+            {
+              "module": "Journal du transfert commun",
+              "lu_le": "2026-10-26T21:56:31.825Z"
+            }
+          ]
+        },
+        {
+          "question": "Suivi du transfert TR-00067",
+          "reponse": "Patient P-43267 — transfert TR-00067 : Hôpital C — Sainte-Aurore → Hôpital A — Val-des-Pins.\nIdentifiant de suivi : admission n° 107.\nService demandé : Soins intensifs.\nStatut du transfert : Reçu.\nDemande d’admission à l’origine : transferee.\nSituation actuelle vérifiée : admis ; établissement Hôpital A — Val-des-Pins ; service Soins intensifs ; chambre 108 ; lit SI-108.\nStatut du lit : occupé. Admission à destination : admis.\nLe patient n’occupe plus la civière URG-02 de Hôpital C — Sainte-Aurore. Civière et lit hospitalier sont distincts.\nParcours enregistré :\n• 2026-10-26T20:54:19.252Z : Demande de lit.\n• 2026-10-26T21:00:31.723Z : Demande de transfert.\n• 2026-10-26T21:01:09.998Z : Acceptation.\n• 2026-10-26T21:01:11.930Z : Chambre prête.\n• 2026-10-26T21:02:07.721Z : Départ confirmé.\n• 2026-10-26T21:02:21.766Z : Réception.\nHistorique du transfert :\n• 2026-10-26T21:00:31.723Z : Référence transmise.\n• 2026-10-26T21:01:09.998Z : Transfert validé.\n• 2026-10-26T21:01:11.930Z : Chambre prête.\n• 2026-10-26T21:01:24.870Z : Transport organisé.\n• 2026-10-26T21:02:07.721Z : Civière.\n• 2026-10-26T21:02:07.721Z : Départ confirmé.\n• 2026-10-26T21:02:21.766Z : Changement d’état.\nTrajet estimé à la demande : 7.7 km ; 11 min ; OSRM Quebec demo - OSM 2026-10-22 (sans trafic en temps réel).\nTemps écoulé depuis la création du transfert : 56 min.\nDurée réelle du transport (départ → réception) : 0.2 min.",
+          "sources": [
+            {
+              "module": "Transferts communs (liens internes et état courant)",
+              "lu_le": "2026-10-26T21:56:31.850Z"
+            },
+            {
+              "module": "Journal du transfert commun",
+              "lu_le": "2026-10-26T21:56:31.850Z"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "compte": "reseau",
+      "verifie": true,
+      "reponses": [
+        {
+          "question": "Où se trouve actuellement le patient P-43267 ?",
+          "reponse": "Patient P-43267 — transfert TR-00067 : Hôpital C — Sainte-Aurore → Hôpital A — Val-des-Pins.\nIdentifiant de suivi : admission n° 107.\nService demandé : Soins intensifs.\nStatut du transfert : Reçu.\nDemande d’admission à l’origine : transferee.\nSituation actuelle vérifiée : admis ; établissement Hôpital A — Val-des-Pins ; service Soins intensifs ; chambre 108 ; lit SI-108.\nStatut du lit : occupé. Admission à destination : admis.\nLe patient n’occupe plus la civière URG-02 de Hôpital C — Sainte-Aurore. Civière et lit hospitalier sont distincts.\nParcours enregistré :\n• 2026-10-26T20:54:19.252Z : Demande de lit.\n• 2026-10-26T21:00:31.723Z : Demande de transfert.\n• 2026-10-26T21:01:09.998Z : Acceptation.\n• 2026-10-26T21:01:11.930Z : Chambre prête.\n• 2026-10-26T21:02:07.721Z : Départ confirmé.\n• 2026-10-26T21:02:21.766Z : Réception.\nHistorique du transfert :\n• 2026-10-26T21:00:31.723Z : Référence transmise.\n• 2026-10-26T21:01:09.998Z : Transfert validé.\n• 2026-10-26T21:01:11.930Z : Chambre prête.\n• 2026-10-26T21:01:24.870Z : Transport organisé.\n• 2026-10-26T21:02:07.721Z : Civière.\n• 2026-10-26T21:02:07.721Z : Départ confirmé.\n• 2026-10-26T21:02:21.766Z : Changement d’état.\nTrajet estimé à la demande : 7.7 km ; 11 min ; OSRM Quebec demo - OSM 2026-10-22 (sans trafic en temps réel).\nTemps écoulé depuis la création du transfert : 56 min.\nDurée réelle du transport (départ → réception) : 0.2 min.",
+          "sources": [
+            {
+              "module": "Transferts communs (liens internes et état courant)",
+              "lu_le": "2026-10-26T21:56:32.019Z"
+            },
+            {
+              "module": "Journal du transfert commun",
+              "lu_le": "2026-10-26T21:56:32.019Z"
+            }
+          ]
+        },
+        {
+          "question": "Suivi du transfert TR-00067",
+          "reponse": "Patient P-43267 — transfert TR-00067 : Hôpital C — Sainte-Aurore → Hôpital A — Val-des-Pins.\nIdentifiant de suivi : admission n° 107.\nService demandé : Soins intensifs.\nStatut du transfert : Reçu.\nDemande d’admission à l’origine : transferee.\nSituation actuelle vérifiée : admis ; établissement Hôpital A — Val-des-Pins ; service Soins intensifs ; chambre 108 ; lit SI-108.\nStatut du lit : occupé. Admission à destination : admis.\nLe patient n’occupe plus la civière URG-02 de Hôpital C — Sainte-Aurore. Civière et lit hospitalier sont distincts.\nParcours enregistré :\n• 2026-10-26T20:54:19.252Z : Demande de lit.\n• 2026-10-26T21:00:31.723Z : Demande de transfert.\n• 2026-10-26T21:01:09.998Z : Acceptation.\n• 2026-10-26T21:01:11.930Z : Chambre prête.\n• 2026-10-26T21:02:07.721Z : Départ confirmé.\n• 2026-10-26T21:02:21.766Z : Réception.\nHistorique du transfert :\n• 2026-10-26T21:00:31.723Z : Référence transmise.\n• 2026-10-26T21:01:09.998Z : Transfert validé.\n• 2026-10-26T21:01:11.930Z : Chambre prête.\n• 2026-10-26T21:01:24.870Z : Transport organisé.\n• 2026-10-26T21:02:07.721Z : Civière.\n• 2026-10-26T21:02:07.721Z : Départ confirmé.\n• 2026-10-26T21:02:21.766Z : Changement d’état.\nTrajet estimé à la demande : 7.7 km ; 11 min ; OSRM Quebec demo - OSM 2026-10-22 (sans trafic en temps réel).\nTemps écoulé depuis la création du transfert : 56 min.\nDurée réelle du transport (départ → réception) : 0.2 min.",
+          "sources": [
+            {
+              "module": "Transferts communs (liens internes et état courant)",
+              "lu_le": "2026-10-26T21:56:32.057Z"
+            },
+            {
+              "module": "Journal du transfert commun",
+              "lu_le": "2026-10-26T21:56:32.057Z"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

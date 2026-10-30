@@ -1,0 +1,93 @@
+{
+  "date": "2026-10-29T07:27:42.255Z",
+  "sources_sha256": "7dd0d0caeffa05997bf1490a78309c9497fe4789598c29c28ee69aca542b7847",
+  "dossier": "/root/arrimo-sh-erp/.local/preuves-sh-lot1/20261029072742_fd1194",
+  "statut": "valide",
+  "suites": [
+    {
+      "suite": "restauration",
+      "base": "arrimo_sh_lot1_test_20261029072742_fd1194_restauration",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "cycle",
+      "base": "arrimo_sh_lot1_test_20261029072742_fd1194_cycle",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "acces",
+      "base": "arrimo_sh_lot1_test_20261029072742_fd1194_acces",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "erp",
+      "base": "arrimo_sh_lot1_test_20261029072742_fd1194_erp",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "interface",
+      "base": "arrimo_sh_lot1_test_20261029072742_fd1194_interface",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "api",
+      "base": "arrimo_sh_lot1_test_20261029072742_fd1194_api",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "scenarios",
+      "base": "arrimo_demo_trio_test_20261029072742_fd1194_scenarios",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "structure",
+      "base": "arrimo_demo_trio_test_20261029072742_fd1194_structure",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "priorites",
+      "base": "arrimo_vnext_test_20261029072742_fd1194_priorites",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "interop",
+      "base": "arrimo_simulation_test_20261029072742_fd1194_interop",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "og-base",
+      "base": "arrimo_og_test_eef9f13863a3",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "og",
+      "base": "arrimo_og_suivi_test_672eee858b4c",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    }
+  ],
+  "donnees_publiques_modifiees": false
+}

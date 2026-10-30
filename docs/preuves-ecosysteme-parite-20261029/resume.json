@@ -1,0 +1,51 @@
+{
+  "candidate_publiee_sources_sha256": "f56eef3abe3aa12337666ab6142a108daeac55a779ca38f96b4b52af65f79f36",
+  "sources_outils_et_parite_sha256": "379c026138e4fd7d54285230c29f2cdde9074570ef124deec3c80038599b15e6",
+  "parite": {
+    "tests": 8,
+    "reussis": 8,
+    "echecs": 0,
+    "ignores": 0,
+    "connexion_reelle_api_et_chromium": true,
+    "og_fr_en_api_et_chromium": true,
+    "mise_a_jour_entre_deux_versions": true,
+    "configurations_et_sessions_preservees": true,
+    "environnement": "isole_fictif"
+  },
+  "tests_locaux": {
+    "reussis": 217,
+    "echecs": 0,
+    "ignores": 0,
+    "annules": 0
+  },
+  "publication": {
+    "statut": "publie",
+    "services_a_jour": 6,
+    "services_modifies": 5,
+    "sh_deja_a_jour": true
+  },
+  "coherence_hospitaliere": {
+    "valide": true,
+    "cibles": 4,
+    "application_sha256": "69e72c3dc0780cca176b780e5dce9098f63df1825f6ec33b29609f5b08908403"
+  },
+  "navigateur_public_abc": {
+    "valide": true,
+    "connexions_normales": true,
+    "og_fr_en": true
+  },
+  "incident_recalage_demo": {
+    "retour_applicatif_initial": true,
+    "champs_modifies": [
+      "date_depart",
+      "date_reception"
+    ],
+    "decalage_secondes_commun": 1560,
+    "autres_champs_identiques": true,
+    "reprise_verifiee": true
+  },
+  "portail_support_public_raccorde": false,
+  "microphone_physique_valide": false,
+  "smtp_reel_valide": false,
+  "cahier_integral_termine": false
+}

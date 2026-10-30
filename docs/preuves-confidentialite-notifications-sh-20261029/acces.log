@@ -1,0 +1,36 @@
+▶ SH lot accès : PostgreSQL isolé, API et navigateur
+  ✔ migrations additives rejouables, versions 7 à 19 et données préservées (173.506242ms)
+  ✔ rôle créé désactivé et entrées de périmètre invalides refusées (941.403893ms)
+  ✔ contrats, PDF et paramètres refusés aux rôles non autorisés (456.522919ms)
+  ✔ configuration publique et paramètres effectifs sans secret (15.363703ms)
+  ✔ journal opérationnel : aucune fuite des devis ou paiements par les traces (75.735271ms)
+  ✔ langue validée, persistée et journalisée (1200.475446ms)
+  ✔ erreurs et notifications SH rendues en anglais côté serveur (177.087935ms)
+  ✔ présence : six statuts, plusieurs appareils, expiration et aucune activité privée (875.08372ms)
+  ✔ sessions : aucune empreinte divulguée, session étrangère protégée (266.930509ms)
+  ✔ révocation ciblée effective sur un autre appareil (287.412703ms)
+  ✔ changement du mot de passe conserve la session courante et ferme les autres (779.259978ms)
+  ✔ désactivation, réactivation et révocation totale (984.60502ms)
+  ✔ récupération : réponse identique, empreinte seulement et MFA inchangée (558.09698ms)
+  ✔ jeton expiré refusé et limite de trois liens par heure (653.256383ms)
+  ✔ double consommation concurrente : une seule réussite (160.369126ms)
+  ✔ échec du courriel : jeton révoqué, erreur journalisée sans secret (67.355574ms)
+  ✔ sans fournisseur : disponibilité false et refus explicite de l’envoi (12.977287ms)
+  ✔ invitation expirée visible en diagnostic et refusée à la consommation (59.51943ms)
+  ✔ archivage garde les auteurs, interdit réactivation directe et restaure sans ouvrir les accès (381.851734ms)
+  ✔ profil et rôle : validation serveur et révocation immédiate (336.900215ms)
+  ✔ pilotes simultanés, chef et équipe, tâches critiques et séparation des sous-tâches (1559.442872ms)
+  ✔ isolation RLS : pays, clients, deux projets d’un même hôpital, rôles et exports (3267.246136ms)
+  ✔ affectations pays, client et hôpital : lectures et mutations négatives entre pays et clients (4794.820755ms)
+  ✔ navigateur : récupération et paramètres, retour connexion, absence du menu contrats pour implantation (14141.312389ms)
+  ✔ journal sans mot de passe ni jeton de récupération (40.667154ms)
+  ✔ réinitialisation de fixture SH : trois migrations successives sans fonction RLS résiduelle (10411.693443ms)
+✔ SH lot accès : PostgreSQL isolé, API et navigateur (55555.882179ms)
+ℹ tests 27
+ℹ suites 0
+ℹ pass 27
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 56938.184444

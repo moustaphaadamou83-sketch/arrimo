@@ -1,0 +1,107 @@
+{
+  "date": "2026-10-29T16:31:10.274Z",
+  "sources_sha256": "f56eef3abe3aa12337666ab6142a108daeac55a779ca38f96b4b52af65f79f36",
+  "dossier": "/root/arrimo-sh-erp/.local/preuves-sh-lot1/20261029163110_cba177",
+  "statut": "valide",
+  "suites": [
+    {
+      "suite": "notifications",
+      "base": "arrimo_sh_lot1_test_20261029163110_cba177_notifications",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "portail",
+      "base": "arrimo_sh_lot1_test_20261029163110_cba177_portail",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "restauration",
+      "base": "arrimo_sh_lot1_test_20261029163110_cba177_restauration",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "cycle",
+      "base": "arrimo_sh_lot1_test_20261029163110_cba177_cycle",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "acces",
+      "base": "arrimo_sh_lot1_test_20261029163110_cba177_acces",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "erp",
+      "base": "arrimo_sh_lot1_test_20261029163110_cba177_erp",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "interface",
+      "base": "arrimo_sh_lot1_test_20261029163110_cba177_interface",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "api",
+      "base": "arrimo_sh_lot1_test_20261029163110_cba177_api",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "scenarios",
+      "base": "arrimo_demo_trio_test_20261029163110_cba177_scenarios",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "structure",
+      "base": "arrimo_demo_trio_test_20261029163110_cba177_structure",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "priorites",
+      "base": "arrimo_vnext_test_20261029163110_cba177_priorites",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "interop",
+      "base": "arrimo_simulation_test_20261029163110_cba177_interop",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "og-base",
+      "base": "arrimo_og_test_34bf0ffeacd7",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    },
+    {
+      "suite": "og",
+      "base": "arrimo_og_suivi_test_b576bfcd4f3f",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null
+    }
+  ],
+  "donnees_publiques_modifiees": false
+}

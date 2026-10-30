@@ -1,0 +1,15 @@
+{
+  "sources_sha256": "0f9c1c727a1ad5adb40106f88de4e0760bbf56ae4f46d456dc6cde83655f8959",
+  "head": "da57f137334e497686dcc24aecce8815d5bc9e94",
+  "tests_locaux": {
+    "reussis": 208,
+    "echecs": 0,
+    "ignores": 0,
+    "annules": 0
+  },
+  "syntaxe_fichiers": 75,
+  "postgresql": "non exécuté : restrictions système EPERM",
+  "navigateur": "non exécuté",
+  "pret_pilote": false,
+  "publication": false
+}

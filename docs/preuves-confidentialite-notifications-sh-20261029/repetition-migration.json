@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-29T16:34:53.929Z",
+  "source": "arrimo_sh",
+  "copie": "arrimo_sh_lot1_restore_20261029163445_024d2c",
+  "sauvegarde": "/root/arrimo-sh-erp/.local/preuves-sh-lot1/migration-20261029163445_024d2c/sh-avant.dump",
+  "sha256": "de147153eb9c17aff99e8a03f5d684bc03ad0945b97509c302b06dd60fac5682",
+  "restauration_identique": true,
+  "migration": {
+    "version": 19,
+    "appliquee": true
+  },
+  "anciennes_colonnes_preservees": true,
+  "migration_rejouable": true,
+  "compatibilite": {
+    "ancienne": true,
+    "nouvelle": true
+  },
+  "source_modifiee": false,
+  "valide": true
+}

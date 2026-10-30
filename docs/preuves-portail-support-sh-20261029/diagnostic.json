@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-29T10:09:20.438Z",
+  "uid": 0,
+  "restrictions": {
+    "CapEff": "000001ffffffffff",
+    "CapBnd": "000001ffffffffff",
+    "NoNewPrivs": "0",
+    "Seccomp": "0"
+  },
+  "changementIdentite": {
+    "possible": true,
+    "code": null,
+    "motif": null
+  },
+  "socketPostgres": {
+    "accessible": true
+  },
+  "ecouteLocale": {
+    "possible": true
+  },
+  "prerequisSystemeValides": true,
+  "sqlExecute": false,
+  "donneesPubliquesModifiees": false,
+  "limite": "Ces sondes ne valident ni les droits SQL, ni les migrations, ni Chromium. Aucun droit système n’est modifié."
+}

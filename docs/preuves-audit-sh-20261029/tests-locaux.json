@@ -1,0 +1,97 @@
+{
+  "date": "2026-10-29T03:43:56.664Z",
+  "type": "tests locaux sans PostgreSQL ni navigateur",
+  "sources_sha256": "44e237439e16f0c4b966508c17383fea2b4e76505c6a42a3b9e5889d537ea147",
+  "suites": [
+    {
+      "fichier": "sh-finances.test.cjs",
+      "reussis": 3,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "og-vocal.test.cjs",
+      "reussis": 6,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "sh-recette-garde.test.cjs",
+      "reussis": 4,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "sh-roles-validation.test.cjs",
+      "reussis": 4,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "bilingue.test.cjs",
+      "reussis": 5,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "og-correction.test.cjs",
+      "reussis": 17,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "serveur-test.test.cjs",
+      "reussis": 6,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "simulation-connecteurs.test.cjs",
+      "reussis": 46,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "priorites.test.cjs",
+      "reussis": 40,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "priorites-ui-contract.test.cjs",
+      "reussis": 11,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "configuration-operationnelle.test.cjs",
+      "reussis": 18,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "connecteurs-atomicite.test.cjs",
+      "reussis": 7,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "courriel-transport.test.cjs",
+      "reussis": 1,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "routage.test.cjs",
+      "reussis": 6,
+      "echecs": 0,
+      "ignores": 0
+    }
+  ],
+  "total": {
+    "reussis": 174,
+    "echecs": 0,
+    "ignores": 0,
+    "annules": 0
+  }
+}

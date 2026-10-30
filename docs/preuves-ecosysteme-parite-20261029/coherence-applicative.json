@@ -1,0 +1,34 @@
+{
+  "valide": true,
+  "application_sha256": "69e72c3dc0780cca176b780e5dce9098f63df1825f6ec33b29609f5b08908403",
+  "cibles": [
+    {
+      "cible": "principal",
+      "release": "/opt/arrimo/releases/ecosysteme-20261029t1700",
+      "application_sha256": "69e72c3dc0780cca176b780e5dce9098f63df1825f6ec33b29609f5b08908403",
+      "valide": true,
+      "erreurs": []
+    },
+    {
+      "cible": "demo",
+      "release": "/opt/arrimo-demo/releases/ecosysteme-20261029t1700",
+      "application_sha256": "69e72c3dc0780cca176b780e5dce9098f63df1825f6ec33b29609f5b08908403",
+      "valide": true,
+      "erreurs": []
+    },
+    {
+      "cible": "recette",
+      "release": "/opt/arrimo-recette/releases/ecosysteme-20261029t1700",
+      "application_sha256": "69e72c3dc0780cca176b780e5dce9098f63df1825f6ec33b29609f5b08908403",
+      "valide": true,
+      "erreurs": []
+    },
+    {
+      "cible": "validation",
+      "release": "/opt/arrimo-validation/releases/ecosysteme-20261029t1700",
+      "application_sha256": "69e72c3dc0780cca176b780e5dce9098f63df1825f6ec33b29609f5b08908403",
+      "valide": true,
+      "erreurs": []
+    }
+  ]
+}

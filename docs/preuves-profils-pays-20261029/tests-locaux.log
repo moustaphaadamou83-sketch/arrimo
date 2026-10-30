@@ -1,0 +1,329 @@
+OK profil pays : sélectionner le pays demandé, même si le profil canadien vient en premier
+OK profil pays : refuser absence, ambiguïté, identifiant étranger et pays non renseigné
+OK correspondance : ne pas deviner un pays d’après un code de profil, seule une affectation explicite est utilisée
+OK correspondance mal formée : refus sans afficher le contenu de la configuration
+OK fonction de création : config_id choisi et journal transmis (base simulée)
+OK profil incompatible : aucun INSERT ni transaction de création
+OK création : une panne de journal arrête la transaction
+OK établissement existant : vérifier identité et pays avant de le relier
+OK pays d’un dossier relié : pas de réaffectation silencieuse, édition avant liaison conservée
+OK cible : une ancienne API sans sélection de pays est refusée, les profils des autres pays sont filtrés
+OK interface de liaison : aucun choix implicite parmi plusieurs profils, choix transmis à l’API
+OK formulaire Arrimo : profil explicite si plusieurs choix, conservation du parcours à profil unique
+OK API de service : clé obligatoire et pays obligatoire avant toute requête de création
+OK CAD : calcul en cents conservé, taxes de fixture arrondies séparément
+OK XOF et GNF : arrondi dans l’unité de la monnaie, sans cents inventés
+OK paiements et prix : refuser une précision perdue ou un dépassement numérique
+OK devises à trois décimales : refus explicite tant que le stockage reste à deux décimales
+OK devis existant : le PDF réutilise les lignes et totaux stockés sans recalculer les arrondis
+OK pays et monnaies : références vérifiées du cahier, normalisation et choix international explicite
+OK plusieurs monnaies ou absence de monnaie de référence : aucune sélection arbitraire
+OK référentiel : 249 pays, libellés localisés, précision et provenance sans inventer change ou taxes
+OK références : accès authentifié par les rôles de base, sans accorder de nouvelles permissions aux rôles personnalisés
+OK création d’opportunité : la devise est celle du pays du client, une autre devise reste un choix explicite
+OK formulaires CRM réels : pays proposés, devise automatique et choix international conservé à l’envoi
+OK promotion : conserver les modules désactivés et la vocation, sans donnée opérationnelle ni secret
+OK promotion : bloquer les paramètres non pris en charge au lieu de les perdre silencieusement
+OK lecture de préparation : lecture seule et code établissement encodé
+OK promotion : mise à jour avec la version cible et seulement les paramètres autorisés
+OK reprise : aucune écriture lorsque les paramètres cible correspondent déjà
+OK promotion : une version absente ou un conflit cible arrête sans nouvelle tentative aveugle
+OK pipeline : deux montants du même statut dans deux devises restent distincts
+OK pipeline : aucun montant ou CAD inventé en l’absence de données ou de devise
+OK écran rapports : affiche les deux devises et ne perd pas le deuxième montant du même statut
+OK affichage financier : les préférences CLDR ne masquent pas les subdivisions monétaires
+OK vocal : aucune capture au chargement, consentement et politique obligatoires
+OK vocal : texte reconnu modifiable, aucun envoi automatique et langue choisie
+OK vocal : arrêt et changement de contexte ignorent les transcriptions tardives
+OK vocal : refus du microphone conservé même après onend
+OK vocal : réponse parlée dans sa langue, voix locale préférée et interruption
+OK vocal : absence de moteur ou de voix signalée sans masquer le texte
+OK la recette navigateur ne peut pas hériter d’une URL de base externe
+OK les noms de bases réelles et les serveurs distants sont refusés
+OK les journaux masquent le mot de passe encodé et décodé sans altérer les connexions sans mot de passe
+OK diagnostic Linux : rapporte les capacités nulles et les protections sans les modifier
+OK création de fixtures : les paramètres PostgreSQL hérités ne peuvent pas détourner createdb
+OK nettoyage SH : aucune suppression n’est envoyée pour une base réelle ou non identifiée
+OK nettoyage SH : les noms des fixtures dédiées sont acceptés
+OK activation : une tâche critique ouverte bloque, un projet sans tâche critique ouverte passe ce contrôle
+OK rôle créé désactivé : la réponse conserve le choix explicite
+OK rôle invalide : booléen texte, permission héritée ou permission administrative refusés sans écriture
+OK périmètre pays absent ou invalide : refus contrôlé et annulation sans insertion
+OK Arrimo : chaque clé française dispose d’une traduction anglaise avec les mêmes variables
+OK OG : langue demandée distincte de la langue de la question et du contexte
+OK SH : messages statiques, notifications et valeurs utilisateurs conservées
+OK SH : rôles et périmètres traduits sans modifier les noms des membres
+OK PDF commercial : véritable génération avec libellés anglais et contenu client préservé
+OK 1 — statut individuel : P-01004 admis à MED-204B, Hôpital C
+OK recherche individuelle composée ne retombe pas sur la file d’attente
+OK 2 — nombre de lits occupés, distinct des lits libres
+OK 3 — explication locale : ne prétend pas connaître les critères historiques
+OK proposition actuelle : explique les critères métier sur la demande associée
+OK lit inconnu : aucune recommandation réseau hors sujet
+OK 4 — transferts en cours excluent demandes, reçus et refusés
+OK 5 — plus de quatre heures : seuil strict et aucune priorité inventée
+OK 6 — procédure après transport : départ puis réception validés par les équipes
+OK 7 — accès établissement interdit avant toute lecture
+OK établissement explicitement cité : pas de fuite interhospitalière
+OK gestionnaire habilité : bascule explicite vers C
+OK référence absente : indique les limites sans inventer un patient
+OK routage français ne contourne pas OG lorsque l’IA est configurée
+OK priorité validée : affiche la validation existante sans en inventer une autre
+OK les sources portent une date de lecture et aucune requête n’écrit de données
+OK seuil de quatre heures : utilise l’arrivée exacte, sans perdre les minutes arrondies
+OK serveur : adresse initialement nulle, résolution après listening seulement
+OK serveur : erreur de port propagée intacte, sans lecture du port nul
+OK serveur : exception synchrone conservée
+OK serveur : listening sans adresse fait échouer explicitement le test
+OK serveur : démarrage qui ne termine pas échoue et ferme son serveur
+OK serveur : aucune écoute sur une interface publique
+OK enveloppe : sérialisation canonique, pas de décision clinique calculée
+OK enveloppe refusée : tableau
+OK enveloppe refusée : sansConfirmation
+OK enveloppe refusée : sequenceNegative
+OK enveloppe refusée : sequenceFraction
+OK enveloppe refusée : sequenceTexte
+OK enveloppe refusée : sequenceTropGrande
+OK enveloppe refusée : nomPatient
+OK enveloppe refusée : auteurForge
+OK enveloppe refusée : sql
+OK enveloppe refusée : dateInexistante
+OK enveloppe refusée : dateSansFuseau
+OK enveloppe refusée : typeInconnu
+OK enveloppe refusée : besoinsIdentifiants
+OK enveloppe refusée : ageAbsent
+OK enveloppe refusée : versionAbsente
+OK production : simulation refusée avant toute requête
+OK isolation : utilisateur d’un autre établissement refusé avant toute requête
+OK entretien et connecteur réseau : aucune mutation autorisée
+OK connecteur non activé : aucune opération métier
+OK événement et accusé appliqués dans la transaction appelante ; doublon sans nouvel effet
+OK même identifiant avec contenu différent : conflit, accusé original conservé
+OK désordre 2,1,2 : événement futur conservé, puis rejoué explicitement une seule fois
+OK séquence déjà dépassée avec nouvel identifiant : aucun écrasement
+OK date source périmée : conflit avant exécution du workflow
+OK correspondance absente : mise en attente puis reprise sans perte d’événement
+OK rejeu par un autre compte : refus même dans le même établissement
+OK correspondance hors établissement : refus, aucune opération métier
+OK conflit métier : rollback au savepoint, aucun avancement de séquence
+OK erreur technique inattendue : rollback complet, aucun faux accusé appliqué
+OK workflow partagé : arrivee_urgence
+OK workflow partagé : demande_lit
+OK workflow partagé : priorite_validee
+OK workflow partagé : attribution
+OK workflow partagé : admission
+OK workflow partagé : etat_lit
+OK workflow partagé : conge_prevu
+OK workflow partagé : conge_confirme
+OK workflow partagé : conge
+OK workflow partagé : nettoyage
+OK workflow partagé : transfert
+OK workflow partagé : transfert_etape
+OK workflow partagé : reception
+OK nettoyage : ne peut pas annuler une réservation ou remettre un lit hors service
+OK congé : mauvais patient refusé avant de libérer le lit
+OK admission préparée sur un autre lit ou une ancienne version : aucun effet
+OK référentiel : ordre déterministe, valeurs conservées, sans mutation ni classement inventé
+OK référentiel invalide refusé : vide
+OK référentiel invalide refusé : tropCourt
+OK référentiel invalide refusé : tropLong
+OK référentiel invalide refusé : codeDouble
+OK référentiel invalide refusé : rangDouble
+OK référentiel invalide refusé : codeSQL
+OK référentiel invalide refusé : rangDecimal
+OK référentiel invalide refusé : rangNul
+OK référentiel invalide refusé : libelleVide
+OK référentiel invalide refusé : libelleTropLong
+OK référentiel invalide refusé : categorieNulle
+OK file : priorité validée avant attente, ancienneté seulement à rang égal, P1 historique sans rang
+OK changement de référentiel : revalidation nécessaire, aucun ancien rang appliqué
+OK aucun référentiel : aucune priorité considérée validée
+OK égalité totale : ordre stable par identifiant
+OK isolation : validation de B refusée au compte de A avant toute recherche d’habilitation
+OK habilitation explicite obligatoire, même pour un gestionnaire réseau
+OK entretien : aucune validation clinique
+OK validation sans confirmation valable refusée avant transaction
+OK validation sans motif valable refusée avant transaction
+OK validation sans versionAbsente valable refusée avant transaction
+OK validation sans versionTexte valable refusée avant transaction
+OK concurrence : version de demande obsolète refusée, sans mise à jour
+OK référentiel modifié entre affichage et validation : refus 409
+OK demande clôturée : priorité immuable
+OK catégorie inconnue : refus 400 sans choix automatique
+OK validation : auteur, catégorie et motif proviennent du compte et du référentiel serveur
+OK journal indisponible : validation annulée
+OK configuration : un professionnel sans rôle administrateur ne peut changer les règles
+OK configuration : administrateur sans habilitation professionnelle refusé
+OK configuration : nouvelle version et catégories approuvées journalisées
+OK habilitation : aucun droit accordé sans administration, MFA et attestation
+OK habilitation : attribution explicite versionnée et journalisée
+OK habilitation : changement concurrent refusé sans écraser le droit courant
+OK OG : questions sur le classement dirigées vers les priorités, sans explication de transfert inventée
+OK migration et schema restent identiques ; aucune validation rétroactive
+OK traductions : nouvelles clés FR/EN et catalogue des erreurs cohérents
+OK OG traduit uniquement le statut non validé et conserve les libellés professionnels
+OK présentation anglaise des priorités et explications pour Admissions et Urgences
+OK priorité : aucun appel API avant confirmation humaine
+OK priorité : changement d’établissement interdit l’envoi depuis une ancienne fenêtre
+OK priorité : libellés et référence patient échappés ; aucune catégorie choisie par défaut
+OK OG : confirmation obligatoire avant action assigner
+OK OG : confirmation obligatoire avant action debut_nettoyage
+OK OG : confirmation obligatoire avant action lit
+OK OG : confirmation obligatoire avant action conge
+OK OG : confirmation obligatoire avant action civiere
+OK OG : confirmation obligatoire avant action deplacer
+OK OG : recherche réseau transmet le groupe d’âge et ne crée pas de transfert
+OK OG : alternative après refus conserve les besoins pédiatriques du transfert
+OK configuration : conserver les données inconnues et ne changer que les quatre modules
+OK version de configuration indépendante de l’ordre des propriétés
+OK configuration valide : aucune interprétation clinique
+OK synchronisation interdite : nul
+OK synchronisation interdite : incomplet
+OK synchronisation interdite : tableau
+OK synchronisation interdite : texte
+OK synchronisation interdite : inconnu
+OK synchronisation interdite : vocation
+OK synchronisation interdite : occupations
+OK synchronisation interdite : patient
+OK synchronisation interdite : habilitations
+OK SH : seuls les administrateurs publient ; implantation en lecture ; autres rôles refusés
+OK API SH : clé de service exigée avant lecture de configuration
+OK API SH : aucune donnée de parcours dans la lecture du référentiel
+OK API SH : version périmée refusée sous verrou sans écrire
+OK API SH : publication limitée aux paramètres et journal dans la même transaction
+OK API SH : panne du journal annule la configuration
+OK événement ignoré : accusé écrit avant COMMIT, dans la même transaction
+OK redélivraison acceptée : aucune lecture ni modification du lit
+OK rejet antérieur : nouvelle tentative autorisée et accusé remplacé
+OK panne d’accusé : ROLLBACK avant journalisation du rejet
+OK lit inconnu : transaction annulée et rejet conservé
+OK connecteur réseau : écriture refusée avant toute transaction
+OK clé de simulation : l’ancien point d’entrée ne contourne pas la session humaine
+OK transport courriel : le message de récupération produit un MIME sans connexion réseau
+OK routeur : aucune distance inventée si le fournisseur n’est pas configuré
+OK routeur : convertit les mètres et secondes OSRM et conserve la géométrie réelle
+OK routeur : transmet la clé facultative par en-tête sans l’ajouter à l’URL
+OK routeur : une matrice nulle reste introuvable, sans estimation de repli
+OK routeur : valide le profil et refuse les coordonnées manquantes
+OK routeur : HTTPS obligatoire hors boucle locale et URLs de test
+{
+  "date": "2026-10-29T04:46:34.295Z",
+  "type": "tests locaux sans PostgreSQL ni navigateur",
+  "sources_sha256": "0f9c1c727a1ad5adb40106f88de4e0760bbf56ae4f46d456dc6cde83655f8959",
+  "suites": [
+    {
+      "fichier": "profils-pays.test.cjs",
+      "reussis": 13,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "sh-montants-devises.test.cjs",
+      "reussis": 5,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "sh-international.test.cjs",
+      "reussis": 6,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "sh-promotion-configuration.test.cjs",
+      "reussis": 6,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "sh-finances.test.cjs",
+      "reussis": 4,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "og-vocal.test.cjs",
+      "reussis": 6,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "sh-recette-garde.test.cjs",
+      "reussis": 7,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "sh-roles-validation.test.cjs",
+      "reussis": 4,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "bilingue.test.cjs",
+      "reussis": 5,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "og-correction.test.cjs",
+      "reussis": 17,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "serveur-test.test.cjs",
+      "reussis": 6,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "simulation-connecteurs.test.cjs",
+      "reussis": 46,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "priorites.test.cjs",
+      "reussis": 40,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "priorites-ui-contract.test.cjs",
+      "reussis": 11,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "configuration-operationnelle.test.cjs",
+      "reussis": 18,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "connecteurs-atomicite.test.cjs",
+      "reussis": 7,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "courriel-transport.test.cjs",
+      "reussis": 1,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "routage.test.cjs",
+      "reussis": 6,
+      "echecs": 0,
+      "ignores": 0
+    }
+  ],
+  "total": {
+    "reussis": 208,
+    "echecs": 0,
+    "ignores": 0,
+    "annules": 0
+  }
+}

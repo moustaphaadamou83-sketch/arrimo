@@ -1,0 +1,47 @@
+{
+  "statut": "arrete",
+  "publication_verifiee": false,
+  "environnements": {
+    "demo": {
+      "publie": false,
+      "statut": "demo_identifiee",
+      "base": "arrimo_demo_trio_public_f6db_20261023",
+      "release_avant": "releases/arrimo-98712dfb9b20c2b5ae21903a3c154da52bff5aa6-32b7f2fd",
+      "sante_avant": {
+        "etat": "ok",
+        "version": "1.0.0",
+        "base": "ok",
+        "latence_ms": 15,
+        "heure": "2026-10-26T20:23:55.174Z"
+      },
+      "service_actif": true
+    },
+    "sh": {
+      "publie": false,
+      "statut": "liaison_demo_hors_cibles_eligibles",
+      "verification": "non_effectuee",
+      "motif": "La liaison Démo SH ne correspond pas à une cible confirmée Démo ; aucun appel à cette liaison"
+    }
+  },
+  "etapes": [
+    {
+      "nom": "service-demo",
+      "reussi": true
+    },
+    {
+      "nom": "base-demo",
+      "reussi": true
+    },
+    {
+      "nom": "postgres-maintenance",
+      "reussi": true
+    },
+    {
+      "nom": "tests-locaux",
+      "reussi": true
+    }
+  ],
+  "bases_isolees": [],
+  "archive_sha256": "998bddbc775c07156f3753cba372d8f26d4b18e545b518bbe61ec95a3189332b",
+  "blocage": "Accès manquants : fournir --acces ou lancer dans un terminal interactif"
+}

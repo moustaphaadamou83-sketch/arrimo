@@ -1,0 +1,88 @@
+TAP version 13
+# Subtest: 20 établissements : 60 connexions simultanées, jetons distincts
+ok 1 - 20 établissements : 60 connexions simultanées, jetons distincts
+  ---
+  duration_ms: 5854.75894
+  type: 'test'
+  ...
+# Subtest: isolation : aucun accès aux ressources d’un autre établissement en changeant l’identifiant
+ok 2 - isolation : aucun accès aux ressources d’un autre établissement en changeant l’identifiant
+  ---
+  duration_ms: 1592.355408
+  type: 'test'
+  ...
+# Subtest: confidentialité : la capacité partagée n’expose que les champs autorisés et aucune référence patient
+ok 3 - confidentialité : la capacité partagée n’expose que les champs autorisés et aucune référence patient
+  ---
+  duration_ms: 3073.138122
+  type: 'test'
+  ...
+# Subtest: réservation concurrente : 20 établissements visent le même lit, un seul l’obtient
+ok 4 - réservation concurrente : 20 établissements visent le même lit, un seul l’obtient
+  ---
+  duration_ms: 130.033556
+  type: 'test'
+  ...
+# Subtest: transferts : seuls les participants voient et agissent ; notifications ciblées ; refus libère le lit
+ok 5 - transferts : seuls les participants voient et agissent ; notifications ciblées ; refus libère le lit
+  ---
+  duration_ms: 194.089612
+  type: 'test'
+  ...
+# Subtest: sessions : déconnexion d’une session, les autres restent ; reconnexion ; compte désactivé coupé
+ok 6 - sessions : déconnexion d’une session, les autres restent ; reconnexion ; compte désactivé coupé
+  ---
+  duration_ms: 101.215645
+  type: 'test'
+  ...
+# Subtest: élévation de privilèges : un coordonnateur n’atteint aucune route d’administration
+ok 7 - élévation de privilèges : un coordonnateur n’atteint aucune route d’administration
+  ---
+  duration_ms: 49.28386
+  type: 'test'
+  ...
+# Subtest: administration d’établissement : 2FA exigée, aucune action sur les ressources d’un autre établissement
+ok 8 - administration d’établissement : 2FA exigée, aucune action sur les ressources d’un autre établissement
+  ---
+  duration_ms: 147.913656
+  type: 'test'
+  ...
+# Subtest: élévation par import : un compte partagé avec un autre établissement ne peut pas être promu par un seul administrateur
+ok 9 - élévation par import : un compte partagé avec un autre établissement ne peut pas être promu par un seul administrateur
+  ---
+  duration_ms: 27.861116
+  type: 'test'
+  ...
+# Subtest: authentification : jetons stockés hachés, fermeture des autres sessions, MFA chiffrée, limiteur non contournable
+ok 10 - authentification : jetons stockés hachés, fermeture des autres sessions, MFA chiffrée, limiteur non contournable
+  ---
+  duration_ms: 263.808465
+  type: 'test'
+  ...
+# Subtest: imports concurrents : le même fichier envoyé 5 fois en même temps ne crée aucun doublon ; fichier partiel refusé en entier
+ok 11 - imports concurrents : le même fichier envoyé 5 fois en même temps ne crée aucun doublon ; fichier partiel refusé en entier
+  ---
+  duration_ms: 233.111312
+  type: 'test'
+  ...
+# Subtest: gestionnaire réseau : périmètre global, donc double authentification obligatoire avant toute action
+ok 12 - gestionnaire réseau : périmètre global, donc double authentification obligatoire avant toute action
+  ---
+  duration_ms: 285.821789
+  type: 'test'
+  ...
+# Subtest: limiteur : un jeton inventé par requête ne contourne pas la limite par IP des connexions (exécuté en dernier)
+ok 13 - limiteur : un jeton inventé par requête ne contourne pas la limite par IP des connexions (exécuté en dernier)
+  ---
+  duration_ms: 799.438662
+  type: 'test'
+  ...
+1..13
+# tests 13
+# suites 0
+# pass 13
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 13251.490228

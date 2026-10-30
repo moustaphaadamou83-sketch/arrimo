@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-29T10:17:35.593Z",
+  "sources_sha256": "ce28257d89282580bf62c1830c75f69a2fdd296acb612afb41f0ee8f5957f98c",
+  "dossier": "/root/arrimo-sh-erp/.local/preuves-sh-lot1/20261029101735_7913b6",
+  "statut": "echec_tests",
+  "suites": [
+    {
+      "suite": "erp",
+      "base": "arrimo_sh_lot1_test_20261029101735_7913b6_erp",
+      "reussi": false,
+      "statut": 1,
+      "erreur": null
+    }
+  ],
+  "donnees_publiques_modifiees": false
+}

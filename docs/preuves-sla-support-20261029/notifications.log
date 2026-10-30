@@ -1,0 +1,17 @@
+▶ notifications : droits du destinataire, ressources et révocation
+  ✔ affectations CRM : pays autorisé, refus hors périmètre et aucun objet créé (344.456798ms)
+  ✔ tâche : membre admis, projet voisin refusé, commentaire et rappel quotidien unique (489.816282ms)
+  ✔ formation et support : notifications rattachées à un établissement autorisé (286.481139ms)
+  ✔ rôle personnalisé : retrait de permission masque l’historique et les compteurs (163.241684ms)
+  ✔ droits révoqués : historique, rappel et acquittement disparaissent immédiatement (212.515936ms)
+  ✔ anciennes notifications sans rattachement : masquées aux employés, conservées en base (237.415665ms)
+  ✔ fonction privilégiée : portée de l’émetteur, contexte lecture et supervision globale (65.133091ms)
+✔ notifications : droits du destinataire, ressources et révocation (5324.335535ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5491.247862

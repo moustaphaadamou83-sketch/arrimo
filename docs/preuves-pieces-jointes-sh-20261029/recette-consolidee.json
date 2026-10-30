@@ -1,0 +1,61 @@
+{
+  "statut": "valide",
+  "sources_sha256": "2293be092cab8cef33261cc38a9eb71d0e1ff9cd6eb1c3fc52353d44114b0052",
+  "tests": 67,
+  "suites": [
+    {
+      "suite": "portail",
+      "base": "arrimo_sh_lot1_test_20261029184637_299a06_portail",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null,
+      "tests": 10
+    },
+    {
+      "suite": "sla",
+      "base": "arrimo_sh_lot1_test_20261029184955_e678b0_sla",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null,
+      "tests": 8
+    },
+    {
+      "suite": "cycle",
+      "base": "arrimo_sh_lot1_test_20261029184955_e678b0_cycle",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null,
+      "tests": 6
+    },
+    {
+      "suite": "notifications",
+      "base": "arrimo_sh_lot1_test_20261029184955_e678b0_notifications",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null,
+      "tests": 8
+    },
+    {
+      "suite": "acces",
+      "base": "arrimo_sh_lot1_test_20261029184955_e678b0_acces",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null,
+      "tests": 27
+    },
+    {
+      "suite": "parite",
+      "base": "arrimo_sh_lot1_test_20261029185321_37737f_parite",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null,
+      "tests": 8
+    }
+  ],
+  "rapports": [
+    "/root/arrimo-sh-erp/.local/preuves-sh-lot1/20261029184637_299a06/rapport.json",
+    "/root/arrimo-sh-erp/.local/preuves-sh-lot1/20261029184955_e678b0/rapport.json",
+    "/root/arrimo-sh-erp/.local/preuves-sh-lot1/20261029185321_37737f/rapport.json"
+  ],
+  "donnees_publiques_modifiees": false
+}

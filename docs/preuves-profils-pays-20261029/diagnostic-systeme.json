@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-29T04:49:00.619Z",
+  "uid": 0,
+  "restrictions": {
+    "CapEff": "0000000000000000",
+    "CapBnd": "0000000000000000",
+    "NoNewPrivs": "1",
+    "Seccomp": "2"
+  },
+  "changementIdentite": {
+    "possible": false,
+    "code": "EPERM",
+    "motif": "SETGROUPS_REFUSE"
+  },
+  "socketPostgres": {
+    "accessible": false,
+    "code": "EPERM"
+  },
+  "ecouteLocale": {
+    "possible": false,
+    "code": "EPERM"
+  },
+  "prerequisSystemeValides": false,
+  "sqlExecute": false,
+  "donneesPubliquesModifiees": false,
+  "limite": "Ces sondes ne valident ni les droits SQL, ni les migrations, ni Chromium. Aucun droit système n’est modifié."
+}

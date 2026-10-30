@@ -1,0 +1,64 @@
+{
+  "fictif": true,
+  "etapes": [
+    "activation SH et comptes invités connectés",
+    "modules et assets communs",
+    "admission, OG FR/EN, nettoyage avec rôle restreint",
+    "transfert accepté, départ et réception par B",
+    "isolation API/OG et écritures refusées",
+    "vraie connexion Chromium B/nouveau et OG",
+    "mise à jour commune de deux tenants et conservation des configurations"
+  ],
+  "source_b_avant_publication": "/opt/arrimo-demo/releases/lot1-20261028t211000z",
+  "connexion_reelle": true,
+  "assets": {
+    "app.js": "41ef2199b6f5e7ad831df49071d7677eb949292cc79a84251e4034b97b69eb87",
+    "og.js": "c9c3cd70fa3fb6882d125b48d30d11eabed9ed4a940958b6d48ca068121d61d4",
+    "og-vocal.js": "77f0af1eb0901b4818b37c0f8cef347a3f4f6f5dc6e87b3a2169e511fdd3ee1e",
+    "og-vocal-moteur.js": "9fe54f42e9b484d02ebd63aed944d95caba5a7b61c2b48b0c2340f8d3793ec60",
+    "support-client.js": "af561399fa69d6cc3762c14ce40f5a127849815fc3c330b19042cc20bca6a6d2",
+    "i18n/fr.js": "2b5fae626634e6c7381f8e3017df4d20d79dae8b5a33a719ffceb60c24f73ba8",
+    "i18n/en.js": "408e1c999f23955c5208b970a47f5aa54d3d89ca830ffe8153f49ca32ee4df70"
+  },
+  "menus": {
+    "b": [
+      "copilote",
+      "reseau",
+      "national",
+      "lits",
+      "urgence",
+      "admissions",
+      "transferts",
+      "nettoyage",
+      "vigilance",
+      "nsa",
+      "indicateurs",
+      "journal",
+      "support",
+      "params"
+    ],
+    "new": [
+      "copilote",
+      "reseau",
+      "national",
+      "lits",
+      "urgence",
+      "admissions",
+      "transferts",
+      "nettoyage",
+      "vigilance",
+      "nsa",
+      "indicateurs",
+      "journal",
+      "support",
+      "params"
+    ]
+  },
+  "mise_a_jour": {
+    "ancienneEmpreinte": "9462662ff537d6a3782c924fba5b5b218df2cd212157ca7ef084a5a7ef007c1b",
+    "nouvelleEmpreinte": "41ef2199b6f5e7ad831df49071d7677eb949292cc79a84251e4034b97b69eb87",
+    "configurations_preservees": true,
+    "sessions_preservees": true
+  },
+  "scenarios_executes": true
+}

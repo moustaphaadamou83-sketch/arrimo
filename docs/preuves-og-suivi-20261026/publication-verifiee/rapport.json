@@ -1,0 +1,595 @@
+{
+  "statut": "publication_verifiee",
+  "publication_verifiee": true,
+  "environnements": {
+    "demo": {
+      "publie": true,
+      "statut": "publie_et_verifie",
+      "base": "arrimo_demo_trio_public_f6db_20261023",
+      "release_avant": "releases/arrimo-og-20261026T202806Z_bdad528b",
+      "sante_avant": {
+        "etat": "ok",
+        "version": "1.0.0",
+        "base": "ok",
+        "latence_ms": 15,
+        "heure": "2026-10-26T21:36:35.398Z"
+      },
+      "service_actif": true,
+      "sauvegarde": "/root/arrimo-og-publication-20261026T213634Z_a85db96d/sauvegarde-demo",
+      "restauration_verifiee": true,
+      "copie": "arrimo_publication_restore_og_demo_a85db96d",
+      "suivi_copie": {
+        "valide": true,
+        "controles": [
+          {
+            "compte": "a",
+            "etablissement_code": "HX",
+            "tests": [
+              "suivi_interhospitalier_reel_compare_sql",
+              "recherche_interhospitaliere_sans_action_automatique",
+              "patient_individuel_compare_sql",
+              "lits_occupes_compares_sql",
+              "explication_locale_et_limites",
+              "transferts_compares_sql",
+              "civieres_et_absence_de_triage_autonome",
+              "procedure_transport",
+              "permissions_patient_et_lits"
+            ],
+            "suivi_tr00067": {
+              "autorise": true,
+              "verifie": true,
+              "patient": "P-43267",
+              "transfert": "TR-00067",
+              "statut": "recu"
+            },
+            "patient_p01004": "absent_des_lits_actifs_de_ce_compte"
+          },
+          {
+            "compte": "b",
+            "etablissement_code": "HY",
+            "tests": [
+              "confidentialite_suivi_interhospitalier",
+              "recherche_interhospitaliere_sans_action_automatique",
+              "patient_individuel_compare_sql",
+              "lits_occupes_compares_sql",
+              "explication_locale_et_limites",
+              "transferts_compares_sql",
+              "civieres_et_absence_de_triage_autonome",
+              "procedure_transport",
+              "permissions_patient_et_lits"
+            ],
+            "suivi_tr00067": {
+              "autorise": false,
+              "verifie": true,
+              "patient": "P-43267",
+              "transfert": "TR-00067",
+              "statut": "aucun_detail_divulgue"
+            },
+            "patient_p01004": "absent_des_lits_actifs_de_ce_compte"
+          },
+          {
+            "compte": "c",
+            "etablissement_code": "HC",
+            "tests": [
+              "suivi_interhospitalier_reel_compare_sql",
+              "recherche_interhospitaliere_sans_action_automatique",
+              "patient_individuel_compare_sql",
+              "lits_occupes_compares_sql",
+              "explication_locale_et_limites",
+              "transferts_compares_sql",
+              "civieres_et_absence_de_triage_autonome",
+              "procedure_transport",
+              "permissions_patient_et_lits"
+            ],
+            "suivi_tr00067": {
+              "autorise": true,
+              "verifie": true,
+              "patient": "P-43267",
+              "transfert": "TR-00067",
+              "statut": "recu"
+            },
+            "patient_sans_lit_occupe": "absence_ou_reservation_comparee_sql",
+            "patient_p01004": "absent_des_lits_actifs_de_ce_compte"
+          },
+          {
+            "compte": "reseau",
+            "etablissement_code": "HX",
+            "tests": [
+              "suivi_interhospitalier_reel_compare_sql",
+              "recherche_interhospitaliere_sans_action_automatique",
+              "patient_individuel_compare_sql",
+              "lits_occupes_compares_sql",
+              "explication_locale_et_limites",
+              "transferts_compares_sql",
+              "civieres_et_absence_de_triage_autonome",
+              "procedure_transport",
+              "coordination_regionale_perimetre_compare_sql",
+              "permissions_patient_et_lits"
+            ],
+            "suivi_tr00067": {
+              "autorise": true,
+              "verifie": true,
+              "patient": "P-43267",
+              "transfert": "TR-00067",
+              "statut": "recu"
+            },
+            "patient_p01004": "absent_des_lits_actifs_de_ce_compte"
+          }
+        ]
+      },
+      "og_copie_verifie": true,
+      "release_candidate": "releases/arrimo-og-20261026T213634Z_a85db96d",
+      "retour_arriere": "/root/arrimo-og-publication-20261026T213634Z_a85db96d/retour-demo.sh",
+      "sante_apres": {
+        "etat": "ok",
+        "version": "1.0.0",
+        "base": "ok",
+        "latence_ms": 2,
+        "heure": "2026-10-26T21:53:08.272Z"
+      },
+      "verification_og": {
+        "valide": true,
+        "controles": [
+          {
+            "compte": "a",
+            "etablissement_code": "HX",
+            "tests": [
+              "suivi_interhospitalier_reel_compare_sql",
+              "recherche_interhospitaliere_sans_action_automatique",
+              "patient_individuel_compare_sql",
+              "lits_occupes_compares_sql",
+              "explication_locale_et_limites",
+              "transferts_compares_sql",
+              "civieres_et_absence_de_triage_autonome",
+              "procedure_transport",
+              "permissions_patient_et_lits",
+              "navigateur_suivi_patient_transfere",
+              "navigateur_trois_temps_transport_11_minutes",
+              "navigateur_panneau_og"
+            ],
+            "suivi_tr00067": {
+              "autorise": true,
+              "verifie": true,
+              "patient": "P-43267",
+              "transfert": "TR-00067",
+              "statut": "recu"
+            },
+            "patient_p01004": "absent_des_lits_actifs_de_ce_compte"
+          },
+          {
+            "compte": "b",
+            "etablissement_code": "HY",
+            "tests": [
+              "confidentialite_suivi_interhospitalier",
+              "recherche_interhospitaliere_sans_action_automatique",
+              "patient_individuel_compare_sql",
+              "lits_occupes_compares_sql",
+              "explication_locale_et_limites",
+              "transferts_compares_sql",
+              "civieres_et_absence_de_triage_autonome",
+              "procedure_transport",
+              "permissions_patient_et_lits",
+              "navigateur_suivi_patient_transfere",
+              "navigateur_panneau_og"
+            ],
+            "suivi_tr00067": {
+              "autorise": false,
+              "verifie": true,
+              "patient": "P-43267",
+              "transfert": "TR-00067",
+              "statut": "aucun_detail_divulgue"
+            },
+            "patient_p01004": "absent_des_lits_actifs_de_ce_compte"
+          },
+          {
+            "compte": "c",
+            "etablissement_code": "HC",
+            "tests": [
+              "suivi_interhospitalier_reel_compare_sql",
+              "recherche_interhospitaliere_sans_action_automatique",
+              "patient_individuel_compare_sql",
+              "lits_occupes_compares_sql",
+              "explication_locale_et_limites",
+              "transferts_compares_sql",
+              "civieres_et_absence_de_triage_autonome",
+              "procedure_transport",
+              "permissions_patient_et_lits",
+              "navigateur_suivi_patient_transfere",
+              "navigateur_trois_temps_transport_11_minutes",
+              "navigateur_panneau_og"
+            ],
+            "suivi_tr00067": {
+              "autorise": true,
+              "verifie": true,
+              "patient": "P-43267",
+              "transfert": "TR-00067",
+              "statut": "recu"
+            },
+            "patient_sans_lit_occupe": "absence_ou_reservation_comparee_sql",
+            "patient_p01004": "absent_des_lits_actifs_de_ce_compte"
+          },
+          {
+            "compte": "reseau",
+            "etablissement_code": "HX",
+            "tests": [
+              "suivi_interhospitalier_reel_compare_sql",
+              "recherche_interhospitaliere_sans_action_automatique",
+              "patient_individuel_compare_sql",
+              "lits_occupes_compares_sql",
+              "explication_locale_et_limites",
+              "transferts_compares_sql",
+              "civieres_et_absence_de_triage_autonome",
+              "procedure_transport",
+              "coordination_regionale_perimetre_compare_sql",
+              "permissions_patient_et_lits",
+              "navigateur_suivi_patient_transfere",
+              "navigateur_trois_temps_transport_11_minutes",
+              "navigateur_panneau_og"
+            ],
+            "suivi_tr00067": {
+              "autorise": true,
+              "verifie": true,
+              "patient": "P-43267",
+              "transfert": "TR-00067",
+              "statut": "recu"
+            },
+            "patient_p01004": "absent_des_lits_actifs_de_ce_compte"
+          }
+        ]
+      },
+      "release_active": "releases/arrimo-og-20261026T213634Z_a85db96d"
+    },
+    "sh": {
+      "publie": false,
+      "statut": "liaison_demo_hors_cibles_eligibles",
+      "verification": "non_effectuee",
+      "motif": "La liaison Démo SH ne correspond pas à une cible confirmée Démo ; aucun appel à cette liaison"
+    }
+  },
+  "etapes": [
+    {
+      "nom": "service-demo",
+      "reussi": true
+    },
+    {
+      "nom": "base-demo",
+      "reussi": true
+    },
+    {
+      "nom": "postgres-maintenance",
+      "reussi": true
+    },
+    {
+      "nom": "tests-locaux",
+      "reussi": true
+    },
+    {
+      "nom": "connexion-demo-a",
+      "reussi": true
+    },
+    {
+      "nom": "droits-demo-a",
+      "reussi": true
+    },
+    {
+      "nom": "connexion-demo-b",
+      "reussi": true
+    },
+    {
+      "nom": "droits-demo-b",
+      "reussi": true
+    },
+    {
+      "nom": "connexion-demo-c",
+      "reussi": true
+    },
+    {
+      "nom": "droits-demo-c",
+      "reussi": true
+    },
+    {
+      "nom": "connexion-demo-reseau",
+      "reussi": true
+    },
+    {
+      "nom": "droits-demo-reseau",
+      "reussi": true
+    },
+    {
+      "nom": "sauvegarde-demo",
+      "reussi": true
+    },
+    {
+      "nom": "controle-dump-demo",
+      "reussi": true
+    },
+    {
+      "nom": "sauvegarde-unite-demo",
+      "reussi": true
+    },
+    {
+      "nom": "creer-copie-demo",
+      "reussi": true
+    },
+    {
+      "nom": "restaurer-copie-demo",
+      "reussi": true
+    },
+    {
+      "nom": "integrite-restauration-demo",
+      "reussi": true
+    },
+    {
+      "nom": "og-copie-demo",
+      "reussi": true
+    },
+    {
+      "nom": "copie-non-modifiee-demo",
+      "reussi": true
+    },
+    {
+      "nom": "runtime-reel",
+      "reussi": true
+    },
+    {
+      "nom": "chromium-version-requise",
+      "reussi": true
+    },
+    {
+      "nom": "chromium-reel",
+      "reussi": true
+    },
+    {
+      "nom": "creer-api",
+      "reussi": true
+    },
+    {
+      "nom": "recette-api",
+      "reussi": true
+    },
+    {
+      "nom": "creer-priorites-sql",
+      "reussi": true
+    },
+    {
+      "nom": "recette-priorites-sql",
+      "reussi": true
+    },
+    {
+      "nom": "creer-interop-sql",
+      "reussi": true
+    },
+    {
+      "nom": "recette-interop-sql",
+      "reussi": true
+    },
+    {
+      "nom": "creer-securite-multietablissement",
+      "reussi": true
+    },
+    {
+      "nom": "recette-securite-multietablissement",
+      "reussi": true
+    },
+    {
+      "nom": "creer-scenarios-abc",
+      "reussi": true
+    },
+    {
+      "nom": "recette-scenarios-abc",
+      "reussi": true
+    },
+    {
+      "nom": "creer-dashboards-abc-reseau",
+      "reussi": true
+    },
+    {
+      "nom": "recette-dashboards-abc-reseau",
+      "reussi": true
+    },
+    {
+      "nom": "creer-interface-parcours",
+      "reussi": true
+    },
+    {
+      "nom": "recette-interface-parcours",
+      "reussi": true
+    },
+    {
+      "nom": "creer-priorites-navigateur",
+      "reussi": true
+    },
+    {
+      "nom": "recette-priorites-navigateur",
+      "reussi": true
+    },
+    {
+      "nom": "creer-structure-navigateur",
+      "reussi": true
+    },
+    {
+      "nom": "recette-structure-navigateur",
+      "reussi": true
+    },
+    {
+      "nom": "creer-sh-erp",
+      "reussi": true
+    },
+    {
+      "nom": "recette-sh-erp",
+      "reussi": true
+    },
+    {
+      "nom": "creer-sh-navigateur",
+      "reussi": true
+    },
+    {
+      "nom": "recette-sh-navigateur",
+      "reussi": true
+    },
+    {
+      "nom": "creer-securite-xss",
+      "reussi": true
+    },
+    {
+      "nom": "recette-securite-xss",
+      "reussi": true
+    },
+    {
+      "nom": "creer-og-postgres",
+      "reussi": true
+    },
+    {
+      "nom": "recette-og-postgres",
+      "reussi": true
+    },
+    {
+      "nom": "creer-og-suivi-postgres",
+      "reussi": true
+    },
+    {
+      "nom": "recette-og-suivi-postgres",
+      "reussi": true
+    },
+    {
+      "nom": "exercice-rollback",
+      "reussi": true
+    },
+    {
+      "nom": "connexion-demo-a",
+      "reussi": true
+    },
+    {
+      "nom": "droits-demo-a",
+      "reussi": true
+    },
+    {
+      "nom": "connexion-demo-b",
+      "reussi": true
+    },
+    {
+      "nom": "droits-demo-b",
+      "reussi": true
+    },
+    {
+      "nom": "connexion-demo-c",
+      "reussi": true
+    },
+    {
+      "nom": "droits-demo-c",
+      "reussi": true
+    },
+    {
+      "nom": "connexion-demo-reseau",
+      "reussi": true
+    },
+    {
+      "nom": "droits-demo-reseau",
+      "reussi": true
+    },
+    {
+      "nom": "lecture-runtime-demo",
+      "reussi": true
+    },
+    {
+      "nom": "bascule-demo",
+      "reussi": true
+    },
+    {
+      "nom": "og-public-demo",
+      "reussi": true
+    }
+  ],
+  "bases_isolees": [
+    "arrimo_publication_restore_og_demo_a85db96d",
+    "arrimo_test_08f054c99ce9b4",
+    "arrimo_vnext_test_461dda0dda3f20",
+    "arrimo_simulation_test_941f582229c082",
+    "arrimo_audit_multi_472b6dcee9bcbd",
+    "arrimo_demo_trio_scenarios_8b15b5d1644e39",
+    "arrimo_demo_trio_ui_ff5f9910dcf204",
+    "arrimo_interface_1fb3e2b2037057",
+    "arrimo_vnext_ui_test_b96acbfd8e78ea",
+    "arrimo_demo_trio_structure_0b02d5ce350985",
+    "arrimo_sh_test_13c66aa9415af0",
+    "arrimo_sh_ui_test_af499c4ba3fcd1",
+    "arrimo_audit_xss_d3e16eadab47a2",
+    "arrimo_og_test_556452c3062be4",
+    "arrimo_og_suivi_test_fa3386e67476ad"
+  ],
+  "archive_sha256": "57cbe783d078588839b73e7516dc4c3dbbda3ee18274f008b0545dc8aec4aa79",
+  "recette_dossier": "/var/tmp/arrimo-og-recette-20261026T213634Z_a85db96d",
+  "recette_suites": [
+    {
+      "suite": "api",
+      "reussie": true,
+      "tests": 74
+    },
+    {
+      "suite": "priorites-sql",
+      "reussie": true,
+      "tests": 10
+    },
+    {
+      "suite": "interop-sql",
+      "reussie": true,
+      "tests": 10
+    },
+    {
+      "suite": "securite-multietablissement",
+      "reussie": true,
+      "tests": 13
+    },
+    {
+      "suite": "scenarios-abc",
+      "reussie": true,
+      "tests": 7
+    },
+    {
+      "suite": "dashboards-abc-reseau",
+      "reussie": true,
+      "tests": 4
+    },
+    {
+      "suite": "interface-parcours",
+      "reussie": true,
+      "tests": 9
+    },
+    {
+      "suite": "priorites-navigateur",
+      "reussie": true,
+      "tests": 4
+    },
+    {
+      "suite": "structure-navigateur",
+      "reussie": true,
+      "tests": 1
+    },
+    {
+      "suite": "sh-erp",
+      "reussie": true,
+      "tests": 19
+    },
+    {
+      "suite": "sh-navigateur",
+      "reussie": true,
+      "tests": 1
+    },
+    {
+      "suite": "securite-xss",
+      "reussie": true,
+      "tests": 1
+    },
+    {
+      "suite": "og-postgres",
+      "reussie": true,
+      "tests": 1
+    },
+    {
+      "suite": "og-suivi-postgres",
+      "reussie": true,
+      "tests": 19
+    }
+  ],
+  "recette_integree_verifiee": true
+}

@@ -1,0 +1,38 @@
+{
+  "statut": "audit_sans_publication",
+  "publication_verifiee": false,
+  "environnements": {
+    "demo": {
+      "publie": false,
+      "statut": "demo_identifiee",
+      "base": "arrimo_demo_trio_public_f6db_20261023",
+      "release_avant": "releases/arrimo-98712dfb9b20c2b5ae21903a3c154da52bff5aa6-32b7f2fd",
+      "sante_avant": {
+        "etat": "ok",
+        "version": "1.0.0",
+        "base": "ok",
+        "latence_ms": 21,
+        "heure": "2026-10-26T20:11:18.302Z"
+      },
+      "service_actif": true
+    },
+    "sh": {
+      "publie": false,
+      "statut": "liaison_demo_hors_cibles_eligibles",
+      "verification": "non_effectuee",
+      "motif": "La liaison Démo SH ne correspond pas à une cible confirmée Démo ; aucun appel à cette liaison"
+    }
+  },
+  "etapes": [
+    {
+      "nom": "service-demo",
+      "reussi": true
+    },
+    {
+      "nom": "base-demo",
+      "reussi": true
+    }
+  ],
+  "bases_isolees": [],
+  "archive_sha256": "25f9704e5dedc9cc23a9626aba2bf4c428dea83a241798fb35fc22a6e7941da8"
+}

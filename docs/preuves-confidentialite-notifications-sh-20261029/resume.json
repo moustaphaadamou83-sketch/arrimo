@@ -1,0 +1,153 @@
+{
+  "sources_sha256": "f56eef3abe3aa12337666ab6142a108daeac55a779ca38f96b4b52af65f79f36",
+  "integration": {
+    "statut": "valide",
+    "suites": [
+      {
+        "suite": "notifications",
+        "tests": 8,
+        "pass": 8,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "portail",
+        "tests": 9,
+        "pass": 9,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "restauration",
+        "tests": 1,
+        "pass": 1,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "cycle",
+        "tests": 6,
+        "pass": 6,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "acces",
+        "tests": 27,
+        "pass": 27,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "erp",
+        "tests": 21,
+        "pass": 21,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "interface",
+        "tests": 1,
+        "pass": 1,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "api",
+        "tests": 65,
+        "pass": 65,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "scenarios",
+        "tests": 7,
+        "pass": 7,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "structure",
+        "tests": 1,
+        "pass": 1,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "priorites",
+        "tests": 10,
+        "pass": 10,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "interop",
+        "tests": 10,
+        "pass": 10,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "og-base",
+        "tests": 1,
+        "pass": 1,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "og",
+        "tests": 21,
+        "pass": 21,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      }
+    ],
+    "tests": 188,
+    "reussis": 188,
+    "echecs": 0,
+    "ignores": 0
+  },
+  "locaux": {
+    "reussis": 212,
+    "echecs": 0,
+    "ignores": 0,
+    "annules": 0
+  },
+  "python": {
+    "tests": 75,
+    "simulation": true
+  },
+  "syntaxe": {
+    "fichiers": 191,
+    "erreurs": []
+  },
+  "publication_sh": {
+    "sources_sha256": "f56eef3abe3aa12337666ab6142a108daeac55a779ca38f96b4b52af65f79f36",
+    "ancienne_release": "/opt/arrimo-sh/releases/lot1-20261028t232549z",
+    "nouvelle_release": "/opt/arrimo-sh/releases/sh-v19-20261029t163913z",
+    "sauvegarde_sha256": "399010492366b9d8cc793d4580a5a0f55168881f19e89147002dca9543a7a102",
+    "valide": true,
+    "migration": {
+      "version": 19,
+      "appliquee": true,
+      "anciennes_colonnes_preservees": true
+    },
+    "configuration_preservee": true,
+    "autres_services_preserves": true
+  },
+  "applications_hospitalieres_publiees": false
+}

@@ -1,0 +1,71 @@
+TAP version 13
+# Subtest: recette réelle : migration, validation professionnelle, concurrence et admission pédiatrique
+    # Subtest: migration répétable : demande préservée et aucune validation rétroactive
+    ok 1 - migration répétable : demande préservée et aucune validation rétroactive
+      ---
+      duration_ms: 16.507282
+      type: 'test'
+      ...
+    # Subtest: habilitation humaine et référentiel approuvé
+    ok 2 - habilitation humaine et référentiel approuvé
+      ---
+      duration_ms: 25.688086
+      type: 'test'
+      ...
+    # Subtest: deux validations simultanées : une réussite, un conflit, un seul journal
+    ok 3 - deux validations simultanées : une réussite, un conflit, un seul journal
+      ---
+      duration_ms: 25.973377
+      type: 'test'
+      ...
+    # Subtest: isolation interétablissements : refus sans changement
+    ok 4 - isolation interétablissements : refus sans changement
+      ---
+      duration_ms: 4.266552
+      type: 'test'
+      ...
+    # Subtest: changement de référentiel concurrent : une version publiée, revalidation explicite
+    ok 5 - changement de référentiel concurrent : une version publiée, revalidation explicite
+      ---
+      duration_ms: 37.01523
+      type: 'test'
+      ...
+    # Subtest: compatibilité : lit adulte écarté pour demande pédiatrique
+    ok 6 - compatibilité : lit adulte écarté pour demande pédiatrique
+      ---
+      duration_ms: 33.521297
+      type: 'test'
+      ...
+    # Subtest: réservation concurrente : un lit, une seule demande assignée
+    ok 7 - réservation concurrente : un lit, une seule demande assignée
+      ---
+      duration_ms: 21.816247
+      type: 'test'
+      ...
+    # Subtest: admission depuis Lits : même demande clôturée et lit occupé
+    ok 8 - admission depuis Lits : même demande clôturée et lit occupé
+      ---
+      duration_ms: 12.248953
+      type: 'test'
+      ...
+    # Subtest: connecteur : événement neuf simultané appliqué une seule fois
+    ok 9 - connecteur : événement neuf simultané appliqué une seule fois
+      ---
+      duration_ms: 22.420093
+      type: 'test'
+      ...
+    1..9
+ok 1 - recette réelle : migration, validation professionnelle, concurrence et admission pédiatrique
+  ---
+  duration_ms: 2052.472512
+  type: 'test'
+  ...
+1..1
+# tests 10
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2201.367016

@@ -1,0 +1,37 @@
+{
+  "lecture_seule": true,
+  "diagnostic_copie": [
+    {
+      "compte": "a",
+      "etablissement": "HX",
+      "patient_compare_sql": true,
+      "occupation_comparee_sql": true,
+      "isolation": true,
+      "ancienne_precondition_patient_occupe": true
+    },
+    {
+      "compte": "b",
+      "etablissement": "HY",
+      "patient_compare_sql": true,
+      "occupation_comparee_sql": true,
+      "isolation": true,
+      "ancienne_precondition_patient_occupe": true
+    },
+    {
+      "compte": "c",
+      "etablissement": "HC",
+      "patient_compare_sql": true,
+      "occupation_comparee_sql": true,
+      "isolation": true,
+      "ancienne_precondition_patient_occupe": false
+    },
+    {
+      "compte": "d",
+      "etablissement": "HPED",
+      "patient_compare_sql": true,
+      "occupation_comparee_sql": true,
+      "isolation": true,
+      "ancienne_precondition_patient_occupe": true
+    }
+  ]
+}

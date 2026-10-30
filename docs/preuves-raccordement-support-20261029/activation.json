@@ -1,0 +1,232 @@
+{
+  "statut": "actif",
+  "sources": [
+    {
+      "cible": "demo",
+      "etablissements_raccordes": 20
+    },
+    {
+      "cible": "demo_abc",
+      "etablissements_raccordes": 21
+    },
+    {
+      "cible": "recette",
+      "etablissements_raccordes": 0
+    }
+  ],
+  "ecritures_hospitalieres": false,
+  "liaisons": {
+    "crees": 41,
+    "raccordes": 0,
+    "liens": [
+      {
+        "cible": "demo",
+        "code": "HA",
+        "hopital_id": 1
+      },
+      {
+        "cible": "demo",
+        "code": "HB",
+        "hopital_id": 2
+      },
+      {
+        "cible": "demo",
+        "code": "HC",
+        "hopital_id": 3
+      },
+      {
+        "cible": "demo",
+        "code": "HD",
+        "hopital_id": 4
+      },
+      {
+        "cible": "demo",
+        "code": "HE",
+        "hopital_id": 5
+      },
+      {
+        "cible": "demo",
+        "code": "HF",
+        "hopital_id": 6
+      },
+      {
+        "cible": "demo",
+        "code": "HG",
+        "hopital_id": 7
+      },
+      {
+        "cible": "demo",
+        "code": "HH",
+        "hopital_id": 8
+      },
+      {
+        "cible": "demo",
+        "code": "HI",
+        "hopital_id": 9
+      },
+      {
+        "cible": "demo",
+        "code": "HJ",
+        "hopital_id": 10
+      },
+      {
+        "cible": "demo",
+        "code": "HK",
+        "hopital_id": 11
+      },
+      {
+        "cible": "demo",
+        "code": "HL",
+        "hopital_id": 12
+      },
+      {
+        "cible": "demo",
+        "code": "HM",
+        "hopital_id": 13
+      },
+      {
+        "cible": "demo",
+        "code": "HN",
+        "hopital_id": 14
+      },
+      {
+        "cible": "demo",
+        "code": "HO",
+        "hopital_id": 15
+      },
+      {
+        "cible": "demo",
+        "code": "HP",
+        "hopital_id": 16
+      },
+      {
+        "cible": "demo",
+        "code": "HQ",
+        "hopital_id": 17
+      },
+      {
+        "cible": "demo",
+        "code": "HR",
+        "hopital_id": 18
+      },
+      {
+        "cible": "demo",
+        "code": "HX",
+        "hopital_id": 19
+      },
+      {
+        "cible": "demo",
+        "code": "HY",
+        "hopital_id": 20
+      },
+      {
+        "cible": "demo_abc",
+        "code": "HA",
+        "hopital_id": 21
+      },
+      {
+        "cible": "demo_abc",
+        "code": "HB",
+        "hopital_id": 22
+      },
+      {
+        "cible": "demo_abc",
+        "code": "HC",
+        "hopital_id": 23
+      },
+      {
+        "cible": "demo_abc",
+        "code": "HD",
+        "hopital_id": 24
+      },
+      {
+        "cible": "demo_abc",
+        "code": "HE",
+        "hopital_id": 25
+      },
+      {
+        "cible": "demo_abc",
+        "code": "HF",
+        "hopital_id": 26
+      },
+      {
+        "cible": "demo_abc",
+        "code": "HG",
+        "hopital_id": 27
+      },
+      {
+        "cible": "demo_abc",
+        "code": "HH",
+        "hopital_id": 28
+      },
+      {
+        "cible": "demo_abc",
+        "code": "HI",
+        "hopital_id": 29
+      },
+      {
+        "cible": "demo_abc",
+        "code": "HJ",
+        "hopital_id": 30
+      },
+      {
+        "cible": "demo_abc",
+        "code": "HK",
+        "hopital_id": 31
+      },
+      {
+        "cible": "demo_abc",
+        "code": "HL",
+        "hopital_id": 32
+      },
+      {
+        "cible": "demo_abc",
+        "code": "HM",
+        "hopital_id": 33
+      },
+      {
+        "cible": "demo_abc",
+        "code": "HN",
+        "hopital_id": 34
+      },
+      {
+        "cible": "demo_abc",
+        "code": "HO",
+        "hopital_id": 35
+      },
+      {
+        "cible": "demo_abc",
+        "code": "HP",
+        "hopital_id": 36
+      },
+      {
+        "cible": "demo_abc",
+        "code": "HPED",
+        "hopital_id": 37
+      },
+      {
+        "cible": "demo_abc",
+        "code": "HQ",
+        "hopital_id": 38
+      },
+      {
+        "cible": "demo_abc",
+        "code": "HR",
+        "hopital_id": 39
+      },
+      {
+        "cible": "demo_abc",
+        "code": "HX",
+        "hopital_id": 40
+      },
+      {
+        "cible": "demo_abc",
+        "code": "HY",
+        "hopital_id": 41
+      }
+    ],
+    "aucune_ecriture_hospitaliere": true
+  },
+  "configuration_verifiee": true,
+  "cles_distinctes": true
+}

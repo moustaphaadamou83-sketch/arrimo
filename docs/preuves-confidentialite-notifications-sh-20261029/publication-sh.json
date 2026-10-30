@@ -1,0 +1,14 @@
+{
+  "sources_sha256": "f56eef3abe3aa12337666ab6142a108daeac55a779ca38f96b4b52af65f79f36",
+  "ancienne_release": "/opt/arrimo-sh/releases/lot1-20261028t232549z",
+  "nouvelle_release": "/opt/arrimo-sh/releases/sh-v19-20261029t163913z",
+  "sauvegarde_sha256": "399010492366b9d8cc793d4580a5a0f55168881f19e89147002dca9543a7a102",
+  "valide": true,
+  "migration": {
+    "version": 19,
+    "appliquee": true,
+    "anciennes_colonnes_preservees": true
+  },
+  "configuration_preservee": true,
+  "autres_services_preserves": true
+}

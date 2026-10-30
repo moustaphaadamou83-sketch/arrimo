@@ -1,0 +1,67 @@
+TAP version 13
+# Démo remise à zéro par reseau@demo.arrimo.
+# Subtest: guide de démonstration complet · ordinateur (1366 px)
+ok 1 - guide de démonstration complet · ordinateur (1366 px)
+  ---
+  duration_ms: 67234.302743
+  type: 'test'
+  ...
+# Démo remise à zéro par reseau@demo.arrimo.
+# Subtest: guide de démonstration complet · tablette (820 px)
+ok 2 - guide de démonstration complet · tablette (820 px)
+  ---
+  duration_ms: 56587.463931
+  type: 'test'
+  ...
+# Démo remise à zéro par reseau@demo.arrimo.
+# Subtest: guide de démonstration complet · telephone (390 px)
+ok 3 - guide de démonstration complet · telephone (390 px)
+  ---
+  duration_ms: 54578.40116
+  type: 'test'
+  ...
+# Subtest: interface en anglais : aucun texte français restant (noms propres exceptés)
+ok 4 - interface en anglais : aucun texte français restant (noms propres exceptés)
+  ---
+  duration_ms: 64642.221486
+  type: 'test'
+  ...
+# Subtest: bandeau de l’environnement : démonstration, recette (ambre), rien en production
+ok 5 - bandeau de l’environnement : démonstration, recette (ambre), rien en production
+  ---
+  duration_ms: 6135.302933
+  type: 'test'
+  ...
+# Subtest: interface en anglais · tablette (820 px) : chaque écran, sans texte français ni débordement
+ok 6 - interface en anglais · tablette (820 px) : chaque écran, sans texte français ni débordement
+  ---
+  duration_ms: 23982.631695
+  type: 'test'
+  ...
+# Subtest: interface en anglais · telephone (390 px) : chaque écran, sans texte français ni débordement
+ok 7 - interface en anglais · telephone (390 px) : chaque écran, sans texte français ni débordement
+  ---
+  duration_ms: 19917.288623
+  type: 'test'
+  ...
+# Subtest: environnement neuf : premier compte, mot de passe choisi, premier établissement créé
+ok 8 - environnement neuf : premier compte, mot de passe choisi, premier établissement créé
+  ---
+  duration_ms: 2819.082587
+  type: 'test'
+  ...
+# Subtest: console SH : première connexion, hôpital, implantation, formation, go-live, activation, rapport · 3 largeurs
+ok 9 - console SH : première connexion, hôpital, implantation, formation, go-live, activation, rapport · 3 largeurs
+  ---
+  duration_ms: 274952.06774
+  type: 'test'
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 572071.350007

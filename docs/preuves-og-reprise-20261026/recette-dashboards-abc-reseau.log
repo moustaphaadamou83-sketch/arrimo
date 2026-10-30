@@ -1,0 +1,34 @@
+TAP version 13
+# Subtest: démo A/B/C : modèle existant, trois accès isolés, transaction, refus Plan B et réception fictive
+ok 1 - démo A/B/C : modèle existant, trois accès isolés, transaction, refus Plan B et réception fictive
+  ---
+  duration_ms: 12037.691867
+  type: 'test'
+  ...
+# Subtest: OG : plan coordonné sépare les faits, prévisions et inconnues sans agir automatiquement
+ok 2 - OG : plan coordonné sépare les faits, prévisions et inconnues sans agir automatiquement
+  ---
+  duration_ms: 4.268337
+  type: 'test'
+  ...
+# Subtest: sessions navigateur séparées : tableaux A, B, C et réseau
+ok 3 - sessions navigateur séparées : tableaux A, B, C et réseau
+  ---
+  duration_ms: 6361.390142
+  type: 'test'
+  ...
+# Subtest: interface A/B/C : OG voit le blocage puis le lit confirmé après nettoyage et le même transfert est reçu
+ok 4 - interface A/B/C : OG voit le blocage puis le lit confirmé après nettoyage et le même transfert est reçu
+  ---
+  duration_ms: 6687.459286
+  type: 'test'
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 26315.940728

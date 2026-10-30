@@ -1,0 +1,22 @@
+{
+  "date": "2026-10-29T04:19:32.196Z",
+  "head": "da57f137334e497686dcc24aecce8815d5bc9e94",
+  "sources_sha256": "19342293aae83952df8a3d3fe3ebe7cfaaad00ee6cdf05a1efb75c3a11c37dff",
+  "sources_identiques_aux_tests": true,
+  "tests_locaux": {
+    "reussis": 195,
+    "echecs": 0,
+    "ignores": 0,
+    "annules": 0
+  },
+  "syntaxe": {
+    "fichiers_verifies": 70,
+    "erreurs": []
+  },
+  "postgres_http_navigateur": "bloques_par_environnement",
+  "publication": false,
+  "migration_publique": false,
+  "pret_pilote": false,
+  "pays_reference": 249,
+  "devises_territoriales_reference": 153
+}

@@ -1,0 +1,12 @@
+{
+  "src/courriel.js": "a9014992c30a484d443792ef17591db0b296c3dca22738fb012b2ed56bce8631",
+  "src/sh/support-courriels.js": "db585be1b8f9adf3663bc7d32ca0d2e7a2ee0a7b7a9885b4edf5b46dc1d1eb53",
+  "src/sh/support-courriels-migrations.js": "498bbb33308e57fd58560ce3d2a7ea9eca680190f41f4daf32382a9a08a757d1",
+  "src/sh/portail-support.js": "fc9dc265fd70443966d1667a078d4ce96e65cd09044eb634ae894aba3e6252b0",
+  "src/sh/commercial.js": "559788ebef9ac60d854d64526b88520598bcf8b50813bb4dfd8124eb4ffd19d4",
+  "src/sh/migrations.js": "77ee12bdfadf4702b0a37bdb85fbe8565c09f46a4655529a719044e19a215738",
+  "src/sh/server.js": "61b2dfcdcfadda1c19f360180b06b5dd5fca305ae3d9c36ac61bff9b9f4c6837",
+  "src/sh/app.js": "790850fbfbefd74f822535b4fe2aa8b854a3d071ba39851b35921e30e4d86a34",
+  "db/sh-vider.js": "9bdfd7df7b77f58aa5a9e38fc1d92f728de210a315152612a5786cfab9cff37f",
+  "tests/sh-portail-support.test.cjs": "770cd059a10b2ed2e500acb570c120a5ae43ff887b589353dc96a552a0215706"
+}

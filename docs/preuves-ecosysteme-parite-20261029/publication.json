@@ -1,0 +1,166 @@
+{
+  "sources_sha256": "f56eef3abe3aa12337666ab6142a108daeac55a779ca38f96b4b52af65f79f36",
+  "statut": "publie",
+  "services": {
+    "principal": {
+      "nom": "principal",
+      "base": "arrimo",
+      "ancienne_release": "/opt/arrimo/releases/arrimo-98712dfb9b20c2b5ae21903a3c154da52bff5aa6-4a99c096",
+      "legacy": false,
+      "configuration_sha256": "2692b01445fc2cb211e7a51e52914d4ba2cdb16becea2a92e8be9ff5dd98e450",
+      "prepare": true,
+      "publie": true,
+      "copie": "arrimo_publication_restore_principal_0779c49c0d",
+      "sauvegarde_sha256": "08a4b2997dab08a2c91e543d34150a20c7ea49487ad4a7d690d44cea3001fa1a",
+      "restauration_identique": true,
+      "migrations_copie_rejouables": true,
+      "smoke_ancien_et_nouveau": true,
+      "nouvelle_release": "/opt/arrimo/releases/ecosysteme-20261029t1700",
+      "sauvegarde_fraiche_sha256": "35767a179ca2fa39e8cff3e6ece8bf250f9d509eb4d5bdbcbeba613e47cc1a5f",
+      "sante": {
+        "etat": "ok",
+        "base": "ok",
+        "version": "1.0.0"
+      },
+      "version_application": {
+        "candidate_sources_sha256": "f56eef3abe3aa12337666ab6142a108daeac55a779ca38f96b4b52af65f79f36",
+        "application_sha256": "69e72c3dc0780cca176b780e5dce9098f63df1825f6ec33b29609f5b08908403",
+        "release": "ecosysteme-20261029t1700"
+      },
+      "assets_verifies": 26,
+      "configuration_preservee": true
+    },
+    "demo": {
+      "nom": "demo",
+      "base": "arrimo_demo_trio_public_f6db_20261023",
+      "ancienne_release": "/opt/arrimo-demo/releases/lot1-20261028t211000z",
+      "legacy": false,
+      "configuration_sha256": "39f46faf04ccfe6c399629cc5c3ff3af61fe74d41831e891184acef50e4a9540",
+      "prepare": true,
+      "publie": true,
+      "copie": "arrimo_publication_restore_demo_c1c3db385c",
+      "sauvegarde_sha256": "fdf2505448c67c052016f5db0fddca8fb5d0d69b287c47210920d0a13badaba7",
+      "restauration_identique": true,
+      "migrations_copie_rejouables": true,
+      "smoke_ancien_et_nouveau": true,
+      "nouvelle_release": "/opt/arrimo-demo/releases/ecosysteme-20261029t1700",
+      "sauvegarde_fraiche_sha256": "cb254c5ece4964afab7fd6cda20dc850545924619e3d76d4029f0327a3670acb",
+      "sante": {
+        "etat": "ok",
+        "base": "ok",
+        "version": "1.0.0"
+      },
+      "version_application": {
+        "candidate_sources_sha256": "f56eef3abe3aa12337666ab6142a108daeac55a779ca38f96b4b52af65f79f36",
+        "application_sha256": "69e72c3dc0780cca176b780e5dce9098f63df1825f6ec33b29609f5b08908403",
+        "release": "ecosysteme-20261029t1700"
+      },
+      "connexion_normale_B_avant_bascule": true,
+      "recalage_historique_secondes": 1560,
+      "scenario_abc_et_comptes_preserves": true,
+      "assets_verifies": 26,
+      "configuration_preservee": true
+    },
+    "recette": {
+      "nom": "recette",
+      "base": "arrimo_recette",
+      "ancienne_release": "/opt/arrimo-recette",
+      "legacy": true,
+      "configuration_sha256": "dc442c960410711a6fa7ab37d3d41a77e58e680f26757a1104f6744c2420a324",
+      "prepare": true,
+      "publie": true,
+      "copie": "arrimo_publication_restore_recette_b564ee3693",
+      "sauvegarde_sha256": "b49e70a6f491b001573a3cab948fa6d17beef4915227e4115c9f582cb0be8f2b",
+      "restauration_identique": true,
+      "fallback": "/opt/arrimo-recette/releases/avant-20261029t1700",
+      "migrations_copie_rejouables": true,
+      "smoke_ancien_et_nouveau": true,
+      "nouvelle_release": "/opt/arrimo-recette/releases/ecosysteme-20261029t1700",
+      "sauvegarde_fraiche_sha256": "e859bf3328094b538c3a8be6a83b57ae834ed7d2908a858c9d489495863f72e8",
+      "sante": {
+        "etat": "ok",
+        "base": "ok",
+        "version": "1.0.0"
+      },
+      "version_application": {
+        "candidate_sources_sha256": "f56eef3abe3aa12337666ab6142a108daeac55a779ca38f96b4b52af65f79f36",
+        "application_sha256": "69e72c3dc0780cca176b780e5dce9098f63df1825f6ec33b29609f5b08908403",
+        "release": "ecosysteme-20261029t1700"
+      },
+      "assets_verifies": 26,
+      "configuration_preservee": true
+    },
+    "validation": {
+      "nom": "validation",
+      "base": "arrimo_validation_restore",
+      "ancienne_release": "/opt/arrimo-validation/releases/f6db0e021698",
+      "legacy": false,
+      "configuration_sha256": "6e392ce472c30bbe3131035a1d8a07b2555dd9cae0bb23f58199b4ea5439ca8d",
+      "prepare": true,
+      "publie": true,
+      "copie": "arrimo_publication_restore_validation_87eb5dc6e9",
+      "sauvegarde_sha256": "bf0b9d15d7b7d0b44985231b1889795ea3c36b0143f994f03f812a4de660e425",
+      "restauration_identique": true,
+      "migrations_copie_rejouables": true,
+      "smoke_ancien_et_nouveau": true,
+      "nouvelle_release": "/opt/arrimo-validation/releases/ecosysteme-20261029t1700",
+      "sauvegarde_fraiche_sha256": "9be944fd3e94a45be17381b030e500d68c9951ee56e2ab5a7b3881bdc889c049",
+      "sante": {
+        "etat": "ok",
+        "base": "ok",
+        "version": "1.0.0"
+      },
+      "version_application": {
+        "candidate_sources_sha256": "f56eef3abe3aa12337666ab6142a108daeac55a779ca38f96b4b52af65f79f36",
+        "application_sha256": "69e72c3dc0780cca176b780e5dce9098f63df1825f6ec33b29609f5b08908403",
+        "release": "ecosysteme-20261029t1700"
+      },
+      "assets_verifies": 26,
+      "configuration_preservee": true
+    },
+    "sh": {
+      "nom": "sh",
+      "base": "arrimo_sh",
+      "ancienne_release": "/opt/arrimo-sh/releases/sh-v19-20261029t163913z",
+      "legacy": false,
+      "configuration_sha256": "530e765c3fc448ad2a2bed688267158e5bf9c60419406216b9c8a7d7516a5aec",
+      "prepare": true,
+      "publie": false,
+      "deja_a_jour": true,
+      "sante": {
+        "etat": "ok",
+        "base": "ok",
+        "version": "1.0.0"
+      }
+    },
+    "sh-validation": {
+      "nom": "sh-validation",
+      "base": "arrimo_sh_validation_lot1_20261028t204938z",
+      "ancienne_release": "/opt/arrimo-sh-validation/releases/lot1-presence-20261028T232552Z",
+      "legacy": false,
+      "configuration_sha256": "8dcc0a07e94e349df133bbdacf46c880cc616ff0de876a204397df9b3f3d2d2c",
+      "prepare": true,
+      "publie": true,
+      "copie": "arrimo_publication_restore_sh_validation_f04e6e7a61",
+      "sauvegarde_sha256": "a35597572b640039f74bdbdd8732738afbdd64a5985e7080157c7d758cbecca0",
+      "restauration_identique": true,
+      "migrations_copie_rejouables": true,
+      "smoke_ancien_et_nouveau": true,
+      "nouvelle_release": "/opt/arrimo-sh-validation/releases/ecosysteme-20261029t1700",
+      "sauvegarde_fraiche_sha256": "dca11d2da8ba1e326c64870242a5117bebc3798caff1fc71bfe23b1702493da1",
+      "sante": {
+        "etat": "ok",
+        "base": "ok",
+        "version": "1.0.0"
+      },
+      "version_application": {
+        "candidate_sources_sha256": "f56eef3abe3aa12337666ab6142a108daeac55a779ca38f96b4b52af65f79f36",
+        "application_sha256": "69e72c3dc0780cca176b780e5dce9098f63df1825f6ec33b29609f5b08908403",
+        "release": "ecosysteme-20261029t1700"
+      },
+      "assets_verifies": 13,
+      "configuration_preservee": true
+    }
+  },
+  "aucune_reinitialisation": true
+}

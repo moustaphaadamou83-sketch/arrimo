@@ -1,0 +1,19 @@
+{
+  "coherence-applicative.json": "21e56709e11bca29b7e6d9472a54cbcf3621ec47c3d71c949c82256c058f8c1e",
+  "inventaire-ecosysteme.py": "fcebcb30ff34c092ee141a5ebd271ca5bb9acf57b60cb37fb6cfef3ac248495c",
+  "manifest-runtime.json": "769d9ec94c4442f3aebca616c8f9cc1dc3367988b69b5122cd99318a365e009d",
+  "navigateur-public.json": "c85d75bd984cc9219dcb40fa20181890ded780bb25c9f30f83ff57201a7bd1d1",
+  "og-public.json": "ecb234063eb92798bcf6bd84cb8bec9d440e7e54f6429765230d96995e563b1f",
+  "parite-b-en.png": "c83b98806cad04f081d73b2f2b21f86404e07ff20dc06c6fabc46ded75d7b67e",
+  "parite-b-fr.png": "49e82b9fd0180f87e009557f8106f22e794f3f31f1b441ef6132694dce16e079",
+  "parite-details.json": "48209e1ec363957744138c7982a6e32cafdc221d5a496845034e45c6860ffa0c",
+  "parite-new-en.png": "faea3f5d0c3c6ad5eaf15e0a0d25ceb9dbda7f19a34fd4f77055ee0ff3ee2d52",
+  "parite-new-fr.png": "81812b40360687b6e1575f430695e97c3e4deb1ca6de4e454ae1ff3a40a9c662",
+  "parite.log": "097028e745c3544f2d4db189aaf2527813ab7fc47a9d086989c10c0ab3dc9d0c",
+  "publication-ecosysteme.py": "a224a138753f557afe302a20ca4d2a558f08bd08adfe0d6ffec4de0214969aab",
+  "publication.json": "b3fc938ca69cec500cf6fda1e0f80e0570e2dcac8a936d3f9001ae0ef7ba4a8a",
+  "recette-parite.json": "951c6ec73baadd80387e434b3447582007c6453969e996f77b89558122132595",
+  "resume.json": "3b695e6d634f0d64165d059303353c7cc3b6ffad66395e55964948cac1647e9a",
+  "tests-coherence.log": "d75adcdb17caf0eeb3f6c789a62268687a1a51401e1fc8f5fed2d4165385cb47",
+  "tests-locaux.json": "a4309cd6870d408616bd4558a98a937f6ec6945b0ec99eef054716a96579075c"
+}

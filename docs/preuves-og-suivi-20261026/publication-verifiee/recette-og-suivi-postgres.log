@@ -1,0 +1,125 @@
+TAP version 13
+# Subtest: Suivi OG interhospitalier : quatorze validations PostgreSQL et API
+    # Subtest: réservation : pas de patient annoncé admis ou arrivé
+    ok 1 - réservation : pas de patient annoncé admis ou arrivé
+      ---
+      duration_ms: 22.506179
+      type: 'test'
+      ...
+    # Subtest: départ confirmé : transport sans réception inventée
+    ok 2 - départ confirmé : transport sans réception inventée
+      ---
+      duration_ms: 19.933634
+      type: 'test'
+      ...
+    # Subtest: 1 — A retrouve le patient et son admission après transfert
+    ok 3 - 1 — A retrouve le patient et son admission après transfert
+      ---
+      duration_ms: 23.542882
+      type: 'test'
+      ...
+    # Subtest: 2 — C conserve le suivi de son patient transféré
+    ok 4 - 2 — C conserve le suivi de son patient transféré
+      ---
+      duration_ms: 34.306854
+      type: 'test'
+      ...
+    # Subtest: 3 — lit SI-108 occupé, service et chambre exacts
+    ok 5 - 3 — lit SI-108 occupé, service et chambre exacts
+      ---
+      duration_ms: 20.30159
+      type: 'test'
+      ...
+    # Subtest: 4 — C suit directement le numéro du transfert
+    ok 6 - 4 — C suit directement le numéro du transfert
+      ---
+      duration_ms: 15.115013
+      type: 'test'
+      ...
+    # Subtest: 5 — B ne voit aucun dossier ni détail du transfert
+    ok 7 - 5 — B ne voit aucun dossier ni détail du transfert
+      ---
+      duration_ms: 52.612333
+      type: 'test'
+      ...
+    # Subtest: 6 — coordination régionale : suivi autorisé
+    ok 8 - 6 — coordination régionale : suivi autorisé
+      ---
+      duration_ms: 17.70483
+      type: 'test'
+      ...
+    # Subtest: 7 — questions composées et identifiants croisés
+    ok 9 - 7 — questions composées et identifiants croisés
+      ---
+      duration_ms: 66.025935
+      type: 'test'
+      ...
+    # Subtest: 8 — patient enregistré sans admission
+    ok 10 - 8 — patient enregistré sans admission
+      ---
+      duration_ms: 65.783463
+      type: 'test'
+      ...
+    # Subtest: 9 — patient encore sur civière, pas confondu avec un lit
+    ok 11 - 9 — patient encore sur civière, pas confondu avec un lit
+      ---
+      duration_ms: 20.820607
+      type: 'test'
+      ...
+    # Subtest: 10 — ancien lit réattribué ne prouve pas une admission actuelle
+    ok 12 - 10 — ancien lit réattribué ne prouve pas une admission actuelle
+      ---
+      duration_ms: 26.668386
+      type: 'test'
+      ...
+    # Subtest: 11 — capacité interhospitalière sans réservation automatique
+    ok 13 - 11 — capacité interhospitalière sans réservation automatique
+      ---
+      duration_ms: 129.100749
+      type: 'test'
+      ...
+    # Subtest: 12 — estimation, âge et durée réelle sont distincts
+    ok 14 - 12 — estimation, âge et durée réelle sont distincts
+      ---
+      duration_ms: 14.430598
+      type: 'test'
+      ...
+    # Subtest: écran de transfert : trois durées explicitement nommées
+    ok 15 - écran de transfert : trois durées explicitement nommées
+      ---
+      duration_ms: 1484.717252
+      type: 'test'
+      ...
+    # Subtest: 13 — référence identique : précision exigée, transfert explicite utilisable
+    ok 16 - 13 — référence identique : précision exigée, transfert explicite utilisable
+      ---
+      duration_ms: 50.873642
+      type: 'test'
+      ...
+    # Subtest: 14 — lectures sans écriture et garde-fous hors périmètre
+    ok 17 - 14 — lectures sans écriture et garde-fous hors périmètre
+      ---
+      duration_ms: 12.517672
+      type: 'test'
+      ...
+    # Subtest: module désactivé : le suivi ne contourne pas le verrou existant
+    ok 18 - module désactivé : le suivi ne contourne pas le verrou existant
+      ---
+      duration_ms: 20.956229
+      type: 'test'
+      ...
+    1..18
+ok 1 - Suivi OG interhospitalier : quatorze validations PostgreSQL et API
+  ---
+  duration_ms: 8947.761091
+  type: 'test'
+  ...
+1..1
+# tests 19
+# suites 0
+# pass 19
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 9174.482774

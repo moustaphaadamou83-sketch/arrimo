@@ -1,0 +1,5 @@
+Release active: release-a; précédente: aucune; base inchangée.
+Release active: release-c; précédente: releases/release-a; base inchangée.
+Retour applicatif réussi: releases/release-a; base inchangée, aucune restauration SQL.
+PASS: activation atomique, panne simulée, rollback, écritures conservées, base jamais restaurée.
+Échec santé après bascule; restauration du pointeur applicatif précédent.

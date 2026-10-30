@@ -1,0 +1,127 @@
+{
+  "date": "2026-10-29T07:26:20.024Z",
+  "type": "tests locaux sans PostgreSQL ni navigateur",
+  "sources_sha256": "7dd0d0caeffa05997bf1490a78309c9497fe4789598c29c28ee69aca542b7847",
+  "suites": [
+    {
+      "fichier": "environnements-pilote.test.cjs",
+      "reussis": 1,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "profils-pays.test.cjs",
+      "reussis": 15,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "sh-montants-devises.test.cjs",
+      "reussis": 5,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "sh-international.test.cjs",
+      "reussis": 6,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "sh-promotion-configuration.test.cjs",
+      "reussis": 6,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "sh-finances.test.cjs",
+      "reussis": 4,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "og-vocal.test.cjs",
+      "reussis": 6,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "sh-recette-garde.test.cjs",
+      "reussis": 8,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "sh-roles-validation.test.cjs",
+      "reussis": 4,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "bilingue.test.cjs",
+      "reussis": 5,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "og-correction.test.cjs",
+      "reussis": 17,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "serveur-test.test.cjs",
+      "reussis": 6,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "simulation-connecteurs.test.cjs",
+      "reussis": 46,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "priorites.test.cjs",
+      "reussis": 40,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "priorites-ui-contract.test.cjs",
+      "reussis": 11,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "configuration-operationnelle.test.cjs",
+      "reussis": 18,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "connecteurs-atomicite.test.cjs",
+      "reussis": 7,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "courriel-transport.test.cjs",
+      "reussis": 1,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "routage.test.cjs",
+      "reussis": 6,
+      "echecs": 0,
+      "ignores": 0
+    }
+  ],
+  "total": {
+    "reussis": 212,
+    "echecs": 0,
+    "ignores": 0,
+    "annules": 0
+  }
+}

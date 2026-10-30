@@ -1,0 +1,22 @@
+{
+  "sources_sha256": "06308964c9d53bbaeea041329356b2fa8aa0686b942930ef822ca9b9a46032c9",
+  "tests_integres": 95,
+  "suites": 10,
+  "tests_locaux": {
+    "reussis": 224,
+    "echecs": 0,
+    "ignores": 0,
+    "annules": 0
+  },
+  "migration": 21,
+  "services_publies": 6,
+  "coherence_hospitaliere": "4e5d1c1cfa9804d8925846f77762f09081daf77d7c3d002cadfce7a5eece339d",
+  "portail_public_abc_fr_en_verifie": true,
+  "liaisons_support_preservees": 41,
+  "sla_publics_configures": 0,
+  "notifications_sla_publiques_creees": 0,
+  "calendrier_sla": "24_7_minutes_ecoulees",
+  "courriels_sla_integres": false,
+  "horloge_escalades_controlee_en_test": true,
+  "cahier_integral_termine": false
+}

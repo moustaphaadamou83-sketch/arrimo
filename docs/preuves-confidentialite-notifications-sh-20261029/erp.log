@@ -1,0 +1,29 @@
+✔ migration ERP : version 6, rejouable sans effet, rôle Finance accepté (18748.375255ms)
+✔ sécurité : session, double authentification et matrice des rôles (147.314169ms)
+✔ tarification : grille de prix et taxes canadiennes (205.162194ms)
+✔ CRM : prospect, contact décideur, relance attribuée et notifiée (1566.530367ms)
+✔ devis : tarifs, taxes du Québec, approbation, envoi, acceptation et PDF (1830.084822ms)
+✔ contrat : préparation, document signé déposé, signature → projet, tâches et facturation (1895.529737ms)
+✔ projet et tâches : jalons, attribution notifiée, droits sur ses propres tâches, commentaires (895.291376ms)
+✔ hôpital D : créé depuis le CRM, relié en recette, import CSV et Excel, utilisateurs, modules (4370.698833ms)
+✔ formation : séance, participants issus des comptes Arrimo, présence et validation (3160.227999ms)
+✔ activation et Go Live : recette activée, structure transférée à la production de test, projet clos (4694.683798ms)
+✔ support : incident critique, délai de service, affectation, messages, résolution et historique (1465.722834ms)
+✔ facturation : frais uniques, abonnement, numérotation, paiements partiels, PDF, résumé (1188.844397ms)
+✔ contrat : renouvellement et résiliation journalisés (302.030527ms)
+✔ documents : chiffrés sur disque, versions, accès par catégorie, intégrité contrôlée (482.982751ms)
+✔ personnel : équipes avec chef, membres et notifications ciblées (86.582379ms)
+✔ hébergement : supervision des environnements et disponibilité sur 24 h (129.936211ms)
+✔ rapports : indicateurs par rôle et export CSV protégé contre les formules (1038.329353ms)
+✔ journal : chaque étape du parcours est tracée, et le journal reste immuable (24.477692ms)
+✔ référentiel international : route protégée, client non canadien et devise automatique (3017.681241ms)
+✔ Go Live : pannes successives à la création, aux civières et aux comptes, reprises sans doublon ni état incohérent (9992.755994ms)
+✔ Pilote Hôpital Test : client, équipe, structure, invitations, formation, OG vocal simulé, promotion et archivage (25896.616461ms)
+ℹ tests 21
+ℹ suites 0
+ℹ pass 21
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 82610.431143

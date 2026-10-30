@@ -1,0 +1,11 @@
+{
+  "src/sh/support-pj-migrations.js": "71b702b8288b5fc5e3ff410b6ae2b16e4f3bcf8499f4138144284e47b9e549ef",
+  "src/sh/portail-support.js": "20d80cb83945ebe8ec0a0190df3f22c066f248e21a0197a03dba0da8fb3f2c67",
+  "src/support-client.js": "057b35477820b461d9e986d2dd4be5023250ef37bfc90f5c521fab6797300441",
+  "src/sh/app.js": "790850fbfbefd74f822535b4fe2aa8b854a3d071ba39851b35921e30e4d86a34",
+  "src/app.js": "104376330062c49f4acb4f034428c87a4ce2e10cee6eea49e12e3917da179a8e",
+  "src/sh/permissions.js": "d8157b159b73d0204cf7b38a45d7bc5de7796511873cccdbb03daf99d14ebe7d",
+  "public/support-client.js": "a858182c01c14846c7d34bb89685499b68f3127785f8ae9e055dce0a2c160a62",
+  "public-sh/erp.js": "0346681c74f164fc2e99878240fdfff9faf9cbe4c296f89c0ce678255d936ef6",
+  "tests/sh-portail-support.test.cjs": "d883d4a2257f7b36e53501b6ace06d4db91cffcd604305de0dac40edc0dcd3fa"
+}

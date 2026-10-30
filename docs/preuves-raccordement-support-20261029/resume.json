@@ -1,0 +1,54 @@
+{
+  "sources_sha256": "14b954e019776f9a4c504dedd743eb740b67b012bec852d121659cbff8529737",
+  "integration": {
+    "tests": 152,
+    "reussis": 152,
+    "suites": 10,
+    "echecs": 0,
+    "ignores": 0,
+    "annules": 0
+  },
+  "locaux": {
+    "reussis": 221,
+    "echecs": 0,
+    "ignores": 0,
+    "annules": 0
+  },
+  "publication": {
+    "services": 6,
+    "statut": "publie",
+    "migration_sh": 20
+  },
+  "raccordement": {
+    "etablissements": 41,
+    "sources": [
+      {
+        "cible": "demo",
+        "etablissements_raccordes": 20
+      },
+      {
+        "cible": "demo_abc",
+        "etablissements_raccordes": 21
+      },
+      {
+        "cible": "recette",
+        "etablissements_raccordes": 0
+      }
+    ],
+    "cles_distinctes": true,
+    "aucune_ecriture_hospitaliere": true
+  },
+  "navigateur_public": {
+    "comptes": 3,
+    "formulaire_fr_en": true,
+    "isolation_verifiee": true,
+    "tickets_publics_crees": 0
+  },
+  "coherence": {
+    "valide": true,
+    "application_sha256": "54b12ac67622d4811b2472d9c644f59988e46c3ee33112fcef7336c0347bc6e9"
+  },
+  "sla_contractuels_realises": false,
+  "smtp_reel_valide": false,
+  "cahier_integral_termine": false
+}

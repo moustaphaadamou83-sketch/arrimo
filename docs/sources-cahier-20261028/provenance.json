@@ -1,0 +1,41 @@
+[
+  {
+    "fichier": "CAHIER_ULTIME_SH_OG.md",
+    "source": "/root/.codex/sessions/2026/10/28/rollout-2026-10-28T20-01-29-01a183e3-896d-7e83-9700-ae7e24167ba2.jsonl",
+    "ligne_jsonl": 197,
+    "type": "message_utilisateur",
+    "sha256_texte_original": "1e503479af496aa0f0e2638c6e596ec1f39ceea3f71bb8b3bdeba8385ff952df",
+    "sha256_fichier": "5196895ae4e4412d5e28db9d62e84c4b47f4b8d4b206dbc993bc4ce73b97a5c6"
+  },
+  {
+    "fichier": "COMPLEMENT_PARAMETRES_ACCES.md",
+    "source": "/root/.codex/sessions/2026/10/28/rollout-2026-10-28T20-01-29-01a183e3-896d-7e83-9700-ae7e24167ba2.jsonl",
+    "ligne_jsonl": 314,
+    "type": "message_utilisateur",
+    "sha256_texte_original": "d230e2e175ad432b4c33f70b1643887cd12cbfe13756bbe6bc5451409fd4360e",
+    "sha256_fichier": "344327435a8d148eff9bccc9701501576c8de75e3e90f0f728e80d0ac6ef7c8b"
+  },
+  {
+    "fichier": "COMPLEMENT_PRESENCE.md",
+    "source": "/root/.codex/sessions/2026/10/28/rollout-2026-10-28T20-01-29-01a183e3-896d-7e83-9700-ae7e24167ba2.jsonl",
+    "ligne_jsonl": 327,
+    "type": "message_utilisateur",
+    "sha256_texte_original": "8e053a0b2268b7bad45c8d71ddaf03dc8df4dc5107f09fd820206c5fe609d5c4",
+    "sha256_fichier": "f5fc085e1c5b30d50469b9edc57206b5e627cde26d563dcfd9bb4a79075833cd"
+  },
+  {
+    "fichier": "COMPLEMENT_BILINGUISME.md",
+    "source": "/root/.codex/sessions/2026/10/28/rollout-2026-10-28T20-01-29-01a183e3-896d-7e83-9700-ae7e24167ba2.jsonl",
+    "ligne_jsonl": 775,
+    "type": "message_utilisateur",
+    "sha256_texte_original": "1d256aef6cd5b364bc7b8dafe9698a36128b36c722801bdad397bff547e2cc9b",
+    "sha256_fichier": "e6e53931751be20e6452a125d735f4bdcc7b1b8bfddc466fb3aa5a6c889f147e"
+  },
+  {
+    "fichier": "DECOUPAGE_SIX_LOTS.md",
+    "source": "/root/.codex/sessions/2026/10/28/rollout-2026-10-28T20-01-29-01a183e3-896d-7e83-9700-ae7e24167ba2.jsonl",
+    "ligne_jsonl": 1434,
+    "type": "proposition_assistant_dans_historique",
+    "sha256_fichier": "9c4562cc36745455c8b608ce24c403674701b281436b5323efdc9ab5b7301515"
+  }
+]

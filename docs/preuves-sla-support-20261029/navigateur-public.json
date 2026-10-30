@@ -1,0 +1,37 @@
+{
+  "valide": true,
+  "resultats": [
+    {
+      "compte": "a",
+      "etablissement_id": 1,
+      "connexion_normale": true,
+      "portail_fr_en": true,
+      "formulaire_visible": true,
+      "lecture_tickets": true,
+      "erreurs_javascript": 0,
+      "aucune_ecriture_metier": true
+    },
+    {
+      "compte": "b",
+      "etablissement_id": 2,
+      "connexion_normale": true,
+      "portail_fr_en": true,
+      "formulaire_visible": true,
+      "lecture_tickets": true,
+      "erreurs_javascript": 0,
+      "aucune_ecriture_metier": true
+    },
+    {
+      "compte": "c",
+      "etablissement_id": 5,
+      "connexion_normale": true,
+      "portail_fr_en": true,
+      "formulaire_visible": true,
+      "lecture_tickets": true,
+      "erreurs_javascript": 0,
+      "aucune_ecriture_metier": true
+    }
+  ],
+  "isolation_verifiee": true,
+  "tickets_publics_crees": 0
+}

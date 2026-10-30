@@ -1,0 +1,67 @@
+{
+  "date": "2026-10-26T21:26:49.482Z",
+  "type": "tests locaux sans PostgreSQL ni navigateur",
+  "sources_sha256": "910cae520e867fdfe0c7f14c2df648bb78a5b79338e79c6b148a95de97cb9f4d",
+  "suites": [
+    {
+      "fichier": "og-correction.test.cjs",
+      "reussis": 17,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "serveur-test.test.cjs",
+      "reussis": 6,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "simulation-connecteurs.test.cjs",
+      "reussis": 46,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "priorites.test.cjs",
+      "reussis": 40,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "priorites-ui-contract.test.cjs",
+      "reussis": 11,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "configuration-operationnelle.test.cjs",
+      "reussis": 18,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "connecteurs-atomicite.test.cjs",
+      "reussis": 7,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "courriel-transport.test.cjs",
+      "reussis": 1,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "routage.test.cjs",
+      "reussis": 6,
+      "echecs": 0,
+      "ignores": 0
+    }
+  ],
+  "total": {
+    "reussis": 152,
+    "echecs": 0,
+    "ignores": 0,
+    "annules": 0
+  }
+}

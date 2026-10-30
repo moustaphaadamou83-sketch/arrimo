@@ -1,0 +1,18 @@
+▶ portail client : serveurs hospitalier et SH, isolation, messages publics et navigateur
+  ✔ clé de service, environnement et session obligatoires (47.864446ms)
+  ✔ création rattachée au bon établissement et auteur imposé côté serveur (78.238597ms)
+  ✔ échanges internes masqués, réponses publiques et résolution visibles (159.500919ms)
+  ✔ publication explicite d’un ticket interne et masquage immédiat (68.413996ms)
+  ✔ numéros concurrents uniques et au-delà de 9999 (106.88223ms)
+  ✔ affectations et notifications employés : aucun titre de ticket reçu hors périmètre (150.376903ms)
+  ✔ pagination : tous les tickets visibles une fois, aucun ticket voisin, curseurs stricts (105.707532ms)
+  ✔ navigateur mobile : création, lecture et réponse FR/EN sans erreur (3894.131655ms)
+✔ portail client : serveurs hospitalier et SH, isolation, messages publics et navigateur (7370.833664ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 7457.546935

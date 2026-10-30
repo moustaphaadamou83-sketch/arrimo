@@ -1,0 +1,13 @@
+✔ manifest : configuration privée, traversée et inventaire incomplet refusés (6.327993ms)
+✔ empreinte indépendante de l’ordre des fichiers (0.920457ms)
+✔ release et assets publics concordants : candidate reconnue (2.445992ms)
+✔ versions divergentes : refus même si la santé est verte (5.752459ms)
+✔ cible hors périmètre ou requête échouée : contrôle en échec (1.107977ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 56.437659

@@ -1,0 +1,74 @@
+{
+  "dossier": "/root/arrimo-sh-erp/.local/preuves-sh-lot1/navigateur-public-1793294726581",
+  "date": "2026-10-29T17:26:54.310Z",
+  "url": "https://demo.arrimo.senseafri.com",
+  "resultats": [
+    {
+      "compte": "a",
+      "vues_anglaises": [
+        "copilote",
+        "reseau",
+        "national",
+        "lits",
+        "urgence",
+        "admissions",
+        "transferts",
+        "nettoyage",
+        "vigilance",
+        "nsa",
+        "indicateurs",
+        "journal",
+        "support",
+        "params"
+      ],
+      "og_fr_en": true,
+      "permissions_verifiees": true,
+      "ecritures_metier_bloquees": []
+    },
+    {
+      "compte": "b",
+      "vues_anglaises": [
+        "copilote",
+        "reseau",
+        "national",
+        "lits",
+        "urgence",
+        "admissions",
+        "transferts",
+        "nettoyage",
+        "vigilance",
+        "nsa",
+        "indicateurs",
+        "journal",
+        "support",
+        "params"
+      ],
+      "og_fr_en": true,
+      "permissions_verifiees": true,
+      "ecritures_metier_bloquees": []
+    },
+    {
+      "compte": "c",
+      "vues_anglaises": [
+        "copilote",
+        "reseau",
+        "national",
+        "lits",
+        "urgence",
+        "admissions",
+        "transferts",
+        "nettoyage",
+        "vigilance",
+        "nsa",
+        "indicateurs",
+        "journal",
+        "support",
+        "params"
+      ],
+      "og_fr_en": true,
+      "permissions_verifiees": true,
+      "ecritures_metier_bloquees": []
+    }
+  ],
+  "valide": true
+}

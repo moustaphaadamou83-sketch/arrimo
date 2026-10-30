@@ -1,0 +1,30 @@
+▶ Suivi OG interhospitalier : quatorze validations PostgreSQL et API
+  ✔ réservation : pas de patient annoncé admis ou arrivé (33.08471ms)
+  ✔ départ confirmé : transport sans réception inventée (22.008087ms)
+  ✔ 1 — A retrouve le patient et son admission après transfert (20.884633ms)
+  ✔ 2 — C conserve le suivi de son patient transféré (20.256593ms)
+  ✔ 3 — lit SI-108 occupé, service et chambre exacts (25.375624ms)
+  ✔ 4 — C suit directement le numéro du transfert (20.067319ms)
+  ✔ 5 — B ne voit aucun dossier ni détail du transfert (40.611939ms)
+  ✔ 6 — coordination régionale : suivi autorisé (17.082988ms)
+  ✔ bilingue : questions FR/EN, réponses choisies FR/EN et mêmes permissions A/B/C (363.529428ms)
+  ✔ mode vocal : contrôles navigateur simulés, réponse issue de la vraie API OG (3206.832285ms)
+  ✔ 7 — questions composées et identifiants croisés (70.221695ms)
+  ✔ 8 — patient enregistré sans admission (104.726622ms)
+  ✔ 9 — patient encore sur civière, pas confondu avec un lit (25.494455ms)
+  ✔ 10 — ancien lit réattribué ne prouve pas une admission actuelle (32.545887ms)
+  ✔ 11 — capacité interhospitalière sans réservation automatique (179.062453ms)
+  ✔ 12 — estimation, âge et durée réelle sont distincts (25.431338ms)
+  ✔ écran de transfert : trois durées explicitement nommées (1322.382859ms)
+  ✔ 13 — référence identique : précision exigée, transfert explicite utilisable (42.056953ms)
+  ✔ 14 — lectures sans écriture et garde-fous hors périmètre (11.699315ms)
+  ✔ module désactivé : le suivi ne contourne pas le verrou existant (18.488647ms)
+✔ Suivi OG interhospitalier : quatorze validations PostgreSQL et API (20393.171125ms)
+ℹ tests 21
+ℹ suites 0
+ℹ pass 21
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 20465.298592

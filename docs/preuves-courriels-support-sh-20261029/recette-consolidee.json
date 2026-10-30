@@ -1,0 +1,54 @@
+{
+  "statut": "valide",
+  "sources_sha256": "104310da295d5fe07f5400032462fc6e930194345b298c45966d7e4ef78c0cf5",
+  "tests": 60,
+  "suites": [
+    {
+      "suite": "portail",
+      "base": "arrimo_sh_lot1_test_20261029191754_478e4e_portail",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null,
+      "tests": 11
+    },
+    {
+      "suite": "sla",
+      "base": "arrimo_sh_lot1_test_20261029191754_478e4e_sla",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null,
+      "tests": 8
+    },
+    {
+      "suite": "acces",
+      "base": "arrimo_sh_lot1_test_20261029190736_ac91ae_acces",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null,
+      "tests": 27
+    },
+    {
+      "suite": "parite",
+      "base": "arrimo_sh_lot1_test_20261029191149_a0e4bc_parite",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null,
+      "tests": 8
+    },
+    {
+      "suite": "raccordement",
+      "base": "arrimo_sh_lot1_test_20261029191253_f804c3_raccordement",
+      "reussi": true,
+      "statut": 0,
+      "erreur": null,
+      "tests": 6
+    }
+  ],
+  "rapports": [
+    "/root/arrimo-sh-erp/.local/preuves-sh-lot1/20261029191754_478e4e/rapport.json",
+    "/root/arrimo-sh-erp/.local/preuves-sh-lot1/20261029190736_ac91ae/rapport.json",
+    "/root/arrimo-sh-erp/.local/preuves-sh-lot1/20261029191149_a0e4bc/rapport.json",
+    "/root/arrimo-sh-erp/.local/preuves-sh-lot1/20261029191253_f804c3/rapport.json"
+  ],
+  "donnees_publiques_modifiees": false
+}

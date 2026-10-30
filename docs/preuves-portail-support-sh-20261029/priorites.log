@@ -1,0 +1,19 @@
+▶ recette réelle : migration, validation professionnelle, concurrence et admission pédiatrique
+  ✔ migration répétable : demande préservée et aucune validation rétroactive (23.434075ms)
+  ✔ habilitation humaine et référentiel approuvé (43.319084ms)
+  ✔ deux validations simultanées : une réussite, un conflit, un seul journal (17.960484ms)
+  ✔ isolation interétablissements : refus sans changement (3.711597ms)
+  ✔ changement de référentiel concurrent : une version publiée, revalidation explicite (37.079656ms)
+  ✔ compatibilité : lit adulte écarté pour demande pédiatrique (56.239585ms)
+  ✔ réservation concurrente : un lit, une seule demande assignée (46.08031ms)
+  ✔ admission depuis Lits : même demande clôturée et lit occupé (39.723303ms)
+  ✔ connecteur : événement neuf simultané appliqué une seule fois (77.015476ms)
+✔ recette réelle : migration, validation professionnelle, concurrence et admission pédiatrique (2094.929ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2172.64968

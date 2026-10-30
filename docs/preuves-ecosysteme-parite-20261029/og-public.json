@@ -1,0 +1,102 @@
+{
+  "rapport": "/root/arrimo-sh-erp/.local/preuves-sh-lot1/bilingue-public-1793294608131.json",
+  "valide": true,
+  "resultats": [
+    {
+      "compte": "a",
+      "langue_interface": "fr",
+      "langue_question": "fr",
+      "donnees_correctes": true,
+      "langue_correcte": true,
+      "extrait": "Patient P-43267 — transfert TR-00067 : Hôpital C — Sainte-Aurore → Hôpital A — Val-des-Pins.\nIdentifiant de suivi : admission n° 107.\nService demandé : Soins intensifs.\nStatut du transfert : Reçu.\nDemande d’admission à l’origine : transferee.\nSituation actuell"
+    },
+    {
+      "compte": "a",
+      "langue_interface": "fr",
+      "langue_question": "en",
+      "donnees_correctes": true,
+      "langue_correcte": true,
+      "extrait": "Patient P-43267 — transfert TR-00067 : Hôpital C — Sainte-Aurore → Hôpital A — Val-des-Pins.\nIdentifiant de suivi : admission n° 107.\nService demandé : Soins intensifs.\nStatut du transfert : Reçu.\nDemande d’admission à l’origine : transferee.\nSituation actuell"
+    },
+    {
+      "compte": "a",
+      "langue_interface": "en",
+      "langue_question": "fr",
+      "donnees_correctes": true,
+      "langue_correcte": true,
+      "extrait": "Patient P-43267 — transfer TR-00067: Hospital C — Sainte-Aurore → Hospital A — Val-des-Pins.\nTracking identifier: admission #107.\nRequested department: Intensive care.\nTransfer status: Received.\nAdmission request at origin: transferred.\nVerified current locati"
+    },
+    {
+      "compte": "a",
+      "langue_interface": "en",
+      "langue_question": "en",
+      "donnees_correctes": true,
+      "langue_correcte": true,
+      "extrait": "Patient P-43267 — transfer TR-00067: Hospital C — Sainte-Aurore → Hospital A — Val-des-Pins.\nTracking identifier: admission #107.\nRequested department: Intensive care.\nTransfer status: Received.\nAdmission request at origin: transferred.\nVerified current locati"
+    },
+    {
+      "compte": "b",
+      "langue_interface": "fr",
+      "langue_question": "fr",
+      "donnees_correctes": true,
+      "langue_correcte": true,
+      "extrait": "Aucune situation active accessible pour P-43267 dans Hôpital B — Mont-Clair. Une absence de résultat ne signifie pas que le patient n’existe pas ailleurs."
+    },
+    {
+      "compte": "b",
+      "langue_interface": "fr",
+      "langue_question": "en",
+      "donnees_correctes": true,
+      "langue_correcte": true,
+      "extrait": "Aucune situation active accessible pour P-43267 dans Hôpital B — Mont-Clair. Une absence de résultat ne signifie pas que le patient n’existe pas ailleurs."
+    },
+    {
+      "compte": "b",
+      "langue_interface": "en",
+      "langue_question": "fr",
+      "donnees_correctes": true,
+      "langue_correcte": true,
+      "extrait": "No accessible active record for P-43267 at Hospital B — Mont-Clair. No result does not mean the patient does not exist elsewhere."
+    },
+    {
+      "compte": "b",
+      "langue_interface": "en",
+      "langue_question": "en",
+      "donnees_correctes": true,
+      "langue_correcte": true,
+      "extrait": "No accessible active record for P-43267 at Hospital B — Mont-Clair. No result does not mean the patient does not exist elsewhere."
+    },
+    {
+      "compte": "c",
+      "langue_interface": "fr",
+      "langue_question": "fr",
+      "donnees_correctes": true,
+      "langue_correcte": true,
+      "extrait": "Patient P-43267 — transfert TR-00067 : Hôpital C — Sainte-Aurore → Hôpital A — Val-des-Pins.\nIdentifiant de suivi : admission n° 107.\nService demandé : Soins intensifs.\nStatut du transfert : Reçu.\nDemande d’admission à l’origine : transferee.\nSituation actuell"
+    },
+    {
+      "compte": "c",
+      "langue_interface": "fr",
+      "langue_question": "en",
+      "donnees_correctes": true,
+      "langue_correcte": true,
+      "extrait": "Patient P-43267 — transfert TR-00067 : Hôpital C — Sainte-Aurore → Hôpital A — Val-des-Pins.\nIdentifiant de suivi : admission n° 107.\nService demandé : Soins intensifs.\nStatut du transfert : Reçu.\nDemande d’admission à l’origine : transferee.\nSituation actuell"
+    },
+    {
+      "compte": "c",
+      "langue_interface": "en",
+      "langue_question": "fr",
+      "donnees_correctes": true,
+      "langue_correcte": true,
+      "extrait": "Patient P-43267 — transfer TR-00067: Hospital C — Sainte-Aurore → Hospital A — Val-des-Pins.\nTracking identifier: admission #107.\nRequested department: Intensive care.\nTransfer status: Received.\nAdmission request at origin: transferred.\nVerified current locati"
+    },
+    {
+      "compte": "c",
+      "langue_interface": "en",
+      "langue_question": "en",
+      "donnees_correctes": true,
+      "langue_correcte": true,
+      "extrait": "Patient P-43267 — transfer TR-00067: Hospital C — Sainte-Aurore → Hospital A — Val-des-Pins.\nTracking identifier: admission #107.\nRequested department: Intensive care.\nTransfer status: Received.\nAdmission request at origin: transferred.\nVerified current locati"
+    }
+  ]
+}

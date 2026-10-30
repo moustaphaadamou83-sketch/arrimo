@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-29",
+  "head": "da57f137334e497686dcc24aecce8815d5bc9e94",
+  "sources_sha256": "44e237439e16f0c4b966508c17383fea2b4e76505c6a42a3b9e5889d537ea147",
+  "sources_identiques_aux_tests": true,
+  "tests_node": {
+    "reussis": 174,
+    "echecs": 0,
+    "ignores": 0,
+    "annules": 0
+  },
+  "tests_smtp_simules": {
+    "reussis": 6,
+    "echecs": 0
+  },
+  "recette_postgres_http_navigateur": "bloquee_avant_SQL",
+  "publication": false,
+  "migration_publique": false,
+  "pret_premier_pilote": false,
+  "enonces_matrice": 466
+}

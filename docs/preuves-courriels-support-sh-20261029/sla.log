@@ -1,0 +1,17 @@
+▶ SLA contractuels : versions, échéances, escalades et droits réels
+  ✔ contrat de l’autre établissement, règle invalide, rôle non autorisé et destinataire voisin refusés (316.580472ms)
+  ✔ tickets interne et client : même SLA figé et aucune donnée financière exposée (214.620578ms)
+  ✔ nouvelle version et priorité : anciens engagements conservés, écritures directes contrôlées (213.945769ms)
+  ✔ escalades réelles PostgreSQL avec horloge contrôlée : concurrence, unicité et isolation des notifications (206.246737ms)
+  ✔ prise en charge, résolution et réouverture : nouvelle génération sans effacer l’historique (243.227317ms)
+  ✔ révocation du destinataire et lot de plus de cent tickets : repli administratif et absence de famine (1493.663722ms)
+  ✔ interface SH : formulaire SLA, versionnement et traduction anglaise (4294.199598ms)
+✔ SLA contractuels : versions, échéances, escalades et droits réels (11673.798659ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 11776.646008

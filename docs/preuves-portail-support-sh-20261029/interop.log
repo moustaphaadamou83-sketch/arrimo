@@ -1,0 +1,19 @@
+▶ interopérabilité fictive : parcours réel PostgreSQL et concurrence
+  ✔ désordre : demande conservée sans effet avant arrivée (20.838818ms)
+  ✔ même arrivée simultanée : une application et un accusé de doublon (69.478839ms)
+  ✔ priorité humaine, attribution pédiatrique, admission et civière au nettoyage (111.514272ms)
+  ✔ congé prévu puis confirmé ne libère pas le lit ; départ et nettoyage le libèrent (167.098996ms)
+  ✔ deux connecteurs concurrents demandent le même lit : une seule réservation (91.68776ms)
+  ✔ transfert fictif : départ et réception gardent les étapes métier (358.767984ms)
+  ✔ isolation : clé seule, mauvaise correspondance et acteur hors établissement refusés (18.412135ms)
+  ✔ OG répond depuis les événements synchronisés autorisés et leur fraîcheur (88.598523ms)
+  ✔ API réelle : session obligatoire, clé et compte limités au même établissement (490.1585ms)
+✔ interopérabilité fictive : parcours réel PostgreSQL et concurrence (3359.99743ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3454.152992

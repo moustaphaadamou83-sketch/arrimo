@@ -1,0 +1,133 @@
+{
+  "date": "2026-10-29T17:30:32.929Z",
+  "type": "tests locaux sans PostgreSQL ni navigateur",
+  "sources_sha256": "379c026138e4fd7d54285230c29f2cdde9074570ef124deec3c80038599b15e6",
+  "suites": [
+    {
+      "fichier": "coherence-applicative.test.cjs",
+      "reussis": 5,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "environnements-pilote.test.cjs",
+      "reussis": 1,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "profils-pays.test.cjs",
+      "reussis": 15,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "sh-montants-devises.test.cjs",
+      "reussis": 5,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "sh-international.test.cjs",
+      "reussis": 6,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "sh-promotion-configuration.test.cjs",
+      "reussis": 6,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "sh-finances.test.cjs",
+      "reussis": 4,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "og-vocal.test.cjs",
+      "reussis": 6,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "sh-recette-garde.test.cjs",
+      "reussis": 8,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "sh-roles-validation.test.cjs",
+      "reussis": 4,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "bilingue.test.cjs",
+      "reussis": 5,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "og-correction.test.cjs",
+      "reussis": 17,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "serveur-test.test.cjs",
+      "reussis": 6,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "simulation-connecteurs.test.cjs",
+      "reussis": 46,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "priorites.test.cjs",
+      "reussis": 40,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "priorites-ui-contract.test.cjs",
+      "reussis": 11,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "configuration-operationnelle.test.cjs",
+      "reussis": 18,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "connecteurs-atomicite.test.cjs",
+      "reussis": 7,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "courriel-transport.test.cjs",
+      "reussis": 1,
+      "echecs": 0,
+      "ignores": 0
+    },
+    {
+      "fichier": "routage.test.cjs",
+      "reussis": 6,
+      "echecs": 0,
+      "ignores": 0
+    }
+  ],
+  "total": {
+    "reussis": 217,
+    "echecs": 0,
+    "ignores": 0,
+    "annules": 0
+  }
+}

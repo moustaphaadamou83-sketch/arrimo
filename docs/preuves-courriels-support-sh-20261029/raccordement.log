@@ -1,0 +1,15 @@
+▶ raccordement support : même code dans deux bases, liens SH et parcours client réel
+  ✔ un établissement sans liaison est annoncé indisponible, puis relié via SH sans création hospitalière (1700.747295ms)
+  ✔ tickets homonymes séparés par cible, identité client imposée, aucun accès croisé (215.461639ms)
+  ✔ clés échangées ou réutilisées refusées, cible invalide non activable (39.706191ms)
+  ✔ révocation du lien et panne du service affichées sans accès résiduel (96.735457ms)
+  ✔ navigateur connecté : création, réponse publique et traduction FR/EN (6217.706006ms)
+✔ raccordement support : même code dans deux bases, liens SH et parcours client réel (14316.860894ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 14413.927568

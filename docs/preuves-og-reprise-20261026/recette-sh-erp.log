@@ -1,0 +1,124 @@
+TAP version 13
+# Subtest: migration ERP : version 6, rejouable sans effet, rôle Finance accepté
+ok 1 - migration ERP : version 6, rejouable sans effet, rôle Finance accepté
+  ---
+  duration_ms: 5132.997315
+  type: 'test'
+  ...
+# Subtest: sécurité : session, double authentification et matrice des rôles
+ok 2 - sécurité : session, double authentification et matrice des rôles
+  ---
+  duration_ms: 91.960903
+  type: 'test'
+  ...
+# Subtest: tarification : grille de prix et taxes canadiennes
+ok 3 - tarification : grille de prix et taxes canadiennes
+  ---
+  duration_ms: 86.131786
+  type: 'test'
+  ...
+# Subtest: CRM : prospect, contact décideur, relance attribuée et notifiée
+ok 4 - CRM : prospect, contact décideur, relance attribuée et notifiée
+  ---
+  duration_ms: 252.434435
+  type: 'test'
+  ...
+# Subtest: devis : tarifs, taxes du Québec, approbation, envoi, acceptation et PDF
+ok 5 - devis : tarifs, taxes du Québec, approbation, envoi, acceptation et PDF
+  ---
+  duration_ms: 672.595712
+  type: 'test'
+  ...
+# Subtest: contrat : préparation, document signé déposé, signature → projet, tâches et facturation
+ok 6 - contrat : préparation, document signé déposé, signature → projet, tâches et facturation
+  ---
+  duration_ms: 493.333763
+  type: 'test'
+  ...
+# Subtest: projet et tâches : jalons, attribution notifiée, droits sur ses propres tâches, commentaires
+ok 7 - projet et tâches : jalons, attribution notifiée, droits sur ses propres tâches, commentaires
+  ---
+  duration_ms: 184.260858
+  type: 'test'
+  ...
+# Subtest: hôpital D : créé depuis le CRM, relié en recette, import CSV et Excel, utilisateurs, modules
+ok 8 - hôpital D : créé depuis le CRM, relié en recette, import CSV et Excel, utilisateurs, modules
+  ---
+  duration_ms: 1687.972583
+  type: 'test'
+  ...
+# Subtest: formation : séance, participants issus des comptes Arrimo, présence et validation
+ok 9 - formation : séance, participants issus des comptes Arrimo, présence et validation
+  ---
+  duration_ms: 808.301119
+  type: 'test'
+  ...
+# Subtest: activation et Go Live : recette activée, structure transférée à la production de test, projet clos
+ok 10 - activation et Go Live : recette activée, structure transférée à la production de test, projet clos
+  ---
+  duration_ms: 1515.651826
+  type: 'test'
+  ...
+# Subtest: support : incident critique, délai de service, affectation, messages, résolution et historique
+ok 11 - support : incident critique, délai de service, affectation, messages, résolution et historique
+  ---
+  duration_ms: 165.948047
+  type: 'test'
+  ...
+# Subtest: facturation : frais uniques, abonnement, numérotation, paiements partiels, PDF, résumé
+ok 12 - facturation : frais uniques, abonnement, numérotation, paiements partiels, PDF, résumé
+  ---
+  duration_ms: 521.456844
+  type: 'test'
+  ...
+# Subtest: contrat : renouvellement et résiliation journalisés
+ok 13 - contrat : renouvellement et résiliation journalisés
+  ---
+  duration_ms: 42.024496
+  type: 'test'
+  ...
+# Subtest: documents : chiffrés sur disque, versions, accès par catégorie, intégrité contrôlée
+ok 14 - documents : chiffrés sur disque, versions, accès par catégorie, intégrité contrôlée
+  ---
+  duration_ms: 125.503536
+  type: 'test'
+  ...
+# Subtest: personnel : équipes avec chef, membres et notifications ciblées
+ok 15 - personnel : équipes avec chef, membres et notifications ciblées
+  ---
+  duration_ms: 53.870831
+  type: 'test'
+  ...
+# Subtest: hébergement : supervision des environnements et disponibilité sur 24 h
+ok 16 - hébergement : supervision des environnements et disponibilité sur 24 h
+  ---
+  duration_ms: 42.172432
+  type: 'test'
+  ...
+# Subtest: rapports : indicateurs par rôle et export CSV protégé contre les formules
+ok 17 - rapports : indicateurs par rôle et export CSV protégé contre les formules
+  ---
+  duration_ms: 103.365385
+  type: 'test'
+  ...
+# Subtest: journal : chaque étape du parcours est tracée, et le journal reste immuable
+ok 18 - journal : chaque étape du parcours est tracée, et le journal reste immuable
+  ---
+  duration_ms: 8.193646
+  type: 'test'
+  ...
+# Subtest: Go Live : pannes successives à la création, aux civières et aux comptes, reprises sans doublon ni état incohérent
+ok 19 - Go Live : pannes successives à la création, aux civières et aux comptes, reprises sans doublon ni état incohérent
+  ---
+  duration_ms: 2055.579657
+  type: 'test'
+  ...
+1..19
+# tests 19
+# suites 0
+# pass 19
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 15445.065604
