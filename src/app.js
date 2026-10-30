@@ -23,13 +23,14 @@ const entier = (v, nom) => {
   return n;
 };
 
-function creerApp(pool) {
+function creerApp(pool, options = {}) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 'loopback');   // derrière Nginx : l'adresse du client vient de X-Forwarded-For
   app.use('/api', limiteur());
   // Import CSV : jusqu'à 1 Mo (même limite que Nginx) ; ailleurs 50 Ko
   app.use(['/api/admin/import', '/api/sh/import'], express.json({ limit: '1mb' }));
+  app.use('/api/support', express.json({ limit: '15mb' }));
   app.use(express.json({ limit: '50kb' }));
   app.use((req, res, next) => {
     res.set({
@@ -92,6 +93,8 @@ function creerApp(pool) {
   const CHAMPS_LEGAUX = ['entite', 'adresse', 'responsable', 'contact', 'duree_comptes', 'duree_journaux', 'duree_references', 'hebergeur', 'entente'];
   api.get('/public', route(async (req) => ({
     demo: env.estDemo(),
+    og_vocal:true,
+    og_vocal_fictif:env.vocalFictifAutorise(),
     environnement: env.environnement(),
     mot_de_passe_oublie: courriel.actif(),
     legal: Object.fromEntries(CHAMPS_LEGAUX.map((k) => [k, process.env[`ARRIMO_LEGAL_${k.toUpperCase()}`] || null]).filter(([, v]) => v)),
@@ -175,6 +178,7 @@ function creerApp(pool) {
   });
 
   const simulation = require('./simulation-connecteurs');
+  require('./support-client').brancher(api,pool,route,{env:options.supportEnv||process.env});
   api.put('/connecteurs/simulation/:id/configuration', route((req) => simulation.configurer(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   api.post('/connecteurs/simulation/correspondances', route(async (req) => simulation.correspondance(pool, req.utilisateur, await cx.identifier(pool, req.get('x-connecteur-key')), req.body)));
   api.post('/connecteurs/simulation/evenements', route(async (req, res) => {
@@ -197,7 +201,7 @@ function creerApp(pool) {
   api.get('/moi', route(async (req) => {
     const u = req.utilisateur;
     const { rows } = await pool.query(
-      `SELECT e.id, e.code, e.nom, e.ville, e.partage, e.module_actif, e.config_id, e.rayon_alerte_km, e.modules, e.vocation,
+      `SELECT e.id, e.code, e.nom, e.ville, e.partage, e.module_actif, e.config_id, e.rayon_alerte_km, e.modules, e.vocation, e.latitude, e.longitude,
               ARRAY(SELECT DISTINCT l.type_id FROM lits l WHERE l.etablissement_id = e.id) AS types_presents
          FROM etablissements e
         WHERE e.actif AND ($1 OR e.id = ANY($2::int[]))
@@ -207,7 +211,7 @@ function creerApp(pool) {
          FROM config_pays c LEFT JOIN types_unite t ON t.config_id = c.id
         WHERE c.id = ANY($1::int[]) GROUP BY c.id`, [[...new Set(rows.map((e) => e.config_id))]]);
     return { utilisateur: { id: u.id, nom: u.nom, email: u.email, role: u.role, admin: u.admin, gestionnaire: u.gestionnaire,
-      totp_actif: u.totp_actif, mdp_temporaire: u.mdp_temporaire, premiers_pas_vus: u.premiers_pas_vus },
+      totp_actif: u.totp_actif, mdp_temporaire: u.mdp_temporaire, premiers_pas_vus: u.premiers_pas_vus, apparence: u.apparence || 'automatique' },
     etablissements: rows, configs: configs.rows, demo: env.estDemo(), environnement: env.environnement(),
     patients_fictifs: ['demo', 'recette'].includes(env.environnement()) || process.env.ARRIMO_PATIENTS_FICTIFS === '1' };
   }));
@@ -318,6 +322,14 @@ function creerApp(pool) {
     entier(req.body.vers_id, 'vers_id'), req.body.version)));
 
   /* ---------- file d'admission ---------- */
+  const ogConfiguration = require('./og-configuration');
+  api.get('/og/configuration', route((req) => ogConfiguration.configuration(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
+  api.put('/og/configuration', route((req) => ogConfiguration.configurer(pool, req.utilisateur, entier(req.body.etablissement_id, 'etablissement_id'), req.body)));
+  api.post('/og/documents/lire', route((req) => require('./og-documents').lireDocument(pool, req.utilisateur, entier(req.body.etablissement_id, 'etablissement_id'), req.body)));
+  const ogActions = require('./og-actions');
+  api.post('/og/actions', route((req) => ogActions.preparer(pool, req.utilisateur, entier(req.body.etablissement_id, 'etablissement_id'), req.body)));
+  api.post('/og/actions/:id/confirmer', route((req) => ogActions.confirmer(pool, req.utilisateur, entier(req.body.etablissement_id, 'etablissement_id'), String(req.params.id), req.body)));
+  api.post('/og/actions/:id/annuler', route((req) => ogActions.annuler(pool, req.utilisateur, entier(req.body.etablissement_id, 'etablissement_id'), String(req.params.id))));
   const priorites = require('./priorites');
   api.get('/admissions/referentiel', route((req) => priorites.referentiel(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   api.put('/admissions/referentiel', route((req) => priorites.configurer(pool, req.utilisateur, entier(req.body.etablissement_id, 'etablissement_id'), req.body)));
@@ -351,8 +363,15 @@ function creerApp(pool) {
   api.get('/copilote/briefing', route((req) => copilote.briefing(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   api.get('/copilote/previsions', route((req) => require('./previsions').previsions(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   api.get('/copilote/reseau', route((req) => copilote.briefingReseau(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
-  api.post('/copilote/question', route((req) => copilote.question(pool, req.utilisateur,
-    entier(req.body.etablissement_id, 'etablissement_id'), String(req.body.question || '').slice(0, 500))));
+  // Fonctions OG contrôlées côté serveur selon la licence SH et les réglages de l'établissement.
+  const avecFonctionOg = (fonction, champ, fn) => route(async (req) => {
+    const etab = entier(champ === 'query' ? req.query.etablissement_id : req.body.etablissement_id, 'etablissement_id');
+    exigerEtablissement(req.utilisateur, etab);
+    await ogConfiguration.exigerFonction(pool, etab, fonction);
+    return fn(req, etab);
+  });
+  api.post('/copilote/question', avecFonctionOg('texte', 'body', (req, etab) => copilote.question(pool, req.utilisateur,
+    etab, String(req.body.question || '').slice(0, 500), undefined, req.body.patient_id_context)));
 
   api.put('/lits/:id/sortie-prevue', route(async (req) => {
     const id = entier(req.params.id, 'id');
@@ -373,6 +392,15 @@ function creerApp(pool) {
   /* ---------- patients fictifs et arrivées à l'urgence (démonstration et recette seulement) ---------- */
   const pat = require('./patients');
   api.get('/patients', route((req) => pat.listePatients(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'), req.query.q)));
+  const ogPatients = require('./og-recherche-patients');
+  api.get('/copilote/patients/recherche', avecFonctionOg('patients', 'query', (req, etab) => ogPatients.rechercher(pool, req.utilisateur, etab, req.query.q)));
+  api.get('/copilote/patients/:id', avecFonctionOg('patients', 'query', (req, etab) => ogPatients.consulter(pool, req.utilisateur, etab, entier(req.params.id, 'id'))));
+  const ogBrouillonsPatients = require('./og-brouillons-patients');
+  api.post('/copilote/patients/brouillons', avecFonctionOg('patients', 'body', (req, etab) => ogBrouillonsPatients.creerBrouillon(pool, req.utilisateur, etab, req.body)));
+  api.post('/copilote/patients/brouillons/:id/confirmer', avecFonctionOg('patients', 'body', (req, etab) => ogBrouillonsPatients.confirmerBrouillon(pool, req.utilisateur,
+    etab, req.params.id, req.body.accepter_doublons === true)));
+  api.delete('/copilote/patients/brouillons/:id', route((req) => ogBrouillonsPatients.annulerBrouillon(req.utilisateur,
+    entier(req.body.etablissement_id, 'etablissement_id'), req.params.id)));
   api.post('/patients', route((req) => pat.creerPatient(pool, req.utilisateur, entier(req.body.etablissement_id, 'etablissement_id'), req.body)));
   api.put('/patients/:id', route((req) => pat.modifierPatient(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   api.post('/urgence/arrivees', route((req) => pat.enregistrerArrivee(pool, req.utilisateur, req.body)));

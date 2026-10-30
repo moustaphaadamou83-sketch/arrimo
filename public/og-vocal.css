@@ -1,0 +1,11 @@
+#og-vocal { padding:8px 18px; background: var(--th-surface, #fff); border-top: 1px solid var(--th-bordure, #cbdce6); font-size:12px; flex-shrink:0; max-height:38dvh; overflow-y:auto; }
+#og-vocal[hidden] { display:none; }
+#og-vocal summary { cursor:pointer; font-weight:600; min-height:28px; }
+#og-vocal p { line-height:1.5; margin:6px 0; }
+#og-vocal .ligne { flex-wrap:wrap; gap:6px; }
+#og-vocal button,#og-vocal select { min-height:40px; }
+#og-vocal label { margin:5px 0; }
+#og-form .ligne { flex-wrap: wrap; }
+.og-vocal-bouton { display: inline-flex; align-items: center; gap: 6px; }
+.og-vocal-bouton[aria-pressed="true"] { background: var(--principal-plein); color: #fff; border-color: var(--principal-plein); }
+@media (max-width: 480px) { .og-vocal-bouton span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } }

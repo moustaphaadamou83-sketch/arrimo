@@ -1,14 +1,21 @@
 /* Console SH : interface (français ; console interne de l'équipe SH). Aucun script en ligne : la politique de sécurité l'interdit. */
 const F = window.ArrimoFormat;
+const BASE_SH = new URL('.',document.currentScript.src).pathname.replace(/\/$/,'');
 let langueUI = (() => { try { return localStorage.getItem('arrimo-sh-langue') === 'en' ? 'en' : 'fr'; } catch { return 'fr'; } })();
 let L = langueUI === 'en' ? 'en-CA' : 'fr-CA';
 const LEXIQUE_EN = (window.ARRIMO_SH_I18N || {}).en || {};
 const LEXIQUE_FR = Object.fromEntries(Object.entries(LEXIQUE_EN).map(([fr,en])=>[en,fr]));
-const traduireTexte = (texte) => (langueUI === 'en' ? LEXIQUE_EN : LEXIQUE_FR)[String(texte ?? '').trim()] || texte;
+const traduireTexte = (texte) => langueUI==='en'?window.ArrimoShLocalisation.traduire(texte,'en'):LEXIQUE_FR[String(texte??'').trim()]||texte;
+const textesOriginaux=new WeakMap();
 function traduireNoeuds(racine = document) {
   const walker = document.createTreeWalker(racine, NodeFilter.SHOW_TEXT);
   const nodes = []; while (walker.nextNode()) nodes.push(walker.currentNode);
-  for (const n of nodes) { const value = n.nodeValue, tr = traduireTexte(value); if (tr !== value) n.nodeValue = tr; }
+  for (const n of nodes) {
+    const ancien=textesOriginaux.get(n);
+    const original=ancien&&n.nodeValue===ancien.traduit?ancien.original:n.nodeValue;
+    const tr=langueUI==='en'?window.ArrimoShLocalisation.traduire(original,'en'):original;
+    textesOriginaux.set(n,{original,traduit:tr});if(n.nodeValue!==tr)n.nodeValue=tr;
+  }
   racine.querySelectorAll?.('[placeholder],[aria-label],[title]').forEach((el) => {
     for (const a of ['placeholder','aria-label','title']) if (el.hasAttribute(a)) el.setAttribute(a, traduireTexte(el.getAttribute(a)));
   });
@@ -24,14 +31,14 @@ const $ = (s, r = document) => r.querySelector(s);
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const icone = (nom) => `<svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-${nom}"/></svg>`;
 const pl = (modele, vars) => F.remplir(L, modele, vars);
-const quand = (iso) => (iso ? new Date(iso).toLocaleString(L, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
+const quand = (iso) => (iso ? new Date(iso).toLocaleString(L, { timeZone:etat.moi?.utilisateur?.fuseau_horaire||'America/Toronto',day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
 const jour = (d) => (d ? new Date(`${String(d).slice(0, 10)}T12:00:00`).toLocaleDateString(L, { day: 'numeric', month: 'long', year: 'numeric' }) : '');
-const lire = (k) => { try { return sessionStorage.getItem(k); } catch { return null; } };
-const ecrire = (k, v) => { try { v == null ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, v); } catch { /* stockage indisponible */ } };
+const lire = (k) => { try { return sessionStorage.getItem(BASE_SH?`${k}:${BASE_SH}`:k); } catch { return null; } };
+const ecrire = (k, v) => { try { const cle=BASE_SH?`${k}:${BASE_SH}`:k;v == null ? sessionStorage.removeItem(cle) : sessionStorage.setItem(cle, v); } catch { /* stockage indisponible */ } };
 appliquerLangue(langueUI);
 
 const STATUTS = { prospect: 'Prospect', implantation: 'En implantation', actif: 'Actif', suspendu: 'Suspendu' };
-const ENVS = { demo: 'Démonstration', recette: 'Recette', production: 'Production' };
+const ENVS = { demo: 'Démonstration', demo_abc:'Démonstration ABC', recette: 'Recette', pilote:'Pilote', production: 'Production' };
 const TYPES = { departements:'Départements',services: 'Services hospitaliers', unites: 'Unités', etages:'Étages et ailes', chambres: 'Chambres', lits: 'Lits', civieres: 'Civières de l’urgence', utilisateurs: 'Utilisateurs' };
 const COLONNES = { departements:'departement;code;attributs_json;actif',services: 'service;code;departement;attributs_json;actif', unites: 'unite;type_unite;service;departement;attributs_json;actif', etages:'unite;etage;aile;attributs_json;actif', chambres: 'unite;chambre;etage;type_chambre;capacite;accessible;attributs_json;restrictions_json;statut_operationnel;actif', lits: 'unite;chambre;lit;isolement;pression_negative;ventilation;telemetrie;categorie;attributs_json;actif', civieres: 'civiere;categorie;unite;attributs_json;actif', utilisateurs: 'nom;courriel;role' };
 const AIDE_TYPES = { departements:'Codes uniques à l’établissement. Importer avant les services.',services: 'Code stable et unique dans l’établissement. Importer les départements avant les services et unités.', unites: 'Type d’unité : SI, MED, CHIR, MAT ou leur nom. Service et département doivent déjà exister.', etages:'L’unité doit déjà exister. Étage et aile sont facultatifs selon l’organisation du site.', chambres: 'L’unité doit déjà exister. Étage facultatif; capacité déclarée distincte du nombre réel de lits.', lits: 'La chambre doit déjà exister. Équipement : oui ou non.',
@@ -58,9 +65,9 @@ function toast(msg, err) {
   setTimeout(() => el.remove(), err ? 7000 : 4500);
 }
 async function api(methode, chemin, corps) {
-  const r = await fetch(`/api${chemin}`, {
+  const r = await fetch(`${BASE_SH}/api${chemin}`, {
     method: methode,
-    headers: { 'Content-Type': 'application/json', ...(etat.token ? { Authorization: `Bearer ${etat.token}` } : {}) },
+    headers: { 'Content-Type': 'application/json','X-Langue':langueUI, ...(etat.token ? { Authorization: `Bearer ${etat.token}` } : {}) },
     body: corps ? JSON.stringify(corps) : undefined,
   });
   let data = null;
@@ -117,7 +124,7 @@ function montrerSecret(titre, texte, explication) {
 }
 
 /* ---------------- connexion ---------------- */
-const FORMULAIRES = ['#f-connexion', '#f-2fa', '#f-mdp-temp', '#f-2fa-act', '#f-invitation'];
+const FORMULAIRES = ['#f-connexion', '#f-2fa', '#f-mdp-temp', '#f-2fa-act', '#f-invitation', '#f-oubli', '#f-recuperation'];
 function montrer(sel) {
   $('#ecran-app').hidden = true;
   $('#ecran-connexion').hidden = false;
@@ -129,6 +136,7 @@ function montrer(sel) {
 function erreurDans(id, msg) { const el = $(id); el.textContent = traduireTexte(msg || ''); el.hidden = !msg; }
 function deconnecter() {
   etat.token = null; etat.moi = null; ecrire('sh-token', null);
+  document.dispatchEvent(new Event('sh:session-reset'));
   ['#c-mdp', '#c-code', '#t-actuel', '#t-nouveau', '#t-confirme'].forEach((s) => { $(s).value = ''; });
   montrer('#f-connexion');
 }
@@ -195,6 +203,7 @@ async function demarrer() {
   try { etat.moi = await api('GET', '/moi'); } catch { deconnecter(); return; }
   const u = etat.moi.utilisateur;
   appliquerLangue(u.langue || langueUI);
+  window.ArrimoApparence?.definir(u.apparence || 'automatique');
   if (u.mdp_temporaire) { montrer('#f-mdp-temp'); return; }
   if (!u.totp_actif) { montrer('#f-2fa-act'); return; }
   $('#ecran-connexion').hidden = true;
@@ -206,7 +215,14 @@ async function demarrer() {
 
 /* ---------------- navigation ---------------- */
 document.querySelectorAll('#onglets button').forEach((b) => { b.onclick = () => { etat.vue = b.dataset.v; etat.hopital = null; etat.projet = null; afficher(); }; });
-async function afficher() {
+// Rendus en série : un clic pendant un rendu lent ne peut plus être écrasé par la vue précédente.
+let fileRendu = Promise.resolve(), derniereDemande = 0;
+function afficher() {
+  const n = ++derniereDemande;
+  fileRendu = fileRendu.then(() => (n === derniereDemande ? afficherVue() : null)).catch((e) => toast(e.message, true));
+  return fileRendu;
+}
+async function afficherVue() {
   if (!etat.moi) return;
   document.querySelectorAll('#onglets button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.v === etat.vue)));
   const v = $('#contenu');
@@ -225,11 +241,13 @@ async function afficher() {
     else if (etat.vue === 'hopitaux') { if (etat.hopital) { await vueHopital(v); await completerHopital(v, { id: etat.hopital, relie: true }); } else await vueHopitaux(v); }
     else if (etat.vue === 'journal') await vueJournal(v);
     else if (etat.vue === 'equipe') { await vueEquipe(v); await completerEquipe(v); }
-    else vueCompte(v);
+    else if (etat.vue === 'parametres') await vueParametres(v);
+    else await vueCompte(v);
   } catch (e) { toast(e.message, true); }
   traduireNoeuds(v);
   document.body.dataset.pret = '1';
   document.body.dataset.rendus = String(Number(document.body.dataset.rendus || 0) + 1);   // repère pour les tests d'interface
+  if(typeof rafraichirPresence==='function')void rafraichirPresence();
 }
 
 $('#sh-langue').onchange = async () => {
@@ -250,7 +268,8 @@ const nb = (n) => F.nombre(L, n, 6);
 function formHopital(h = {}) {
   const verrou = !!h.relie;
   return `<div class="ligne">${champ('h-nom', 'Nom de l’hôpital', h.nom)}${champ('h-code', 'Code d’établissement', h.code_etab, `placeholder="HOP-A"${verrou ? ' disabled' : ''}`)}${choixEnv('h-env', h.environnement || 'recette', verrou)}</div>
-    <div class="ligne">${champ('h-raison', 'Raison sociale', h.raison_sociale)}${champ('h-legal', 'Identifiant légal', h.identifiant_legal)}${champ('h-pays', 'Pays (ISO)', h.pays_code || 'CA', 'maxlength="2"')}</div>
+    <div class="ligne">${champ('h-raison', 'Raison sociale', h.raison_sociale)}${champ('h-legal', 'Identifiant légal', h.identifiant_legal)}${champ('h-pays', 'Pays (ISO)', h.pays_code || 'CA', `maxlength="2"${h.relie?' disabled':''}`)}</div>
+    ${h.relie?'<p class="note">Le pays suit l’établissement relié.</p>':''}
     <div class="ligne">${champ('h-adresse', 'Adresse', h.adresse)}${champ('h-ville', 'Ville', h.ville)}</div>
     <div class="ligne">${champ('h-region', 'Province / région', h.region)}${champ('h-tz', 'Fuseau horaire', h.fuseau_horaire || 'America/Toronto')}${champ('h-prevus', 'Utilisateurs prévus', h.utilisateurs_prevus ?? 0, 'type="number" min="0"')}${champ('h-autorises', 'Utilisateurs autorisés', h.utilisateurs_autorises ?? 0, 'type="number" min="0"')}</div>
     <div class="ligne">${champ('h-lat', 'Latitude', h.latitude == null ? '' : nb(h.latitude), `inputmode="decimal" placeholder="${nb(45.4)}"`)}${champ('h-lon', 'Longitude', h.longitude == null ? '' : nb(h.longitude), `inputmode="decimal" placeholder="${nb(-71.89)}"`)}
@@ -313,7 +332,7 @@ function blocModules(h) {
   return `<p class="note">Catalogue et licences consignés dans SH. L'activation fonctionnelle des modules dépend des capacités réellement exposées par Arrimo.</p>
     <div class="pile">${(h.modules || []).map((m) => `<div class="module-sh"><div><b>${esc(m.nom)}</b><div class="note">${esc(m.description)} · dépendances : ${m.dependances.length ? esc(m.dependances.join(', ')) : 'aucune'}</div></div>
       <select data-module="${esc(m.code)}" aria-label="Licence ${esc(m.nom)}">${['non_selectionne','propose','souscrit','suspendu'].map((s) => `<option value="${s}"${m.licence===s?' selected':''}>${{non_selectionne:'Non sélectionné',propose:'Proposé',souscrit:'Souscrit',suspendu:'Suspendu'}[s]}</option>`).join('')}</select>
-      <label class="champ"><span class="lbl">Paramètres autorisés (JSON)</span><textarea data-param="${esc(m.code)}" rows="2" spellcheck="false">${esc(JSON.stringify(m.parametres || {}, null, 2))}</textarea></label></div>`).join('')}</div>
+      ${m.code==='og'?'<p class="note note-longue">Licence OG : indiquez les fonctions incluses, par exemple {"vocal":true,"dictee":true,"conversation":true,"personnalisation":true,"actions":true,"patients":true,"rapports":true}. L’assistant texte est inclus dès la souscription. La licence est transmise à l’établissement relié à l’enregistrement.</p>':''}<label class="champ"><span class="lbl">Paramètres autorisés (JSON)</span><textarea data-param="${esc(m.code)}" rows="2" spellcheck="false">${esc(JSON.stringify(m.parametres || {}, null, 2))}</textarea></label></div>`).join('')}</div>
     <button class="btn" id="b-modules">Enregistrer le catalogue</button>`;
 }
 
@@ -385,7 +404,7 @@ async function vueHopital(v) {
     <div class="deux hopital-fiche">
       <div class="pile">
         <div class="panneau-c"><h3>Établissement dans l’environnement</h3>${etatEtab}</div>
-        ${h.environnement === 'recette' || h.golive_le ? `<div class="panneau-c" id="golive"><h3>Go-live</h3>${blocGolive(h)}</div>` : ''}
+        ${['recette','pilote'].includes(h.environnement) || h.golive_le ? `<div class="panneau-c" id="golive"><h3>Go-live</h3>${blocGolive(h)}</div>` : ''}
         <div class="panneau-c"><h3>Activation du module</h3>${blocActivation(h)}</div>
         <div class="panneau-c"><h3>Rapport de go-live</h3><p class="note">Établissement, dates des contrôles, imports, comptes (sans mot de passe), formation et responsables, avec signatures.</p>
           <div><button class="btn" id="b-rapport">${icone('download')}Télécharger le rapport (PDF)</button></div></div>
@@ -407,7 +426,7 @@ async function vueHopital(v) {
 
   $('#b-retour-liste').onclick = () => { etat.hopital = null; afficher(); };
   const rel = $('#b-relier');
-  if (rel) rel.onclick = () => agir(rel, () => api('POST', `/hopitaux/${h.id}/relier`), (r) => (r.cree ? `Établissement créé dans l’environnement (${r.actif ? 'ouvert pour les tests et la formation' : 'inactif'}).` : 'Établissement relié.'));
+  if (rel) rel.onclick = () => relierHopitalAvecProfil(h,rel);
   $('#b-enregistrer').onclick = (ev) => agir(ev.target, () => {
     const data=lireFormHopital();
     if(etat.moi.utilisateur.role==='commercial'){
@@ -449,7 +468,7 @@ async function vueHopital(v) {
     const b = ev.currentTarget;
     b.disabled = true;
     try {
-      const r = await fetch(`/api/hopitaux/${h.id}/rapport.pdf`, { headers: { Authorization: `Bearer ${etat.token}` } });
+      const r = await fetch(`${BASE_SH}/api/hopitaux/${h.id}/rapport.pdf`, { headers: { Authorization: `Bearer ${etat.token}` } });
       if (!r.ok) throw new Error((await r.json().catch(() => null))?.erreur || 'Rapport indisponible.');
       telecharger(await r.blob(), `arrimo-rapport-golive-${h.code_etab}.pdf`);
       toast('Rapport téléchargé.');
@@ -457,18 +476,26 @@ async function vueHopital(v) {
   };
   const gl = $('#b-golive');
   if (gl) {
-    gl.onclick = () => modale(`Go-live de ${h.nom}`, `<p>La structure est prévalidée avant le transfert. Les comptes reçoivent des invitations individuelles à usage unique.</p>
-      <p>Aucune donnée de test ne passe en production : ni patients, ni mouvements, ni journal. L’établissement de production est créé inactif ; vous l’activerez ensuite.</p>`,
+    gl.onclick = async () => {
+      gl.disabled=true;
+      try{
+      const profil=await choixProfilProduction(h);
+      modale(`Go-live de ${h.nom}`, `<p>La structure est prévalidée avant le transfert. Les comptes reçoivent des invitations individuelles à usage unique.</p>
+      <p>Aucune donnée de test ne passe en production : ni patients, ni mouvements, ni journal. L’établissement de production est créé inactif ; vous l’activerez ensuite.</p>${profil.html}`,
     [{ label: 'Annuler' }, { label: 'Passer en production', pri: true, run: async () => {
       try {
-        const controle = await api('POST', `/hopitaux/${h.id}/golive/preflight`);
+        const choix=profil.lire();
+        const controle = await api('POST', `/hopitaux/${h.id}/golive/preflight`,choix);
         if (!controle.possible) { toast(`Go-live bloqué : ${controle.bloqueurs.join(', ')}`, true); return false; }
-        await api('POST', `/hopitaux/${h.id}/golive`);
+        await api('POST', `/hopitaux/${h.id}/golive`,choix);
         toast('Go-live fait : l’hôpital est en production.');
         await afficher();
         return true;
       } catch (e) { toast(e.message, true); return false; }
     } }]);
+      }catch(e){toast(e.message,true);}
+      finally{if(gl.isConnected)gl.disabled=false;}
+    };
   }
 }
 
@@ -482,7 +509,7 @@ function blocGolive(h) {
 }
 
 function blocFormation(h) {
-  const gen = h.environnement === 'recette'
+  const gen = ['recette','pilote'].includes(h.environnement)
     ? `<div class="generateur"><p>Pour les séances : des patients et des mouvements fictifs (admissions, congés, nettoyages, civières, demandes de lit) dans la structure de l’hôpital.</p>
         <p class="note">Recette seulement : jamais en production. Références fictives P-9xxxx.</p>
         <div><button class="btn" id="b-generer"${h.relie ? '' : ' disabled'}>Générer des patients fictifs</button></div></div>` : '';
@@ -573,7 +600,7 @@ function blocImports(h) {
         <button class="btn pri" data-imp-verifier="${type}"${x.contenu ? '' : ' disabled'}>Vérifier</button></div>
         ${x.analyse ? `<div class="carte"><h4>Correspondance des colonnes</h4><div class="ligne">${COLONNES[type].split(';').map(c=>`<div class="champ"><label class="lbl" for="map-${type}-${c}">${esc(c)}</label><select id="map-${type}-${c}" data-map-type="${type}" data-map-cible="${c}"><option value="">— ignorer —</option>${x.analyse.headers.map(h=>`<option value="${esc(h)}"${(x.mapping?.[c]||'')===h?' selected':''}>${esc(h)}</option>`).join('')}</select></div>`).join('')}</div><p class="note">Aperçu : ${esc(JSON.stringify(x.analyse.apercu.slice(0,3)))}</p></div>`:''}${res}</div>`;
   };
-  const editorAutorise=['administration','implantation'].includes(etat.moi?.utilisateur?.role) && h.environnement==='recette' && !h.golive_le && h.statut!=='actif';
+  const editorAutorise=['administration','implantation'].includes(etat.moi?.utilisateur?.role) && ['recette','pilote'].includes(h.environnement) && !h.golive_le && h.statut!=='actif';
   const editeur=editorAutorise?`<section class="panneau-c" id="editeur-structure"><h3>Éditeur manuel de structure</h3><p class="note">Préparation initiale en recette. Enregistrer passe par la même prévalidation et le même import transactionnel que les fichiers CSV/Excel. Après le Go Live, les changements opérationnels se font dans Arrimo.</p>
     <div class="ligne"><div class="champ"><label class="lbl" for="sh-structure-type">Élément</label><select id="sh-structure-type">${TYPES_STRUCTURE.map(t=>`<option value="${t}">${esc(TYPES[t])}</option>`).join('')}</select></div>
     <div class="champ"><label class="lbl" for="sh-structure-existant">Modifier un élément (facultatif)</label><select id="sh-structure-existant"><option value="">Nouvel élément</option></select></div></div>
@@ -590,7 +617,7 @@ function brancherImports(v, h) {
     b.onclick = async () => {
       try {
         const format=b.dataset.format||'csv';
-        const r = await fetch(`/api/hopitaux/${h.id}/import/modeles/${b.dataset.impModele}?format=${format}`, { headers: { Authorization: `Bearer ${etat.token}` } });
+        const r = await fetch(`${BASE_SH}/api/hopitaux/${h.id}/import/modeles/${b.dataset.impModele}?format=${format}`, { headers: { Authorization: `Bearer ${etat.token}` } });
         if (!r.ok) throw new Error('Modèle indisponible : l’environnement ne répond pas.');
         telecharger(await r.blob(), `arrimo-${b.dataset.impModele}.${format}`);
       } catch (e) { toast(e.message, true); }
@@ -699,12 +726,12 @@ async function vueEquipe(v) {
         <button class="btn pri" id="b-membre">Envoyer l’invitation</button>
         <p class="note">La personne choisit son propre mot de passe avec un lien individuel à usage unique. Aucun mot de passe n’est affiché.</p></div>
       <div><div class="tableau"><table><thead><tr><th>Membre</th><th>Rôle et sécurité</th><th>Dernière connexion</th><th></th></tr></thead><tbody>
-      ${equipe.map((m) => `<tr><td><span class="donnee">${esc(m.nom)}</span>${m.actif ? '' : ' <span class="badge">Désactivé</span>'}<div class="note">${esc(m.email)}</div></td>
-        <td><select data-role="${m.id}"${m.id === moi.id ? ' disabled' : ''}>${['administration', 'commercial', 'implantation', 'formation', 'support', 'finance'].map((r) => `<option value="${r}"${m.role === r ? ' selected' : ''}>${r}</option>`).join('')}</select><div class="note">${m.totp_actif ? 'Double authentification' : 'Double authentification à activer'}</div></td>
+      ${equipe.map((m) => `<tr><td><span class="donnee">${esc(m.nom)}</span>${presenceHTML(m.id)}${m.actif ? '' : ` <span class="badge">${m.archive_le ? 'Archivé' : 'Désactivé'}</span>`}<div class="note">${esc(m.email)}${m.fonction ? ` · ${esc(m.fonction)}` : ''}</div></td>
+        <td><select data-role="${m.id}"${m.id === moi.id ? ' disabled' : ''}>${['administration', 'commercial', 'implantation', 'formation', 'support', 'finance'].map((r) => `<option value="${r}"${m.role === r ? ' selected' : ''}>${esc(LIB.role[r]||r)}</option>`).join('')}</select><div class="note">${m.totp_actif ? 'Double authentification' : 'Double authentification à activer'}</div></td>
         <td class="note">${m.derniere_connexion ? esc(quand(m.derniere_connexion)) : 'Jamais'}</td>
-        <td>${m.id === moi.id ? '<span class="note">Vous</span>' : `<div class="ligne serre"><button class="btn" data-reinit="${m.id}" data-nom="${esc(m.nom)}">Envoyer un lien</button>
-          <button class="btn${m.actif ? ' dan' : ''}" data-actif="${m.id}" data-val="${!m.actif}">${m.actif ? 'Désactiver' : 'Réactiver'}</button></div>`}</td></tr>`).join('')}</tbody></table></div>
-      ${invitations.length ? `<section class="panneau-c"><h3>Invitations en attente</h3><div class="tableau"><table><thead><tr><th>Destinataire</th><th>Rôle</th><th>Expire</th></tr></thead><tbody>${invitations.map((i) => `<tr><td>${esc(i.nom)}<div class="note">${esc(i.email)}</div></td><td>${esc(i.role)}</td><td class="note">${esc(quand(i.expire_le))}</td></tr>`).join('')}</tbody></table></div></section>` : '<p class="note">Aucune invitation en attente.</p>'}</div></div>`;
+        <td><button class="btn" data-aide="${m.id}">Aider à se connecter</button>${m.id === moi.id ? '<span class="note">Vous</span>' : `<div class="ligne serre"><button class="btn" data-reinit="${m.id}" data-nom="${esc(m.nom)}"${m.archive_le ? ' disabled' : ''}>Récupérer la MFA</button>
+          <button class="btn${m.actif ? ' dan' : ''}" data-actif="${m.id}" data-val="${!m.actif}"${m.archive_le ? ' disabled' : ''}>${m.actif ? 'Désactiver' : 'Réactiver'}</button></div>`}</td></tr>`).join('')}</tbody></table></div>
+      ${invitations.length ? `<section class="panneau-c"><h3>Invitations en attente ou expirées</h3><div class="tableau"><table><thead><tr><th>Destinataire</th><th>Rôle</th><th>Expire</th><th>Action</th></tr></thead><tbody>${invitations.map((i) => `<tr><td>${esc(i.nom)}<div class="note">${esc(i.email)}</div></td><td>${esc(i.role)}</td><td class="note">${esc(quand(i.expire_le))}${new Date(i.expire_le)<new Date()?' · Expirée':''}</td><td>${i.utilisateur_id?'':`<button class="btn" data-renvoyer="${i.id}">Renvoyer l’invitation</button>`}</td></tr>`).join('')}</tbody></table></div></section>` : '<p class="note">Aucune invitation en attente.</p>'}</div></div>`;
   $('#b-membre').onclick = (ev) => agir(ev.target, async () => {
     const r = await api('POST', '/equipe', { nom: $('#m-nom').value, email: $('#m-email').value, role: $('#m-role').value });
     return r;
@@ -721,12 +748,19 @@ async function vueEquipe(v) {
   });
   v.querySelectorAll('[data-role]').forEach((s) => { s.onchange = () => agir(s, () => api('PUT', `/equipe/${s.dataset.role}/role`, { role: s.value }), 'Rôle modifié.'); });
   v.querySelectorAll('[data-actif]').forEach((b) => { b.onclick = () => agir(b, () => api('PUT', `/equipe/${b.dataset.actif}`, { actif: b.dataset.val === 'true' }), 'Compte modifié.'); });
+  v.querySelectorAll('[data-aide]').forEach(b => { b.onclick=()=>aiderConnexion(equipe.find(m=>String(m.id)===b.dataset.aide),invitations); });
+  v.querySelectorAll('[data-renvoyer]').forEach(b=>{b.onclick=()=>agir(b,()=>api('POST',`/invitations/${b.dataset.renvoyer}/renvoyer`,{}),'Invitation renvoyée ; ancien lien révoqué.');});
 }
 
 /* ---------------- mon compte ---------------- */
-function vueCompte(v) {
+async function vueCompte(v) {
   const u = etat.moi.utilisateur;
   v.innerHTML = `<div class="entete"><div><h2>Mon compte</h2><p><span class="donnee">${esc(u.nom)}</span> · ${esc(u.email)} · double authentification active</p></div></div>
+    <form class="panneau-c compte" id="f-fuseau"><h3>Préférence de fuseau horaire</h3><p class="note">Les heures affichées dans la console suivent cette préférence; les échéances contractuelles conservent le fuseau de l’établissement.</p><div class="champ"><label class="lbl" for="m-fuseau">Fuseau IANA</label><input id="m-fuseau" maxlength="80" required value="${esc(u.fuseau_horaire||'America/Toronto')}" placeholder="America/Toronto"></div><button class="btn" type="submit">Enregistrer le fuseau</button></form>
+    <form class="panneau-c compte" id="f-apparence"><h3>Apparence</h3><p class="note">Appliquée à toutes vos pages, sur tous vos appareils. « Selon le soleil » passe en sombre entre le coucher et le lever du soleil à la position approximative de cet appareil, si vous l’autorisez; sinon la préférence du système s’applique.</p>
+      <fieldset class="choix-apparence"><legend class="lbl">Mode d’affichage</legend>${[['clair','Clair'],['sombre','Sombre'],['automatique','Automatique (système)'],['soleil','Selon le soleil']].map(([c,l])=>`<label class="case"><input type="radio" name="m-apparence" value="${c}"${(u.apparence||'automatique')===c?' checked':''}> ${l}</label>`).join('')}</fieldset>
+      <p class="note" id="m-apparence-lieu">${window.ArrimoApparence?.lieu()?'Position approximative enregistrée sur cet appareil.':'Aucune position enregistrée sur cet appareil.'}</p>
+      <div><button class="btn pri" type="submit">Enregistrer l’apparence</button></div></form>
     <form class="panneau-c compte" id="f-mdp"><h3>Changer de mot de passe</h3>
       <div class="champ"><label class="lbl" for="m-actuel">Mot de passe actuel</label><input id="m-actuel" type="password" autocomplete="current-password"></div>
       <div class="champ"><label class="lbl" for="m-nouveau">Nouveau mot de passe</label><input id="m-nouveau" type="password" autocomplete="new-password"></div>
@@ -738,9 +772,37 @@ function vueCompte(v) {
     if ($('#m-nouveau').value !== $('#m-confirme').value) { toast('Les deux mots de passe sont différents.', true); return; }
     agir(null, () => api('PUT', '/moi/mot-de-passe', { actuel: $('#m-actuel').value, nouveau: $('#m-nouveau').value }), 'Mot de passe enregistré.');
   };
+  $('#f-apparence').onsubmit=async e=>{e.preventDefault();const b=e.submitter;b.disabled=true;
+    try{const choix=v.querySelector('input[name=m-apparence]:checked')?.value||'automatique';
+      let lieu;if(choix==='soleil'){lieu=await window.ArrimoApparence.localiser();if(!lieu)toast('Position refusée ou indisponible : la préférence du système s’applique.',true);}
+      const r=await api('PUT','/moi/apparence',{apparence:choix});u.apparence=r.apparence;window.ArrimoApparence?.definir(r.apparence,lieu===undefined?{}:{lieu});toast('Apparence enregistrée.');await afficher();}
+    catch(err){toast(err.message,true);}finally{b.disabled=false;}};
+  $('#f-fuseau').onsubmit=async e=>{e.preventDefault();const b=e.submitter;b.disabled=true;try{const r=await api('PUT','/moi/fuseau-horaire',{fuseau_horaire:$('#m-fuseau').value.trim()});u.fuseau_horaire=r.fuseau_horaire;toast('Préférence de fuseau enregistrée.');await afficher();}catch(err){toast(err.message,true);}finally{if(b.isConnected)b.disabled=false;}};
+  await afficherSessions(v,u.id,false);
 }
 
 /* ---------------- démarrage ---------------- */
-if (new URLSearchParams(location.hash.slice(1)).has('invitation')) {
+const jetonRecuperation = new URLSearchParams(location.hash.slice(1)).get('recuperation');
+$('#b-oubli').onclick=()=>{ $('#o-message').textContent=''; montrer('#f-oubli'); };
+$('#b-oubli-retour').onclick=()=>montrer('#f-connexion');
+$('#f-oubli').onsubmit=async e=>{
+  e.preventDefault(); const b=e.submitter; b.disabled=true;
+  try { const r=await api('POST','/mot-de-passe/demander',{email:$('#o-email').value}); $('#o-message').textContent=r.message; }
+  catch(err){ $('#o-message').textContent=err.message; }finally{ b.disabled=false; }
+};
+$('#f-recuperation').onsubmit=async e=>{
+  e.preventDefault();
+  if($('#r-nouveau').value!==$('#r-confirme').value){$('#r-message').textContent='Les deux mots de passe sont différents.';return;}
+  const b=e.submitter;b.disabled=true;
+  try{await api('POST','/mot-de-passe/reinitialiser',{jeton:jetonRecuperation,nouveau:$('#r-nouveau').value});
+    $('#r-nouveau').value='';$('#r-confirme').value='';montrer('#f-connexion');toast('Mot de passe enregistré. Connectez-vous avec votre code de double authentification.');
+  }catch(err){$('#r-message').textContent=err.message;}finally{b.disabled=false;}
+};
+function initialiserSH(){
+if (jetonRecuperation) {
+  etat.token=null;ecrire('sh-token',null);history.replaceState(null,'',location.pathname+location.search);montrer('#f-recuperation');
+} else if (new URLSearchParams(location.hash.slice(1)).has('invitation')) {
   etat.token = null; ecrire('sh-token', null); montrer('#f-invitation');
 } else if (etat.token) demarrer(); else montrer('#f-connexion');
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initialiserSH,{once:true});else initialiserSH();

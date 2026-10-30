@@ -10,6 +10,7 @@ const { transaction, ErreurHttp } = require('./db');
 const { exigerEtablissement } = require('./auth');
 const { changerEtatCiviere, journaliser } = require('./regles');
 const { environnement } = require('./environnement');
+const crypto = require('node:crypto');
 const { groupeAgeDepuisNaissance } = require('./terrain');
 
 function exigerFictifs() {
@@ -42,24 +43,30 @@ async function semblables(db, etabId, id) {
 }
 
 async function creerPatient(db, utilisateur, etabId, b, { arrivee = null, parcours = 'enregistre' } = {}) {
-  exigerFictifs();
-  exigerEtablissement(utilisateur, etabId);
+  exigerFictifs(); exigerEtablissement(utilisateur, etabId);
   const id = lireIdentite(b);
-  const doublons = await semblables(db, etabId, id);
-  if (doublons.length && !b.confirmer_doublon) {
-    throw new ErreurHttp(409, 'patient_doublon_possible', { ref: doublons.map((x) => x.reference).join(', ') });
-  }
-  try {
-    const { rows } = await db.query(
-      `INSERT INTO patients (etablissement_id, reference, prenom, nom, date_naissance, reference_locale, arrivee_le, parcours, cree_par)
-       VALUES ($1, 'P-' || lpad(nextval('patient_seq')::text, 5, '0'), $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [etabId, id.prenom, id.nom, id.date_naissance, id.reference_locale, arrivee, parcours, utilisateur.id]);
-    await journaliser(db, { etablissementId: etabId, utilisateurId: utilisateur.id, action: 'Patient fictif enregistré', detail: rows[0].reference });
-    return presenter(rows[0]);
-  } catch (e) {
-    if (e.code === '23505') throw new ErreurHttp(409, 'patient_doublon_possible', { ref: id.reference_locale || '' });
-    throw e;
-  }
+  const inserer = async (c) => {
+    // Sérialise deux créations simultanées de la même identité, sans nouvelle table.
+    const empreinte = crypto.createHash('sha256').update(`${etabId}\u001f${id.nom.toLocaleLowerCase('fr-CA')}\u001f${id.prenom.toLocaleLowerCase('fr-CA')}\u001f${id.date_naissance}\u001f${id.reference_locale || ''}`).digest('hex');
+    await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`arrimo-patient:${empreinte}`]);
+    const doublons = await semblables(c, etabId, id);
+    if (doublons.length && !b.confirmer_doublon) {
+      throw new ErreurHttp(409, 'patient_doublon_possible', { ref: doublons.map((x) => x.reference).join(', ') });
+    }
+    try {
+      const { rows } = await c.query(
+        `INSERT INTO patients (etablissement_id, reference, prenom, nom, date_naissance, reference_locale, arrivee_le, parcours, cree_par)
+         VALUES ($1, 'P-' || lpad(nextval('patient_seq')::text, 5, '0'), $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        [etabId, id.prenom, id.nom, id.date_naissance, id.reference_locale, arrivee, parcours, utilisateur.id]);
+      await journaliser(c, { etablissementId: etabId, utilisateurId: utilisateur.id, action: 'Patient fictif enregistré', detail: rows[0].reference });
+      return presenter(rows[0]);
+    } catch (e) {
+      if (e.code === '23505') throw new ErreurHttp(409, 'patient_doublon_possible', { ref: id.reference_locale || '' });
+      throw e;
+    }
+  };
+  // Un pool ouvre sa transaction ; une connexion déjà empruntée (méthode release) est réutilisée telle quelle.
+  return typeof db.connect === 'function' && typeof db.release !== 'function' ? transaction(db, inserer) : inserer(db);
 }
 
 function presenter(p) {
@@ -132,4 +139,4 @@ async function modifierPatient(pool, utilisateur, patientId, b) {
   });
 }
 
-module.exports = { creerPatient, listePatients, enregistrerArrivee, modifierPatient, semblables, exigerFictifs };
+module.exports = { creerPatient, listePatients, enregistrerArrivee, modifierPatient, semblables, lireIdentite, exigerFictifs };

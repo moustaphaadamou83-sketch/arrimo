@@ -14,20 +14,24 @@ const URL_INVITATION = (env) => {
   return `${base}/#invitation=`;
 };
 
-async function creer(pool, { email, nom, role, utilisateurId = null, creePar = null }, env = process.env) {
+async function creer(pool, { email, nom, role, utilisateurId = null, creePar = null, remplaceId = null }, env = process.env) {
   const adresse = String(email || '').trim().toLowerCase();
   const nomPropre = String(nom || '').trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adresse) || !nomPropre) throw new ErreurHttp(400, 'invitation_destinataire_invalide');
   if (!ROLES.includes(role)) throw new ErreurHttp(400, 'role_sh_invalide');
-  if (!courriel.actif()) throw new ErreurHttp(503, 'courriel_sh_non_configure');
+  if (!courriel.actif(env.SH_PUBLIC_URL)) throw new ErreurHttp(503, 'courriel_sh_non_configure');
   const lienBase = URL_INVITATION(env);
   const jeton = crypto.randomBytes(32).toString('hex');
   const hash = empreinte(jeton);
   const invitation = await transaction(pool, async (c) => {
-    const existant = (await c.query('SELECT id FROM sh_utilisateurs WHERE lower(email) = $1', [adresse])).rows[0];
+    await c.query('SELECT pg_advisory_xact_lock(hashtext($1))',[`sh-invitation:${adresse}`]);
+    const existant = (await c.query('SELECT id,archive_le FROM sh_utilisateurs WHERE lower(email) = $1 FOR UPDATE', [adresse])).rows[0];
+    if(existant?.archive_le)throw new ErreurHttp(409,'Restaurez le compte archivé avant de l’inviter.');
     if (utilisateurId && (!existant || existant.id !== Number(utilisateurId))) throw new ErreurHttp(404, 'membre_sh_introuvable');
     if (!utilisateurId && existant) throw new ErreurHttp(409, 'membre_sh_existant');
-    if (!utilisateurId && (await c.query(`SELECT 1 FROM sh_invitations WHERE lower(email)=$1 AND utilise_le IS NULL
+    if(remplaceId && !(await c.query(`SELECT 1 FROM sh_invitations WHERE id=$1 AND lower(email)=$2 AND utilisateur_id IS NULL
+      AND utilise_le IS NULL AND revoquee_le IS NULL FOR UPDATE`,[remplaceId,adresse])).rowCount)throw new ErreurHttp(409,'Invitation non renouvelable.');
+    if (!utilisateurId && !remplaceId && (await c.query(`SELECT 1 FROM sh_invitations WHERE lower(email)=$1 AND utilise_le IS NULL
       AND revoquee_le IS NULL AND expire_le>now()`, [adresse])).rowCount) throw new ErreurHttp(409, 'membre_sh_existant');
     await c.query('UPDATE sh_invitations SET revoquee_le = now() WHERE lower(email) = $1 AND utilise_le IS NULL AND revoquee_le IS NULL', [adresse]);
     const r = await c.query(`INSERT INTO sh_invitations (jeton_hache, email, nom, role, utilisateur_id, cree_par, expire_le)

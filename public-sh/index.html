@@ -6,11 +6,15 @@
 <meta name="robots" content="noindex, nofollow">
 <title>Arrimo · Console SH</title>
 <link rel="icon" href="logo.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0E5E6F">
+<script src="apparence.js"></script>
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="sh.css">
 <script src="i18n/format.js"></script>
 <script src="i18n/fr.js"></script>
 <script src="i18n/en.js"></script>
+<script src="i18n/en-lot1.js"></script>
+<script src="i18n/localisation.js"></script>
 </head>
 <body>
 <div class="bandeau-demo bandeau-sh"><span id="bandeau-libelle">Console SH · accès réservé à l’équipe SH</span><label class="select-langue" for="sh-langue">Langue <select id="sh-langue" aria-label="Langue"><option value="fr">Français</option><option value="en">English</option></select></label></div>
@@ -27,6 +31,23 @@
     <input id="c-mdp" type="password" autocomplete="current-password" required>
     <p id="c-erreur" class="erreur" role="alert" hidden></p>
     <button class="btn pri large" type="submit">Se connecter</button>
+    <button class="btn large" type="button" id="b-oubli">Mot de passe oublié ?</button>
+  </form>
+  <form id="f-oubli" class="carte-connexion" hidden>
+    <h1>Récupérer mon compte SH</h1>
+    <p>Un lien à usage unique permet de choisir un nouveau mot de passe. Votre double authentification est conservée.</p>
+    <label for="o-email">Adresse courriel</label><input id="o-email" type="email" autocomplete="username" required>
+    <p id="o-message" role="status" aria-live="polite"></p>
+    <button class="btn pri large" type="submit">Envoyer un lien de récupération</button>
+    <button class="btn large" type="button" id="b-oubli-retour">Retour à la connexion</button>
+  </form>
+  <form id="f-recuperation" class="carte-connexion" hidden>
+    <h1>Nouveau mot de passe SH</h1>
+    <label for="r-nouveau">Nouveau mot de passe</label><input id="r-nouveau" type="password" autocomplete="new-password" minlength="12" required>
+    <label for="r-confirme">Confirmer</label><input id="r-confirme" type="password" autocomplete="new-password" minlength="12" required>
+    <p>Au moins 12 caractères, avec des lettres et des chiffres. Vos sessions seront fermées ; la double authentification reste active.</p>
+    <p id="r-message" role="status" aria-live="polite"></p>
+    <button class="btn pri large" type="submit">Enregistrer et se connecter</button>
   </form>
   <form id="f-2fa" class="carte-connexion" novalidate hidden>
     <img src="logo.svg" alt="" width="56" height="56">
@@ -75,6 +96,7 @@
     <div class="barre-in">
       <div class="marque"><img src="logo.svg" alt="" width="30" height="30"><div><strong>Arrimo · Console SH</strong><small id="nom-utilisateur"></small></div></div>
       <div class="barre-droite">
+        <button class="btn barre-btn" id="b-recherche" type="button" aria-label="Rechercher"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-search"/></svg><span class="menu-libelle">Rechercher</span></button>
         <button class="btn barre-btn cloche" id="b-notifications" type="button" aria-label="Notifications"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-bell"/></svg><span class="menu-libelle">Notifications</span><span class="pastille" id="pastille-notifications" hidden>0</span></button>
         <button class="btn barre-btn" id="b-deconnexion"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-log-out"/></svg><span class="menu-libelle">Déconnexion</span></button>
       </div>
@@ -94,15 +116,24 @@
       <button role="tab" data-v="rapports" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-chart-column"/></svg><span>Rapports</span></button>
       <button role="tab" data-v="journal" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-history"/></svg><span>Journal SH</span></button>
       <button role="tab" data-v="equipe" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-users"/></svg><span>Équipe SH</span></button>
+      <button role="tab" data-v="parametres" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-shield-check"/></svg><span>Paramètres</span></button>
       <button role="tab" data-v="compte" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-user"/></svg><span>Mon compte</span></button>
     </nav>
   </header>
   <main class="contenu" id="contenu"></main>
+  <footer id="sh-profil-presence" class="sh-profil-presence" hidden></footer>
 </div>
 
 <div id="modale" class="modale" hidden></div>
 <div id="toasts" class="toasts" aria-live="polite"></div>
+<script src="profils-pays.js"></script>
 <script src="sh.js"></script>
+<script src="devises-unites.js"></script>
+<script src="finances.js"></script>
 <script src="erp.js"></script>
+<script src="support-sla.js"></script>
+<script src="acces.js"></script>
+<script src="presence.js"></script>
+<script src="roles-perimetres.js"></script>
 </body>
 </html>

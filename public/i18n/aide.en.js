@@ -28,6 +28,7 @@ window.ARRIMO_I18N.en.aide = {
     },
   },
   ecrans: {
+    support:{"nom": "Client support", "but": "Create and track requests for your facility.", "gestes": ["Describe the issue without medical information.", "Select a project and submit the request.", "Open the ticket to view public replies."], "erreurs": []},
     copilote: {
       nom: 'Copilot',
       but: 'The situation summary for the bed management meeting: alert level, ranked recommendations and answers to your questions. The Copilot proposes; you decide.',

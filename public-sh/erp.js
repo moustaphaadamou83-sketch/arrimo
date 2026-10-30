@@ -7,7 +7,10 @@ const bouton = (libelle, action, classe = 'btn', id = '') => `<button class="${c
 function tableSH(headers, rows, vide = 'Aucune donnée enregistrée.') {
   return `<div class="tableau"><table><thead><tr>${headers.map((x) => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${rows || `<tr><td colspan="${headers.length}" class="note">${esc(vide)}</td></tr>`}</tbody></table></div>`;
 }
-const argent = (n, devise = 'CAD') => (n == null || n === '' ? '—' : new Intl.NumberFormat(L, { style: 'currency', currency: devise || 'CAD' }).format(Number(n)));
+const argent = (n, devise = 'CAD') => {
+  if(n==null||n==='')return '—';
+  return window.ArrimoShFinances.formatterMontant(n,devise,L);
+};
 const jourIso = (d) => (d ? String(d).slice(0, 10) : '');
 const aujourdhuiIso = () => new Date().toLocaleDateString('en-CA');
 const roleMoi = () => etat.moi.utilisateur.role;
@@ -19,9 +22,9 @@ const LIB = {
   devis: { brouillon: 'Brouillon', a_valider: 'À approuver', approuve: 'Approuvé', envoye: 'Envoyé', accepte: 'Accepté', refuse: 'Refusé', expire: 'Expiré' },
   contrat: { negociation: 'En négociation', pret_a_signer: 'Prêt à signer', signe: 'Signé', resilie: 'Résilié', expire: 'Expiré' },
   facture: { brouillon: 'Brouillon', emise: 'Émise', partiellement_payee: 'Payée en partie', payee: 'Payée', en_retard: 'En retard', annulee: 'Annulée' },
-  tache: { a_faire: 'À faire', en_cours: 'En cours', bloquee: 'Bloquée', terminee: 'Terminée' },
-  projet: { planification: 'Planification', en_cours: 'En cours', bloque: 'Bloqué', termine: 'Terminé', annule: 'Annulé' },
-  ticket: { ouvert: 'Ouvert', en_cours: 'En cours', en_attente: 'En attente', resolu: 'Résolu', ferme: 'Fermé' },
+  tache: { a_faire: 'À faire', en_cours: 'En cours', bloquee: 'Bloquée', en_validation: 'En validation', terminee: 'Terminée', annulee: 'Annulée' },
+  projet: { planification: 'Planification', en_cours: 'En cours', en_attente: 'En attente', suspendu: 'Suspendu', bloque: 'Bloqué', termine: 'Terminé', annule: 'Annulé' },
+  ticket: { ouvert: 'Ouvert', assigne: 'Assigné', en_cours: 'En cours', en_attente: 'En attente', resolu: 'Résolu', ferme: 'Fermé' },
   priorite: { basse: 'Basse', normale: 'Normale', haute: 'Haute', urgente: 'Urgente' },
   type_ticket: { demande: 'Demande', incident: 'Incident', question: 'Question' },
   periodicite: { unique: 'Unique', mensuel: 'Mensuel', annuel: 'Annuel' },
@@ -35,7 +38,7 @@ const NIVEAUX = { gagnee: 'n-vert', signe: 'n-vert', payee: 'n-vert', terminee: 
 const etiquette = (famille, code) => `<span class="etat-niveau ${NIVEAUX[code] || ''}">${esc(LIB[famille]?.[code] || code || '—')}</span>`;
 const options = (famille, choisi) => Object.entries(LIB[famille]).map(([k, n]) => `<option value="${k}"${k === choisi ? ' selected' : ''}>${esc(n)}</option>`).join('');
 async function telechargerApi(chemin, nom) {
-  const r = await fetch(`/api${chemin}`, { headers: { Authorization: `Bearer ${etat.token}` } });
+  const r = await fetch(`${BASE_SH}/api${chemin}`, { headers: { Authorization: `Bearer ${etat.token}` } });
   if (!r.ok) { let m = `Erreur ${r.status}.`; try { m = (await r.json()).erreur || m; } catch { /* binaire */ } throw new Error(m); }
   telecharger(await r.blob(), nom);
 }
@@ -53,22 +56,32 @@ const enregistrer = (fn, succes) => async () => {
   try { await fn(); if (succes) toast(succes); await afficher(); return true; } catch (e) { toast(e.message, true); return false; }
 };
 let personnelCache = null;
+const referencesInternationalesCache=new Map();
+async function referencesInternationales(){
+  const langue=document.documentElement.lang.startsWith('en')?'en':'fr';
+  if(!referencesInternationalesCache.has(langue))referencesInternationalesCache.set(langue,await api('GET','/references/internationales'));
+  return referencesInternationalesCache.get(langue);
+}
 async function personnel() { if (!personnelCache) personnelCache = await api('GET', '/personnel').catch(() => []); return personnelCache; }
-const choixPersonne = (id, choisi, libelle = 'Responsable') => personnel().then((ps) => `<div class="champ"><label class="lbl" for="${id}">${esc(libelle)}</label><select id="${id}"><option value="">Non attribué</option>${ps.map((p) => `<option value="${p.id}"${Number(choisi) === p.id ? ' selected' : ''}>${esc(p.nom)} · ${esc(LIB.role[p.role] || p.role)}</option>`).join('')}</select></div>`);
+const choixPersonne = (id, choisi, libelle = 'Responsable') => personnel().then((ps) => `<div class="champ"><label class="lbl" for="${id}">${esc(libelle)}</label><select id="${id}"><option value="">Non attribué</option>${ps.map((p) => `<option value="${p.id}" data-presence-option="${p.id}" data-nom="${esc(p.nom)}" data-role="${esc(LIB.role[p.role]||p.role)}"${Number(choisi) === p.id ? ' selected' : ''}>${esc(p.nom)} · ${esc(LIB.role[p.role] || p.role)} · ${esc(libellePresence(p.presence))}</option>`).join('')}</select><label class="case"><input type="checkbox" data-disponibles-pour="${id}">Employés disponibles seulement</label></div>`);
+const choixMembresProjet=(id,membres)=>personnel().then(ps=>`<fieldset id="${id}"><legend>Équipe du projet</legend>${ps.map(p=>`<label class="case"><input type="checkbox" value="${p.id}"${membres.map(Number).includes(p.id)?' checked':''}>${esc(p.nom)}</label>`).join('')}</fieldset>`);
+const membresProjetSelectionnes=selecteur=>[...$(selecteur).querySelectorAll('input:checked')].map(x=>Number(x.value));
 
 /* ---------------- onglets et notifications ---------------- */
 const ONGLETS_ROLES = {
   accueil: null, hopitaux: null, taches: null, calendrier: null, documents: null, rapports: null, compte: null,
-  crm: ['commercial', 'finance'], contrats: ['commercial', 'implantation', 'support', 'finance'], facturation: ['finance'],
+  crm: ['commercial', 'finance'], contrats: ['commercial', 'finance'], facturation: ['finance'],
   projets: ['implantation', 'support', 'formation'], support: ['support', 'implantation'], hebergement: ['implantation', 'support'],
-  journal: ['implantation', 'support'], equipe: [],
+  journal: ['implantation', 'support'], equipe: [], parametres: [],
 };
 function reglerOnglets() {
+  const routes={accueil:'GET /rapports/indicateurs',hopitaux:'GET /hopitaux',taches:'GET /taches',calendrier:'GET /calendrier',documents:'GET /documents',rapports:'GET /rapports/indicateurs',crm:'GET /crm/organisations',contrats:'GET /crm/contrats',facturation:'GET /facturation/factures',projets:'GET /projets',support:'GET /support/tickets',hebergement:'GET /hebergement',journal:'GET /journal',equipe:'GET /equipe',parametres:'GET /parametres'};
+  const u=etat.moi.utilisateur;
   for (const [vue, roles] of Object.entries(ONGLETS_ROLES)) {
     const b = $(`#onglets [data-v="${vue}"]`);
-    if (b) b.hidden = roles !== null && !peut(...roles);
+    if (b) b.hidden = (roles !== null && !peut(...roles)) || (u.role_personnalise_id&&vue!=='compte'&&!u.droits_personnalises?.includes(routes[vue]));
   }
-  if ($(`#onglets [data-v="${etat.vue}"]`)?.hidden) etat.vue = 'hopitaux';
+  if ($(`#onglets [data-v="${etat.vue}"]`)?.hidden) etat.vue = $('#onglets button:not([hidden])')?.dataset.v||'compte';
   rafraichirCloche();
 }
 async function rafraichirCloche() {
@@ -126,15 +139,23 @@ async function vueCRM(v) {
     ${commercial ? `<h3>Relances à faire</h3>${tableSH(['Relance', 'Type', 'Organisation', 'Responsable', 'Échéance', ''], lignesRel, 'Aucune relance en attente.')}` : ''}
     <h3>Organisations</h3>${tableSH(['Organisation', 'Type', 'Province', 'Contacts', 'Opportunités', 'Établissement'], lignesOrg)}`;
   const opp = (id) => opps.find((o) => String(o.id) === String(id));
-  surAction(v, 'org-nouvelle', () => modale('Nouvelle organisation', `<div class="form-modale">${champ('o-nom', 'Nom', '')}${champ('o-site', 'Site Web', '', 'type="url"')}
-    <div class="ligne">${champ('o-ville', 'Ville', '')}${champ('o-region', 'Province / région', 'Québec')}${champ('o-pays', 'Pays (ISO)', 'CA', 'maxlength="2"')}</div>${champ('o-adresse', 'Adresse', '')}${champ('o-fact', 'Courriel de facturation', '', 'type="email"')}</div>`,
-  [{ label: 'Annuler' }, { label: 'Créer', pri: true, run: enregistrer(() => api('POST', '/crm/organisations', { nom: valeur('#o-nom'), site_web: valeur('#o-site'), ville: valeur('#o-ville'), region: valeur('#o-region'), pays_code: valeur('#o-pays'), adresse: valeur('#o-adresse'), courriel_facturation: valeur('#o-fact') }), 'Organisation créée.') }]));
+  surAction(v, 'org-nouvelle', async () => {try{
+    const refs=await referencesInternationales();
+    modale('Nouvelle organisation', `<div class="form-modale">${champ('o-nom', 'Nom', '')}${champ('o-site', 'Site Web', '', 'type="url"')}
+    <div class="ligne">${champ('o-ville', 'Ville', '')}${champ('o-region', 'Province / région fiscale', '')}<div class="champ"><label class="lbl" for="o-pays">Pays (ISO)</label><select id="o-pays">${refs.pays.map(p=>`<option value="${esc(p.code)}"${p.code==='CA'?' selected':''}>${esc(p.nom)} (${esc(p.code)})</option>`).join('')}</select></div></div><p class="note">La région sert à sélectionner le lieu de fourniture fiscal; une facture peut être bloquée si elle manque.</p>${champ('o-adresse', 'Adresse', '')}${champ('o-fact', 'Courriel de facturation', '', 'type="email"')}</div>`,
+  [{ label: 'Annuler' }, { label: 'Créer', pri: true, run: enregistrer(() => {if(valeur('#o-pays')==='CA'&&!valeur('#o-region').trim())throw new Error('Indiquez la province ou région fiscale avant de créer le client.');return api('POST', '/crm/organisations', { nom: valeur('#o-nom'), site_web: valeur('#o-site'), ville: valeur('#o-ville'), region: valeur('#o-region'), pays_code: valeur('#o-pays'), adresse: valeur('#o-adresse'), courriel_facturation: valeur('#o-fact')});}, 'Organisation créée.') }]);
+  }catch(e){toast(e.message,true);}});
   surAction(v, 'opp-nouvelle', async () => {
     if (!orgs.length) { toast('Créez d’abord une organisation.', true); return; }
+    try{
+    const refs=await referencesInternationales();
     modale('Nouvelle opportunité', `<div class="form-modale"><div class="champ"><label class="lbl" for="p-org">Organisation</label><select id="p-org">${orgs.map((o) => `<option value="${o.id}">${esc(o.nom)}</option>`).join('')}</select></div>
-      ${champ('p-titre', 'Titre', '')}<div class="ligne">${champ('p-montant', 'Valeur estimée', '', 'type="number" min="0" step="0.01"')}${champ('p-proba', 'Probabilité (%)', '20', 'type="number" min="0" max="100"')}${champ('p-echeance', 'Décision attendue', '', 'type="date"')}</div>
+      ${champ('p-titre', 'Titre', '')}<div class="champ"><label class="lbl" for="p-devise">Devise</label><select id="p-devise"><option value="">Choisir une devise</option>${refs.devises.map(d=>`<option value="${esc(d.code)}">${esc(d.code)} · ${esc(d.nom)} · ${esc(d.symbole)}${d.base!==10||d.decimales>2?' · '+esc(traduireTexte('Facturation indisponible')):''}</option>`).join('')}</select><p class="note">Aucune conversion automatique de devises.</p></div><div class="ligne">${champ('p-montant', 'Valeur estimée', '', 'type="number" min="0" step="0.01"')}${champ('p-proba', 'Probabilité (%)', '20', 'type="number" min="0" max="100"')}${champ('p-echeance', 'Décision attendue', '', 'type="date"')}</div>
       ${await choixPersonne('p-resp', etat.moi.utilisateur.id)}${champ('p-action', 'Prochaine action', '')}</div>`,
-    [{ label: 'Annuler' }, { label: 'Créer', pri: true, run: enregistrer(() => api('POST', '/crm/opportunites', { organisation_id: Number(valeur('#p-org')), titre: valeur('#p-titre'), montant: valeur('#p-montant') || null, probabilite: Number(valeur('#p-proba') || 0), echeance: valeur('#p-echeance') || null, responsable_id: valeur('#p-resp') || null, prochaine_action: valeur('#p-action') }), 'Opportunité créée.') }]);
+    [{ label: 'Annuler' }, { label: 'Créer', pri: true, run: enregistrer(() => api('POST', '/crm/opportunites', { organisation_id: Number(valeur('#p-org')), titre: valeur('#p-titre'), montant: valeur('#p-montant') || null,devise:valeur('#p-devise'), probabilite: Number(valeur('#p-proba') || 0), echeance: valeur('#p-echeance') || null, responsable_id: valeur('#p-resp') || null, prochaine_action: valeur('#p-action') }), 'Opportunité créée.') }]);
+    const actualiserDevise=()=>{const org=orgs.find(o=>String(o.id)===valeur('#p-org'));$('#p-devise').value=refs.pays.find(p=>p.code===org?.pays_code)?.devise_defaut||'';};
+    $('#p-org').onchange=actualiserDevise;actualiserDevise();
+    }catch(e){toast(e.message,true);}
   });
   surAction(v, 'opp-avancer', (id, b) => { const o = opp(id); agir(b, () => api('PUT', `/crm/opportunites/${o.id}`, { statut: suivant[o.statut], probabilite: suivant[o.statut] === 'gagnee' ? 100 : Math.max(o.probabilite, { analyse: 30, proposition: 50, negociation: 75 }[suivant[o.statut]] || 0) }), `Étape suivante : ${LIB.opp[suivant[o.statut]]}.`); });
   surAction(v, 'opp-perdue', (id) => modale('Opportunité perdue', champ('p-motif', 'Motif', ''), [{ label: 'Annuler' }, { label: 'Enregistrer', dan: true, run: enregistrer(() => api('PUT', `/crm/opportunites/${id}`, { statut: 'perdue', perdue_motif: valeur('#p-motif') }), 'Opportunité classée perdue.') }]));
@@ -253,7 +274,7 @@ async function vueContrats(v) {
 
 /* ---------------- facturation ---------------- */
 async function vueFacturation(v) {
-  const [resume, abonnements, factures, tarifs, orgs] = await Promise.all([api('GET', '/facturation/resume'), api('GET', '/facturation/abonnements'), api('GET', `/facturation/factures${etat.filtreFacture ? `?etat=${etat.filtreFacture}` : ''}`), api('GET', '/tarifs'), api('GET', '/crm/organisations')]);
+  const [resume, abonnements, factures, tarifs, orgs, taxes, profilsTaxes, tauxChange, margesProjets] = await Promise.all([api('GET', '/facturation/resume'), api('GET', '/facturation/abonnements'), api('GET', `/facturation/factures${etat.filtreFacture ? `?etat=${etat.filtreFacture}` : ''}`), api('GET', '/tarifs'), api('GET', '/crm/organisations'), api('GET','/facturation/taxes'),api('GET','/facturation/profils-fiscaux'),api('GET','/facturation/change'),api('GET','/finances/projets')]);
   const tot = (etatF) => resume.etats.filter((e) => e.etat === etatF);
   const cartes = [['Revenu mensuel récurrent', resume.mrr.map((m) => argent(m.mrr, m.devise)).join(' · ') || argent(0)], ['Encaissé ce mois', resume.encaisse_mois.map((m) => argent(m.total, m.devise)).join(' · ') || argent(0)],
     ['Solde à recevoir', [...tot('emise'), ...tot('partiellement_payee'), ...tot('en_retard')].reduce((n, e) => n + Number(e.solde), 0)], ['En retard', tot('en_retard').reduce((n, e) => n + e.n, 0)], ['Abonnements à facturer', resume.abonnements_a_facturer]];
@@ -262,15 +283,23 @@ async function vueFacturation(v) {
   const lignesA = abonnements.map((a) => `<tr><td>${esc(a.libelle)}</td><td>${esc(a.contrat)}</td><td>${esc(LIB.periodicite[a.periodicite])}</td><td class="num">${esc(argent(a.montant_periode, a.devise))} HT</td><td>${esc(jour(a.prochaine_facture_le))}</td><td>${esc(a.statut)}</td>
     <td><div class="ligne serre">${a.statut === 'actif' ? bouton('Facturer la période', 'a-facturer', 'btn', a.id) + bouton('Suspendre', 'a-suspendre', 'btn discret', a.id) : a.statut === 'suspendu' ? bouton('Réactiver', 'a-reactiver', 'btn', a.id) : ''}</div></td></tr>`).join('');
   const lignesT = tarifs.map((t) => `<tr><td>${esc(t.code)}</td><td>${esc(t.libelle)}</td><td class="num">${esc(argent(t.prix_unitaire))}</td><td>${esc(LIB.periodicite[t.periodicite])}</td><td>${t.taxable ? 'oui' : 'non'}</td><td>${t.actif ? 'actif' : 'inactif'}</td></tr>`).join('');
+  const lignesTaxes=taxes.map(t=>`<tr><td>${esc(t.pays_code)} / ${esc(t.region)}</td><td>${esc(t.code)} · ${esc(t.nom)}</td><td class="num">${esc(t.taux)} %</td><td>${esc(jourIso(t.valide_de))} → ${esc(t.valide_jusqua?jourIso(t.valide_jusqua):'sans échéance')}</td><td>${t.source_url?`<a href="${esc(t.source_url)}" target="_blank" rel="noopener">${esc(t.source_nom)}</a>`:'—'}<div class="note">Vérifié : ${esc(jourIso(t.verifie_le)||'—')}</div></td><td>${bouton('Modifier la règle','tax-edit','btn discret',t.id)}</td></tr>`).join('');
+  const lignesProfils=profilsTaxes.map(p=>`<tr><td>${esc(p.pays_code)} / ${esc(p.region)}</td><td>${esc(p.statut)}</td><td>${esc(p.source_nom||'—')}<div class="note">${esc(p.motif||'')}</div></td><td>${esc(jour(p.verifie_le)||'—')}</td><td>${bouton(p.statut==='valide'?'Réviser le profil':'Vérifier le profil','tax-profile-edit','btn discret',p.id)}</td></tr>`).join('');
   v.innerHTML = `<div class="entete"><div><h2>Facturation</h2><p>Factures numérotées sans trou à l’émission, taxes selon la province du client, paiements partiels et relances par échéance.</p></div>
     <div class="ligne serre">${bouton('Générer les factures dues', 'f-generer', 'btn pri')}${bouton('Nouvelle facture', 'f-nouvelle')}${bouton('Export CSV', 'f-export')}</div></div>
     <div class="cartes-kpi">${cartes.map(([n, x]) => `<article class="carte"><span class="note">${esc(n)}</span><strong>${esc(typeof x === 'number' && n === 'Solde à recevoir' ? argent(x) : x)}</strong></article>`).join('')}</div>
     <div class="ligne filtres"><div class="champ"><label class="lbl" for="ff-etat">État</label><select id="ff-etat"><option value="">Toutes</option>${options('facture', etat.filtreFacture)}</select></div></div>
     <h3>Factures</h3>${tableSH(['Numéro', 'Client', 'État', 'Total', 'Solde', 'Échéance', 'Actions'], lignesF)}
     <h3>Abonnements</h3>${tableSH(['Abonnement', 'Contrat', 'Périodicité', 'Montant', 'Prochaine facture', 'Statut', ''], lignesA, 'Les abonnements sont créés à la signature d’un contrat.')}
-    <h3>Grille tarifaire</h3>${tableSH(['Code', 'Libellé', 'Prix', 'Périodicité', 'Taxable', 'État'], lignesT)}<div class="ligne">${bouton('Ajouter ou modifier un tarif', 't-edit')}</div>`;
+    <h3>Grille tarifaire</h3>${tableSH(['Code', 'Libellé', 'Prix', 'Périodicité', 'Taxable', 'État'], lignesT)}<div class="ligne">${bouton('Ajouter ou modifier un tarif', 't-edit')}</div>
+    <h3>Profils fiscaux par pays et région</h3><p class="note">Une région sans profil validé bloque la facturation. Une exonération doit être explicite, datée et sourcée.</p>${tableSH(['Pays / région', 'État', 'Source et justification', 'Vérifié le', ''],lignesProfils,'Aucun profil fiscal.')}<div class="ligne">${bouton('Ajouter un profil fiscal','tax-profile-new')}</div>
+    <h3>Marges par projet</h3><p class="note">Revenus facturés hors taxes moins coûts réels, par devise et sans conversion. Les projets sans budget, coût ni facture n’apparaissent pas.</p>${tableSH(['Projet','Hôpital','Devise','Budget','Coût réel','Revenus HT','Marge','Taux'],margesProjets.flatMap(pj=>pj.synthese.map(s=>`<tr><td>${esc(pj.reference)} · ${esc(pj.nom)}</td><td>${esc(pj.hopital||'—')}</td><td>${esc(s.devise)}</td><td class="num">${esc(argent(s.budget,s.devise))}</td><td class="num">${esc(argent(s.cout_reel,s.devise))}</td><td class="num">${esc(argent(s.revenus,s.devise))}</td><td class="num">${esc(argent(s.marge,s.devise))}</td><td class="num">${esc(pct(s.taux_marge))}</td></tr>`)).join(''),'Aucun projet avec données financières.')}
+    <h3>Taux de change officiels</h3><p class="note">Source : <a href="${esc(tauxChange.source.url)}" target="_blank" rel="noopener">${esc(tauxChange.source.nom)}</a>, taux moyens quotidiens. Un taux publié n’est jamais modifié; une devise non publiée par la Banque du Canada n’a aucun taux. À l’émission, l’équivalent en CAD est figé à titre informatif avec le taux publié au plus ${esc(tauxChange.anciennete_max_jours)} jours plus tôt.</p>${tableSH(['Devise','Jour','CAD par unité','Série'],tauxChange.derniers.map(t=>`<tr><td>${esc(t.devise)}</td><td>${esc(jourIso(t.jour))}</td><td class="num">${esc(Number(t.cad_par_unite))}</td><td>${esc(t.serie)}</td></tr>`).join(''),'Aucun taux importé.')}<div class="ligne">${bouton('Actualiser depuis la Banque du Canada','change-actualiser')}</div>
+    <h3>Règles de taxe avec dates d’effet et sources</h3>${tableSH(['Juridiction','Taxe','Taux','Période','Source officielle',''],lignesTaxes,'Aucun taux fiscal sourcé.')}<div class="ligne">${bouton('Ajouter un taux sourcé','tax-new')}</div>`;
   $('#ff-etat').onchange = (e) => { etat.filtreFacture = e.target.value; afficher(); };
-  surAction(v, 'f-generer', (id, b) => agir(b, () => api('POST', '/facturation/generer'), (r) => pl('{n|aucune facture due|# facture préparée en brouillon|# factures préparées en brouillon}', { n: r.factures_creees })));
+  await barreFiltres(v, 'facturation', { etat: etat.filtreFacture || '' }, (f) => { etat.filtreFacture = f.etat || ''; });
+  surAction(v, 'f-generer', (id, b) => agir(b, () => api('POST', '/facturation/generer'), (r) => pl('{n|aucune facture due|# facture préparée en brouillon|# factures préparées en brouillon}', { n: r.factures_creees })+(r.bloquees?.length?` · Abonnements bloqués par le profil fiscal : ${r.bloquees.length}`:'')));
+  surAction(v, 'change-actualiser', (id, b) => agir(b, () => api('POST', '/facturation/change/actualiser', {}), 'Taux de change actualisés.'));
   surAction(v, 'f-export', (id, b) => agir(b, () => telechargerApi('/rapports/export?section=factures', 'arrimo-sh-factures.csv')));
   surAction(v, 'f-emettre', (id) => modale('Émettre la facture', `<p>Le numéro définitif est attribué et les taxes sont recalculées à l’émission.</p>${champ('fe-ech', 'Échéance (facultatif)', '', 'type="date"')}`, [{ label: 'Annuler' }, { label: 'Émettre', pri: true, run: enregistrer(() => api('POST', `/facturation/factures/${id}/emettre`, { echeance_le: valeur('#fe-ech') || null }), 'Facture émise.') }]));
   surAction(v, 'f-payer', (id) => { const f = factures.find((x) => String(x.id) === String(id)); modale(`Paiement · ${f.numero}`, `<p class="note">Solde dû : ${esc(argent(f.solde, f.devise))}</p><div class="ligne">${champ('fp-montant', 'Montant', f.solde, 'type="number" min="0.01" step="0.01"')}${champ('fp-date', 'Reçu le', aujourdhuiIso(), 'type="date"')}</div>
@@ -281,7 +310,7 @@ async function vueFacturation(v) {
   surAction(v, 'f-detail', async (id) => {
     const f = await api('GET', `/facturation/factures/${id}`);
     modale(f.numero || `Brouillon ${f.id}`, `<p>${etiquette('facture', f.etat)} · ${esc(f.client)}</p>${tableSH(['Description', 'Qté', 'Montant'], f.lignes.map((l) => `<tr><td>${esc(l.description)}</td><td>${esc(l.quantite)}</td><td class="num">${esc(argent(l.montant, f.devise))}</td></tr>`).join(''))}
-      <p class="note">Sous-total ${esc(argent(f.sous_total, f.devise))} · ${f.taxes.map((t) => `${esc(t.nom)} ${esc(argent(t.montant, f.devise))}`).join(' · ') || 'aucune taxe'} · total ${esc(argent(f.total, f.devise))}</p>
+      <p class="note">Sous-total ${esc(argent(f.sous_total, f.devise))} · ${f.taxes.map((t) => `${esc(t.nom)} ${esc(t.taux)} % ${esc(argent(t.montant, f.devise))}${t.source_nom?` · <a href="${esc(t.source_url)}" target="_blank" rel="noopener">${esc(t.source_nom)}</a> · en vigueur du ${esc(jourIso(t.valide_de))}${t.valide_jusqua?` au ${esc(jourIso(t.valide_jusqua))}`:' (sans échéance)'} · vérifié ${esc(jourIso(t.verifie_le))}`:''}`).join(' · ') || 'aucune taxe'} · total ${esc(argent(f.total, f.devise))}</p>${f.change?`<p class="note">${f.change.indisponible?'Équivalent en dollars canadiens non indiqué : aucun taux officiel récent de la Banque du Canada pour cette devise.':`Équivalent informatif : ${esc(argent(f.change.total_cad,'CAD'))} au taux ${esc(f.change.cad_par_unite)} CAD/${esc(f.change.devise)} du ${esc(f.change.jour)} · <a href="${esc(f.change.source_url)}" target="_blank" rel="noopener">${esc(f.change.source_nom)}</a> (${esc(f.change.serie)})`}</p>`:''}
       <h4>Paiements</h4><p class="note">${f.paiements.map((p) => `${esc(jour(p.recu_le))} · ${esc(argent(p.montant, f.devise))} · ${esc(p.mode)}${p.reference ? ` · ${esc(p.reference)}` : ''}`).join('<br>') || 'Aucun.'}</p>`, [{ label: 'Fermer', pri: true }]);
     $('#modale .boite').classList.add('large');
   });
@@ -294,57 +323,181 @@ async function vueFacturation(v) {
   surAction(v, 't-edit', () => modale('Tarif', `<div class="form-modale"><div class="ligne">${champ('tf-code', 'Code', '', 'placeholder="licence-lits"')}${champ('tf-lib', 'Libellé', '')}</div><div class="ligne">${champ('tf-prix', 'Prix unitaire', '', 'type="number" min="0" step="0.01"')}${champ('tf-unite', 'Unité', 'forfait')}
     <div class="champ"><label class="lbl" for="tf-per">Périodicité</label><select id="tf-per">${options('periodicite', 'unique')}</select></div></div><label class="case"><input type="checkbox" id="tf-tax" checked> Taxable</label> <label class="case"><input type="checkbox" id="tf-actif" checked> Actif</label></div>`,
   [{ label: 'Annuler' }, { label: 'Enregistrer', pri: true, run: enregistrer(() => api('POST', '/tarifs', { code: valeur('#tf-code'), libelle: valeur('#tf-lib'), prix_unitaire: Number(valeur('#tf-prix')), unite: valeur('#tf-unite'), periodicite: valeur('#tf-per'), taxable: $('#tf-tax').checked, actif: $('#tf-actif').checked }), 'Tarif enregistré.') }]));
+  const sourcesTaxe=`${champ('tx-source','Organisme source','')}${champ('tx-url','URL officielle','', 'type="url" placeholder="https://…"')}${champ('tx-motif','Justification / fourniture concernée','')}`;
+  surAction(v,'tax-profile-new',()=>modale('Nouveau profil fiscal',`<div class="form-modale"><div class="ligne">${champ('tp-pays','Pays ISO','')}${champ('tp-region','Région / province ISO','', 'placeholder="QC ou *"')}</div><div class="champ"><label class="lbl" for="tp-statut">État</label><select id="tp-statut"><option value="a_verifier">À vérifier</option><option value="valide">Validé</option><option value="exonere">Exonéré</option></select></div>${sourcesTaxe}</div>`,[{label:'Annuler'},{label:'Créer le profil',pri:true,run:enregistrer(()=>api('POST','/facturation/profils-fiscaux',{pays_code:valeur('#tp-pays'),region:valeur('#tp-region'),statut:valeur('#tp-statut'),source_nom:valeur('#tx-source'),source_url:valeur('#tx-url'),motif:valeur('#tx-motif')}),'Profil fiscal créé.')} ]));
+  surAction(v,'tax-profile-edit',id=>{const p=profilsTaxes.find(x=>String(x.id)===String(id));modale(`Profil ${p.pays_code}/${p.region}`,`<div class="form-modale"><div class="champ"><label class="lbl" for="tp-statut">État</label><select id="tp-statut"><option value="a_verifier" ${p.statut==='a_verifier'?'selected':''}>À vérifier</option><option value="valide" ${p.statut==='valide'?'selected':''}>Validé</option><option value="exonere" ${p.statut==='exonere'?'selected':''}>Exonéré</option></select></div>${sourcesTaxe}</div>`,[{label:'Annuler'},{label:'Enregistrer',pri:true,run:enregistrer(()=>api('PUT',`/facturation/profils-fiscaux/${id}`,{statut:valeur('#tp-statut'),source_nom:valeur('#tx-source'),source_url:valeur('#tx-url'),motif:valeur('#tx-motif')}),'Profil fiscal mis à jour.')} ]);$('#tx-source').value=p.source_nom||'';$('#tx-url').value=p.source_url||'';$('#tx-motif').value=p.motif||'';});
+  surAction(v,'tax-new',()=>modale('Nouvelle règle fiscale',`<div class="form-modale"><div class="ligne">${champ('tx-pays','Pays ISO','CA')}${champ('tx-region','Région ISO','', 'placeholder="QC ou *"')}</div><div class="ligne">${champ('tx-code','Code taxe','')}${champ('tx-nom','Nom de taxe','')}${champ('tx-taux','Taux (%)','','type="number" min="0" max="99.999" step="0.001"')}</div><div class="ligne">${champ('tx-de','Valide à partir du',aujourdhuiIso(),'type="date"')}${champ('tx-jusqua','Valide jusqu’au','','type="date"')}</div>${sourcesTaxe}</div>`,[{label:'Annuler'},{label:'Enregistrer la règle',pri:true,run:enregistrer(()=>api('POST','/facturation/taxes',{pays_code:valeur('#tx-pays'),region:valeur('#tx-region'),code:valeur('#tx-code'),nom:valeur('#tx-nom'),taux:Number(valeur('#tx-taux')),valide_de:valeur('#tx-de'),valide_jusqua:valeur('#tx-jusqua')||null,source_nom:valeur('#tx-source'),source_url:valeur('#tx-url'),motif:valeur('#tx-motif')}),'Règle fiscale créée.')} ]));
+  surAction(v,'tax-edit',id=>{const x=taxes.find(t=>String(t.id)===String(id));modale(`Règle ${x.pays_code}/${x.region} · ${x.code}`,`<div class="form-modale"><div class="ligne">${champ('tx-taux','Taux (%)',x.taux,'type="number" min="0" max="99.999" step="0.001"')}${champ('tx-de','Valide à partir du',jour(x.valide_de),'type="date"')}${champ('tx-jusqua','Valide jusqu’au',jour(x.valide_jusqua),'type="date"')}</div>${sourcesTaxe}</div>`,[{label:'Annuler'},{label:'Enregistrer',pri:true,run:enregistrer(()=>api('PUT',`/facturation/taxes/${id}`,{taux:Number(valeur('#tx-taux')),valide_de:valeur('#tx-de'),valide_jusqua:valeur('#tx-jusqua')||null,source_nom:valeur('#tx-source'),source_url:valeur('#tx-url'),motif:valeur('#tx-motif')}),'Règle fiscale mise à jour.')} ]);$('#tx-source').value=x.source_nom||'';$('#tx-url').value=x.source_url||'';$('#tx-motif').value='Mise à jour sourcée';});
 }
 
 /* ---------------- projets ---------------- */
+/* Vues du portefeuille : liste, Kanban par étape du cahier, calendrier des échéances et chronologie. */
+const VUES_PROJETS = [['liste', 'Liste'], ['kanban', 'Kanban'], ['calendrier', 'Calendrier'], ['chronologie', 'Chronologie']];
+const ETAPES_PROJET = [['nouveau', 'Nouveau'], ['qualification', 'Qualification'], ['cadrage', 'Cadrage'], ['preparation', 'Préparation'], ['configuration', 'Configuration'], ['migration', 'Migration'],
+  ['integrations', 'Intégrations'], ['formation', 'Formation'], ['tests_uat', 'Tests et recette utilisateur'], ['pret_lancement', 'Prêt au lancement'], ['go_live', 'Go Live'], ['stabilisation', 'Stabilisation'], ['maintenance', 'Maintenance'], ['termine', 'Terminé']];
+function vueProjetsSelon(vue, ps, lignes) {
+  const ouvrir = (p) => `<button class="lien-ligne" type="button" data-action="p-ouvrir" data-id="${p.id}">${esc(p.nom)}</button>`;
+  if (vue === 'kanban') {
+    const colonnes = [['', 'À classer'], ...ETAPES_PROJET].map(([code, libelle]) => {
+      const liste = ps.filter((p) => (p.etape || '') === code);
+      if (!code && !liste.length) return '';
+      return `<section class="sh-kanban-col"><h3>${esc(libelle)} <span>${liste.length}</span></h3>${liste.map((p) => `<article class="carte-kanban">${ouvrir(p)}<div class="note">${esc(p.hopital || p.organisation || '')} · ${p.avancement} %</div>
+        ${peut('implantation') && !p.archive_le ? `<label class="lbl" for="etape-${p.id}">Étape</label><select id="etape-${p.id}" data-etape-projet="${p.id}">${ETAPES_PROJET.map(([c, l]) => `<option value="${c}"${p.etape === c ? ' selected' : ''}>${esc(l)}</option>`).join('')}${p.etape ? '' : '<option value="" selected disabled>À classer</option>'}</select>` : ''}</article>`).join('')}</section>`;
+    }).join('');
+    return `<div class="sh-kanban">${colonnes}</div>`;
+  }
+  if (vue === 'calendrier') {
+    const evts = ps.flatMap((p) => [p.debut && { jour: jourIso(p.debut), quoi: 'Début', p }, p.echeance && { jour: jourIso(p.echeance), quoi: 'Échéance', p }].filter(Boolean)).sort((a, b) => a.jour.localeCompare(b.jour));
+    const mois = [...new Set(evts.map((e) => e.jour.slice(0, 7)))];
+    return mois.length ? mois.map((m) => `<h3>${esc(new Date(`${m}-15T12:00:00`).toLocaleDateString(L, { month: 'long', year: 'numeric' }))}</h3>${tableSH(['Date', 'Événement', 'Projet'], evts.filter((e) => e.jour.startsWith(m)).map((e) => `<tr><td>${esc(e.jour)}</td><td>${esc(e.quoi)}</td><td>${ouvrir(e.p)}</td></tr>`).join(''))}`).join('') : '<p class="note">Aucun projet daté.</p>';
+  }
+  if (vue === 'chronologie') {
+    const dates = ps.filter((p) => p.debut && p.echeance);
+    if (!dates.length) return '<p class="note">Renseignez le début et l’échéance des projets pour afficher la chronologie.</p>';
+    const t = (d) => new Date(`${jourIso(d)}T12:00:00`).getTime();
+    const min = Math.min(...dates.map((p) => t(p.debut))), max = Math.max(...dates.map((p) => t(p.echeance))), span = Math.max(max - min, 86400000);
+    return `<div class="chronologie">${dates.map((p) => `<div class="chrono-ligne">${ouvrir(p)}<div class="chrono-piste" aria-label="${esc(jourIso(p.debut))} → ${esc(jourIso(p.echeance))}"><i style="margin-left:${(100 * (t(p.debut) - min) / span).toFixed(2)}%;width:${Math.max(1, 100 * (t(p.echeance) - t(p.debut)) / span).toFixed(2)}%"><b style="width:${p.avancement}%"></b></i></div><span class="note">${esc(jourIso(p.debut))} → ${esc(jourIso(p.echeance))} · ${p.avancement} %</span></div>`).join('')}</div>`;
+  }
+  return tableSH(['Projet', 'Établissement', 'Statut', 'Responsable', 'Avancement', 'Échéance'], lignes);
+}
 async function vueProjets(v) {
   if (etat.projet) return vueProjet(v);
-  const [ps, hs] = await Promise.all([api('GET', '/projets'), api('GET', '/hopitaux')]);
-  const lignes = ps.map((p) => `<tr><td><button class="lien-ligne" type="button" data-action="p-ouvrir" data-id="${p.id}">${esc(p.nom)}</button></td><td>${esc(p.hopital || p.organisation || '—')}</td><td>${etiquette('projet', p.statut)}</td><td>${esc(p.responsable || '—')}</td>
+  const [ps, hs] = await Promise.all([api('GET', `/projets${etat.projetsArchives?'?archives=1':''}`), api('GET', '/hopitaux')]);
+  const lignes = ps.map((p) => `<tr><td><button class="lien-ligne" type="button" data-action="p-ouvrir" data-id="${p.id}">${esc(p.nom)}</button></td><td>${esc(p.hopital || p.organisation || '—')}</td><td>${etiquette('projet', p.statut)}</td><td>${responsablePresenceHTML(p.responsable_id,p.responsable)}</td>
     <td><div class="progres"><i style="width:${p.avancement}%"></i></div><span class="note">${p.avancement} % · ${esc(pl('{n|# tâche|# tâches}', { n: p.taches }))}${p.taches_en_retard ? ` · ${p.taches_en_retard} en retard` : ''}</span></td><td>${esc(p.echeance ? jour(p.echeance) : '—')}</td></tr>`).join('');
   v.innerHTML = `<div class="entete"><div><h2>Projets</h2><p>Projets d’implantation : créés à la signature d’un contrat, rattachés à l’établissement dès sa fiche créée. L’avancement suit les tâches, dont celles qui se terminent avec les étapes réelles.</p></div>${peut('implantation') ? bouton('Nouveau projet', 'p-nouveau', 'btn pri') : ''}</div>
-    ${tableSH(['Projet', 'Établissement', 'Statut', 'Responsable', 'Avancement', 'Échéance'], lignes)}`;
+    ${bouton(etat.projetsArchives?'Voir les projets actifs':'Voir les projets archivés','p-archives')}
+    <div class="ligne serre" role="group" aria-label="Vue des projets">${VUES_PROJETS.map(([c, l]) => `<button class="chip" type="button" data-action="p-vue" data-id="${c}" aria-pressed="${(etat.vueProjets || 'liste') === c}">${esc(l)}</button>`).join('')}</div>
+    ${vueProjetsSelon(etat.vueProjets || 'liste', ps, lignes)}`;
+  surAction(v, 'p-vue', (c) => { etat.vueProjets = c; afficher(); });
+  await barreFiltres(v, 'projets', { vue: etat.vueProjets || 'liste', archives: !!etat.projetsArchives }, (f) => { etat.vueProjets = f.vue; etat.projetsArchives = !!f.archives; });
+  v.querySelectorAll('[data-etape-projet]').forEach((s) => { s.onchange = () => agir(s, () => api('PUT', `/projets/${s.dataset.etapeProjet}/etape`, { etape: s.value }), 'Étape enregistrée.'); });
+  surAction(v,'p-archives',()=>{etat.projetsArchives=!etat.projetsArchives;afficher();});
   surAction(v, 'p-ouvrir', (id) => { etat.projet = Number(id); afficher(); });
   surAction(v, 'p-nouveau', async () => {
     if (!hs.length) { toast('Créez d’abord la fiche de l’établissement.', true); return; }
     modale('Nouveau projet', `<div class="form-modale"><div class="champ"><label class="lbl" for="pr-hop">Établissement</label><select id="pr-hop">${hs.map((h) => `<option value="${h.id}">${esc(h.nom)}</option>`).join('')}</select></div>${champ('pr-nom', 'Nom du projet', '')}
-      <div class="ligne">${champ('pr-debut', 'Début', '', 'type="date"')}${champ('pr-date', 'Échéance', '', 'type="date"')}</div>${await choixPersonne('pr-resp', null)}</div>`,
-    [{ label: 'Annuler' }, { label: 'Créer', pri: true, run: enregistrer(() => api('POST', '/projets', { hopital_id: Number(valeur('#pr-hop')), nom: valeur('#pr-nom'), debut: valeur('#pr-debut') || null, echeance: valeur('#pr-date') || null, responsable_id: valeur('#pr-resp') || null }), 'Projet créé.') }]);
+      <div class="champ"><label for="pr-type">Type de projet</label><select id="pr-type"><option value="implantation">Implantation</option><option value="pilote">Pilote</option><option value="extension">Extension</option><option value="integration">Intégration</option><option value="migration">Migration</option><option value="maintenance">Maintenance</option><option value="mise_a_niveau">Mise à niveau</option></select></div>
+      <div class="ligne">${champ('pr-debut', 'Début', '', 'type="date"')}${champ('pr-date', 'Échéance', '', 'type="date"')}</div>${await choixPersonne('pr-resp', null,'Chef de projet')}
+      ${await choixMembresProjet('pr-membres',[])}<p class="note">Un pilote nécessite un chef et au moins deux membres actifs. Le projet ne crée pas automatiquement un environnement hospitalier.</p></div>`,
+    [{ label: 'Annuler' }, { label: 'Créer', pri: true, run: enregistrer(() => api('POST', '/projets', { hopital_id: Number(valeur('#pr-hop')), nom: valeur('#pr-nom'),type_projet:valeur('#pr-type'),membres:membresProjetSelectionnes('#pr-membres'), debut: valeur('#pr-debut') || null, echeance: valeur('#pr-date') || null, responsable_id: valeur('#pr-resp') || null }), 'Projet créé.') }]);
   });
+}
+/** Finances du projet : par devise, sans conversion ; revenus = factures émises (HT) du contrat du projet. */
+const LIB_NATURE = { budget: 'Budget', cout_prevu: 'Coût prévu', cout_reel: 'Coût réel' };
+const LIB_CATEGORIE = { main_oeuvre: 'Main-d’œuvre', licences: 'Licences', deplacements: 'Déplacements', materiel: 'Matériel', sous_traitance: 'Sous-traitance', formation: 'Formation', autre: 'Autre' };
+const pct = (x) => (x == null ? '—' : `${x} %`);
+function tableSynthese(synthese) {
+  return tableSH(['Devise', 'Budget', 'Coût prévu', 'Coût réel', 'Revenus facturés HT', 'Marge', 'Taux de marge', 'Budget consommé'],
+    synthese.map((s) => `<tr><td>${esc(s.devise)}</td><td class="num">${esc(argent(s.budget, s.devise))}</td><td class="num">${esc(argent(s.cout_prevu, s.devise))}</td><td class="num">${esc(argent(s.cout_reel, s.devise))}</td>
+      <td class="num">${esc(argent(s.revenus, s.devise))}</td><td class="num">${esc(argent(s.marge, s.devise))}</td><td class="num">${esc(pct(s.taux_marge))}</td><td class="num">${esc(pct(s.consommation_budget))}</td></tr>`).join(''),
+    'Aucune donnée financière.');
+}
+const NIVEAU = { faible: 'Faible', moderee: 'Modérée', elevee: 'Élevée' };
+const ETAT_REGISTRE = { ouvert: 'Ouvert', en_traitement: 'En traitement', clos: 'Clos' };
+async function afficherRegistreProjet(v, p) {
+  const r = await api('GET', `/projets/${p.id}/registre`); const gerer = peut('implantation') && !p.archive_le;
+  const risques = r.filter((x) => x.type === 'risque'), decisions = r.filter((x) => x.type === 'decision');
+  $('#pj-registre').innerHTML = `<h3>Risques</h3>${tableSH(['Risque', 'Gravité', 'Probabilité', 'Responsable', 'Échéance', 'État', ''], risques.map((x) => `<tr><td><b>${esc(x.titre)}</b><div class="note">${esc(x.description || '')}</div></td><td>${esc(NIVEAU[x.gravite])}</td><td>${esc(NIVEAU[x.probabilite])}</td><td>${esc(x.responsable || '—')}</td><td>${esc(jourIso(x.echeance) || '—')}</td><td>${esc(ETAT_REGISTRE[x.statut])}</td><td>${gerer && x.statut !== 'clos' ? bouton('Clore', 'rg-clore', 'btn discret', x.id) : ''}</td></tr>`).join(''), 'Aucun risque enregistré.')}
+    <h3>Décisions</h3>${tableSH(['Décision', 'Décidée par', 'Le'], decisions.map((x) => `<tr><td><b>${esc(x.titre)}</b><div class="note">${esc(x.description || '')}</div></td><td>${esc(x.decide_par)}</td><td>${esc(jourIso(x.decide_le))}</td></tr>`).join(''), 'Aucune décision enregistrée.')}
+    ${gerer ? `<div class="ligne serre">${bouton('Ajouter un risque', 'rg-risque')}${bouton('Consigner une décision', 'rg-decision')}</div>` : ''}`;
+  const niveaux = (idc, lib) => `<div class="champ"><label class="lbl" for="${idc}">${lib}</label><select id="${idc}">${Object.entries(NIVEAU).map(([c, l]) => `<option value="${c}">${esc(l)}</option>`).join('')}</select></div>`;
+  surAction(v, 'rg-risque', () => modale('Nouveau risque', `<div class="form-modale">${champ('rg-titre', 'Risque', '')}<div class="champ"><label class="lbl" for="rg-desc">Description et mesure prévue</label><textarea id="rg-desc"></textarea></div><div class="ligne">${niveaux('rg-gravite', 'Gravité')}${niveaux('rg-proba', 'Probabilité')}${champ('rg-ech', 'Échéance', '', 'type="date"')}</div></div>`,
+    [{ label: 'Annuler' }, { label: 'Enregistrer', pri: true, run: enregistrer(() => api('POST', `/projets/${p.id}/registre`, { type: 'risque', titre: valeur('#rg-titre'), description: valeur('#rg-desc'), gravite: valeur('#rg-gravite'), probabilite: valeur('#rg-proba'), echeance: valeur('#rg-ech') || null }), 'Risque enregistré.') }]));
+  surAction(v, 'rg-decision', () => modale('Nouvelle décision', `<div class="form-modale">${champ('rg-titre', 'Décision', '')}<div class="champ"><label class="lbl" for="rg-desc">Contexte et justification</label><textarea id="rg-desc"></textarea></div><div class="ligne">${champ('rg-par', 'Décidée par', '')}${champ('rg-le', 'Date', aujourdhuiIso(), 'type="date"')}</div></div>`,
+    [{ label: 'Annuler' }, { label: 'Enregistrer', pri: true, run: enregistrer(() => api('POST', `/projets/${p.id}/registre`, { type: 'decision', titre: valeur('#rg-titre'), description: valeur('#rg-desc'), decide_par: valeur('#rg-par'), decide_le: valeur('#rg-le') }), 'Décision enregistrée.') }]));
+  surAction(v, 'rg-clore', (id, b) => agir(b, () => api('PUT', `/projets/${p.id}/registre/${id}`, { statut: 'clos' }), 'Risque clos.'));
+}
+async function afficherFinancesProjet(v, p) {
+  const f = await api('GET', `/projets/${p.id}/finances`);
+  const modifier = peut('finance') && !p.archive_le;
+  $('#pj-finances').innerHTML = `<h3>Finances du projet</h3><p class="note">Montants par devise, sans conversion. Les revenus sont les factures émises, hors taxes, du contrat du projet.</p>${tableSynthese(f.synthese)}
+    ${tableSH(['Date', 'Nature', 'Catégorie', 'Libellé', 'Montant', ''], f.lignes.map((l) => `<tr><td>${esc(jourIso(l.jour))}</td><td>${esc(LIB_NATURE[l.nature])}</td><td>${esc(LIB_CATEGORIE[l.categorie])}</td><td>${esc(l.libelle)}</td>
+      <td class="num">${esc(argent(l.montant, l.devise))}</td><td>${modifier ? bouton('Retirer', 'pf-retirer', 'btn discret', l.id) : ''}</td></tr>`).join(''), 'Aucune ligne de budget ou de coût.')}
+    ${modifier ? `<div class="ligne">${bouton('Ajouter un budget ou un coût', 'pf-ajouter')}</div>` : ''}`;
+  surAction(v, 'pf-ajouter', () => modale('Budget ou coût du projet', `<div class="form-modale"><div class="ligne"><div class="champ"><label class="lbl" for="pf-nature">Nature</label><select id="pf-nature">${f.natures.map((n) => `<option value="${n}">${esc(LIB_NATURE[n])}</option>`).join('')}</select></div>
+      <div class="champ"><label class="lbl" for="pf-categorie">Catégorie</label><select id="pf-categorie">${f.categories.map((c) => `<option value="${c}">${esc(LIB_CATEGORIE[c])}</option>`).join('')}</select></div></div>
+      ${champ('pf-libelle', 'Libellé', '')}<div class="ligne">${champ('pf-montant', 'Montant', '', 'type="number" min="0" step="0.01"')}${champ('pf-devise', 'Devise (ISO)', p.devise || 'CAD')}${champ('pf-jour', 'Date', aujourdhuiIso(), 'type="date"')}</div></div>`,
+    [{ label: 'Annuler' }, { label: 'Enregistrer', pri: true, run: enregistrer(() => api('POST', `/projets/${p.id}/finances`, { nature: valeur('#pf-nature'), categorie: valeur('#pf-categorie'), libelle: valeur('#pf-libelle'),
+      montant: Number(valeur('#pf-montant')), devise: valeur('#pf-devise').trim().toUpperCase(), jour: valeur('#pf-jour') }), 'Ligne financière enregistrée.') }]));
+  surAction(v, 'pf-retirer', (id, b) => agir(b, () => api('DELETE', `/projets/${p.id}/finances/${id}`), 'Ligne retirée.'));
 }
 async function vueProjet(v) {
   const p = await api('GET', `/projets/${etat.projet}`);
-  const gerer = peut('implantation');
+  const gerer = peut('implantation')&&!p.archive_le;
   v.innerHTML = `<div class="entete"><div><button class="btn discret retour" type="button" id="b-retour-projets">← Tous les projets</button><h2>${esc(p.nom)}</h2>
       <p>${etiquette('projet', p.statut)} · ${esc(p.hopital || p.organisation || '')}${p.contrat ? ` · contrat ${esc(p.contrat)}` : ''} · ${p.avancement} %</p></div>
       ${gerer ? `<div class="ligne serre">${bouton('Modifier', 'pj-modifier')}${bouton('Nouvelle tâche', 'pj-tache', 'btn pri')}${bouton('Nouveau jalon', 'pj-jalon')}</div>` : ''}</div>
     <div class="progres large"><i style="width:${p.avancement}%"></i></div>
+    <p>${esc(p.reference)} · ${esc(p.type_projet)} · Équipe : ${p.membres.map(m=>esc(m.nom)+presenceHTML(m.utilisateur_id)).join(', ')||'Non constituée'}</p>
+    ${p.archive_le?`<p class="note">Projet archivé : restaurez-le avant modification.</p>`:''}
+    ${peut('implantation')?`<div class="ligne serre">${p.archive_le?bouton('Restaurer le projet','pj-restaurer')+bouton('Demander la suppression','pj-demander-suppression'):['termine','annule'].includes(p.statut)?bouton('Archiver le projet','pj-archiver'):''}${p.suppression_demandee_le&&etat.moi.utilisateur.role==='administration'?bouton('Supprimer définitivement','pj-supprimer','btn dan'):''}</div>`:''}
     <h3>Jalons</h3>${tableSH(['Jalon', 'Échéance', 'Responsable', 'État'], p.jalons.map((j) => `<tr><td>${esc(j.nom)}</td><td>${esc(j.echeance ? jour(j.echeance) : '—')}</td><td>${esc(j.responsable || '—')}</td><td>${j.termine_le ? `atteint le ${esc(jour(j.termine_le))}` : gerer ? bouton('Marquer atteint', 'pj-jalon-fait', 'btn', j.id) : 'à venir'}</td></tr>`).join(''), 'Aucun jalon.')}
-    <h3>Tâches</h3>${tableauTaches(p.taches, { projet: false })}`;
+    <h3>Tâches</h3>${tableauTaches(p.taches, { projet: false })}<div id="pj-registre"></div><div id="pj-finances"></div>`;
   $('#b-retour-projets').onclick = () => { etat.projet = null; afficher(); };
-  brancherTaches(v, p.taches);
+  if (peut('implantation', 'support', 'formation')) await afficherRegistreProjet(v, p);
+  if (peut('finance', 'implantation')) await afficherFinancesProjet(v, p);
+  if(!p.archive_le)brancherTaches(v, p.taches);
+  for(const action of ['archiver','restaurer'])surAction(v,`pj-${action}`,()=>modale(action==='archiver'?'Archiver le projet':'Restaurer le projet',`<p>${esc(p.reference)} · ${esc(p.nom)}</p>`,[
+    {label:'Annuler'},{label:action==='archiver'?'Archiver':'Restaurer',pri:true,run:enregistrer(()=>api('POST',`/projets/${p.id}/${action}`),'Projet enregistré.')}
+  ]));
+  surAction(v,'pj-demander-suppression',()=>modale('Demander la suppression',`<p>${esc(p.reference)} · ${esc(p.nom)}</p><div class="champ"><label for="suppression-motif">Motif de suppression</label><textarea id="suppression-motif" minlength="10" maxlength="2000"></textarea></div>`,[
+    {label:'Annuler'},{label:'Demander la suppression',pri:true,run:enregistrer(()=>api('POST',`/projets/${p.id}/demander-suppression`,{motif:valeur('#suppression-motif')}),'Demande enregistrée.')}
+  ]));
+  surAction(v,'pj-supprimer',()=>modale('Supprimer définitivement',`<p>La suppression reste soumise aux contrôles de conservation et de dépendances.</p><p>${esc(p.reference)} · ${esc(p.nom)}</p>${champ('suppression-confirmation',`SUPPRIMER ${p.reference}`,'')}`,[
+    {label:'Annuler'},{label:'Supprimer définitivement',dan:true,run:async()=>{try{await api('POST',`/projets/${p.id}/supprimer`,{confirmation:valeur('#suppression-confirmation')});etat.projet=null;await afficher();return true;}catch(e){toast(e.message,true);return false;}}}
+  ]));
   surAction(v, 'pj-jalon-fait', (id, b) => agir(b, () => api('PUT', `/jalons/${id}`, { termine: true }), 'Jalon atteint.'));
   surAction(v, 'pj-jalon', async () => modale('Nouveau jalon', `<div class="form-modale">${champ('jl-nom', 'Nom', '')}${champ('jl-date', 'Échéance', '', 'type="date"')}${await choixPersonne('jl-resp', null)}</div>`,
     [{ label: 'Annuler' }, { label: 'Ajouter', pri: true, run: enregistrer(() => api('POST', `/projets/${p.id}/jalons`, { nom: valeur('#jl-nom'), echeance: valeur('#jl-date') || null, responsable_id: valeur('#jl-resp') || null }), 'Jalon ajouté.') }]));
   surAction(v, 'pj-tache', async () => modale('Nouvelle tâche', `<div class="form-modale">${champ('nt-titre', 'Titre', '')}<div class="ligne"><div class="champ"><label class="lbl" for="nt-prio">Priorité</label><select id="nt-prio">${options('priorite', 'normale')}</select></div>${champ('nt-date', 'Échéance', '', 'type="date"')}</div>
-    ${await choixPersonne('nt-resp', null)}<div class="champ"><label class="lbl" for="nt-desc">Description</label><textarea id="nt-desc"></textarea></div></div>`,
-  [{ label: 'Annuler' }, { label: 'Créer', pri: true, run: enregistrer(() => api('POST', `/projets/${p.id}/taches`, { titre: valeur('#nt-titre'), priorite: valeur('#nt-prio'), echeance: valeur('#nt-date') || null, responsable_id: valeur('#nt-resp') || null, description: valeur('#nt-desc') }), 'Tâche créée.') }]));
-  surAction(v, 'pj-modifier', async () => modale('Modifier le projet', `<div class="form-modale">${champ('mp-nom', 'Nom', p.nom)}<div class="ligne"><div class="champ"><label class="lbl" for="mp-statut">Statut</label><select id="mp-statut">${options('projet', p.statut)}</select></div>${champ('mp-debut', 'Début', jourIso(p.debut), 'type="date"')}${champ('mp-fin', 'Échéance', jourIso(p.echeance), 'type="date"')}</div>${await choixPersonne('mp-resp', p.responsable_id)}</div>`,
-    [{ label: 'Annuler' }, { label: 'Enregistrer', pri: true, run: enregistrer(() => api('PUT', `/projets/${p.id}`, { nom: valeur('#mp-nom'), statut: valeur('#mp-statut'), debut: valeur('#mp-debut') || null, echeance: valeur('#mp-fin') || null, responsable_id: valeur('#mp-resp') || null }), 'Projet enregistré.') }]));
+    ${await choixPersonne('nt-resp', null)}<div class="champ"><label class="lbl" for="nt-desc">Description</label><textarea id="nt-desc"></textarea></div>
+    <label class="case"><input id="nt-critique" type="checkbox">Critique : bloque le Go Live tant qu’elle n’est pas terminée</label>
+    <div class="champ"><label for="nt-acceptation">Critères d’acceptation</label><textarea id="nt-acceptation"></textarea></div></div>`,
+  [{ label: 'Annuler' }, { label: 'Créer', pri: true, run: enregistrer(() => api('POST', `/projets/${p.id}/taches`, { titre: valeur('#nt-titre'), priorite: valeur('#nt-prio'), echeance: valeur('#nt-date') || null, responsable_id: valeur('#nt-resp') || null, description: valeur('#nt-desc'),critique_golive:$('#nt-critique').checked,criteres_acceptation:valeur('#nt-acceptation') }), 'Tâche créée.') }]));
+  surAction(v, 'pj-modifier', async () => modale('Modifier le projet', `<div class="form-modale">${champ('mp-nom', 'Nom', p.nom)}<div class="ligne"><div class="champ"><label class="lbl" for="mp-statut">Statut</label><select id="mp-statut">${options('projet', p.statut)}</select></div>${champ('mp-debut', 'Début', jourIso(p.debut), 'type="date"')}${champ('mp-fin', 'Échéance', jourIso(p.echeance), 'type="date"')}</div>${await choixPersonne('mp-resp', p.responsable_id,'Chef de projet')}${await choixMembresProjet('mp-membres',p.membres.map(m=>m.utilisateur_id))}</div>`,
+    [{ label: 'Annuler' }, { label: 'Enregistrer', pri: true, run: enregistrer(() => api('PUT', `/projets/${p.id}`, { nom: valeur('#mp-nom'), statut: valeur('#mp-statut'), debut: valeur('#mp-debut') || null, echeance: valeur('#mp-fin') || null, responsable_id: valeur('#mp-resp') || null,membres:membresProjetSelectionnes('#mp-membres') }), 'Projet enregistré.') }]));
 }
 
 /* ---------------- tâches ---------------- */
 function tableauTaches(ts, { projet = true } = {}) {
   const moi = etat.moi.utilisateur.id; const gestion = peut('implantation');
   return tableSH(['Tâche', ...(projet ? ['Projet'] : []), 'Statut', 'Priorité', 'Responsable', 'Échéance', ''], ts.map((t) => {
-    const modifiable = gestion || t.responsable_id === moi;
+    const modifiable = gestion || t.responsable_id === moi || t.collaborateur === true;
     return `<tr><td><b>${esc(t.titre)}</b>${t.code_auto ? ' <span class="badge">suit la console</span>' : ''}${t.en_retard ? ` ${etiquette('facture', 'en_retard')}` : ''}</td>${projet ? `<td>${esc(t.projet)}<div class="note">${esc(t.hopital || '')}</div></td>` : ''}
-      <td>${modifiable ? `<select data-tache-statut="${t.id}" aria-label="Statut de ${esc(t.titre)}">${options('tache', t.statut)}</select>` : etiquette('tache', t.statut)}</td><td>${etiquette('priorite', t.priorite)}</td><td>${esc(t.responsable || '—')}</td><td>${esc(t.echeance ? jour(t.echeance) : '—')}</td>
-      <td><div class="ligne serre">${modifiable ? bouton('Modifier', 't-modifier', 'btn', t.id) : ''}${bouton(`Commentaires${t.commentaires ? ` (${t.commentaires})` : ''}`, 't-commentaires', 'btn discret', t.id)}</div></td></tr>`;
+      <td>${modifiable ? `<select data-tache-statut="${t.id}" aria-label="Statut de ${esc(t.titre)}">${options('tache', t.statut)}</select>` : etiquette('tache', t.statut)}</td><td>${etiquette('priorite', t.priorite)}</td><td>${responsablePresenceHTML(t.responsable_id,t.responsable)}</td><td>${esc(t.echeance ? jour(t.echeance) : '—')}</td>
+      <td><div class="ligne serre">${modifiable ? bouton('Modifier', 't-modifier', 'btn', t.id) : ''}${bouton('Suivi', 't-suivi', 'btn discret', t.id)}${bouton(`Commentaires${t.commentaires ? ` (${t.commentaires})` : ''}`, 't-commentaires', 'btn discret', t.id)}</div></td></tr>`;
   }).join(''), 'Aucune tâche.');
 }
 function brancherTaches(v, ts) {
-  v.querySelectorAll('[data-tache-statut]').forEach((s) => { s.onchange = () => agir(s, () => api('PUT', `/taches/${s.dataset.tacheStatut}`, { statut: s.value }), 'Tâche mise à jour.'); });
+  v.querySelectorAll('[data-tache-statut]').forEach((s) => { s.onchange = () => {
+    const id = s.dataset.tacheStatut;
+    // L'annulation exige un motif ; les autres changements s'appliquent directement.
+    if (s.value === 'annulee') return modale('Annuler la tâche', `${champ('ta-motif', 'Motif de l’annulation', '')}`, [{ label: 'Fermer', run: () => { afficher(); return true; } },
+      { label: 'Annuler la tâche', dan: true, run: enregistrer(() => api('PUT', `/taches/${id}`, { statut: 'annulee', motif: valeur('#ta-motif') }), 'Tâche annulée.') }]);
+    return agir(s, () => api('PUT', `/taches/${id}`, { statut: s.value }), 'Tâche mise à jour.');
+  }; });
+  surAction(v, 't-suivi', async (id) => {
+    const t = ts.find((x) => String(x.id) === String(id)); const s = await api('GET', `/taches/${id}/suivi`);
+    const modifiable = (peut('implantation') || t.responsable_id === etat.moi.utilisateur.id || t.collaborateur === true) && !['terminee', 'annulee'].includes(t.statut);
+    const h = (m) => (m == null ? '—' : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`);
+    modale(`Suivi · ${t.titre}`, `<p>Estimé : <b>${esc(h(s.temps_estime_minutes))}</b> · Réalisé : <b>${esc(h(s.temps_realise_minutes))}</b>${s.ecart_minutes == null ? '' : ` · Écart : ${s.ecart_minutes < 0 ? '−' : '+'}${esc(h(Math.abs(s.ecart_minutes)))}`}</p>
+      ${peut('implantation') && modifiable ? `<div class="ligne">${champ('ts-estime', 'Estimation (minutes)', s.temps_estime_minutes ?? '', 'type="number" min="0" step="15"')}<div>${bouton('Enregistrer l’estimation', 'ts-estimer')}</div></div>` : ''}
+      <p>Collaborateurs : ${s.collaborateurs.length ? s.collaborateurs.map((c) => esc(c.nom)).join(', ') : 'aucun'}</p>
+      ${peut('implantation') && modifiable ? `${await choixMembresProjet('ts-collab', s.collaborateurs.map((c) => c.id))}<div>${bouton('Enregistrer les collaborateurs', 'ts-collaborateurs')}</div>` : ''}
+      <h3>Checklist</h3>${s.checklist.length ? `<ul class="liste-simple">${s.checklist.map((c) => `<li><label class="case"><input type="checkbox" data-check="${c.id}"${c.faite ? ' checked' : ''}${modifiable ? '' : ' disabled'}> ${esc(c.libelle)}</label>${c.faite ? ` <span class="note">${esc(c.faite_par_nom || '')}</span>` : ''}</li>`).join('')}</ul>` : '<p class="note">Aucun élément.</p>'}
+      ${modifiable ? `<div class="ligne">${champ('ts-check', 'Nouvel élément', '')}<div>${bouton('Ajouter', 'ts-ajouter')}</div></div>` : ''}
+      <h3>Temps réalisé</h3>${tableSH(['Date', 'Personne', 'Durée', 'Note'], s.temps.map((x) => `<tr><td>${esc(jourIso(x.jour))}</td><td>${esc(x.utilisateur)}</td><td>${esc(h(x.minutes))}</td><td>${esc(x.note || '')}</td></tr>`).join(''), 'Aucun temps saisi.')}
+      ${modifiable ? `<div class="ligne">${champ('ts-minutes', 'Minutes', '', 'type="number" min="1" max="1440"')}${champ('ts-jour', 'Date', aujourdhuiIso(), 'type="date"')}${champ('ts-note', 'Note', '')}<div>${bouton('Saisir le temps', 'ts-temps')}</div></div>` : ''}`,
+    [{ label: 'Fermer' }]);
+    const m = $('#modale');
+    const rafraichir = () => { m.hidden = true; m.innerHTML = ''; v.querySelector(`[data-action="t-suivi"][data-id="${id}"]`)?.click(); };
+    m.querySelectorAll('[data-check]').forEach((c) => { c.onchange = () => agir(c, () => api('PUT', `/taches/${id}/checklist/${c.dataset.check}`, { faite: c.checked }), 'Checklist mise à jour.'); });
+    surAction(m, 'ts-collaborateurs', (x, b) => agir(b, () => api('PUT', `/taches/${id}/collaborateurs`, { utilisateurs: membresProjetSelectionnes('#ts-collab') }), 'Collaborateurs enregistrés.').then(rafraichir));
+    surAction(m, 'ts-estimer', (x, b) => agir(b, () => api('PUT', `/taches/${id}/estimation`, { minutes: valeur('#ts-estime') === '' ? null : Number(valeur('#ts-estime')) }), 'Estimation enregistrée.').then(rafraichir));
+    surAction(m, 'ts-ajouter', (x, b) => agir(b, () => api('POST', `/taches/${id}/checklist`, { libelle: valeur('#ts-check') }), 'Élément ajouté.').then(rafraichir));
+    surAction(m, 'ts-temps', (x, b) => agir(b, () => api('POST', `/taches/${id}/temps`, { minutes: Number(valeur('#ts-minutes')), jour: valeur('#ts-jour'), note: valeur('#ts-note') }), 'Temps saisi.').then(rafraichir));
+  });
   surAction(v, 't-modifier', async (id) => {
     const t = ts.find((x) => String(x.id) === String(id));
     modale('Modifier la tâche', `<div class="form-modale"><div class="ligne"><div class="champ"><label class="lbl" for="mt-prio">Priorité</label><select id="mt-prio">${options('priorite', t.priorite)}</select></div>${champ('mt-date', 'Échéance', jourIso(t.echeance), 'type="date"')}</div>
@@ -391,15 +544,22 @@ async function vueCalendrier(v) {
 async function vueSupport(v) {
   const f = etat.filtresSupport || (etat.filtresSupport = { statut: '', type: '', moi: false });
   const [items, hs] = await Promise.all([api('GET', `/support/tickets?${new URLSearchParams({ ...(f.statut ? { statut: f.statut } : {}), ...(f.type ? { type: f.type } : {}), ...(f.moi ? { moi: '1' } : {}) })}`), api('GET', '/hopitaux')]);
+  const etapesKanban=[['nouveau','Nouveau'],['assigne','Assigné'],['en_cours','En cours'],['en_attente','En attente'],['resolu','Résolu'],['ferme','Fermé']];
+  const kanban=etapesKanban.map(([code,label])=>{const liste=items.filter(t=>(t.statut==='ouvert'?(t.responsable_id?'assigne':'nouveau'):t.statut)===code);return `<section class="sh-kanban-col" data-colonne="${code}"><h3>${esc(label)} <span>${liste.length}</span></h3>${liste.slice(0,50).map(t=>`<article class="sh-kanban-card"><button type="button" class="lien-ligne" data-action="tk-ouvrir" data-id="${Number(t.id)}">${esc(t.reference)} · ${esc(t.titre)}</button><p>${esc(t.hopital)}</p><p>${etiquette('priorite',t.priorite)} ${esc(t.responsable||'Non attribué')}</p><p class="note">${esc(t.echeance?quand(t.echeance):'—')}</p></article>`).join('')||'<p class="note">Aucun ticket.</p>'}${liste.length>50?`<p class="note">50 premiers sur ${liste.length} tickets.</p>`:''}</section>`;}).join('');
   const lignes = items.map((t) => `<tr><td><button class="lien-ligne" type="button" data-action="tk-ouvrir" data-id="${t.id}">${esc(t.titre)}</button>${t.hors_delai ? ` ${etiquette('facture', 'en_retard')}` : ''}</td><td>${esc(t.hopital)}</td><td>${esc(LIB.type_ticket[t.type])}${t.gravite ? ` · ${esc(t.gravite)}` : ''}</td>
-    <td>${etiquette('ticket', t.statut)}</td><td>${etiquette('priorite', t.priorite)}</td><td>${esc(t.responsable || '—')}</td><td>${esc(t.echeance ? quand(t.echeance) : '—')}</td></tr>`).join('');
-  v.innerHTML = `<div class="entete"><div><h2>Support</h2><p>${esc(pl('{n|# ticket|# tickets}', { n: items.length }))} · ${items.filter((t) => t.hors_delai).length} hors délai. Délai de prise en charge : 4 h (urgente), 24 h (haute), 72 h (normale), 7 jours (basse).</p></div>${bouton('Nouveau ticket', 'tk-nouveau', 'btn pri')}</div>
+    <td>${etiquette('ticket', t.statut)}</td><td>${etiquette('priorite', t.priorite)}</td><td>${responsablePresenceHTML(t.responsable_id,t.responsable)}</td><td>${esc(t.echeance ? quand(t.echeance) : '—')}</td></tr>`).join('');
+  v.innerHTML = `<div class="entete"><div><h2>Support</h2><p>${esc(pl('{n|# ticket|# tickets}', { n: items.length }))} · ${items.filter((t) => t.hors_delai).length} hors délai. Délai de prise en charge : 4 h (urgente), 24 h (haute), 72 h (normale), 7 jours (basse).</p></div><div class="ligne">${roleMoi()==='administration'?bouton('SLA contractuels','sla-configurer','btn'):''}${peut('support')?bouton('Vérifier les escalades','sla-verifier','btn'):''}${bouton('Nouveau ticket', 'tk-nouveau', 'btn pri')}</div></div>
+    <section class="carte"><h3>OG · recherche et résumés de tickets</h3><p class="note">Recherche locale en lecture seule. Résumé factuel : état, priorité, établissement et responsable.</p><form id="support-og-form" class="ligne"><input id="support-og-query" maxlength="160" minlength="2" required placeholder="Référence ou mots-clés"><button class="btn" type="submit">Rechercher</button></form><div id="support-og-resultats" aria-live="polite"></div></section>
+    <h3>Suivi des tickets</h3><div class="sh-kanban tk-kanban">${kanban}</div>
     <div class="ligne filtres"><div class="champ"><label class="lbl" for="fs-statut">Statut</label><select id="fs-statut"><option value="">Tous</option>${options('ticket', f.statut)}</select></div>
       <div class="champ"><label class="lbl" for="fs-type">Type</label><select id="fs-type"><option value="">Tous</option>${options('type_ticket', f.type)}</select></div><label class="case"><input type="checkbox" id="fs-moi"${f.moi ? ' checked' : ''}> Attribués à moi</label></div>
     ${tableSH(['Sujet', 'Établissement', 'Type', 'Statut', 'Priorité', 'Responsable', 'Échéance'], lignes)}`;
   $('#fs-statut').onchange = (e) => { f.statut = e.target.value; afficher(); };
   $('#fs-type').onchange = (e) => { f.type = e.target.value; afficher(); };
   $('#fs-moi').onchange = (e) => { f.moi = e.target.checked; afficher(); };
+  surAction(v,'sla-configurer',()=>choisirSlaSupport(hs));
+  surAction(v,'sla-verifier',(id,b)=>agir(b,()=>api('POST','/support/escalades/executer',{}),'Escalades vérifiées.'));
+  const ogForm=$('#support-og-form',v); if(ogForm) ogForm.onsubmit=async(e)=>{e.preventDefault();const zone=$('#support-og-resultats',v),btn=ogForm.querySelector('button');btn.disabled=true;zone.textContent='Recherche…';try{const resultat=await api('POST','/support/og/recherche',{recherche:$('#support-og-query',v).value});zone.innerHTML=resultat.tickets.length?`<p>${esc(resultat.nombre)} ticket(s) trouvé(s).</p><ul>${resultat.tickets.map(t=>`<li><button type="button" class="lien-ligne" data-og-ticket="${Number(t.id)}">${esc(t.resume)}</button></li>`).join('')}</ul>`:'<p>Aucun ticket trouvé.</p>';if(typeof traduireNoeuds==='function')traduireNoeuds(zone);for(const b of zone.querySelectorAll('[data-og-ticket]'))b.onclick=async()=>{f.statut='';f.type='';f.moi=false;await afficher();v.querySelectorAll('[data-action="tk-ouvrir"]').forEach(x=>{if(x.dataset.id===b.dataset.ogTicket)x.click();});};}catch(err){zone.textContent=err.message;}finally{btn.disabled=false;}};
   surAction(v, 'tk-nouveau', () => {
     if (!hs.length) { toast('Aucun établissement enregistré.', true); return; }
     modale('Nouveau ticket', `<div class="form-modale"><div class="champ"><label class="lbl" for="tk-hop">Établissement</label><select id="tk-hop">${hs.map((h) => `<option value="${h.id}">${esc(h.nom)}</option>`).join('')}</select></div>
@@ -410,16 +570,19 @@ async function vueSupport(v) {
   surAction(v, 'tk-ouvrir', async (id) => {
     const t = await api('GET', `/support/tickets/${id}`);
     const gerer = peut('support');
-    modale(t.titre, `<p>${etiquette('ticket', t.statut)} ${etiquette('priorite', t.priorite)} · ${esc(t.hopital)} · ${esc(LIB.type_ticket[t.type])}${t.gravite ? ` ${esc(t.gravite)}` : ''}</p>
-      <p class="note">Créé ${esc(quand(t.cree_le))} par ${esc(t.createur || '—')} · échéance ${esc(quand(t.echeance))}${t.contact ? ` · contact ${esc(t.contact)}` : ''}</p>${t.description ? `<p>${esc(t.description)}</p>` : ''}
+    modale(t.reference+' · '+t.titre, `<p>${etiquette('ticket', t.statut)} ${etiquette('priorite', t.priorite)} · ${esc(t.hopital)} · ${esc(LIB.type_ticket[t.type])}${t.gravite ? ` ${esc(t.gravite)}` : ''}</p>
+      <p class="note">Créé ${esc(quand(t.cree_le))} par ${esc(t.createur || t.demandeur_client || '—')} · échéance ${esc(quand(t.echeance))}${t.contact ? ` · contact ${esc(t.contact)}` : ''}</p>${t.description ? `<p>${esc(t.description)}</p>` : ''}${detailSlaSupport(t)}
       ${gerer ? `<div class="ligne"><div class="champ"><label class="lbl" for="tm-statut">Statut</label><select id="tm-statut">${options('ticket', t.statut)}</select></div><div class="champ"><label class="lbl" for="tm-prio">Priorité</label><select id="tm-prio">${options('priorite', t.priorite)}</select></div>${await choixPersonne('tm-resp', t.responsable_id)}</div>
-        <div class="champ"><label class="lbl" for="tm-resol">Résolution</label><textarea id="tm-resol">${esc(t.resolution || '')}</textarea></div>` : ''}
+        <div class="champ"><label class="lbl" for="tm-resol">Résolution</label><textarea id="tm-resol">${esc(t.resolution || '')}</textarea></div><label class="case"><input type="checkbox" id="tm-client"${t.client_visible?' checked':''}>Visible au client : description et résolution partagées</label>` : ''}
+      <h4>Pièces jointes</h4><ul class="liste-simple" id="tm-pieces">Chargement…</ul>${gerer?'<div class="ligne"><input type="file" id="tm-fichier" accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.csv,.txt"><button class="btn" id="tm-joindre" type="button">Joindre au ticket</button></div>':''}
       <h4>Échanges</h4>${t.messages.length ? `<ul class="liste-simple">${t.messages.map((m) => `<li><b>${esc(m.auteur || '—')}</b> <span class="note">${esc(quand(m.cree_le))}</span><br>${esc(m.message)}</li>`).join('')}</ul>` : '<p class="note">Aucun échange.</p>'}
-      <div class="champ"><label class="lbl" for="tm-msg">Nouveau message (interne)</label><textarea id="tm-msg"></textarea></div>
+      <div class="champ"><label class="lbl" for="tm-msg">Nouveau message</label><textarea id="tm-msg"></textarea></div><label class="case"><input type="checkbox" id="tm-public">Partager ce message avec le client</label>
       <h4>Historique</h4><p class="note">${t.evenements.map((e) => `${esc(quand(e.quand))} · ${esc(e.champ)} : ${esc(e.avant ?? '—')} → ${esc(e.apres ?? '—')} · ${esc(e.par)}`).join('<br>') || 'Aucun changement.'}</p>`,
-    [{ label: 'Fermer' }, { label: 'Envoyer le message', run: enregistrer(() => api('POST', `/support/tickets/${id}/messages`, { message: valeur('#tm-msg') }), 'Message ajouté.') },
-      ...(gerer ? [{ label: 'Enregistrer', pri: true, run: enregistrer(() => api('PUT', `/support/tickets/${id}`, { statut: valeur('#tm-statut'), priorite: valeur('#tm-prio'), responsable_id: valeur('#tm-resp') || null, resolution: valeur('#tm-resol') }), 'Ticket enregistré.') }] : [])]);
+    [{ label: 'Fermer' }, ...(gerer&&!t.prise_en_charge_le&&!['resolu','ferme'].includes(t.statut)?[{label:'Prendre en charge',run:enregistrer(()=>api('POST',`/support/tickets/${id}/prise-en-charge`,{}),'Ticket pris en charge.')}]:[]), { label: 'Envoyer le message', run: enregistrer(() => api('POST', `/support/tickets/${id}/messages`, { message: valeur('#tm-msg'),interne:!$('#tm-public').checked }), 'Message ajouté.') },
+      ...(gerer ? [{ label: 'Enregistrer', pri: true, run: enregistrer(() => api('PUT', `/support/tickets/${id}`, { statut: valeur('#tm-statut'), priorite: valeur('#tm-prio'), responsable_id: valeur('#tm-resp') || null, resolution: valeur('#tm-resol'),client_visible:$('#tm-client').checked }), 'Ticket enregistré.') }] : [])]);
     $('#modale .boite').classList.add('large');
+    (async()=>{const docs=await api('GET',`/documents?ticket_id=${id}`);const ul=$('#tm-pieces');if(!ul)return;ul.innerHTML=docs.map(d=>`<li><button class="btn" data-pj="${esc(d.id)}">${esc(d.nom)} · ${esc(taille(d.taille))}</button></li>`).join('')||'<li>Aucune pièce jointe.</li>';ul.querySelectorAll('[data-pj]').forEach(b=>b.onclick=()=>telechargerApi(`/documents/${b.dataset.pj}/fichier`,b.textContent.split(' · ')[0]));})().catch(e=>toast(e.message,true));
+    const joindre=$('#tm-joindre');if(joindre)joindre.onclick=async()=>{joindre.disabled=true;try{const f=await lireFichier($('#tm-fichier'));await api('POST','/documents',{...f,categorie:'support',ticket_id:Number(id)});toast('Pièce jointe ajoutée.');await afficher();}catch(e){toast(e.message,true);}finally{if(joindre.isConnected)joindre.disabled=false;}};
   });
 }
 
@@ -479,8 +642,9 @@ async function vueRapports(v) {
   };
   const blocs = [];
   if (r.pipeline) {
-    const ordre = Object.keys(LIB.opp); const pipeline = ordre.map((s) => r.pipeline.find((p) => p.statut === s) || { statut: s, n: 0, valeur: 0, ponderee: 0 });
-    blocs.push(`<article class="carte"><h3>Pipeline commercial</h3>${barres(pipeline, 'valeur', (x) => `${LIB.opp[x.statut]} (${x.n})`, (x) => argent(x.valeur))}<p class="note">Taux de conversion : ${r.taux_conversion == null ? '—' : `${esc(r.taux_conversion)} %`} · relances en retard : ${esc(r.relances_en_retard)}</p>
+    const groupes=window.ArrimoShFinances.pipelineParDevise(r.pipeline,Object.keys(LIB.opp));
+    const pipeline=groupes.map(g=>`<h4>${esc(g.devise)}</h4>${barres(g.lignes,'valeur',x=>`${LIB.opp[x.statut]} (${x.n})`,x=>argent(x.valeur,g.devise))}`).join('');
+    blocs.push(`<article class="carte"><h3>Pipeline commercial</h3>${pipeline||'<p>Aucune donnée enregistrée.</p>'}<p class="note">Taux de conversion : ${r.taux_conversion == null ? '—' : `${esc(r.taux_conversion)} %`} · relances en retard : ${esc(r.relances_en_retard)}</p>
       <p class="note">Contrats actifs ${esc(r.contrats.actifs)} · en cours ${esc(r.contrats.en_cours)} · préavis sous 90 jours ${esc(r.contrats.a_renouveler)}</p>${peut('commercial', 'finance') ? bouton('Exporter le pipeline (CSV)', 'exp-pipeline') : ''}</article>`);
   }
   if (r.factures) {
@@ -490,12 +654,34 @@ async function vueRapports(v) {
     blocs.push(`<article class="carte"><h3>Implantation</h3>${barres(r.projets, 'n', (x) => LIB.projet[x.statut] || x.statut)}<p class="note">Tâches ouvertes ${esc(r.taches.ouvertes)} · en retard ${esc(r.taches.en_retard)} · terminées ${esc(r.taches.terminees)}</p>
       <h4>Formation par établissement</h4>${barres(r.formation, 'faits', (x) => x.nom, (x) => `${x.faits}/${x.elements} · ${pl('{n|aucun participant validé|# participant validé|# participants validés}', { n: x.participants_valides })}`)}</article>`);
   }
-  if (r.support) blocs.push(`<article class="carte"><h3>Support</h3><p>Ouverts ${esc(r.support.ouverts)} · hors délai ${esc(r.support.hors_delai)} · incidents ouverts ${esc(r.support.incidents_ouverts)}</p><p class="note">Résolution moyenne : ${r.support.resolution_moyenne_heures == null ? '—' : `${esc(r.support.resolution_moyenne_heures)} h`}</p>${bouton('Exporter les tickets (CSV)', 'exp-support')}</article>`);
+  if (r.support) blocs.push(`<article class="carte"><h3>Support</h3><p>Ouverts ${esc(r.support.ouverts)} · hors délai ${esc(r.support.hors_delai)} · incidents ouverts ${esc(r.support.incidents_ouverts)}</p><p class="note">Résolution moyenne : ${r.support.resolution_moyenne_heures == null ? '—' : `${esc(r.support.resolution_moyenne_heures)} h`}</p><p class="note">SLA respecté — prise en charge : ${r.support.prise_en_charge_sla_pct == null ? '—' : `${esc(r.support.prise_en_charge_sla_pct)} %`} (${esc(r.support.prises_en_charge_sla_respectees)}/${esc(r.support.prises_en_charge_sla_eligibles)}) · résolution : ${r.support.resolution_sla_pct == null ? '—' : `${esc(r.support.resolution_sla_pct)} %`} (${esc(r.support.resolutions_sla_respectees)}/${esc(r.support.resolutions_sla_eligibles)})</p>${bouton('Exporter les tickets (CSV)', 'exp-support')}</article>`);
   v.innerHTML = `<div class="entete"><div><h2>Rapports</h2><p>Indicateurs calculés à la demande depuis la base SH (${esc(quand(r.genere_le))}) ; aucune valeur de démonstration. Les sections dépendent de votre rôle.</p></div></div><div class="grille-rapports">${blocs.join('') || '<p class="note">Aucun indicateur pour votre rôle.</p>'}</div>`;
   for (const s of ['pipeline', 'factures', 'support']) surAction(v, `exp-${s}`, (id, b) => agir(b, () => telechargerApi(`/rapports/export?section=${s}`, `arrimo-sh-${s}.csv`)));
 }
 
 /* ---------------- équipe : équipes et permissions (complète l'écran Équipe SH de sh.js) ---------------- */
+/** Compétences, zones et charge réelle (tâches ouvertes et estimations restantes) de chaque membre. */
+const NIVEAU_COMPETENCE = { notions: 'Notions', autonome: 'Autonome', expert: 'Expert' };
+async function afficherCompetences(v, recherche = '') {
+  const membres = await api('GET', `/equipe/competences${recherche ? `?q=${encodeURIComponent(recherche)}` : ''}`);
+  let zone = $('#zone-competences'); if (!zone) { zone = document.createElement('section'); zone.id = 'zone-competences'; v.appendChild(zone); }
+  const h = (m) => `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`;
+  zone.innerHTML = `<h3>Compétences, zones et charge</h3><p class="note">La charge vient des tâches ouvertes et de leurs estimations restantes ; les tâches sans estimation sont signalées.</p>
+    <div class="ligne filtres"><div class="champ"><label class="lbl" for="cp-q">Rechercher une compétence ou une zone</label><input id="cp-q" value="${esc(recherche)}"></div></div>
+    ${tableSH(['Membre', 'Compétences', 'Zones', 'Tâches ouvertes', 'Reste estimé', ''], membres.map((m) => `<tr><td><b>${esc(m.nom)}</b><div class="note">${esc(m.fonction || LIB.role[m.role] || m.role)}</div></td>
+      <td>${m.competences.map((c) => `<span class="badge">${esc(c.competence)} · ${esc(NIVEAU_COMPETENCE[c.niveau])}</span>`).join(' ') || '—'}</td><td>${esc(m.zones.join(', ') || '—')}</td>
+      <td class="num">${m.charge.taches_ouvertes}${m.charge.en_retard ? ` · ${m.charge.en_retard} en retard` : ''}${m.charge.sans_estimation ? `<div class="note">${m.charge.sans_estimation} sans estimation</div>` : ''}</td><td class="num">${esc(h(m.charge.minutes_restantes))}</td>
+      <td>${peut() ? bouton('Modifier', 'cp-modifier', 'btn discret', m.id) : ''}</td></tr>`).join(''), 'Aucun membre ne correspond.')}`;
+  let minuterie; $('#cp-q').oninput = (e) => { clearTimeout(minuterie); minuterie = setTimeout(() => afficherCompetences(v, e.target.value.trim()).then(() => { const q = $('#cp-q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }), 300); };
+  surAction(zone, 'cp-modifier', (id) => {
+    const m = membres.find((x) => String(x.id) === String(id));
+    modale(`Compétences · ${m.nom}`, `<div class="form-modale"><div class="champ"><label class="lbl" for="cp-liste">Une compétence par ligne : libellé ; niveau (notions, autonome ou expert)</label><textarea id="cp-liste" rows="6">${esc(m.competences.map((c) => `${c.competence} ; ${c.niveau}`).join('\n'))}</textarea></div>
+      ${champ('cp-zones', 'Zones d’intervention (séparées par des virgules)', m.zones.join(', '))}</div>`,
+    [{ label: 'Annuler' }, { label: 'Enregistrer', pri: true, run: enregistrer(() => api('PUT', `/equipe/${m.id}/competences`, {
+      competences: valeur('#cp-liste').split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const [competence, niveau] = l.split(';').map((x) => x.trim()); return { competence, niveau: (niveau || '').toLowerCase() }; }),
+      zones: valeur('#cp-zones').split(',').map((z) => z.trim()).filter(Boolean) }), 'Compétences enregistrées.') }]);
+  });
+}
 async function completerEquipe(v) {
   const [equipes, perso, matrice] = await Promise.all([api('GET', '/equipes'), personnel(), api('GET', '/permissions')]);
   const zone = document.createElement('div');
@@ -503,6 +689,7 @@ async function completerEquipe(v) {
     <div class="ligne">${bouton('Nouvelle équipe', 'eq-nouvelle')}</div>
     <details class="matrice"><summary>Matrice des permissions par rôle (${matrice.routes.length} actions)</summary>${tableSH(['Action', ...matrice.roles.map((r) => LIB.role[r] || r)], matrice.routes.map((x) => `<tr><td class="num">${esc(x.route)}</td>${matrice.roles.map((r) => `<td>${x.roles.includes(r) ? '✓' : ''}</td>`).join('')}</tr>`).join(''))}</details>`;
   v.appendChild(zone);
+  if (peut('implantation')) await afficherCompetences(v);
   const formulaire = (e) => modale(e ? `Équipe · ${e.nom}` : 'Nouvelle équipe', `<div class="form-modale">${champ('eq-nom', 'Nom', e?.nom || '')}${champ('eq-desc', 'Description', e?.description || '')}
     <fieldset class="membres"><legend>Membres</legend>${perso.map((p) => { const m = e?.membres.find((x) => x.utilisateur_id === p.id); return `<div class="ligne serre"><label class="case"><input type="checkbox" data-membre="${p.id}"${m ? ' checked' : ''}> ${esc(p.nom)} · ${esc(LIB.role[p.role] || p.role)}</label><label class="case"><input type="checkbox" data-chef="${p.id}"${m?.chef ? ' checked' : ''}> chef</label></div>`; }).join('')}</fieldset></div>`,
   [{ label: 'Annuler' }, { label: 'Enregistrer', pri: true, run: enregistrer(() => {
@@ -515,6 +702,34 @@ async function completerEquipe(v) {
 }
 
 /* ---------------- fiche hôpital : séances de formation et suivi 360 (complète vueHopital de sh.js) ---------------- */
+/** Parcours d'implantation en 17 étapes (cahier §11) : statut, responsable, livrables, preuves et dépendances. */
+const STATUT_DEPLOIEMENT = { a_faire: 'À faire', en_cours: 'En cours', bloquee: 'Bloquée', terminee: 'Terminée', non_applicable: 'Non applicable' };
+async function afficherDeploiement(v, h) {
+  const d = await api('GET', `/hopitaux/${h.id}/deploiement`); const gerer = peut('implantation');
+  let zone = $('#deploiement-17'); if (!zone) { zone = document.createElement('section'); zone.id = 'deploiement-17'; zone.className = 'panneau-c'; v.appendChild(zone); }
+  const noms = new Map(d.etapes.map((e) => [e.code, e.nom]));
+  zone.innerHTML = `<h3>Parcours de déploiement (17 étapes)</h3><div class="progres large"><i style="width:${d.avancement}%"></i></div><p class="note">Avancement réel : ${d.avancement} % (étapes terminées ou non applicables). Une étape se termine seulement avec une preuve et après ses étapes préalables.</p>
+    ${d.actions_bloquantes.length ? `<p class="note"><b>Actions bloquantes :</b> ${d.actions_bloquantes.map((a) => `${esc(a.nom)} (${a.raison === 'bloquee' ? 'bloquée' : 'sans responsable'})`).join(' · ')}</p>` : ''}
+    ${tableSH(['Étape', 'Statut', 'Responsable', 'Livrables', 'Preuves', 'Dépend de', ''], d.etapes.map((e) => `<tr><td>${e.rang}. <b>${esc(e.nom)}</b>${e.prete ? ' <span class="badge">prête</span>' : ''}</td>
+      <td>${gerer ? `<select data-dep-statut="${e.code}" aria-label="Statut de ${esc(e.nom)}">${Object.entries(STATUT_DEPLOIEMENT).filter(([c]) => c !== 'non_applicable' || e.code === 'connexions').map(([c, l]) => `<option value="${c}"${c === e.statut ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>` : esc(STATUT_DEPLOIEMENT[e.statut])}</td>
+      <td>${esc(e.responsable || '—')}</td><td>${esc(e.livrables || '—')}</td><td>${e.preuves.length ? e.preuves.map((p) => esc(`${p.type} : ${p.valeur}`)).join('<br>') : '—'}</td>
+      <td class="note">${e.dependances.map((x) => esc(noms.get(x))).join(', ') || '—'}</td><td>${gerer ? bouton('Détails', 'dep-details', 'btn discret', e.code) : ''}</td></tr>`).join(''))}`;
+  zone.querySelectorAll('[data-dep-statut]').forEach((sel) => { sel.onchange = async () => {
+    const corps = { statut: sel.value };
+    if (sel.value === 'non_applicable') { const m = prompt('Motif (10 caractères au moins)'); if (!m) { afficherDeploiement(v, h); return; } corps.motif = m; }
+    try { await api('PUT', `/hopitaux/${h.id}/deploiement/${sel.dataset.depStatut}`, corps); toast('Étape enregistrée.'); } catch (e) { toast(e.message, true); }
+    afficherDeploiement(v, h);
+  }; });
+  surAction(zone, 'dep-details', async (code) => {
+    const e = d.etapes.find((x) => x.code === code);
+    modale(`${e.rang}. ${e.nom}`, `<div class="form-modale">${await choixPersonne('dep-resp', e.responsable_id, 'Responsable')}<div class="champ"><label class="lbl" for="dep-livrables">Livrables</label><textarea id="dep-livrables">${esc(e.livrables || '')}</textarea></div>
+      <div class="ligne"><div class="champ"><label class="lbl" for="dep-type">Ajouter une preuve</label><select id="dep-type"><option value="note">Note</option><option value="lien">Lien HTTPS</option><option value="document">Document (identifiant)</option></select></div>${champ('dep-valeur', 'Contenu de la preuve', '')}</div></div>`,
+    [{ label: 'Annuler' }, { label: 'Enregistrer', pri: true, run: enregistrer(async () => {
+      await api('PUT', `/hopitaux/${h.id}/deploiement/${code}`, { responsable_id: valeur('#dep-resp') || null, livrables: valeur('#dep-livrables') });
+      if (valeur('#dep-valeur').trim()) await api('POST', `/hopitaux/${h.id}/deploiement/${code}/preuves`, { type: valeur('#dep-type'), valeur: valeur('#dep-valeur').trim() });
+    }, 'Étape enregistrée.') }]);
+  });
+}
 async function completerHopital(v, h) {
   const zone = document.createElement('div');
   zone.className = 'pile complement-hopital';
@@ -543,5 +758,35 @@ async function completerHopital(v, h) {
   surAction(zone, 'ss-nouvelle', async () => modale('Planifier une séance', `<div class="form-modale"><div class="ligne"><div class="champ"><label class="lbl" for="sn-role">Rôle formé</label><select id="sn-role"><option value="coordination">Coordination des lits</option><option value="urgence">Urgence</option><option value="entretien">Entretien</option><option value="administration">Administration</option></select></div>
     ${champ('sn-debut', 'Début', '', 'type="datetime-local"')}${champ('sn-duree', 'Durée (min)', 90, 'type="number" min="15" max="600"')}</div>${champ('sn-titre', 'Titre', '')}${champ('sn-lieu', 'Lieu', '')}${await choixPersonne('sn-form', etat.moi.utilisateur.id, 'Formateur')}</div>`,
   [{ label: 'Annuler' }, { label: 'Planifier', pri: true, run: enregistrer(() => api('POST', `/hopitaux/${h.id}/formation/sessions`, { role: valeur('#sn-role'), debut: valeur('#sn-debut') ? new Date(valeur('#sn-debut')).toISOString() : '', duree_minutes: Number(valeur('#sn-duree')), titre: valeur('#sn-titre'), lieu: valeur('#sn-lieu'), formateur_id: valeur('#sn-form') || null }), 'Séance planifiée.') }]));
+  if (peut('implantation', 'formation', 'support')) await afficherDeploiement(v, h);
   traduireNoeuds(zone);
+}
+
+
+/* ---------------- recherche globale et filtres enregistrables ---------------- */
+const TYPE_RESULTAT = { hopital: 'Hôpital', organisation: 'Organisation', projet: 'Projet', tache: 'Tâche', ticket: 'Ticket', contrat: 'Contrat', facture: 'Facture' };
+function ouvrirRecherche() {
+  modale('Rechercher', `<div class="champ"><label class="lbl" for="rg-q">Hôpital, client, projet, tâche, ticket, contrat ou facture</label><input id="rg-q" autocomplete="off"></div><div id="rg-resultats" aria-live="polite"><p class="note">Saisissez au moins deux caractères.</p></div>`, [{ label: 'Fermer' }]);
+  let minuterie; const q = $('#rg-q'); q.focus();
+  q.oninput = () => { clearTimeout(minuterie); minuterie = setTimeout(async () => {
+    const texte = q.value.trim(), zone = $('#rg-resultats'); if (texte.length < 2) { zone.innerHTML = '<p class="note">Saisissez au moins deux caractères.</p>'; return; }
+    try {
+      const r = await api('GET', `/recherche?q=${encodeURIComponent(texte)}`);
+      zone.innerHTML = r.resultats.length ? `<ul class="liste-simple">${r.resultats.map((x, i) => `<li><button class="lien-ligne" type="button" data-resultat="${i}">${esc(x.libelle)}</button> <span class="badge">${esc(TYPE_RESULTAT[x.type])}</span> <span class="note">${esc(x.detail || '')}</span></li>`).join('')}</ul>` : '<p class="note">Aucun résultat dans votre périmètre.</p>';
+      zone.querySelectorAll('[data-resultat]').forEach((b) => { b.onclick = () => { const x = r.resultats[Number(b.dataset.resultat)];
+        etat.vue = x.vue; etat.hopital = x.type === 'hopital' ? x.id : null; etat.projet = x.type === 'projet' ? x.id : null; $('#modale').hidden = true; afficher(); }; });
+    } catch (e) { zone.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; }
+  }, 250); };
+}
+{ const b = globalThis.document?.querySelector('#b-recherche'); if (b) b.onclick = ouvrirRecherche; }
+/** Barre de filtres enregistrables d'une vue : appliquer, enregistrer l'état courant, retirer. Propre à chaque utilisateur. */
+async function barreFiltres(v, vue, courant, appliquer) {
+  const filtres = await api('GET', `/moi/filtres?vue=${vue}`);
+  const zone = document.createElement('div'); zone.className = 'ligne filtres';
+  zone.innerHTML = `<div class="champ"><label class="lbl" for="fe-${vue}">Filtres enregistrés</label><select id="fe-${vue}"><option value="">Choisir…</option>${filtres.map((f) => `<option value="${f.id}">${esc(f.nom)}</option>`).join('')}</select></div>
+    <div class="ligne serre">${bouton('Enregistrer ce filtre', 'fe-enregistrer')}${filtres.length ? bouton('Retirer', 'fe-retirer', 'btn discret') : ''}</div>`;
+  v.querySelector('.entete')?.after(zone);
+  zone.querySelector('select').onchange = (e) => { const f = filtres.find((x) => String(x.id) === e.target.value); if (f) { appliquer(f.filtres); afficher(); } };
+  surAction(zone, 'fe-enregistrer', () => modale('Enregistrer le filtre', champ('fe-nom', 'Nom du filtre', ''), [{ label: 'Annuler' }, { label: 'Enregistrer', pri: true, run: enregistrer(() => api('POST', '/moi/filtres', { vue, nom: valeur('#fe-nom'), filtres: courant }), 'Filtre enregistré.') }]));
+  surAction(zone, 'fe-retirer', (x, b) => { const id = zone.querySelector('select').value; if (!id) { toast('Choisissez d’abord un filtre.', true); return; } agir(b, () => api('DELETE', `/moi/filtres/${id}`), 'Filtre retiré.'); });
 }

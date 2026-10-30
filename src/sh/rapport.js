@@ -9,7 +9,7 @@ const PDFDocument = require('pdfkit');
 const C = { principal: '#0E5E6F', secondaire: '#159895', texte: '#1F2937', texte2: '#5B6B7F', bordure: '#E2E8F0', doux: '#EEF4F6' };
 const POLICES = path.join(__dirname, 'polices');
 const FUSEAU = process.env.SH_FUSEAU || 'America/Toronto';
-const ENVS = { demo: 'Démonstration', recette: 'Recette', production: 'Production' };
+const ENVS = { demo: 'Démonstration', demo_abc:'Démonstration ABC', recette: 'Recette', pilote:'Pilote', production: 'Production' };
 const TYPES = { unites: 'Unités', chambres: 'Chambres', lits: 'Lits', civieres: 'Civières', utilisateurs: 'Comptes' };
 const ROLES = { coordonnateur: 'Coordination', entretien: 'Entretien', admin_etab: 'Administration', gestionnaire: 'Gestion du réseau' };
 

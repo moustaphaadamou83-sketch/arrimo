@@ -1,6 +1,7 @@
 /* Dictionnaire de l'interface de la console SH. Les clés reprennent le texte français source. */
-window.ARRIMO_SH_I18N = window.ARRIMO_SH_I18N || {};
-window.ARRIMO_SH_I18N.en = {
+const dictionnaireSH = typeof window==='undefined'?{}:window;
+dictionnaireSH.ARRIMO_SH_I18N = dictionnaireSH.ARRIMO_SH_I18N || {};
+dictionnaireSH.ARRIMO_SH_I18N.en = {
   'Console SH · accès réservé à l’équipe SH':'SH Console · restricted to the SH team',
   'Implantation et activation d’Arrimo dans les hôpitaux clients':'Arrimo implementation and activation for client hospitals',
   'Adresse courriel':'Email address','Mot de passe':'Password','Se connecter':'Sign in','Code de vérification':'Verification code',
@@ -29,7 +30,7 @@ window.ARRIMO_SH_I18N.en = {
   'La langue préférée est enregistrée dans votre compte SH.':'Your preferred language is saved to your SH account.'
 };
 // Écrans ERP (erp.js) : libellés d'onglets, titres, actions et statuts courants.
-Object.assign(window.ARRIMO_SH_I18N.en, {
+Object.assign(dictionnaireSH.ARRIMO_SH_I18N.en, {
   'Facturation':'Billing','Calendrier':'Calendar','Documents':'Documents','Hébergement':'Hosting','Rapports':'Reports','Notifications':'Notifications',
   'Pipeline commercial':'Sales pipeline','Relances à faire':'Follow-ups to do','Organisations':'Organizations','Nouvelle organisation':'New organization','Nouvelle opportunité':'New opportunity',
   'Avancer':'Advance','Devis':'Quote','Relance':'Follow-up','Perdue':'Lost','Fait':'Done','Créer la fiche établissement':'Create hospital record',
@@ -49,3 +50,4 @@ Object.assign(window.ARRIMO_SH_I18N.en, {
   'Brouillon':'Draft','Émise':'Issued','Payée':'Paid','Payée en partie':'Partly paid','Annulée':'Cancelled','À faire':'To do','En cours':'In progress','Bloquée':'Blocked','Terminée':'Done',
   'Ouvert':'Open','En attente':'Pending','Résolu':'Resolved','Fermé':'Closed','Basse':'Low','Normale':'Normal','Haute':'High','Urgente':'Urgent',
 });
+if(typeof module!=='undefined'&&module.exports)module.exports=dictionnaireSH.ARRIMO_SH_I18N;

@@ -20,6 +20,23 @@ pool.query(fs.readFileSync(path.join(__dirname, '..', '..', 'db', 'sh-schema.sql
   .then(() => migrerSh(pool, process.env))
   .then(() => creerAppSh(pool).listen(port, hote, () => {
     console.log(`Console SH sur ${hote}:${port} · environnements reliés : ${cibles().map((c) => c.code).join(', ') || 'aucun'}`);
+    const slaMinutes=Number(process.env.SH_SLA_MINUTES??1);
+    if(Number.isFinite(slaMinutes)&&slaMinutes>0){
+      const verifierSla=()=>require('./support-sla').executerEscalades(pool).catch(e=>console.error('SLA :',e.code||e.name));
+      verifierSla();setInterval(verifierSla,Math.max(1,slaMinutes)*60000).unref();
+    }
+    const courrielsMinutes=Number(process.env.SH_SUPPORT_COURRIELS_MINUTES??1);
+    if(Number.isFinite(courrielsMinutes)&&courrielsMinutes>0){
+      const envoyerCourriels=()=>require('./support-courriels').executer(pool,{env:process.env}).catch(e=>console.error('Courriels support :',e.code||e.name));
+      envoyerCourriels();setInterval(envoyerCourriels,Math.max(1,courrielsMinutes)*60000).unref();
+    }
+    // Taux de change officiels (SH_CHANGE_MINUTES, 720 par défaut ; 0 désactive). Les quinze derniers jours sont réimportés sans écraser.
+    const changeMinutes=Number(process.env.SH_CHANGE_MINUTES??720);
+    if(Number.isFinite(changeMinutes)&&changeMinutes>0){
+      const importer=()=>{const debut=new Date(Date.now()-15*86400000).toISOString().slice(0,10);
+        return require('../db').transaction(pool,c=>require('./change').importerBanqueCanada(c,{debut})).catch(e=>console.error('Change :',e.code||e.name));};
+      setTimeout(importer,30000).unref();setInterval(importer,Math.max(60,changeMinutes)*60000).unref();
+    }
     // Supervision des environnements reliés (SH_SUPERVISION_MINUTES, 5 par défaut ; 0 la désactive)
     const minutes = Number(process.env.SH_SUPERVISION_MINUTES ?? 5);
     if (minutes > 0) {

@@ -11,6 +11,7 @@ const s = require('./services');
 const t = require('./terrain');
 const civ = require('./civieres');
 const vig = require('./vigilance');
+const suivi = require('./og-suivi');
 const { exigerEtablissement } = require('./auth');
 
 const norm = (x) => String(x || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -75,6 +76,8 @@ function dureeMentionnee(qn) {
   const m = qn.match(/(plus de|depuis plus de|au-dela de|superieur a|>|depuis|de plus de)\s*(\d+)\s*(h\b|heures?|min\b|minutes?|j\b|jours?)/)
     || qn.match(/(\d+)\s*(h\b|heures?|min\b|minutes?|j\b|jours?)/);
   if (!m) {
+    if (/quatre heures/.test(qn)) return 240;
+    if (/trois heures/.test(qn)) return 180;
     if (/deux heures/.test(qn)) return 120;
     if (/une heure/.test(qn)) return 60;
     return null;
@@ -100,6 +103,8 @@ function nombreMentionne(qn) {
 
 /** Établissements cités : nom complet, mot distinctif, « hôpital C », ou lettre seule en majuscule dans la question d'origine. */
 function etablissementsMentionnes(question, qn, etabs) {
+  // Ne pas lire le suffixe A/B/C d’un code de lit comme un hôpital.
+  question = String(question).replace(/\b[A-Z]{1,8}-[A-Z]{0,4}-?\d{1,12}[A-Z]?\b/gi, ' ');
   const res = [];
   for (const e of etabs) {
     const n = norm(e.nom);
@@ -115,7 +120,7 @@ function etablissementsMentionnes(question, qn, etabs) {
 }
 
 function litsMentionnes(question, lits) {
-  const codes = (String(question).toUpperCase().match(/\b[A-Z]{1,8}-?[A-Z]{0,4}-?\d{1,4}[A-Z]?\b/g) || []);
+  const codes = (String(question).toUpperCase().replace(/\bP-\d+\b/g, '').match(/\b[A-Z]{1,8}-?[A-Z]{0,4}-?\d{1,4}[A-Z]?\b/g) || []);
   const res = [];
   for (const c of codes) {
     const l = lits.find((x) => x.code.toUpperCase() === c || x.code.toUpperCase().replace(/-/g, '') === c.replace(/-/g, ''));
@@ -132,6 +137,8 @@ const INTENTIONS = [
   ['actions', [[/(actions?.{0,25}(attendu|a faire|a mener|a realiser)|qu (est-ce qu|est ce qu)? ?on doit faire|que (devons|doit) (nous|on|l equipe) faire|taches?|attendu\w* de (notre|mon|l) equipe|a faire aujourd|liste de travail)/, 4]]],
   ['lit', [[/\blit\b.*(conge|prevu|confirme|etat|statut|reserv|occup)|(conge|statut|etat) du lit/, 2]]],
   ['conges', [[/(conges?|sorties? prevues?|departs? prevus?|vont se liberer|se liberer|liberations?|liberes? (aujourd|demain|ce soir|dans)|libereront|disponibilites? prevues?)/, 3]]],
+  ['lits_occupes', [[/lits?.{0,60}occup/, 5]]],
+  ['procedure', [[/(prochaine etape|etape suivante|apres l organisation|apres.{0,35}transport)/, 6]]],
   ['lits_libres', [[/(lits? (libres?|disponibles?|vacants?)|libres? en|disponibles? en|places? (libres?|disponibles?)|combien de lits)/, 3]]],
   ['reserves', [[/(reserves?|reservations?)/, 3]]],
   ['non_confirmes', [[/(non confirm|pas confirm|perime|confirmation|a confirmer|disponibilite (non|pas))/, 4]]],
@@ -172,6 +179,10 @@ function choisir(scores, entites) {
     a.delete('conges'); a.delete('etat'); a.delete('reserves'); a.delete('nettoyage');
     a.set('lit', { nom: 'lit', sc: 5, pos: 0 });
   }
+  if (entites.lits.length && a.has('lit')) a.delete('lits_occupes');
+  if (a.has('lits_occupes')) a.delete('lits_libres');
+  if (has('procedure')) return ['procedure'];
+  if (has('pourquoi') && (entites.lits.length || entites.litsInconnus?.length)) return entites.lits.length ? ['attribution_locale'] : [];
   if (has('non_confirmes')) { a.delete('lits_libres'); }
   if (has('pourquoi')) { a.delete('transferts'); a.delete('reseau'); a.delete('lits_libres'); a.delete('destination'); }
   if (has('priorites') && /(demand|admission|classement|rang|ordre)/.test(entites.qn)
@@ -218,6 +229,34 @@ const ORIENT = { chsld: 'CHSLD', ri: 'ressource intermédiaire', readaptation: '
 /* ------------------------------------------------------------------ moteur */
 async function repondre(pool, utilisateur, etabId, question, { historique } = {}) {
   exigerEtablissement(utilisateur, etabId);
+  const moteurPatients=require('./og-recherche-patients');
+  const rechercheNom=moteurPatients.extraireRecherche(question);
+  if (rechercheNom) {
+    const en=utilisateur.langue==='en';
+    // Identités fictives : démo et recette seulement. Ailleurs, OG répond sans erreur et sans chercher.
+    // Contrôles sans requête d'abord (environnement), puis fonction OG « patients » de l'établissement.
+    let autorise = true; try { require('./patients').exigerFictifs(); } catch { autorise = false; }
+    if (autorise) autorise = (await require('./og-configuration').lire(pool, etabId)).effectif.patients;
+    const resultat = autorise ? await moteurPatients.rechercher(pool, utilisateur, etabId, rechercheNom) : null;
+    if (!resultat) return {mode:'local',moteur:'og-outils',intentions:['patient'],reponse:en?'Patient search by name is not available in this environment. Use the patient reference (for example P-00000).':'La recherche de patients par nom n’est pas disponible dans cet environnement. Utilisez la référence du patient (par exemple P-00000).',sources:[]};
+    const reponse=resultat.resultats.length>1
+      ? (en?'Several records match. Select the correct file; a name alone does not confirm identity.':'Plusieurs dossiers correspondent. Sélectionnez le bon dossier; le nom seul ne confirme pas l’identité.')
+      : resultat.resultats.length
+        ? (en?'Possible match. Verify identity before viewing.':'Correspondance proposée. Vérifiez l’identité avant consultation.')
+        : (en?'No result in this hospital.':'Aucun résultat dans cet établissement.');
+    return {mode:'local',moteur:'og-outils',intentions:['patient'],reponse,patients:resultat.resultats,limite:resultat.limite,sources:[{module:en?'Authorized patient records':'Dossiers patients autorisés',lu_le:new Date().toISOString()}],faits:[],estimations:[],manquants:[]};
+  }
+  const precedent=contexte(utilisateur,etabId);
+  let questionSuivi=question;
+  if (precedent?.suivi && !/\b(?:P|TR)-\d+\b/i.test(question) && !/\b[A-Z][A-Z-]*-\d+/i.test(question)
+      && /^(?:et )?(?:ou est[- ]il|ou se trouve|dans quel|quel est son|est[- ]il|a[- ]t[- ]il|son |sa |le patient|quelle est sa)/.test(norm(question))) {
+    questionSuivi=question+' '+precedent.suivi;
+  }
+  const parcours = await suivi.repondreSuivi(pool, utilisateur, etabId, questionSuivi);
+  if (parcours) {
+    memoriser(utilisateur,etabId,{intentions:['patient'],suivi:(questionSuivi.match(/\b(?:P|TR)-\d{1,12}\b/gi)||[]).join(' ')});
+    return parcours;
+  }
   const etab = await s.etablissement(pool, etabId);
   s.exigerActif(etab);
   const quand = fabriqueQuand(etab.config.fuseau);
@@ -237,13 +276,23 @@ async function repondre(pool, utilisateur, etabId, question, { historique } = {}
   const lm = litsMentionnes(question, await lits());
   entites.lits = lm.trouves; entites.litsInconnus = lm.inconnus;
 
-  let intentions = choisir(detecterIntentions(qn), entites);
+  const references = [...new Set(String(question).toUpperCase().match(/\bP-\d{1,12}\b/g) || [])];
+  const rechercheReseau = suivi.estRechercheCapacite(question) && (references.length || /\b(?:cherch\w*|trouv\w*|recherch\w*) (?:un|des|de) lit/.test(qn)) && !/chez nous|\bici\b|notre etablissement/.test(qn);
+  const recherchePatient = references.length && rechercheReseau;
+  let intentions = rechercheReseau ? ['pourquoi'] : references.length ? ['patient'] : choisir(detecterIntentions(qn), entites);
+  // Un établissement cité n'autorise jamais la lecture de ses patients ou lits locaux.
+  if (entites.etabs.length && intentions.some(x => ['patient', 'lits_occupes', 'lit', 'attribution_locale', 'civieres', 'attente', 'transferts'].includes(x))) {
+    const cible = entites.etabs[0];
+    exigerEtablissement(utilisateur, cible.id);
+    if (entites.etabs.length > 1) return { mode: 'local', reponse: 'Précisez un seul établissement pour cette recherche.', sources: [] };
+    return repondre(pool, utilisateur, cible.id, question, {});
+  }
   // Références au contexte : « et en chirurgie ? », « et demain ? », « ce lit », « celui-ci »
   const ctx = contexte(utilisateur, etabId) || historique || null;
   let suite = false;
   const courte = qn.split(' ').length <= 6 || /^(et|aussi|pareil|meme chose|idem)\b/.test(qn);
-  if (!intentions.length && courte && ctx && ctx.intentions?.length && (entites.types.length || entites.horizon || entites.duree || entites.etabs.length || entites.lits.length || /^(et|aussi|pareil|meme chose|idem)\b/.test(qn))) {
-    const avecType = ['lits_libres', 'attente', 'conges', 'alertes', 'reserves', 'pourquoi', 'pediatrie', 'capacites', 'destination', 'previsions'];
+  if (!intentions.length && !entites.litsInconnus.length && !references.length && courte && ctx && ctx.intentions?.length && (entites.types.length || entites.horizon || entites.duree || entites.etabs.length || entites.lits.length || /^(et|aussi|pareil|meme chose|idem)\b/.test(qn))) {
+    const avecType = ['lits_libres', 'lits_occupes', 'attente', 'conges', 'alertes', 'reserves', 'pourquoi', 'pediatrie', 'capacites', 'destination', 'previsions'];
     intentions = entites.types.length ? ctx.intentions.filter((x) => avecType.includes(x)) : ctx.intentions;
     if (!intentions.length) intentions = ctx.intentions;
     suite = true;
@@ -260,6 +309,56 @@ async function repondre(pool, utilisateur, etabId, question, { historique } = {}
   const blocs = [];
   const faits = []; const estimations = []; const manquants = []; const actions = [];
   const outils = {
+    async patient() {
+      const ls = await lits();
+      const file = await charger('file', () => t.fileAdmission(pool, utilisateur, etabId), 'Admissions');
+      const { civieres } = await charger('civ', () => civ.listeCivieres(pool, utilisateur, etabId), 'Urgences');
+      const transferts = await charger('transferts', () => s.listeTransferts(pool, utilisateur, etabId), 'Transferts');
+      for (const ref of references) {
+        const lit = ls.find(x => x.patient_ref === ref && ['occupe', 'reserve'].includes(x.etat));
+        const demande = file.find(x => x.patient_ref === ref);
+        const civiere = civieres.find(x => x.patient_ref === ref && x.etat === 'occupee');
+        const tr = transferts.filter(x => x.patient_ref === ref);
+        if (!lit && !demande && !civiere && !tr.length) {
+          blocs.push(`Aucune situation active accessible pour ${ref} dans ${etab.nom}. Une absence de résultat ne signifie pas que le patient n’existe pas ailleurs.`);
+          manquants.push('situation du patient dans le périmètre autorisé');
+          continue;
+        }
+        blocs.push([`Patient ${ref} — ${etab.nom}.`,
+          lit ? `Statut : ${lit.etat === 'occupe' ? 'admis' : 'lit réservé, admission à confirmer'} ; lit ${lit.code} (${lit.unite}).` : 'Aucun lit occupé ou réservé enregistré ici.',
+          demande ? `Admission : ${demande.statut} ; ${demande.priorite_affichage}. ${demande.priorite_explication}` : '',
+          civiere ? `Civière ${civiere.code} depuis ${duree(civiere.heures * 60)}.` : '',
+          ...tr.map(x => `Transfert ${x.numero} : ${x.statut}.`)].filter(Boolean).join('\n'));
+      }
+    },
+    async lits_occupes() {
+      let ls = (await lits()).filter(x => x.etat === 'occupe');
+      if (entites.types.length) ls = ls.filter(x => entites.types.some(ty => ty.id === x.type_id));
+      blocs.push(`Lits occupés${entites.types.length ? ' en ' + entites.types.map(x => x.nom.toLowerCase()).join(', ') : ''} — ${etab.nom} : ${ls.length}.`);
+    },
+    async procedure() {
+      if (!/transport/.test(qn)) {
+        blocs.push('Précisez la procédure concernée : admission, attribution de lit ou transfert.');
+        manquants.push('procédure concernée');
+        return;
+      }
+      blocs.push('Après l’organisation du transport (statut transport), l’équipe habilitée confirme le départ réel : le transfert passe en route. L’établissement receveur confirme ensuite la réception (statut reçu). Le transport organisé ne prouve ni le départ ni l’arrivée ; chaque étape est validée par une personne habilitée dans Transferts.');
+      noter('Procédure Transferts (moteur métier)');
+    },
+    async attribution_locale() {
+      const file = await charger('file', () => t.fileAdmission(pool, utilisateur, etabId), 'Admissions');
+      for (const lit of entites.lits) {
+        const d = file.find(x => x.lit_suggere?.id === lit.id || x.lit_id === lit.id);
+        blocs.push(`Lit ${lit.code} — ${etab.nom} : ${ETAT[lit.etat]}.`);
+        if (d?.lit_suggere?.id === lit.id) {
+          blocs.push(`Proposition locale actuelle pour ${d.patient_ref} : lit libre du type demandé, compatible avec le groupe d’âge et les besoins enregistrés. Le moteur départage ensuite par isolement, pression négative, ventilation, télémétrie, puis code du lit. ${d.priorite_affichage}. ${d.priorite_explication}`);
+        } else {
+          blocs.push('Règle locale actuelle : lit libre du type demandé, groupe d’âge et besoins compatibles ; départage par isolement, pression négative, ventilation, télémétrie, puis code.');
+          manquants.push(`critères historiques de proposition de ${lit.code} non conservés dans cette réponse ; les critères actuels ne prouvent pas la justification passée`);
+        }
+        actions.push('Faire confirmer la compatibilité clinique et l’attribution par l’équipe habilitée.');
+      }
+    },
     async etat() {
       const al = await charger('alerte', () => t.niveauAlerte(pool, etabId, 'fr'), 'Accueil (niveau d’alerte)');
       const ls = await lits();
@@ -417,8 +516,19 @@ async function repondre(pool, utilisateur, etabId, question, { historique } = {}
       const corridor = occ.filter((c) => c.categorie === 'debordement');
       const l = [`Urgence de ${etab.nom} : ${stats.occupees} civières occupées sur ${stats.fonctionnelles} en service (${stats.taux} %), dont ${corridor.length} en corridor ; ${stats.libres} civières libres, ${stats.nettoyage} en nettoyage.`,
         `${stats.plus_24h} patients depuis plus de 24 h, ${stats.plus_48h} depuis plus de 48 h ; ${occ.filter((c) => c.demande_id).length} ont une demande de lit, ${occ.filter((c) => !c.demande_id).length} n’en ont pas.`];
-      const liste = (/corridor|couloir/.test(qn) ? corridor : occ).filter((c) => c.heures * 60 >= seuil).sort((a, b) => b.heures - a.heures);
-      if (liste.length) l.push(...liste.slice(0, 15).map((c) => `• ${c.code}${c.categorie === 'debordement' ? ' (corridor)' : ''} — ${c.patient_ref} depuis ${duree(c.heures * 60)}${c.demande_id ? ` · demande de lit (${c.type_nom.toLowerCase()})` : ' · sans demande de lit'}`));
+      const strict = /plus de|au-dela|superieur/.test(qn);
+      // Le service expose aussi des heures arrondies : le seuil utilise l’heure d’arrivée source.
+      const minutesPresence = c => c.arrivee_le && Number.isFinite(Date.parse(c.arrivee_le))
+        ? (Date.now() - Date.parse(c.arrivee_le)) / 60000 : c.heures * 60;
+      const liste = (/corridor|couloir/.test(qn) ? corridor : occ).filter((c) => strict ? minutesPresence(c) > seuil : minutesPresence(c) >= seuil).sort((a, b) => minutesPresence(b) - minutesPresence(a));
+      const file = await charger('file', () => t.fileAdmission(pool, utilisateur, etabId), 'Admissions (priorités validées)');
+      if (!liste.length) l.push(`Aucune civière occupée ne correspond au seuil de ${duree(seuil)}.`);
+      if (liste.length) l.push(...liste.slice(0, 15).map((c) => `• ${c.code}${c.categorie === 'debordement' ? ' (corridor)' : ''} — ${c.patient_ref} depuis ${duree(minutesPresence(c))}${c.demande_id ? ` · demande de lit (${c.type_nom.toLowerCase()})` : ' · sans demande de lit'}`));
+      for (const c of liste.slice(0, 15)) {
+        const d = file.find(x => x.civiere_id === c.id);
+        l.push(`${c.code} : ${d?.priorite_affichage || 'Priorité clinique non validée'}.${d?.priorite_explication ? ' ' + d.priorite_explication : ''}`);
+      }
+      l.push('La durée d’attente ne mesure pas la gravité médicale. Les priorités et leur réévaluation restent réservées aux professionnels habilités.');
       l.push('Une longue présence sur civière n’est pas à elle seule une indication d’hospitalisation : à interpréter par l’équipe.');
       blocs.push(l.join('\n'));
     },
@@ -429,6 +539,11 @@ async function repondre(pool, utilisateur, etabId, question, { historique } = {}
       const envoyes = tr.filter((x) => x.origine_id === etabId && x.statut === 'demande');
       const cours = tr.filter((x) => ['validee', 'transport', 'en_route'].includes(x.statut));
       const l = [];
+      if (/en cours|actuellement/.test(qn) && !/attente|demandes/.test(qn)) {
+        blocs.push(cours.length ? `Transferts en cours (${cours.length}) :\n${cours.map(x => `• ${x.numero} : ${x.origine_nom} → ${x.destination_nom} ; ${{validee: 'validé', transport: 'transport organisé', en_route: 'en route'}[x.statut]}`).join('\n')}` : 'Aucun transfert validé, en transport organisé ou en route actuellement.');
+        faits.push('les demandes en attente de validation sont exclues des transferts en cours');
+        return;
+      }
       l.push(recus.length ? `Demandes reçues qui attendent VOTRE réponse (${recus.length}) :\n${recus.map((x) => `• ${x.numero} de ${x.origine_nom} · ${x.type_nom.toLowerCase()} · lit ${x.lit_code || 'à attribuer'} · depuis ${duree((Date.now() - new Date(x.date_demande)) / 60000)}${x.urgent ? ' · URGENT' : ''}`).join('\n')}` : 'Aucune demande reçue en attente de votre réponse.');
       l.push(envoyes.length ? `Vos demandes en attente d’une réponse (${envoyes.length}) :\n${envoyes.map((x) => `• ${x.numero} vers ${x.destination_nom} · depuis ${duree((Date.now() - new Date(x.date_demande)) / 60000)}`).join('\n')}` : 'Aucune de vos demandes n’attend de réponse.');
       if (cours.length) l.push(`En cours (${cours.length}) : ${cours.map((x) => `${x.numero} (${{ validee: 'accepté', transport: 'transport organisé', en_route: 'en route' }[x.statut]})`).join(', ')}.`);
@@ -439,9 +554,18 @@ async function repondre(pool, utilisateur, etabId, question, { historique } = {}
       // Type recherché : cité, sinon celui du dernier transfert de l'établissement
       const tr = await charger('transferts', () => s.listeTransferts(pool, utilisateur, etabId), 'Transferts');
       const dernier = tr.filter((x) => x.origine_id === etabId).sort((a, b) => new Date(b.date_demande) - new Date(a.date_demande))[0];
-      const ty = entites.types[0] || (dernier && types.find((x) => x.id === dernier.type_id)) || types.find((x) => x.code === 'MED') || types[0];
-      const r = await charger(`reco-${ty.id}`, () => s.recommander(pool, utilisateur, etabId, ty.id, dernier && !entites.types.length ? { ...(dernier.besoins || {}), groupe_age: dernier.groupe_age } : {}), 'Réseau (recherche)');
+      const demandes = recherchePatient ? (await charger('file', () => t.fileAdmission(pool, utilisateur, etabId), 'Admissions')).filter(x => references.includes(x.patient_ref)) : [];
+      if (recherchePatient && references.length!==1 || demandes.length>1) {
+        blocs.push('Plusieurs situations correspondent : précisez le patient interne ou la demande d’admission avant la recherche.');manquants.push('identifiant de la demande');return;
+      }
+      const demande = demandes[0];
+      const ty = entites.types[0] || (demande && types.find(x=>x.id===demande.type_id)) || (!recherchePatient && dernier && types.find((x) => x.id === dernier.type_id)) || (!recherchePatient && types.find((x) => x.code === 'MED')) || (!recherchePatient && types[0]);
+      if (!ty) {blocs.push('Précisez le service ou la demande de lit autorisée ; OG ne devine pas les besoins du patient.');manquants.push('service recherché');return;}
+      const besoins = demande ? {isolement:demande.besoin_isolement,pression_negative:demande.besoin_pression_negative,ventilation:demande.besoin_ventilation,telemetrie:demande.besoin_telemetrie,groupe_age:demande.groupe_age}
+        : !recherchePatient && dernier && !entites.types.length ? { ...(dernier.besoins || {}), groupe_age: dernier.groupe_age } : {};
+      const r = await charger(`reco-${ty.id}`, () => s.recommander(pool, utilisateur, etabId, ty.id, besoins), 'Réseau (recherche)');
       const l = [`Recherche d’un lit de ${ty.nom.toLowerCase()} depuis ${etab.nom} — règle : capacité confirmée d’abord, puis niveau de tension, puis durée et distance routières.`];
+      if (recherchePatient && !demande) {l.push('Besoins du patient non vérifiés dans une demande active accessible : ces options sont présentées par service ; la compatibilité individuelle reste à confirmer.');manquants.push('besoins du patient à confirmer');}
       const cites = entites.etabs.length ? entites.etabs : [];
       const ordre = r.suggestions;
       const propose = ordre.find((x) => x.recommande);
@@ -455,10 +579,12 @@ async function repondre(pool, utilisateur, etabId, question, { historique } = {}
         }
         const rang = ordre.indexOf(x) + 1;
         const ex = x.exclusions && (x.exclusions.age || x.exclusions.besoins) ? ` ; lits écartés : ${x.exclusions.age ? `${x.exclusions.age} pour le groupe d’âge` : ''}${x.exclusions.age && x.exclusions.besoins ? ', ' : ''}${x.exclusions.besoins ? `${x.exclusions.besoins} pour les besoins (équipement, isolement)` : ''}` : '';
-        l.push(`• ${x.nom} — rang ${rang}${x.recommande ? ' (proposé)' : ''} : ${x.libres_confirmes ? `${x.libres_confirmes} lit(s) confirmé(s)` : x.libres_perimes ? 'confirmation périmée' : x.libres_non_confirmes ? 'lits libres non confirmés' : 'aucun lit libre, seulement des disponibilités prévues'}, niveau ${x.niveau}${x.statut_route === 'calcule' ? `, ${duree(x.minutes_route)} de route (${x.distance_km} km, routeur ${r.routage.fournisseur || ''})` : ', route non calculée'}${ex}${refus ? ` ; a refusé ${refus.numero} : « ${refus.motif_refus || refus.motif_refus_code} »` : ''}.`);
+        l.push(`• ${x.nom} — rang ${rang}${x.recommande ? ' (proposé)' : ''} : ${x.libres_confirmes ? `${x.libres_confirmes} lit(s) confirmé(s)` : x.libres_perimes ? 'confirmation périmée' : x.libres_non_confirmes ? 'lits libres non confirmés' : 'aucun lit libre, seulement des disponibilités prévues'}, niveau ${x.niveau}${x.statut_route === 'calcule' ? `, ${duree(x.minutes_route)} de route (${x.distance_km} km, routeur ${r.routage.fournisseur || ''})` : ', route non calculée'}${x.lit?.code ? ` ; lit partagé confirmé : ${x.lit.code}` : ''}${ex}${refus ? ` ; a refusé ${refus.numero} : « ${refus.motif_refus || refus.motif_refus_code} »` : ''}.`);
       }
       if (!ordre.length) l.push('Aucun établissement ne partage actuellement de capacité compatible.');
       l.push('Distance routière et durée viennent du routeur (sans trafic en temps réel) ; la décision et l’acceptation restent humaines.');
+      l.push('Toute disponibilité doit être revérifiée avant réservation. OG ne réserve aucun lit et ne déclenche aucune admission ni aucun transfert.');
+      l.push('La compatibilité clinique reste à valider par l’équipe receveuse.');
       blocs.push(l.join('\n'));
       faits.push('classement recalculé maintenant'); estimations.push('durée routière OSRM sans trafic');
     },
@@ -558,7 +684,7 @@ async function repondre(pool, utilisateur, etabId, question, { historique } = {}
     },
   };
 
-  if (entites.litsInconnus.length && !entites.lits.length && /\blit\b/.test(qn)) {
+  if (entites.litsInconnus.length && !entites.lits.length && /\blit\b|pourquoi/.test(qn)) {
     blocs.push(`Je ne trouve pas de lit ${entites.litsInconnus.join(', ')} dans ${etab.nom}. Vérifiez le numéro (OG ne consulte que les lits de votre établissement).`);
     manquants.push('lit introuvable');
   }
@@ -585,4 +711,4 @@ const AIDE = 'Je réponds à partir des données d’Arrimo de votre établissem
   + '• Quelles alertes bloquent notre unité ? · Quelles actions sont attendues de notre équipe aujourd’hui ?\n'
   + 'Je ne donne aucun avis clinique et je ne fais aucune action à votre place.';
 
-module.exports = { AIDE, repondre, norm, detecterIntentions, choisir, typesMentionnes, dureeMentionnee, horizonMentionne };
+module.exports = { AIDE, repondre, contexte, memoriser, norm, detecterIntentions, choisir, typesMentionnes, dureeMentionnee, horizonMentionne };

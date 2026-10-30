@@ -5,8 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Arrimo</title>
 <link rel="icon" href="logo.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0E5E6F">
+<script src="apparence.js"></script>
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="copilote.css">
+<link rel="stylesheet" href="og-vocal.css">
 <script src="i18n/format.js"></script>
 <script src="i18n/fr.js"></script>
 <script src="i18n/en.js"></script>
@@ -105,6 +108,8 @@
             <button role="menuitem" class="menu-item" id="b-compte"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-user"/></svg><span data-i18n="barre.mon_compte">Mon compte</span></button>
             <label class="menu-langue"><span data-i18n="langue.choisir">Langue</span>
               <select class="choix-langue" id="langue-barre" data-i18n-attr="aria-label:langue.choisir"></select></label>
+            <label class="menu-langue"><span data-i18n="apparence.choisir">Apparence</span>
+              <select id="apparence-barre" data-i18n-attr="aria-label:apparence.choisir"></select></label>
             <button role="menuitem" class="menu-item" id="b-deconnexion"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-log-out"/></svg><span data-i18n="barre.deconnexion">Déconnexion</span></button>
           </div>
         </div>
@@ -123,6 +128,7 @@
       <button role="tab" data-v="nsa" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-hourglass"/></svg><span data-i18n="onglets.nsa"></span></button>
       <button role="tab" data-v="indicateurs" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-chart-column"/></svg><span data-i18n="onglets.indicateurs"></span></button>
       <button role="tab" data-v="journal" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-history"/></svg><span data-i18n="onglets.journal"></span></button>
+      <button role="tab" data-v="support" aria-selected="false"><span data-i18n="support.titre"></span></button>
       <button role="tab" data-v="params" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-settings"/></svg><span data-i18n="onglets.params"></span></button>
       <button role="tab" data-v="admin" aria-selected="false" hidden><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-shield-check"/></svg><span data-i18n="onglets.admin"></span></button>
     </nav>
@@ -142,6 +148,7 @@
     <section id="v-nsa" hidden></section>
     <section id="v-indicateurs" hidden></section>
     <section id="v-journal" hidden></section>
+    <section id="v-support" hidden></section>
     <section id="v-params" hidden></section>
     <section id="v-admin" hidden></section>
     <section id="v-compte" hidden></section>
@@ -154,6 +161,7 @@
       <div id="og-contexte" class="og-contexte"></div>
       <div id="og-messages" class="og-messages" role="log" aria-live="polite" aria-relevant="additions text" data-i18n-attr="aria-label:og.conversation"></div>
       <section class="og-raccourcis"><h3 data-i18n="og.actions"></h3><div id="og-actions" class="og-actions"></div></section>
+      <section id="og-vocal" hidden></section>
       <form id="og-form" class="og-form"><label for="og-question" data-i18n="og.question"></label><div class="ligne"><input id="og-question" name="question" maxlength="500" autocomplete="off" required><button id="og-envoyer" class="btn pri" type="submit" data-i18n="og.envoyer"></button></div><p class="og-confidentialite" data-i18n="og.confidentialite"></p></form>
     </div>
   </dialog>
@@ -163,7 +171,11 @@
 
 <div id="modale" class="modale" hidden></div>
 <div id="toasts" class="toasts" aria-live="polite"></div>
+<script src="og-avatar.js"></script>
+<script src="support-client.js"></script>
 <script src="app.js"></script>
 <script src="og.js"></script>
+<script src="og-vocal-moteur.js"></script>
+<script src="og-vocal.js"></script>
 </body>
 </html>

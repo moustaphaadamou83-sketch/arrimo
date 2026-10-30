@@ -32,7 +32,8 @@
     "test:sh-erp-interface": "node scripts/verifier-runtime-tests.cjs && node --test tests/sh-erp.interface.spec.cjs",
     "test:scenarios-abc": "node scripts/verifier-runtime-tests.cjs && node --test --test-concurrency=1 tests/scenarios-abc.test.cjs",
     "test:local": "node scripts/test-vnext-local.cjs",
-    "test:interop-postgres": "node tests/simulation-postgres.test.cjs"
+    "test:interop-postgres": "node tests/simulation-postgres.test.cjs",
+    "test:og-local": "node --test --test-isolation=none tests/og-correction.test.cjs"
   },
   "license": "UNLICENSED",
   "dependencies": {

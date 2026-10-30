@@ -374,9 +374,44 @@ async function questionIa(contexte, question, fetchImpl = fetch, langue = 'fr') 
   return (data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
 }
 
-async function question(pool, utilisateur, etabId, q, fetchImpl) {
-  const L = utilisateur.langue;
-  if (process.env.COPILOTE_IA_CLE && questionPredefinie(q)) return questionHistorique(pool, utilisateur, etabId, q, fetchImpl);
+async function question(pool, utilisateur, etabId, q, fetchImpl, patientContexteId) {
+  const L = require('./og-localisation').langueDemandee(q,utilisateur.langue);
+  utilisateur={...utilisateur,langue:L};
+  // Guide d'utilisation : étapes et écran à ouvrir, selon les modules actifs de l'établissement.
+  const og_guide = require('./og-guide');
+  if (og_guide.guider(q, L, {})) {
+    const modules = (await pool.query('SELECT modules FROM etablissements WHERE id=$1', [etabId])).rows[0]?.modules || {};
+    return og_guide.guider(q, L, modules);
+  }
+  // Actions : OG propose une carte à confirmer ; les décisions de niveau 4 sont refusées quelle que soit la formulation.
+  const action = require('./og-intentions-actions').detecter(q);
+  if (action) return action.refus
+    ? { mode: 'local', reponse: L === 'en' ? 'OG cannot do this: it is a human decision (clinical, irreversible or about access rights). I can show the relevant information or prepare a request for the responsible person.' : 'OG ne peut pas faire cela : c’est une décision humaine (clinique, irréversible ou sur les droits). Je peux afficher les informations utiles ou préparer une demande pour la personne responsable.', sources: [], intentions: ['action_interdite'] }
+    : { mode: 'local', reponse: L === 'en' ? 'Here is a proposal to review. Nothing happens until you confirm.' : 'Voici une proposition à vérifier. Rien n’est fait avant votre confirmation.', sources: [], intentions: ['action'], proposition: action };
+  const patients=require('./og-recherche-patients');
+  // Référence explicite : patient, transfert, admission, ou code de lit ou de civière (MED-204A, URG-02, SI-108).
+  const identifiantExplicite=/\b(?:P|TR)-\d{1,12}\b|\bpatient\s+(?:interne|id)\s*\d+\b|\badmission\s*(?:n[°o]\s*|#\s*)\d+\b|\b[A-Z][A-Z0-9]{1,5}-\d{1,6}[A-Z]?\b/.test(q);
+  // Une référence explicite relève du suivi (mêmes contrôles de périmètre) ; la recherche par nom ne s'en saisit pas.
+  if (!identifiantExplicite && patients.extraireRecherche(q)) {
+    const recherche = await require('./og-outils').repondre(pool, utilisateur, etabId, q);
+    if (recherche?.patients) return recherche;
+  }
+  // Conversation sans aucun contexte (fiche, patient, lit ou référence mémorisés) : OG demande d'abord de quel patient il s'agit.
+  if (patients.estQuestionSuivi(q)&&!patientContexteId&&!identifiantExplicite&&!((c)=>c?.suivi||c?.lits?.length)(require('./og-outils').contexte(utilisateur,etabId))) {
+    return {mode:'local',reponse:L==='en'?'Select a patient record first, or search by name or identifier.':'Sélectionnez d’abord un dossier patient ou recherchez par nom ou identifiant.',sources:[],intentions:['patient']};
+  }
+  const qAvecContexte=Number.isSafeInteger(Number(patientContexteId))&&Number(patientContexteId)>0&&patients.estQuestionSuivi(q)
+    ? `${q} (patient interne ${Number(patientContexteId)})` : q;
+  if (/\b(?:P|TR)-\d{1,12}\b|\bpatient\s+(?:interne|id)\s*\d+\b|\badmission\s*(?:n[°o]\s*|#\s*)\d+\b/i.test(qAvecContexte)) {
+    const suivi = await require('./og-suivi').repondreSuivi(pool, utilisateur, etabId, qAvecContexte);
+    // La référence suivie reste en mémoire pour les questions suivantes (« dans quel service est-il ? »).
+    if (suivi) { const refs = (qAvecContexte.match(/\b(?:P|TR)-\d{1,12}\b/gi) || []).join(' '); if (refs) require('./og-outils').memoriser(utilisateur, etabId, { intentions: ['patient'], suivi: refs }); return suivi; }
+  }
+  // Le suivi patient utilise exactement la même projection autorisée en français et en anglais.
+  if(L==='en'){
+    const suivi=await require('./og-suivi').repondreSuivi(pool,utilisateur,etabId,q);
+    if(suivi)return suivi;
+  }
   // OG transversal (français) : intentions et entités reconnues, outils métier autorisés ; sinon réponses historiques
   if (L !== 'en') {
     const og = require('./og-outils');

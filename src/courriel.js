@@ -5,16 +5,17 @@
  * Les tests remplacent le transport par une fonction qui garde les messages.
  */
 let transportTest = null;
-let transportSmtp = null;
+let transportSmtp = null, transportSmtpUrl = null;
 
-const actif = () => !!(transportTest || (process.env.SMTP_URL && require('./environnement').urlPublique()));
+const actif = (urlPublique, env = process.env) => !!(transportTest || (env.SMTP_URL && (urlPublique || env.ARRIMO_URL || require('./environnement').urlPublique())));
 
 function definirTransport(fn) { transportTest = fn; }
 
-async function envoyer({ a, sujet, texte }) {
+async function envoyer({ a, sujet, texte }, env = process.env) {
   if (transportTest) return transportTest({ a, sujet, texte });
-  if (!transportSmtp) transportSmtp = require('nodemailer').createTransport(process.env.SMTP_URL);
-  return transportSmtp.sendMail({ from: process.env.COURRIEL_EXPEDITEUR || 'Arrimo <no-reply@localhost>', to: a, subject: sujet, text: texte });
+  if (!env.SMTP_URL) throw Object.assign(new Error('Transport courriel non configuré.'), { code: 'SMTP_NON_CONFIGURE' });
+  if (!transportSmtp || transportSmtpUrl !== env.SMTP_URL) { transportSmtp = require('nodemailer').createTransport(env.SMTP_URL); transportSmtpUrl = env.SMTP_URL; }
+  return transportSmtp.sendMail({ from: env.COURRIEL_EXPEDITEUR || 'Arrimo <no-reply@localhost>', to: a, subject: sujet, text: texte });
 }
 
 module.exports = { actif, envoyer, definirTransport };

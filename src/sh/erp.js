@@ -1,4 +1,5 @@
 'use strict';
+const {verifierDestinataire}=require('./notifications-perimetres');
 /**
  * Modules ERP de la console SH : tarification, contrats (période, renouvellement, PDF), facturation,
  * personnel (équipes, matrice des permissions), documents, hébergement, rapports, formation par séances,
@@ -6,13 +7,17 @@
  */
 const fs = require('fs');
 const { transaction } = require('../db');
-const { lignesPropres, totaux, prochainNumero, ajouterMois, ajouterJours, cents, versMontant, jourDe } = require('./montants');
+const { lignesPropres, totaux, prochainNumero, ajouterMois, ajouterJours, cents, versMontant, jourDe,verifierMontantDevise,codeRegion } = require('./montants');
 const { documentCommercial, date: dateFr } = require('./pdf-erp');
 const documents = require('./documents');
 const { notifier, nombre } = require('./automatisations');
 const { montantsDevis, taxesClient, aujourdhui, jourOuNull } = require('./commercial');
 const { PERMISSIONS, ROLES_SH } = require('./permissions');
 const { verifierEnvironnements } = require('./supervision');
+const { equipeValidee,enregistrerEquipe:enregistrerEquipeProjet } = require('./projets');
+const { traduire:traduireSH } = require('../../public-sh/i18n/localisation');
+const presence=require('./presence');
+const change=require('./change');
 
 const texte = (x, max = 500) => String(x ?? '').trim().slice(0, max) || null;
 const idPositif = (x) => Number.isSafeInteger(Number(x)) && Number(x) > 0 ? Number(x) : null;
@@ -22,6 +27,13 @@ const PERIODES_MOIS = { mensuel: 1, annuel: 12 };
 const ROLES_FACTURATION = ['administration', 'finance'];
 
 function brancher(api, pool, route, journal, { cibles, appeler, env }) {
+  require('./cycle-projets').brancher(api,pool,route,journal,env);
+  require('./finances-projets').brancher(api,pool,route,journal);
+  require('./taches-suivi').brancher(api,pool,route,journal);
+  require('./projets-pilotage').brancher(api,pool,route,journal);
+  require('./competences').brancher(api,pool,route,journal);
+  require('./recherche').brancher(api,pool,route);
+  require('./deploiement').brancher(api,pool,route,journal);
   /* ------------------------------------------------------------ tarification et taxes */
   api.get('/tarifs', route(async () => (await pool.query('SELECT * FROM sh_tarifs ORDER BY actif DESC, libelle')).rows));
   api.post('/tarifs', route(async (req) => {
@@ -37,12 +49,59 @@ function brancher(api, pool, route, journal, { cibles, appeler, env }) {
     return rows[0];
   }));
   api.get('/facturation/taxes', route(async () => (await pool.query('SELECT * FROM sh_taxes ORDER BY pays_code, region, ordre')).rows));
+  api.get('/facturation/change', route(async () => ({ source: { nom: change.SOURCE_NOM, url: change.SOURCE_URL }, devises: change.DEVISES, anciennete_max_jours: change.ANCIENNETE_MAX_JOURS,
+    derniers: (await pool.query('SELECT DISTINCT ON (devise) devise,jour,cad_par_unite,source_nom,source_url,serie,recupere_le FROM sh_taux_change ORDER BY devise,jour DESC')).rows })));
+  api.post('/facturation/change/actualiser', route(async (req) => {
+    const debut = jourOuNull(req.body.depuis) || ajouterJours(aujourdhui(), -14);
+    if (debut < ajouterJours(aujourdhui(), -366) || debut > aujourdhui()) throw erreur(400, 'Période d’import limitée à l’année écoulée.');
+    const bilan = await transaction(pool, (c) => change.importerBanqueCanada(c, { debut }));
+    await journal(pool, req.u, 'Taux de change importés', change.SOURCE_NOM, `depuis ${debut} · ${bilan.ajoutes} ajoutés · ${bilan.divergents.length} divergents`);
+    return bilan;
+  }));
+  api.get('/facturation/profils-fiscaux', route(async () => (await pool.query('SELECT * FROM sh_profils_fiscaux ORDER BY pays_code,region')).rows));
+  api.post('/facturation/profils-fiscaux',route(async(req)=>{
+    const b=req.body,pays=require('./international').normaliserPays(b.pays_code),region=String(b.region||'').trim()==='*'?'*':codeRegion(b.region),statut=String(b.statut||'a_verifier');
+    const sourceNom=texte(b.source_nom,160),source=String(b.source_url||'').trim(),motif=texte(b.motif,500);
+    if(!region||!['a_verifier','valide','exonere'].includes(statut)||!motif)throw erreur(400,'Pays, région, statut et justification sont requis.');
+    if(statut!=='a_verifier'&&(!sourceNom||!/^https:\/\//i.test(source)))throw erreur(400,'Un profil validé ou exonéré exige une source officielle HTTPS.');
+    const {rows}=await pool.query(`INSERT INTO sh_profils_fiscaux(pays_code,region,statut,source_nom,source_url,verifie_le,motif,modifie_par)
+      VALUES($1,$2,$3,$4,$5,CASE WHEN $3='a_verifier' THEN NULL ELSE CURRENT_DATE END,$6,$7) RETURNING *`,[pays,region,statut,statut==='a_verifier'?null:sourceNom,statut==='a_verifier'?null:source,motif,req.u.email]);
+    await journal(pool,req.u,'Profil fiscal créé',`${pays}/${region}`,`${statut} · ${motif}`);return rows[0];
+  }));
+  api.post('/facturation/taxes', route(async (req) => {
+    const b=req.body,pays=require('./international').normaliserPays(b.pays_code),region=String(b.region||'').trim()==='*'?'*':codeRegion(b.region);
+    const code=String(b.code||'').trim().toUpperCase(),nom=texte(b.nom,100),taux=Number(b.taux),de=jourOuNull(b.valide_de),jusqua=jourOuNull(b.valide_jusqua);
+    const source=String(b.source_url||'').trim(),sourceNom=texte(b.source_nom,160),motif=texte(b.motif,500);
+    if(!region||!/^[A-Z0-9_-]{2,24}$/.test(code)||!nom||!Number.isFinite(taux)||taux<0||taux>=100||!de||!sourceNom||!/^https:\/\//i.test(source)||!motif||jusqua&&jusqua<de)throw erreur(400,'Pays, région, code, taux, dates, source HTTPS et motif fiscal documenté sont requis.');
+    const rows=await transaction(pool,async c=>{
+      await c.query("SELECT pg_advisory_xact_lock(hashtext('sh-fiscal-rule'),hashtext($1))",[`${pays}/${region}/${code}`]);
+      const overlaps=(await c.query(`SELECT * FROM sh_taxes WHERE pays_code=$1 AND region=$2 AND code=$3
+        AND (valide_de IS NULL OR valide_de<=$4::date) AND (valide_jusqua IS NULL OR valide_jusqua>= $5::date) FOR UPDATE`,[pays,region,code,jusqua||'9999-12-31',de])).rows;
+      if(overlaps.length>1)throw erreur(409,'Les périodes fiscales existantes se chevauchent; corrigez-les avant d’ajouter une règle.');
+      if(overlaps.length){const old=overlaps[0];if(old.valide_de&&de<=jour(old.valide_de))throw erreur(409,'La nouvelle règle doit commencer après la période existante; utilisez Modifier pour une correction.');
+        if(jusqua&&old.valide_jusqua&&jusqua<jour(old.valide_jusqua))throw erreur(409,'La période proposée chevauche une règle future déjà enregistrée.');
+        await c.query('UPDATE sh_taxes SET valide_jusqua=$2::date-1 WHERE id=$1',[old.id,de]);}
+      return (await c.query(`INSERT INTO sh_taxes(pays_code,region,code,nom,taux,ordre,source_nom,source_url,verifie_le,valide_de,valide_jusqua)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,CURRENT_DATE,$9,$10) RETURNING *`,[pays,region,code,nom,taux,Math.max(1,Math.min(99,Number(b.ordre)||overlaps[0]?.ordre||1)),sourceNom,source,de,jusqua])).rows[0];
+    });
+    await journal(pool,req.u,'Règle fiscale créée',`${pays}/${region} · ${code}`,`${taux}% · ${sourceNom} · ${de}${jusqua?` → ${jusqua}`:''} · ${motif}`);
+    return rows;
+  }));
   api.put('/facturation/taxes/:id', route(async (req) => {
-    const taux = Number(req.body.taux);
-    if (!Number.isFinite(taux) || taux < 0 || taux >= 100) throw erreur(400, 'Taux invalide.');
-    const { rows } = await pool.query('UPDATE sh_taxes SET taux=$2 WHERE id=$1 RETURNING *', [idPositif(req.params.id), taux]);
+    const b=req.body,taux=Number(b.taux),de=jourOuNull(b.valide_de),jusqua=jourOuNull(b.valide_jusqua),source=String(b.source_url||'').trim(),sourceNom=texte(b.source_nom,160),motif=texte(b.motif,500);
+    if(!Number.isFinite(taux)||taux<0||taux>=100||!de||!sourceNom||!/^https:\/\//i.test(source)||!motif||jusqua&&jusqua<de)throw erreur(400,'Taux, dates, source HTTPS et motif fiscal documenté sont requis.');
+    const { rows } = await pool.query(`UPDATE sh_taxes SET taux=$2,source_nom=$3,source_url=$4,verifie_le=CURRENT_DATE,valide_de=$5,valide_jusqua=$6 WHERE id=$1 RETURNING *`, [idPositif(req.params.id), taux,sourceNom,source,de,jusqua]);
     if (!rows[0]) throw erreur(404, 'Taxe introuvable.');
-    await journal(pool, req.u, 'Taux de taxe modifié', `${rows[0].code} ${rows[0].region}`, `${taux} %`);
+    await journal(pool, req.u, 'Taux de taxe modifié', `${rows[0].pays_code}/${rows[0].region} ${rows[0].code}`, `${taux} % · ${sourceNom} · ${de}${jusqua?` → ${jusqua}`:''} · ${motif}`);
+    return rows[0];
+  }));
+  api.put('/facturation/profils-fiscaux/:id', route(async(req)=>{
+    const id=idPositif(req.params.id),statut=String(req.body.statut||''),sourceNom=texte(req.body.source_nom,160),source=String(req.body.source_url||'').trim(),motif=texte(req.body.motif,500);
+    if(!['a_verifier','valide','exonere'].includes(statut)||!motif)throw erreur(400,'Statut et justification de profil fiscal requis.');
+    if(statut!=='a_verifier'&&(!sourceNom||!/^https:\/\//i.test(source)))throw erreur(400,'Un profil validé ou exonéré exige une source officielle HTTPS.');
+    const {rows}=await pool.query(`UPDATE sh_profils_fiscaux SET statut=$2,source_nom=$3,source_url=$4,verifie_le=CASE WHEN $2='a_verifier' THEN NULL ELSE CURRENT_DATE END,motif=$5,modifie_par=$6,modifie_le=now() WHERE id=$1 RETURNING *`,[id,statut,statut==='a_verifier'?null:sourceNom,statut==='a_verifier'?null:source,motif,req.u.email]);
+    if(!rows[0])throw erreur(404,'Profil fiscal introuvable.');
+    await journal(pool,req.u,'Profil fiscal modifié',`${rows[0].pays_code}/${rows[0].region}`,`${statut} · ${motif}`);
     return rows[0];
   }));
 
@@ -57,9 +116,9 @@ function brancher(api, pool, route, journal, { cibles, appeler, env }) {
       if (!d) throw erreur(404, 'Devis introuvable.');
       const m = await montantsDevis(pool, d);
       const pdf = await documentCommercial({ type: 'devis', titre: 'Devis', reference: `D-${d.opportunite_id}-v${d.version}`, client: await clientDe(d.organisation_id), devise: d.devise,
-        champs: [['Objet', d.titre], ['Version', `v${d.version} · ${d.statut}`], ['Émis le', dateFr(d.cree_le)], ['Valide jusqu’au', dateFr(jour(d.valide_jusqu))]],
+        champs: [['Objet', d.titre], ['Version', `v${d.version} · ${d.statut}`], ['Émis le', dateFr(d.cree_le, req.langue)], ['Valide jusqu’au', dateFr(jour(d.valide_jusqu), req.langue)]],
         lignes: m.lignes, totaux: m, mentions: [d.conditions || 'Conditions : paiement à 30 jours. Les abonnements sont facturés au début de chaque période.',
-          'Document généré par la console Arrimo.SH ; il ne vaut pas signature. Aucune donnée de patient.'] }, env);
+          'Document généré par la console Arrimo.SH ; il ne vaut pas signature. Aucune donnée de patient.'] }, {...(await require('./parametres').envEffectif(pool, env)),SH_DOCUMENT_LANGUE:req.langue});
       await journal(pool, req.u, 'Devis téléchargé (PDF)', `Devis ${d.id}`, `v${d.version}`);
       envoyerPdf(res, pdf, `devis-${d.opportunite_id}-v${d.version}`);
     } catch (e) { next(e); }
@@ -126,12 +185,12 @@ function brancher(api, pool, route, journal, { cibles, appeler, env }) {
       const d = c.devis_id ? (await pool.query('SELECT * FROM sh_devis WHERE id=$1', [c.devis_id])).rows[0] : null;
       const m = d ? await montantsDevis(pool, d) : null;
       const pdf = await documentCommercial({ type: 'contrat', titre: 'Contrat de service', reference: c.reference, client: await clientDe(c.organisation_id), devise: d?.devise || 'CAD',
-        champs: [['Objet', c.titre], ['Statut', c.statut], ['Début', dateFr(jour(c.date_debut))], ['Fin', dateFr(jour(c.date_fin))], ['Durée', `${c.duree_mois} mois`],
+        champs: [['Objet', c.titre], ['Statut', c.statut], ['Début', dateFr(jour(c.date_debut), req.langue)], ['Fin', dateFr(jour(c.date_fin), req.langue)], ['Durée', `${c.duree_mois} mois`],
           ['Renouvellement', c.renouvellement_auto ? `automatique, préavis de ${c.preavis_jours} jours` : 'sur décision expresse'], ['Devis de référence', d ? `v${d.version}` : '—'],
-          ['Signature', c.statut === 'signe' ? `${c.signe_par} · ${dateFr(c.signe_le)} · ${c.document_ref}` : 'non signé']],
+          ['Signature', c.statut === 'signe' ? `${c.signe_par} · ${dateFr(c.signe_le, req.langue)} · ${c.document_ref}` : 'non signé']],
         lignes: m?.lignes, totaux: m, signatures: c.statut !== 'signe',
         mentions: ['Le service est hébergé et exploité selon les exigences de la Loi 25 convenues entre les parties ; aucune donnée de patient n’est traitée par la console SH.',
-          'Modèle généré par Arrimo.SH, à faire valider juridiquement avant usage. La signature est obtenue hors plateforme puis consignée avec la référence du document signé.'] }, env);
+          'Modèle généré par Arrimo.SH, à faire valider juridiquement avant usage. La signature est obtenue hors plateforme puis consignée avec la référence du document signé.'] }, {...(await require('./parametres').envEffectif(pool, env)),SH_DOCUMENT_LANGUE:req.langue});
       await journal(pool, req.u, 'Contrat téléchargé (PDF)', c.reference, null, c.hopital_id);
       envoyerPdf(res, pdf, `contrat-${c.reference}`);
     } catch (e) { next(e); }
@@ -169,8 +228,8 @@ function brancher(api, pool, route, journal, { cibles, appeler, env }) {
     const debut = jour(a.prochaine_facture_le);
     if (a.fin && debut > jour(a.fin)) throw erreur(409, 'La période suivante dépasse la fin du contrat : renouvelez-le d’abord.');
     const finPeriode = ajouterJours(ajouterMois(debut, PERIODES_MOIS[a.periodicite]), -1);
-    const lignes = lignesPropres(a.lignes);
-    const t = totaux(lignes, await taxesClient(db, a.organisation_id));
+    const lignes = lignesPropres(a.lignes,new Map(),a.devise);
+    const t = totaux(lignes, await taxesClient(db, a.organisation_id,debut),a.devise);
     const f = (await db.query(`INSERT INTO sh_factures(organisation_id,hopital_id,contrat_id,abonnement_id,periode_debut,periode_fin,lignes,devise,sous_total,taxes,total,cree_par)
       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT (abonnement_id, periode_debut) WHERE abonnement_id IS NOT NULL DO NOTHING RETURNING id`,
     [a.organisation_id, a.hopital_id, a.contrat_id, a.id, debut, finPeriode, JSON.stringify(lignes), a.devise, t.sous_total, JSON.stringify(t.taxes), t.total, u.id])).rows[0];
@@ -184,9 +243,13 @@ function brancher(api, pool, route, journal, { cibles, appeler, env }) {
   }));
   api.post('/facturation/generer', route(async (req) => {
     const dus = (await pool.query(`SELECT id FROM sh_abonnements WHERE statut='actif' AND prochaine_facture_le <= now()::date AND (fin IS NULL OR prochaine_facture_le <= fin)`)).rows;
-    const creees = [];
-    for (const a of dus) { const id = await transaction(pool, (db) => facturerAbonnement(db, a.id, req.u)); if (id) creees.push(id); }
-    return { abonnements: dus.length, factures_creees: creees.length, ids: creees };
+    const creees = [], bloquees = [];
+    // Un profil fiscal manquant bloque son seul abonnement, pas la génération des autres.
+    for (const a of dus) {
+      try { const id = await transaction(pool, (db) => facturerAbonnement(db, a.id, req.u)); if (id) creees.push(id); }
+      catch (e) { if (!/^(profil_fiscal_|region_fiscale_|taux_fiscal_)/.test(e.code || '')) throw e; bloquees.push({ abonnement_id: a.id, code: e.code, message: e.message }); }
+    }
+    return { abonnements: dus.length, factures_creees: creees.length, ids: creees, bloquees };
   }));
   api.get('/facturation/factures', route(async (req) => {
     const etat = ['brouillon', 'emise', 'partiellement_payee', 'payee', 'en_retard', 'annulee'].includes(req.query.etat) ? req.query.etat : null;
@@ -201,10 +264,11 @@ function brancher(api, pool, route, journal, { cibles, appeler, env }) {
     const org = idPositif(req.body.organisation_id);
     const o = (await pool.query('SELECT * FROM sh_crm_organisations WHERE id=$1', [org])).rows[0];
     if (!o) throw erreur(404, 'Organisation introuvable.');
-    const lignes = lignesPropres(req.body.lignes, new Map((await pool.query('SELECT * FROM sh_tarifs WHERE actif')).rows.map((t) => [t.code, { ...t, prix_unitaire: Number(t.prix_unitaire) }])));
-    const t = totaux(lignes, await taxesClient(pool, org));
+    const devise=require('./international').choisirDevise(o.pays_code,req.body.devise);
+    const lignes = lignesPropres(req.body.lignes, new Map((await pool.query('SELECT * FROM sh_tarifs WHERE actif')).rows.map((t) => [t.code, { ...t, prix_unitaire: Number(t.prix_unitaire) }])),devise);
+    const t = totaux(lignes, await taxesClient(pool, org, aujourdhui()),devise);
     const { rows } = await pool.query(`INSERT INTO sh_factures(organisation_id,hopital_id,lignes,devise,sous_total,taxes,total,note,cree_par)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`, [org, o.hopital_id, JSON.stringify(lignes), String(req.body.devise || 'CAD').toUpperCase(), t.sous_total, JSON.stringify(t.taxes), t.total, texte(req.body.note, 1000), req.u.id]);
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`, [org, o.hopital_id, JSON.stringify(lignes), devise, t.sous_total, JSON.stringify(t.taxes), t.total, texte(req.body.note, 1000), req.u.id]);
     await journal(pool, req.u, 'Facture préparée', o.nom, `${t.total} · brouillon`, o.hopital_id);
     return facture(rows[0].id);
   }));
@@ -214,11 +278,15 @@ function brancher(api, pool, route, journal, { cibles, appeler, env }) {
     if (f.statut !== 'brouillon') throw erreur(409, 'Seule une facture brouillon peut être émise.');
     const emise = aujourdhui();
     // Taxes recalculées à l'émission : la province du client a pu être complétée depuis le brouillon.
-    const lignes = lignesPropres(f.lignes);
-    const t = totaux(lignes, await taxesClient(db, f.organisation_id));
+    const lignes = lignesPropres(f.lignes,new Map(),f.devise);
+    const t = totaux(lignes, await taxesClient(db, f.organisation_id, emise),f.devise);
+    // Équivalent CAD informatif, figé à l'émission ; sans taux officiel récent, il est déclaré indisponible.
+    const taux = f.devise === 'CAD' ? null : await change.tauxPour(db, f.devise, emise);
+    const equivalent = f.devise === 'CAD' ? null : taux ? { devise: f.devise, cad_par_unite: String(taux.cad_par_unite), jour: jourDe(taux.jour), source_nom: taux.source_nom,
+      source_url: taux.source_url, serie: taux.serie, total_cad: Number((t.total * Number(taux.cad_par_unite)).toFixed(2)) } : { devise: f.devise, indisponible: true };
     const numero = await prochainNumero(db, 'FAC', emise.slice(0, 4));
-    await db.query(`UPDATE sh_factures SET statut='emise', numero=$2, emise_le=$3, echeance_le=$4, sous_total=$5, taxes=$6, total=$7 WHERE id=$1`,
-      [f.id, numero, emise, jourOuNull(req.body.echeance_le) || ajouterJours(emise, f.delai_paiement_jours ?? 30), t.sous_total, JSON.stringify(t.taxes), t.total]);
+    await db.query(`UPDATE sh_factures SET statut='emise', numero=$2, emise_le=$3, echeance_le=$4, sous_total=$5, taxes=$6, total=$7, change=$8 WHERE id=$1`,
+      [f.id, numero, emise, jourOuNull(req.body.echeance_le) || ajouterJours(emise, f.delai_paiement_jours ?? 30), t.sous_total, JSON.stringify(t.taxes), t.total, equivalent && JSON.stringify(equivalent)]);
     await journal(db, req.u, 'Facture émise', numero, `${t.total} ${f.devise}`, f.hopital_id);
     return facture(f.id, db);
   })));
@@ -240,6 +308,7 @@ function brancher(api, pool, route, journal, { cibles, appeler, env }) {
     if (!['emise'].includes(f.statut)) throw erreur(409, 'Le paiement s’enregistre sur une facture émise.');
     const montant = Number(req.body.montant);
     if (!Number.isFinite(montant) || montant <= 0) throw erreur(400, 'Montant de paiement invalide.');
+    verifierMontantDevise(montant,f.devise);
     if (cents(montant) > cents(f.solde)) throw erreur(409, `Le paiement dépasse le solde dû (${f.solde} ${f.devise}).`);
     const mode = ['virement', 'cheque', 'carte', 'prelevement', 'autre'].includes(req.body.mode) ? req.body.mode : null;
     if (!mode) throw erreur(400, 'Mode de paiement invalide.');
@@ -253,9 +322,12 @@ function brancher(api, pool, route, journal, { cibles, appeler, env }) {
       const f = await facture(idPositif(req.params.id));
       if (f.statut === 'brouillon') throw erreur(409, 'Émettez la facture avant de produire son PDF.');
       const pdf = await documentCommercial({ type: 'facture', titre: f.statut === 'annulee' ? 'Facture annulée' : 'Facture', reference: f.numero, client: await clientDe(f.organisation_id), devise: f.devise,
-        champs: [['Émise le', dateFr(jour(f.emise_le))], ['Échéance', dateFr(jour(f.echeance_le))], ['Période', f.periode_debut ? `${dateFr(jour(f.periode_debut))} au ${dateFr(jour(f.periode_fin))}` : '—'], ['État', f.etat]],
+        champs: [['Émise le', dateFr(jour(f.emise_le), req.langue)], ['Échéance', dateFr(jour(f.echeance_le), req.langue)], ['Période', f.periode_debut ? `${dateFr(jour(f.periode_debut), req.langue)} au ${dateFr(jour(f.periode_fin), req.langue)}` : '—'], ['État', f.etat]],
         lignes: f.lignes, totaux: { sous_total: f.sous_total, taxes: f.taxes, total: f.total, paye: f.paye, solde: f.solde },
-        mentions: [f.statut === 'annulee' ? `Facture annulée : ${f.annulee_motif}.` : 'Paiement par virement ou chèque à l’ordre de l’émetteur, en indiquant le numéro de facture.', 'Aucune donnée de patient.'] }, env);
+        mentions: [f.statut === 'annulee' ? `Facture annulée : ${f.annulee_motif}.` : 'Paiement par virement ou chèque à l’ordre de l’émetteur, en indiquant le numéro de facture.',
+          ...(f.change ? [f.change.indisponible ? 'Équivalent en dollars canadiens non indiqué : aucun taux officiel récent de la Banque du Canada pour cette devise.'
+            : `Équivalent informatif : ${f.change.total_cad} CAD au taux ${f.change.cad_par_unite} CAD/${f.change.devise} du ${f.change.jour} (${f.change.source_nom}, ${f.change.serie}). Le montant dû reste en ${f.change.devise}.`] : []),
+          'Aucune donnée de patient.'] }, {...(await require('./parametres').envEffectif(pool, env)),SH_DOCUMENT_LANGUE:req.langue});
       await journal(pool, req.u, 'Facture téléchargée (PDF)', f.numero, null, f.hopital_id);
       envoyerPdf(res, pdf, `facture-${f.numero}`);
     } catch (e) { next(e); }
@@ -271,7 +343,7 @@ function brancher(api, pool, route, journal, { cibles, appeler, env }) {
   }));
 
   /* ------------------------------------------------------------ personnel : équipes et permissions */
-  api.get('/personnel', route(async () => (await pool.query('SELECT id, nom, role FROM sh_utilisateurs WHERE actif ORDER BY nom')).rows));
+  api.get('/personnel', route(async () => (await pool.query(`SELECT u.id,u.nom,u.role,u.fonction,${presence.expression()} presence FROM sh_utilisateurs u WHERE u.actif AND u.archive_le IS NULL ORDER BY u.nom`)).rows));
   api.get('/permissions', route(async () => ({ roles: ROLES_SH, routes: Object.entries(PERMISSIONS).map(([route, roles]) => ({ route, roles })) })));
   api.get('/equipes', route(async () => (await pool.query(`SELECT e.*, COALESCE(json_agg(json_build_object('utilisateur_id',u.id,'nom',u.nom,'role',u.role,'chef',m.chef) ORDER BY m.chef DESC, u.nom)
       FILTER (WHERE u.id IS NOT NULL), '[]') membres FROM sh_equipes e LEFT JOIN sh_equipes_membres m ON m.equipe_id=e.id LEFT JOIN sh_utilisateurs u ON u.id=m.utilisateur_id
@@ -392,8 +464,8 @@ function brancher(api, pool, route, journal, { cibles, appeler, env }) {
   api.get('/rapports/indicateurs', route(async (req) => {
     const r = req.u.role; const voit = (roles) => r === 'administration' || roles.includes(r); const out = { genere_le: new Date().toISOString() };
     if (voit(['commercial', 'finance'])) {
-      out.pipeline = (await pool.query(`SELECT statut, count(*)::int n, COALESCE(sum(montant),0)::numeric(14,2) valeur,
-        COALESCE(sum(montant*probabilite/100.0),0)::numeric(14,2) ponderee FROM sh_opportunites GROUP BY statut`)).rows;
+      out.pipeline = (await pool.query(`SELECT statut, devise, count(*)::int n, COALESCE(sum(montant),0)::numeric(14,2) valeur,
+        COALESCE(sum(montant*probabilite/100.0),0)::numeric(14,2) ponderee FROM sh_opportunites GROUP BY statut, devise ORDER BY devise,statut`)).rows;
       const conv = (await pool.query(`SELECT count(*) FILTER (WHERE statut='gagnee')::int gagnees, count(*) FILTER (WHERE statut IN ('gagnee','perdue'))::int closes FROM sh_opportunites`)).rows[0];
       out.taux_conversion = conv.closes ? Math.round((1000 * conv.gagnees) / conv.closes) / 10 : null;
       out.devis = (await pool.query('SELECT statut, count(*)::int n FROM sh_devis GROUP BY statut')).rows;
@@ -410,7 +482,7 @@ function brancher(api, pool, route, journal, { cibles, appeler, env }) {
     }
     if (voit(['implantation', 'support', 'formation'])) {
       out.projets = (await pool.query('SELECT statut, count(*)::int n FROM sh_projets GROUP BY statut')).rows;
-      out.taches = (await pool.query(`SELECT count(*) FILTER (WHERE statut<>'terminee')::int ouvertes, count(*) FILTER (WHERE statut<>'terminee' AND echeance < now()::date)::int en_retard,
+      out.taches = (await pool.query(`SELECT count(*) FILTER (WHERE statut NOT IN ('terminee','annulee'))::int ouvertes, count(*) FILTER (WHERE statut NOT IN ('terminee','annulee') AND echeance < now()::date)::int en_retard,
         count(*) FILTER (WHERE statut='terminee')::int terminees FROM sh_taches`)).rows[0];
       out.hopitaux = (await pool.query('SELECT statut, environnement, count(*)::int n FROM hopitaux GROUP BY statut, environnement')).rows;
       out.formation = (await pool.query(`SELECT h.id, h.nom, count(fe.id)::int elements, count(fe.id) FILTER (WHERE fe.faite)::int faits,
@@ -421,7 +493,14 @@ function brancher(api, pool, route, journal, { cibles, appeler, env }) {
       out.support = (await pool.query(`SELECT count(*) FILTER (WHERE statut NOT IN ('resolu','ferme'))::int ouverts,
         count(*) FILTER (WHERE statut NOT IN ('resolu','ferme') AND echeance < now())::int hors_delai,
         count(*) FILTER (WHERE type='incident' AND statut NOT IN ('resolu','ferme'))::int incidents_ouverts,
-        round(avg(EXTRACT(EPOCH FROM (resolu_le - cree_le))/3600) FILTER (WHERE resolu_le IS NOT NULL))::int resolution_moyenne_heures FROM sh_support_tickets`)).rows[0];
+        round(avg(EXTRACT(EPOCH FROM (resolu_le - cree_le))/3600) FILTER (WHERE resolu_le IS NOT NULL))::int resolution_moyenne_heures,
+        count(*) FILTER (WHERE prise_en_charge_echeance IS NOT NULL AND (prise_en_charge_le IS NOT NULL OR prise_en_charge_echeance<=now()))::int prises_en_charge_sla_eligibles,
+        count(*) FILTER (WHERE prise_en_charge_echeance IS NOT NULL AND (prise_en_charge_le IS NOT NULL OR prise_en_charge_echeance<=now()) AND prise_en_charge_le<=prise_en_charge_echeance)::int prises_en_charge_sla_respectees,
+        count(*) FILTER (WHERE resolution_echeance IS NOT NULL AND (resolu_le IS NOT NULL OR resolution_echeance<=now()))::int resolutions_sla_eligibles,
+        count(*) FILTER (WHERE resolution_echeance IS NOT NULL AND (resolu_le IS NOT NULL OR resolution_echeance<=now()) AND resolu_le<=resolution_echeance)::int resolutions_sla_respectees,
+        round(100.0*count(*) FILTER (WHERE prise_en_charge_echeance IS NOT NULL AND (prise_en_charge_le IS NOT NULL OR prise_en_charge_echeance<=now()) AND prise_en_charge_le<=prise_en_charge_echeance)/NULLIF(count(*) FILTER (WHERE prise_en_charge_echeance IS NOT NULL AND (prise_en_charge_le IS NOT NULL OR prise_en_charge_echeance<=now())),0),1)::numeric prise_en_charge_sla_pct,
+        round(100.0*count(*) FILTER (WHERE resolution_echeance IS NOT NULL AND (resolu_le IS NOT NULL OR resolution_echeance<=now()) AND resolu_le<=resolution_echeance)/NULLIF(count(*) FILTER (WHERE resolution_echeance IS NOT NULL AND (resolu_le IS NOT NULL OR resolution_echeance<=now())),0),1)::numeric resolution_sla_pct
+        FROM sh_support_tickets`)).rows[0];
     }
     return out;
   }));
@@ -442,9 +521,9 @@ function brancher(api, pool, route, journal, { cibles, appeler, env }) {
             .map((o) => [o.organisation, o.titre, o.statut, o.montant, o.devise, o.probabilite, jour(o.echeance)])];
       } else if (section === 'support') {
         if (!['administration', 'support', 'implantation'].includes(req.u.role)) throw erreur(403, 'Votre rôle ne permet pas cet export.');
-        lignes = [['ticket', 'etablissement', 'type', 'gravite', 'priorite', 'statut', 'cree_le', 'resolu_le'],
+        lignes = [['ticket', 'etablissement', 'type', 'gravite', 'priorite', 'statut', 'cree_le', 'resolu_le', 'prise_en_charge_echeance', 'prise_en_charge_le', 'prise_en_charge_respectee', 'resolution_echeance', 'resolution_le', 'resolution_respectee'],
           ...(await pool.query('SELECT t.*, h.nom hopital FROM sh_support_tickets t JOIN hopitaux h ON h.id=t.hopital_id ORDER BY t.cree_le')).rows
-            .map((t) => [t.id, t.hopital, t.type, t.gravite, t.priorite, t.statut, t.cree_le?.toISOString(), t.resolu_le?.toISOString()])];
+            .map((t) => [t.id, t.hopital, t.type, t.gravite, t.priorite, t.statut, t.cree_le?.toISOString(), t.resolu_le?.toISOString(), t.prise_en_charge_echeance?.toISOString(),t.prise_en_charge_le?.toISOString(),t.prise_en_charge_echeance&&t.prise_en_charge_le? t.prise_en_charge_le<=t.prise_en_charge_echeance:'',t.resolution_echeance?.toISOString(),t.resolu_le?.toISOString(),t.resolution_echeance&&t.resolu_le?t.resolu_le<=t.resolution_echeance:''])];
       } else throw erreur(400, 'Section d’export inconnue : factures, pipeline ou support.');
       await journal(pool, req.u, 'Export de rapport', section, nombre(lignes.length - 1, 'ligne'));
       res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="arrimo-sh-${section}.csv"` }).send(`﻿${csv(lignes)}\r\n`);
@@ -463,10 +542,11 @@ function brancher(api, pool, route, journal, { cibles, appeler, env }) {
     if (!ROLES_FORMATION.includes(b.role) || Number.isNaN(debut.getTime())) throw erreur(400, 'Rôle formé et date de début requis.');
     const formateur = idPositif(b.formateur_id);
     return transaction(pool, async (c) => {
+      await verifierDestinataire(c,formateur,'formation','hopital',h);
       const { rows } = await c.query(`INSERT INTO sh_formation_sessions(hopital_id,role,titre,debut,duree_minutes,lieu,formateur_id,cree_par) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
         [h, b.role, texte(b.titre, 160) || `Formation ${b.role}`, debut, Number(b.duree_minutes) || 90, texte(b.lieu, 200), formateur, req.u.id])
         .catch((e) => { if (e.code === '23503') throw erreur(404, 'Établissement ou formateur introuvable.'); if (e.code === '23514') throw erreur(400, 'Durée invalide (15 à 600 minutes).'); throw e; });
-      if (formateur && formateur !== req.u.id) await notifier(c, formateur, { type: 'formation', titre: `Séance de formation planifiée : ${rows[0].titre}`, lien: 'calendrier' });
+      if (formateur && formateur !== req.u.id) await notifier(c, formateur, { ressourceType:'hopital',ressourceId:h, type: 'formation', titre: `Séance de formation planifiée : ${rows[0].titre}`, lien: 'calendrier' });
       await journal(c, req.u, 'Séance de formation planifiée', rows[0].titre, debut.toISOString(), h);
       return rows[0];
     });
@@ -523,13 +603,14 @@ function brancher(api, pool, route, journal, { cibles, appeler, env }) {
   api.get('/notifications', route(async (req) => {
     const rows = (await pool.query('SELECT * FROM sh_notifications WHERE utilisateur_id=$1 ORDER BY lu_le NULLS FIRST, cree_le DESC LIMIT 50', [req.u.id])).rows;
     // Rappels calculés : tâches attribuées en retard, une fois par jour et par tâche.
-    const retard = (await pool.query(`SELECT id, titre FROM sh_taches WHERE responsable_id=$1 AND statut<>'terminee' AND echeance < now()::date`, [req.u.id])).rows;
+    const retard = (await pool.query(`SELECT id, titre FROM sh_taches WHERE responsable_id=$1 AND statut NOT IN ('terminee','annulee') AND echeance < now()::date`, [req.u.id])).rows;
     const jourJ = aujourdhui();
-    if (retard.length) {
-      await notifier(pool, req.u.id, { type: 'rappel', titre: `${nombre(retard.length, 'tâche')} en retard`, lien: 'taches', cle: `retard-${jourJ}` });
+    for (const t of retard) {
+      await notifier(pool, req.u.id, { type: 'rappel',ressourceType:'tache',ressourceId:t.id, titre: `Tâche en retard : ${t.titre}`, lien: 'taches', cle: `retard-${jourJ}-${t.id}` });
     }
     const non_lues = (await pool.query('SELECT count(*)::int n FROM sh_notifications WHERE utilisateur_id=$1 AND lu_le IS NULL', [req.u.id])).rows[0].n;
-    return { non_lues, notifications: retard.length ? (await pool.query('SELECT * FROM sh_notifications WHERE utilisateur_id=$1 ORDER BY lu_le NULLS FIRST, cree_le DESC LIMIT 50', [req.u.id])).rows : rows };
+    const notifications=retard.length?(await pool.query('SELECT * FROM sh_notifications WHERE utilisateur_id=$1 ORDER BY lu_le NULLS FIRST, cree_le DESC LIMIT 50',[req.u.id])).rows:rows;
+    return { non_lues, notifications:notifications.map(n=>({...n,titre:traduireSH(n.titre,req.langue||req.u.langue)})) };
   }));
   api.post('/notifications/lues', route(async (req) => {
     const ids = Array.isArray(req.body.ids) ? req.body.ids.map(idPositif).filter(Boolean) : null;
@@ -569,25 +650,32 @@ function brancher(api, pool, route, journal, { cibles, appeler, env }) {
       LEFT JOIN sh_crm_organisations o ON o.id=p.organisation_id LEFT JOIN sh_contrats c ON c.id=p.contrat_id LEFT JOIN sh_utilisateurs u ON u.id=p.responsable_id WHERE p.id=$1`, [id])).rows[0];
     if (!p) throw erreur(404, 'Projet introuvable.');
     const [taches, jalons] = await Promise.all([
-      pool.query(`SELECT t.*, u.nom responsable, (t.statut<>'terminee' AND t.echeance < now()::date) en_retard FROM sh_taches t LEFT JOIN sh_utilisateurs u ON u.id=t.responsable_id WHERE projet_id=$1 ORDER BY (t.statut='terminee'), t.echeance NULLS LAST, t.id`, [id]),
+      pool.query(`SELECT t.*, u.nom responsable, (t.statut NOT IN ('terminee','annulee') AND t.echeance < now()::date) en_retard FROM sh_taches t LEFT JOIN sh_utilisateurs u ON u.id=t.responsable_id WHERE projet_id=$1 ORDER BY (t.statut='terminee'), t.echeance NULLS LAST, t.id`, [id]),
       pool.query(`SELECT j.*, u.nom responsable FROM sh_jalons j LEFT JOIN sh_utilisateurs u ON u.id=j.responsable_id WHERE projet_id=$1 ORDER BY j.echeance NULLS LAST, j.id`, [id]),
     ]);
-    const n = taches.rows.length; const faites = taches.rows.filter((t) => t.statut === 'terminee').length;
-    return { ...p, avancement: n ? Math.round((100 * faites) / n) : 0, taches: taches.rows, jalons: jalons.rows };
+    const n = taches.rows.filter((t) => t.statut !== 'annulee').length; const faites = taches.rows.filter((t) => t.statut === 'terminee').length;
+    const membres=(await pool.query(`SELECT m.utilisateur_id,u.nom,u.fonction,u.actif FROM sh_projet_membres m
+      JOIN sh_utilisateurs u ON u.id=m.utilisateur_id WHERE m.projet_id=$1 ORDER BY u.nom`,[id])).rows;
+    return { ...p, reference:`PRJ-${String(p.id).padStart(6,'0')}`, membres,avancement: n ? Math.round((100 * faites) / n) : 0, taches: taches.rows, jalons: jalons.rows };
   }));
   api.put('/projets/:id', route(async (req) => {
-    const p = (await pool.query('SELECT * FROM sh_projets WHERE id=$1', [idPositif(req.params.id)])).rows[0];
+    return transaction(pool,async c=>{
+    const p = (await c.query('SELECT * FROM sh_projets WHERE id=$1 FOR UPDATE', [idPositif(req.params.id)])).rows[0];
     if (!p) throw erreur(404, 'Projet introuvable.');
     const b = req.body; const statut = b.statut ?? p.statut;
-    if (!['planification', 'en_cours', 'bloque', 'termine', 'annule'].includes(statut)) throw erreur(400, 'Statut de projet invalide.');
-    if (statut === 'termine' && (await pool.query(`SELECT 1 FROM sh_taches WHERE projet_id=$1 AND statut<>'terminee'`, [p.id])).rowCount) throw erreur(409, 'Des tâches sont encore ouvertes : terminez-les avant de clore le projet.');
+    if (!require('./projets-pilotage-migrations').STATUTS_PROJET.includes(statut)) throw erreur(400, 'Statut de projet invalide.');
+    if (statut === 'termine' && (await c.query(`SELECT 1 FROM sh_taches WHERE projet_id=$1 AND statut NOT IN ('terminee','annulee')`, [p.id])).rowCount) throw erreur(409, 'Des tâches sont encore ouvertes : terminez-les avant de clore le projet.');
     const responsable = b.responsable_id === undefined ? p.responsable_id : idPositif(b.responsable_id);
-    const { rows } = await pool.query(`UPDATE sh_projets SET statut=$2, nom=$3, debut=$4, echeance=$5, responsable_id=$6, description=$7, modifie_le=now() WHERE id=$1 RETURNING *`,
+    const existants=(await c.query('SELECT utilisateur_id FROM sh_projet_membres WHERE projet_id=$1',[p.id])).rows.map(m=>m.utilisateur_id);
+    const ids=await equipeValidee(c,responsable,b.membres??existants,{pilote:p.type_projet==='pilote'});
+    const { rows } = await c.query(`UPDATE sh_projets SET statut=$2, nom=$3, debut=$4, echeance=$5, responsable_id=$6, description=$7, modifie_le=now() WHERE id=$1 RETURNING *`,
       [p.id, statut, texte(b.nom ?? p.nom, 180), b.debut === undefined ? jour(p.debut) : jourOuNull(b.debut), b.echeance === undefined ? jour(p.echeance) : jourOuNull(b.echeance), responsable,
         b.description === undefined ? p.description : texte(b.description, 4000)]);
-    if (responsable && responsable !== p.responsable_id && responsable !== req.u.id) await notifier(pool, responsable, { type: 'projet', titre: `Projet confié : ${rows[0].nom}`, lien: 'projets' });
-    await journal(pool, req.u, 'Projet modifié', rows[0].nom, statut, p.hopital_id);
+    await enregistrerEquipeProjet(c,p.id,ids);
+    if (responsable && responsable !== p.responsable_id && responsable !== req.u.id) await notifier(c, responsable, { ressourceType:'projet',ressourceId:p.id, type: 'projet', titre: `Projet confié : ${rows[0].nom}`, lien: 'projets' });
+    await journal(c, req.u, 'Projet modifié', rows[0].nom, statut, p.hopital_id);
     return rows[0];
+    });
   }));
   api.post('/projets/:id/jalons', route(async (req) => {
     const id = idPositif(req.params.id); const nom = texte(req.body.nom, 180); if (!nom) throw erreur(400, 'Nom du jalon requis.');
@@ -609,10 +697,10 @@ function brancher(api, pool, route, journal, { cibles, appeler, env }) {
     const id = idPositif(req.params.id); const r = req.u.role; const voit = (roles) => r === 'administration' || roles.includes(r);
     const org = (await pool.query('SELECT id, nom, type FROM sh_crm_organisations WHERE hopital_id=$1', [id])).rows[0] || null;
     const out = { organisation: org };
-    out.projets = (await pool.query(`SELECT p.id, p.nom, p.statut, COALESCE(round(100.0*count(t.id) FILTER(WHERE t.statut='terminee')/NULLIF(count(t.id),0)),0)::int avancement
+    out.projets = (await pool.query(`SELECT p.id, p.nom, p.statut, COALESCE(round(100.0*count(t.id) FILTER(WHERE t.statut='terminee')/NULLIF(count(t.id) FILTER(WHERE t.statut<>'annulee'),0)),0)::int avancement
       FROM sh_projets p LEFT JOIN sh_taches t ON t.projet_id=p.id WHERE p.hopital_id=$1 GROUP BY p.id ORDER BY p.id`, [id])).rows;
     if (voit(['support', 'implantation'])) out.tickets = (await pool.query(`SELECT id, titre, type, statut, priorite, cree_le FROM sh_support_tickets WHERE hopital_id=$1 ORDER BY (statut IN ('resolu','ferme')), cree_le DESC LIMIT 50`, [id])).rows;
-    if (voit(['commercial', 'finance', 'implantation', 'support'])) out.contrats = (await pool.query(`SELECT c.id, c.reference, c.statut, c.date_fin FROM sh_contrats c WHERE c.hopital_id=$1
+    if (voit(['commercial', 'finance'])) out.contrats = (await pool.query(`SELECT c.id, c.reference, c.statut, c.date_fin FROM sh_contrats c WHERE c.hopital_id=$1
       OR c.opportunite_id IN (SELECT id FROM sh_opportunites WHERE organisation_id=$2) ORDER BY c.id`, [id, org?.id || 0])).rows;
     if (voit(['finance'])) out.factures = (await pool.query(`SELECT id, numero, etat, total, solde, echeance_le FROM (${SELECT_FACTURE}) x WHERE hopital_id=$1 OR organisation_id=$2 ORDER BY cree_le DESC LIMIT 50`, [id, org?.id || 0])).rows;
     out.documents = (await pool.query(`SELECT d.id, d.nom, d.categorie, d.version, d.confidentiel FROM sh_documents d WHERE d.hopital_id=$1 AND d.archive_le IS NULL

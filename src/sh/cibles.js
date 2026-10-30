@@ -5,17 +5,22 @@
  *   SH_ENV_RECETTE_URL=http://127.0.0.1:3011     SH_ENV_RECETTE_CLE=...     SH_ENV_RECETTE_PUBLIC=https://recette.arrimo.senseafri.com
  *   SH_ENV_PRODUCTION_URL=https://...             SH_ENV_PRODUCTION_CLE=...  SH_ENV_PRODUCTION_PUBLIC=https://arrimo.ca
  */
-const NOMS = { demo: 'Démonstration', recette: 'Recette', production: 'Production' };
+const NOMS = { demo: 'Démonstration', demo_abc:'Démonstration ABC', recette: 'Recette', pilote:'Pilote', production: 'Production' };
 
 class ErreurCible extends Error {
   constructor(statut, message, code) { super(message); this.statut = statut; this.code = code; }
 }
 
 function cibles(env = process.env) {
-  return Object.keys(NOMS).map((code) => {
+  const configurees=Object.keys(NOMS).map((code) => {
     const p = `SH_ENV_${code.toUpperCase()}_`;
     return { code, nom: NOMS[code], url: (env[`${p}URL`] || '').replace(/\/$/, ''), cle: env[`${p}CLE`] || '', public: (env[`${p}PUBLIC`] || '').replace(/\/$/, '') };
   }).filter((c) => c.url && c.cle);
+  const abc=configurees.find(c=>c.code==='demo_abc');
+  if(abc&&configurees.some(c=>c.code==='demo'&&c.url===abc.url))throw new ErreurCible(503,'La Démo ABC doit utiliser une API distincte de la démonstration principale.','demo_abc_non_isolee');
+  const pilote=configurees.find(c=>c.code==='pilote');
+  if(pilote&&configurees.some(c=>c.code!=='pilote'&&c.url===pilote.url))throw new ErreurCible(503,'Le pilote doit utiliser une API distincte des autres environnements.','pilote_non_isole');
+  return configurees;
 }
 
 /** Appel à l'API d'un environnement. Rend le JSON (ou le texte si brut), ou lève une erreur avec le message de l'environnement. */

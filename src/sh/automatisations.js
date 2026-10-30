@@ -6,12 +6,10 @@
  */
 
 /** Notifie un ou plusieurs comptes SH ; une clé évite les doublons (même rappel, même personne). */
-async function notifier(db, utilisateurs, { type, titre, lien = null, cle = null }) {
+async function notifier(db, utilisateurs, { type, titre, lien = null, cle = null,organisationId=null,ressourceType=null,ressourceId=null }) {
   const ids = [...new Set([].concat(utilisateurs).map(Number).filter((x) => Number.isInteger(x) && x > 0))];
   for (const id of ids) {
-    await db.query(`INSERT INTO sh_notifications (utilisateur_id, type, titre, lien, cle)
-      SELECT $1, $2, $3, $4, $5 WHERE EXISTS (SELECT 1 FROM sh_utilisateurs WHERE id = $1 AND actif)
-      ON CONFLICT (utilisateur_id, cle) WHERE cle IS NOT NULL DO NOTHING`, [id, type, String(titre).slice(0, 240), lien, cle]);
+    await db.query('SELECT sh_notifier_employe($1,$2,$3,$4,$5,$6,$7,$8)', [id, type, String(titre).slice(0, 240), lien, cle,organisationId,ressourceType,ressourceId]);
   }
 }
 
@@ -26,7 +24,7 @@ async function comptesAvecRoles(db, roles) {
  */
 async function terminerTacheAuto(db, hopitalId, code, u) {
   const { rows } = await db.query(`UPDATE sh_taches t SET statut = 'terminee', terminee_le = now(), modifie_le = now()
-    FROM sh_projets p WHERE p.id = t.projet_id AND p.hopital_id = $1 AND t.code_auto = $2 AND t.statut <> 'terminee'
+    FROM sh_projets p WHERE p.id = t.projet_id AND p.hopital_id = $1 AND p.archive_le IS NULL AND t.code_auto = $2 AND t.statut NOT IN ('terminee','annulee')
     RETURNING t.id, t.titre, p.id AS projet_id`, [hopitalId, code]);
   for (const t of rows) {
     await db.query(`INSERT INTO sh_taches_commentaires (tache_id, utilisateur_id, commentaire) VALUES ($1, $2, $3)`,

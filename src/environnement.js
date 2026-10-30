@@ -7,7 +7,7 @@
  *   ARRIMO_URL       facultatif : adresse publique imposée (sinon calculée à partir du domaine).
  * Compatibilité : sans ARRIMO_ENV, ARRIMO_DEMO=1 vaut « demo » ; sinon, en NODE_ENV=production, « production ».
  */
-const ENVIRONNEMENTS = ['demo', 'recette', 'production'];
+const ENVIRONNEMENTS = ['demo', 'recette', 'pilote', 'production'];
 
 function environnement() {
   const e = String(process.env.ARRIMO_ENV || '').trim().toLowerCase();
@@ -18,12 +18,15 @@ function environnement() {
 /** Démonstration : remise à zéro, recalage des horloges, simulation, données fictives. */
 const estDemo = () => environnement() === 'demo';
 const estProduction = () => environnement() === 'production';
+/** Essais vocaux : uniquement sur une cible déclarée fictive, jamais en production. */
+const vocalFictifAutorise=()=>estDemo()||(['recette','pilote'].includes(environnement())&&process.env.ARRIMO_OG_VOCAL_FICTIF==='1'&&process.env.ARRIMO_PATIENTS_FICTIFS==='1');
 
 /** Hôte public de cet environnement (ex. recette.arrimo.senseafri.com). */
 function hote() {
   const d = String(process.env.ARRIMO_DOMAINE || '').trim().toLowerCase();
   if (!d) return null;
-  return environnement() === 'recette' ? `recette.${d}` : d;
+  const e=environnement();
+  return ['recette','pilote'].includes(e) ? `${e}.${d}` : d;
 }
 /** Adresse publique (liens des courriels) : ARRIMO_URL si elle est imposée, sinon https://<hôte>. */
 function urlPublique() {
@@ -32,4 +35,4 @@ function urlPublique() {
   return h ? `https://${h}` : '';
 }
 
-module.exports = { ENVIRONNEMENTS, environnement, estDemo, estProduction, hote, urlPublique };
+module.exports = { ENVIRONNEMENTS, environnement, estDemo, estProduction, vocalFictifAutorise, hote, urlPublique };

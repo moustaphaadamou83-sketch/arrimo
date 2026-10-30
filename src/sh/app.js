@@ -14,15 +14,22 @@ const { limiteur } = require('../limites');
 const { version } = require('../../package.json');
 const { ETAPES, RANG_GOLIVE, ELEMENT_IMPORT, FORMATION, ELEMENTS_AUTOMATIQUES, creerEtapes } = require('./etapes');
 const { rapportGolive } = require('./rapport');
-const { cibles, appeler, lienAcces, ErreurCible } = require('./cibles');
+const { NOMS, cibles, appeler, lienAcces, ErreurCible } = require('./cibles');
 const { empreinte, chiffrerSecret, dechiffrerSecret } = require('./security');
-const { autoriser, ROLES_SH } = require('./permissions');
+const { autoriser, ROLES_SH, JOURNAL_OPERATIONNEL } = require('./permissions');
 const invitations = require('./invitations');
+const acces = require('./acces');
+const recuperation = require('./recuperation');
+const presence=require('./presence');
 const commercial = require('./commercial');
 const erp = require('./erp');
 const { terminerTacheAuto, nombre } = require('./automatisations');
 const xlsx = require('./xlsx');
 const { lireCsv } = require('../import');
+const { traduire:traduireSH } = require('../../public-sh/i18n/localisation');
+const {creerPoolPerimetre}=require('./perimetre-pool');
+const rolesPerimetres=require('./roles-perimetres');
+const profilsPays=require('../profils-pays');
 
 /** Erreur de la console : statut HTTP et message en français (console interne, en français seulement). */
 class ErreurSh extends Error {
@@ -37,7 +44,7 @@ const TYPES_IMPORT = Object.keys(ELEMENT_IMPORT);
 const COURRIEL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CODE_ETAB = /^[A-Z0-9-]{2,12}$/;
 const SOUS_DOMAINE = /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/;
-const RESERVES = ['www', 'sh', 'recette', 'api', 'demo', 'admin', 'mail'];
+const RESERVES = ['www', 'sh', 'pilote', 'recette', 'api', 'demo', 'admin', 'mail'];
 const PUBLIC_SH = path.join(__dirname, '..', '..', 'public-sh');
 const PUBLIC = path.join(__dirname, '..', '..', 'public');
 
@@ -57,12 +64,16 @@ async function journal(db, u, action, cible, detail, hopitalId = null) {
 }
 
 function creerAppSh(pool, { env = process.env } = {}) {
+  const poolService=pool;
+  pool=creerPoolPerimetre(pool);
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 'loopback');
+  app.use((req,res,next)=>{req.langue=req.get('x-langue')==='en'?'en':'fr';next();});
   app.use('/api', limiteur());
   app.use('/api/hopitaux/:id/import', express.json({ limit: '2mb' }));
   app.use('/api/documents', express.json({ limit: '15mb' }));
+  app.use('/api/portail-support', express.json({ limit: '15mb' }));
   app.use(express.json({ limit: '50kb' }));
   app.use((req, res, next) => {
     res.set({
@@ -73,7 +84,7 @@ function creerAppSh(pool, { env = process.env } = {}) {
   });
   // Interface de la console, et les fichiers partagés avec Arrimo (charte, icônes, police, mise en forme des nombres)
   app.use(express.static(PUBLIC_SH));
-  for (const f of ['style.css', 'icones.svg', 'logo.svg', 'i18n/format.js', 'i18n/fr.js']) app.get(`/${f}`, (req, res) => res.sendFile(path.join(PUBLIC, f)));
+  for (const f of ['style.css', 'apparence.js', 'icones.svg', 'logo.svg', 'i18n/format.js', 'i18n/fr.js']) app.get(`/${f}`, (req, res) => res.sendFile(path.join(PUBLIC, f)));
   app.use('/polices', express.static(path.join(PUBLIC, 'polices')));
 
   const ciblesSh = () => cibles(env);
@@ -100,7 +111,7 @@ function creerAppSh(pool, { env = process.env } = {}) {
   const tentatives = new Map();
   async function ouvrirSession(u) {
     const token = crypto.randomBytes(32).toString('hex');
-    await pool.query(`INSERT INTO sh_sessions (token, token_hache, utilisateur_id, expire_le) VALUES ($1, true, $2, now() + make_interval(hours => $3))`, [empreinte(token), u.id, DUREE_SESSION_H]);
+    await pool.query(`INSERT INTO sh_sessions (token, token_hache, utilisateur_id, expire_le,presence_le) VALUES ($1, true, $2, now() + make_interval(hours => $3),now())`, [empreinte(token), u.id, Number((await require('./parametres').envEffectif(pool, env)).SH_SESSION_HEURES || DUREE_SESSION_H)]);
     await pool.query('UPDATE sh_utilisateurs SET derniere_connexion = now() WHERE id = $1', [u.id]);
     await pool.query('DELETE FROM sh_sessions WHERE expire_le < now()');
     await pool.query('DELETE FROM sh_connexions_2fa WHERE expire_le < now()');
@@ -140,17 +151,24 @@ function creerAppSh(pool, { env = process.env } = {}) {
     return ouvrirSession(u);
   }));
   api.post('/invitations/consommer', route((req) => invitations.consommer(pool, req.body, env)));
+  api.get('/connexion/configuration', route(() => ({ recuperation_disponible:recuperation.disponible(env),validation_fictive:env.SH_VALIDATION_FICTIVE==='1' })));
+  api.post('/mot-de-passe/demander', route(req => recuperation.demander(pool,req.body.email,env)));
+  api.post('/mot-de-passe/reinitialiser', route(req => recuperation.consommer(pool,req.body.jeton,req.body.nouveau)));
 
   /* ---------------------------------------------------------------- session obligatoire pour la suite */
+  require('./portail-support').brancher(api,poolService,env);
   api.use(async (req, res, next) => {
     try {
       const entete = req.get('authorization') || '';
       const token = entete.startsWith('Bearer ') ? entete.slice(7) : null;
       if (!token) throw new ErreurSh(401, 'Connexion requise.');
-      const u = (await pool.query(`SELECT u.id, u.email, u.nom, u.role, u.langue, u.mdp_temporaire, u.totp_actif FROM sh_sessions s
-        JOIN sh_utilisateurs u ON u.id = s.utilisateur_id AND u.actif WHERE s.token = $1 AND s.token_hache AND s.expire_le > now()`, [empreinte(token)])).rows[0];
+      const u = (await pool.query(`SELECT u.id, u.email, u.nom,u.fonction,u.presence_manuelle,u.role_personnalise_id,r.permissions droits_personnalises,r.actif role_personnalise_actif, u.role, u.langue,u.fuseau_horaire,u.apparence, u.mdp_temporaire, u.totp_actif FROM sh_sessions s
+        JOIN sh_utilisateurs u ON u.id = s.utilisateur_id AND u.actif LEFT JOIN sh_roles_personnalises r ON r.id=u.role_personnalise_id
+        WHERE s.token = $1 AND s.token_hache AND s.expire_le > now()`, [empreinte(token)])).rows[0];
       if (!u) throw new ErreurSh(401, 'Session expirée. Reconnectez-vous.');
-      req.u = { ...u, token };
+      if(u.role_personnalise_id&&!u.role_personnalise_actif)throw new ErreurSh(403,'Le rôle attribué est désactivé.');
+    req.u = { ...u, token };
+    if(!req.get('x-langue'))req.langue=u.langue||'fr';
       // Première connexion : choisir son mot de passe, puis activer la double authentification ; rien d'autre avant
       const p = `${req.method} ${req.path}`;
       if (u.mdp_temporaire && !['GET /moi', 'PUT /moi/mot-de-passe', 'POST /deconnexion'].includes(p)) throw new ErreurSh(403, 'Choisissez d’abord votre propre mot de passe.');
@@ -158,7 +176,7 @@ function creerAppSh(pool, { env = process.env } = {}) {
         throw new ErreurSh(403, 'Activez d’abord la double authentification.');
       }
       if (!autoriser(req.u, req)) throw new ErreurSh(403, 'Votre rôle ne permet pas cette action.');
-      next();
+      pool.executer({...req.u,methode:req.method},()=>next());
     } catch (e) { next(e); }
   });
 
@@ -169,11 +187,12 @@ function creerAppSh(pool, { env = process.env } = {}) {
     return { fermees: r.rowCount };
   }));
   api.get('/moi', route(async (req) => ({
-    utilisateur: { id: req.u.id, nom: req.u.nom, email: req.u.email, role: req.u.role, langue: req.u.langue || 'fr', mdp_temporaire: req.u.mdp_temporaire, totp_actif: req.u.totp_actif },
+    utilisateur: { id: req.u.id, nom: req.u.nom,fonction:req.u.fonction,presence_manuelle:req.u.presence_manuelle,role_personnalise_id:req.u.role_personnalise_id,droits_personnalises:req.u.droits_personnalises, email: req.u.email, role: req.u.role, langue: req.u.langue || 'fr', apparence:req.u.apparence||'automatique',fuseau_horaire:req.u.fuseau_horaire||'America/Toronto', mdp_temporaire: req.u.mdp_temporaire, totp_actif: req.u.totp_actif },
     environnements: ciblesSh().map((c) => ({ code: c.code, nom: c.nom, public: c.public })),
     etapes: ETAPES.map((e, i) => ({ rang: i + 1, code: e.code, nom: e.nom })),
     types_import: TYPES_IMPORT,
   })));
+  api.get('/references/internationales',route(req=>require('./international').references(req.langue)));
   api.put('/moi/langue', route(async (req) => {
     const langue = String(req.body.langue || '');
     if (!['fr', 'en'].includes(langue)) throw new ErreurSh(400, 'Langue invalide.');
@@ -182,14 +201,32 @@ function creerAppSh(pool, { env = process.env } = {}) {
     await journal(pool, req.u, 'Préférence linguistique modifiée', req.u.email, langue);
     return { langue };
   }));
+  api.put('/moi/apparence', route(async (req) => {
+    const apparence=String(req.body.apparence||'');
+    if(!require('./apparence-migrations').APPARENCES.includes(apparence))throw new ErreurSh(400,'Apparence invalide.');
+    await pool.query('UPDATE sh_utilisateurs SET apparence=$2 WHERE id=$1',[req.u.id,apparence]);req.u.apparence=apparence;
+    await journal(pool,req.u,'Préférence d’apparence modifiée',req.u.email,apparence);
+    return {apparence};
+  }));
+  api.put('/moi/fuseau-horaire', route(async (req) => {
+    const fuseau=String(req.body.fuseau_horaire||'').trim();
+    if(!fuseau||fuseau.length>80||!(await pool.query('SELECT 1 FROM pg_timezone_names WHERE name=$1',[fuseau])).rowCount)throw new ErreurSh(400,'Fuseau horaire invalide.');
+    await pool.query('UPDATE sh_utilisateurs SET fuseau_horaire=$2 WHERE id=$1',[req.u.id,fuseau]);req.u.fuseau_horaire=fuseau;
+    await journal(pool,req.u,'Préférence de fuseau horaire modifiée',req.u.email,fuseau);
+    return {fuseau_horaire:fuseau};
+  }));
   api.put('/moi/mot-de-passe', route(async (req) => {
-    const u = (await pool.query('SELECT mot_de_passe_hash FROM sh_utilisateurs WHERE id = $1', [req.u.id])).rows[0];
+    return transaction(pool, async c => {
+    const u = (await c.query('SELECT mot_de_passe_hash FROM sh_utilisateurs WHERE id = $1 FOR UPDATE', [req.u.id])).rows[0];
     if (!(await verifierAsync(String(req.body.actuel || ''), u.mot_de_passe_hash))) throw new ErreurSh(401, 'Mot de passe actuel incorrect.');
     verifierRobustesse(req.body.nouveau);
     if (req.body.actuel === req.body.nouveau) throw new ErreurSh(400, 'Choisissez un mot de passe différent de l’actuel.');
-    await pool.query('UPDATE sh_utilisateurs SET mot_de_passe_hash = $2, mdp_temporaire = false WHERE id = $1', [req.u.id, await hacherAsync(req.body.nouveau)]);
-    await pool.query('DELETE FROM sh_sessions WHERE utilisateur_id = $1 AND token <> $2', [req.u.id, req.u.token]);
-    await journal(pool, req.u, 'Mot de passe changé', req.u.email, null);
+    await c.query('UPDATE sh_utilisateurs SET mot_de_passe_hash = $2, mdp_temporaire = false WHERE id = $1', [req.u.id, await hacherAsync(req.body.nouveau)]);
+    await c.query('DELETE FROM sh_sessions WHERE utilisateur_id = $1 AND token <> $2', [req.u.id, empreinte(req.u.token)]);
+    await c.query('DELETE FROM sh_connexions_2fa WHERE utilisateur_id=$1',[req.u.id]);
+    await c.query('UPDATE sh_recuperations SET revoque_le=now() WHERE utilisateur_id=$1 AND utilise_le IS NULL',[req.u.id]);
+    await journal(c, req.u, 'Mot de passe changé', req.u.email, null);
+    });
   }));
   api.post('/moi/2fa/preparer', route(async (req) => {
     if (req.u.totp_actif) throw new ErreurSh(409, 'La double authentification est déjà active.');
@@ -209,8 +246,12 @@ function creerAppSh(pool, { env = process.env } = {}) {
   }));
 
   // Modules commerciaux et de collaboration. Les mutations restent internes à SH et auditées.
+  require('./support-sla').brancher(api,pool,route,journal);
   commercial.brancher(api, pool, route, journal);
   erp.brancher(api, pool, route, journal, { cibles: () => ciblesSh(), appeler, env });
+  acces.brancher(api,pool,route,journal,env);
+  presence.brancher(api,pool,route,journal);
+  rolesPerimetres.brancher(api,pool,route,journal);
 
   /* ---------------------------------------------------------------- environnements */
   /** Établissements de chaque environnement (par code), ou null s'il ne répond pas. */
@@ -248,7 +289,7 @@ function creerAppSh(pool, { env = process.env } = {}) {
     const vals = []; const conds = [];
     if (req.query.q) { vals.push(`%${String(req.query.q).trim().toLowerCase()}%`); conds.push(`(lower(h.nom) LIKE $${vals.length} OR lower(coalesce(h.ville, '')) LIKE $${vals.length} OR lower(h.code_etab) LIKE $${vals.length})`); }
     if (STATUTS.includes(req.query.statut)) { vals.push(req.query.statut); conds.push(`h.statut = $${vals.length}`); }
-    if (['demo', 'recette', 'production'].includes(req.query.environnement)) { vals.push(req.query.environnement); conds.push(`h.environnement = $${vals.length}`); }
+    if (Object.hasOwn(NOMS,req.query.environnement)) { vals.push(req.query.environnement); conds.push(`h.environnement = $${vals.length}`); }
     const rows = (await pool.query(`${SELECT_HOPITAL} ${conds.length ? `WHERE ${conds.join(' AND ')}` : ''} ORDER BY h.nom`, vals)).rows;
     const dist = await etablissementsDistants([...new Set(rows.map((h) => h.environnement))]);
     return rows.map((h) => presenter(h, dist));
@@ -269,14 +310,14 @@ function creerAppSh(pool, { env = process.env } = {}) {
       longitude: b.longitude !== undefined ? b.longitude : existant.longitude,
       raison_sociale: texte(b.raison_sociale ?? existant.raison_sociale, 180),
       identifiant_legal: texte(b.identifiant_legal ?? existant.identifiant_legal, 80),
-      pays_code: String(b.pays_code ?? existant.pays_code ?? 'CA').trim().toUpperCase(),
+      pays_code: require('./international').normaliserPays(b.pays_code??existant.pays_code??'CA'),
       region: texte(b.region ?? existant.region, 100),
       fuseau_horaire: String(b.fuseau_horaire ?? existant.fuseau_horaire ?? 'America/Toronto').trim(),
       utilisateurs_prevus: Number(b.utilisateurs_prevus ?? existant.utilisateurs_prevus ?? 0),
       utilisateurs_autorises: Number(b.utilisateurs_autorises ?? existant.utilisateurs_autorises ?? 0),
     };
     if (!v.nom) throw new ErreurSh(400, 'Le nom de l’hôpital est requis.');
-    if (!['demo', 'recette', 'production'].includes(v.environnement)) throw new ErreurSh(400, 'Choisissez l’environnement : démonstration, recette ou production.');
+    if (!Object.hasOwn(NOMS,v.environnement)) throw new ErreurSh(400, 'Choisissez l’environnement : démonstration principale, Démo ABC, recette, pilote ou production.');
     if (!CODE_ETAB.test(v.code_etab)) throw new ErreurSh(400, 'Code d’établissement invalide : 2 à 12 lettres majuscules, chiffres ou tirets (ex. HOP-A).');
     if (!/^[A-Z]{2}$/.test(v.pays_code) || !Number.isInteger(v.utilisateurs_prevus) || v.utilisateurs_prevus < 0 ||
         !Number.isInteger(v.utilisateurs_autorises) || v.utilisateurs_autorises < 0 || v.utilisateurs_autorises < v.utilisateurs_prevus ||
@@ -334,12 +375,15 @@ function creerAppSh(pool, { env = process.env } = {}) {
     const decideur = (await pool.query('SELECT * FROM sh_crm_contacts WHERE organisation_id = $1 ORDER BY decideur DESC, id LIMIT 1', [org.id])).rows[0];
     const v = champsHopital({ nom: org.nom, adresse: org.adresse, ville: org.ville, region: org.region, pays_code: org.pays_code,
       contact_nom: decideur?.nom, contact_courriel: decideur?.courriel, contact_telephone: decideur?.telephone, ...req.body });
+    if(v.pays_code!==org.pays_code)throw new ErreurSh(409,'Le client et l’établissement doivent appartenir au même pays.');
     const id = await transaction(pool, async (c) => {
+      const actuelle=(await c.query('SELECT hopital_id FROM sh_crm_organisations WHERE id=$1 FOR UPDATE',[org.id])).rows[0];
+      if(!actuelle||actuelle.hopital_id)throw new ErreurSh(409,'Cette organisation a déjà sa fiche établissement.');
       const h = (await c.query(`INSERT INTO hopitaux (nom, adresse, ville, contact_nom, contact_courriel, contact_telephone, environnement, code_etab, sous_domaine, latitude, longitude,
-        raison_sociale,identifiant_legal,pays_code,region,fuseau_horaire,utilisateurs_prevus,utilisateurs_autorises)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING id`,
+        raison_sociale,identifiant_legal,pays_code,region,fuseau_horaire,utilisateurs_prevus,utilisateurs_autorises,organisation_id)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING id`,
       [v.nom, v.adresse, v.ville, v.contact_nom, v.contact_courriel, v.contact_telephone, v.environnement, v.code_etab, v.sous_domaine, v.latitude, v.longitude,
-        v.raison_sociale, v.identifiant_legal, v.pays_code, v.region, v.fuseau_horaire, v.utilisateurs_prevus, v.utilisateurs_autorises]).catch(unique)).rows[0].id;
+        v.raison_sociale, v.identifiant_legal, v.pays_code, v.region, v.fuseau_horaire, v.utilisateurs_prevus, v.utilisateurs_autorises,org.id]).catch(unique)).rows[0].id;
       await creerEtapes(c, h);
       await c.query(`UPDATE sh_crm_organisations SET hopital_id = $2, modifie_le = now() WHERE id = $1`, [org.id, h]);
       await c.query('UPDATE sh_projets SET hopital_id = $2, modifie_le = now() WHERE organisation_id = $1 AND hopital_id IS NULL', [org.id, h]);
@@ -356,7 +400,6 @@ function creerAppSh(pool, { env = process.env } = {}) {
 
   /** Fiche complète d'un hôpital (aussi utilisée par le rapport de go-live). */
   async function fiche(id) {
-    await creerEtapes(pool, id);   // éléments ajoutés depuis la création de l'hôpital (rejouable)
     const h = await hopital(id);
     const etapes = (await pool.query(`SELECT e.*, COALESCE(json_agg(v.* ORDER BY v.rang) FILTER (WHERE v.id IS NOT NULL), '[]') AS verifications
       FROM etapes e LEFT JOIN verifications v ON v.etape_id = e.id WHERE e.hopital_id = $1 GROUP BY e.id ORDER BY e.rang`, [h.id])).rows
@@ -391,19 +434,20 @@ function creerAppSh(pool, { env = process.env } = {}) {
         { rang: 6, code: 'activation', nom: 'Activation et suivi', etapes: ['golive','production'] },
       ], manquants,
       peut_activer: h.relie && !manquants.length,
-      golive: { possible: h.environnement === 'recette' && h.relie && !manquants.length && production, production_reliee: production } };
+      golive: { possible: ['recette','pilote'].includes(h.environnement) && h.relie && !manquants.length && production, production_reliee: production } };
   }
   api.get('/hopitaux/:id', route((req) => fiche(entier(req.params.id))));
   api.get('/hopitaux/:id/structure', route(async (req) => {
     const h = await hopital(entier(req.params.id));
-    if (h.environnement !== 'recette' || h.golive_le || h.statut === 'actif') throw new ErreurSh(409, 'La structure est modifiable dans SH uniquement avant le Go Live en recette. Après activation, Arrimo est la référence opérationnelle.');
+    if (!['recette','pilote'].includes(h.environnement) || h.golive_le || h.statut === 'actif') throw new ErreurSh(409, 'La structure est modifiable dans SH uniquement avant le Go Live en recette. Après activation, Arrimo est la référence opérationnelle.');
     if (!h.relie) throw new ErreurSh(409, 'Reliez d’abord cet établissement à la recette.');
-    return appeler(cible('recette'), 'GET', `/sh/etablissements/${h.code_etab}/structure/detaillee`);
+    return appeler(cible(h.environnement), 'GET', `/sh/etablissements/${h.code_etab}/structure/detaillee`);
   }));
 
   api.put('/hopitaux/:id', route(async (req) => {
     const avant = await hopital(entier(req.params.id));
     const v = champsHopital(req.body, avant);
+    profilsPays.verifierChangementPays(avant,v);
     if (avant.relie && (v.environnement !== avant.environnement || v.code_etab !== avant.code_etab)) {
       throw new ErreurSh(409, 'L’hôpital est déjà relié à son établissement : l’environnement et le code ne peuvent plus changer.');
     }
@@ -524,7 +568,10 @@ function creerAppSh(pool, { env = process.env } = {}) {
       if (choisis.size) await terminerTacheAuto(c, h.id, 'modules', req.u);
       await journal(c,req.u,'Catalogue de modules modifié',`${h.code_etab} · ${h.nom}`,`${nombre(choisis.size, 'licence souscrite', 'licences souscrites')}`,h.id);
     });
-    return fiche(h.id);
+    // Établissement déjà relié : la licence OG est transmise à son environnement (réglages locaux conservés).
+    const og_licence = h.relie ? await require('./og-licence').transmettre(pool, appeler, cible(h.environnement), h, req.u.email) : null;
+    if (og_licence && !og_licence.ignoree) await journal(pool, req.u, og_licence.transmise ? 'Licence OG transmise' : 'Licence OG non transmise', `${h.code_etab} · ${h.nom}`, og_licence.transmise ? JSON.stringify(og_licence.licence) : og_licence.raison, h.id);
+    return { ...(await fiche(h.id)), og_licence };
   }));
 
   /** Coche un élément de la liste de vérification (automatique), et passe un prospect en implantation. */
@@ -540,24 +587,35 @@ function creerAppSh(pool, { env = process.env } = {}) {
   }
 
   /** Relie l'hôpital à son établissement dans l'environnement : le crée s'il n'existe pas (inactif), règle son lien propre. */
+  api.get('/hopitaux/:id/profils-pays',route(async req=>{
+    const h=await hopital(entier(req.params.id));
+    return profilsPays.lireProfilsCibles(appeler,cible(h.environnement),h);
+  }));
   api.post('/hopitaux/:id/relier', route(async (req) => {
     const h = await hopital(entier(req.params.id));
     const c = cible(h.environnement);
     const existants = await appeler(c, 'GET', '/sh/etablissements');
-    let cree = false; let actif = (existants.find((e) => e.code === h.code_etab) || {}).module_actif;
-    if (!existants.some((e) => e.code === h.code_etab)) {
+    const existant=existants.find(e=>e.code===h.code_etab);
+    if(existant&&req.body.config_id!==undefined&&Number(req.body.config_id)!==Number(existant.config_id))throw new ErreurHttp(409,'profil_pays_incompatible');
+    const profil=await profilsPays.lireProfilCible(appeler,c,h,existant?.config_id??req.body.config_id);
+    if(existant)profilsPays.verifierEtablissementPays(existant,h);
+    let cree = false; let actif = existant?.module_actif;
+    if (!existant) {
       if (h.latitude == null || h.longitude == null) throw new ErreurSh(400, 'Indiquez la position de l’hôpital (latitude et longitude) avant de créer son établissement.');
-      actif = (await appeler(c, 'POST', '/sh/etablissements', { code: h.code_etab, nom: h.nom, ville: h.ville, adresse: h.adresse, latitude: h.latitude, longitude: h.longitude, par: req.u.email })).module_actif;
+      actif = (await appeler(c, 'POST', '/sh/etablissements', { code: h.code_etab, nom: h.nom,pays_code:h.pays_code,config_id:profil.id, ville: h.ville, adresse: h.adresse, latitude: h.latitude, longitude: h.longitude, par: req.u.email })).module_actif;
       cree = true;
     }
     if (h.sous_domaine) await appeler(c, 'PUT', `/sh/etablissements/${h.code_etab}`, { sous_domaine: h.sous_domaine, par: req.u.email });
+    // Provisionnement d'OG : paramètres initiaux selon la licence souscrite dans SH.
+    const og_licence = await require('./og-licence').transmettre(pool, appeler, c, h, req.u.email);
     await transaction(pool, async (db) => {
       await db.query('UPDATE hopitaux SET relie = true WHERE id = $1', [h.id]);
       await cocher(db, h.id, 'etablissement_cree', req.u);
       if (h.sous_domaine) await cocher(db, h.id, 'lien_defini', req.u);
       await journal(db, req.u, cree ? 'Établissement créé' : 'Établissement relié', `${h.code_etab} · ${h.nom}`, `environnement ${h.environnement}`, h.id);
+      if (!og_licence.ignoree) await journal(db, req.u, og_licence.transmise ? 'Licence OG transmise' : 'Licence OG non transmise', `${h.code_etab} · ${h.nom}`, og_licence.transmise ? JSON.stringify(og_licence.licence) : og_licence.raison, h.id);
     });
-    return { cree, actif: !!actif };
+    return { cree, actif: !!actif, og_licence };
   }));
 
   /* ---------------------------------------------------------------- projet d'implantation */
@@ -595,6 +653,11 @@ function creerAppSh(pool, { env = process.env } = {}) {
     const manque = (await pool.query(`SELECT count(*)::int AS n FROM verifications v JOIN etapes e ON e.id = v.etape_id
       WHERE e.hopital_id = $1 AND e.rang < $2 AND NOT v.faite`, [h.id, RANG_GOLIVE])).rows[0].n;
     if (manque) throw new ErreurSh(409, `Activation impossible : ${manque} élément${manque > 1 ? 's' : ''} à cocher avant le go-live.`);
+    await require('./projets').exigerTachesCritiquesTerminees(pool,h.id);
+    const environnementCible=cible(h.environnement);
+    const distant=(await appeler(environnementCible,'GET','/sh/etablissements')).find(e=>e.code===h.code_etab);
+    await profilsPays.lireProfilCible(appeler,environnementCible,h,distant?.config_id);
+    profilsPays.verifierEtablissementPays(distant,h);
     await appeler(cible(h.environnement), 'PUT', `/sh/etablissements/${h.code_etab}`, { module_actif: true, par: req.u.email });
     await transaction(pool, async (c) => {
       await c.query(`INSERT INTO activations (hopital_id, action, par) VALUES ($1, 'activation', $2)`, [h.id, req.u.email]);
@@ -718,9 +781,9 @@ function creerAppSh(pool, { env = process.env } = {}) {
   /** Patients et mouvements fictifs pour la formation : recette seulement (refusé aussi par l'environnement lui-même). */
   api.post('/hopitaux/:id/formation/generer', route(async (req) => {
     const h = await hopital(entier(req.params.id));
-    if (h.environnement !== 'recette') throw new ErreurSh(403, 'Les données de formation ne peuvent être générées qu’en recette.');
+    if (!['recette','pilote'].includes(h.environnement)) throw new ErreurSh(403, 'Les données de formation ne peuvent être générées qu’en recette.');
     if (!h.relie) throw new ErreurSh(409, 'Reliez d’abord l’hôpital à son établissement.');
-    const n = await appeler(cible('recette'), 'POST', '/sh/formation/generer', { code: h.code_etab, par: req.u.email });
+    const n = await appeler(cible(h.environnement), 'POST', '/sh/formation/generer', { code: h.code_etab, par: req.u.email });
     await journal(pool, req.u, 'Données de formation générées', `${h.code_etab} · ${h.nom}`,
       `admissions : ${n.admissions} · nettoyages : ${n.nettoyages} · civières : ${n.civieres} · demandes de lit : ${n.demandes}`, h.id);
     return n;
@@ -728,9 +791,12 @@ function creerAppSh(pool, { env = process.env } = {}) {
 
   /* ---------------------------------------------------------------- C4 : go-live (recette → production) */
   /** Préflight sans écriture : toute la structure est vérifiée avant de commencer le transfert. */
-  async function preflightGolive(h, acteur) {
+  async function preflightGolive(h, acteur, configId) {
     const bloqueurs = [];
-    if (h.environnement !== 'recette') bloqueurs.push('source_hors_recette');
+    const critiques=(await pool.query(`SELECT count(*)::int n FROM sh_taches t JOIN sh_projets p ON p.id=t.projet_id
+      WHERE p.hopital_id=$1 AND p.statut NOT IN ('termine','annule') AND t.critique_golive AND t.statut<>'terminee'`,[h.id])).rows[0].n;
+    if(critiques)bloqueurs.push(`taches_critiques_non_terminees:${critiques}`);
+    if (!['recette','pilote'].includes(h.environnement)) bloqueurs.push('source_hors_recette');
     if (!h.relie) bloqueurs.push('etablissement_recette_non_relie');
     if (h.latitude == null || h.longitude == null) bloqueurs.push('coordonnees_manquantes');
     const prod = ciblesSh().find((c) => c.code === 'production');
@@ -742,18 +808,32 @@ function creerAppSh(pool, { env = process.env } = {}) {
       AND (code_etab = $2 OR (sous_domaine IS NOT NULL AND sous_domaine = $3))`, [h.id, h.code_etab, h.sous_domaine])).rowCount;
     if (collision) bloqueurs.push('code_ou_domaine_deja_utilise');
     if (!prod || bloqueurs.length) return { possible: false, bloqueurs, fichiers: [] };
+    try{
+      const source=(await appeler(cible(h.environnement),'GET','/sh/etablissements')).find(e=>e.code===h.code_etab);
+      await profilsPays.lireProfilCible(appeler,cible(h.environnement),h,source?.config_id);
+      profilsPays.verifierEtablissementPays(source,h);
+    }catch{return {possible:false,bloqueurs:['profil_pays_source_incompatible'],fichiers:[]};}
 
     let structure;
-    try { structure = await appeler(cible('recette'), 'GET', `/sh/etablissements/${h.code_etab}/structure`); }
+    try { structure = await appeler(cible(h.environnement), 'GET', `/sh/etablissements/${h.code_etab}/structure`); }
     catch { return { possible: false, bloqueurs: ['structure_recette_inaccessible'], fichiers: [] }; }
+    try{await require('./promotion-configuration').lireConfiguration(appeler,cible(h.environnement),h.code_etab);}
+    catch{return {possible:false,bloqueurs:['configuration_recette_incompatible'],fichiers:[]};}
     let etablissements;
     try { etablissements = await appeler(prod, 'GET', '/sh/etablissements'); }
     catch { return { possible: false, bloqueurs: ['production_inaccessible'], fichiers: [] }; }
     const memeCode = etablissements.find((e) => e.code === h.code_etab);
     if (memeCode && memeCode.nom !== h.nom) bloqueurs.push('etablissement_distant_existant_non_correspondant');
+    if (memeCode?.module_actif) bloqueurs.push('etablissement_production_deja_actif');
     let capacites;
     try { capacites = await appeler(prod, 'GET', '/sh/capacites'); }
     catch { bloqueurs.push('fonctionnalites_securisees_absentes'); capacites = {}; }
+    if(!capacites.configurationOperationnelle)bloqueurs.push('configuration_operationnelle_cible_absente');
+    try{
+      if(capacites.selectionPays!==true||!Array.isArray(capacites.profilsPays))throw new Error('compatibilite');
+      profilsPays.choisirProfilProduction(capacites.profilsPays,h,memeCode,configId);
+      if(memeCode)profilsPays.verifierEtablissementPays(memeCode,h,{verifierNom:true});
+    }catch{bloqueurs.push('profil_pays_cible_incompatible');}
     const fichiers = [];
     for (const type of TYPES_IMPORT) {
       const contenu = structure[type] || '';
@@ -778,7 +858,15 @@ function creerAppSh(pool, { env = process.env } = {}) {
     await journal(pool, acteur, 'Préflight Go Live', `${h.code_etab} · ${h.nom}`, bloqueurs.length ? `bloqueurs : ${bloqueurs.join(', ')}` : 'préflight sans écriture réussi', h.id);
     return { possible: bloqueurs.length === 0, bloqueurs, fichiers };
   }
-  api.post('/hopitaux/:id/golive/preflight', route(async (req) => preflightGolive(await hopital(entier(req.params.id)), req.u)));
+  api.get('/hopitaux/:id/golive/profils-pays',route(async req=>{
+    const h=await hopital(entier(req.params.id));
+    if(!['recette','pilote'].includes(h.environnement))throw new ErreurSh(409,'Le go-live part d’un hôpital en recette ou en pilote.');
+    const prod=cible('production');
+    const profils=await profilsPays.lireProfilsCibles(appeler,prod,h);
+    const existant=(await appeler(prod,'GET','/sh/etablissements')).find(e=>e.code===h.code_etab);
+    return existant?[profilsPays.choisirProfilProduction(profils,h,existant)]:profils;
+  }));
+  api.post('/hopitaux/:id/golive/preflight', route(async (req) => preflightGolive(await hopital(entier(req.params.id)), req.u,req.body?.config_id)));
 
   /**
    * La structure validée en recette est importée après préflight sans écriture.
@@ -787,32 +875,47 @@ function creerAppSh(pool, { env = process.env } = {}) {
    */
   api.post('/hopitaux/:id/golive', route(async (req) => {
     const h = await hopital(entier(req.params.id));
-    if (h.environnement !== 'recette') throw new ErreurSh(409, 'Le go-live part d’un hôpital en recette.');
+    if (!['recette','pilote'].includes(h.environnement)) throw new ErreurSh(409, 'Le go-live part d’un hôpital en recette ou en pilote.');
     if (!h.relie) throw new ErreurSh(409, 'Reliez d’abord l’hôpital à son établissement.');
     const manque = (await pool.query(`SELECT count(*)::int AS n FROM verifications v JOIN etapes e ON e.id = v.etape_id
       WHERE e.hopital_id = $1 AND e.rang < $2 AND NOT v.faite`, [h.id, RANG_GOLIVE])).rows[0].n;
     if (manque) throw new ErreurSh(409, `Go-live impossible : ${manque} élément${manque > 1 ? 's' : ''} à cocher avant le go-live.`);
     const prod = ciblesSh().find((c) => c.code === 'production');
     if (!prod) throw new ErreurSh(409, 'La production n’est pas encore reliée à la console (serveur au Canada à installer).');
-    const controle = await preflightGolive(h, req.u);
+    const controle = await preflightGolive(h, req.u,req.body?.config_id);
     if (!controle.possible) throw new ErreurSh(409, `Go-live bloqué par le préflight : ${controle.bloqueurs.join(', ')}.`);
     if (h.latitude == null || h.longitude == null) throw new ErreurSh(400, 'Indiquez la position de l’hôpital avant le go-live.');
     if ((await pool.query(`SELECT 1 FROM hopitaux WHERE environnement = 'production' AND id <> $1 AND (code_etab = $2 OR (sous_domaine IS NOT NULL AND sous_domaine = $3))`,
       [h.id, h.code_etab, h.sous_domaine])).rows[0]) throw new ErreurSh(409, 'Un autre hôpital de production a déjà ce code ou ce lien.');
-    const structure = await appeler(cible('recette'), 'GET', `/sh/etablissements/${h.code_etab}/structure`);
-    const empreinteGolive = empreinte(JSON.stringify({ code: h.code_etab, structure }));
+    const structure = await appeler(cible(h.environnement), 'GET', `/sh/etablissements/${h.code_etab}/structure`);
+    const configuration = await require('./promotion-configuration').lireConfiguration(appeler,cible(h.environnement),h.code_etab);
+    const cibleAvant=(await appeler(prod,'GET','/sh/etablissements')).find(e=>e.code===h.code_etab);
+    const profilChoisi=profilsPays.choisirProfilProduction(await profilsPays.lireProfilsCibles(appeler,prod,h),h,cibleAvant,req.body?.config_id);
+    const empreinteGolive = empreinte(JSON.stringify({ code: h.code_etab, structure,configuration,config_id:profilChoisi.id }));
     const operation = (await pool.query(`INSERT INTO sh_golive_operations (hopital_id,cible,empreinte,statut,phase,lance_par)
       VALUES ($1,'production',$2,'en_cours','preparation',$3)
       ON CONFLICT (hopital_id,cible,empreinte) DO UPDATE SET statut='en_cours',phase='reprise',code_erreur=NULL,modifie_le=now(),lance_par=EXCLUDED.lance_par
-      WHERE sh_golive_operations.statut <> 'en_cours'
-      RETURNING id`, [h.id, empreinteGolive, req.u.email])).rows[0];
+      WHERE sh_golive_operations.statut = 'interrompu'
+      RETURNING id`, [h.id, empreinteGolive, req.u.email]).catch(e=>{
+        if(e.code==='23505')throw new ErreurSh(409,'Un Go Live est déjà en cours pour cet établissement.');
+        throw e;
+      })).rows[0];
     if (!operation) throw new ErreurSh(409, 'Un Go Live identique est déjà en cours. Réessayez après son achèvement ou son interruption.');
     req.goliveOperationId = operation.id;
-    if (!(await appeler(prod, 'GET', '/sh/etablissements')).some((e) => e.code === h.code_etab)) {
+    const sourceActuelle=await hopital(h.id);
+    if(sourceActuelle.environnement!==h.environnement||sourceActuelle.code_etab!==h.code_etab)throw new ErreurSh(409,'La source du Go Live a changé : recommencez le préflight.');
+    const etablissementCible=(await appeler(prod,'GET','/sh/etablissements')).find(e=>e.code===h.code_etab);
+    if(etablissementCible?.module_actif)throw new ErreurSh(409,'Un établissement de production déjà actif ne peut pas être remplacé par le Go Live.');
+    const profilCible=profilsPays.choisirProfilProduction(await profilsPays.lireProfilsCibles(appeler,prod,h),h,etablissementCible,profilChoisi.id);
+    if(etablissementCible)profilsPays.verifierEtablissementPays(etablissementCible,h,{verifierNom:true});
+    if (!etablissementCible) {
       await pool.query("UPDATE sh_golive_operations SET phase='creation_tenant',modifie_le=now() WHERE id=$1", [operation.id]);
-      await appeler(prod, 'POST', '/sh/etablissements', { code: h.code_etab, nom: h.nom, ville: h.ville, adresse: h.adresse, latitude: h.latitude, longitude: h.longitude, par: req.u.email });
+      await appeler(prod, 'POST', '/sh/etablissements', { code: h.code_etab, nom: h.nom,pays_code:h.pays_code,config_id:profilCible.id, ville: h.ville, adresse: h.adresse, latitude: h.latitude, longitude: h.longitude, par: req.u.email });
     }
     if (h.sous_domaine) await appeler(prod, 'PUT', `/sh/etablissements/${h.code_etab}`, { sous_domaine: h.sous_domaine, par: req.u.email });
+    await pool.query("UPDATE sh_golive_operations SET phase='configuration_operationnelle',modifie_le=now() WHERE id=$1",[operation.id]);
+    const configurationPromue=await require('./promotion-configuration').promouvoirConfiguration(appeler,prod,h.code_etab,configuration,req.u.email);
+    await pool.query("UPDATE sh_golive_operations SET resultats=jsonb_set(resultats,ARRAY['configuration_operationnelle'],$2::jsonb,true),modifie_le=now() WHERE id=$1",[operation.id,JSON.stringify(configurationPromue)]);
     const resultats = []; let invitationsEnvoyees = 0;
     for (const type of TYPES_IMPORT) {
       await pool.query('UPDATE sh_golive_operations SET phase=$2,modifie_le=now() WHERE id=$1', [operation.id, `import_${type}`]);
@@ -832,15 +935,15 @@ function creerAppSh(pool, { env = process.env } = {}) {
         [operation.id, type, JSON.stringify({ lignes: r.lignes, resume: r.resume, invitations_envoyees: r.invitations_envoyees || 0 })]);
     }
     await transaction(pool, async (c) => {
-      await c.query(`UPDATE hopitaux SET environnement = 'production', relie = true, golive_le = now(), golive_par = $2 WHERE id = $1`, [h.id, req.u.email]).catch(unique);
+      await c.query(`UPDATE hopitaux SET environnement = 'production', statut='implantation', relie = true, golive_le = now(), golive_par = $2 WHERE id = $1`, [h.id, req.u.email]).catch(unique);
       await cocher(c, h.id, 'production_importee', req.u);
       await terminerTacheAuto(c, h.id, 'golive', req.u);
       await cocher(c, h.id, 'module_active', req.u, false);   // en production, le module reste à activer
       await c.query("UPDATE sh_golive_operations SET statut='termine',phase='termine',code_erreur=NULL,modifie_le=now() WHERE id=$1", [operation.id]);
       await journal(c, req.u, 'Go-live', `${h.code_etab} · ${h.nom}`,
-        `recette → production · ${resultats.map((x) => `${x.type} : ${x.lignes}`).join(' · ')} · invitations envoyées : ${invitationsEnvoyees}`, h.id);
+        `${h.environnement} → production · ${resultats.map((x) => `${x.type} : ${x.lignes}`).join(' · ')} · invitations envoyées : ${invitationsEnvoyees}`, h.id);
     });
-    return { resultats, invitations_envoyees: invitationsEnvoyees };
+    return { resultats, invitations_envoyees: invitationsEnvoyees,configuration:configurationPromue };
   }));
 
   /** Rapport de go-live en PDF. */
@@ -861,14 +964,23 @@ function creerAppSh(pool, { env = process.env } = {}) {
     const avant = req.query.avant ? entier(req.query.avant) : null;
     return (await pool.query(`SELECT j.id, j.date, j.action, j.cible, j.detail, u.nom AS utilisateur, h.nom AS hopital FROM sh_journal j
       LEFT JOIN sh_utilisateurs u ON u.id = j.utilisateur_id LEFT JOIN hopitaux h ON h.id = j.hopital_id
-      ${avant ? 'WHERE j.id < $1' : ''} ORDER BY j.id DESC LIMIT 100`, avant ? [avant] : [])).rows;
+      WHERE ($1::bigint IS NULL OR j.id<$1) AND ($2::boolean OR j.action=ANY($3::text[]))
+      ORDER BY j.id DESC LIMIT 100`, [avant,req.u.role==='administration',JOURNAL_OPERATIONNEL])).rows;
   }));
 
   /* ---------------------------------------------------------------- équipe SH */
   api.get('/equipe', route(async () => (await pool.query(
-    'SELECT id, email, nom, role, actif, totp_actif, derniere_connexion, cree_le FROM sh_utilisateurs ORDER BY nom')).rows));
-  api.get('/invitations', route(async () => (await pool.query(`SELECT id,email,nom,role,expire_le,cree_le,utilise_le,revoquee_le
-    FROM sh_invitations WHERE utilise_le IS NULL AND revoquee_le IS NULL AND expire_le > now() ORDER BY cree_le DESC`)).rows));
+    'SELECT id, email, nom, fonction, role, actif, archive_le, suppression_demandee_le, suppression_motif, supprime_le, totp_actif, derniere_connexion, cree_le FROM sh_utilisateurs ORDER BY nom')).rows));
+  api.get('/invitations', route(async () => (await pool.query(`SELECT id,email,nom,role,expire_le,cree_le,utilise_le,revoquee_le,utilisateur_id
+    FROM sh_invitations WHERE utilise_le IS NULL AND revoquee_le IS NULL ORDER BY cree_le DESC LIMIT 500`)).rows));
+  api.post('/invitations/:id/renvoyer',route(async req=>{
+    const i=(await pool.query(`SELECT * FROM sh_invitations WHERE id=$1 AND utilisateur_id IS NULL
+      AND utilise_le IS NULL AND revoquee_le IS NULL`,[entier(req.params.id)])).rows[0];
+    if(!i)throw new ErreurSh(404,'Invitation non renouvelable.');
+    const r=await invitations.creer(pool,{email:i.email,nom:i.nom,role:i.role,creePar:req.u.id,remplaceId:i.id},env);
+    await journal(pool,req.u,'Invitation SH renvoyée',i.email,'ancien lien révoqué');
+    return {ok:true,expire_le:r.expire_le};
+  }));
   api.post('/equipe', route(async (req) => {
     const email = String(req.body.email || '').trim().toLowerCase();
     const nom = texte(req.body.nom, 120);
@@ -888,17 +1000,31 @@ function creerAppSh(pool, { env = process.env } = {}) {
   };
   api.put('/equipe/:id', route(async (req) => {
     const m = await autreMembre(req);
-    const actif = !!req.body.actif;
-    await pool.query('UPDATE sh_utilisateurs SET actif = $2 WHERE id = $1', [m.id, actif]);
-    if (!actif) await pool.query('DELETE FROM sh_sessions WHERE utilisateur_id = $1', [m.id]);
-    await journal(pool, req.u, actif ? 'Compte SH réactivé' : 'Compte SH désactivé', m.email, null);
+    if(typeof req.body.actif!=='boolean') throw new ErreurSh(400,'Le statut actif doit être un booléen.');
+    const actif = req.body.actif;
+    await transaction(pool,async c=>{
+      const u=(await c.query('SELECT archive_le FROM sh_utilisateurs WHERE id=$1 FOR UPDATE',[m.id])).rows[0];
+      if(actif&&u.archive_le) throw new ErreurSh(409,'Restaurez le compte archivé avant de le réactiver.');
+      await c.query('UPDATE sh_utilisateurs SET actif = $2 WHERE id = $1', [m.id, actif]);
+      if (!actif) {
+        await acces.revoquer(c,m.id);
+        await c.query('UPDATE sh_recuperations SET revoque_le=now() WHERE utilisateur_id=$1 AND utilise_le IS NULL',[m.id]);
+        await c.query('UPDATE sh_invitations SET revoquee_le=now() WHERE utilisateur_id=$1 AND utilise_le IS NULL',[m.id]);
+      }
+      await journal(c, req.u, actif ? 'Compte SH réactivé' : 'Compte SH désactivé', m.email, null);
+    });
   }));
   api.put('/equipe/:id/role', route(async (req) => {
     const m = await autreMembre(req);
     const role = String(req.body.role || '');
     if (!ROLES_SH.includes(role)) throw new ErreurSh(400, 'Rôle SH invalide.');
-    await pool.query('UPDATE sh_utilisateurs SET role=$2 WHERE id=$1', [m.id, role]);
-    await journal(pool, req.u, 'Rôle SH modifié', m.email, `${m.role} → ${role}`);
+    await transaction(pool,async c=>{
+      await c.query('SELECT id FROM sh_utilisateurs WHERE id=$1 FOR UPDATE',[m.id]);
+      await c.query('UPDATE sh_utilisateurs SET role=$2,role_personnalise_id=NULL WHERE id=$1', [m.id, role]);
+      await acces.revoquer(c,m.id);
+      await c.query('UPDATE sh_invitations SET revoquee_le=now() WHERE utilisateur_id=$1 AND utilise_le IS NULL',[m.id]);
+      await journal(c, req.u, 'Rôle SH modifié', m.email, `${m.role} → ${role} ; sessions révoquées`);
+    });
     return { ok: true, role };
   }));
   api.post('/equipe/:id/inviter', route(async (req) => {
@@ -910,17 +1036,19 @@ function creerAppSh(pool, { env = process.env } = {}) {
   }));
 
   app.use('/api', api);
-  app.use('/api', (req, res) => res.status(404).json({ erreur: 'Adresse inconnue.' }));
+  app.use('/api', (req, res) => res.status(404).json({ erreur: traduireSH('Adresse inconnue.',req.langue) }));
 
   // eslint-disable-next-line no-unused-vars
   app.use((err, req, res, next) => {
+    if(err.code==='P0A01')return res.status(409).json({erreur:traduireSH('Projet archivé : restaurez-le avant modification.',req.langue)});
+    if(err.code==='42501')return res.status(403).json({erreur:traduireSH('Accès hors du périmètre autorisé.',req.langue)});
     // Erreurs métier des modules (statut HTTP explicite) : message rendu tel quel, comme les erreurs de la console.
     const metier = Number.isInteger(err.statut) && err.statut >= 400 && err.statut < 600;
-    if (err instanceof ErreurSh || err instanceof ErreurCible || err instanceof ErreurHttp || metier) return res.status(err.statut).json({ erreur: err.message, ...(err.code && !metier ? { code: err.code } : {}) });
-    if (err.type === 'entity.parse.failed') return res.status(400).json({ erreur: 'Requête mal formée.' });
-    if (err.type === 'entity.too.large') return res.status(413).json({ erreur: 'Fichier trop gros (1 Mo au plus).' });
+    if (err instanceof ErreurSh || err instanceof ErreurCible || err instanceof ErreurHttp || metier) return res.status(err.statut).json({ erreur: traduireSH(err.message,req.langue), ...(err.code && (err instanceof ErreurHttp||!metier) ? { code: err.code, ...(err.vars&&Object.keys(err.vars).length?{vars:err.vars}:{}) } : {}) });
+    if (err.type === 'entity.parse.failed') return res.status(400).json({ erreur: traduireSH('Requête mal formée.',req.langue) });
+    if (err.type === 'entity.too.large') return res.status(413).json({ erreur: traduireSH('Fichier trop gros (1 Mo au plus).',req.langue) });
     console.error(err);
-    return res.status(500).json({ erreur: 'Erreur interne. Réessayez.' });
+    return res.status(500).json({ erreur: traduireSH('Erreur interne. Réessayez.',req.langue) });
   });
   return app;
 }

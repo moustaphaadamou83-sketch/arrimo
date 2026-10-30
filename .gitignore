@@ -10,3 +10,5 @@ docs/presentation/*.mp4
 .local/
 preuves/
 dependances-reference
+__pycache__/
+*.pyc

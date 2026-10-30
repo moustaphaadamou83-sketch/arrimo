@@ -62,8 +62,28 @@ function appliquerLangue() {
     el.dataset.i18nAttr.split(';').forEach((paire) => { const [attr, cle] = paire.split(':'); el.setAttribute(attr, t(cle)); });
   });
   document.querySelectorAll('select.choix-langue').forEach((s) => { s.value = langue; });
+  majApparence();
   if (etat.lien) $('#c-lien').textContent = t('connexion.lien', { nom: etat.lien.nom });
 }
+/* Apparence (clair, sombre, automatique, soleil) : préférence du compte, appliquée à toutes ses pages. */
+function lieuApparence() {
+  const e = etat.moi?.etablissements?.find((x) => x.id === etat.ctx) || etat.moi?.etablissements?.[0];
+  return e && Number.isFinite(e.latitude) ? { latitude: e.latitude, longitude: e.longitude, source: 'etablissement' } : null;
+}
+function majApparence() {
+  const s = $('#apparence-barre'); if (!s) return;
+  const actuel = etat.moi?.utilisateur?.apparence || window.ArrimoApparence?.mode() || 'automatique';
+  s.innerHTML = ['clair', 'sombre', 'automatique', 'soleil'].map((m) => `<option value="${m}"${m === actuel ? ' selected' : ''}>${esc(t(`apparence.${m}`))}</option>`).join('');
+}
+$('#apparence-barre')?.addEventListener('change', async (e) => {
+  const choix = e.target.value;
+  try {
+    const r = await api('PUT', '/moi/apparence', { apparence: choix });
+    if (etat.moi) etat.moi.utilisateur.apparence = r.apparence;
+    window.ArrimoApparence?.definir(r.apparence, { lieu: lieuApparence() });
+    toast(t('apparence.enregistree'));
+  } catch (err) { toast(err.message, true); majApparence(); }
+});
 function changerLangue(l) {
   if (!LANGUES.includes(l) || l === langue) return;
   langue = l;
@@ -262,6 +282,8 @@ $('#f-mdp-temp').addEventListener('submit', async (e) => {
 });
 
 function deconnecter(expire) {
+  etat.supportBrouillons={};etat.supportFiche=null;etat.supportNavigation=null;
+  $('#v-support').innerHTML='';
   window.dispatchEvent(new Event('arrimo:session-reset'));
   etat.question = ''; etat.reponse = ''; etat.recos = [];
   if (etat.token && !expire) api('POST', '/deconnexion').catch(() => {});
@@ -294,6 +316,8 @@ function majSelecteurCtx() {
 
 async function demarrer() {
   etat.moi = await api('GET', '/moi');
+  window.ArrimoApparence?.definir(etat.moi.utilisateur.apparence || 'automatique', { lieu: lieuApparence() });
+  majApparence();
   bandeauEnvironnement(etat.moi.environnement);
   if (etat.moi.utilisateur.mdp_temporaire) { montrerFormulaire('#f-mdp-temp'); $('#t-actuel').focus(); return; }
   const etabs = etat.moi.etablissements;
@@ -383,7 +407,7 @@ async function rafraichir() {
     await Promise.all([e ? majCompteurs() : null, ({
       copilote: vueCopilote, reseau: vueReseau, national: vueNational, lits: vueLits, urgence: vueUrgence, admissions: vueAdmissions, transferts: vueTransferts,
       nettoyage: vueNettoyage, vigilance: vueVigilance, nsa: vueNsa, indicateurs: vueIndicateurs, journal: vueJournal, params: vueParams,
-      admin: vueAdmin, compte: vueCompte,
+      admin: vueAdmin, compte: vueCompte, support:vueSupportClient,
     })[etat.vue]()]);
     if (!$('#panneau-aide').hidden) afficherAide();
   } catch (err) {
@@ -392,7 +416,7 @@ async function rafraichir() {
     enCours = false;
   }
 }
-setInterval(() => { if ($('#modale').hidden && document.visibilityState === 'visible') rafraichir(); }, 30000);
+setInterval(() => { if ($('#modale').hidden && document.visibilityState === 'visible' && !$('#v-support').contains(document.activeElement)) rafraichir(); }, 30000);
 
 /* ---------------- Notifications en direct : pastille et bandeau « disponibilité à côté », sans recharger la page ---------------- */
 async function veilleNotifs() {
@@ -853,7 +877,9 @@ async function vueTransferts() {
       <div class="t"><b>${esc(x.numero)}</b>${x.urgent ? `<span class="urgent">${esc(t('transferts.urgent'))}</span>` : `<span class="note">${esc(t(x.destination_id === etat.ctx ? 'transferts.entrant' : 'transferts.sortant'))}</span>`}</div>
       <div style="font-size:12px">${esc(x.origine_nom)} → ${esc(x.destination_nom)}</div>
       <div class="note">${esc(x.type_nom)} · ${esc(t('transferts.lit'))} <span class="num">${esc(x.lit_code || '—')}</span> · <span class="num">${esc(x.patient_ref)}</span></div>
-      <div class="note"><span class="num">${x.distance_km != null ? esc(t('general.km', { n: x.distance_km })) : '—'}</span> · ${depuis(x.date_demande)}${x.transport_info ? ` · ${esc(x.transport_info)}` : ''}</div>
+      <div class="note">${esc(t('transferts.trajet_estime'))} : <span class="num">${x.distance_km != null ? esc(t('general.km', { n: x.distance_km })) : '—'}</span> · ${esc(x.minutes_route != null && x.route_actualise_le ? duree(x.minutes_route) : t('transferts.trajet_non_renseigne'))}${x.transport_info ? ` · ${esc(x.transport_info)}` : ''}</div>
+      <div class="note">${esc(t('transferts.age_creation'))} : ${depuis(x.date_demande)}</div>
+      <div class="note">${esc(t('transferts.transport_reel'))} : ${esc(x.date_depart && x.date_reception ? new Intl.NumberFormat(locale(), {style:'unit',unit:'second',unitDisplay:'short',maximumFractionDigits:0}).format((new Date(x.date_reception)-new Date(x.date_depart))/1000) : t('transferts.transport_non_mesure'))}</div>
       ${besoinsTransfert(x) ? `<div class="note">${esc(t('transferts.besoins', { liste: besoinsTransfert(x) }))}</div>` : ''}
       ${x.statut === 'en_route' && x.arrivee_prevue ? `<div class="arrivee" data-eta="${esc(x.arrivee_prevue)}">${icone('clock')}<span><strong>${esc(t('transferts.arrivee', { heure: heureCourte(x.arrivee_prevue) }))}</strong> · <span class="decompte"></span></span></div>` : ''}
       ${['validee', 'transport', 'en_route'].includes(x.statut) ? (x.date_chambre_prete ? `<div><span class="etat-niveau n-vert">${esc(t('transferts.badge_prete'))}</span></div>`
@@ -929,6 +955,50 @@ async function vueJournal() {
 }
 
 /* ---------------- Paramètres ---------------- */
+/* OG par établissement : personnalisation (aperçu, voix) et fonctions, bornées par la licence SH. */
+async function panneauOg(etab) {
+  const zone = $('#params-og'); if (!zone || !etab) return;
+  const cfg = await api('GET', `/og/configuration?etablissement_id=${etab}`);
+  const u = etat.moi.utilisateur, admin = u.admin && ['gestionnaire', 'admin_etab'].includes(u.role);
+  const O = (k, v) => esc(t(`ogperso.${k}`, v)); const A = window.ArrimoOgAvatar;
+  const choix = { modele: ['robot', 'symbole', 'humain'], style: ['professionnel', 'moderne', 'amical'], tenue: ['blouse', 'veste', 'polo'], accessoire: ['aucun', 'lunettes', 'casque'] };
+  const couleurs = ['#0E5E6F', '#159895', '#1E3A5F', '#3B4A6B', '#2F6F5E'], peaux = ['#F5D6BE', '#E0AC86', '#C68642', '#8D5524', '#5C3A21'];
+  const prefixe = { modele: 'm', style: 's', tenue: 't', accessoire: 'a' };
+  const p = cfg.personnalisation, dis = admin ? '' : ' disabled';
+  const select = (cle, valeurs, actuelle, lib) => `<div class="champ"><label class="lbl" for="og-${cle}">${O(cle)}</label><select id="og-${cle}"${dis}>${valeurs.map((v, i) => `<option value="${esc(v)}"${v === actuelle ? ' selected' : ''}>${esc(lib(v, i))}</option>`).join('')}</select></div>`;
+  zone.innerHTML = `<div class="panneau-c"><h3>${O('titre')}</h3><p class="note">${O('intro')}</p>
+    <div class="og-perso"><div class="og-apercu" id="og-apercu" aria-hidden="true"></div><div class="og-perso-champs">
+      <div class="champ"><label class="lbl" for="og-nom">${O('nom')}</label><input id="og-nom" maxlength="30" value="${esc(p.nom)}"${dis}></div>
+      ${Object.entries(choix).map(([cle, vals]) => select(cle, vals, p.avatar[cle], (v) => t(`ogperso.${prefixe[cle]}_${v}`))).join('')}
+      ${select('couleur', couleurs, p.avatar.couleur, (v, i) => t('ogperso.couleur_n', { n: i + 1 }))}${select('peau', peaux, p.avatar.peau, (v, i) => t('ogperso.peau_n', { n: i + 1 }))}
+      ${select('voix', ['feminine', 'masculine'], p.voix, (v) => t(`ogperso.v_${v}`))}${select('langue', ['fr', 'en'], p.langue, (v) => dicoDe(v).langue?.nom || v)}
+      <div class="champ"><label class="lbl" for="og-accueil">${O('accueil')}</label><input id="og-accueil" maxlength="200" value="${esc(p.accueil)}"${dis}></div></div></div>
+    <h4>${O('fonctions')}</h4><div class="og-fonctions">${Object.keys(cfg.licence).map((f) => `<label class="case"><input type="checkbox" data-og-fonction="${f}"${cfg.effectif[f] ? ' checked' : ''}${admin && cfg.licence[f] ? '' : ' disabled'}> ${O(`f_${f}`)}${cfg.licence[f] ? '' : ` <span class="note">(${O('hors_licence')})</span>`}</label>`).join('')}</div>
+    <div class="ligne serre"><button class="btn" type="button" id="og-tester">${O('tester')}</button>${admin ? `<button class="btn" type="button" id="og-reinit">${O('reinitialiser')}</button><button class="btn pri" type="button" id="og-enregistrer">${O('enregistrer')}</button>` : ''}</div>
+    ${admin ? '' : `<p class="note">${O('lecture_seule')}</p>`}</div>`;
+  const lireAvatar = () => ({ modele: $('#og-modele').value, style: $('#og-style').value, couleur: $('#og-couleur').value, peau: $('#og-peau').value, tenue: $('#og-tenue').value, accessoire: $('#og-accessoire').value });
+  const apercu = () => { $('#og-apercu').innerHTML = A ? A.svg(lireAvatar(), 96) : ''; };
+  zone.querySelectorAll('select').forEach((s) => { s.onchange = apercu; }); apercu();
+  $('#og-tester').onclick = () => {
+    if (!('speechSynthesis' in window)) { toast(t('ogperso.voix_indisponible'), true); return; }
+    const langueVoix = $('#og-langue').value, texte = t('ogperso.essai_voix', { nom: $('#og-nom').value || 'OG' });
+    const u2 = new SpeechSynthesisUtterance(texte); u2.lang = langueVoix === 'en' ? 'en-CA' : 'fr-CA';
+    const voix = speechSynthesis.getVoices().filter((v) => v.lang.startsWith(langueVoix));
+    // Les navigateurs n'indiquent pas le genre des voix : choix indicatif par nom, sinon la voix par défaut.
+    const masc = /male|homme|thomas|daniel|paul|nicolas|alex/i, fem = /female|femme|amelie|marie|julie|samantha|karen|hortense/i;
+    u2.voice = voix.find((v) => ($('#og-voix').value === 'masculine' ? masc : fem).test(v.name)) || voix[0] || null;
+    speechSynthesis.cancel(); speechSynthesis.speak(u2);
+  };
+  const reinit = $('#og-reinit'); if (reinit) reinit.onclick = () => {
+    $('#og-nom').value = 'OG'; $('#og-modele').value = 'robot'; $('#og-style').value = 'professionnel'; $('#og-couleur').value = '#0E5E6F'; $('#og-peau').value = '#C68642';
+    $('#og-tenue').value = 'blouse'; $('#og-accessoire').value = 'aucun'; $('#og-accueil').value = ''; apercu();
+  };
+  const enr = $('#og-enregistrer'); if (enr) enr.onclick = () => agir(enr, async () => {
+    const fonctions = Object.fromEntries([...zone.querySelectorAll('[data-og-fonction]:not(:disabled)')].map((c) => [c.dataset.ogFonction, c.checked]));
+    await api('PUT', '/og/configuration', { etablissement_id: etab, fonctions, personnalisation: { nom: $('#og-nom').value.trim(), voix: $('#og-voix').value, langue: $('#og-langue').value, accueil: $('#og-accueil').value, avatar: lireAvatar() } });
+    window.dispatchEvent(new Event('arrimo:og-configuration'));
+  }, t('ogperso.enregistre'));
+}
 async function vueParams() {
   const cfg = configCtx();
   const gest = etat.moi.utilisateur.role === 'gestionnaire';
@@ -956,7 +1026,8 @@ async function vueParams() {
         ${etat.moi.utilisateur.admin ? `<div class="ligne"><div class="champ"><label class="lbl" for="p-rayon">${P('alertes_rayon')}</label>
           <input id="p-rayon" type="number" min="1" max="200" inputmode="numeric" value="${etabCtx().rayon_alerte_km}"></div><button class="btn" id="b-rayon">${esc(t('general.enregistrer'))}</button></div>`
     : `<p>${P('alertes_valeur', { km: etabCtx().rayon_alerte_km })}</p>`}</div>
-    </div>`;
+    </div><div id="params-og"></div>`;
+  await panneauOg(etat.ctx);
   const br = $('#b-rayon');
   if (br) br.onclick = () => agir(br, async () => { await api('PUT', `/admin/etablissements/${etat.ctx}/rayon-alerte`, { rayon_alerte_km: Number($('#p-rayon').value) }); await recharger(); }, t('params.alertes_ok'));
   const recharger = async () => { etat.moi = await api('GET', '/moi'); };
@@ -1921,6 +1992,7 @@ function premiersPas(revoir) {
 function formNouvelEtab() {
   const I = (k, vars) => esc(t(`import.${k}`, vars));
   return `<details class="panneau-c nouvel-etab"><summary><h3>${I('etab_titre')}</h3></summary><p class="note">${I('etab_aide')}</p>
+    <div class="champ"><label class="lbl" for="ne-profil">${I('profil_hospitalier')}</label><select id="ne-profil" disabled><option value="">${I('profil_chargement')}</option></select></div>
     <div class="ligne"><div class="champ"><label class="lbl" for="ne-code">${I('etab_code')}</label><input id="ne-code" maxlength="12" autocomplete="off" placeholder="HOP-A"></div>
       <div class="champ"><label class="lbl" for="ne-nom">${I('etab_nom')}</label><input id="ne-nom" autocomplete="off"></div></div>
     <div class="ligne"><div class="champ"><label class="lbl" for="ne-ville">${I('etab_ville')}</label><input id="ne-ville" autocomplete="off"></div>
@@ -1932,8 +2004,10 @@ function formNouvelEtab() {
 function brancherNouvelEtab() {
   const b = $('#b-ne-creer');
   if (!b) return;
+  const profil=$('#ne-profil');b.disabled=true;
   b.onclick = () => agir(b, async () => {
-    const e = await api('POST', '/admin/etablissements', { code: $('#ne-code').value, nom: $('#ne-nom').value, ville: $('#ne-ville').value,
+    if(!profil.value)throw new Error(t('erreurs.profil_pays_ambigu'));
+    const e = await api('POST', '/admin/etablissements', {config_id:Number(profil.value), code: $('#ne-code').value, nom: $('#ne-nom').value, ville: $('#ne-ville').value,
       adresse: $('#ne-adresse').value, latitude: $('#ne-lat').value.replace(',', '.'), longitude: $('#ne-lon').value.replace(',', '.') });
     const premier = !etat.ctx;
     etat.moi = await api('GET', '/moi');
@@ -1941,6 +2015,11 @@ function brancherNouvelEtab() {
     if (premier) { await demarrer(); allerA('admin'); }
     return e;
   }, (e) => t('import.etab_ok', { nom: e.nom }));
+  return api('GET','/admin/config').then(profils=>{
+    if(!profils.length)throw new Error(t('erreurs.profil_pays_absent'));
+    profil.innerHTML=`<option value="">${esc(t('import.profil_choisir'))}</option>`+profils.map(p=>`<option value="${esc(p.id)}">${esc(p.nom)} (${esc(p.code)})</option>`).join('');
+    profil.value=profils.length===1?String(profils[0].id):'';profil.disabled=false;b.disabled=false;
+  }).catch(e=>toast(e.message,true));
 }
 const TYPES_IMPORT = ['unites', 'chambres', 'lits', 'civieres', 'utilisateurs'];
 // Noms de colonnes des modèles : identifiants fixes du fichier, identiques dans les deux langues

@@ -49,6 +49,9 @@ CREATE TABLE IF NOT EXISTS utilisateurs (
   actif              boolean NOT NULL DEFAULT true
 );
 ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS invitation_en_attente boolean NOT NULL DEFAULT false;
+-- Apparence choisie par l'utilisateur (clair, sombre, automatique selon le système, soleil selon l'établissement)
+ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS apparence text NOT NULL DEFAULT 'automatique'
+  CHECK (apparence IN ('clair', 'sombre', 'automatique', 'soleil'));
 
 CREATE TABLE IF NOT EXISTS utilisateur_etablissements (
   utilisateur_id    int NOT NULL REFERENCES utilisateurs(id) ON DELETE CASCADE,
@@ -704,3 +707,33 @@ CREATE TABLE IF NOT EXISTS connecteurs_simulation_evenements (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS simulation_sequence_appliquee_unique
   ON connecteurs_simulation_evenements(connecteur_id, flux, sequence) WHERE statut = 'applique';
+
+-- OG par établissement : licence transmise par SH et réglages de l'administrateur hospitalier.
+-- Sans ligne, OG garde son fonctionnement historique (assistant texte seul).
+CREATE TABLE IF NOT EXISTS og_configurations (
+  etablissement_id int PRIMARY KEY REFERENCES etablissements(id) ON DELETE CASCADE,
+  licence          jsonb NOT NULL DEFAULT '{}'::jsonb,
+  licence_le       timestamptz,
+  reglages         jsonb NOT NULL DEFAULT '{}'::jsonb,
+  modifie_par      int REFERENCES utilisateurs(id),
+  modifie_le       timestamptz NOT NULL DEFAULT now()
+);
+
+-- Actions supervisées d'OG : préparation, confirmation explicite par un utilisateur habilité, exécution par l'API
+-- métier existante, résultat vérifiable. Aucune identité patient n'y est stockée (référence seulement).
+CREATE TABLE IF NOT EXISTS og_actions (
+  id               uuid PRIMARY KEY,
+  etablissement_id int NOT NULL REFERENCES etablissements(id) ON DELETE CASCADE,
+  utilisateur_id   int NOT NULL REFERENCES utilisateurs(id),
+  outil            text NOT NULL,
+  niveau           int NOT NULL CHECK (niveau BETWEEN 0 AND 3),
+  entree           jsonb NOT NULL,
+  idempotence      text NOT NULL,
+  etat             text NOT NULL DEFAULT 'preparee' CHECK (etat IN ('preparee', 'executee', 'annulee', 'echouee')),
+  resultat         jsonb,
+  confirme_par     int REFERENCES utilisateurs(id),
+  cree_le          timestamptz NOT NULL DEFAULT now(),
+  expire_le        timestamptz NOT NULL,
+  termine_le       timestamptz,
+  UNIQUE (utilisateur_id, idempotence)
+);

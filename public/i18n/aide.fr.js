@@ -28,6 +28,7 @@ window.ARRIMO_I18N.fr.aide = {
     },
   },
   ecrans: {
+    support:{"nom": "Support client", "but": "Créer et suivre les demandes de votre établissement.", "gestes": ["Décrire le problème sans données médicales.", "Choisir un projet et envoyer la demande.", "Ouvrir le ticket pour consulter les réponses publiques."], "erreurs": []},
     copilote: {
       nom: 'Copilote',
       but: 'Le résumé de la situation pour la réunion de gestion des lits : niveau d’alerte, recommandations classées et réponses à vos questions. Le Copilote propose ; vous décidez.',

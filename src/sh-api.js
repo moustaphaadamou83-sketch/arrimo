@@ -18,7 +18,7 @@ const motdepasse = require('./motdepasse');
 const courriel = require('./courriel');
 
 // Noms réservés : ne peuvent pas servir de lien d'hôpital
-const RESERVES = ['www', 'sh', 'recette', 'api', 'demo', 'admin', 'mail'];
+const RESERVES = ['www', 'sh', 'pilote', 'recette', 'api', 'demo', 'admin', 'mail'];
 const SOUS_DOMAINE = /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/;
 
 function exigerCle(req) {
@@ -40,8 +40,17 @@ function brancherSh(api, pool, route) {
     return e;
   };
 
-  api.get('/sh/capacites', sh(async () => ({ api: 1, invitationsSecurisees: true, courrielActif: courriel.actif() })));
+  api.get('/sh/capacites', sh(async () => ({ api: 1, invitationsSecurisees: true, courrielActif: courriel.actif(), configurationOperationnelle: true,
+    selectionPays:true,profilsPays:require('./profils-pays').profilsAvecPays((await pool.query('SELECT id,code,nom FROM config_pays ORDER BY id')).rows) })));
 
+  // Licence OG décidée dans SH (module OG souscrit et ses fonctions) ; les réglages de l'établissement sont conservés.
+  api.get('/sh/etablissements/:code/og-licence', sh(async (req) => require('./og-configuration').lire(pool, (await etabParCode(req.params.code)).id)));
+  api.put('/sh/etablissements/:code/og-licence', sh(async (req) => {
+    const e = await etabParCode(req.params.code);
+    const r = await require('./og-configuration').definirLicence(pool, e.id, req.body.licence);
+    await journalAdmin(pool, systeme, 'Licence OG transmise par SH', e.nom, `${JSON.stringify(r.licence)} · ${parSh(req.body)}`, e.id);
+    return r;
+  }));
   api.get('/sh/etablissements/:code/configuration-operationnelle', sh(async (req) => {
     const e = await etabParCode(req.params.code);
     const etat = (await pool.query('SELECT modules, vocation, config_id FROM etablissements WHERE id=$1', [e.id])).rows[0];
@@ -64,17 +73,24 @@ function brancherSh(api, pool, route) {
     });
   }));
 
-  api.get('/sh/etablissements', sh(async () => (await pool.query(
-    `SELECT e.id, e.code, e.nom, e.ville, e.adresse, e.partage, e.module_actif, e.sous_domaine,
+  api.get('/sh/etablissements', sh(async () => {
+    const rows=(await pool.query(
+    `SELECT e.id, e.code, e.nom, e.ville, e.adresse, e.partage, e.module_actif, e.sous_domaine,e.config_id,profil.code configuration_code,
             (SELECT count(*)::int FROM unites u WHERE u.etablissement_id = e.id) AS unites,
             (SELECT count(*)::int FROM chambres ch JOIN unites u ON u.id = ch.unite_id WHERE u.etablissement_id = e.id) AS chambres,
             (SELECT count(*)::int FROM lits l WHERE l.etablissement_id = e.id) AS lits,
             (SELECT count(*)::int FROM civieres c WHERE c.etablissement_id = e.id) AS civieres,
             (SELECT count(*)::int FROM utilisateur_etablissements ue JOIN utilisateurs us ON us.id = ue.utilisateur_id AND us.actif
               WHERE ue.etablissement_id = e.id) AS comptes
-       FROM etablissements e WHERE e.actif ORDER BY e.nom`)).rows));
+       FROM etablissements e JOIN config_pays profil ON profil.id=e.config_id WHERE e.actif ORDER BY e.nom`)).rows;
+    const profils=require('./profils-pays').profilsAvecPays(rows.map(e=>({id:e.config_id,code:e.configuration_code})));
+    const paysParProfil=new Map(profils.map(p=>[p.id,p.pays_code]));
+    return rows.map(e=>({...e,pays_code:paysParProfil.get(e.config_id)}));
+  }));
 
-  api.post('/sh/etablissements', sh((req) => creerEtablissement(pool, req.body, async (c, e) => {
+  api.post('/sh/etablissements', sh((req) => {
+    if(req.body.pays_code===undefined)throw new ErreurHttp(400,'profil_pays_requis');
+    return creerEtablissement(pool, req.body, async (c, e) => {
     await journalAdmin(c, systeme, 'Établissement créé', `${e.code} · ${e.nom}`, parSh(req.body), e.id);
     // Recette : l'établissement sert aux tests et à la formation, il est donc ouvert dès sa création.
     // En production, il reste inactif jusqu'à l'activation par la console (étapes avant le go-live cochées).
@@ -83,7 +99,7 @@ function brancherSh(api, pool, route) {
       e.module_actif = true;
       await journalAdmin(c, systeme, 'Établissement modifié', e.nom, `module activé pour les tests et la formation (recette) · ${parSh(req.body)}`, e.id);
     }
-  })));
+  });}));
 
   /* ---------- C4 : formation (recette seulement), structure validée pour le go-live, comptes pour le rapport ---------- */
   api.post('/sh/formation/generer', sh(async (req) => {

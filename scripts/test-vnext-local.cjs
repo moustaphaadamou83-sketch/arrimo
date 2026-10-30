@@ -1,26 +1,11 @@
 /** Tests indépendants du réseau et de PostgreSQL ; ne pas confondre avec la recette intégrée. */
 const fs = require('node:fs');
 const path = require('node:path');
-const crypto = require('node:crypto');
 const { run } = require('node:test');
 const racine = path.resolve(__dirname, '..');
-const fichiers = ['serveur-test.test.cjs', 'simulation-connecteurs.test.cjs', 'priorites.test.cjs', 'priorites-ui-contract.test.cjs', 'configuration-operationnelle.test.cjs',
+const fichiers = ['support-sla-regles.test.cjs', 'support-configuration.test.cjs', 'coherence-applicative.test.cjs', 'environnements-pilote.test.cjs', 'profils-pays.test.cjs', 'sh-montants-devises.test.cjs', 'sh-international.test.cjs', 'sh-promotion-configuration.test.cjs', 'sh-finances.test.cjs', 'og-vocal.test.cjs', 'sh-recette-garde.test.cjs', 'sh-roles-validation.test.cjs', 'bilingue.test.cjs', 'og-correction.test.cjs', 'serveur-test.test.cjs', 'simulation-connecteurs.test.cjs', 'priorites.test.cjs', 'priorites-ui-contract.test.cjs', 'configuration-operationnelle.test.cjs',
   'connecteurs-atomicite.test.cjs', 'courriel-transport.test.cjs', 'routage.test.cjs'];
-function empreinteSources() {
-  const chemins = [];
-  const parcourir = (rel) => {
-    for (const entree of fs.readdirSync(path.join(racine, rel), { withFileTypes: true })) {
-      const chemin = `${rel}/${entree.name}`;
-      if (entree.isDirectory()) parcourir(chemin);
-      else if (entree.isFile()) chemins.push(chemin);
-    }
-  };
-  for (const dossier of ['src', 'public', 'public-sh', 'db', 'scripts', 'tests']) parcourir(dossier);
-  for (const fichier of ['package.json', 'package-lock.json']) if (fs.existsSync(path.join(racine, fichier))) chemins.push(fichier);
-  const hash = crypto.createHash('sha256');
-  for (const rel of chemins.sort()) hash.update(rel).update('\0').update(fs.readFileSync(path.join(racine, rel))).update('\0');
-  return hash.digest('hex');
-}
+const {empreinteSources}=require('./empreinte-sources.cjs');
 const rapport = { date: new Date().toISOString(), type: 'tests locaux sans PostgreSQL ni navigateur', sources_sha256: empreinteSources(),
   suites: fichiers.map((fichier) => ({ fichier, reussis: 0, echecs: 0, ignores: 0 })), total: null };
 // Aucun sous-processus : certains environnements refusent spawn/IPC même quand

@@ -1,8 +1,8 @@
 /* Console SH : compléments à la charte d'Arrimo (style.css). Mêmes couleurs ; les couleurs de statut ne servent qu'aux statuts. */
-.bandeau-sh { background: var(--principal); color: #fff; border-bottom-color: var(--survol); }
+.bandeau-sh { background: var(--principal-plein); color: #fff; border-bottom-color: var(--survol); }
 .bandeau-sh { display:flex; align-items:center; justify-content:center; gap:12px; flex-wrap:wrap; }
 .select-langue { display:inline-flex; align-items:center; gap:6px; font-weight:600; }
-.select-langue select { color:var(--texte); background:#fff; border-radius:6px; padding:4px 7px; }
+.select-langue select { color:var(--texte); background: var(--th-surface, #fff); border-radius:6px; padding:4px 7px; }
 .s-actif { --c: var(--succes); } .s-implantation { --c: var(--info); } .s-prospect { --c: var(--inactif); } .s-suspendu { --c: var(--attention); }
 .envs { display: flex; flex-wrap: wrap; gap: var(--e2) var(--e5); margin-bottom: var(--e4); }
 .env { display: inline-flex; align-items: center; gap: var(--e2); }
@@ -13,7 +13,7 @@
 .progres i { display: block; height: 100%; background: var(--secondaire); }
 .retour { padding-left: 0; margin-bottom: var(--e2); }
 .secret { word-break: break-all; user-select: all; }
-.qr { width: 200px; max-width: 100%; background: #fff; padding: 6px; border: 1px solid var(--bordure); border-radius: var(--rayon); align-self: center; }
+.qr { width: 200px; max-width: 100%; background: var(--th-surface, #fff); padding: 6px; border: 1px solid var(--bordure); border-radius: var(--rayon); align-self: center; }
 .etapes-2fa { padding-left: 18px; margin: 0 0 var(--e2); }
 .boite.large { width: min(760px, 100%); }
 .form-modale, .form-fiche { display: flex; flex-direction: column; gap: var(--e3); margin-bottom: var(--e3); }
@@ -27,7 +27,7 @@
 .frise li.en-cours a { border-color: var(--principal); box-shadow: 0 0 0 1px var(--principal); }
 .rond { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--doux); color: var(--principal); font-size: var(--t-libelle); font-weight: 700; flex: none; }
 .rond .ic { width: 14px; height: 14px; }
-.fait .rond, .etape.fini .rond { background: var(--principal); color: #fff; }
+.fait .rond, .etape.fini .rond { background: var(--principal-plein); color: #fff; }
 .etapes { display: flex; flex-direction: column; gap: var(--e2); }
 .etape { border: 1px solid var(--bordure); border-radius: var(--rayon); padding: var(--e2) var(--e3); }
 .etape[open] { padding-bottom: var(--e3); }
@@ -37,7 +37,7 @@
 .cases-etape { display: flex; flex-direction: column; gap: var(--e2); }
 .cases-etape .case { align-items: flex-start; }
 .cases-etape .case input { margin-top: 2px; }
-textarea { font: inherit; width: 100%; border: 1px solid #CBD5E1; border-radius: var(--rayon); padding: var(--e2); resize: vertical; }
+textarea { font: inherit; width: 100%; border: 1px solid var(--th-bordure, #CBD5E1); border-radius: var(--rayon); padding: var(--e2); resize: vertical; }
 .compteurs { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: var(--e2); margin-bottom: var(--e3); }
 .compteurs div { display: flex; flex-direction: column; background: var(--doux); border-radius: var(--rayon); padding: var(--e2) var(--e3); }
 .compteurs .v { font-size: 20px; font-weight: 650; }
@@ -62,6 +62,9 @@ table.compact { min-width: 0; }
 .sh-kanban-card { background: var(--carte); border: 1px solid var(--bordure); border-radius: var(--rayon); padding: var(--e3); margin-bottom: var(--e2); }
 .sh-kanban-card p { margin: var(--e1) 0; }
 .sh-kanban-card .ligne { margin-top: var(--e2); }
+.tk-kanban { grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); padding-bottom: var(--e2); }
+.tk-kanban .sh-kanban-col { max-height: 560px; overflow-y: auto; }
+.tk-kanban .sh-kanban-card .lien-ligne { text-align: left; }
 .cartes-kpi { display: grid; grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap: var(--e3); margin-bottom: var(--e4); }
 .cartes-kpi .carte { display: flex; flex-direction: column; gap: var(--e2); }
 .cartes-kpi strong { font-size: 1.6rem; color: var(--principal); }
@@ -97,3 +100,12 @@ table.compact { min-width: 0; }
 .boite .champ { min-width: 0; }
 .boite select, .boite input:not([type=checkbox]):not([type=radio]) { max-width: 100%; }
 .ligne-devis select { width: 100%; }
+.sh-presence { display:inline-flex; align-items:center; gap:5px; margin-inline-start:8px; font-size:.8rem; color:var(--texte); white-space:nowrap; }
+.sh-presence i { width:8px; height:8px; border-radius:50%; background: #64748b; flex:none; }
+.sh-presence.en_ligne i { background: #15803d; }
+.sh-presence.occupe i,.sh-presence.en_pause i { background: #a16207; }
+.sh-presence.en_reunion i { background: #1d4ed8; }
+.sh-presence.hors_ligne i { background:transparent; border: 1px solid var(--th-principal, #64748b); }
+.sh-profil-presence { position:sticky; bottom:0; display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:8px 16px; border-top:1px solid var(--bordure); background:var(--carte); z-index:2; }
+.sh-profil-presence[hidden] { display:none; }
+.note-longue { overflow-wrap: anywhere; word-break: break-word; min-width: 0; }

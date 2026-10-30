@@ -2,18 +2,38 @@
 
 const ROLES_SH = ['administration', 'commercial', 'implantation', 'formation', 'support', 'finance'];
 const A = 'administration';
+// Liste positive : une nouvelle action commerciale ne devient jamais visible au support par défaut.
+const JOURNAL_OPERATIONNEL = ['Hôpital créé','Hôpital créé depuis le CRM','Fiche modifiée','Dossier établissement modifié',
+  'Configuration opérationnelle publiée','Spécialité activée dans Arrimo','Catalogue de modules modifié',
+  'Établissement créé','Établissement relié','Étape modifiée','Élément coché','Élément décoché',
+  'Module activé','Module désactivé','Import CSV','Préflight Go Live','Go-live','Rapport de go-live téléchargé',
+  'Projet créé','Projet modifié','Tâche créée','Tâche modifiée','Jalon ajouté','Jalon atteint','Jalon modifié',
+  'Ticket créé','Incident déclaré','Ticket modifié','Ticket pris en charge'];
 const PERMISSIONS = {
   'GET /moi': ROLES_SH,
+  'GET /references/internationales': ROLES_SH,
   'PUT /moi/langue': ROLES_SH,
+  'PUT /moi/fuseau-horaire': ROLES_SH,
+  'PUT /moi/apparence': ROLES_SH,
+  'GET /recherche': ROLES_SH,
+  'GET /moi/filtres': ROLES_SH,
+  'POST /moi/filtres': ROLES_SH,
+  'DELETE /moi/filtres/:id': ROLES_SH,
   'PUT /moi/mot-de-passe': ROLES_SH,
   'POST /moi/2fa/preparer': ROLES_SH,
   'POST /moi/2fa/activer': ROLES_SH,
   'POST /deconnexion': ROLES_SH,
   'POST /moi/sessions/fermer': ROLES_SH,
+  'GET /presence': ROLES_SH,
+  'POST /moi/presence': ROLES_SH,
+  'PUT /moi/presence': ROLES_SH,
+  'GET /moi/sessions': ROLES_SH,
+  'POST /moi/sessions/:id/revoquer': ROLES_SH,
   'GET /environnements': ['administration', 'implantation', 'support'],
   'GET /hopitaux': ROLES_SH,
   'GET /hopitaux/:id': ROLES_SH,
   'GET /hopitaux/:id/structure': ['administration', 'implantation'],
+  'GET /hopitaux/:id/profils-pays': ['administration','implantation'],
   'GET /hopitaux/:id/suivi': ROLES_SH,
   'POST /hopitaux': ['administration', 'commercial'],
   'PUT /hopitaux/:id': ['administration', 'commercial', 'implantation'],
@@ -24,6 +44,9 @@ const PERMISSIONS = {
   'POST /hopitaux/:id/specialites': ['administration'],
   'POST /hopitaux/:id/relier': ['administration', 'implantation'],
   'PUT /etapes/:id': ['administration', 'implantation'],
+  'GET /hopitaux/:id/deploiement': ['administration', 'implantation', 'formation', 'support'],
+  'PUT /hopitaux/:id/deploiement/:code': ['administration', 'implantation'],
+  'POST /hopitaux/:id/deploiement/:code/preuves': ['administration', 'implantation'],
   'PUT /verifications/:id': ['administration', 'implantation'],
   'GET /hopitaux/:id/import/modeles/:type': ['administration', 'implantation'],
   'POST /hopitaux/:id/import/verifier': ['administration', 'implantation'],
@@ -33,6 +56,7 @@ const PERMISSIONS = {
   'PUT /hopitaux/:id/formation/:role': ['administration', 'implantation', 'formation'],
   'POST /hopitaux/:id/formation/generer': ['administration', 'implantation', 'formation'],
   'POST /hopitaux/:id/golive/preflight': ['administration', 'implantation'],
+  'GET /hopitaux/:id/golive/profils-pays': ['administration', 'implantation'],
   'POST /hopitaux/:id/golive': ['administration'],
   'POST /hopitaux/:id/activation': ['administration'],
   'POST /hopitaux/:id/desactivation': ['administration'],
@@ -40,10 +64,34 @@ const PERMISSIONS = {
   'GET /journal': ['administration', 'implantation', 'support'],
   'GET /equipe': ['administration'],
   'GET /invitations': ['administration'],
+  'POST /invitations/:id/renvoyer': [A],
   'POST /equipe': ['administration'],
   'PUT /equipe/:id': ['administration'],
   'PUT /equipe/:id/role': ['administration'],
   'POST /equipe/:id/inviter': ['administration'],
+  'PUT /equipe/:id/profil': [A],
+  'GET /equipe/:id/sessions': [A],
+  'POST /equipe/:id/sessions/fermer': [A],
+  'POST /equipe/:id/sessions/:id/revoquer': [A],
+  'POST /equipe/:id/recuperer': [A],
+  'POST /equipe/:id/archiver': [A],
+  'POST /equipe/:id/restaurer': [A],
+  'GET /parametres': [A],
+  'PUT /parametres/:cle': [A],
+  'GET /projets/:id/finances': [A,'finance','implantation'],
+  'POST /projets/:id/finances': [A,'finance'],
+  'DELETE /projets/:id/finances/:id': [A,'finance'],
+  'GET /finances/projets': [A,'finance'],
+  'POST /equipe/:id/demander-suppression': [A],
+  'POST /equipe/:id/supprimer': [A],
+  'GET /roles-personnalises':[A],
+  'GET /perimetres/references':[A],
+  'POST /roles-personnalises':[A],
+  'PUT /roles-personnalises/:id':[A],
+  'PUT /equipe/:id/role-personnalise':[A],
+  'GET /equipe/:id/affectations':[A],
+  'POST /equipe/:id/affectations':[A],
+  'POST /equipe/:id/affectations/:id/retirer':[A],
   'GET /crm/organisations': ['administration', 'commercial', 'finance'],
   'GET /crm/organisations/:id': ['administration', 'commercial', 'finance'],
   'PUT /crm/organisations/:id': ['administration', 'commercial', 'finance'],
@@ -63,18 +111,22 @@ const PERMISSIONS = {
   'POST /crm/devis/:id/valider': ['administration'],
   'PUT /crm/devis/:id/statut': ['administration', 'commercial'],
   'GET /crm/devis/:id/pdf': ['administration', 'commercial', 'finance'],
-  'GET /crm/contrats/:id': ['administration', 'commercial', 'implantation', 'support', 'finance'],
+  'GET /crm/contrats/:id': ['administration', 'commercial', 'finance'],
   'PUT /crm/contrats/:id': ['administration', 'commercial'],
   'POST /crm/contrats/:id/renouveler': [A],
   'POST /crm/contrats/:id/resilier': [A],
   'GET /crm/contrats/:id/pdf': ['administration', 'commercial', 'finance'],
-  'GET /crm/contrats': ['administration', 'commercial', 'implantation', 'support', 'finance'],
+  'GET /crm/contrats': ['administration', 'commercial', 'finance'],
   'POST /crm/opportunites/:id/contrats': ['administration', 'commercial'],
   'POST /crm/contrats/:id/signe': ['administration'],
   'GET /projets': ['administration', 'implantation', 'support', 'formation'],
   'POST /projets': ['administration', 'implantation'],
   'GET /projets/:id': ['administration', 'implantation', 'support', 'formation'],
   'PUT /projets/:id': ['administration', 'implantation'],
+  'POST /projets/:id/archiver': ['administration','implantation'],
+  'POST /projets/:id/restaurer': ['administration','implantation'],
+  'POST /projets/:id/demander-suppression': ['administration','implantation'],
+  'POST /projets/:id/supprimer': ['administration'],
   'POST /projets/:id/jalons': ['administration', 'implantation'],
   'PUT /jalons/:id': ['administration', 'implantation'],
   'GET /taches': ROLES_SH,
@@ -82,16 +134,44 @@ const PERMISSIONS = {
   'PUT /taches/:id': ROLES_SH,
   'GET /taches/:id/commentaires': ROLES_SH,
   'POST /taches/:id/commentaires': ROLES_SH,
+  'GET /taches/:id/suivi': ROLES_SH,
+  'PUT /projets/:id/etape': ['administration', 'implantation'],
+  'GET /equipe/competences': ['administration', 'implantation'],
+  'PUT /equipe/:id/competences': ['administration'],
+  'GET /projets/:id/registre': ['administration', 'implantation', 'support', 'formation'],
+  'POST /projets/:id/registre': ['administration', 'implantation'],
+  'PUT /projets/:id/registre/:id': ['administration', 'implantation'],
+  'PUT /taches/:id/estimation': ['administration', 'implantation'],
+  'PUT /taches/:id/collaborateurs': ['administration', 'implantation'],
+  'POST /taches/:id/checklist': ROLES_SH,
+  'PUT /taches/:id/checklist/:id': ROLES_SH,
+  'DELETE /taches/:id/checklist/:id': ROLES_SH,
+  'POST /taches/:id/temps': ROLES_SH,
+  'DELETE /taches/:id/temps/:id': ROLES_SH,
+  'GET /hopitaux/:id/support-sla': ['administration','support','implantation'],
+  'POST /hopitaux/:id/support-sla': ['administration'],
+  'POST /hopitaux/:id/support-sla/desactiver': ['administration'],
+  'POST /support/tickets/:id/prise-en-charge': ['administration','support'],
+  'POST /support/escalades/executer': ['administration','support'],
   'GET /support/tickets': ['administration', 'support', 'implantation'],
+  'POST /support/og/recherche': ['administration', 'support', 'implantation'],
   'POST /support/tickets': ['administration', 'support', 'implantation'],
   'GET /support/tickets/:id': ['administration', 'support', 'implantation'],
   'PUT /support/tickets/:id': ['administration', 'support'],
   'POST /support/tickets/:id/messages': ['administration', 'support', 'implantation'],
+  'POST /support/tickets/:id/pieces-jointes': ['administration', 'support', 'implantation'],
+  'GET /support/tickets/:id/pieces-jointes/:id/fichier': ROLES_SH,
   // Tarification et facturation
   'GET /tarifs': ['administration', 'commercial', 'finance'],
   'POST /tarifs': ['administration', 'finance'],
   'GET /facturation/taxes': ['administration', 'commercial', 'finance'],
+  'GET /facturation/profils-fiscaux': ['administration','finance'],
+  'POST /facturation/profils-fiscaux': [A],
+  'PUT /facturation/profils-fiscaux/:id': [A],
+  'POST /facturation/taxes': [A],
   'PUT /facturation/taxes/:id': [A],
+  'GET /facturation/change': ['administration','finance'],
+  'POST /facturation/change/actualiser': ['administration','finance'],
   'GET /facturation/abonnements': ['administration', 'finance'],
   'PUT /facturation/abonnements/:id': ['administration', 'finance'],
   'POST /facturation/abonnements/:id/facturer': ['administration', 'finance'],
@@ -136,13 +216,17 @@ const PERMISSIONS = {
 function cleRoute(method, path) {
   return `${method.toUpperCase()} ${String(path).replace(/\/\d+(?=\/|$)/g, '/:id')
     .replace(/\/hopitaux\/:id\/import\/modeles\/[^/]+$/, '/hopitaux/:id/import/modeles/:type')
-    .replace(/\/hopitaux\/:id\/formation\/(coordination|urgence|entretien|administration)$/, '/hopitaux/:id/formation/:role')}`;
+    .replace(/\/hopitaux\/:id\/formation\/(coordination|urgence|entretien|administration)$/, '/hopitaux/:id/formation/:role')
+    .replace(/^\/parametres\/[a-z_]{2,60}$/, '/parametres/:cle')
+    .replace(/^(\/hopitaux\/:id\/deploiement)\/[a-z_]{3,40}(\/preuves)?$/, '$1/:code$2')}`;
 }
 
 function autoriser(u, req) {
   const cle = cleRoute(req.method, req.path);
   const roles = PERMISSIONS[cle];
   if (!roles || !roles.includes(u.role)) return false;
+  if(u.role_personnalise_id&&!/^(GET \/moi$|PUT \/moi\/(langue|mot-de-passe)$|POST \/moi\/2fa\/|POST \/deconnexion$|(?:GET|POST|PUT) \/moi\/(sessions|presence))/.test(cle)
+    &&!u.droits_personnalises?.includes(cle))return false;
   if (u.role === 'commercial' && req.method === 'PUT' && /^\/hopitaux\/\d+$/.test(req.path)) {
     const autorises = new Set(['nom', 'adresse', 'ville', 'contact_nom', 'contact_courriel', 'contact_telephone', 'raison_sociale', 'identifiant_legal', 'pays_code', 'region', 'fuseau_horaire']);
     if (Object.keys(req.body || {}).some((k) => !autorises.has(k))) return false;
@@ -150,4 +234,4 @@ function autoriser(u, req) {
   return true;
 }
 
-module.exports = { ROLES_SH, PERMISSIONS, autoriser, cleRoute };
+module.exports = { ROLES_SH, PERMISSIONS, JOURNAL_OPERATIONNEL, autoriser, cleRoute };

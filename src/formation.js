@@ -19,7 +19,7 @@ const ROLES_EXPORT = ['coordonnateur', 'entretien', 'admin_etab'];
 
 /** Le générateur n'existe qu'en recette (et sur un poste de développement). */
 function exigerRecette() {
-  if (!['recette', 'developpement'].includes(env.environnement())) throw new ErreurHttp(403, 'formation_recette_seulement');
+  if (!['recette', 'developpement'].includes(env.environnement())&&!(env.environnement()==='pilote'&&process.env.ARRIMO_PATIENTS_FICTIFS==='1')) throw new ErreurHttp(403, 'formation_recette_seulement');
 }
 
 async function tenter(pool, fn) {

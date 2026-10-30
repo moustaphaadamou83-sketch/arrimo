@@ -22,7 +22,7 @@ async function journalAdmin(db, u, action, cible, detail, etablissementId = null
 }
 
 /** Nouvel établissement, créé inactif (l'activation suit l'implantation, console SH). journaliser(c, etab) écrit l'entrée du journal. */
-async function creerEtablissement(pool, b, journaliserCreation) {
+async function creerEtablissement(pool, b, journaliserCreation,{env=process.env}={}) {
   const code = String(b.code || '').trim().toUpperCase();
   const nom = String(b.nom || '').trim();
   const lat = Number(b.latitude); const lon = Number(b.longitude);
@@ -31,15 +31,16 @@ async function creerEtablissement(pool, b, journaliserCreation) {
   if (!(lat >= -90 && lat <= 90) || !(lon >= -180 && lon <= 180) || b.latitude === '' || b.longitude === '' || b.latitude == null || b.longitude == null) throw new ErreurHttp(400, 'position_invalide');
   const partage = b.partage || 'complet';
   if (!['complet', 'agrege', 'aucun'].includes(partage)) throw new ErreurHttp(400, 'partage_invalide');
-  const config = (await pool.query('SELECT id FROM config_pays ORDER BY id LIMIT 1')).rows[0];
-  if (!config) throw new ErreurHttp(400, 'config_introuvable');
+  const profils=require('./profils-pays').profilsAvecPays((await pool.query('SELECT id,code,nom FROM config_pays ORDER BY id')).rows,env);
+  if(!profils.length)throw new ErreurHttp(400,'config_introuvable');
+  const config=require('./profils-pays').choisirProfil(profils,b);
   return transaction(pool, async (c) => {
     if ((await c.query('SELECT 1 FROM etablissements WHERE code = $1', [code])).rows[0]) throw new ErreurHttp(409, 'code_etab_existe');
     const e = (await c.query(`INSERT INTO etablissements (code, nom, ville, adresse, latitude, longitude, config_id, partage, module_actif)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false) RETURNING id, code, nom, ville, adresse, partage, module_actif`,
     [code, nom, String(b.ville || '').trim() || null, String(b.adresse || '').trim() || null, lat, lon, config.id, partage])).rows[0];
     await journaliserCreation(c, e);
-    return e;
+    return {...e,config_id:config.id,configuration_code:config.code};
   });
 }
 
@@ -50,6 +51,12 @@ function brancher(api, pool, route, entier, options = {}) {
     await journalAdmin(pool, req.utilisateur, 'Mot de passe changé', req.utilisateur.email, null);
   }));
 
+  api.put('/moi/apparence', route(async (req) => {
+    const apparence = String(req.body.apparence || '');
+    if (!['clair', 'sombre', 'automatique', 'soleil'].includes(apparence)) throw new ErreurHttp(400, 'apparence_invalide');
+    await pool.query('UPDATE utilisateurs SET apparence = $2 WHERE id = $1', [req.utilisateur.id, apparence]);
+    return { apparence };
+  }));
   api.post('/moi/premiers-pas', route(async (req) => {
     await pool.query('UPDATE utilisateurs SET premiers_pas_vus = true WHERE id = $1', [req.utilisateur.id]);
   }));

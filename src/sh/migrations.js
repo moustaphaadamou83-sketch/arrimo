@@ -3,6 +3,39 @@ const crypto = require('node:crypto');
 const { transaction } = require('../db');
 const { chiffrerSecret } = require('./security');
 const { ERP_VERSION, migrerErp } = require('./erp-migrations');
+const { ACCES_VERSION, migrerAcces } = require('./acces-migrations');
+const { PROJETS_VERSION, migrerProjets } = require('./projets-migrations');
+const { PRESENCE_VERSION,migrerPresence } = require('./presence-migrations');
+const { PERIMETRE_VERSION,migrerPerimetre } = require('./perimetre-migrations');
+const {CYCLE_PROJETS_VERSION,migrerCycleProjets}=require('./cycle-projets-migrations');
+const {PILOTE_VERSION,migrerPilote}=require('./pilote-migrations');
+const {GOLIVE_CONCURRENCE_VERSION,migrerGoliveConcurrence}=require('./golive-concurrence-migrations');
+const {LIENS_CLIENTS_VERSION,migrerLiensClients}=require('./liens-clients-migrations');
+const {SUPPORT_PORTAIL_VERSION,migrerSupportPortail}=require('./support-portail-migrations');
+const {SUPPORT_DROITS_VERSION,migrerSupportDroits}=require('./support-droits-migrations');
+const {NOTIFICATIONS_FINANCES_VERSION,migrerNotificationsFinances}=require('./notifications-finances-migrations');
+const {SUPPORT_PAGINATION_VERSION,migrerSupportPagination}=require('./support-pagination-migrations');
+
+const {NOTIFICATIONS_PERIMETRES_VERSION,migrerNotificationsPerimetres}=require('./notifications-perimetres-migrations');
+
+const {RACCORDEMENT_SUPPORT_VERSION,migrerRaccordementSupport}=require('./raccordement-support-migrations');
+
+const {SUPPORT_SLA_VERSION,migrerSupportSla}=require('./support-sla-migrations');
+const {SUPPORT_PJ_VERSION,migrerSupportPj}=require('./support-pj-migrations');
+const {SUPPORT_COURRIELS_VERSION,migrerSupportCourriels}=require('./support-courriels-migrations');
+const {SUPPORT_CALENDRIER_VERSION,migrerSupportCalendrier}=require('./support-calendrier-migrations');
+const {PREFERENCES_VERSION,migrerPreferences}=require('./preferences-migrations');
+const {FISCALITE_VERSION,migrerFiscalite}=require('./fiscalite-migrations');
+const {CHANGE_VERSION,migrerChange}=require('./change-migrations');
+const {APPARENCE_VERSION,migrerApparence}=require('./apparence-migrations');
+const {PARAMETRES_VERSION,migrerParametres}=require('./parametres-migrations');
+const {FINANCES_PROJETS_VERSION,migrerFinancesProjets}=require('./finances-projets-migrations');
+const {TACHES_SUIVI_VERSION,migrerTachesSuivi}=require('./taches-suivi-migrations');
+const {PROJETS_PILOTAGE_VERSION,migrerProjetsPilotage}=require('./projets-pilotage-migrations');
+const {COMPETENCES_VERSION,migrerCompetences}=require('./competences-migrations');
+const {RECHERCHE_VERSION,migrerRecherche}=require('./recherche-migrations');
+const {DEPLOIEMENT_VERSION,migrerDeploiement}=require('./deploiement-migrations');
+const {COLLABORATEURS_VERSION,migrerCollaborateurs}=require('./collaborateurs-migrations');
 
 const VERSION = 4;
 const LANGUE_VERSION = 5;
@@ -14,7 +47,37 @@ async function migrerSh(pool, env = process.env) {
     await c.query('CREATE TABLE IF NOT EXISTS sh_migrations (version integer PRIMARY KEY, applique_le timestamptz NOT NULL DEFAULT now())');
     const socle = await migrerSocle(c, env);
     const erp = await migrerErp(c);
-    return { version: ERP_VERSION, appliquee: socle || erp };
+    const acces = await migrerAcces(c);
+    const projets = await migrerProjets(c);
+    const presence=await migrerPresence(c);
+    const perimetre=await migrerPerimetre(c);
+    const cycle=await migrerCycleProjets(c);
+    const pilote=await migrerPilote(c);
+    const concurrence=await migrerGoliveConcurrence(c);
+    const liens=await migrerLiensClients(c);
+    const support=await migrerSupportPortail(c);
+    const supportDroits=await migrerSupportDroits(c);
+    const notificationsFinances=await migrerNotificationsFinances(c);
+    const supportPagination=await migrerSupportPagination(c);
+    const notificationsPerimetres=await migrerNotificationsPerimetres(c);
+    const raccordementSupport=await migrerRaccordementSupport(c);
+    const supportSla=await migrerSupportSla(c);
+    const supportPj=await migrerSupportPj(c);
+    const supportCourriels=await migrerSupportCourriels(c);
+    const supportCalendrier=await migrerSupportCalendrier(c);
+    const preferences=await migrerPreferences(c);
+    const fiscalite=await migrerFiscalite(c);
+    const change=await migrerChange(c);
+    const apparence=await migrerApparence(c);
+    const parametres=await migrerParametres(c);
+    const financesProjets=await migrerFinancesProjets(c);
+    const tachesSuivi=await migrerTachesSuivi(c);
+    const projetsPilotage=await migrerProjetsPilotage(c);
+    const competences=await migrerCompetences(c);
+    const recherche=await migrerRecherche(c);
+    const deploiement=await migrerDeploiement(c);
+    const collaborateurs=await migrerCollaborateurs(c);
+    return { version: COLLABORATEURS_VERSION, appliquee: socle || erp || acces || projets || presence || perimetre || cycle || pilote || concurrence || liens || support || supportDroits || notificationsFinances || supportPagination || notificationsPerimetres || raccordementSupport || supportSla || supportPj || supportCourriels || supportCalendrier || preferences || fiscalite || change || apparence || parametres || financesProjets || tachesSuivi || projetsPilotage || competences || recherche || deploiement || collaborateurs };
   });
 }
 
@@ -188,4 +251,4 @@ async function migrerSocle(c, env) {
   }
 }
 
-module.exports = { VERSION, LANGUE_VERSION, ERP_VERSION, migrerSh };
+module.exports = { VERSION, LANGUE_VERSION, ERP_VERSION, ACCES_VERSION, PROJETS_VERSION, PRESENCE_VERSION, PERIMETRE_VERSION, migrerSh };

@@ -141,6 +141,8 @@ async function capaciteReseau(pool, utilisateur, depuisId) {
       risque: risque(r),
     });
   }
+  // Un établissement nouvellement configuré reste présent même sans lit ni unité.
+  if(!parEtab.has(ici.id))parEtab.set(ici.id,{id:ici.id,code:ici.code,nom:ici.nom,ville:ici.ville,moi:true,partage:ici.partage,distance_geographique_km:0,unites:[]});
   // Urgence : civières et taux d'occupation. Le partage agrégé n'expose que les totaux.
   const urg = await cv.statsUrgence(pool, [...parEtab.keys()]);
   for (const e of parEtab.values()) {

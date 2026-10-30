@@ -20,7 +20,7 @@ async function verifierEnvironnements(pool, cibles, { delaiMs = 5000 } = {}) {
     const avant = (await pool.query('SELECT ok FROM sh_supervision WHERE environnement=$1 ORDER BY quand DESC LIMIT 1', [c.code])).rows[0];
     await pool.query('INSERT INTO sh_supervision(environnement, ok, latence_ms, version, detail) VALUES($1,$2,$3,$4,$5)', [c.code, ok, ok ? latence : null, version, detail]);
     if (avant && avant.ok !== ok) {
-      await notifier(pool, await comptesAvecRoles(pool, ['administration', 'support']), { type: 'hebergement',
+      await notifier(pool, await comptesAvecRoles(pool, ['administration', 'support']), { ressourceType:'global', type: 'hebergement',
         titre: ok ? `${c.nom} répond de nouveau` : `${c.nom} ne répond plus (${detail})`, lien: 'hebergement' });
     }
     resultats.push({ code: c.code, ok, latence_ms: ok ? latence : null, version, detail });

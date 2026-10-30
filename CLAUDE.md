@@ -4,7 +4,7 @@ Arrimo coordonne les lits hospitaliers et les transferts entre hôpitaux (cible 
 Propriétaire : Moustafa Adamou. Langue de travail et de l’interface : **français** (anglais à ajouter).
 
 ## Règles permanentes (à respecter dans tout le travail)
-- **Aucune donnée médicale** : une référence patient (format par pays, ex. `P-00000`), jamais de diagnostic. Exception demandée par Moustafa (cahier de finalisation, 24 oct. 2026) : fiche d’identification **fictive** (prénom, nom, date de naissance) en démo et recette seulement (`src/patients.js`) ; jamais dans les vues réseau, OG, notifications ni journal.
+- **Aucune donnée médicale** : une référence patient (format par pays, ex. `P-00000`), jamais de diagnostic. Exception demandée par Moustafa (cahier de finalisation, 24 oct. 2026) : fiche d’identification **fictive** (prénom, nom, date de naissance) en démo et recette seulement (`src/patients.js`) ; jamais dans les vues réseau, notifications ni journal. Décision de Moustafa (30 oct. 2026) : OG peut rechercher, afficher et créer ces fiches **fictives** en démo et recette seulement ; refus prouvé par test en production et validation, et aucune identité dans le journal ni les notifications.
 - **Données fictives seulement** sur le serveur de démonstration. Aucune vraie donnée de patient ou d’hôpital avant l’hébergement au Canada et l’évaluation Loi 25.
 - **Aucune dépendance à Odoo**. Module autonome : Node.js + PostgreSQL + interface web sans framework.
 - **Dans tout ce qui est destiné au Québec** (interface, documents, présentations) : ne pas mentionner l’Afrique de l’Ouest ni Odoo.
