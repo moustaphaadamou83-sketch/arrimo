@@ -68,6 +68,16 @@ window.ARRIMO_I18N.en = {
     bandeau_inactif: 'The module is not enabled for <b>{etab}</b>. It is enabled from SH. You can view, but not act.',
     demo: 'Demonstration · fictitious data',
   },
+  disposition: {
+    basculer: 'Menu layout', horizontale: 'Horizontal bar at the top', verticale: 'Vertical bar on the left',
+    titre: 'Menu layout', aide: 'Choose where the main menu appears. This choice is specific to this device; on a small screen, the menu stays at the top.',
+    enregistree: 'Menu layout saved.',
+  },
+  infos: {
+    source: 'Current weather · source {source}', resume: '{ville} · {date} · {heure} · {meteo}', meteo_indisponible: 'weather unavailable',
+    ciel_degage: 'Clear', ciel_nuageux: 'Partly cloudy', ciel_couvert: 'Overcast', ciel_brouillard: 'Fog', ciel_bruine: 'Drizzle',
+    ciel_pluie: 'Rain', ciel_neige: 'Snow', ciel_orage: 'Thunderstorm',
+  },
   onglets: {
     patients: 'Patients', 
     vigilance: 'Discharges & alerts',

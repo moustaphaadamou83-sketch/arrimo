@@ -736,8 +736,9 @@ test('Pilote Hôpital Test : client, équipe, structure, invitations, formation,
     },{token,id:etab.id});
     await page.goto(basePilote);await page.waitForSelector('body[data-pret="1"]');
     if(await page.locator('#b-premiers-pas-ok').isVisible())await page.click('#b-premiers-pas-ok');
-    await page.click('#og-open');await page.waitForSelector('#og-vocal:not([hidden])');await page.click('#og-vocal summary');
-    await page.check('#ov-consentement');await page.check('#ov-automatique');await page.click('#ov-micro');
+    await page.click('#og-open');await page.waitForSelector('#og-vocal:not([hidden])');
+    // Autorisation vocale personnelle (Paramètres → OG), puis dictée par le bouton à icône.
+    await page.evaluate(()=>window.ArrimoOgVoixPrefs.ecrire({consentement:true,automatique:true,langue:'fr-CA'}));await page.click('#og-dicter');
     await page.evaluate(()=>{window.__reco.onresult({results:[[{transcript:'Combien de lits de médecine sont occupés ?'}]]});window.__reco.onend();});
     const reponse=page.waitForResponse(r=>r.url().endsWith('/api/copilote/question'));
     await page.click('#og-envoyer');assert.ok((await(await reponse).json()).reponse);

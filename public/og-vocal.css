@@ -9,3 +9,12 @@
 .og-vocal-bouton { display: inline-flex; align-items: center; gap: 6px; }
 .og-vocal-bouton[aria-pressed="true"] { background: var(--principal-plein); color: #fff; border-color: var(--principal-plein); }
 @media (max-width: 480px) { .og-vocal-bouton span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } }
+/* Volet vocal réduit : état, « Lire la réponse », « Arrêter » ; les réglages sont dans Paramètres → OG. */
+#og-vocal .ov-barre { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
+#og-vocal .ov-barre p { margin: 0; flex: 1 1 180px; }
+#og-vocal .ov-activer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.og-vocal-bouton { justify-content: center; min-width: 44px; padding-inline: 10px; }
+.og-vocal-bouton .ic { width: 20px; height: 20px; }
+.og-vocal-bouton.actif { animation: og-ecoute 1.6s ease-in-out infinite; }
+@keyframes og-ecoute { 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--principal-plein) 30%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .og-vocal-bouton.actif { animation: none; } }

@@ -22,6 +22,8 @@ const routeurTest = require('./routeur-fictif.cjs');
 
 const URL_TEST = process.env.INTERFACE_DATABASE_URL || process.env.TEST_DATABASE_URL;
 const MDP = process.env.DEMO_MOT_DE_PASSE || 'Demo-Arrimo-2026';
+// Météo de l'en-tête : fournisseur externe coupé pour des captures reproductibles (testée à part, tests/meteo.test.cjs).
+process.env.ARRIMO_METEO = '0';
 const LARGEURS_COMPLETES = [
   { nom: 'ordinateur', width: 1366, height: 800 },
   { nom: 'tablette', width: 820, height: 1180, tactile: true },
@@ -1020,6 +1022,19 @@ for (const L of LARGEURS.filter((l) => l.nom !== 'tablette')) {
     assert.strictEqual(await apparence(), 'sombre');
     await x.click('#v-params [data-param-nav="params:apparence"]'); await x.waitForSelector('input[name="p-apparence"][value="sombre"]:checked');
     await verifier(x, L, 'params-apparence-sombre');
+    // Heure et date de l'établissement toujours affichées (la météo dépend du fournisseur, coupé dans ce test).
+    await x.waitForSelector('#infos-lieu:not([hidden]) .il-heure');
+    assert.match(await x.textContent('#infos-lieu .il-heure'), /\d{1,2}\D+\d{2}/);
+    // Disposition du menu : barre verticale à gauche sur ordinateur, retenue après rechargement, puis retour en haut.
+    if (L.nom === 'ordinateur') {
+      await x.check('input[name="p-disposition"][value="verticale"]');
+      await x.waitForFunction(() => document.body.classList.contains('nav-verticale') && document.querySelector('#onglets #infos-lieu'));
+      await verifier(x, L, 'params-menu-vertical');
+      await x.reload(); await x.waitForSelector('body[data-pret="1"]');
+      assert.ok(await x.evaluate(() => document.body.classList.contains('nav-verticale')), 'disposition retenue');
+      await x.click('#b-disposition'); await x.waitForFunction(() => !document.body.classList.contains('nav-verticale'));
+      await onglet(x, 'params'); await x.click('#v-params [data-param-nav="params:apparence"]');
+    }
     // OG : nom, avatar et voix enregistrés pour l'établissement, appliqués au panneau et à la voix.
     await x.click('#v-params [data-param-nav="params:og"]'); await x.waitForSelector('#og-nom:not([disabled])');
     await x.fill('#og-nom', 'Charles'); await x.selectOption('#og-modele', 'humain'); await x.selectOption('#og-voix', 'masculine');
@@ -1032,6 +1047,10 @@ for (const L of LARGEURS.filter((l) => l.nom !== 'tablette')) {
     const cfg = (await pool.query(`SELECT o.reglages FROM og_configurations o JOIN utilisateur_etablissements ue ON ue.etablissement_id=o.etablissement_id JOIN utilisateurs u ON u.id=ue.utilisateur_id WHERE u.email=$1`, [email])).rows[0].reglages;
     assert.deepStrictEqual([cfg.personnalisation.nom, cfg.personnalisation.avatar.modele, cfg.personnalisation.voix], ['Charles', 'humain', 'masculine']);
     await verifier(x, L, 'params-og');
+    // Voix d'OG : autorisation et langue réglées ici (plus dans le panneau OG), enregistrées pour l'utilisateur.
+    await x.waitForSelector('#params-og-voix #pv-consentement');
+    await x.check('#pv-consentement'); await toast(x, 'Préférences vocales enregistrées');
+    assert.strictEqual(await x.evaluate(() => window.ArrimoOgVoixPrefs.lire().consentement), true);
     await x.click('#og-open'); await x.waitForFunction(() => document.querySelector('#og-title')?.textContent === 'Charles');
     assert.ok(await x.locator('.og-entete .og-avatar svg').count(), 'avatar appliqué');
     assert.strictEqual(await x.evaluate(() => window.ArrimoOgVoix), 'masculine', 'voix transmise au moteur vocal');

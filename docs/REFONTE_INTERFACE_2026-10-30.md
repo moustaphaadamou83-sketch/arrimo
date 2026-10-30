@@ -125,3 +125,45 @@ Release `refonte-20261030t1828`, publiée le 30 octobre 2026 sur six environneme
 **Hôpitaux A, B et C** : même logiciel, réglages propres. Vérifiés par le scénario A/B/C, par les tests d'interface et sur la démo en ligne.
 
 **Nouvel établissement provisionné depuis SH** : il reçoit la même interface. Vérifié par la suite « raccordement » et par les tests OG de provisionnement (§20.6).
+
+## Corrections après les essais de Moustafa (30 oct., soir)
+
+### Conversation vocale continue réparée
+**Cause** : les navigateurs coupent le micro après quelques secondes de silence, ou s'ils n'entendent rien au démarrage. Arrimo prenait cette coupure pour la fin de la conversation : elle tombait aussitôt.
+
+**Correction** :
+- Le micro redémarre seul : la conversation dure jusqu'à « c'est fini », « j'ai plus de questions », « au revoir » (ou « that's all » en anglais), ou jusqu'au bouton.
+- Elle s'arrête seule après trois minutes sans parole.
+- **Conversation simultanée** : pendant qu'OG parle, une vraie prise de parole l'interrompt, et OG écoute la nouvelle question.
+- La voix d'OG captée par le micro est reconnue et ignorée.
+- Les réponses avec une référence patient ne sont toujours pas lues automatiquement.
+
+### Boutons vocaux et réglages de la voix
+- Les deux boutons vocaux n'affichent plus qu'une icône (micro, ondes). Le libellé reste dans l'infobulle et pour les lecteurs d'écran.
+- Les réglages de la voix (autorisation, langue du micro, lecture automatique) passent du panneau OG à **Paramètres → OG**. Ils sont personnels et propres à l'appareil.
+- Sans autorisation, le panneau OG propose « Ouvrir Paramètres → OG ».
+
+### Menu
+- Les groupes **Opérations, Pilotage et Gestion** sont des pastilles turquoise, visibles aussi sur téléphone.
+- Le menu peut être une **barre horizontale en haut** ou une **barre verticale à gauche**. Le choix se fait par le bouton de l'en-tête ou dans Paramètres → Apparence, et il est retenu sur l'appareil. Sur petit écran, le menu reste en haut.
+
+### Météo, heure et date
+- Le lieu, la date, l'heure (fuseau de l'établissement) et la météo actuelle (température en °C et ciel) s'affichent dans l'en-tête, ou en tête de la barre verticale.
+- La source est **Open-Meteo**, interrogée par le serveur avec les coordonnées de l'établissement seulement : aucune donnée patient ni utilisateur n'est transmise. Le résultat est gardé 15 minutes.
+- En cas de panne, l'heure et la date restent affichées.
+
+### Tests
+- Moteur vocal : redémarrage après silence, écho ignoré, interruption, micro refusé.
+- Navigateur : conversation continue de bout en bout, terminée par « that's all ».
+- Météo (fournisseur simulé) : cache, panne, désactivation, accès par établissement.
+- Centre de paramètres : heure et date, barre verticale retenue après rechargement, réglages vocaux enregistrés.
+
+### Publication des corrections
+Release `voix-20261030t2348`, publiée le 31 octobre 2026 sur les six environnements.
+- Recette `20261030231637_863716` : 16 suites, 225 tests, aucun échec.
+- Santé `ok` partout. Configurations préservées. Scénario A/B/C intact.
+- Météo vérifiée en ligne sur la démo B (Open-Meteo, 5,9 °C, ciel dégagé).
+
+Deux défauts ont été trouvés par la recette et corrigés avant publication :
+- le rôle entretien ne pouvait pas lire la météo ;
+- un clic fait pendant un rendu en cours était perdu. Il est maintenant rejoué.

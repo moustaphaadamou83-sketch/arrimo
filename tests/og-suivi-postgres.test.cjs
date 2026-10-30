@@ -75,14 +75,21 @@ test('Suivi OG interhospitalier : quatorze validations PostgreSQL et API', {time
       },{token:tokens.c,id:ids.c});
       const page=await context.newPage();const erreurs=[];page.on('pageerror',e=>erreurs.push(e.message));await page.goto(base);
       await page.waitForSelector('body[data-pret="1"]');if(await page.locator('#b-premiers-pas-ok').isVisible())await page.locator('#b-premiers-pas-ok').click();
-      await page.locator('#og-open').click();await page.waitForSelector('#og-vocal:not([hidden])');assert.ok(await page.locator('#og-dicter').isVisible()&&await page.locator('#og-converser').isVisible(),'deux boutons vocaux visibles près du champ');await page.locator('#og-dicter').click();assert.equal(await page.locator('#og-vocal details').evaluate(d=>d.open),true,'sans consentement, le volet s’ouvre sur la case');assert.equal(await page.evaluate(()=>window.__mic),0,'aucune écoute sans consentement');
-      assert.equal(await page.evaluate(()=>window.__mic),0);await page.locator('#ov-micro').click();assert.equal(await page.evaluate(()=>window.__mic),0);
-      await page.locator('#ov-consentement').check();await page.locator('#ov-automatique').check();await page.locator('#ov-micro').click();
+      await page.locator('#og-open').click();await page.waitForSelector('#og-vocal:not([hidden])');assert.ok(await page.locator('#og-dicter').isVisible()&&await page.locator('#og-converser').isVisible(),'deux boutons vocaux visibles près du champ');assert.equal((await page.locator('#og-dicter').textContent()).trim(),'','bouton à icône seule');assert.match(await page.locator('#og-dicter').getAttribute('aria-label'),/\w/,'libellé accessible');await page.locator('#og-dicter').click();assert.equal(await page.locator('#ov-activer').isVisible(),true,'sans autorisation : renvoi vers Paramètres → OG');assert.equal(await page.evaluate(()=>window.__mic),0,'aucune écoute sans consentement');
+      assert.equal(await page.evaluate(()=>window.__mic),0);await page.locator('#og-converser').click();assert.equal(await page.evaluate(()=>window.__mic),0);
+      await page.evaluate(()=>window.ArrimoOgVoixPrefs.ecrire({consentement:true,automatique:true,langue:'en-CA'}));await page.locator('#og-dicter').click();
       await page.evaluate(()=>{window.__reco.onresult({results:[[{transcript:'Where is patient P-43267 currently located?'}]]});window.__reco.onend();});
       assert.equal(await page.locator('#og-question').inputValue(),'Where is patient P-43267 currently located?');assert.equal(await page.evaluate(()=>window.__paroles.length),0);
       const response=page.waitForResponse(r=>r.url().endsWith('/api/copilote/question'));await page.locator('#og-envoyer').click();assert.match((await (await response).json()).reponse,/Room 108/);
       await page.waitForTimeout(500);assert.equal(await page.evaluate(()=>window.__paroles.length),0,'réponse sensible : aucune lecture automatique (cahier OG, sécurité)');await page.locator('#ov-lire').click();await page.waitForFunction(()=>window.__paroles.length>0);const audio=await page.evaluate(()=>window.__paroles);assert.ok(audio.every(x=>x.lang==='en-CA'));assert.match(audio.map(x=>x.text).join(''),/SI-108/);
-      await page.locator('#ov-stop').click();await page.locator('#ov-micro').click();await page.evaluate(()=>window.__reco.onerror({error:'not-allowed'}));assert.match(await page.locator('#ov-etat').textContent(),/permission denied/);
+      // Conversation continue : une phrase finale part seule, la réponse revient ; « that's all » termine la conversation.
+      await page.locator('#og-converser').click();assert.equal(await page.locator('#og-converser').getAttribute('aria-pressed'),'true');
+      const rep2=page.waitForResponse(r=>r.url().endsWith('/api/copilote/question'));
+      await page.evaluate(()=>window.__reco.onresult({resultIndex:0,results:[Object.assign([{transcript:'How many free beds?'}],{isFinal:true})]}));
+      assert.equal((await rep2).status(),200);
+      await page.evaluate(()=>window.__reco.onresult({resultIndex:0,results:[Object.assign([{transcript:"Thanks, that's all"}],{isFinal:true})]}));
+      await page.waitForFunction(()=>document.querySelector('#og-converser').getAttribute('aria-pressed')==='false');
+      await page.locator('#ov-stop').click();await page.locator('#og-dicter').click();await page.evaluate(()=>window.__reco.onerror({error:'not-allowed'}));assert.match(await page.locator('#ov-etat').textContent(),/permission denied/);
       assert.equal(await page.locator('#og-question').isEnabled(),true);assert.deepEqual(erreurs,[]);
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);
     }finally{await browser.close();}

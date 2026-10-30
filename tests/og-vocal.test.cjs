@@ -56,3 +56,33 @@ test('vocal : absence de moteur ou de voix signalée sans masquer le texte',()=>
   assert.equal(m.parler('Text','en-CA',{autorise:true,consentement:true}),false);assert.equal(etats.at(-1),'audio_indisponible');
   const f=fixture();f.synthese.getVoices=()=>[];assert.equal(f.m.parler('Text','en-CA',{autorise:true,consentement:true}),false);assert.equal(f.etats.at(-1),'voix_indisponible');
 });
+test('vocal : conversation continue — le micro redémarre seul après un silence, jusqu’à l’arrêt', async () => {
+  const f=fixture(),phrases=[];
+  f.m.ecouterConversation({autorise:true,consentement:true,phrase:x=>phrases.push(x)});
+  const premier=f.instance;premier.onerror({error:'no-speech'});premier.onend();
+  await new Promise(r=>setTimeout(r,300));
+  assert.notEqual(f.instance,premier,'nouvelle écoute après la coupure du navigateur');assert.equal(f.creations,2);
+  f.instance.onresult({resultIndex:0,results:[Object.assign([{transcript:'Et en soins intensifs ?'}],{isFinal:true})]});
+  assert.deepEqual(phrases,['Et en soins intensifs ?']);
+  f.m.reinitialiser();const apres=f.creations;f.instance.onend?.();await new Promise(r=>setTimeout(r,300));
+  assert.equal(f.creations,apres,'aucun redémarrage après l’arrêt');
+});
+test('vocal : conversation — la voix d’OG captée par le micro est ignorée, une vraie prise de parole l’interrompt', () => {
+  const f=fixture(),phrases=[];let interruptions=0;
+  f.synthese.speaking=false;
+  f.m.ecouterConversation({autorise:true,consentement:true,phrase:x=>phrases.push(x),interruption:()=>interruptions++});
+  f.m.parler('Il reste douze lits libres en médecine et trois en soins intensifs.','fr-CA',{autorise:true,consentement:true});
+  f.synthese.speaking=true;const r=f.instance;const avant=f.annulations;
+  r.onresult({resultIndex:0,results:[Object.assign([{transcript:'douze lits libres en médecine'}],{isFinal:true})]});
+  assert.deepEqual(phrases,[],'écho ignoré');assert.equal(f.annulations,avant,'la lecture continue');
+  r.onresult({resultIndex:0,results:[Object.assign([{transcript:'attends combien en chirurgie'}],{isFinal:false})]});
+  assert.equal(f.annulations,avant+1,'OG se tait');assert.equal(interruptions,1);
+  f.synthese.speaking=false;
+  r.onresult({resultIndex:0,results:[Object.assign([{transcript:'Combien en chirurgie ?'}],{isFinal:true})]});
+  assert.deepEqual(phrases,['Combien en chirurgie ?']);f.m.reinitialiser();
+});
+test('vocal : conversation — un micro refusé arrête l’écoute sans relance', async () => {
+  const f=fixture();f.m.ecouterConversation({autorise:true,consentement:true});
+  const r=f.instance;r.onerror({error:'not-allowed'});r.onend();await new Promise(x=>setTimeout(x,300));
+  assert.equal(f.creations,1);assert.equal(f.etats.at(-1),'refuse');
+});

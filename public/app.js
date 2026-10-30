@@ -305,6 +305,58 @@ function deconnecter(expire) {
 }
 $('#b-deconnexion').onclick = () => deconnecter(false);
 $('#b-compte').onclick = () => allerA('compte');
+/* ---------------- Disposition de la navigation : barre horizontale ou barre verticale à gauche ---------------- */
+// Préférence propre à cet appareil (un écran large et un téléphone ne se prêtent pas à la même disposition).
+const DISPOSITIONS = ['horizontale', 'verticale'];
+const disposition = () => (lire('arrimo-disposition') === 'verticale' ? 'verticale' : 'horizontale');
+function appliquerDisposition(d) {
+  const v = d === 'verticale';
+  document.body.classList.toggle('nav-verticale', v);
+  const infos = $('#infos-lieu'); const nav = $('#onglets');
+  if (infos && nav) { if (v) nav.prepend(infos); else $('.barre-in .marque')?.after(infos); }
+  const b = $('#b-disposition');
+  if (b) { const l = `${t('disposition.basculer')} · ${t(`disposition.${d}`)}`; b.setAttribute('aria-label', l); b.title = l; b.setAttribute('aria-pressed', String(v)); }
+  majHauteurBarre();
+}
+function choisirDisposition(d) {
+  if (!DISPOSITIONS.includes(d)) return;
+  ecrire('arrimo-disposition', d); appliquerDisposition(d); toast(t('disposition.enregistree'));
+}
+/** Hauteur réelle de l'en-tête : la barre verticale commence juste dessous. */
+function majHauteurBarre() { const h = $('.barre-in')?.getBoundingClientRect().height; if (h) document.body.style.setProperty('--haut-barre', `${Math.round(h)}px`); }
+if (window.ResizeObserver && $('.barre-in')) new ResizeObserver(majHauteurBarre).observe($('.barre-in'));
+$('#b-disposition')?.addEventListener('click', () => choisirDisposition(disposition() === 'verticale' ? 'horizontale' : 'verticale'));
+
+/* ---------------- Météo, heure et date de l'établissement (fuseau de sa configuration) ---------------- */
+// Codes météo de l'OMM regroupés en familles lisibles ; l'icône accompagne toujours un libellé (jamais l'icône seule).
+const METEO = [[[0], 'degage', '☀️', '🌙'], [[1, 2], 'nuageux', '🌤️', '☁️'], [[3], 'couvert', '☁️', '☁️'], [[45, 48], 'brouillard', '🌫️', '🌫️'],
+  [[51, 53, 55, 56, 57], 'bruine', '🌦️', '🌧️'], [[61, 63, 65, 66, 67, 80, 81, 82], 'pluie', '🌧️', '🌧️'], [[71, 73, 75, 77, 85, 86], 'neige', '❄️', '❄️'], [[95, 96, 99], 'orage', '⛈️', '⛈️']];
+let meteoCtx = { ctx: null, donnees: null, lu: 0 };
+function majInfosLieu() {
+  const z = $('#infos-lieu'); const e = etabCtx(); if (!z) return;
+  if (!e || !etat.moi) { z.hidden = true; return; }
+  const maintenant = new Date(); const tz = fuseau();
+  const date = maintenant.toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short', timeZone: tz });
+  const h = maintenant.toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit', timeZone: tz });
+  const m = meteoCtx.ctx === etat.ctx && meteoCtx.donnees?.disponible ? meteoCtx.donnees : null;
+  const famille = m ? METEO.find(([codes]) => codes.includes(m.code)) : null;
+  const meteoHtml = m ? `<span class="il-meteo" title="${esc(t('infos.source', { source: m.source }))}"><span aria-hidden="true">${famille ? (m.jour ? famille[2] : famille[3]) : '🌡️'}</span>
+      <span class="num">${esc(nb(Math.round(m.temperature)))} °C</span><span class="il-ciel">${famille ? esc(t(`infos.ciel_${famille[1]}`)) : ''}</span></span>` : '';
+  z.innerHTML = `${meteoHtml}<span class="il-lieu">${esc(m?.ville || e.ville || '')}</span><span class="il-date">${esc(date)}</span><span class="il-heure num">${esc(h)}</span>`;
+  z.setAttribute('aria-label', t('infos.resume', { ville: m?.ville || e.ville || '', date, heure: h, meteo: m ? `${Math.round(m.temperature)} °C${famille ? `, ${t(`infos.ciel_${famille[1]}`)}` : ''}` : t('infos.meteo_indisponible') }));
+  z.hidden = false;
+}
+async function majMeteo(forcer) {
+  if (!etat.ctx || !etat.token) return;
+  if (!forcer && meteoCtx.ctx === etat.ctx && Date.now() - meteoCtx.lu < 15 * 60 * 1000) { majInfosLieu(); return; }
+  const ctx = etat.ctx;
+  meteoCtx = { ctx, donnees: meteoCtx.ctx === ctx ? meteoCtx.donnees : null, lu: Date.now() };
+  try { const d = await api('GET', `/meteo?etablissement_id=${ctx}`); if (etat.ctx === ctx) meteoCtx.donnees = d; } catch { /* l'heure et la date restent affichées */ }
+  majInfosLieu();
+}
+setInterval(majInfosLieu, 30000);
+setInterval(() => majMeteo(false), 5 * 60 * 1000);
+
 /** Modifications OG non enregistrées : demander avant de quitter l'écran. */
 function quitterSansEnregistrer() {
   if (!etat.ogModifie) return true;
@@ -364,6 +416,7 @@ async function demarrer() {
   $('#ecran-app').hidden = false;
   const entretien = estEntretien();
   appliquerModules();
+  appliquerDisposition(disposition()); majInfosLieu(); majMeteo(true);
   $('#b-notif').hidden = entretien;
   if (entretien) etat.vue = 'nettoyage';
   document.querySelectorAll('#onglets button').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.v === etat.vue)));
@@ -399,6 +452,7 @@ $('#ctx').onchange = async (e) => {
   etat.recherche = { ...etat.recherche, res: null, choix: null };
   etat.reponse = '';
   appliquerModules();
+  majInfosLieu(); majMeteo(true);
   await rafraichir();
 };
 document.querySelectorAll('#onglets button').forEach((b) => {
@@ -414,8 +468,11 @@ const etabCtx = () => etat.moi.etablissements.find((e) => e.id === etat.ctx);
 const configCtx = () => (etabCtx() ? etat.moi.configs.find((c) => c.id === etabCtx().config_id) : etat.moi.configs[0]);
 
 let enCours = false;
+// Une demande de rendu pendant un rendu en cours (clic rapide après une action) n'est pas perdue : elle est rejouée ensuite.
+let rafraichirEnAttente = false;
 async function rafraichir() {
-  if (!etat.token || !etat.moi || enCours) return;
+  if (!etat.token || !etat.moi) return;
+  if (enCours) { rafraichirEnAttente = true; return; }
   enCours = true;
   try {
     const e = etabCtx();
@@ -428,11 +485,13 @@ async function rafraichir() {
       admin: vueAdmin, compte: vueCompte, support:vueSupportClient, patients: vuePatients,
     })[etat.vue]()]);
     poserMenuParametres();
+    appliquerDisposition(disposition()); majInfosLieu();
     if (!$('#panneau-aide').hidden) afficherAide();
   } catch (err) {
     if (etat.token) toast(err.message, true);
   } finally {
     enCours = false;
+    if (rafraichirEnAttente) { rafraichirEnAttente = false; rafraichir(); }
   }
 }
 // Rafraîchissement automatique des écrans opérationnels seulement : les formulaires (paramètres, compte, administration)
@@ -1041,6 +1100,20 @@ function menuParametres(actif) {
   return `<nav class="params-nav" aria-label="${esc(t('params.titre'))}">${entreesParametres().map(([cible, cle]) =>
     `<button type="button" class="btn${cible === actif ? ' actif' : ''}" data-param-nav="${cible}"${cible === actif ? ' aria-current="page"' : ''}>${esc(t(`params.nav_${cle}`))}</button>`).join('')}</nav>`;
 }
+/** Voix d'OG : réglages personnels (autorisation, langue du micro, lecture automatique), enregistrés à chaque changement. */
+function panneauVoixOg() {
+  const zone = $('#params-og-voix'); const V = window.ArrimoOgVoixPrefs;
+  if (!zone || !V || !V.disponible()) return;
+  const p = V.lire(); const x = (k) => esc(V.texte(k));
+  zone.innerHTML = `<section class="panneau-c og-voix-perso" aria-labelledby="pv-titre"><h3 id="pv-titre">${x('titre')}</h3><p class="note">${x('information')}</p>
+    <label class="case"><input type="checkbox" id="pv-consentement"${p.consentement ? ' checked' : ''}> ${x('consentement')}</label>
+    <div class="ligne"><div class="champ"><label class="lbl" for="pv-langue">${x('langue')}</label><select id="pv-langue"><option value="fr-CA"${p.langue === 'fr-CA' ? ' selected' : ''}>Français</option><option value="en-CA"${p.langue === 'en-CA' ? ' selected' : ''}>English</option></select></div></div>
+    <label class="case"><input type="checkbox" id="pv-automatique"${p.automatique ? ' checked' : ''}> ${x('automatique')}</label>
+    <p class="note">${x('perso')}</p></section>`;
+  const enregistrer = () => { V.ecrire({ consentement: $('#pv-consentement').checked, langue: $('#pv-langue').value, automatique: $('#pv-automatique').checked }); toast(V.texte('enregistre')); };
+  ['#pv-consentement', '#pv-langue', '#pv-automatique'].forEach((id) => { $(id).onchange = enregistrer; });
+}
+window.addEventListener('arrimo:ouvrir-parametres', (e) => ouvrirParametre(e.detail || 'params'));
 function ouvrirParametre(cible) {
   const [vue, section] = cible.split(':');
   if ((vue !== etat.vue || (section && section !== etat.paramsSection)) && !quitterSansEnregistrer()) return;
@@ -1067,6 +1140,9 @@ async function vueParams() {
     corps = `<div class="grille"><div class="panneau-c"><h3>${P('apparence_titre')}</h3><p class="note">${P('apparence_aide')}</p>
       <fieldset class="choix-apparence"><legend class="lbl">${esc(t('apparence.choisir'))}</legend>${['clair', 'sombre', 'automatique', 'soleil'].map((m) =>
         `<label class="case"><input type="radio" name="p-apparence" value="${m}"${(u.apparence || 'automatique') === m ? ' checked' : ''}> ${esc(t(`apparence.${m}`))}</label>`).join('')}</fieldset></div>
+      <div class="panneau-c"><h3>${esc(t('disposition.titre'))}</h3><p class="note">${esc(t('disposition.aide'))}</p>
+        <fieldset class="choix-apparence"><legend class="lbl">${esc(t('disposition.titre'))}</legend>${DISPOSITIONS.map((d) =>
+          `<label class="case"><input type="radio" name="p-disposition" value="${d}"${disposition() === d ? ' checked' : ''}> ${esc(t(`disposition.${d}`))}</label>`).join('')}</fieldset></div>
       <div class="panneau-c"><h3>${esc(t('langue.choisir'))}</h3><p class="note">${P('langue_aide')}</p><select class="choix-langue" id="p-langue" aria-label="${esc(t('langue.choisir'))}"></select></div></div>`;
   } else if (section === 'notifications') {
     corps = `<div class="grille"><div class="panneau-c"><h3>${P('alertes_titre')}</h3><p class="note">${P('alertes_aide')}</p>
@@ -1079,7 +1155,7 @@ async function vueParams() {
         <dt>${P('seuil_civieres')}</dt><dd class="num">${esc([cfg.seuil_civieres_jaune, cfg.seuil_civieres_orange, cfg.seuil_civieres_rouge].map((x) => pct(x)).join(' · '))}</dd>
         <dt>${P('seuil_relance')}</dt><dd>${P('seuil_relance_val')}</dd></dl></div></div>`;
   } else if (section === 'og') {
-    corps = '<div id="params-og"></div>';
+    corps = '<div id="params-og"></div><div id="params-og-voix"></div>';
   } else {
     const st = await api('GET', `/structure?etablissement_id=${etat.ctx}`).catch(() => null);
     const nbActifs = (l) => (l || []).filter((x) => x.actif !== false).length;
@@ -1113,12 +1189,13 @@ async function vueParams() {
   $('#v-params').innerHTML = `<div class="entete"><div><h2>${P('titre')}</h2><p>${P('intro')}</p></div></div>${menuParametres('params:' + section)}<div id="params-corps">${corps}</div>`;
   poserMenuParametres();
   const recharger = async () => { etat.moi = await api('GET', '/moi'); };
-  if (section === 'og') await panneauOg(etat.ctx);
+  if (section === 'og') { await panneauOg(etat.ctx); panneauVoixOg(); }
   if (section === 'apparence') {
     const sel = $('#p-langue');
     sel.innerHTML = LANGUES.map((l) => `<option value="${l}">${esc(dicoDe(l).langue?.court || l.toUpperCase())} · ${esc(dicoDe(l).langue?.nom || l)}</option>`).join('');
     sel.value = langue; sel.onchange = () => changerLangue(sel.value);
     document.querySelectorAll('input[name="p-apparence"]').forEach((r) => { r.onchange = () => choisirApparence(r.value); });
+    document.querySelectorAll('input[name="p-disposition"]').forEach((r) => { r.onchange = () => choisirDisposition(r.value); });
   }
   if (section === 'notifications') { const n = $('#p-voir-notifs'); if (n) n.onclick = () => $('#b-notif').click(); }
   const br = $('#b-rayon');

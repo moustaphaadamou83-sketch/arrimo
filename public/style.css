@@ -523,9 +523,10 @@ label.item input[type=radio] { order: -1; width: 20px; height: 20px; flex: none;
 @media (max-width: 600px) { .og-perso { grid-template-columns: 1fr; } }
 /* Navigation principale regroupée ; Journal et Support client s'ouvrent depuis Paramètres. */
 #onglets .hors-menu { display: none !important; }
-.onglets-groupe { align-self: center; margin-left: var(--e3); padding-left: var(--e3); border-left: 1px solid rgba(255, 255, 255, 0.28);
-  font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #D7ECEF; white-space: nowrap; }
-@media (max-width: 700px) { .onglets-groupe { display: none; } }
+/* Groupes du menu (Opérations, Pilotage, Gestion) : pastille turquoise distincte des onglets, séparée du groupe précédent. */
+.onglets-groupe { align-self: center; flex: none; margin-left: var(--e3); padding: 3px 10px; border-radius: 999px;
+  background: rgba(87, 197, 182, 0.24); border: 1px solid rgba(87, 197, 182, 0.55);
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #E6FAF6; white-space: nowrap; }
 /* Menu secondaire du centre de paramètres */
 .params-nav { display: flex; flex-wrap: wrap; gap: var(--e2); margin: 0 0 var(--e4); padding-bottom: var(--e3); border-bottom: 1px solid var(--bordure); }
 .params-nav .btn.actif { background: var(--principal-plein); border-color: var(--principal-plein); color: #fff; }
@@ -569,3 +570,31 @@ label.item input[type=radio] { order: -1; width: 20px; height: 20px; flex: none;
 .matrice-acces th[scope="row"] { font-weight: 500; text-align: left; }
 .compteurs { display: grid; grid-template-columns: 1fr auto; gap: 4px var(--e3); }
 .compteurs dd { margin: 0; text-align: right; }
+
+/* Météo, heure et date de l'établissement */
+.infos-lieu { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 13px; color: #E6FAF6; font-variant-numeric: tabular-nums; }
+.infos-lieu > span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.infos-lieu .il-meteo .num { font-weight: 700; font-size: 15px; color: #fff; }
+.infos-lieu .il-heure { font-weight: 700; color: #fff; }
+.infos-lieu .il-lieu:empty { display: none; }
+@media (max-width: 900px) { .infos-lieu .il-ciel, .infos-lieu .il-lieu { display: none; } }
+
+/* Barre verticale à gauche (choix de l'utilisateur, écrans larges seulement) */
+@media (min-width: 901px) {
+  body.nav-verticale { --largeur-nav: 236px; }
+  body.nav-verticale .barre-in { max-width: none; }
+  body.nav-verticale .onglets { position: fixed; top: var(--haut-barre, 64px); left: 0; bottom: 0; width: var(--largeur-nav); max-width: none; margin: 0;
+    flex-direction: column; align-items: stretch; gap: 2px; padding: var(--e3) var(--e2) var(--e5); overflow-x: hidden; overflow-y: auto;
+    background: var(--principal-plein); border-right: 1px solid rgba(255, 255, 255, 0.14); z-index: 4; }
+  body.nav-verticale .onglets button { justify-content: flex-start; width: 100%; border-bottom: 0; border-left: 3px solid transparent; border-radius: 0 8px 8px 0; padding: 9px 12px; }
+  body.nav-verticale .onglets button[aria-selected="true"] { border-left-color: var(--accent); background: rgba(255, 255, 255, 0.12); }
+  body.nav-verticale .onglets button .n { margin-left: auto; }
+  body.nav-verticale .onglets-groupe { align-self: flex-start; margin: var(--e4) 0 var(--e1) var(--e2); }
+  body.nav-verticale .onglets .infos-lieu { flex-direction: column; align-items: flex-start; gap: 4px; padding: var(--e2) var(--e3) var(--e3); margin-bottom: var(--e2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.18); }
+  body.nav-verticale .onglets .infos-lieu .il-ciel, body.nav-verticale .onglets .infos-lieu .il-lieu { display: inline-flex; }
+  body.nav-verticale .onglets .infos-lieu .il-heure { font-size: 22px; }
+  body.nav-verticale main.contenu, body.nav-verticale .bandeau { margin-left: var(--largeur-nav); max-width: none; padding-left: var(--e5); padding-right: var(--e5); }
+  body.nav-verticale footer.pied { margin-left: var(--largeur-nav); }
+}
+@media (max-width: 900px) { #b-disposition { display: none; } }

@@ -88,10 +88,12 @@
   <header class="barre">
     <div class="barre-in">
       <div class="marque"><img src="logo.svg" alt="" width="30" height="30"><div><strong>Arrimo</strong><small id="nom-utilisateur"></small></div></div>
+      <div class="infos-lieu" id="infos-lieu" hidden></div>
       <div class="barre-droite">
         <label class="ctx" for="ctx"><span data-i18n="barre.etablissement">Établissement</span>
           <select id="ctx"></select>
         </label>
+        <button class="btn icone barre-btn" id="b-disposition" type="button" data-i18n-attr="aria-label:disposition.basculer;title:disposition.basculer"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-panel-left"/></svg></button>
         <button class="btn icone barre-btn" id="b-theme" type="button" data-i18n-attr="aria-label:apparence.basculer;title:apparence.basculer"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-sun-moon"/></svg></button>
         <button class="btn icone barre-btn" id="b-notif" aria-label="Notifications" title="Notifications" data-i18n-attr="aria-label:barre.notifications;title:barre.notifications">
           <svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-bell"/></svg>

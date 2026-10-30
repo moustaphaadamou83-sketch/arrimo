@@ -68,6 +68,16 @@ window.ARRIMO_I18N.fr = {
     bandeau_inactif: 'Le module n’est pas activé pour <b>{etab}</b>. L’activation se fait depuis SH. Vous pouvez consulter, mais pas agir.',
     demo: 'Démonstration · données fictives',
   },
+  disposition: {
+    basculer: 'Disposition du menu', horizontale: 'Barre horizontale en haut', verticale: 'Barre verticale à gauche',
+    titre: 'Disposition du menu', aide: 'Choisissez où s’affiche le menu principal. Ce choix est propre à cet appareil ; sur un petit écran, le menu reste en haut.',
+    enregistree: 'Disposition du menu enregistrée.',
+  },
+  infos: {
+    source: 'Météo actuelle · source {source}', resume: '{ville} · {date} · {heure} · {meteo}', meteo_indisponible: 'météo indisponible',
+    ciel_degage: 'Dégagé', ciel_nuageux: 'Partiellement nuageux', ciel_couvert: 'Couvert', ciel_brouillard: 'Brouillard', ciel_bruine: 'Bruine',
+    ciel_pluie: 'Pluie', ciel_neige: 'Neige', ciel_orage: 'Orage',
+  },
   onglets: {
     patients: 'Patients', 
     vigilance: 'Congés et alertes',
