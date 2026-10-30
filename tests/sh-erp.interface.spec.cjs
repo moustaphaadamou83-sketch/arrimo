@@ -30,11 +30,13 @@ const courriel = require('../src/courriel');
 const URL_TEST = process.env.INTERFACE_DATABASE_URL || process.env.TEST_DATABASE_URL;
 const CLE_MFA = Buffer.alloc(32, 5).toString('base64');
 const MDP = 'Console-ERP-2026';
-const LARGEURS = [
+const LARGEURS_DISPONIBLES = [
   { nom: 'ordinateur', width: 1366, height: 800 },
   { nom: 'tablette', width: 820, height: 1180, tactile: true },
   { nom: 'telephone', width: 390, height: 844, tactile: true, mobile: true },
 ];
+const SELECTION_LARGEURS=process.env.SH_UI_VIEWPORTS?.split(',').map(x=>x.trim()).filter(Boolean);
+const LARGEURS=SELECTION_LARGEURS?.length?LARGEURS_DISPONIBLES.filter(x=>SELECTION_LARGEURS.includes(x.nom)):LARGEURS_DISPONIBLES;
 const DOSSIER = path.join(__dirname, '..', 'captures');
 const courriels = [];
 let pool; let serveur; let serveurSh; let base; let baseSh; let navigateur; let dossierDocs;
@@ -155,6 +157,7 @@ test('ERP SH dans le navigateur : parcours complet par les écrans, 3 largeurs',
     await appel(admin, 'POST', '/equipe', { nom: 'Commercial fictif', email: 'commercial.ui@sh.exemple', role: 'commercial' });
     await invitations.consommer(pool, { jeton: dernierJeton(), nouveau: MDP }, process.env);
     const commercial = await session('commercial.ui@sh.exemple');
+    const membreCommercial=(await appel(admin,'GET','/equipe')).find(u=>u.email==='commercial.ui@sh.exemple');
     await appel(admin, 'POST', '/tarifs', { code: 'implantation', libelle: 'Implantation et paramétrage', prix_unitaire: 15000 });
     await appel(admin, 'POST', '/tarifs', { code: 'licence-lits', libelle: 'Licence lits et transferts', prix_unitaire: 1200, periodicite: 'mensuel' });
     const hop = await appel(admin, 'POST', '/hopitaux', { nom: 'Hôpital fictif UI', environnement: 'recette', code_etab: `HOP-UI${L.nom[0].toUpperCase()}`, latitude: 46, longitude: -71.5, ville: 'Ville UI' });
@@ -167,9 +170,12 @@ test('ERP SH dans le navigateur : parcours complet par les écrans, 3 largeurs',
     await page.vue('crm');
     assert.strictEqual(await page.titre(), 'CRM');
     await page.click('[data-action="org-nouvelle"]');
-    await page.fill('#o-nom', 'Centre hospitalier fictif UI'); await page.fill('#o-ville', 'Ville UI');
+    await page.fill('#o-nom', 'Centre hospitalier fictif UI'); await page.fill('#o-ville', 'Ville UI'); await page.fill('#o-region','Québec');
     await page.valider('Créer');
     assert.match(await page.textContent('#contenu'), /Centre hospitalier fictif UI/);
+    assert.deepStrictEqual(await appel(commercial,'GET','/crm/organisations'),[],'Un rôle seul ne donne accès à aucun client.');
+    const organisation=(await appel(admin,'GET','/crm/organisations')).find(o=>o.nom==='Centre hospitalier fictif UI');
+    await appel(admin,'POST',`/equipe/${membreCommercial.id}/affectations`,{type:'client',organisation_id:organisation.id});
     for (const titre of ['Projet A fictif', 'Projet B fictif']) {
       await page.click('[data-action="opp-nouvelle"]');
       await page.fill('#p-titre', titre); await page.fill('#p-montant', '20000');
@@ -210,6 +216,9 @@ test('ERP SH dans le navigateur : parcours complet par les écrans, 3 largeurs',
     // Facturation : facture de frais uniques émise puis payée
     await page.vue('facturation');
     assert.strictEqual(await page.titre(), 'Facturation');
+    assert.match(await page.textContent('#contenu'),/Profils fiscaux par pays et région/);
+    assert.match(await page.textContent('#contenu'),/CA \/ QC/);
+    assert.match(await page.textContent('#contenu'),/CA \/ BC/);
     await page.click('[data-action="f-emettre"]');
     await page.valider('Émettre');
     assert.match(await page.textContent('#contenu'), /FAC-\d{4}-0001/);
@@ -227,6 +236,23 @@ test('ERP SH dans le navigateur : parcours complet par les écrans, 3 largeurs',
     await page.rendu(() => page.locator('[data-tache-statut]').first().selectOption('en_cours'));
     await page.viderToasts();
     await verifier(page, L, 'sh-erp-06-projet');
+    // Cycle de vie par les vrais écrans, sur un projet fictif sans contrat.
+    await page.rendu(()=>page.click('#b-retour-projets'));
+    await page.click('[data-action="p-nouveau"]');
+    await page.selectOption('#pr-hop',String(hop.id));await page.fill('#pr-nom','Projet archive fictif UI');
+    await page.valider('Créer');
+    await page.rendu(()=>page.locator('[data-action="p-ouvrir"]',{hasText:'Projet archive fictif UI'}).click());
+    await page.click('[data-action="pj-modifier"]');await page.selectOption('#mp-statut','termine');await page.valider('Enregistrer');
+    await page.click('[data-action="pj-archiver"]');await page.valider('Archiver');
+    assert.match(await page.textContent('#contenu'),/Projet archivé/);
+    assert.strictEqual(await page.locator('[data-action="pj-modifier"]').count(),0);
+    await page.viderToasts();await verifier(page,L,'sh-erp-06a-projet-archive');
+    await page.rendu(()=>page.click('#b-retour-projets'));
+    assert.strictEqual(await page.locator('[data-action="p-ouvrir"]',{hasText:'Projet archive fictif UI'}).count(),0);
+    await page.rendu(()=>page.click('[data-action="p-archives"]'));
+    await page.rendu(()=>page.locator('[data-action="p-ouvrir"]',{hasText:'Projet archive fictif UI'}).click());
+    await page.click('[data-action="pj-restaurer"]');await page.valider('Restaurer');
+    assert.strictEqual(await page.locator('[data-action="pj-modifier"]').count(),1);
     await page.vue('taches');
     assert.strictEqual(await page.titre(), 'Tâches');
     await page.rendu(() => page.uncheck('#ft-moi'));
@@ -244,6 +270,8 @@ test('ERP SH dans le navigateur : parcours complet par les écrans, 3 largeurs',
     await page.fill('#tk-titre', 'Incident fictif UI');
     await page.valider('Créer');
     assert.match(await page.textContent('#contenu'), /Incident fictif UI/);
+    assert.ok(await page.isVisible('[data-colonne="nouveau"] .sh-kanban-card:has-text("Incident fictif UI")'),'le Kanban support contient les nouveaux tickets');
+    assert.ok(await page.isVisible('[data-colonne="assigne"]'),'la colonne Assigné est disponible');
     await page.click('[data-action="tk-ouvrir"]');
     await page.waitForSelector('#tm-statut');
     await verifier(page, L, 'sh-erp-09-ticket');
@@ -298,6 +326,28 @@ test('ERP SH dans le navigateur : parcours complet par les écrans, 3 largeurs',
     await page.vue('accueil');
     assert.strictEqual(await page.titre(), 'Accueil');
     await verifier(page, L, 'sh-erp-16-accueil');
+    await page.vue('compte');
+    // Apparence sombre : préférence enregistrée par compte, appliquée, contrastes AA sur chaque onglet visible
+    await page.check('input[name="m-apparence"][value="sombre"]');
+    const reponseApparence=page.waitForResponse(r=>r.url().includes('/api/moi/apparence')&&r.request().method()==='PUT');
+    await page.rendu(()=>page.click('#f-apparence button[type="submit"]'));
+    assert.equal((await reponseApparence).status(),200);
+    assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'sombre');
+    assert.equal((await pool.query("SELECT apparence FROM sh_utilisateurs WHERE email='admin.ui@sh.exemple'")).rows[0].apparence,'sombre');
+    const ongletsSombres=await page.evaluate(()=>[...document.querySelectorAll('#onglets [data-v]')].filter(b=>!b.hidden&&b.offsetParent!==null).map(b=>b.dataset.v));
+    assert.ok(ongletsSombres.length>=8,`onglets visibles : ${ongletsSombres}`);
+    for(const v of ongletsSombres){await page.vue(v);await page.viderToasts();await verifier(page,L,`sh-sombre-${v}`);}
+    await page.vue('compte');
+    await page.check('input[name="m-apparence"][value="automatique"]');
+    await page.rendu(()=>page.click('#f-apparence button[type="submit"]'));
+    assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'clair','automatique suit le système (clair dans ce navigateur)');
+    await page.fill('#m-fuseau','Africa/Lome');
+    const reponseFuseau=page.waitForResponse(r=>r.url().includes('/api/moi/fuseau-horaire')&&r.request().method()==='PUT');
+    await page.click('#f-fuseau button[type="submit"]');
+    const resultatFuseau=await reponseFuseau;
+    assert.equal(resultatFuseau.status(),200,`Enregistrement du fuseau : ${resultatFuseau.status()} ${await resultatFuseau.text()}; toasts=${await page.locator('#toasts').innerText()}`);
+    await page.waitForFunction(()=>document.querySelector('#m-fuseau')?.value==='Africa/Lome');
+    assert.equal((await pool.query("SELECT fuseau_horaire FROM sh_utilisateurs WHERE email='admin.ui@sh.exemple'")).rows[0].fuseau_horaire,'Africa/Lome');
     await page.context().close();
 
     // Rôle commercial : facturation et hébergement masqués, CRM visible

@@ -16,7 +16,7 @@ const URL=process.env.STRUCTURE_DATABASE_URL;
 const MDP=process.env.DEMO_MOT_DE_PASSE||'Demo-Arrimo-2026';
 let pool,server,browser,base;
 let dossierAcces;
-const captures=path.join(__dirname,'..','docs','captures-structure');
+const captures=path.join(__dirname,'..','.local','captures-structure');
 
 test('formulaires de structure et dashboards A/B/C isolés', {timeout:180000}, async()=>{
   assert.ok(URL,'STRUCTURE_DATABASE_URL requis; le test refuse toute base partagée ou non dédiée');

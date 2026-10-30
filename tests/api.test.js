@@ -794,6 +794,129 @@ test('disponibilité à côté : alerte aux hôpitaux proches qui en ont besoin,
   }
 });
 
+test('OG par établissement : licence SH, réglages administrateur bornés, personnalisation isolée, refus côté serveur', async () => {
+  const ex = (await appel('x', 'GET', '/moi')).corps.etablissements[0].id, ey = (await appel('y', 'GET', '/moi')).corps.etablissements[0].id;
+  const codeX = (await pool.query('SELECT code FROM etablissements WHERE id=$1', [ex])).rows[0].code;
+  const lire = async (qui, etab) => appel(qui, 'GET', `/og/configuration?etablissement_id=${etab}`);
+  let c = (await lire('x', ex)).corps;
+  assert.deepStrictEqual([c.licence.texte, c.licence.vocal, c.licence.patients, c.licence.documents, c.personnalisation.nom], [true, true, false, false, 'OG'], 'sans licence SH hors démo : texte et vocal (décision du 30 oct.), rien d’autre');
+  assert.strictEqual((await lire('x', ey)).statut, 403, 'configuration d’un autre établissement');
+  assert.strictEqual((await appel('x', 'PUT', '/og/configuration', { etablissement_id: ex, personnalisation: { nom: 'Charles' } })).statut, 403, 'réservé à l’administrateur');
+  const avant2fa = process.env.ARRIMO_2FA_ADMIN; process.env.ARRIMO_2FA_ADMIN = '0';
+  try {
+    tokens.gestog = (await appel(null, 'POST', '/connexion', { email: 'reseau@demo.arrimo', mot_de_passe: MOT_DE_PASSE_DEMO })).corps.token;
+    assert.strictEqual((await appel('gestog', 'PUT', '/og/configuration', { etablissement_id: ex, fonctions: { documents: true } })).statut, 409, 'fonction hors licence');
+    assert.strictEqual((await appel('gestog', 'PUT', '/og/configuration', { etablissement_id: ex, personnalisation: { nom: 'Charles', avatar: { modele: 'licorne' } } })).statut, 400);
+    c = (await appel('gestog', 'PUT', '/og/configuration', { etablissement_id: ex, personnalisation: { nom: 'Charles', voix: 'masculine', avatar: { modele: 'humain', peau: '#8D5524', accessoire: 'lunettes' } } })).corps;
+    assert.deepStrictEqual([c.personnalisation.nom, c.personnalisation.voix, c.personnalisation.avatar.modele, c.personnalisation.avatar.peau], ['Charles', 'masculine', 'humain', '#8D5524']);
+    assert.strictEqual((await lire('y', ey)).corps.personnalisation.nom, 'OG', 'personnalisation isolée par établissement');
+    // Licence transmise par SH : réglages locaux conservés ; dictée et conversation dépendent du vocal.
+    const cle = { 'X-SH-Key': 'cle-de-test-sh-123456' };
+    assert.strictEqual((await appel(null, 'PUT', `/sh/etablissements/${codeX}/og-licence`, { licence: { texte: true, vocal: true } }, { 'X-SH-Key': 'mauvaise' })).statut, 401);
+    await appel(null, 'PUT', `/sh/etablissements/${codeX}/og-licence`, { licence: { texte: true, vocal: true, dictee: true, conversation: true, patients: true, inconnue: true }, par: 'test' }, cle);
+    c = (await lire('x', ex)).corps;
+    assert.deepStrictEqual([c.licence.vocal, c.effectif.dictee, c.licence.inconnue, c.personnalisation.nom], [true, true, undefined, 'Charles']);
+    c = (await appel('gestog', 'PUT', '/og/configuration', { etablissement_id: ex, fonctions: { vocal: false }, personnalisation: { nom: 'Charles' } })).corps;
+    assert.deepStrictEqual([c.effectif.vocal, c.effectif.dictee, c.effectif.conversation], [false, false, false], 'sans vocal, ni dictée ni conversation');
+    // OG désactivé par la licence : la question est refusée côté serveur, quelle que soit l'interface.
+    await appel(null, 'PUT', `/sh/etablissements/${codeX}/og-licence`, { licence: { texte: false } }, cle);
+    const refus = await appel('x', 'POST', '/copilote/question', { etablissement_id: ex, question: 'Lits libres' });
+    assert.deepStrictEqual([refus.statut, refus.corps.code], [403, 'og_desactive']);
+    assert.strictEqual((await appel('y', 'POST', '/copilote/question', { etablissement_id: ey, question: 'Lits libres' })).statut, 200, 'les autres établissements ne sont pas touchés');
+    assert.ok((await pool.query("SELECT 1 FROM journal WHERE action='Configuration OG modifiée'")).rowCount);
+  } finally {
+    if (avant2fa === undefined) delete process.env.ARRIMO_2FA_ADMIN; else process.env.ARRIMO_2FA_ADMIN = avant2fa;
+    await pool.query('DELETE FROM og_configurations');
+  }
+});
+
+test('OG actions supervisées : licence, niveau 4 refusé, préparation sans effet, confirmation explicite, exécution unique et journalisée', async () => {
+  const moi = (await appel('x', 'GET', '/moi')).corps, ex = moi.etablissements[0].id, ey = (await appel('y', 'GET', '/moi')).corps.etablissements[0].id;
+  const codeX = (await pool.query('SELECT code FROM etablissements WHERE id=$1', [ex])).rows[0].code;
+  const exemple = moi.configs.find((c) => c.id === moi.etablissements[0].config_id).reference_exemple;
+  const ref = exemple.replace(/\d/g, (d, i) => String((i * 7 + 3) % 10));
+  const type = (await pool.query("SELECT t.id, t.nom FROM types_unite t JOIN etablissements e ON e.config_id=t.config_id WHERE e.id=$1 ORDER BY t.ordre LIMIT 1", [ex])).rows[0];
+  const idem = () => `test-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+  const cle = { 'X-SH-Key': 'cle-de-test-sh-123456' };
+  try {
+    assert.strictEqual((await appel('x', 'POST', '/og/actions', { etablissement_id: ex, outil: 'preparer_admission', entree: {}, idempotence: idem() })).corps.code, 'og_fonction_desactivee', 'sans licence « actions »');
+    await appel(null, 'PUT', `/sh/etablissements/${codeX}/og-licence`, { licence: { texte: true, actions: true } }, cle);
+    assert.strictEqual((await appel('x', 'POST', '/og/actions', { etablissement_id: ex, outil: 'liberer_lit_occupe', entree: {}, idempotence: idem() })).corps.code, 'og_action_interdite', 'niveau 4 refusé côté serveur');
+    // Préparation incomplète : aucune conséquence, confirmation refusée
+    const k = idem();
+    const brouillon = (await appel('x', 'POST', '/og/actions', { etablissement_id: ex, outil: 'preparer_admission', entree: { patient_ref: '' }, idempotence: k })).corps;
+    assert.deepStrictEqual([brouillon.niveau, brouillon.etat, brouillon.manquants.sort()], [3, 'preparee', ['patient_ref', 'type_id']]);
+    assert.strictEqual((await appel('x', 'POST', '/og/actions', { etablissement_id: ex, outil: 'preparer_admission', entree: {}, idempotence: k })).corps.id, brouillon.id, 'même identifiant de demande : même proposition');
+    const avant = (await pool.query("SELECT count(*)::int n FROM demandes_admission WHERE etablissement_id=$1", [ex])).rows[0].n;
+    assert.strictEqual((await appel('x', 'POST', `/og/actions/${brouillon.id}/confirmer`, { etablissement_id: ex, confirmation: true })).corps.code, 'og_action_incomplete');
+    assert.strictEqual((await appel('x', 'POST', `/og/actions/${brouillon.id}/confirmer`, { etablissement_id: ex, entree: { patient_ref: ref, type_id: type.id } })).corps.code, 'og_action_confirmation', 'confirmation explicite exigée');
+    assert.ok([403, 404].includes((await appel('y', 'POST', `/og/actions/${brouillon.id}/confirmer`, { etablissement_id: ey, confirmation: true })).statut), 'un autre utilisateur ne confirme pas');
+    assert.strictEqual((await pool.query("SELECT count(*)::int n FROM demandes_admission WHERE etablissement_id=$1", [ex])).rows[0].n, avant, 'préparer ne crée rien');
+    // Confirmation après correction dans la carte : une seule demande, en attente de décision humaine
+    const fait = (await appel('x', 'POST', `/og/actions/${brouillon.id}/confirmer`, { etablissement_id: ex, confirmation: true, entree: { patient_ref: ref, type_id: type.id } })).corps;
+    assert.deepStrictEqual([fait.etat, fait.resultat.patient_ref, fait.resultat.statut], ['executee', ref, 'attente']);
+    const encore = (await appel('x', 'POST', `/og/actions/${brouillon.id}/confirmer`, { etablissement_id: ex, confirmation: true, entree: { patient_ref: ref, type_id: type.id } })).corps;
+    assert.strictEqual(encore.resultat.demande_id, fait.resultat.demande_id, 'double confirmation : aucun doublon');
+    assert.strictEqual((await pool.query("SELECT count(*)::int n FROM demandes_admission WHERE etablissement_id=$1", [ex])).rows[0].n, avant + 1);
+    assert.ok((await pool.query("SELECT 1 FROM journal WHERE action='Action OG confirmée' AND detail LIKE 'preparer_admission%'")).rowCount);
+    await appel('x', 'POST', `/admissions/${fait.resultat.demande_id}/annuler`, {});
+    // Conversation : refus explicite du niveau 4, proposition (sans effet) pour une admission
+    const refus = (await appel('x', 'POST', '/copilote/question', { etablissement_id: ex, question: 'Peux-tu libérer le lit 101 ?' })).corps;
+    assert.ok(/décision humaine/.test(refus.reponse) && !refus.proposition);
+    const prop = (await appel('x', 'POST', '/copilote/question', { etablissement_id: ex, question: `Prépare l'admission de ${ref} en ${type.nom}` })).corps;
+    assert.deepStrictEqual([prop.proposition.outil, prop.proposition.entree.patient_ref], ['preparer_admission', ref]);
+    const carte = (await appel('x', 'POST', '/og/actions', { etablissement_id: ex, outil: prop.proposition.outil, entree: prop.proposition.entree, idempotence: idem() })).corps;
+    assert.strictEqual(carte.entree.type_id, type.id, 'unité citée reconnue, à vérifier dans la carte');
+    await appel('x', 'POST', `/og/actions/${carte.id}/annuler`, { etablissement_id: ex });
+    assert.strictEqual((await appel('x', 'POST', `/og/actions/${carte.id}/confirmer`, { etablissement_id: ex, confirmation: true })).corps.code, 'og_action_close');
+  } finally {
+    await pool.query('DELETE FROM og_configurations');
+  }
+});
+
+test('OG action « préparer un transfert » : destinations à lits confirmés par proximité, demande soumise à l’acceptation de la destination', async () => {
+  const moi = (await appel('x', 'GET', '/moi')).corps, ex = moi.etablissements[0].id;
+  const codeX = (await pool.query('SELECT code FROM etablissements WHERE id=$1', [ex])).rows[0].code;
+  const ref = moi.configs.find((c) => c.id === moi.etablissements[0].config_id).reference_exemple.replace(/\d/g, (d, i) => String((i * 3 + 5) % 10));
+  // Lit libre confirmé maintenant dans l'établissement partageant le plus proche, pour un type présent chez X.
+  const cible = (await pool.query(`SELECT l.id lit, l.type_id, e.id etab, e.nom FROM lits l JOIN etablissements e ON e.id=l.etablissement_id
+    JOIN etablissements x ON x.id=$1 WHERE e.id<>x.id AND e.actif AND e.module_actif AND e.partage='complet' AND e.config_id=x.config_id AND l.etat='libre'
+      AND EXISTS (SELECT 1 FROM lits m WHERE m.etablissement_id=x.id AND m.type_id=l.type_id)
+    ORDER BY (e.latitude-x.latitude)^2+(e.longitude-x.longitude)^2 LIMIT 1`, [ex])).rows[0];
+  assert.ok(cible, 'un voisin partageant avec un lit libre');
+  await pool.query('UPDATE lits SET disponibilite_confirmee_le=now() WHERE id=$1', [cible.lit]);
+  const cle = { 'X-SH-Key': 'cle-de-test-sh-123456' };
+  await appel(null, 'PUT', `/sh/etablissements/${codeX}/og-licence`, { licence: { texte: true, actions: true } }, cle);
+  const avant2fa = process.env.ARRIMO_2FA_ADMIN; process.env.ARRIMO_2FA_ADMIN = '0';
+  try {
+    const idem = `transfert-${Date.now()}`;
+    let a = (await appel('x', 'POST', '/og/actions', { etablissement_id: ex, outil: 'preparer_transfert', entree: { patient_ref: ref, type_id: cible.type_id }, idempotence: idem })).corps;
+    assert.deepStrictEqual([a.niveau, a.manquants], [3, ['destination_id']], 'destination à choisir explicitement');
+    assert.ok(a.options.destinations.length && a.options.destinations.every((d) => d.libres_confirmes > 0), 'seulement des destinations à lits confirmés');
+    assert.ok(a.options.destinations.some((d) => d.id === cible.etab));
+    const fait = (await appel('x', 'POST', `/og/actions/${a.id}/confirmer`, { etablissement_id: ex, confirmation: true, entree: { patient_ref: ref, type_id: cible.type_id, destination_id: cible.etab } })).corps;
+    assert.deepStrictEqual([fait.etat, fait.resultat.statut, fait.resultat.patient_ref], ['executee', 'demande', ref], 'demande en attente d’acceptation');
+    assert.ok((await pool.query("SELECT 1 FROM journal WHERE action='Action OG confirmée' AND detail LIKE 'preparer_transfert%'")).rowCount);
+    // Relance par OG (niveau 2) : même anti-répétition que l'interface, puis relance effective après le délai.
+    const numero = (await pool.query('SELECT numero FROM transferts WHERE id=$1', [fait.resultat.transfert_id])).rows[0].numero;
+    const prop = (await appel('x', 'POST', '/copilote/question', { etablissement_id: ex, question: `Relance le transfert ${numero}` })).corps.proposition;
+    assert.deepStrictEqual(prop, { outil: 'relancer_transfert', entree: { numero } });
+    const rel = (await appel('x', 'POST', '/og/actions', { etablissement_id: ex, outil: 'relancer_transfert', entree: prop.entree, idempotence: `${idem}-relance` })).corps;
+    assert.deepStrictEqual([rel.niveau, rel.manquants, rel.resume.statut], [2, [], 'demande']);
+    assert.strictEqual((await appel('x', 'POST', `/og/actions/${rel.id}/confirmer`, { etablissement_id: ex, confirmation: true })).corps.code, 'relance_trop_tot', 'pas de relance avant 5 minutes');
+    await pool.query("UPDATE transferts SET date_demande = now() - interval '10 minutes' WHERE id=$1", [fait.resultat.transfert_id]);
+    const relance = (await appel('x', 'POST', `/og/actions/${rel.id}/confirmer`, { etablissement_id: ex, confirmation: true })).corps;
+    assert.deepStrictEqual([relance.etat, relance.resultat.relances], ['executee', 1]);
+    assert.ok((await pool.query("SELECT 1 FROM journal WHERE action='Transfert relancé' AND detail=$1", [numero])).rowCount);
+    // La destination reste maîtresse de la décision : refus par le circuit normal, lit libéré.
+    tokens.gesttr = (await appel(null, 'POST', '/connexion', { email: 'reseau@demo.arrimo', mot_de_passe: MOT_DE_PASSE_DEMO })).corps.token;
+    assert.strictEqual((await appel('gesttr', 'POST', `/transferts/${fait.resultat.transfert_id}/refuser`, { motif: 'Test OG terminé' })).statut, 200);
+  } finally {
+    if (avant2fa === undefined) delete process.env.ARRIMO_2FA_ADMIN; else process.env.ARRIMO_2FA_ADMIN = avant2fa;
+    await pool.query('DELETE FROM og_configurations');
+  }
+});
+
 test('Copilote : vue complète, prévisions à 4 h, 12 h et 24 h avec marge, questions de prévision', async () => {
   const hx = await id('HX'); const hy = await id('HY'); const med = await type('MED');
   const p = (await appel('x', 'GET', `/copilote/previsions?etablissement_id=${hx}`)).corps;
@@ -1303,6 +1426,19 @@ test('langues : erreurs avec code stable, Copilote et notifications en anglais',
   assert.match(n(en), /^New request .*: Medicine, bed/);
 });
 
+test('apparence : préférence par compte, valeurs contrôlées, autres comptes inchangés', async () => {
+  assert.strictEqual((await appel('x', 'GET', '/moi')).corps.utilisateur.apparence, 'automatique');
+  assert.strictEqual((await appel('x', 'PUT', '/moi/apparence', { apparence: 'violet' })).statut, 400);
+  assert.strictEqual((await appel('x', 'PUT', '/moi/apparence', { apparence: 'sombre' })).statut, 200);
+  assert.strictEqual((await appel('x', 'GET', '/moi')).corps.utilisateur.apparence, 'sombre');
+  assert.strictEqual((await appel('y', 'GET', '/moi')).corps.utilisateur.apparence, 'automatique');
+  const etab = (await appel('x', 'GET', '/moi')).corps.etablissements[0];
+  assert.ok(Number.isFinite(etab.latitude) && Number.isFinite(etab.longitude), 'coordonnées de l’établissement pour le mode soleil');
+  // L'entretien (accès restreint) peut aussi régler son apparence : route sous /moi/
+  assert.strictEqual((await appel('ex', 'PUT', '/moi/apparence', { apparence: 'soleil' })).statut, 200);
+  assert.strictEqual((await appel('x', 'PUT', '/moi/apparence', { apparence: 'automatique' })).statut, 200);
+});
+
 test('aide : premiers pas mémorisés côté serveur, une seule fois', async () => {
   const avant = await appel('x', 'GET', '/moi');
   assert.strictEqual(avant.corps.utilisateur.premiers_pas_vus, false);
@@ -1692,11 +1828,11 @@ test('installateur : noms propres à chaque environnement, domaine changeable ; 
 test('premier compte d’un environnement vide : gestionnaire, mot de passe temporaire ; refusé s’il existe des comptes', async (t) => {
   const { premierCompte } = require('../db/premier-compte');
   await assert.rejects(premierCompte(pool, 'premier@exemple.ca', 'Premier'), /déjà des comptes/);
-  const nomBase = `arrimo_test_premier_${require('node:crypto').randomBytes(12).toString('hex')}`;
-  await pool.query(`CREATE DATABASE ${nomBase}`);
-  t.diagnostic(`Base auxiliaire fictive conservée : ${nomBase}`);
-  const url = new URL(URL_TEST); url.pathname = `/${nomBase}`;
-  const vide = creerPool(url.toString());
+  const nomSchema = `premier_test_${require('node:crypto').randomBytes(12).toString('hex')}`;
+  await pool.query(`CREATE SCHEMA ${nomSchema}`);
+  t.diagnostic(`Schéma auxiliaire fictif conservé dans la base de test : ${nomSchema}`);
+  // Le propriétaire de la base de recette n'a pas besoin du privilège cluster CREATEDB.
+  const vide = new (require('pg').Pool)({connectionString:URL_TEST,options:`-c search_path=${nomSchema}`});
   try {
     await assert.rejects(premierCompte(vide, 'pas un courriel', 'X'), /Courriel invalide/);
     const mdp = await premierCompte(vide, 'Moustafa@Exemple.ca', 'Moustafa Adamou');
@@ -1913,7 +2049,7 @@ test('console SH : première connexion (mot de passe, double authentification), 
     assert.strictEqual(h.statut, 'prospect');
     assert.strictEqual((await sh('POST', '/hopitaux', { nom: 'Doublon', environnement: 'recette', code_etab: 'HOP-SH' })).statut, 409);
     // CRM → devis versionné → contrat déclaré signé → projet et tâches modèle, rejouable.
-    const org=(await sh('POST','/crm/organisations',{nom:'Hôpital SH Prospect'})).corps;
+    const org=(await sh('POST','/crm/organisations',{nom:'Hôpital SH Prospect',region:'QC'})).corps;
     const contact=(await sh('POST',`/crm/organisations/${org.id}/contacts`,{nom:'Décideuse fictive',courriel:'contact.crm@exemple.ca',decideur:true})).corps;
     assert.strictEqual(contact.organisation_id,org.id);
     const opp=(await sh('POST','/crm/opportunites',{organisation_id:org.id,titre:'Implantation Arrimo SH',montant:12000,probabilite:60,responsable_id:1})).corps;
@@ -2231,8 +2367,8 @@ test('C4 : patients fictifs en recette seulement, formation par rôle, go-live s
     assert.ok(!JSON.stringify(g.corps).includes('mot_de_passe_temporaire'));
     const operationGolive = (await pool.query(`SELECT statut,phase,resultats FROM sh_golive_operations WHERE hopital_id=$1`, [h.id])).rows[0];
     assert.deepStrictEqual([operationGolive.statut, operationGolive.phase], ['termine', 'termine']);
-    assert.deepStrictEqual(Object.keys(operationGolive.resultats).sort(), ['chambres','civieres','lits','unites','utilisateurs'],
-      'seuls les imports présents dans le dossier de recette sont consignés');
+    assert.deepStrictEqual(Object.keys(operationGolive.resultats).sort(), ['chambres','civieres','configuration_operationnelle','lits','unites','utilisateurs'],
+      'les imports présents et la configuration promue sont consignés');
     const eProd = (await poolProd.query(`SELECT id, module_actif, sous_domaine FROM etablissements WHERE code = 'HOP-D2'`)).rows[0];
     assert.deepStrictEqual([eProd.module_actif, eProd.sous_domaine], [false, 'hopital-d2'], 'production : créé inactif, avec son lien');
     const litsProd = (await poolProd.query('SELECT code, etat, patient_ref, isolement, telemetrie FROM lits WHERE etablissement_id = $1 ORDER BY code', [eProd.id])).rows;

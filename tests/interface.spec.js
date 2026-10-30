@@ -86,8 +86,14 @@ async function menu(page, element) {
 }
 
 async function onglet(page, vue) {
+  if (process.env.SH_RECETTE_FILTRE) page.on('pageerror', (e) => console.log('ERREUR PAGE', vue, String(e).slice(0, 300)));
   await page.click(`#onglets button[data-v="${vue}"]`);
-  await page.waitForFunction((v) => !document.querySelector(`#v-${v}`).hidden && document.querySelector(`#v-${v}`).children.length > 0, vue);
+  // 60 s : sur un serveur partagé chargé, certaines vues dépassent ponctuellement 30 s (aucune erreur, rendu seulement plus lent).
+  await page.waitForFunction((v) => !document.querySelector(`#v-${v}`).hidden && document.querySelector(`#v-${v}`).children.length > 0, vue, { timeout: 60000 }).catch(async (e) => {
+    if (process.env.SH_RECETTE_FILTRE) console.log('DIAGNOSTIC', vue, JSON.stringify(await page.evaluate((v) => ({ cache: document.querySelector(`#v-${v}`).hidden, enfants: document.querySelector(`#v-${v}`).children.length,
+      visibles: [...document.querySelectorAll('[id^="v-"]')].filter((x) => !x.hidden).map((x) => x.id), toasts: document.querySelector('#toasts')?.innerText, modale: !document.querySelector('#modale')?.hidden, og: document.querySelector('#og-panel')?.open }), vue)));
+    throw e;
+  });
   await page.waitForTimeout(150);
 }
 async function toast(page, texte) {
@@ -251,6 +257,7 @@ for (const L of LARGEURS) {
     await x.waitForSelector('#modale:not([hidden]) #m-npat');
     await verifier(x, L, '01d-disponibilite-transferer');
     await x.keyboard.press('Escape');
+    await x.waitForSelector('#modale', { state: 'hidden' });   // sur téléphone, le clic suivant ne doit pas tomber sur la fenêtre qui se ferme
 
     // 2 bis. L'urgence de X : civières, corridor, séjours de plus de 24 h
     await onglet(x, 'urgence');
@@ -794,7 +801,7 @@ test('console SH : première connexion, hôpital, implantation, formation, go-li
       await page.fill('#sh-structure-code', 'SH-MANUEL');
       await page.fill('#sh-structure-attributs_json', '{"batiment":"A"}');
       page.once('dialog', d => d.accept());
-      await rendu(() => page.locator('#sh-structure-form button[type="submit"]').click());
+      await page.locator('#sh-structure-form button[type="submit"]').click(); // résultat affiché sur place, sans nouveau rendu : vérifié ci-dessous
       await page.locator('#sh-structure-resultat').filter({ hasText: 'Enregistré' }).waitFor({ state: 'visible', timeout: 10000 }).catch(async () => { throw new Error(`éditeur SH création: ${await page.locator('#sh-structure-resultat').textContent()}`); });
       assert.deepStrictEqual((await pool.query(`SELECT d.attributs,d.actif FROM departements d JOIN etablissements e ON e.id=d.etablissement_id WHERE e.code='HOP-A' AND d.code='SH-MANUEL'`)).rows[0], { attributs: { batiment: 'A' }, actif: true });
       await page.selectOption('#sh-structure-type', 'departements');
@@ -802,7 +809,7 @@ test('console SH : première connexion, hôpital, implantation, formation, go-li
       await page.fill('#sh-structure-departement', 'Département SH actualisé');
       await page.fill('#sh-structure-attributs_json', '{"batiment":"B"}');
       page.once('dialog', d => d.accept());
-      await rendu(() => page.locator('#sh-structure-form button[type="submit"]').click());
+      await page.locator('#sh-structure-form button[type="submit"]').click(); // résultat affiché sur place, sans nouveau rendu : vérifié ci-dessous
       await page.locator('#sh-structure-resultat').filter({ hasText: 'Enregistré' }).waitFor({ state: 'visible', timeout: 10000 }).catch(async () => { throw new Error(`éditeur SH modification: ${await page.locator('#sh-structure-resultat').textContent()}`); });
       assert.deepStrictEqual((await pool.query(`SELECT d.nom,d.attributs FROM departements d JOIN etablissements e ON e.id=d.etablissement_id WHERE e.code='HOP-A' AND d.code='SH-MANUEL'`)).rows[0], { nom: 'Département SH actualisé', attributs: { batiment: 'B' } });
       await viderToasts();
@@ -905,3 +912,45 @@ test('console SH : première connexion, hôpital, implantation, formation, go-li
     delete process.env.SH_PUBLIC_URL; delete process.env.SH_MFA_ENCRYPTION_KEY; delete process.env.SH_INITIAL_ADMIN_EMAIL;
   }
 });
+
+for (const L of LARGEURS) {
+  test(`apparence sombre, automatique et soleil : préférence par compte, contrastes AA · ${L.nom}`, { timeout: 240000 }, async () => {
+    for (const c of navigateur.contexts()) await c.close();
+    await viderBase(pool);
+    await demoReseau(pool, { silencieux: true, comptesRoles: true });
+    const x = await ouvrir(L, 'hopital.x@demo.arrimo');
+    await x.click('#b-menu'); await x.waitForSelector('#menu-compte:not([hidden])');
+    const reponse = x.waitForResponse((r) => r.url().includes('/api/moi/apparence') && r.request().method() === 'PUT');
+    await x.selectOption('#apparence-barre', 'sombre');
+    assert.strictEqual((await reponse).status(), 200);
+    await x.waitForFunction(() => document.documentElement.dataset.theme === 'sombre');
+    assert.strictEqual((await pool.query("SELECT apparence FROM utilisateurs WHERE email='hopital.x@demo.arrimo'")).rows[0].apparence, 'sombre');
+    assert.strictEqual((await pool.query("SELECT count(*)::int n FROM utilisateurs WHERE apparence<>'automatique'")).rows[0].n, 1, 'les autres comptes ne changent pas');
+    await x.keyboard.press('Escape');
+    const vues = await x.evaluate(() => [...document.querySelectorAll('#onglets button[data-v]')].filter((b) => !b.hidden && b.offsetParent !== null).map((b) => b.dataset.v));
+    assert.ok(vues.length >= 8, `onglets visibles : ${vues}`);
+    for (const v of vues) { await onglet(x, v); await verifier(x, L, `sombre-${v}`); }
+    await x.context().close();
+
+    // Nouvelle session sur un autre appareil : la préférence vient du serveur, pas du cache local
+    const y = await ouvrir(L, 'hopital.x@demo.arrimo');
+    assert.strictEqual(await y.evaluate(() => document.documentElement.dataset.theme), 'sombre');
+    await y.context().close();
+
+    // Automatique : suit le système (navigateur réglé en sombre) ; soleil : jour ou nuit à la position de l'établissement
+    await pool.query("UPDATE utilisateurs SET apparence='automatique' WHERE email='hopital.x@demo.arrimo'");
+    const ctx = await navigateur.newContext({ viewport: { width: L.width, height: L.height }, colorScheme: 'dark', isMobile: !!L.mobile, hasTouch: !!L.tactile });
+    const a = await ctx.newPage(); a.erreurs = [];
+    await a.goto(base); await a.fill('#c-email', 'hopital.x@demo.arrimo'); await a.fill('#c-mdp', MDP);
+    await a.click('#f-connexion button[type=submit]'); await a.waitForSelector('body[data-pret="1"]'); await fermerPremiersPas(a);
+    assert.strictEqual(await a.evaluate(() => document.documentElement.dataset.theme), 'sombre');
+    const etab = (await pool.query(`SELECT e.latitude, e.longitude FROM etablissements e JOIN utilisateur_etablissements ue ON ue.etablissement_id = e.id
+      JOIN utilisateurs u ON u.id = ue.utilisateur_id WHERE u.email = 'hopital.x@demo.arrimo' ORDER BY e.nom LIMIT 1`)).rows[0];
+    const attendu = require('../public/apparence.js').resoudre('soleil', { lieu: etab, maintenant: new Date() });
+    await a.click('#b-menu'); await a.waitForSelector('#menu-compte:not([hidden])');
+    await a.selectOption('#apparence-barre', 'soleil');
+    await a.waitForFunction(() => document.documentElement.dataset.apparence === 'soleil');
+    assert.strictEqual(await a.evaluate(() => document.documentElement.dataset.theme), attendu, 'soleil à la position de l’établissement');
+    await ctx.close();
+  });
+}
