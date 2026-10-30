@@ -146,7 +146,9 @@ async function fileNettoyage(pool, utilisateur, etabId) {
 /* ------------------------------------------------------------------ file d'admission */
 /** État du parcours du patient fictif lié à une demande (s'il a une fiche). */
 async function parcoursPatient(c, d, etat) {
-  if (d.patient_id) await c.query('UPDATE patients SET parcours = $2, modifie_le = now() WHERE id = $1', [d.patient_id, etat]);
+  if (!d.patient_id) return;
+  await c.query('UPDATE patients SET parcours = $2, modifie_le = now() WHERE id = $1', [d.patient_id, etat]);
+  await require('./patients-historique').suivreParcours(c, d.patient_id, etat);
 }
 
 function besoinsDemande(d) {

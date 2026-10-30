@@ -91,6 +91,8 @@ test('scénario 1 — admission interne : urgence, civière, demande, assignatio
   etape(1, 'Lit adapté assigné : le lit devient réservé', `${l.code} réservé pour ${ref}`);
   const adm = ok(await appel('a', 'POST', `/admissions/${d.id}/admettre`), 'admettre');
   assert.equal(adm.statut, 'admise');
+  const pass1 = (await pool.query('SELECT type, resultat, sortie_le FROM patient_passages WHERE id = $1', [arr.passage.id])).rows[0];
+  assert.deepEqual([pass1.type, pass1.resultat, pass1.sortie_le], ['urgence', 'hospitalise', null], 'le passage suit l’admission');
   const apres = await lit(l.id);
   assert.equal(apres.etat, 'occupe'); assert.equal(apres.patient_ref, ref);
   const civ = (await pool.query('SELECT etat FROM civieres WHERE id = $1', [cv.id])).rows[0];
@@ -187,6 +189,8 @@ test('scénario 4 — transfert A → B de bout en bout : même numéro, lit ré
   trB = t;
   assert.equal((await lit(t.lit_id)).etat, 'reserve');
   etape(4, 'A envoie la demande ; le lit de B est réservé', `${t.numero} · lit ${t.lit_code}`);
+  const pass4 = (await pool.query('SELECT resultat, sortie_le FROM patient_passages WHERE id = $1', [arr.passage.id])).rows[0];
+  assert.equal(pass4.resultat, 'transfere'); assert.ok(pass4.sortie_le, 'le transfert clôt le passage à l’origine');
   for (const [qui, e] of [['b', 'accepter'], ['b', 'chambre_prete'], ['a', 'transport'], ['a', 'depart'], ['b', 'reception']]) {
     const x = ok(await appel(qui, 'POST', `/transferts/${t.id}/${e}`), e);
     assert.equal(x.numero, t.numero, 'même numéro de bout en bout');
@@ -309,4 +313,51 @@ test('scénario 7 — concurrence et sécurité : une seule réservation, pas de
   const reprise = ok(await appel('b', 'POST', `/admissions/${arr.demande.id}/admettre`), 'reprise');
   assert.equal(reprise.statut, 'admise');
   etape(7, 'Lit verrouillé pendant l’admission : refus propre sans état partiel, puis reprise réussie', 'demande restée « assignée », civière occupée ; reprise : admise');
+});
+
+test('scénario 8 — historique longitudinal : vérification d’identité, passages, retour des années plus tard sans doublon, isolement, refus hors démo', async () => {
+  const cv = await civiereLibre('a');
+  const arr = ok(await appel('a', 'POST', '/urgence/arrivees', { etablissement_id: etabs.a, civiere_id: cv.id, prenom: 'Lou', nom: 'Scénario-Huit', date_naissance: '1958-09-09' }), 'arrivée');
+  const pid = arr.patient.id; const ref = arr.patient.reference;
+  assert.equal(arr.passage.type, 'urgence');
+  // L'historique ne s'ouvre qu'après vérification explicite de l'identité
+  assert.equal((await appel('a', 'GET', `/patients/${pid}/historique`)).statut, 428);
+  let h = ok(await appel('a', 'GET', `/patients/${pid}/historique?identite_verifiee=1`), 'historique');
+  assert.equal(h.passages.length, 1);
+  assert.ok(h.mouvements.some((m) => m.passage_id === arr.passage.id), 'l’arrivée sur civière est rattachée au passage');
+  etape(8, 'Patient fictif à l’urgence de A : passage ouvert, historique après vérification d’identité', `${ref} · ${arr.passage.reference}`);
+  // Clôture, puis retour simulé des années plus tard : le passage ancien est conservé, un nouveau passage est lié au même dossier
+  ok(await appel('a', 'POST', `/civieres/${cv.id}/action`, { action: 'liberer' }), 'sortie de la civière');
+  ok(await appel('a', 'POST', `/passages/${arr.passage.id}/cloture`, { resultat: 'sorti' }), 'clôture');
+  assert.equal((await appel('a', 'POST', `/passages/${arr.passage.id}/cloture`, { resultat: 'sorti' })).statut, 409, 'pas de double clôture');
+  await pool.query(`UPDATE patient_passages SET arrivee_le = arrivee_le - interval '10 years', sortie_le = sortie_le - interval '10 years' WHERE id = $1`, [arr.passage.id]);
+  const cv2 = await civiereLibre('a');
+  const retour = ok(await appel('a', 'POST', '/urgence/arrivees', { etablissement_id: etabs.a, civiere_id: cv2.id, patient_reference: ref }), 'retour');
+  assert.equal(retour.patient.id, pid, 'même dossier, aucun doublon');
+  assert.equal((await pool.query(`SELECT count(*)::int n FROM patients WHERE etablissement_id = $1 AND nom = 'Scénario-Huit'`, [etabs.a])).rows[0].n, 1);
+  const consult = ok(await appel('a', 'POST', `/patients/${pid}/passages`, { type: 'consultation' }), 'consultation');
+  h = ok(await appel('a', 'GET', `/patients/${pid}/historique?identite_verifiee=1`), 'historique 2');
+  assert.deepEqual(h.passages.map((x) => x.type), ['consultation', 'urgence', 'urgence']);
+  assert.equal(h.passages.filter((x) => !x.sortie_le).length, 1, 'un seul passage ouvert à la fois');
+  assert.equal(h.passages.find((x) => x.id === retour.passage.id).resultat, 'sorti', 'le passage précédent est clos à l’ouverture du suivant');
+  assert.equal(h.passages.find((x) => x.id === consult.id).resultat, 'en_cours');
+  etape(8, 'Retour simulé dix ans plus tard : dossier retrouvé par sa référence, ancien passage conservé, nouveaux passages liés', `${h.passages.length} passages`);
+  // Saisies invalides refusées
+  assert.equal((await appel('a', 'POST', `/patients/${pid}/passages`, { type: 'chirurgie' })).statut, 400);
+  assert.equal((await appel('a', 'POST', `/patients/${pid}/passages`, { type: 'consultation', arrivee_le: '2099-01-01T00:00:00Z' })).statut, 400);
+  // Isolement : B ne voit ni ne modifie l'historique d'un patient de A
+  assert.equal((await appel('b', 'GET', `/patients/${pid}/historique?identite_verifiee=1`)).statut, 403);
+  assert.equal((await appel('b', 'POST', `/patients/${pid}/passages`, { type: 'consultation' })).statut, 403);
+  assert.equal((await appel('b', 'POST', `/passages/${consult.id}/cloture`, { resultat: 'sorti' })).statut, 403);
+  // Journal : références seulement, jamais le nom
+  const j = (await pool.query(`SELECT detail FROM journal WHERE etablissement_id = $1 AND action IN ('Passage ouvert', 'Passage clos', 'Historique patient consulté')`, [etabs.a])).rows;
+  assert.ok(j.length >= 4 && j.every((x) => !/Scénario-Huit|Lou/.test(x.detail)), 'aucune identité au journal');
+  etape(8, 'Isolement entre établissements et journal sans identité', `${j.length} entrées de journal, références seulement`);
+  // Hors démonstration et recette : refus
+  for (const env of ['production', 'pilote']) {
+    process.env.ARRIMO_ENV = env;
+    try { assert.equal((await appel('a', 'GET', `/patients/${pid}/historique?identite_verifiee=1`)).statut, 403, env); }
+    finally { process.env.ARRIMO_ENV = 'demo'; }
+  }
+  etape(8, 'Historique refusé en production et en pilote', '403');
 });

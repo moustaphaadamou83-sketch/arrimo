@@ -114,3 +114,14 @@ Tests unitaires : 101 sur 101.
 - Les droits ne se modifient pas depuis l'interface : ils restent fixés par rôle côté serveur. Le tableau les explique.
 - Les essais vocaux réels restent à faire par Moustafa.
 - Le mot de passe des comptes de démo publics n'est pas changé en ligne, car le contrôle de publication se connecte avec eux. Le changement est prouvé sur un compte de test.
+
+## Publication
+Release `refonte-20261030t1828`, publiée le 30 octobre 2026 sur six environnements, identiques : principal, démo A/B/C, recette, validation, SH et SH-validation.
+- Recette `.local/preuves-sh-lot1/20261030175954_d75bdf/` : 16 suites, 225 tests, aucun échec.
+- Santé `ok` partout. Configurations préservées. Scénario A/B/C et comptes de démo intacts.
+- Droits des comptes applicatifs vérifiés sur la nouvelle table `patient_passages` (quatre bases hospitalières).
+- Captures avant/après de la démo B en ligne (ordinateur et téléphone) dans `docs/captures-refonte-20261030/`.
+
+**Hôpitaux A, B et C** : même logiciel, réglages propres. Vérifiés par le scénario A/B/C, par les tests d'interface et sur la démo en ligne.
+
+**Nouvel établissement provisionné depuis SH** : il reçoit la même interface. Vérifié par la suite « raccordement » et par les tests OG de provisionnement (§20.6).

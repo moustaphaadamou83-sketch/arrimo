@@ -381,7 +381,8 @@ function appliquerModules() {
   const mods = (etabCtx() && etabCtx().modules) || {};
   document.querySelectorAll('#onglets button').forEach((b) => {
     const mod = Object.keys(MODULE_ONGLET).find((k) => MODULE_ONGLET[k] === b.dataset.v);
-    b.hidden = (entretien && b.dataset.v !== 'nettoyage') || (b.dataset.v === 'admin' && !etat.moi.utilisateur.admin) || (mod && mods[mod] === false);
+    b.hidden = (entretien && b.dataset.v !== 'nettoyage') || (b.dataset.v === 'admin' && !etat.moi.utilisateur.admin) || (mod && mods[mod] === false)
+      || (b.dataset.v === 'patients' && !etat.moi.patients_fictifs);
   });
   const cur = document.querySelector(`#onglets button[data-v="${etat.vue}"]`);
   if (cur && cur.hidden && !entretien) { etat.vue = 'copilote'; document.querySelectorAll('.contenu > section').forEach((sec) => { sec.hidden = sec.id !== 'v-copilote'; }); }
@@ -424,7 +425,7 @@ async function rafraichir() {
     await Promise.all([e ? majCompteurs() : null, ({
       copilote: vueCopilote, reseau: vueReseau, national: vueNational, lits: vueLits, urgence: vueUrgence, admissions: vueAdmissions, transferts: vueTransferts,
       nettoyage: vueNettoyage, vigilance: vueVigilance, nsa: vueNsa, indicateurs: vueIndicateurs, journal: vueJournal, params: vueParams,
-      admin: vueAdmin, compte: vueCompte, support:vueSupportClient,
+      admin: vueAdmin, compte: vueCompte, support:vueSupportClient, patients: vuePatients,
     })[etat.vue]()]);
     poserMenuParametres();
     if (!$('#panneau-aide').hidden) afficherAide();
@@ -436,7 +437,7 @@ async function rafraichir() {
 }
 // Rafraîchissement automatique des écrans opérationnels seulement : les formulaires (paramètres, compte, administration)
 // ne sont jamais redessinés pendant une saisie, sinon les modifications en cours seraient effacées.
-const VUES_FORMULAIRES = ['params', 'compte', 'admin'];
+const VUES_FORMULAIRES = ['params', 'compte', 'admin', 'patients'];
 setInterval(() => {
   if ($('#modale').hidden && document.visibilityState === 'visible' && !VUES_FORMULAIRES.includes(etat.vue) && !etat.ogModifie
     && !$('#v-support').contains(document.activeElement)) rafraichir();
@@ -1359,15 +1360,93 @@ function modaleArrivee(libres, cfg) {
     <div class="ligne"><div class="champ"><label class="lbl" for="m-civ">${esc(t('admissions.civiere'))}</label><select id="m-civ">${libres.map((c) => `<option value="${c.id}" data-version="${c.version}">${esc(c.code)} · ${esc(t(`urgence.cat_${c.categorie}`))}</option>`).join('')}</select></div>
     <div class="champ"><label class="lbl" for="m-heure">${F('heure_arrivee')}</label><input id="m-heure" type="datetime-local" value="${maintenant}"></div></div>
     <div class="champ"><label class="lbl" for="m-dtype">${F('demande_lit')}</label><select id="m-dtype"><option value="">${F('pas_encore')}</option>${typesEtab(cfg).map((x) => `<option value="${x.id}">${esc(nomType(x))}</option>`).join('')}</select></div>
+    <div class="champ"><label class="lbl" for="m-existant">${esc(t('patients.dossier_existant'))} (${esc(t('patients.reference'))})</label><input id="m-existant" autocomplete="off" placeholder="P-00000">
+      <span class="note">${esc(t('patients.existant_aide'))}</span></div>
     <label class="case"><input type="checkbox" id="m-doublon"> ${F('confirmer_doublon')}</label>`,
   [{ label: t('general.annuler') }, { label: t('fin.enregistrer_arrivee'), pri: true, run: async () => {
     const o = $('#m-civ').selectedOptions[0];
     const corps = { etablissement_id: etat.ctx, civiere_id: Number(o.value), version: Number(o.dataset.version), prenom: $('#m-prenom').value, nom: $('#m-nom').value,
       date_naissance: $('#m-dn').value, reference_locale: $('#m-refloc').value || undefined, arrivee_le: $('#m-heure').value ? new Date($('#m-heure').value).toISOString() : undefined,
-      confirmer_doublon: $('#m-doublon').checked };
+      confirmer_doublon: $('#m-doublon').checked, patient_reference: $('#m-existant').value.trim() || undefined };
     if ($('#m-dtype').value) corps.demande = { type_id: Number($('#m-dtype').value), priorite: 'p2' };
     return (await agir(null, () => api('POST', '/urgence/arrivees', corps), (r) => t('fin.arrivee_ok', { ref: r.patient.reference, code: r.civiere.code }))) !== null || false;
   } }]);
+}
+
+/* ---------------- Patients fictifs : recherche, vérification d'identité, historique des passages ---------------- */
+// Démonstration et recette seulement (fiches fictives) ; historique administratif, aucune donnée clinique.
+async function vuePatients() {
+  const v = $('#v-patients');
+  const P = (k, vars) => esc(t(`patients.${k}`, vars));
+  const q = etat.patientsRecherche || '';
+  const liste = await api('GET', `/patients?etablissement_id=${etat.ctx}&q=${encodeURIComponent(q)}`);
+  v.innerHTML = `<div class="entete"><div><h2>${P('titre', { etab: etabCtx().nom })}</h2><p>${P('intro')}</p></div></div>
+    <form class="ligne filtres-nsa" id="f-patients" role="search"><div class="champ"><label class="lbl" for="p-recherche">${P('rechercher')}</label>
+      <input id="p-recherche" type="search" autocomplete="off" value="${esc(q)}"></div><button class="btn" type="submit">${icone('search')}${P('chercher')}</button>
+      <span class="note">${P('resultats', { n: liste.length })}</span></form>
+    <div class="tableau"><table><thead><tr><th>${P('reference')}</th><th>${P('identite')}</th><th>${P('naissance')}</th><th>${P('parcours')}</th><th>${P('emplacement')}</th><th></th></tr></thead>
+    <tbody>${liste.map((p) => `<tr><td class="num">${esc(p.reference)}</td><td class="donnee">${esc(p.prenom)} ${esc(p.nom)}</td><td class="num">${esc(String(p.date_naissance).slice(0, 10))}</td>
+      <td>${P(`parcours_${p.parcours}`)}</td><td class="num">${esc(p.lit_code || p.civiere_code || '—')}</td>
+      <td><button class="btn" type="button" data-historique="${p.id}">${P('historique')}</button></td></tr>`).join('') || `<tr><td colspan="6" class="muted">${P('aucun')}</td></tr>`}</tbody></table></div>
+    <div id="patient-historique"></div>`;
+  $('#f-patients').onsubmit = (e) => { e.preventDefault(); etat.patientsRecherche = $('#p-recherche').value.trim(); rafraichir(); };
+  v.querySelectorAll('[data-historique]').forEach((b) => {
+    b.onclick = () => verifierIdentitePatient(liste.find((p) => p.id === Number(b.dataset.historique)));
+  });
+  if (etat.patientOuvert && liste.some((p) => p.id === etat.patientOuvert)) await afficherHistoriquePatient(etat.patientOuvert);
+}
+/** Étape obligatoire avant l'historique : le professionnel confirme avoir vérifié l'identité (nom, date de naissance). */
+function verifierIdentitePatient(p) {
+  if (!p) return;
+  const P = (k, vars) => esc(t(`patients.${k}`, vars));
+  modale(t('patients.verifier_titre'), `<p>${P('verifier_aide')}</p><dl class="detail-nsa"><dt>${P('identite')}</dt><dd class="donnee">${esc(p.prenom)} ${esc(p.nom)}</dd>
+    <dt>${P('naissance')}</dt><dd class="num">${esc(String(p.date_naissance).slice(0, 10))}</dd><dt>${P('reference')}</dt><dd class="num">${esc(p.reference)}</dd>
+    ${p.reference_locale ? `<dt>${P('ref_locale')}</dt><dd class="num">${esc(p.reference_locale)}</dd>` : ''}</dl>`,
+  [{ label: t('general.annuler') }, { label: t('patients.identite_verifiee'), pri: true, run: async () => { etat.patientOuvert = p.id; await afficherHistoriquePatient(p.id); } }]);
+}
+async function afficherHistoriquePatient(id) {
+  const zone = $('#patient-historique'); if (!zone) return;
+  const P = (k, vars) => esc(t(`patients.${k}`, vars));
+  let h;
+  try { h = await api('GET', `/patients/${id}/historique?identite_verifiee=1`); } catch (e) { toast(e.message, true); return; }
+  const evts = (pid) => [
+    ...h.mouvements.filter((m) => m.passage_id === pid).map((m) => ({ d: m.date, txt: `${m.action}${m.nouvel_etat ? ` → ${t(`etats.${m.nouvel_etat}`)}` : ''}${m.emplacement ? ` · ${m.emplacement}` : ''}${m.unite ? ` (${m.unite})` : ''}` })),
+    ...h.demandes.filter((d) => d.passage_id === pid).map((d) => ({ d: d.cree_le, txt: t('patients.demande_lit', { type: d.type_unite || '—', statut: t(`patients.demande_${d.statut}`) }) })),
+    ...h.transferts.filter((x) => x.passage_id === pid).map((x) => ({ d: x.date_demande, txt: t('patients.transfert', { numero: x.numero, origine: x.origine, destination: x.destination, statut: t(`statuts.${x.statut}`) }) })),
+  ].sort((a, b) => new Date(b.d) - new Date(a.d));
+  const listeEvts = (pid) => { const l = evts(pid); return l.length ? `<ul class="evenements-nsa">${l.map((e) => `<li><span class="num">${esc(heure(e.d))}</span> · ${esc(e.txt)}</li>`).join('')}</ul>` : `<p class="muted">${P('aucun_evenement')}</p>`; };
+  const passage = (x) => `<article class="panneau-c passage" data-passage="${x.id}"><div class="ligne passage-tete"><h4><span class="num">${esc(x.reference)}</span> · ${P(`type_${x.type}`)}</h4>
+      <span class="badge${x.resultat === 'en_cours' ? ' fort' : ''}">${P(`resultat_${x.resultat}`)}</span></div>
+    <dl class="detail-nsa"><dt>${P('etablissement')}</dt><dd>${esc(x.etablissement)}</dd><dt>${P('arrivee')}</dt><dd class="num">${esc(heure(x.arrivee_le))}</dd>
+      <dt>${P('sortie')}</dt><dd class="num">${x.sortie_le ? esc(heure(x.sortie_le)) : '—'}</dd>${x.cree_par ? `<dt>${P('ouvert_par')}</dt><dd>${esc(x.cree_par)}</dd>` : ''}</dl>
+    ${listeEvts(x.id)}${x.sortie_le ? '' : `<div class="ligne serre"><label class="lbl" for="c-res-${x.id}">${P('resultat')}</label><select id="c-res-${x.id}">${['sorti', 'hospitalise', 'transfere', 'annule'].map((r) => `<option value="${r}">${P(`resultat_${r}`)}</option>`).join('')}</select>
+      <button class="btn" type="button" data-clore="${x.id}">${P('clore')}</button></div>`}</article>`;
+  const horsPassage = evts(null);
+  const maintenant = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  zone.innerHTML = `<section class="historique-patient" aria-labelledby="h-patient"><div class="entete"><div><h3 id="h-patient">${P('historique_de', { nom: `${h.patient.prenom} ${h.patient.nom}`, ref: h.patient.reference })}</h3>
+      <p class="note">${P('conservation')}</p></div><button class="btn" type="button" id="b-fermer-hist">${esc(t('general.fermer'))}</button></div>
+    <form class="panneau-c" id="f-passage"><h4>${P('nouveau_passage')}</h4>
+      <div class="ligne filtres-nsa"><div class="champ"><label class="lbl" for="np-type">${P('type')}</label><select id="np-type">${['consultation', 'admission'].map((x) => `<option value="${x}">${P(`type_${x}`)}</option>`).join('')}</select></div>
+      <div class="champ"><label class="lbl" for="np-date">${P('arrivee')}</label><input id="np-date" type="datetime-local" max="${maintenant}"><span class="note">${P('arrivee_aide')}</span></div>
+      <button class="btn pri" type="submit">${P('ouvrir_passage')}</button></div><p class="note">${P('urgence_aide')}</p></form>
+    <p class="note">${P('passages', { n: h.passages.length })}</p>
+    ${h.passages.map(passage).join('')}
+    ${horsPassage.length ? `<article class="panneau-c passage"><h4>${P('hors_passage')}</h4>${listeEvts(null)}</article>` : ''}</section>`;
+  $('#b-fermer-hist').onclick = () => { etat.patientOuvert = null; zone.innerHTML = ''; };
+  $('#f-passage').onsubmit = (e) => {
+    e.preventDefault();
+    agir(e.submitter, async () => {
+      // Heure vide : c'est l'heure du serveur (« maintenant ») qui s'applique.
+      const date = $('#np-date').value;
+      await api('POST', `/patients/${id}/passages`, { type: $('#np-type').value, arrivee_le: date ? new Date(date).toISOString() : undefined });
+    }, t('patients.passage_ouvert'));
+  };
+  zone.querySelectorAll('[data-clore]').forEach((b) => {
+    b.onclick = () => agir(b, async () => {
+      await api('POST', `/passages/${b.dataset.clore}/cloture`, { resultat: $(`#c-res-${b.dataset.clore}`).value });
+    }, t('patients.passage_clos'));
+  });
+  zone.scrollIntoView({ block: 'start' });
 }
 
 /* ---------------- Congés et alertes : congés par lit, disponibilités prévues, blocages explicables ---------------- */

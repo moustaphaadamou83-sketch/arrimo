@@ -28,6 +28,20 @@ window.ARRIMO_I18N.fr.aide = {
     },
   },
   ecrans: {
+    patients: {
+      nom: 'Patients',
+      but: 'Retrouver un patient fictif (démonstration et recette), vérifier son identité et consulter ses passages : arrivées, demandes de lit, transferts et mouvements. Historique administratif seulement, sans donnée clinique.',
+      gestes: [
+        'Cherchez par nom, prénom ou référence (P-…).',
+        'Cliquez sur « Historique », comparez l’identité avec la personne, puis confirmez : la consultation est journalisée.',
+        'Ouvrez un nouveau passage (consultation ou admission) ; pour une arrivée à l’urgence, indiquez la référence existante dans « Arrivée à l’urgence » pour éviter un doublon.',
+        'Clôturez le passage avec son résultat (sorti, hospitalisé, transféré, annulé).',
+      ],
+      erreurs: [
+        ['« Vérifiez l’identité du patient… »', 'L’historique ne s’ouvre qu’après la confirmation de l’identité.'],
+        ['« Un passage plus récent est déjà ouvert »', 'La date d’arrivée saisie précède le passage en cours : corrigez-la ou laissez-la vide.'],
+      ],
+    },
     support:{"nom": "Support client", "but": "Créer et suivre les demandes de votre établissement.", "gestes": ["Décrire le problème sans données médicales.", "Choisir un projet et envoyer la demande.", "Ouvrir le ticket pour consulter les réponses publiques."], "erreurs": []},
     copilote: {
       nom: 'Copilote',

@@ -1041,7 +1041,7 @@ for (const L of LARGEURS.filter((l) => l.nom !== 'tablette')) {
     await x.click('#og-open'); await x.waitForFunction(() => document.querySelector('#og-title')?.textContent === 'Charles');
     await x.keyboard.press('Escape');
     // Journal et Support client, depuis Paramètres, avec le menu secondaire.
-    await onglet(x, 'journal'); assert.ok(await x.locator('#v-journal > .params-nav').count());
+    await onglet(x, 'journal'); await x.waitForSelector('#v-journal > .params-nav');
     await verifier(x, L, 'params-journal');
     await onglet(x, 'support'); await x.waitForSelector('#v-support > .params-nav');
     // Mot de passe : actuel exigé, nouveau valable à la reconnexion, ancien refusé.
@@ -1067,6 +1067,52 @@ for (const L of LARGEURS.filter((l) => l.nom !== 'tablette')) {
     await x.click('#f-connexion button[type=submit]'); await x.waitForSelector('body[data-pret="1"]');
     assert.strictEqual(await x.evaluate(() => document.documentElement.dataset.theme), 'sombre', 'thème retrouvé après reconnexion');
     await x.context().close();
+    } finally { if (avantEnv === undefined) delete process.env.ARRIMO_ENV; else process.env.ARRIMO_ENV = avantEnv; }
+  });
+}
+
+for (const L of LARGEURS.filter((l) => l.nom !== 'tablette')) {
+  test(`patients fictifs : recherche, vérification d'identité, historique des passages, nouveau passage et clôture · ${L.nom}`, { timeout: 180000 }, async () => {
+    for (const c of navigateur.contexts()) await c.close();
+    await viderBase(pool);
+    await demoReseau(pool, { silencieux: true });
+    const avantEnv = process.env.ARRIMO_ENV; process.env.ARRIMO_ENV = 'demo';
+    try {
+      const email = 'hopital.x@demo.arrimo';
+      const x = await ouvrir(L, email);
+      const jeton = await x.evaluate(() => localStorage.getItem('arrimo-token'));
+      const api = async (m, chemin, corps) => (await fetch(`${base}/api${chemin}`, { method: m, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jeton}` }, body: corps && JSON.stringify(corps) })).json();
+      const etab = (await api('GET', '/moi')).etablissements[0].id;
+      // Hôpital X est saturé : une civière de corridor est ajoutée, comme dans les scénarios A/B/C.
+      const cv = (await api('GET', `/civieres?etablissement_id=${etab}`)).civieres.find((c) => c.etat === 'libre')
+        || (await pool.query(`INSERT INTO civieres (etablissement_id, code, categorie) VALUES ($1, 'COR-UI', 'debordement') RETURNING id, version`, [etab])).rows[0];
+      const arr = await api('POST', '/urgence/arrivees', { etablissement_id: etab, civiere_id: cv.id, version: cv.version, prenom: 'Noé', nom: 'Essai-Historique', date_naissance: '1972-04-18' });
+      assert.ok(arr.passage, JSON.stringify(arr));
+      await x.reload(); await x.waitForSelector('body[data-pret="1"]');
+      await onglet(x, 'patients');
+      await x.fill('#p-recherche', 'Essai-Hist'); await x.click('#f-patients button[type=submit]');
+      await x.waitForSelector(`#v-patients [data-historique="${arr.patient.id}"]`);
+      await verifier(x, L, 'patients-liste');
+      // Vérification d'identité obligatoire avant l'historique
+      await x.click(`#v-patients [data-historique="${arr.patient.id}"]`);
+      await x.waitForSelector('#modale:not([hidden]) .detail-nsa');
+      assert.match(await x.textContent('#modale'), /Essai-Historique/);
+      await x.click('#modale .btn.pri');
+      await x.waitForSelector('.historique-patient [data-passage]');
+      assert.strictEqual(await x.locator('.historique-patient [data-passage]').count(), 1);
+      await verifier(x, L, 'patients-historique');
+      // Nouveau passage (consultation) : le passage d'urgence est clos, le nouveau est en cours
+      await x.selectOption('#np-type', 'consultation'); await x.click('#f-passage button[type=submit]');
+      await toast(x, 'Passage ouvert');
+      await x.waitForFunction(() => document.querySelectorAll('.historique-patient [data-passage]').length === 2);
+      // Clôture du passage en cours
+      await x.locator('.historique-patient [data-clore]').first().click();
+      await toast(x, 'Passage clos');
+      await x.waitForFunction(() => !document.querySelector('.historique-patient [data-clore]'));
+      const passages = (await pool.query('SELECT type, resultat FROM patient_passages WHERE patient_id = $1 ORDER BY arrivee_le', [arr.patient.id])).rows;
+      assert.deepStrictEqual(passages.map((p) => p.type), ['urgence', 'consultation']);
+      assert.ok(passages.every((p) => p.resultat === 'sorti'));
+      await x.context().close();
     } finally { if (avantEnv === undefined) delete process.env.ARRIMO_ENV; else process.env.ARRIMO_ENV = avantEnv; }
   });
 }

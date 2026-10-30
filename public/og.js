@@ -121,7 +121,11 @@
         }catch{if(panneau.open)message(O('erreur'));}
         finally{b.disabled=false;}
       };
-      carte.append(nom,etatPatient,b);box.append(carte);
+      // Historique des passages : ouvert dans l'écran Patients, après la vérification d'identité habituelle.
+      const h=document.createElement('button');h.type='button';h.className='btn';h.textContent=O('historique_patient');
+      h.setAttribute('aria-label',`${h.textContent} ${p.reference}`);
+      h.onclick=()=>{etat.patientsRecherche=p.reference;etat.patientOuvert=null;fermer();allerA('patients');};
+      carte.append(nom,etatPatient,b,h);box.append(carte);
     }
     if(limite){const note=document.createElement('p');note.textContent='La liste a été plafonnée; précisez la référence ou la date de naissance.';box.append(note);}
     parent.append(box);

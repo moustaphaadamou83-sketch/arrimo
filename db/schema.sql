@@ -606,6 +606,26 @@ CREATE INDEX IF NOT EXISTS patients_rapprochement ON patients (etablissement_id,
 CREATE UNIQUE INDEX IF NOT EXISTS patients_ref_locale ON patients (etablissement_id, reference_locale) WHERE reference_locale IS NOT NULL;
 ALTER TABLE demandes_admission ADD COLUMN IF NOT EXISTS patient_id int REFERENCES patients(id);
 
+-- Passages des patients fictifs (démonstration et recette) : historique administratif seulement, aucune donnée clinique
+-- ni texte libre. Un passage n'est jamais supprimé ; sa clôture est tracée (qui, quand).
+CREATE SEQUENCE IF NOT EXISTS passage_seq START 1000;
+CREATE TABLE IF NOT EXISTS patient_passages (
+  id                serial PRIMARY KEY,
+  patient_id        int  NOT NULL REFERENCES patients(id),
+  etablissement_id  int  NOT NULL REFERENCES etablissements(id),
+  reference         text NOT NULL UNIQUE,
+  type              text NOT NULL CHECK (type IN ('urgence', 'consultation', 'admission')),
+  arrivee_le        timestamptz NOT NULL,
+  sortie_le         timestamptz,
+  resultat          text NOT NULL DEFAULT 'en_cours' CHECK (resultat IN ('en_cours', 'hospitalise', 'transfere', 'sorti', 'annule')),
+  cree_par          int REFERENCES utilisateurs(id),
+  cree_le           timestamptz NOT NULL DEFAULT now(),
+  cloture_par       int REFERENCES utilisateurs(id),
+  cloture_le        timestamptz,
+  CHECK (sortie_le IS NULL OR sortie_le >= arrivee_le)
+);
+CREATE INDEX IF NOT EXISTS patient_passages_patient ON patient_passages (patient_id, arrivee_le DESC);
+
 -- Synchronisation des admissions : un lit n'est assigné qu'à une demande ; un patient n'a qu'une demande active.
 -- Créés seulement si les données existantes le permettent (jamais d'échec de mise à jour sur des données anciennes).
 DO $$ BEGIN

@@ -101,8 +101,10 @@ async function enregistrerArrivee(pool, utilisateur, b) {
   if (Number.isNaN(arrivee.getTime()) || arrivee > new Date(Date.now() + 60000)) throw new ErreurHttp(400, 'date_invalide');
   const res = await transaction(pool, async (c) => {
     let patient;
-    if (b.patient_id) {
-      patient = (await c.query('SELECT * FROM patients WHERE id = $1 AND etablissement_id = $2 FOR UPDATE', [b.patient_id, etabId])).rows[0];
+    if (b.patient_id || b.patient_reference) {
+      // Patient connu (retour, même des années plus tard) : le dossier existant est réutilisé, sans nouvelle fiche.
+      patient = (await c.query(`SELECT * FROM patients WHERE etablissement_id = $2 AND ${b.patient_id ? 'id = $1' : 'upper(reference) = upper($1)'} FOR UPDATE`,
+        [b.patient_id || texte(b.patient_reference, 20), etabId])).rows[0];
       if (!patient) throw new ErreurHttp(404, 'patient_introuvable');
     } else {
       patient = await creerPatient(c, utilisateur, etabId, b, { arrivee, parcours: 'urgence' });
@@ -113,7 +115,9 @@ async function enregistrerArrivee(pool, utilisateur, b) {
       versionAttendue: b.version ?? cv.version, patientRef: patient.reference, arrivee, detail: `Arrivée à l’urgence : ${patient.reference}`,
     });
     await c.query(`UPDATE patients SET parcours = 'urgence', arrivee_le = $2, modifie_le = now() WHERE id = $1`, [patient.id, arrivee]);
-    return { patient: presenter({ ...patient, parcours: 'urgence', arrivee_le: arrivee }), civiere };
+    // Chaque arrivée ouvre un passage « urgence » rattaché au même dossier (retour d'un patient connu : pas de doublon).
+    const passage = await require('./patients-historique').ouvrirPassage(c, utilisateur, patient, 'urgence', arrivee);
+    return { patient: presenter({ ...patient, parcours: 'urgence', arrivee_le: arrivee }), civiere, passage };
   });
   // Demande de lit, si l'hospitalisation est décidée : même opération que depuis la fiche civière
   if (b.demande && b.demande.type_id) {

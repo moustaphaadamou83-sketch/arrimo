@@ -145,7 +145,8 @@ test('portail client : serveurs hospitalier et SH, isolation, messages publics e
       const page=await browser.newPage({viewport:{width:390,height:844}});const erreurs=[];page.on('pageerror',e=>erreurs.push(e.message));page.on('console',m=>{if(m.type()==='error')erreurs.push(m.text());});
       await page.addInitScript(({token,id})=>{localStorage.setItem('arrimo-token',token);localStorage.setItem('arrimo-ctx',String(id));localStorage.setItem('arrimo-langue','fr');},{token:tokens[0],id:es[0].id});
       await page.goto(base);await page.waitForSelector('body[data-pret="1"]');if(await page.locator('#b-premiers-pas-ok').isVisible())await page.click('#b-premiers-pas-ok');
-      await page.click('[data-v="support"]');await page.waitForSelector('#support-creer',{state:'attached'});await page.click('#v-support summary');
+      // Support client : dans Paramètres depuis la refonte de la navigation (plus d'onglet dans la barre principale).
+      await page.click('#onglets [data-v="params"]');await page.click('#v-params [data-param-nav="support"]');await page.waitForSelector('#support-creer',{state:'attached'});await page.click('#v-support summary');
       await page.fill('#sc-titre','Demande créée au navigateur');await page.fill('#sc-description','Description Test du portail');
       await page.waitForFunction(()=>!enCours);await page.evaluate(()=>rafraichir());assert.equal(await page.inputValue('#sc-titre'),'Demande créée au navigateur');
       await page.locator('#support-creer').evaluate(f=>f.requestSubmit());

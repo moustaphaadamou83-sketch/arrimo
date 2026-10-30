@@ -28,6 +28,20 @@ window.ARRIMO_I18N.en.aide = {
     },
   },
   ecrans: {
+    patients: {
+      nom: 'Patients',
+      but: 'Find a fictitious patient (demo and acceptance testing), verify their identity and review their visits: arrivals, bed requests, transfers and movements. Administrative history only, no clinical data.',
+      gestes: [
+        'Search by last name, first name or reference (P-…).',
+        'Click “History”, compare the identity with the person, then confirm: access is logged.',
+        'Open a new visit (consultation or admission); for an emergency arrival, enter the existing reference in “Emergency arrival” to avoid a duplicate.',
+        'Close the visit with its outcome (discharged, admitted, transferred, cancelled).',
+      ],
+      erreurs: [
+        ['“Verify the patient’s identity…”', 'The history opens only after the identity is confirmed.'],
+        ['“A more recent visit is already open”', 'The arrival date entered is before the current visit: correct it or leave it empty.'],
+      ],
+    },
     support:{"nom": "Client support", "but": "Create and track requests for your facility.", "gestes": ["Describe the issue without medical information.", "Select a project and submit the request.", "Open the ticket to view public replies."], "erreurs": []},
     copilote: {
       nom: 'Copilot',

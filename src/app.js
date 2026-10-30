@@ -408,6 +408,10 @@ function creerApp(pool, options = {}) {
     entier(req.body.etablissement_id, 'etablissement_id'), req.params.id)));
   api.post('/patients', route((req) => pat.creerPatient(pool, req.utilisateur, entier(req.body.etablissement_id, 'etablissement_id'), req.body)));
   api.put('/patients/:id', route((req) => pat.modifierPatient(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
+  const hist = require('./patients-historique');
+  api.get('/patients/:id/historique', route((req) => hist.historique(pool, req.utilisateur, entier(req.params.id, 'id'), { identiteVerifiee: req.query.identite_verifiee === '1' })));
+  api.post('/patients/:id/passages', route((req) => hist.creerPassage(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
+  api.post('/passages/:id/cloture', route((req) => hist.cloturerPassage(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   api.post('/urgence/arrivees', route((req) => pat.enregistrerArrivee(pool, req.utilisateur, req.body)));
   api.get('/specialites', route(async () => (await pool.query('SELECT * FROM specialites_catalogue ORDER BY ordre')).rows));
 
