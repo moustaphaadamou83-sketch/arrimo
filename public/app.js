@@ -74,15 +74,24 @@ function majApparence() {
   const s = $('#apparence-barre'); if (!s) return;
   const actuel = etat.moi?.utilisateur?.apparence || window.ArrimoApparence?.mode() || 'automatique';
   s.innerHTML = ['clair', 'sombre', 'automatique', 'soleil'].map((m) => `<option value="${m}"${m === actuel ? ' selected' : ''}>${esc(t(`apparence.${m}`))}</option>`).join('');
+  const b = $('#b-theme'); if (b) { const l = `${t('apparence.basculer')} · ${t(`apparence.${actuel}`)}`; b.setAttribute('aria-label', l); b.title = l; }
 }
-$('#apparence-barre')?.addEventListener('change', async (e) => {
-  const choix = e.target.value;
+/** Préférence personnelle d'apparence : appliquée tout de suite, enregistrée sur le compte, retrouvée à la reconnexion. */
+async function choisirApparence(choix) {
   try {
     const r = await api('PUT', '/moi/apparence', { apparence: choix });
     if (etat.moi) etat.moi.utilisateur.apparence = r.apparence;
     window.ArrimoApparence?.definir(r.apparence, { lieu: lieuApparence() });
+    majApparence();
     toast(t('apparence.enregistree'));
   } catch (err) { toast(err.message, true); majApparence(); }
+}
+$('#apparence-barre')?.addEventListener('change', (e) => choisirApparence(e.target.value));
+// Bascule de l'en-tête : clair → sombre → automatique (système), sans ouvrir les Paramètres.
+$('#b-theme')?.addEventListener('click', () => {
+  const ordre = ['clair', 'sombre', 'automatique'];
+  const actuel = etat.moi?.utilisateur?.apparence || window.ArrimoApparence?.mode() || 'automatique';
+  choisirApparence(ordre[(ordre.indexOf(actuel) + 1) % ordre.length]);
 });
 function changerLangue(l) {
   if (!LANGUES.includes(l) || l === langue) return;
@@ -296,7 +305,15 @@ function deconnecter(expire) {
 }
 $('#b-deconnexion').onclick = () => deconnecter(false);
 $('#b-compte').onclick = () => allerA('compte');
+/** Modifications OG non enregistrées : demander avant de quitter l'écran. */
+function quitterSansEnregistrer() {
+  if (!etat.ogModifie) return true;
+  if (!window.confirm(t('ogperso.quitter_sans_enregistrer'))) return false;
+  etat.ogModifie = false; return true;
+}
+window.addEventListener('beforeunload', (e) => { if (etat.ogModifie) { e.preventDefault(); e.returnValue = ''; } });
 function allerA(vue) {
+  if (vue !== etat.vue && !quitterSansEnregistrer()) return;
   etat.vue = vue;
   document.querySelectorAll('#onglets button').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.v === vue)));
   document.querySelectorAll('.contenu > section').forEach((sec) => { sec.hidden = sec.id !== `v-${vue}`; });
@@ -409,6 +426,7 @@ async function rafraichir() {
       nettoyage: vueNettoyage, vigilance: vueVigilance, nsa: vueNsa, indicateurs: vueIndicateurs, journal: vueJournal, params: vueParams,
       admin: vueAdmin, compte: vueCompte, support:vueSupportClient,
     })[etat.vue]()]);
+    poserMenuParametres();
     if (!$('#panneau-aide').hidden) afficherAide();
   } catch (err) {
     if (etat.token) toast(err.message, true);
@@ -416,7 +434,13 @@ async function rafraichir() {
     enCours = false;
   }
 }
-setInterval(() => { if ($('#modale').hidden && document.visibilityState === 'visible' && !$('#v-support').contains(document.activeElement)) rafraichir(); }, 30000);
+// Rafraîchissement automatique des écrans opérationnels seulement : les formulaires (paramètres, compte, administration)
+// ne sont jamais redessinés pendant une saisie, sinon les modifications en cours seraient effacées.
+const VUES_FORMULAIRES = ['params', 'compte', 'admin'];
+setInterval(() => {
+  if ($('#modale').hidden && document.visibilityState === 'visible' && !VUES_FORMULAIRES.includes(etat.vue) && !etat.ogModifie
+    && !$('#v-support').contains(document.activeElement)) rafraichir();
+}, 30000);
 
 /* ---------------- Notifications en direct : pastille et bandeau « disponibilité à côté », sans recharger la page ---------------- */
 async function veilleNotifs() {
@@ -959,7 +983,7 @@ async function vueJournal() {
 async function panneauOg(etab) {
   const zone = $('#params-og'); if (!zone || !etab) return;
   const cfg = await api('GET', `/og/configuration?etablissement_id=${etab}`);
-  const u = etat.moi.utilisateur, admin = u.admin && ['gestionnaire', 'admin_etab'].includes(u.role);
+  const admin = cfg.modifiable === true;
   const O = (k, v) => esc(t(`ogperso.${k}`, v)); const A = window.ArrimoOgAvatar;
   const choix = { modele: ['robot', 'symbole', 'humain'], style: ['professionnel', 'moderne', 'amical'], tenue: ['blouse', 'veste', 'polo'], accessoire: ['aucun', 'lunettes', 'casque'] };
   const couleurs = ['#0E5E6F', '#159895', '#1E3A5F', '#3B4A6B', '#2F6F5E'], peaux = ['#F5D6BE', '#E0AC86', '#C68642', '#8D5524', '#5C3A21'];
@@ -975,7 +999,10 @@ async function panneauOg(etab) {
       <div class="champ"><label class="lbl" for="og-accueil">${O('accueil')}</label><input id="og-accueil" maxlength="200" value="${esc(p.accueil)}"${dis}></div></div></div>
     <h4>${O('fonctions')}</h4><div class="og-fonctions">${Object.keys(cfg.licence).map((f) => `<label class="case"><input type="checkbox" data-og-fonction="${f}"${cfg.effectif[f] ? ' checked' : ''}${admin && cfg.licence[f] ? '' : ' disabled'}> ${O(`f_${f}`)}${cfg.licence[f] ? '' : ` <span class="note">(${O('hors_licence')})</span>`}</label>`).join('')}</div>
     <div class="ligne serre"><button class="btn" type="button" id="og-tester">${O('tester')}</button>${admin ? `<button class="btn" type="button" id="og-reinit">${O('reinitialiser')}</button><button class="btn pri" type="button" id="og-enregistrer">${O('enregistrer')}</button>` : ''}</div>
-    ${admin ? '' : `<p class="note">${O('lecture_seule')}</p>`}</div>`;
+    ${admin ? `<p class="note" id="og-etat" role="status" aria-live="polite"></p>` : `<p class="note">${O('lecture_seule')}</p>`}</div>`;
+  etat.ogModifie = false;
+  const marquer = (m) => { etat.ogModifie = m; const e = $('#og-etat'); if (e) e.textContent = m ? t('ogperso.non_enregistre') : ''; };
+  if (admin) { zone.addEventListener('input', () => marquer(true)); zone.addEventListener('change', () => marquer(true)); }
   const lireAvatar = () => ({ modele: $('#og-modele').value, style: $('#og-style').value, couleur: $('#og-couleur').value, peau: $('#og-peau').value, tenue: $('#og-tenue').value, accessoire: $('#og-accessoire').value });
   const apercu = () => { $('#og-apercu').innerHTML = A ? A.svg(lireAvatar(), 96) : ''; };
   zone.querySelectorAll('select').forEach((s) => { s.onchange = apercu; }); apercu();
@@ -991,22 +1018,87 @@ async function panneauOg(etab) {
   };
   const reinit = $('#og-reinit'); if (reinit) reinit.onclick = () => {
     $('#og-nom').value = 'OG'; $('#og-modele').value = 'robot'; $('#og-style').value = 'professionnel'; $('#og-couleur').value = '#0E5E6F'; $('#og-peau').value = '#C68642';
-    $('#og-tenue').value = 'blouse'; $('#og-accessoire').value = 'aucun'; $('#og-accueil').value = ''; apercu();
+    $('#og-tenue').value = 'blouse'; $('#og-accessoire').value = 'aucun'; $('#og-accueil').value = ''; apercu(); marquer(true);
   };
   const enr = $('#og-enregistrer'); if (enr) enr.onclick = () => agir(enr, async () => {
     const fonctions = Object.fromEntries([...zone.querySelectorAll('[data-og-fonction]:not(:disabled)')].map((c) => [c.dataset.ogFonction, c.checked]));
     await api('PUT', '/og/configuration', { etablissement_id: etab, fonctions, personnalisation: { nom: $('#og-nom').value.trim(), voix: $('#og-voix').value, langue: $('#og-langue').value, accueil: $('#og-accueil').value, avatar: lireAvatar() } });
+    marquer(false);
     window.dispatchEvent(new Event('arrimo:og-configuration'));
   }, t('ogperso.enregistre'));
 }
+/* ---------------- Centre de paramètres : menu secondaire commun aux vues de gestion ---------------- */
+// Chaque entrée n'apparaît que si l'utilisateur a accès à la vue correspondante (mêmes règles que la barre principale).
+const VUES_GESTION = ['params', 'compte', 'admin', 'support', 'journal'];
+function entreesParametres() {
+  const accessible = (v) => { const b = document.querySelector(`#onglets button[data-v="${v}"]`); return b && !b.hidden; };
+  return [['compte', 'compte'], ['params:apparence', 'apparence'], ['params:etablissement', 'etablissement'], ['params:og', 'og'],
+    ['params:notifications', 'notifications'], ...(accessible('admin') ? [['admin', 'personnel']] : []),
+    ...(accessible('support') ? [['support', 'support']] : []), ...(accessible('journal') ? [['journal', 'journal']] : [])];
+}
+function menuParametres(actif) {
+  return `<nav class="params-nav" aria-label="${esc(t('params.titre'))}">${entreesParametres().map(([cible, cle]) =>
+    `<button type="button" class="btn${cible === actif ? ' actif' : ''}" data-param-nav="${cible}"${cible === actif ? ' aria-current="page"' : ''}>${esc(t(`params.nav_${cle}`))}</button>`).join('')}</nav>`;
+}
+function ouvrirParametre(cible) {
+  const [vue, section] = cible.split(':');
+  if ((vue !== etat.vue || (section && section !== etat.paramsSection)) && !quitterSansEnregistrer()) return;
+  if (section) etat.paramsSection = section;
+  allerA(vue);
+}
+/** Ajoute le menu en tête des vues de gestion, après leur rendu. */
+function poserMenuParametres() {
+  if (!VUES_GESTION.includes(etat.vue)) return;
+  const v = $(`#v-${etat.vue}`); if (!v) return;
+  if (etat.vue !== 'params' && !v.querySelector(':scope > .params-nav')) v.insertAdjacentHTML('afterbegin', menuParametres(etat.vue));
+  v.querySelectorAll('[data-param-nav]').forEach((b) => { b.onclick = () => ouvrirParametre(b.dataset.paramNav); });
+}
+
 async function vueParams() {
   const cfg = configCtx();
   const gest = etat.moi.utilisateur.role === 'gestionnaire';
   const etabs = etat.moi.etablissements.filter((e) => e.config_id === cfg.id);
   const P = (k, vars) => esc(t(`params.${k}`, vars));
-  $('#v-params').innerHTML = `<div class="entete"><div><h2>${P('titre')}</h2><p>${P('intro')}</p></div></div>
-    <div class="grille">
-      <div class="panneau-c"><h3>${P('configuration', { nom: '' })}<span class="donnee">${esc(cfg.nom)}</span></h3><dl>
+  const section = ['etablissement', 'og', 'apparence', 'notifications'].includes(etat.paramsSection) ? etat.paramsSection : 'etablissement';
+  const e0 = etabCtx(); const u = etat.moi.utilisateur;
+  let corps;
+  if (section === 'apparence') {
+    corps = `<div class="grille"><div class="panneau-c"><h3>${P('apparence_titre')}</h3><p class="note">${P('apparence_aide')}</p>
+      <fieldset class="choix-apparence"><legend class="lbl">${esc(t('apparence.choisir'))}</legend>${['clair', 'sombre', 'automatique', 'soleil'].map((m) =>
+        `<label class="case"><input type="radio" name="p-apparence" value="${m}"${(u.apparence || 'automatique') === m ? ' checked' : ''}> ${esc(t(`apparence.${m}`))}</label>`).join('')}</fieldset></div>
+      <div class="panneau-c"><h3>${esc(t('langue.choisir'))}</h3><p class="note">${P('langue_aide')}</p><select class="choix-langue" id="p-langue" aria-label="${esc(t('langue.choisir'))}"></select></div></div>`;
+  } else if (section === 'notifications') {
+    corps = `<div class="grille"><div class="panneau-c"><h3>${P('alertes_titre')}</h3><p class="note">${P('alertes_aide')}</p>
+      ${u.admin ? `<div class="ligne"><div class="champ"><label class="lbl" for="p-rayon">${P('alertes_rayon')}</label>
+        <input id="p-rayon" type="number" min="1" max="200" inputmode="numeric" value="${e0.rayon_alerte_km}"></div><button class="btn" id="b-rayon">${esc(t('general.enregistrer'))}</button></div>`
+      : `<p>${P('alertes_valeur', { km: e0.rayon_alerte_km })}</p>`}</div>
+      <div class="panneau-c"><h3>${P('notif_titre')}</h3><p class="note">${P('notif_aide')}</p><button class="btn" type="button" id="p-voir-notifs">${P('notif_ouvrir')}</button></div>
+      <div class="panneau-c"><h3>${P('seuils_titre')}</h3><p class="note">${P('seuils_aide')}</p><dl>
+        <dt>${P('seuil_occupation')}</dt><dd class="num">${esc([cfg.seuil_jaune, cfg.seuil_orange, cfg.seuil_rouge].map((x) => pct(x)).join(' · '))}</dd>
+        <dt>${P('seuil_civieres')}</dt><dd class="num">${esc([cfg.seuil_civieres_jaune, cfg.seuil_civieres_orange, cfg.seuil_civieres_rouge].map((x) => pct(x)).join(' · '))}</dd>
+        <dt>${P('seuil_relance')}</dt><dd>${P('seuil_relance_val')}</dd></dl></div></div>`;
+  } else if (section === 'og') {
+    corps = '<div id="params-og"></div>';
+  } else {
+    const st = await api('GET', `/structure?etablissement_id=${etat.ctx}`).catch(() => null);
+    const nbActifs = (l) => (l || []).filter((x) => x.actif !== false).length;
+    const coord = e0.latitude != null && e0.longitude != null ? `${Number(e0.latitude).toFixed(3)}, ${Number(e0.longitude).toFixed(3)}` : '—';
+    corps = `<h3 class="titre-section">${P('administratif')}</h3><div class="grille">
+      <div class="panneau-c"><h3>${P('identite')}</h3><dl><dt>${P('nom')}</dt><dd>${esc(e0.nom)}</dd><dt>${P('code')}</dt><dd>${esc(e0.code)}</dd>
+        <dt>${P('module')}</dt><dd>${P(e0.module_actif ? 'module_active' : 'module_desactive')}</dd></dl></div>
+      <div class="panneau-c"><h3>${P('localisation')}</h3><dl><dt>${P('ville')}</dt><dd>${esc(e0.ville || '—')}</dd><dt>${P('coordonnees')}</dt><dd class="num">${esc(coord)}</dd>
+        <dt>${P('fuseau')}</dt><dd>${esc(cfg.fuseau || '—')}</dd><dt>${P('reseau')}</dt><dd>${esc(cfg.nom)}</dd></dl></div></div>
+      <h3 class="titre-section">${P('operationnel')}</h3><div class="grille">
+      <div class="panneau-c"><h3>${P('structure_titre')}</h3>${st ? `<dl class="compteurs">${[['departements', st.departements], ['services', st.services], ['unites', st.unites], ['chambres', st.chambres], ['lits', st.lits], ['civieres', st.civieres]]
+        .map(([k, l]) => `<dt>${P(`s_${k}`)}</dt><dd class="num">${nb(nbActifs(l))}</dd>`).join('')}</dl>` : ''}
+        <p class="note">${P('structure_aide')}</p>${u.admin ? `<button class="btn" type="button" data-param-nav="admin">${P('structure_gerer')}</button>` : ''}</div>
+      <div class="panneau-c"><h3>${P('cycle')}</h3><div class="cycle">${['libre', 'reserve', 'occupe', 'nettoyage', 'libre'].map((k) => `<span class="pill f-${k}">${esc(t(`etats.${k}`))}</span>`).join('→')}</div>
+        <p class="note">${P('cycle_aide')}</p></div>
+      <div class="panneau-c"><h3>${P('etablissements')}</h3><div>${etabs.map((e) => `<div class="reglage"><div><div>${esc(e.nom)}</div><div class="note">${esc(t(`partage.${e.partage}`))} · ${P(e.module_actif ? 'module_active' : 'module_desactive')}</div></div>
+        ${gest ? `<div class="ligne"><select data-partage="${e.id}" aria-label="${P('partage')}">${options('partage', ['complet', 'agrege', 'aucun'], e.partage)}</select>
+        <button class="btn${e.module_actif ? '' : ' pri'}" data-activer="${e.id}" data-val="${!e.module_actif}">${P(e.module_actif ? 'desactiver' : 'activer')}</button></div>` : ''}</div>`).join('')}</div>
+        <p class="note">${P(gest ? 'note_gest' : 'note')}</p></div></div>
+      ${u.admin ? `<details class="panneau-c params-avance"><summary>${P('avance')}</summary><h3>${P('configuration', { nom: '' })}<span class="donnee">${esc(cfg.nom)}</span></h3><dl>
         <dt>${P('types')}</dt><dd>${cfg.types.map((ty) => esc(nomType(ty))).join(', ')}</dd>
         <dt>${P('rayon')}</dt><dd class="num">${esc(t('general.km', { n: cfg.rayon_km }))}</dd>
         <dt>${P('horizon')}</dt><dd class="num">${esc(duree(cfg.horizon_h * 60))}</dd>
@@ -1015,22 +1107,21 @@ async function vueParams() {
         <dt>${P('conge_depasse')}</dt><dd class="num">${P('conge_val', { duree: duree(cfg.marge_conge_min) })}</dd>
         <dt>${P('hors_service')}</dt><dd class="num">${P('hs_val', { duree: duree(cfg.hors_service_max_h * 60) })}</dd>
         <dt>${P('reference')}</dt><dd>${P('reference_val', { ex: cfg.reference_exemple })}</dd>
-        <dt>${P('transport')}</dt><dd>${esc(cfg.transport_libelle)}</dd></dl></div>
-      <div class="panneau-c"><h3>${P('cycle')}</h3><div class="cycle">${['libre', 'reserve', 'occupe', 'nettoyage', 'libre'].map((k) => `<span class="pill f-${k}">${esc(t(`etats.${k}`))}</span>`).join('→')}</div>
-        <p class="note">${P('cycle_aide')}</p></div>
-      <div class="panneau-c"><h3>${P('etablissements')}</h3><div>${etabs.map((e) => `<div class="reglage"><div><div>${esc(e.nom)}</div><div class="note">${esc(t(`partage.${e.partage}`))} · ${P(e.module_actif ? 'module_active' : 'module_desactive')}</div></div>
-        ${gest ? `<div class="ligne"><select data-partage="${e.id}" aria-label="${P('partage')}">${options('partage', ['complet', 'agrege', 'aucun'], e.partage)}</select>
-        <button class="btn${e.module_actif ? '' : ' pri'}" data-activer="${e.id}" data-val="${!e.module_actif}">${P(e.module_actif ? 'desactiver' : 'activer')}</button></div>` : ''}</div>`).join('')}</div>
-        <p class="note">${P(gest ? 'note_gest' : 'note')}</p></div>
-      <div class="panneau-c"><h3>${P('alertes_titre')}</h3><p class="note">${P('alertes_aide')}</p>
-        ${etat.moi.utilisateur.admin ? `<div class="ligne"><div class="champ"><label class="lbl" for="p-rayon">${P('alertes_rayon')}</label>
-          <input id="p-rayon" type="number" min="1" max="200" inputmode="numeric" value="${etabCtx().rayon_alerte_km}"></div><button class="btn" id="b-rayon">${esc(t('general.enregistrer'))}</button></div>`
-    : `<p>${P('alertes_valeur', { km: etabCtx().rayon_alerte_km })}</p>`}</div>
-    </div><div id="params-og"></div>`;
-  await panneauOg(etat.ctx);
+        <dt>${P('transport')}</dt><dd>${esc(cfg.transport_libelle)}</dd></dl></details>` : ''}`;
+  }
+  $('#v-params').innerHTML = `<div class="entete"><div><h2>${P('titre')}</h2><p>${P('intro')}</p></div></div>${menuParametres('params:' + section)}<div id="params-corps">${corps}</div>`;
+  poserMenuParametres();
+  const recharger = async () => { etat.moi = await api('GET', '/moi'); };
+  if (section === 'og') await panneauOg(etat.ctx);
+  if (section === 'apparence') {
+    const sel = $('#p-langue');
+    sel.innerHTML = LANGUES.map((l) => `<option value="${l}">${esc(dicoDe(l).langue?.court || l.toUpperCase())} · ${esc(dicoDe(l).langue?.nom || l)}</option>`).join('');
+    sel.value = langue; sel.onchange = () => changerLangue(sel.value);
+    document.querySelectorAll('input[name="p-apparence"]').forEach((r) => { r.onchange = () => choisirApparence(r.value); });
+  }
+  if (section === 'notifications') { const n = $('#p-voir-notifs'); if (n) n.onclick = () => $('#b-notif').click(); }
   const br = $('#b-rayon');
   if (br) br.onclick = () => agir(br, async () => { await api('PUT', `/admin/etablissements/${etat.ctx}/rayon-alerte`, { rayon_alerte_km: Number($('#p-rayon').value) }); await recharger(); }, t('params.alertes_ok'));
-  const recharger = async () => { etat.moi = await api('GET', '/moi'); };
   document.querySelectorAll('[data-activer]').forEach((b) => {
     b.onclick = () => agir(b, async () => { await api('PUT', `/admin/etablissements/${b.dataset.activer}`, { module_actif: b.dataset.val === 'true' }); await recharger(); }, t('params.etab_ok'));
   });
@@ -1543,12 +1634,43 @@ async function vueNsa() {
       ${tuile({ lbl: t('nsa.patients'), val: nb(n.total), note: S('sur_occupes', { n: n.occupes }) })}
       ${tuile({ lbl: t('nsa.jours_lits'), val: nb(n.jours_lits), note: S('cumul') })}
       <div class="tuile"><span class="lbl">${S('orientations')}</span><span class="note" style="font-size:13px">${Object.entries(n.par_orientation).map(([k, x]) => `${esc(t(`orientations.${k}`))} : ${x}`).join('<br>') || '—'}</span></div></div>
-    <div class="tableau"><table><thead><tr><th>${S('lit')}</th><th>${S('unite')}</th><th>${S('patient')}</th><th>${S('depuis')}</th><th>${S('orientation')}</th><th></th></tr></thead><tbody>${n.lits.map((l) => `<tr>
+    <div class="ligne filtres-nsa"><div class="champ"><label class="lbl" for="n-recherche">${S('rechercher')}</label><input id="n-recherche" type="search" autocomplete="off" value="${esc(etat.nsaRecherche || '')}"></div>
+      <div class="champ"><label class="lbl" for="n-filtre">${S('filtre_orientation')}</label><select id="n-filtre"><option value="">${S('toutes')}</option>${options('orientations', ORIENTATIONS, etat.nsaOrientation || '')}</select></div>
+      <span class="note" id="n-compte"></span></div>
+    <div class="tableau"><table><thead><tr><th>${S('lit')}</th><th>${S('unite')}</th><th>${S('patient')}</th><th>${S('depuis')}</th><th>${S('orientation')}</th><th></th></tr></thead><tbody>${[...n.lits].sort((a, b) => b.jours - a.jours).map((l) => `<tr data-nsa-ligne="${esc(`${l.code} ${l.unite} ${l.patient_ref}`.toLowerCase())}" data-nsa-orient="${esc(l.nsa_orientation || '')}">
       <td class="num">${esc(l.code)}</td><td class="donnee">${esc(l.unite)}</td><td class="num">${esc(l.patient_ref)}</td><td class="num">${S('jours', { n: l.jours })}${l.jours >= 30 ? ' <span class="pt pt-attention" aria-hidden="true"></span>' : ''}</td>
       <td><select data-orient="${l.id}" aria-label="${S('orientation')}">${options('orientations', ORIENTATIONS, l.nsa_orientation)}</select></td>
-      <td><button class="btn" data-retirer="${l.id}">${S('retirer')}</button></td></tr>`).join('') || `<tr><td colspan="6" class="muted">${S('aucun')}</td></tr>`}</tbody></table></div>`;
+      <td><div class="ligne serre"><button class="btn" type="button" data-nsa-detail="${l.id}">${S('details')}</button><button class="btn" data-retirer="${l.id}">${S('retirer')}</button></div></td></tr>`).join('') || `<tr><td colspan="6" class="muted">${S('aucun')}</td></tr>`}</tbody></table></div>`;
+  const filtrer = () => {
+    etat.nsaRecherche = $('#n-recherche').value; etat.nsaOrientation = $('#n-filtre').value;
+    const q = etat.nsaRecherche.trim().toLowerCase(); let vus = 0;
+    v.querySelectorAll('[data-nsa-ligne]').forEach((tr) => {
+      const ok = (!q || tr.dataset.nsaLigne.includes(q)) && (!etat.nsaOrientation || tr.dataset.nsaOrient === etat.nsaOrientation);
+      tr.hidden = !ok; if (ok) vus += 1;
+    });
+    $('#n-compte').textContent = t('nsa.affiches', { n: vus, total: n.lits.length });
+  };
+  v.querySelectorAll('[data-nsa-detail]').forEach((b) => { b.onclick = () => detailNsa(Number(b.dataset.nsaDetail)); });
+  $('#n-recherche').oninput = filtrer; $('#n-filtre').onchange = filtrer; filtrer();
   v.querySelectorAll('[data-orient]').forEach((sel) => { sel.onchange = () => agir(sel, () => api('PUT', `/lits/${sel.dataset.orient}/nsa`, { orientation: sel.value }), t('nsa.orient_ok')); });
   v.querySelectorAll('[data-retirer]').forEach((b) => { b.onclick = () => agir(b, () => api('DELETE', `/lits/${b.dataset.retirer}/nsa`), t('nsa.retire_ok')); });
+}
+
+/** Panneau de détails d'un lit ALC : informations existantes et événements du journal depuis le début du séjour. */
+async function detailNsa(id) {
+  const S = (k, vars) => esc(t(`nsa.${k}`, vars));
+  let d;
+  try { d = await api('GET', `/nsa/lits/${id}`); } catch (e) { toast(e.message, true); return; }
+  const evts = d.evenements.map((e) => `<li><span class="num">${esc(heure(e.date))}</span> · ${esc(e.action)}${e.nouvel_etat ? ` → ${esc(t(`etats.${e.nouvel_etat}`))}` : ''}${
+    e.utilisateur ? ` <span class="note">(${esc(e.utilisateur)})</span>` : ''}${e.refuse ? ` <span class="badge">${S('refuse')}</span>` : ''}</li>`).join('');
+  modale(t('nsa.detail_titre', { lit: d.code }), `<dl class="detail-nsa">
+      <dt>${S('patient')}</dt><dd class="num">${esc(d.patient_ref || '—')}</dd>
+      <dt>${S('unite')}</dt><dd>${esc(d.unite)}</dd>
+      <dt>${S('orientation')}</dt><dd>${esc(t(`orientations.${d.nsa_orientation}`))}</dd>
+      <dt>${S('depuis_le')}</dt><dd class="num">${esc(heure(d.nsa_depuis))} · ${S('jours', { n: d.jours })}</dd>
+      <dt>${S('statut')}</dt><dd>${S(d.jours >= 30 ? 'statut_long' : 'statut_en_cours')}</dd></dl>
+    <h4>${S('evenements')}</h4>${evts ? `<ul class="evenements-nsa">${evts}</ul>` : `<p class="muted">${S('aucun_evenement')}</p>`}`,
+  [{ label: t('general.fermer'), pri: true }]);
 }
 
 /* ---------------- Tuiles d'indicateurs ---------------- */
@@ -1617,12 +1739,21 @@ async function vueIndicateurs() {
       note: I('duree_periode_note', { n: u.periode.sejours, h24: u.periode.sejours_24h }),
       tendance: tendance(u.periode.duree_moy_h == null ? null : u.periode.duree_moy_h * 60, p.civiere_h == null ? null : p.civiere_h * 60, duree, 1) }),
   ] : null;
+  // Sections du tableau de bord : les mêmes tuiles et les mêmes calculs, regroupés par usage.
+  const categories = [['ensemble', [capacite[0], capacite[1], capacite[3], capacite[2], capacite[6]]],
+    ['flux', [fluidite[0], fluidite[4], fluidite[5], fluidite[6], fluidite[7], capacite[4], capacite[5]]],
+    ['performance', [fluidite[1], fluidite[2], fluidite[3]]], ...(urgence ? [['urgence', urgence]] : [])];
+  const cat = categories.some(([k]) => k === etat.indicCat) ? etat.indicCat : 'tout';
+  const horsCible = categories.flatMap(([, l]) => l).filter((h) => h.includes('class="pt pt-')).length;
   v.innerHTML = `<div class="entete"><div><h2>${I('titre', { etab: etabCtx().nom })}</h2><p>${I('intro', { n: j })}</p></div>
     <div class="ligne"><select id="i-jours" aria-label="${I('periode')}">${[7, 30, 90].map((x) => `<option value="${x}"${x === etat.jours ? ' selected' : ''}>${I('jours', { n: x })}</option>`).join('')}</select>
       <button class="btn" id="b-csv">${icone('download')}${I('exporter')}</button></div></div>
-    <h3 class="titre-section">${I('capacite')}</h3><div class="tuiles">${capacite.join('')}</div>
-    <h3 class="titre-section">${I('fluidite')}</h3><div class="tuiles">${fluidite.join('')}</div>
-    ${urgence ? `<h3 class="titre-section">${I('urgence')}</h3><div class="tuiles">${urgence.join('')}</div>` : ''}`;
+    <div class="ligne filtres-indic"><div class="chips" role="group" aria-label="${I('categorie')}">${['tout', ...categories.map(([k]) => k)].map((k) =>
+      `<button class="chip" type="button" data-icat="${k}" aria-pressed="${cat === k}">${I(k === 'tout' ? 'toutes' : k)}</button>`).join('')}</div>
+      <span class="note" id="i-hors-cible">${I(horsCible ? 'hors_cible' : 'hors_cible_aucun', { n: horsCible })}</span></div>
+    ${categories.filter(([k]) => cat === 'tout' || cat === k).map(([k, l]) => `<h3 class="titre-section">${I(k)}</h3><p class="note section-aide">${I(`${k}_aide`)}</p><div class="tuiles">${l.join('')}</div>`).join('')}
+    ${cat === 'tout' || cat === 'performance' ? graphiquesIndicateurs(i) : ''}`;
+  v.querySelectorAll('[data-icat]').forEach((b) => { b.onclick = () => { etat.indicCat = b.dataset.icat; rafraichir(); }; });
   $('#i-jours').onchange = (ev) => { etat.jours = Number(ev.target.value); rafraichir(); };
   $('#b-csv').onclick = async () => {
     try {
@@ -1637,6 +1768,36 @@ async function vueIndicateurs() {
   };
 }
 
+/** Graphiques (données réelles, lecture seule) : disponibilité actuelle par unité et transferts par jour sur la période. */
+function graphiquesIndicateurs(i) {
+  const I = (k, vars) => esc(t(`indicateurs.${k}`, vars));
+  const unites = (i.par_unite || []).filter((u) => u.dotes > 0);
+  const barresUnites = unites.map((u) => {
+    const autres = Math.max(u.dotes - u.libres - u.occupes, 0);
+    const lib = t('indicateurs.g_unite_val', { unite: u.unite, libres: u.libres, occupes: u.occupes, autres, dotes: u.dotes });
+    const seg = (n, c) => (n ? `<span class="g-seg ${c}" style="flex:${n}"></span>` : '');
+    return `<div class="g-ligne" title="${esc(lib)}"><span class="g-lbl donnee">${esc(u.unite)}</span><span class="g-barre" role="img" aria-label="${esc(lib)}">${seg(u.libres, 'f-libre')}${seg(u.occupes, 'f-occupe')}${seg(autres, 'g-autre')}</span>
+      <span class="g-val num">${esc(t('indicateurs.g_libres_sur', { n: u.libres, total: u.dotes }))}</span></div>`;
+  }).join('');
+  const jours = i.transferts_par_jour || [];
+  const max = Math.max(1, ...jours.map((d) => d.total));
+  const total = jours.reduce((a, d) => a + d.total, 0);
+  const jourLib = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString(locale(), { day: '2-digit', month: 'short' });
+  const colonnes = jours.map((d) => {
+    const lib = t('indicateurs.g_jour_val', { jour: jourLib(d.jour), n: d.total, refuses: d.refuses });
+    return `<span class="g-col" title="${esc(lib)}" aria-label="${esc(lib)}" role="img"><span class="g-pile" style="height:${(d.total / max) * 100}%">${
+      d.refuses ? `<span class="g-seg f-refuse" style="flex:${d.refuses}"></span>` : ''}${d.total - d.refuses ? `<span class="g-seg g-transfert" style="flex:${d.total - d.refuses}"></span>` : ''}</span></span>`;
+  }).join('');
+  return `<h3 class="titre-section">${I('graphiques')}</h3><div class="grille graphiques">
+    <figure class="panneau-c graphique"><figcaption><strong>${I('g_unites')}</strong><span class="note">${I('g_unites_aide')}</span></figcaption>
+      <div class="g-legende"><span><i class="f-libre"></i>${I('g_libres')}</span><span><i class="f-occupe"></i>${I('g_occupes')}</span><span><i class="g-autre"></i>${I('g_autres')}</span></div>
+      ${barresUnites || `<p class="muted">${I('g_aucune_unite')}</p>`}</figure>
+    <figure class="panneau-c graphique"><figcaption><strong>${I('g_transferts', { n: i.periode_jours })}</strong><span class="note">${I('g_transferts_aide', { n: total })}</span></figcaption>
+      <div class="g-legende"><span><i class="g-transfert"></i>${I('g_non_refuses')}</span><span><i class="f-refuse"></i>${I('g_refuses')}</span></div>
+      ${total ? `<div class="g-colonnes" data-max="${max}">${colonnes}</div><div class="g-axe note"><span>${esc(jourLib(jours[0].jour))}</span><span>${I('g_max', { n: max })}</span><span>${esc(jourLib(jours[jours.length - 1].jour))}</span></div>`
+        : `<p class="muted">${I('g_aucun_transfert')}</p>`}</figure></div>`;
+}
+
 /* ---------------- Mon compte ---------------- */
 async function vueCompte() {
   const v = $('#v-compte');
@@ -1644,6 +1805,9 @@ async function vueCompte() {
   const K = (k, vars) => esc(t(`compte.${k}`, vars));
   v.innerHTML = `<div class="entete"><div><h2>${K('titre')}</h2><p><span class="donnee">${esc(u.nom)}</span> · ${esc(u.email)} · ${K('role', { role: t(`roles_texte.${u.role}`) })}</p></div></div>
     <div class="grille">
+      <div class="panneau-c"><h3>${K('profil')}</h3><dl><dt>${K('profil_nom')}</dt><dd class="donnee">${esc(u.nom)}</dd><dt>${K('profil_courriel')}</dt><dd>${esc(u.email)}</dd>
+        <dt>${K('profil_role')}</dt><dd>${esc(t(`roles.${u.role}`))}</dd><dt>${K('profil_etabs')}</dt><dd>${etat.moi.etablissements.map((e) => esc(e.nom)).join('<br>') || '—'}</dd></dl>
+        <p class="note">${K('profil_aide')}</p><button class="btn" type="button" id="b-compte-deconnexion">${icone('log-out')}${K('deconnexion')}</button></div>
       <form class="panneau-c" id="f-mdp"><h3>${K('changer_mdp')}</h3>
         <div class="champ"><label class="lbl" for="m-actuel">${K('actuel')}</label><input id="m-actuel" type="password" autocomplete="current-password"></div>
         <div class="champ"><label class="lbl" for="m-nouveau">${K('nouveau')}</label><input id="m-nouveau" type="password" autocomplete="new-password"></div>
@@ -1659,6 +1823,7 @@ async function vueCompte() {
       </div>
       <div class="panneau-c"><h3>${K('langue')}</h3><select id="langue-compte" aria-label="${K('langue')}">${LANGUES.map((l) => `<option value="${l}"${l === langue ? ' selected' : ''}>${esc(dicoDe(l).langue.nom)}</option>`).join('')}</select></div></div>`;
   $('#langue-compte').onchange = (e) => changerLangue(e.target.value);
+  $('#b-compte-deconnexion').onclick = () => $('#b-deconnexion').click();
   $('#f-mdp').onsubmit = (e) => {
     e.preventDefault();
     if ($('#m-nouveau').value !== $('#m-confirme').value) { toast(t('general.deux_mdp_differents'), true); return; }
@@ -1726,6 +1891,21 @@ function modifierRessourceStructure(type, x, contexte = {}) {
       }catch(e){toast(e.message,true);return false;}
     }}]);
 }
+/** Accès effectifs par rôle, en langage simple. Reflète les règles appliquées par le serveur et la barre de navigation ;
+ *  les modules désactivés pour un établissement restent masqués pour tous. */
+function matriceAcces() {
+  const D = (k) => esc(t(`admin.${k}`));
+  const roles = ['coordonnateur', 'entretien', 'admin_etab', 'gestionnaire'];
+  const lignes = [
+    ['acces_operations', ['oui', 'non', 'oui', 'oui']], ['acces_nettoyage', ['oui', 'oui', 'oui', 'oui']],
+    ['acces_pilotage', ['oui', 'non', 'oui', 'oui']], ['acces_preferences', ['oui', 'oui', 'oui', 'oui']],
+    ['acces_og', ['demo', 'non', 'oui_2fa', 'oui_2fa']], ['acces_comptes', ['non', 'non', 'ses_etabs', 'reseau']],
+    ['acces_config', ['non', 'non', 'non', 'oui_2fa']],
+  ];
+  return `<div class="tableau matrice-acces"><table><caption class="note">${D('acces_titre')}</caption><thead><tr><th scope="col">${D('acces_fonction')}</th>${roles.map((r) => `<th scope="col">${esc(t(`roles.${r}`))}</th>`).join('')}</tr></thead>
+    <tbody>${lignes.map(([k, v]) => `<tr><th scope="row">${D(k)}</th>${v.map((x) => `<td data-acces="${x}">${x === 'non' ? `<span class="muted">${D('acces_non')}</span>` : D(`acces_${x}`)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+
 async function vueAdmin() {
   const v = $('#v-admin');
   const u = etat.moi.utilisateur;
@@ -1758,13 +1938,30 @@ async function vueAdmin() {
         <div class="champ"><span class="lbl">${D('etablissements')}</span><div class="cases">${casesEtab([etat.ctx])}</div></div>
         <button class="btn pri" id="b-creer-compte">${D('creer')}</button>
         <p class="note">${D('creer_aide')}</p></div>
-      <div class="tableau"><table><thead><tr><th>${D('th_nom')}</th><th>${D('th_role')}</th><th>${D('th_etabs')}</th><th>${D('th_securite')}</th><th>${D('th_connexion')}</th><th></th></tr></thead><tbody>${comptes.map((c) => `<tr>
+      <div><details class="panneau-c roles-aide"><summary>${D('roles_titre')}</summary><dl>${['coordonnateur', 'entretien', 'admin_etab', 'gestionnaire'].map((k) =>
+        `<dt>${esc(t(`roles.${k}`))}</dt><dd>${D(`role_aide_${k}`)}</dd>`).join('')}</dl>${matriceAcces()}<p class="note">${D('roles_serveur')}</p></details>
+      <div class="ligne filtres-acl"><div class="champ"><label class="lbl" for="a-recherche">${D('rechercher')}</label><input id="a-recherche" type="search" autocomplete="off" value="${esc(etat.aclRecherche || '')}"></div>
+        <div class="champ"><label class="lbl" for="a-role">${D('filtre_role')}</label><select id="a-role"><option value="">${D('tous_roles')}</option>${options('roles', ['coordonnateur', 'entretien', 'admin_etab', 'gestionnaire'], etat.aclRole || '')}</select></div>
+        <div class="champ"><label class="lbl" for="a-statut">${D('filtre_statut')}</label><select id="a-statut">${['', 'actifs', 'desactives'].map((k) => `<option value="${k}"${(etat.aclStatut || '') === k ? ' selected' : ''}>${D(`statut_${k || 'tous'}`)}</option>`).join('')}</select></div>
+        <span class="note" id="a-compte"></span></div>
+      <div class="tableau"><table><thead><tr><th>${D('th_nom')}</th><th>${D('th_role')}</th><th>${D('th_etabs')}</th><th>${D('th_securite')}</th><th>${D('th_connexion')}</th><th></th></tr></thead><tbody>${[...comptes].sort((a, b) => a.role.localeCompare(b.role) || a.nom.localeCompare(b.nom)).map((c) => `<tr data-acl-ligne="${esc(`${c.nom} ${c.email}`.toLowerCase())}" data-acl-role="${c.role}" data-acl-actif="${c.actif ? '1' : '0'}">
         <td><span class="donnee">${esc(c.nom)}</span><div class="note">${esc(c.email)}</div></td><td>${esc(t(`roles.${c.role}`))}${c.actif ? '' : ` <span class="badge">${D('desactive')}</span>`}</td>
         <td class="note">${c.etablissements.map((e) => esc(nomEtab(e))).join('<br>') || D('tout_le_reseau')}</td>
         <td class="note">${D(c.totp_actif ? 'double_ok' : 'mdp_seul')}${c.mdp_temporaire ? `<br>${D('mdp_temp')}` : ''}</td>
         <td class="note">${c.derniere_connexion ? heure(c.derniere_connexion) : esc(t('general.jamais'))}</td>
         <td><div class="ligne" style="gap:6px">${c.id === u.id ? '' : `<button class="btn" data-reinit="${c.id}" data-nom="${esc(c.nom)}">${D('reinitialiser')}</button>
-          <button class="btn${c.actif ? ' dan' : ''}" data-actif="${c.id}" data-val="${!c.actif}">${D(c.actif ? 'desactiver' : 'reactiver')}</button>`}</div></td></tr>`).join('')}</tbody></table></div></div>`;
+          <button class="btn${c.actif ? ' dan' : ''}" data-actif="${c.id}" data-val="${!c.actif}">${D(c.actif ? 'desactiver' : 'reactiver')}</button>`}</div></td></tr>`).join('')}</tbody></table></div></div></div>`;
+    const filtrerComptes = () => {
+      etat.aclRecherche = $('#a-recherche').value; etat.aclRole = $('#a-role').value; etat.aclStatut = $('#a-statut').value;
+      const q = etat.aclRecherche.trim().toLowerCase(); let vus = 0;
+      corps.querySelectorAll('[data-acl-ligne]').forEach((tr) => {
+        const ok = (!q || tr.dataset.aclLigne.includes(q)) && (!etat.aclRole || tr.dataset.aclRole === etat.aclRole)
+          && (!etat.aclStatut || (etat.aclStatut === 'actifs') === (tr.dataset.aclActif === '1'));
+        tr.hidden = !ok; if (ok) vus += 1;
+      });
+      $('#a-compte').textContent = t('admin.affiches', { n: vus, total: comptes.length });
+    };
+    $('#a-recherche').oninput = filtrerComptes; $('#a-role').onchange = filtrerComptes; $('#a-statut').onchange = filtrerComptes; filtrerComptes();
     $('#b-creer-compte').onclick = (ev) => {
       const choisis = [...corps.querySelectorAll('[data-etabu]:checked')].map((c) => Number(c.dataset.etabu));
       agir(ev.target, async () => {

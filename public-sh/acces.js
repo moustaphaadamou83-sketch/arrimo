@@ -63,7 +63,7 @@ async function vueParametres(v){
       <p>Fuseau de référence : ${esc(p.general.fuseau)}</p><div><button class="btn pri" type="submit">Enregistrer les paramètres</button></div></form>
     <section class="panneau-c"><h3>Sécurité et courriels</h3><p>Double authentification obligatoire · Session : ${esc(p.securite.session_heures)} heures · Lien : ${esc(p.securite.recuperation_minutes)} minutes</p>
     <p><span>Transport courriel</span> : <span>${oui(p.courriels.transport_configure)}</span> · <span>Récupération</span> : <span>${p.courriels.recuperation_disponible?'Disponible':'Indisponible'}</span></p><p>Documents : <span>${oui(p.documents.stockage_configure)}</span></p></section>
-    <section class="panneau-c"><h3>Apparence</h3><p>Mode actuel : <span>${esc({clair:'Clair',sombre:'Sombre',automatique:'Automatique (système)',soleil:'Selon le soleil'}[etat.moi.utilisateur.apparence||'automatique'])}</span></p><button class="btn" id="param-apparence">Modifier mon apparence</button></section>
+    <section class="panneau-c"><h3>Apparence</h3><p class="note">Appliquée tout de suite et enregistrée sur votre compte.</p><fieldset class="choix-apparence"><legend class="lbl">Mode d’affichage</legend>${[['clair','Clair'],['sombre','Sombre'],['automatique','Automatique (système)'],['soleil','Selon le soleil']].map(([c,l])=>`<label class="case"><input type="radio" name="pa-apparence" value="${c}"${(etat.moi.utilisateur.apparence||'automatique')===c?' checked':''}> ${l}</label>`).join('')}</fieldset></section>
     <section class="panneau-c"><h3>Utilisateurs et accès</h3><button class="btn" id="param-utilisateurs">Gérer les utilisateurs et leurs sessions</button></section>
     <section class="panneau-c"><h3>Rôles personnalisés</h3><button class="btn" id="param-roles">Configurer les permissions</button></section>
     <p class="note">${esc(p.gestion)}</p>`;
@@ -71,7 +71,7 @@ async function vueParametres(v){
     try{let n=0;for(const inp of v.querySelectorAll('[data-parametre]')){const x=p.modifiables[inp.dataset.parametre];if(String(x.valeur??'')===inp.value.trim())continue;
       await api('PUT',`/parametres/${inp.dataset.parametre}`,{valeur:inp.value.trim()});n+=1;}
       toast(n?'Paramètres enregistrés.':'Aucune modification.');await afficher();}catch(err){toast(err.message,true);}finally{b.disabled=false;}};
-  $('#param-apparence').onclick=()=>{etat.vue='compte';afficher();};
+  v.querySelectorAll('input[name=pa-apparence]').forEach(r=>{r.onchange=()=>choisirApparence(r.value);});
   $('#param-utilisateurs').onclick=()=>{etat.vue='equipe';afficher();};
   $('#param-roles').onclick=()=>gererRolesPersonnalises();
 }

@@ -92,6 +92,7 @@
         <label class="ctx" for="ctx"><span data-i18n="barre.etablissement">Établissement</span>
           <select id="ctx"></select>
         </label>
+        <button class="btn icone barre-btn" id="b-theme" type="button" data-i18n-attr="aria-label:apparence.basculer;title:apparence.basculer"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-sun-moon"/></svg></button>
         <button class="btn icone barre-btn" id="b-notif" aria-label="Notifications" title="Notifications" data-i18n-attr="aria-label:barre.notifications;title:barre.notifications">
           <svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-bell"/></svg>
           <span id="n-notif" class="pastille" hidden>0</span>
@@ -117,20 +118,23 @@
     </div>
     <nav class="onglets" id="onglets" role="tablist">
       <button role="tab" data-v="copilote" aria-selected="true"><img class="og-nav-robot" src="og-robot.svg" width="22" height="22" alt=""><span data-i18n="onglets.copilote"></span></button>
-      <button role="tab" data-v="reseau" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-network"/></svg><span data-i18n="onglets.reseau"></span></button>
-      <button role="tab" data-v="national" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-map-pin"/></svg><span data-i18n="onglets.national"></span></button>
+      <span class="onglets-groupe" aria-hidden="true" data-i18n="nav.operations">Opérations</span>
       <button role="tab" data-v="lits" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-bed-double"/></svg><span data-i18n="onglets.lits"></span></button>
       <button role="tab" data-v="urgence" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-siren"/></svg><span data-i18n="onglets.urgence"></span></button>
       <button role="tab" data-v="admissions" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-clipboard-list"/></svg><span data-i18n="onglets.admissions"></span> <span class="n" id="n-adm">0</span></button>
       <button role="tab" data-v="transferts" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-ambulance"/></svg><span data-i18n="onglets.transferts"></span> <span class="n" id="n-tr">0</span></button>
       <button role="tab" data-v="nettoyage" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-spray-can"/></svg><span data-i18n="onglets.nettoyage"></span> <span class="n" id="n-net">0</span></button>
       <button role="tab" data-v="vigilance" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-clock"/></svg><span data-i18n="onglets.vigilance"></span> <span class="n" id="n-vig" hidden>0</span></button>
+      <span class="onglets-groupe" aria-hidden="true" data-i18n="nav.pilotage">Pilotage</span>
       <button role="tab" data-v="nsa" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-hourglass"/></svg><span data-i18n="onglets.nsa"></span></button>
       <button role="tab" data-v="indicateurs" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-chart-column"/></svg><span data-i18n="onglets.indicateurs"></span></button>
-      <button role="tab" data-v="journal" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-history"/></svg><span data-i18n="onglets.journal"></span></button>
-      <button role="tab" data-v="support" aria-selected="false"><span data-i18n="support.titre"></span></button>
+      <button role="tab" data-v="reseau" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-network"/></svg><span data-i18n="onglets.reseau"></span></button>
+      <button role="tab" data-v="national" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-map-pin"/></svg><span data-i18n="onglets.national"></span></button>
+      <span class="onglets-groupe" aria-hidden="true" data-i18n="nav.gestion">Gestion</span>
       <button role="tab" data-v="params" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-settings"/></svg><span data-i18n="onglets.params"></span></button>
       <button role="tab" data-v="admin" aria-selected="false" hidden><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-shield-check"/></svg><span data-i18n="onglets.admin"></span></button>
+      <button role="tab" class="hors-menu" data-v="journal" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-history"/></svg><span data-i18n="onglets.journal"></span></button>
+      <button role="tab" class="hors-menu" data-v="support" aria-selected="false"><span data-i18n="support.titre"></span></button>
     </nav>
   </header>
   <div id="bandeau" class="bandeau" hidden></div>

@@ -72,12 +72,17 @@ function validerLicence(l) {
 const { exigerEtablissement } = require('./auth');
 const { transaction } = require('./db');
 const { journaliser } = require('./regles');
-async function configuration(pool, u, etab) { exigerEtablissement(u, etab); return lire(pool, etab); }
+/**
+ * Qui règle OG : l'administrateur de l'établissement. En démonstration (données fictives), le coordonnateur
+ * de chaque hôpital fictif l'est aussi, pour que chaque démo A, B, C règle son propre assistant.
+ */
+const peutConfigurer = (u) => (u.admin && ['gestionnaire', 'admin_etab'].includes(u.role)) || (require('./environnement').estDemo() && u.role === 'coordonnateur');
+async function configuration(pool, u, etab) { exigerEtablissement(u, etab); return { ...(await lire(pool, etab)), modifiable: peutConfigurer(u) }; }
 /** Réglages de l'administrateur hospitalier (double authentification exigée, comme les autres réglages sensibles). */
 async function configurer(pool, u, etab, b) {
   exigerEtablissement(u, etab);
-  if (!u.admin || !['gestionnaire', 'admin_etab'].includes(u.role)) throw new ErreurHttp(403, 'reserve_admin');
-  if (process.env.ARRIMO_2FA_ADMIN !== '0' && !u.totp_actif) throw new ErreurHttp(403, 'admin_exige_2fa');
+  if (!peutConfigurer(u)) throw new ErreurHttp(403, 'reserve_admin');
+  if (!require('./environnement').estDemo() && process.env.ARRIMO_2FA_ADMIN !== '0' && !u.totp_actif) throw new ErreurHttp(403, 'admin_exige_2fa');
   return transaction(pool, async (c) => {
     await c.query('INSERT INTO og_configurations (etablissement_id) VALUES ($1) ON CONFLICT DO NOTHING', [etab]);
     const ligne = (await c.query('SELECT * FROM og_configurations WHERE etablissement_id=$1 FOR UPDATE', [etab])).rows[0];
@@ -86,7 +91,7 @@ async function configurer(pool, u, etab, b) {
     const reglages = validerReglages(licence, b);
     await c.query('UPDATE og_configurations SET reglages=$2, modifie_par=$3, modifie_le=now() WHERE etablissement_id=$1', [etab, JSON.stringify(reglages), u.id]);
     await journaliser(c, { etablissementId: etab, utilisateurId: u.id, action: 'Configuration OG modifiée', detail: JSON.stringify({ nom: reglages.personnalisation.nom, fonctions: reglages.fonctions }) });
-    return lire(c, etab);
+    return { ...(await lire(c, etab)), modifiable: true };
   });
 }
 /** Licence transmise par SH (clé SH) ; les réglages existants de l'établissement sont conservés. */

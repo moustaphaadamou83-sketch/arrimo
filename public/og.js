@@ -227,9 +227,7 @@
     try { configurationOg = await api('GET', `/og/configuration?etablissement_id=${etabId}`); } catch { return; }
     if (etabId !== etat.ctx) return;
     const p = configurationOg.personnalisation, e = configurationOg.effectif;
-    const titre = document.querySelector('#og-title'); if (titre) titre.textContent = p.nom;
-    const image = document.querySelector('.og-entete img, .og-entete .og-avatar');
-    if (image && window.ArrimoOgAvatar && e.personnalisation) { const span = document.createElement('span'); span.className = 'og-avatar'; span.innerHTML = window.ArrimoOgAvatar.svg(p.avatar, 55); image.replaceWith(span); }
+    appliquerIdentite(p, e);
     const vocal = document.querySelector('#og-vocal'); if (vocal && !e.vocal) vocal.hidden = true;
     if (!e.texte) { champ.disabled = true; envoyer.disabled = true; message(t('ogperso.desactive')); return; }
     if (p.accueil) message(p.accueil);
@@ -241,7 +239,17 @@
     action(T('Consulter les alertes', 'View alerts'), () => question(T('Quelles alertes sont en cours ?', 'Which alerts are active?')));
     if (e.rapports) action(T('Générer un rapport', 'Generate a report'), () => naviguer('indicateurs'));
   }
-  window.addEventListener('arrimo:og-configuration', () => { configurationOg = null; });
+  /** Nom, avatar et voix d'OG pour cet établissement : appliqués à l'ouverture et dès un enregistrement. */
+  function appliquerIdentite(p, e) {
+    const titre = document.querySelector('#og-title'); if (titre) titre.textContent = p.nom;
+    const image = document.querySelector('.og-entete img, .og-entete .og-avatar');
+    if (image && window.ArrimoOgAvatar && e.personnalisation) { const span = document.createElement('span'); span.className = 'og-avatar'; span.innerHTML = window.ArrimoOgAvatar.svg(p.avatar, 55); image.replaceWith(span); }
+    window.ArrimoOgVoix = p.voix;
+  }
+  window.addEventListener('arrimo:og-configuration', async () => {
+    configurationOg = null;
+    try { const c = await api('GET', `/og/configuration?etablissement_id=${etat.ctx}`); configurationOg = c; appliquerIdentite(c.personnalisation, c.effectif); } catch { /* réappliqué à la prochaine ouverture */ }
+  });
   ouvrir.onclick = () => {
     if (!etat.token || !etat.moi || etat.moi.utilisateur.mdp_temporaire) return;
     reinitialiser(false);

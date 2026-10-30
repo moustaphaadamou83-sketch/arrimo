@@ -49,7 +49,10 @@
       interrompre();const revision=lecture;
       const voix=synthese.getVoices().filter(v=>v.lang?.slice(0,2)===langueReponse.slice(0,2));
       if(!voix.length){etat('voix_indisponible');return false;}
-      const voixChoisie=voix.find(v=>v.localService)||voix[0];
+      // Voix choisie dans Paramètres → OG : les navigateurs n'exposent pas le genre, le nom de la voix sert d'indice.
+      const genre=(typeof window!=='undefined'&&window.ArrimoOgVoix)||null;
+      const motif=genre==='masculine'?/male|homme|thomas|daniel|paul|nicolas|alex|antoine|jean/i:genre==='feminine'?/female|femme|amelie|amélie|marie|julie|samantha|karen|hortense|audrey|aurelie/i:null;
+      const voixChoisie=(motif&&(voix.find(v=>motif.test(v.name)&&v.localService)||voix.find(v=>motif.test(v.name))))||voix.find(v=>v.localService)||voix[0];
       const morceaux=String(texte).match(/.{1,240}(?:\s|$)|\S{1,240}/g)||[];
       morceaux.forEach((texte,i)=>{
         const u=new Utterance(texte);u.lang=langueReponse;u.voice=voixChoisie;

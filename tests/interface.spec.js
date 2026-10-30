@@ -87,7 +87,12 @@ async function menu(page, element) {
 
 async function onglet(page, vue) {
   if (process.env.SH_RECETTE_FILTRE) page.on('pageerror', (e) => console.log('ERREUR PAGE', vue, String(e).slice(0, 300)));
-  await page.click(`#onglets button[data-v="${vue}"]`);
+  // Journal et Support client ne sont plus dans la barre principale : on y va par Paramètres, comme un utilisateur.
+  if (await page.locator(`#onglets button[data-v="${vue}"].hors-menu`).count()) {
+    await page.click('#onglets button[data-v="params"]');
+    await page.waitForSelector('#v-params [data-param-nav]');
+    await page.click(`#v-params [data-param-nav="${vue}"]`);
+  } else await page.click(`#onglets button[data-v="${vue}"]`);
   // 60 s : sur un serveur partagé chargé, certaines vues dépassent ponctuellement 30 s (aucune erreur, rendu seulement plus lent).
   await page.waitForFunction((v) => !document.querySelector(`#v-${v}`).hidden && document.querySelector(`#v-${v}`).children.length > 0, vue, { timeout: 60000 }).catch(async (e) => {
     if (process.env.SH_RECETTE_FILTRE) console.log('DIAGNOSTIC', vue, JSON.stringify(await page.evaluate((v) => ({ cache: document.querySelector(`#v-${v}`).hidden, enfants: document.querySelector(`#v-${v}`).children.length,
@@ -319,6 +324,19 @@ for (const L of LARGEURS) {
     await onglet(x, 'nsa');
     assert.match(await x.textContent('#v-nsa'), /cible : 8\s%/);
     await verifier(x, L, '09-nsa');
+    // ALC : recherche et filtre par orientation, sans rechargement
+    const lignesNsa = await x.locator('#v-nsa [data-nsa-ligne]').count();
+    assert.ok(lignesNsa > 0);
+    await x.fill('#n-recherche', 'zzz-introuvable');
+    assert.strictEqual(await x.locator('#v-nsa [data-nsa-ligne]:not([hidden])').count(), 0);
+    assert.match(await x.textContent('#n-compte'), new RegExp(`0 sur ${lignesNsa}`));
+    await x.fill('#n-recherche', '');
+    assert.strictEqual(await x.locator('#v-nsa [data-nsa-ligne]:not([hidden])').count(), lignesNsa);
+    // Détails d'un lit ALC : informations et événements liés
+    await x.locator('#v-nsa [data-nsa-detail]').first().click();
+    await x.waitForSelector('#modale:not([hidden]) .detail-nsa');
+    await verifier(x, L, '09b-nsa-detail');
+    await x.keyboard.press('Escape');
     await onglet(x, 'lits');
     assert.match(await x.textContent('#v-lits'), /Manque de personnel/);
     await verifier(x, L, '10-lits');
@@ -332,6 +350,15 @@ for (const L of LARGEURS) {
     const [telechargement] = await Promise.all([x.waitForEvent('download'), x.click('#b-csv')]);
     assert.match(telechargement.suggestedFilename(), /\.csv$/);
     await verifier(x, L, '12-indicateurs');
+    // Catégories : une seule section affichée, puis toutes
+    // Graphiques réels : disponibilité par unité et transferts par jour
+    assert.ok(await x.locator('#v-indicateurs .g-ligne').count() > 0, 'disponibilité par unité');
+    assert.ok(await x.locator('#v-indicateurs .graphique').count() === 2);
+    await x.click('[data-icat="ensemble"]'); await x.waitForSelector('[data-icat="ensemble"][aria-pressed="true"]');
+    assert.strictEqual(await x.locator('#v-indicateurs .titre-section').count(), 1);
+    assert.strictEqual(await x.locator('#v-indicateurs .graphique').count(), 0);
+    await x.click('[data-icat="tout"]'); await x.waitForSelector('[data-icat="tout"][aria-pressed="true"]');
+    assert.ok(await x.locator('#v-indicateurs .titre-section').count() >= 2);
     await onglet(x, 'reseau');
     await verifier(x, L, '13-reseau');
     // Tableau national : du plus proche au plus loin, filtre « lit libre », « Transférer ici »
@@ -380,6 +407,16 @@ for (const L of LARGEURS) {
     await r.waitForSelector('#modale:not([hidden])');
     await verifier(r, L, '20-mot-de-passe-temporaire');
     await r.click('#modale .btn.pri');
+    // Comptes : recherche par courriel et explication des rôles
+    await r.waitForSelector('#a-recherche');
+    await r.fill('#a-recherche', `essai.${L.nom}@`);
+    assert.strictEqual(await r.locator('#admin-corps [data-acl-ligne]:not([hidden])').count(), 1);
+    await r.fill('#a-recherche', '');
+    assert.ok(await r.locator('.roles-aide dt').count() === 4);
+    assert.strictEqual(await r.locator('.matrice-acces tbody tr').count(), 7, 'accès effectifs par rôle');
+    await r.selectOption('#a-statut', 'desactives');
+    assert.strictEqual(await r.locator('#admin-corps [data-acl-ligne][data-acl-actif="1"]:not([hidden])').count(), 0);
+    await r.selectOption('#a-statut', '');
     // Import CSV : un fichier d'unités pour l'Hôpital X, vérifié puis importé
     await r.click('[data-ao="import"]');
     await r.waitForSelector('[data-imp-fichier="unites"]', { state: 'attached' });
@@ -952,5 +989,84 @@ for (const L of LARGEURS) {
     await a.waitForFunction(() => document.documentElement.dataset.apparence === 'soleil');
     assert.strictEqual(await a.evaluate(() => document.documentElement.dataset.theme), attendu, 'soleil à la position de l’établissement');
     await ctx.close();
+  });
+}
+
+for (const L of LARGEURS.filter((l) => l.nom !== 'tablette')) {
+  test(`centre de paramètres : navigation, thème persistant, OG personnalisé et appliqué, Journal, Support, mot de passe · ${L.nom}`, { timeout: 240000 }, async () => {
+    for (const c of navigateur.contexts()) await c.close();
+    await viderBase(pool);
+    await demoReseau(pool, { silencieux: true, comptesRoles: true });
+    // En démo, le coordonnateur personnalise OG (décision du 30 oct.) ; hors démo, le refus reste couvert par les tests API.
+    const avantEnv = process.env.ARRIMO_ENV; process.env.ARRIMO_ENV = 'demo';
+    try {
+    const email = 'hopital.x@demo.arrimo';
+    const apparence = async () => (await pool.query('SELECT apparence FROM utilisateurs WHERE email=$1', [email])).rows[0].apparence;
+    const x = await ouvrir(L, email);
+    // Barre principale : Journal et Support client n'y figurent plus ; ils restent accessibles par Paramètres.
+    assert.strictEqual(await x.locator('#onglets button[data-v="journal"]').isVisible(), false);
+    assert.strictEqual(await x.locator('#onglets button[data-v="support"]').isVisible(), false);
+    await onglet(x, 'params');
+    const entrees = await x.$$eval('#v-params [data-param-nav]', (bs) => bs.map((b) => b.dataset.paramNav));
+    for (const e of ['compte', 'params:apparence', 'params:etablissement', 'params:og', 'params:notifications', 'journal', 'support']) assert.ok(entrees.includes(e), `menu : ${e} (${entrees})`);
+    await verifier(x, L, 'params-etablissement');
+    // Établissement : administratif (localisation, fuseau) et opérationnel (structure réelle)
+    assert.ok(await x.locator('#v-params .compteurs dt').count() === 6, 'structure et capacités');
+    assert.match(await x.textContent('#v-params'), /Fuseau horaire/);
+    // Bascule de l'en-tête : immédiate et enregistrée, indépendante de l'heure.
+    await x.click('#b-theme'); await x.waitForFunction(() => document.documentElement.dataset.theme === 'clair');
+    assert.strictEqual(await apparence(), 'clair');
+    await x.click('#b-theme'); await x.waitForFunction(() => document.documentElement.dataset.theme === 'sombre');
+    assert.strictEqual(await apparence(), 'sombre');
+    await x.click('#v-params [data-param-nav="params:apparence"]'); await x.waitForSelector('input[name="p-apparence"][value="sombre"]:checked');
+    await verifier(x, L, 'params-apparence-sombre');
+    // OG : nom, avatar et voix enregistrés pour l'établissement, appliqués au panneau et à la voix.
+    await x.click('#v-params [data-param-nav="params:og"]'); await x.waitForSelector('#og-nom:not([disabled])');
+    await x.fill('#og-nom', 'Charles'); await x.selectOption('#og-modele', 'humain'); await x.selectOption('#og-voix', 'masculine');
+    assert.match(await x.textContent('#og-etat'), /non enregistrées/);
+    // Quitter avec des modifications non enregistrées : une confirmation est demandée ; refuser garde la saisie.
+    x.once('dialog', (d) => d.dismiss());
+    await x.click('#v-params [data-param-nav="params:apparence"]');
+    assert.strictEqual(await x.inputValue('#og-nom'), 'Charles');
+    await x.click('#og-enregistrer'); await toast(x, 'Configuration OG enregistrée');
+    const cfg = (await pool.query(`SELECT o.reglages FROM og_configurations o JOIN utilisateur_etablissements ue ON ue.etablissement_id=o.etablissement_id JOIN utilisateurs u ON u.id=ue.utilisateur_id WHERE u.email=$1`, [email])).rows[0].reglages;
+    assert.deepStrictEqual([cfg.personnalisation.nom, cfg.personnalisation.avatar.modele, cfg.personnalisation.voix], ['Charles', 'humain', 'masculine']);
+    await verifier(x, L, 'params-og');
+    await x.click('#og-open'); await x.waitForFunction(() => document.querySelector('#og-title')?.textContent === 'Charles');
+    assert.ok(await x.locator('.og-entete .og-avatar svg').count(), 'avatar appliqué');
+    assert.strictEqual(await x.evaluate(() => window.ArrimoOgVoix), 'masculine', 'voix transmise au moteur vocal');
+    await x.keyboard.press('Escape');
+    await x.reload(); await x.waitForSelector('body[data-pret="1"]');
+    assert.strictEqual(await x.evaluate(() => document.documentElement.dataset.theme), 'sombre', 'thème retrouvé après rechargement');
+    await x.click('#og-open'); await x.waitForFunction(() => document.querySelector('#og-title')?.textContent === 'Charles');
+    await x.keyboard.press('Escape');
+    // Journal et Support client, depuis Paramètres, avec le menu secondaire.
+    await onglet(x, 'journal'); assert.ok(await x.locator('#v-journal > .params-nav').count());
+    await verifier(x, L, 'params-journal');
+    await onglet(x, 'support'); await x.waitForSelector('#v-support > .params-nav');
+    // Mot de passe : actuel exigé, nouveau valable à la reconnexion, ancien refusé.
+    await x.click('#v-support [data-param-nav="compte"]'); await x.waitForSelector('#f-mdp');
+    const nouveau = 'Arrimo-Nouveau-2026!x';
+    await x.fill('#m-actuel', MDP); await x.fill('#m-nouveau', nouveau); await x.fill('#m-confirme', nouveau);
+    await x.click('#f-mdp button[type=submit]'); await x.waitForTimeout(800);
+    const essai = async (mdp) => (await fetch(`${base}/api/connexion`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, mot_de_passe: mdp }) })).status;
+    assert.strictEqual(await essai(nouveau), 200, 'nouveau mot de passe');
+    assert.strictEqual(await essai(MDP), 401, 'ancien mot de passe refusé');
+    // Profil et déconnexion depuis Mon compte : la session est invalidée côté serveur.
+    assert.match(await x.textContent('#v-compte'), new RegExp(email.replace('.', '\\.')));
+    const jeton = await x.evaluate(() => { try { return localStorage.getItem('arrimo-token') || sessionStorage.getItem('arrimo-token'); } catch { return null; } });
+    await x.click('#b-compte-deconnexion');
+    await x.waitForSelector('#f-connexion:not([hidden])');
+    if (jeton) {
+      let statut = 0;
+      for (let k = 0; k < 20 && statut !== 401; k += 1) { statut = (await fetch(`${base}/api/moi`, { headers: { Authorization: `Bearer ${jeton}` } })).status; if (statut !== 401) await x.waitForTimeout(100); }
+      assert.strictEqual(statut, 401, 'session fermée côté serveur');
+    }
+    // Reconnexion avec le nouveau mot de passe : le thème choisi est retrouvé.
+    await x.fill('#c-email', email); await x.fill('#c-mdp', nouveau);
+    await x.click('#f-connexion button[type=submit]'); await x.waitForSelector('body[data-pret="1"]');
+    assert.strictEqual(await x.evaluate(() => document.documentElement.dataset.theme), 'sombre', 'thème retrouvé après reconnexion');
+    await x.context().close();
+    } finally { if (avantEnv === undefined) delete process.env.ARRIMO_ENV; else process.env.ARRIMO_ENV = avantEnv; }
   });
 }

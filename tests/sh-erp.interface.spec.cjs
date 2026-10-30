@@ -328,18 +328,32 @@ test('ERP SH dans le navigateur : parcours complet par les écrans, 3 largeurs',
     await verifier(page, L, 'sh-erp-16-accueil');
     await page.vue('compte');
     // Apparence sombre : préférence enregistrée par compte, appliquée, contrastes AA sur chaque onglet visible
-    await page.check('input[name="m-apparence"][value="sombre"]');
+    // Le choix s'applique et s'enregistre dès le clic, sans bouton « Enregistrer ».
+    assert.equal(await page.locator('#f-apparence button[type="submit"]').count(),0);
     const reponseApparence=page.waitForResponse(r=>r.url().includes('/api/moi/apparence')&&r.request().method()==='PUT');
-    await page.rendu(()=>page.click('#f-apparence button[type="submit"]'));
+    await page.check('input[name="m-apparence"][value="sombre"]');
     assert.equal((await reponseApparence).status(),200);
+    await page.waitForFunction(()=>document.documentElement.dataset.theme==='sombre');
     assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'sombre');
     assert.equal((await pool.query("SELECT apparence FROM sh_utilisateurs WHERE email='admin.ui@sh.exemple'")).rows[0].apparence,'sombre');
     const ongletsSombres=await page.evaluate(()=>[...document.querySelectorAll('#onglets [data-v]')].filter(b=>!b.hidden&&b.offsetParent!==null).map(b=>b.dataset.v));
     assert.ok(ongletsSombres.length>=8,`onglets visibles : ${ongletsSombres}`);
     for(const v of ongletsSombres){await page.vue(v);await page.viderToasts();await verifier(page,L,`sh-sombre-${v}`);}
     await page.vue('compte');
-    await page.check('input[name="m-apparence"][value="automatique"]');
-    await page.rendu(()=>page.click('#f-apparence button[type="submit"]'));
+    // Bouton de l'en-tête : sombre → automatique, immédiat et enregistré.
+    const reponseTheme=page.waitForResponse(r=>r.url().includes('/api/moi/apparence')&&r.request().method()==='PUT');
+    await page.click('#b-theme');
+    assert.equal((await reponseTheme).status(),200);
+    await page.waitForFunction(()=>document.documentElement.dataset.apparence==='automatique');
+    assert.equal((await pool.query("SELECT apparence FROM sh_utilisateurs WHERE email='admin.ui@sh.exemple'")).rows[0].apparence,'automatique');
+    // Paramètres : le choix direct s'applique aussi immédiatement.
+    if(ongletsSombres.includes('parametres')){await page.vue('parametres');
+      const rp=page.waitForResponse(r=>r.url().includes('/api/moi/apparence')&&r.request().method()==='PUT');
+      await page.check('input[name="pa-apparence"][value="sombre"]');assert.equal((await rp).status(),200);
+      await page.waitForFunction(()=>document.documentElement.dataset.theme==='sombre');
+      const rr=page.waitForResponse(r=>r.url().includes('/api/moi/apparence')&&r.request().method()==='PUT');
+      await page.check('input[name="pa-apparence"][value="automatique"]');assert.equal((await rr).status(),200);
+      await page.vue('compte');}
     assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'clair','automatique suit le système (clair dans ce navigateur)');
     await page.fill('#m-fuseau','Africa/Lome');
     const reponseFuseau=page.waitForResponse(r=>r.url().includes('/api/moi/fuseau-horaire')&&r.request().method()==='PUT');

@@ -445,6 +445,23 @@ async function listeNsa(pool, utilisateur, etabId) {
   };
 }
 
+/** Détail d'un lit ALC/NSA : informations du lit et événements du journal du séjour en cours (depuis l'occupation et le début NSA, 20 au plus). */
+async function detailNsa(pool, utilisateur, litId) {
+  const l = (await pool.query(
+    `SELECT l.id, l.code, l.patient_ref, l.nsa_depuis, l.nsa_orientation, l.etablissement_id, l.etat, u.nom AS unite,
+            floor(EXTRACT(EPOCH FROM (now() - l.nsa_depuis)) / 86400)::int AS jours
+       FROM lits l JOIN unites u ON u.id = l.unite_id WHERE l.id = $1 AND l.nsa_depuis IS NOT NULL`, [litId])).rows[0];
+  if (!l) throw new ErreurHttp(404, 'lit_introuvable');
+  exigerEtablissement(utilisateur, l.etablissement_id);
+  const evenements = (await pool.query(
+    `SELECT j.date, j.action, j.ancien_etat, j.nouvel_etat, j.detail, j.refuse, u.nom AS utilisateur
+       FROM journal j LEFT JOIN utilisateurs u ON u.id = j.utilisateur_id
+      WHERE j.lit_id = $1 AND j.date >= GREATEST($2::timestamptz,
+            COALESCE((SELECT max(o.date) FROM journal o WHERE o.lit_id = $1 AND o.nouvel_etat = 'occupe'), $2::timestamptz))
+      ORDER BY j.date DESC, j.id DESC LIMIT 20`, [l.id, l.nsa_depuis])).rows;
+  return { ...l, evenements };
+}
+
 /* ------------------------------------------------------------------ indicateurs */
 /** Mesures de fluidité sur une fenêtre de temps : de `debut` jours avant maintenant à `fin` jours avant maintenant. */
 async function mesuresPeriode(pool, etabId, debut, fin) {
@@ -521,8 +538,21 @@ async function indicateurs(pool, utilisateur, etabId, jours = 30) {
   const alerte = await niveauAlerte(pool, etabId, utilisateur.langue);
   const urgence = alerte.urgence ? { ...alerte.urgence, periode: actuelle.civieres } : null;
   const c = cap.rows[0];
+  // Lecture seule, pour les graphiques : disponibilité actuelle par unité et transferts par jour sur la période.
+  const parUnite = (await pool.query(
+    `SELECT u.nom AS unite, count(*) FILTER (WHERE l.etat <> 'indispo')::int AS dotes,
+            count(*) FILTER (WHERE l.etat = 'libre')::int AS libres, count(*) FILTER (WHERE l.etat = 'occupe')::int AS occupes
+       FROM lits l JOIN unites u ON u.id = l.unite_id WHERE l.etablissement_id = $1 AND l.actif
+      GROUP BY u.nom ORDER BY u.nom`, [etabId])).rows;
+  const parJour = (await pool.query(
+    `SELECT to_char(d, 'YYYY-MM-DD') AS jour, count(t.id)::int AS total, count(t.id) FILTER (WHERE t.statut = 'refuse')::int AS refuses
+       FROM generate_series(date_trunc('day', now()) - make_interval(days => $2 - 1), date_trunc('day', now()), interval '1 day') d
+       LEFT JOIN transferts t ON (t.origine_id = $1 OR t.destination_id = $1) AND date_trunc('day', t.date_demande) = d
+      GROUP BY d ORDER BY d`, [etabId, j])).rows;
   return {
     periode_jours: j,
+    par_unite: parUnite,
+    transferts_par_jour: parJour,
     capacite: { ...c,
       occupation_patients: c.dotes ? Math.round(c.occupes / c.dotes * 1000) / 10 : 0,
       non_disponibilite: c.dotes ? Math.round((c.occupes + c.reserves + c.nettoyage) / c.dotes * 1000) / 10 : 0,
@@ -562,5 +592,5 @@ module.exports = {
   designerNsa, retirerNsa, changerNsaOrientation, majConge, debuterNettoyage, fileNettoyage,
   creerDemande, fileAdmission, assignerLit, admettreDemande, annulerDemande, transfererDemande,
   admettreDepuisLit, annulerDepuisLit, reserverDepuisLit, synchroniserConge, synchroniserDemandeAdmise,
-  niveauAlerte, listeNsa, indicateurs, indicateursCsv, besoinsDemande, ORIENTATIONS, groupeAgeDepuisNaissance,
+  niveauAlerte, listeNsa, detailNsa, indicateurs, indicateursCsv, besoinsDemande, ORIENTATIONS, groupeAgeDepuisNaissance,
 };

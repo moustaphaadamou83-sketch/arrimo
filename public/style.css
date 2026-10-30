@@ -521,3 +521,51 @@ label.item input[type=radio] { order: -1; width: 20px; height: 20px; flex: none;
 .og-fonctions { display: flex; flex-wrap: wrap; gap: var(--e2) var(--e4); margin-bottom: var(--e3); }
 .og-avatar { display: inline-grid; place-items: center; width: 55px; height: 55px; flex: none; }
 @media (max-width: 600px) { .og-perso { grid-template-columns: 1fr; } }
+/* Navigation principale regroupée ; Journal et Support client s'ouvrent depuis Paramètres. */
+#onglets .hors-menu { display: none !important; }
+.onglets-groupe { align-self: center; margin-left: var(--e3); padding-left: var(--e3); border-left: 1px solid rgba(255, 255, 255, 0.28);
+  font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #D7ECEF; white-space: nowrap; }
+@media (max-width: 700px) { .onglets-groupe { display: none; } }
+/* Menu secondaire du centre de paramètres */
+.params-nav { display: flex; flex-wrap: wrap; gap: var(--e2); margin: 0 0 var(--e4); padding-bottom: var(--e3); border-bottom: 1px solid var(--bordure); }
+.params-nav .btn.actif { background: var(--principal-plein); border-color: var(--principal-plein); color: #fff; }
+.params-avance { margin-top: var(--e4); }
+.params-avance summary { cursor: pointer; font-weight: 600; min-height: 32px; }
+/* Filtres des indicateurs, de l'ALC et des comptes */
+.filtres-indic, .filtres-nsa, .filtres-acl { align-items: flex-end; flex-wrap: wrap; gap: var(--e3); margin: var(--e3) 0; }
+.filtres-nsa .champ, .filtres-acl .champ { margin: 0; min-width: 180px; flex: 1 1 180px; }
+.roles-aide summary { cursor: pointer; font-weight: 600; min-height: 32px; }
+.roles-aide dt { font-weight: 600; margin-top: var(--e2); }
+.roles-aide dd { margin: 0; color: var(--texte-2, #64748B); }
+/* Indicateurs : aide de section et graphiques (barres fines, extrémités arrondies, espace de 2 px entre segments) */
+.section-aide { margin: -4px 0 var(--e3); }
+.graphiques { align-items: start; }
+.graphique { margin: 0; display: flex; flex-direction: column; gap: var(--e3); min-width: 0; }
+.graphique figcaption { display: flex; flex-direction: column; gap: 2px; }
+.g-legende { display: flex; flex-wrap: wrap; gap: var(--e3); font-size: 13px; color: var(--texte-2); }
+.g-legende span { display: inline-flex; align-items: center; gap: 6px; }
+.g-legende i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.g-ligne { display: grid; grid-template-columns: minmax(80px, 30%) 1fr auto; gap: var(--e2); align-items: center; font-size: 13px; }
+.g-lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.g-barre { display: flex; gap: 2px; height: 12px; min-width: 0; }
+.g-seg { display: block; min-width: 2px; border-radius: 4px; }
+.g-val { color: var(--texte-2); white-space: nowrap; }
+.g-autre { background: var(--inactif); }
+.g-transfert { background: var(--secondaire); }
+.f-refuse { background: var(--critique); }
+.g-colonnes { display: flex; align-items: flex-end; gap: 2px; height: 140px; border-bottom: 1px solid var(--bordure); }
+.g-col { flex: 1 1 0; min-width: 2px; height: 100%; display: flex; align-items: flex-end; }
+.g-col:hover .g-pile { outline: 2px solid var(--principal); outline-offset: 1px; }
+.g-pile { width: 100%; display: flex; flex-direction: column; gap: 2px; min-height: 2px; }
+.g-pile .g-seg { border-radius: 4px 4px 0 0; }
+.g-axe { display: flex; justify-content: space-between; gap: var(--e2); font-size: 12px; }
+@media (max-width: 600px) { .g-ligne { grid-template-columns: 1fr auto; } .g-ligne .g-barre { grid-column: 1 / -1; grid-row: 2; } }
+/* ALC : détail d'un lit, et tableau des accès par rôle */
+.detail-nsa { display: grid; grid-template-columns: max-content 1fr; gap: 4px var(--e3); margin: 0 0 var(--e3); }
+.detail-nsa dd { margin: 0; }
+.evenements-nsa { margin: 0; padding-left: 18px; max-height: 40vh; overflow: auto; font-size: 14px; }
+.matrice-acces { margin-top: var(--e3); }
+.matrice-acces caption { text-align: left; caption-side: top; padding-bottom: var(--e2); }
+.matrice-acces th[scope="row"] { font-weight: 500; text-align: left; }
+.compteurs { display: grid; grid-template-columns: 1fr auto; gap: 4px var(--e3); }
+.compteurs dd { margin: 0; text-align: right; }

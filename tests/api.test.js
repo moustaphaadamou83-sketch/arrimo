@@ -446,6 +446,9 @@ test('hors service : le motif est obligatoire et compté dans les indicateurs', 
   assert.strictEqual(r.corps.motif_indispo, 'personnel');
   const ind = await appel('bouchard', 'GET', `/indicateurs?etablissement_id=${sl}`);
   assert.ok(ind.corps.capacite.indispo_par_motif.personnel >= 1);
+  // Graphiques : disponibilité par unité et une valeur par jour de la période (30 jours par défaut)
+  assert.ok(ind.corps.par_unite.length > 0 && ind.corps.par_unite.every((u) => u.libres + u.occupes <= u.dotes));
+  assert.strictEqual(ind.corps.transferts_par_jour.length, 30);
   const remis = await appel('bouchard', 'POST', `/lits/${l.id}/action`, { action: 'remettre' });
   assert.strictEqual(remis.corps.motif_indispo, null);
 });
@@ -457,6 +460,12 @@ test('NSA : désignation, taux, et effacement automatique au départ du patient'
   assert.strictEqual((await appel('bouchard', 'POST', `/lits/${l.id}/nsa`, { orientation: 'chsld' })).statut, 200);
   const n = await appel('bouchard', 'GET', `/nsa?etablissement_id=${sl}`);
   assert.ok(n.corps.lits.some((x) => x.id === l.id));
+  // Détail ALC : lecture dans son établissement seulement, avec les événements du journal depuis le début du séjour
+  const d = await appel('bouchard', 'GET', `/nsa/lits/${l.id}`);
+  assert.strictEqual(d.statut, 200, JSON.stringify(d.corps));
+  assert.strictEqual(d.corps.nsa_orientation, 'chsld');
+  assert.ok(Array.isArray(d.corps.evenements));
+  assert.strictEqual((await appel('cote', 'GET', `/nsa/lits/${l.id}`)).statut, 403, 'autre établissement refusé');
   const lib = await appel('bouchard', 'POST', `/lits/${l.id}/action`, { action: 'liberer' });
   assert.strictEqual(lib.corps.nsa_depuis, null);
   assert.strictEqual(lib.corps.etat, 'nettoyage');

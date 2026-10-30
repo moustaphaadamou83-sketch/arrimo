@@ -196,14 +196,26 @@ $('#b-2fa-prep').onclick = async () => {
     };
   } catch (err) { erreurDans('#a-erreur', err.message); }
 };
+$('#b-theme').onclick = () => { const ordre=['clair','sombre','automatique']; const m=etat.moi?.utilisateur?.apparence||'automatique'; choisirApparence(ordre[(ordre.indexOf(m)+1)%ordre.length]); };
 $('#b-deconnexion').onclick = async () => { try { await api('POST', '/deconnexion'); } catch { /* déjà fermée */ } deconnecter(); };
 
+/** Apparence : appliquée immédiatement, enregistrée sur le compte, retrouvée à la reconnexion. */
+async function choisirApparence(choix){
+  const u=etat.moi?.utilisateur;if(!u)return;
+  let lieu;if(choix==='soleil'){lieu=await window.ArrimoApparence.localiser();if(!lieu)toast('Position refusée ou indisponible : la préférence du système s’applique.',true);}
+  const avant=u.apparence||'automatique';
+  window.ArrimoApparence?.definir(choix,lieu===undefined?{}:{lieu});majBoutonTheme(choix);
+  try{const r=await api('PUT','/moi/apparence',{apparence:choix});u.apparence=r.apparence;window.ArrimoApparence?.definir(r.apparence,lieu===undefined?{}:{lieu});majBoutonTheme(r.apparence);toast('Apparence enregistrée.');}
+  catch(err){window.ArrimoApparence?.definir(avant);majBoutonTheme(avant);toast(err.message,true);}
+}
+const LIBELLES_APPARENCE={clair:'Clair',sombre:'Sombre',automatique:'Automatique (système)',soleil:'Selon le soleil'};
+function majBoutonTheme(m){const b=$('#b-theme');if(!b)return;const l=`${traduireTexte('Changer le thème')} · ${traduireTexte(LIBELLES_APPARENCE[m]||LIBELLES_APPARENCE.automatique)}`;b.setAttribute('aria-label',l);b.title=l;}
 function ouvrir(token) { etat.token = token; ecrire('sh-token', token); demarrer(); }
 async function demarrer() {
   try { etat.moi = await api('GET', '/moi'); } catch { deconnecter(); return; }
   const u = etat.moi.utilisateur;
   appliquerLangue(u.langue || langueUI);
-  window.ArrimoApparence?.definir(u.apparence || 'automatique');
+  window.ArrimoApparence?.definir(u.apparence || 'automatique'); majBoutonTheme(u.apparence || 'automatique');
   if (u.mdp_temporaire) { montrer('#f-mdp-temp'); return; }
   if (!u.totp_actif) { montrer('#f-2fa-act'); return; }
   $('#ecran-connexion').hidden = true;
@@ -757,10 +769,10 @@ async function vueCompte(v) {
   const u = etat.moi.utilisateur;
   v.innerHTML = `<div class="entete"><div><h2>Mon compte</h2><p><span class="donnee">${esc(u.nom)}</span> · ${esc(u.email)} · double authentification active</p></div></div>
     <form class="panneau-c compte" id="f-fuseau"><h3>Préférence de fuseau horaire</h3><p class="note">Les heures affichées dans la console suivent cette préférence; les échéances contractuelles conservent le fuseau de l’établissement.</p><div class="champ"><label class="lbl" for="m-fuseau">Fuseau IANA</label><input id="m-fuseau" maxlength="80" required value="${esc(u.fuseau_horaire||'America/Toronto')}" placeholder="America/Toronto"></div><button class="btn" type="submit">Enregistrer le fuseau</button></form>
-    <form class="panneau-c compte" id="f-apparence"><h3>Apparence</h3><p class="note">Appliquée à toutes vos pages, sur tous vos appareils. « Selon le soleil » passe en sombre entre le coucher et le lever du soleil à la position approximative de cet appareil, si vous l’autorisez; sinon la préférence du système s’applique.</p>
+    <form class="panneau-c compte" id="f-apparence"><h3>Apparence</h3><p class="note">Appliquée tout de suite à toutes vos pages, sur tous vos appareils. « Selon le soleil » passe en sombre entre le coucher et le lever du soleil à la position approximative de cet appareil, si vous l’autorisez; sinon la préférence du système s’applique.</p>
       <fieldset class="choix-apparence"><legend class="lbl">Mode d’affichage</legend>${[['clair','Clair'],['sombre','Sombre'],['automatique','Automatique (système)'],['soleil','Selon le soleil']].map(([c,l])=>`<label class="case"><input type="radio" name="m-apparence" value="${c}"${(u.apparence||'automatique')===c?' checked':''}> ${l}</label>`).join('')}</fieldset>
       <p class="note" id="m-apparence-lieu">${window.ArrimoApparence?.lieu()?'Position approximative enregistrée sur cet appareil.':'Aucune position enregistrée sur cet appareil.'}</p>
-      <div><button class="btn pri" type="submit">Enregistrer l’apparence</button></div></form>
+</form>
     <form class="panneau-c compte" id="f-mdp"><h3>Changer de mot de passe</h3>
       <div class="champ"><label class="lbl" for="m-actuel">Mot de passe actuel</label><input id="m-actuel" type="password" autocomplete="current-password"></div>
       <div class="champ"><label class="lbl" for="m-nouveau">Nouveau mot de passe</label><input id="m-nouveau" type="password" autocomplete="new-password"></div>
@@ -772,11 +784,8 @@ async function vueCompte(v) {
     if ($('#m-nouveau').value !== $('#m-confirme').value) { toast('Les deux mots de passe sont différents.', true); return; }
     agir(null, () => api('PUT', '/moi/mot-de-passe', { actuel: $('#m-actuel').value, nouveau: $('#m-nouveau').value }), 'Mot de passe enregistré.');
   };
-  $('#f-apparence').onsubmit=async e=>{e.preventDefault();const b=e.submitter;b.disabled=true;
-    try{const choix=v.querySelector('input[name=m-apparence]:checked')?.value||'automatique';
-      let lieu;if(choix==='soleil'){lieu=await window.ArrimoApparence.localiser();if(!lieu)toast('Position refusée ou indisponible : la préférence du système s’applique.',true);}
-      const r=await api('PUT','/moi/apparence',{apparence:choix});u.apparence=r.apparence;window.ArrimoApparence?.definir(r.apparence,lieu===undefined?{}:{lieu});toast('Apparence enregistrée.');await afficher();}
-    catch(err){toast(err.message,true);}finally{b.disabled=false;}};
+  v.querySelectorAll('input[name=m-apparence]').forEach(r=>{r.onchange=()=>choisirApparence(r.value);});
+  $('#f-apparence').onsubmit=e=>e.preventDefault();
   $('#f-fuseau').onsubmit=async e=>{e.preventDefault();const b=e.submitter;b.disabled=true;try{const r=await api('PUT','/moi/fuseau-horaire',{fuseau_horaire:$('#m-fuseau').value.trim()});u.fuseau_horaire=r.fuseau_horaire;toast('Préférence de fuseau enregistrée.');await afficher();}catch(err){toast(err.message,true);}finally{if(b.isConnected)b.disabled=false;}};
   await afficherSessions(v,u.id,false);
 }

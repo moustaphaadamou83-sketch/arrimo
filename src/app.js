@@ -296,6 +296,11 @@ function creerApp(pool, options = {}) {
     const id = entier(req.params.id, 'id'); await s.litVisible(pool, req.utilisateur, id);
     return t.debuterNettoyage(pool, req.utilisateur, id);
   }));
+  api.get('/nsa/lits/:id', route(async (req) => {
+    const d = await t.detailNsa(pool, req.utilisateur, entier(req.params.id, 'id'));
+    await s.exigerModule(pool, d.etablissement_id, 'nsa');
+    return d;
+  }));
   api.get('/nsa', route(async (req) => {
     const etab = entier(req.query.etablissement_id, 'etablissement_id');
     await s.exigerModule(pool, etab, 'nsa');
