@@ -14,7 +14,7 @@ test('SLA contractuels : versions, échéances, escalades et droits réels',{tim
   assert.equal((await require(require('node:path').join(process.env.SH_SLA_BASELINE_RELEASE||'/opt/arrimo-sh/releases/support-20261029t1755','src/sh/migrations')).migrerSh(pool,env)).version,20);
   const histHop=(await pool.query("INSERT INTO hopitaux(nom,code_etab,environnement) VALUES('Historique','HIST','pilote') RETURNING id")).rows[0];
   const historique=(await pool.query("INSERT INTO sh_support_tickets(hopital_id,titre,echeance) VALUES($1,'Ancien ticket',now()-interval '1 day') RETURNING *",[histHop.id])).rows[0];
-  assert.equal((await require('../src/sh/migrations').migrerSh(pool,env)).version,36);
+  assert.equal((await require('../src/sh/migrations').migrerSh(pool,env)).version,37);
   const calendrier={mode:'ouvrable',jours:[1,2,3,4,5],debut:'09:00',fin:'17:00',jours_feries:[]};
   const echeance=async joursFeries=>(await pool.query('SELECT sh_sla_echeance($1::timestamptz,120,$2::jsonb,$3) d',[new Date('2026-01-05T16:00:00Z'),JSON.stringify({...calendrier,jours_feries:joursFeries}),'UTC'])).rows[0].d;
   assert.equal((await echeance([])).toISOString(),'2026-01-06T10:00:00.000Z','les minutes restantes reprennent au prochain jour ouvré');
