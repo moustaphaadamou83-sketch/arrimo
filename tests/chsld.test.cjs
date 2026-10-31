@@ -91,16 +91,16 @@ test('SH : le type d’établissement vient en premier et commande les modules p
   assert.deepStrictEqual(codes(chs, 'hopital'), [], 'aucun module hospitalier proposé à un CHSLD');
   assert.ok(['residents', 'chambres', 'demandes_hebergement', 'entretien_chsld', 'taches', 'proches', 'hospitalisations', 'reseau_chsld'].every((c) => codes(chs, 'chsld').includes(c)));
   assert.ok(codes(hop, 'hopital').includes('civieres') && !codes(hop, 'chsld').length, 'urgence et civières (code historique « civieres ») pour l’hôpital');
-  assert.deepStrictEqual(chs.modules.filter((m) => m.categorie === 'optionnel').map((m) => [m.code, m.statut]), [['portail_proches', 'a_venir'], ['messagerie_securisee', 'a_venir'], ['appels_video', 'etude']]);
+  assert.deepStrictEqual(chs.modules.filter((m) => m.categorie === 'optionnel').map((m) => [m.code, m.statut]), [['portail_proches', 'disponible'], ['messagerie_securisee', 'disponible'], ['appels_video', 'etude']]);
   RESULTATS.sh.catalogue = { hopital: hop.modules.map((m) => `${m.categorie}:${m.code}:${m.statut}`), chsld: chs.modules.map((m) => `${m.categorie}:${m.code}:${m.statut}`) };
   // Types futurs : prévus mais refusés ; modules non implémentés : jamais souscrits
   for (const type of ['maison_aines', 'rpa', 'ressource_intermediaire']) {
     const r = await appelSh('POST', '/hopitaux', { type_etablissement: type, nom: `Essai ${type}`, code_etab: `ES-${type.slice(0, 3).toUpperCase()}`, environnement: 'pilote', pays_code: 'CA', latitude: 45, longitude: -71 });
     assert.strictEqual(r.statut, 409, type); assert.match(r.corps.erreur, /pas encore opérationnel/);
   }
-  const r = await appelSh('POST', '/hopitaux', { type_etablissement: 'chsld', modules: { portail_proches: true }, nom: 'Essai portail', code_etab: 'ES-PORT', environnement: 'pilote', pays_code: 'CA', latitude: 45, longitude: -71 });
+  const r = await appelSh('POST', '/hopitaux', { type_etablissement: 'chsld', modules: { appels_video: true }, nom: 'Essai vidéo', code_etab: 'ES-VIDEO', environnement: 'pilote', pays_code: 'CA', latitude: 45, longitude: -71 });
   assert.strictEqual(r.statut, 409); assert.match(r.corps.erreur, /pas encore disponible/);
-  RESULTATS.sh.refus = ['maison_aines', 'rpa', 'ressource_intermediaire', 'module portail_proches'];
+  RESULTATS.sh.refus = ['maison_aines', 'rpa', 'ressource_intermediaire', 'module appels_video (à l’étude)'];
 });
 
 let crees, ids;
@@ -283,6 +283,67 @@ test('non-régression hospitalière : les CHSLD n’entrent jamais dans les capa
   for (const route of ['/lits', '/admissions', '/civieres', '/transferts', '/nettoyage', '/copilote/briefing']) await api('b', 'GET', `${route}?etablissement_id=${hy}`);
 });
 
+test('phase 2 — portail des proches : activé depuis SH, invitation, accès limité, messagerie, révocation, blocage', async () => {
+  const era = crees.find((c) => c.code === 'CHSLD-ERA');
+  const fd = await api('era', 'GET', `/chsld/residents/${p.dupont}`);
+  const fille = fd.contacts.find((k) => k.relation === 'fille'), fils = fd.contacts.find((k) => k.relation === 'fils');
+  // Module optionnel désactivé par défaut : aucune invitation possible
+  await refuse('era', 'POST', `/chsld/contacts/${fille.id}/acces-portail`, {}, 403, 'module_desactive');
+  // Activation depuis SH : licence souscrite, puis configuration opérationnelle publiée vers l'environnement
+  const fiche = await sh('GET', `/hopitaux/${era.hopital_id}`);
+  await sh('PUT', `/hopitaux/${era.hopital_id}/modules`, { modules: fiche.modules.map((m) => ({ code: m.code, licence: ['portail_proches', 'messagerie_securisee'].includes(m.code) ? 'souscrit' : m.licence })) });
+  const cfg = await sh('GET', `/hopitaux/${era.hopital_id}/configuration-operationnelle`);
+  assert.ok(cfg.modules_modifiables.includes('portail_proches'));
+  await sh('PUT', `/hopitaux/${era.hopital_id}/configuration-operationnelle`, { version: cfg.version, vocation: 'general', modules: Object.fromEntries(cfg.modules_modifiables.map((k) => [k, true])) });
+  // Invitations : un contact sans courriel ni autorisation est refusé ; le lien n'est remis qu'une fois
+  await refuse('era', 'POST', `/chsld/contacts/${fils.id}/acces-portail`, {}, 409, 'proche_courriel_requis');
+  await refuse('era_soins', 'POST', `/chsld/contacts/${fille.id}/acces-portail`, {}, 403, 'role_insuffisant');
+  const inv = await api('era', 'POST', `/chsld/contacts/${fille.id}/acces-portail`, {});
+  const cle = inv.lien.match(/invitation=([a-f0-9]{64})/)[1];
+  assert.strictEqual((await poolPilote.query('SELECT count(*)::int n FROM proches_acces WHERE invitation_hash = $1', [cle])).rows[0].n, 0, 'le jeton n’est jamais stocké en clair');
+  await refuse(null, 'POST', '/proches/invitation', { jeton: cle, mot_de_passe: 'court' }, 400, 'mdp_faible');
+  await api(null, 'POST', '/proches/invitation', { jeton: cle, mot_de_passe: 'Proche-Fictive-2026' });
+  await refuse(null, 'POST', '/proches/invitation', { jeton: cle, mot_de_passe: 'Proche-Fictive-2026' }, 400, 'invitation_invalide');
+  await refuse(null, 'POST', '/proches/connexion', { courriel: 'marie.dupont@example.invalid', mot_de_passe: 'Mauvais-mot-2026' }, 401, 'identifiants_incorrects');
+  sessions.marie = (await api(null, 'POST', '/proches/connexion', { courriel: 'marie.dupont@example.invalid', mot_de_passe: 'Proche-Fictive-2026' })).token;
+  assert.match(sessions.marie, /^P\./);
+  // Ce que voit le proche : profil, prénom et initiale du résident, établissement, catégories autorisées ; jamais la chambre ni la référence
+  const moi = await api('marie', 'GET', '/proches/moi');
+  assert.deepStrictEqual(moi.resident, { prenom: 'Jean', initiale: 'D.' }); assert.strictEqual(moi.etablissement.nom, 'CHSLD des Érables');
+  assert.doesNotMatch(JSON.stringify(moi), /ERA-\d|R-\d{5}|chambre|lit_id|hospital/i);
+  // Sessions étanches : le jeton du proche n'ouvre pas l'API du personnel, et inversement
+  await refuse('marie', 'GET', '/moi', null, 401); await refuse('era', 'GET', '/proches/moi', null, 401);
+  // Messagerie : message et demande de rappel ; réponse de l'établissement ; catégorie retirée → refus immédiat
+  await api('marie', 'POST', '/proches/messages', { categorie: 'rendez_vous', texte: 'Puis-je venir samedi à 14 h ?' });
+  await api('marie', 'POST', '/proches/messages', { categorie: 'administratif', texte: 'Merci de me rappeler pour les documents.', rappel: true });
+  const portail = await api('era', 'GET', `/chsld/residents/${p.dupont}/portail`);
+  assert.strictEqual(portail.messages.filter((m) => m.sens === 'proche').length, 2);
+  assert.ok((await api('era', 'GET', `/chsld/residents/${p.dupont}`)).communications.some((c) => c.type === 'rappel_demande' && c.sens === 'entrant'));
+  await api('era', 'POST', `/chsld/residents/${p.dupont}/messages`, { contact_id: fille.id, categorie: 'rendez_vous', texte: 'Oui, samedi à 14 h convient.' });
+  assert.ok((await api('marie', 'GET', '/proches/moi')).messages.some((m) => m.sens === 'etablissement' && /samedi/.test(m.texte)));
+  const k = (await api('era', 'GET', `/chsld/residents/${p.dupont}`)).contacts.find((x) => x.id === fille.id);
+  await api('era', 'PUT', `/chsld/contacts/${k.id}`, { ...k, autorisations: k.autorisations.filter((c) => c !== 'rendez_vous'), version: k.version });
+  await refuse('marie', 'POST', '/proches/messages', { categorie: 'rendez_vous', texte: 'Et dimanche ?' }, 403, 'proche_non_autorise');
+  assert.ok(!(await api('marie', 'GET', '/proches/moi')).messages.some((m) => m.categorie === 'rendez_vous'), 'les messages d’une catégorie retirée ne sont plus visibles');
+  // Révocation : effet immédiat sur la session ouverte
+  const acces = (await api('era', 'GET', `/chsld/residents/${p.dupont}/portail`)).acces.find((a) => !a.revoque_le);
+  await api('era', 'POST', `/chsld/acces-portail/${acces.id}/revoquer`);
+  await refuse('marie', 'GET', '/proches/moi', null, 401);
+  // Blocage : 5 échecs bloquent 15 minutes, même avec le bon mot de passe ensuite
+  const inv2 = await api('era', 'POST', `/chsld/contacts/${fille.id}/acces-portail`, { expire_le: new Date(Date.now() + 30 * 86400000).toISOString() });
+  await api(null, 'POST', '/proches/invitation', { jeton: inv2.lien.match(/invitation=([a-f0-9]{64})/)[1], mot_de_passe: 'Proche-Fictive-2027' });
+  for (let i = 0; i < 5; i += 1) await refuse(null, 'POST', '/proches/connexion', { courriel: 'marie.dupont@example.invalid', mot_de_passe: `Faux-${i}-2026xx` }, 401);
+  await refuse(null, 'POST', '/proches/connexion', { courriel: 'marie.dupont@example.invalid', mot_de_passe: 'Proche-Fictive-2027' }, 401, 'identifiants_incorrects');
+  await poolPilote.query('UPDATE proches_acces SET bloque_jusqu_au = now() - interval \'1 second\' WHERE revoque_le IS NULL AND courriel = $1', ['marie.dupont@example.invalid']);
+  sessions.marie = (await api(null, 'POST', '/proches/connexion', { courriel: 'marie.dupont@example.invalid', mot_de_passe: 'Proche-Fictive-2027' })).token;
+  assert.match((await api('marie', 'GET', '/proches/moi')).expire_le, /^\d{4}-/);
+  const page = await fetch(`${basePilote}/proches`); assert.strictEqual(page.status, 200);
+  // Journal : aucune donnée personnelle du proche ni texte de message
+  const j = (await poolPilote.query(`SELECT string_agg(detail, ' ') t FROM journal WHERE action = 'Portail des proches'`)).rows[0].t;
+  assert.doesNotMatch(j, /Marie|samedi|Dupont|example\.invalid/);
+  RESULTATS.portail = 'module optionnel activé depuis SH ; invitation à usage unique (empreinte seulement) ; mot de passe robuste ; aucune chambre ni référence exposée ; sessions étanches ; catégories respectées et retrait immédiat ; messagerie et rappel ; révocation immédiate ; blocage après 5 échecs ; journal sans donnée personnelle';
+});
+
 test('captures : formulaire SH (type puis modules), liste SH, écrans CHSLD réels', { timeout: 180000 }, async () => {
   const { chromium } = require('playwright'); const dossier = path.resolve('.local/captures-chsld'); fs.mkdirSync(dossier, { recursive: true });
   const navigateur = await chromium.launch(); const erreurs = [];
@@ -296,7 +357,8 @@ test('captures : formulaire SH (type puis modules), liste SH, écrans CHSLD rée
     await s.selectOption('#h-type', 'chsld'); await s.waitForSelector('#h-modules [data-module="residents"]');
     await s.screenshot({ path: `${dossier}/sh-formulaire-chsld.png`, fullPage: true });
     assert.strictEqual(await s.locator('#h-type option[value="rpa"]').isDisabled(), true, 'RPA non sélectionnable');
-    assert.strictEqual(await s.locator('#h-modules [data-module="portail_proches"]').isDisabled(), true, 'portail des proches non cochable');
+    assert.strictEqual(await s.locator('#h-modules [data-module="appels_video"]').isDisabled(), true, 'appels vidéo (à l’étude) non cochables');
+    assert.strictEqual(await s.locator('#h-modules [data-module="portail_proches"]').isChecked(), false, 'portail des proches : optionnel, non coché d’office');
     assert.strictEqual(await s.locator('#h-modules [data-module="og"]').isDisabled(), true, 'module commun inclus');
     await s.selectOption('#h-type', 'hopital'); await s.waitForSelector('#h-modules [data-module="civieres"]');
     await s.screenshot({ path: `${dossier}/sh-formulaire-hopital.png`, fullPage: true });
@@ -322,6 +384,11 @@ test('captures : formulaire SH (type puis modules), liste SH, écrans CHSLD rée
       }
       await ctx.close();
     }
+    const ctxP = await navigateur.newContext({ viewport: { width: 390, height: 844 } }); const pp = await ctxP.newPage(); pp.on('pageerror', (e) => erreurs.push(`portail ${e}`));
+    await pp.addInitScript((j) => sessionStorage.setItem('arrimo-proche', j), sessions.marie);
+    await pp.goto(`${basePilote}/proches`); await pp.waitForSelector('#txt');
+    await pp.screenshot({ path: `${dossier}/portail-proches-telephone.png`, fullPage: true });
+    await ctxP.close();
   } finally { await navigateur.close(); }
   assert.deepStrictEqual(erreurs, []);
   RESULTATS.captures = fs.readdirSync(path.resolve('.local/captures-chsld'));

@@ -99,6 +99,7 @@
     const v = $('#v-c-residents');
     let f; try { f = await api('GET', `/chsld/residents/${id}`); } catch (e) { etat.chResident = null; throw e; }
     const r = f.resident; const g = gerer();
+    const portail = await api('GET', `/chsld/residents/${id}/portail`).catch(() => null);
     const ligneId = (k, val) => (val ? `<dt>${C(`fiche.${k}`)}</dt><dd>${esc(val)}</dd>` : '');
     const loc = f.localisation ? `<p class="ch-loc">${C('fiche.localisation', { etat: t(f.localisation.confirmee ? 'chsld.fiche.loc_confirmee' : 'chsld.fiche.loc_envoyee'), hopital: f.localisation.hopital, numero: f.localisation.numero })}</p>` : '';
     const actions = [];
@@ -129,6 +130,7 @@
         <div class="panneau-c"><h3>${C('fiche.coordinations')}</h3>${f.coordinations.length ? `<ul class="liste-simple">${f.coordinations.map((c) => `<li><b class="num">${esc(c.numero)}</b> · ${C(`coord.type_${c.type}`)} · ${esc(c.origine)} → ${esc(c.destination)} · ${esc(t(`chsld.coord_statut.${c.statut}`))}${c.incident ? ` · ${C(`coord.incident_${c.incident}`)}` : ''}</li>`).join('')}</ul>` : `<p class="note">${C('fiche.aucun')}</p>`}</div>
         <div class="panneau-c"><div class="entete-panneau"><h3>${C('fiche.communications')}</h3>${f.contacts.length ? `<button class="btn" id="ch-com">${C('communication.nouvelle')}</button>` : ''}</div>
           ${f.communications.length ? `<ul class="liste-simple">${f.communications.map((c) => `<li>${C(`com_type.${c.type}`)} · ${esc(c.contact)} (${C(`relation.${c.relation}`)}) · ${C(`categorie.${c.categorie}`)} — ${esc(c.sujet)} · ${esc(t(`chsld.tache_statut.${c.statut === 'fait' ? 'faite' : c.statut === 'annule' ? 'annulee' : 'a_faire'}`))}${c.statut === 'a_faire' ? ` <button class="btn" data-com-fait="${c.id}">${C('communication.marquer_fait')}</button>` : ''}</li>`).join('')}</ul>` : `<p class="note">${C('fiche.aucun')}</p>`}</div>
+        ${portail?.module_actif ? panneauPortail(f, portail, g) : ''}
         <div class="panneau-c"><h3>${C('fiche.taches')}</h3>${f.taches.length ? `<ul class="liste-simple">${f.taches.map((x) => `<li>${C(`tache_type.${x.type}`)} · ${esc(x.titre)} · ${esc(t(`chsld.tache_statut.${x.statut}`))}</li>`).join('')}</ul>` : `<p class="note">${C('fiche.aucun')}</p>`}</div>
         <div class="panneau-c"><h3>${C('fiche.mouvements')}</h3>${f.mouvements.length ? `<ol class="ch-historique">${f.mouvements.map((m) => `<li><span class="note num">${esc(dateHeure(m.date))}</span> <b>${C(`mvt.${m.type}`)}</b>${m.de_lit || m.vers_lit ? ` · ${esc([m.de_lit, m.vers_lit].filter(Boolean).join(' → '))}` : ''}${m.autre_etablissement ? ` · ${esc(m.autre_etablissement)}` : ''}${m.detail ? `<div class="note">${esc(m.detail)}</div>` : ''}</li>`).join('')}</ol>` : `<p class="note">${C('fiche.aucun')}</p>`}</div>
       </div></div>`;
@@ -141,6 +143,23 @@
     v.querySelectorAll('[data-verif]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/chsld/contacts/${b.dataset.verif}/verifier-representant`), t('chsld.actions.ok')); });
     v.querySelectorAll('[data-com-fait]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/chsld/communications/${b.dataset.comFait}/statut`, { statut: 'fait' }), t('chsld.actions.ok')); });
     if ($('#ch-com')) $('#ch-com').onclick = () => nouvelleCommunication(r, f.contacts);
+    v.querySelectorAll('[data-inviter]').forEach((b) => { b.onclick = async () => { b.disabled = true; try { const a = await api('POST', `/chsld/contacts/${b.dataset.inviter}/acces-portail`, {});
+      modale(t('chsld.portail.inviter'), `<p>${C('portail.lien')}</p><p><code class="ch-lien">${esc(location.origin + a.lien)}</code></p>`, [{ label: t('general.fermer'), pri: true }]); rafraichir(); } catch (e) { toast(e.message, true); b.disabled = false; } }; });
+    v.querySelectorAll('[data-revoquer]').forEach((b) => { b.onclick = () => { if (window.confirm(t('chsld.portail.confirmer_revocation'))) agir(b, () => api('POST', `/chsld/acces-portail/${b.dataset.revoquer}/revoquer`), t('chsld.actions.ok')); }; });
+    v.querySelectorAll('[data-repondre]').forEach((b) => { b.onclick = () => { const k = f.contacts.find((x) => x.id === Number(b.dataset.repondre));
+      modale(t('chsld.portail.repondre'), `${sel('pm-cat', C('communication.categorie'), k.autorisations.map((c) => [c, t(`chsld.categorie.${c}`)]))}<div class="champ"><label class="lbl" for="pm-txt">${C('communication.sujet')}</label><textarea id="pm-txt" maxlength="2000"></textarea></div>`,
+        [{ label: t('general.annuler') }, { label: t('general.enregistrer'), pri: true, run: async () => (await agir(null, () => api('POST', `/chsld/residents/${r.id}/messages`, { contact_id: k.id, categorie: $('#pm-cat').value, texte: $('#pm-txt').value }), t('chsld.portail.envoye'))) !== null || false }]); }; });
+  }
+  /** Portail des proches : accès par contact (inviter, révoquer) et fil des messages. */
+  function panneauPortail(f, p, g) {
+    const etatAcces = (a) => (a.revoque_le ? C('portail.revoque') : a.actif ? `${C('portail.actif')}${a.expire_le ? ` · ${C('portail.expire_le', { date: jour(a.expire_le) })}` : ''}` : C('portail.attente'));
+    return `<div class="panneau-c"><h3>${C('portail.titre')}</h3><p class="note">${C('portail.intro')}</p>
+      ${f.contacts.map((k) => { const a = p.acces.find((x) => x.contact_id === k.id && !x.revoque_le); const fil = p.messages.filter((m) => m.contact_id === k.id);
+        return `<div class="item"><div><b>${esc(k.prenom)} ${esc(k.nom)}</b> · ${C(`relation.${k.relation}`)} <span class="note">${a ? etatAcces(a) : ''}</span>
+          ${fil.length ? `<ul class="liste-simple">${fil.slice(-5).map((m) => `<li><span class="note">${esc(dateHeure(m.cree_le))} · ${C(`categorie.${m.categorie}`)}</span> ${m.sens === 'proche' ? '←' : '→'} ${esc(m.texte)}</li>`).join('')}</ul>` : ''}</div>
+          <div class="actions">${g && !a && k.courriel && k.autorisations.length ? `<button class="btn" data-inviter="${k.id}">${C('portail.inviter')}</button>` : ''}${g && a ? `<button class="btn dan" data-revoquer="${a.id}">${C('portail.revoquer')}</button>` : ''}
+            ${k.autorisations.length ? `<button class="btn" data-repondre="${k.id}">${C('portail.repondre')}</button>` : ''}</div></div>`; }).join('')}
+      <p class="note">${C('portail.conditions')}</p></div>`;
   }
   function modifierIdentite(r) {
     const d = (x) => (x ? String(x).slice(0, 10) : '');

@@ -310,7 +310,8 @@ function creerAppSh(pool, { env = process.env } = {}) {
       const voulu = choix && typeof choix === 'object' ? choix[m.code] : undefined;
       if (voulu !== undefined && typeof voulu !== 'boolean') throw new ErreurSh(400, 'Choix de module invalide.');
       if (voulu === true && ['a_venir', 'etude'].includes(m.statut)) throw new ErreurSh(409, `Le module « ${m.nom} » n’est pas encore disponible.`);
-      const licence = m.statut === 'inclus' || (m.statut === 'disponible' && voulu !== false) ? 'souscrit' : 'non_selectionne';
+      // Optionnels : souscrits seulement sur choix explicite ; autres modules disponibles : souscrits sauf refus
+      const licence = m.statut === 'inclus' || (m.statut === 'disponible' && (m.categorie === 'optionnel' ? voulu === true : voulu !== false)) ? 'souscrit' : 'non_selectionne';
       await c.query(`INSERT INTO sh_hopital_modules(hopital_id,module_code,licence,modifie_par) VALUES($1,$2,$3,$4) ON CONFLICT(hopital_id,module_code) DO NOTHING`,
         [h, m.code, licence, u.email]);
     }

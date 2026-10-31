@@ -45,8 +45,9 @@ const MODULES = [
   { code: 'hospitalisations', categorie: 'chsld', types: ['chsld'], statut: 'disponible', drapeau: 'hospitalisations', nom: 'Hospitalisations et retours', nom_en: 'Hospital stays and returns', dependances: ['residents'] },
   { code: 'reseau_chsld', categorie: 'chsld', types: ['chsld'], statut: 'disponible', drapeau: 'reseau_chsld', nom: 'Réseau inter-CHSLD', nom_en: 'Inter-CHSLD network', dependances: ['residents'] },
   // Optionnels, non implémentés : affichés, jamais activables
-  { code: 'portail_proches', categorie: 'optionnel', types: ['chsld'], statut: 'a_venir', nom: 'Portail des proches', nom_en: 'Family portal', note: 'Phase 2, après revue de sécurité' },
-  { code: 'messagerie_securisee', categorie: 'optionnel', types: ['chsld'], statut: 'a_venir', nom: 'Messagerie sécurisée', nom_en: 'Secure messaging', note: 'Avec le portail des proches' },
+  // Optionnels : désactivés par défaut, activés seulement sur choix explicite (licence) ; démonstration et recette seulement
+  { code: 'portail_proches', categorie: 'optionnel', types: ['chsld'], statut: 'disponible', drapeau: 'portail_proches', nom: 'Portail des proches (pilote)', nom_en: 'Family portal (pilot)', note: 'Invitation individuelle, révocable ; démonstration et recette', dependances: ['proches'] },
+  { code: 'messagerie_securisee', categorie: 'optionnel', types: ['chsld'], statut: 'disponible', drapeau: 'portail_proches', nom: 'Messagerie sécurisée', nom_en: 'Secure messaging', note: 'Dans le portail des proches', dependances: ['portail_proches'] },
   { code: 'appels_video', categorie: 'optionnel', types: ['chsld'], statut: 'etude', nom: 'Appels audio et vidéo', nom_en: 'Audio and video calls', note: 'Étude seulement' },
 ];
 const MODULE = new Map(MODULES.map((m) => [m.code, m]));
@@ -73,7 +74,8 @@ function drapeauxDepuisChoix(type, choix = {}) {
     if (!m || !m.types.includes(type) || typeof actif !== 'boolean') throw new ErreurHttp(400, 'module_invalide', { module: code });
     if (['a_venir', 'etude'].includes(m.statut) && actif) throw new ErreurHttp(409, 'module_non_disponible', { module: code });
     if (m.statut === 'inclus' && !actif) throw new ErreurHttp(409, 'module_inclus', { module: code });
-    if (m.statut === 'disponible' && m.drapeau && !actif) resultat[m.drapeau] = false;
+    if (m.statut === 'disponible' && m.drapeau && m.categorie === 'optionnel') { if (actif) resultat[m.drapeau] = true; }
+    else if (m.statut === 'disponible' && m.drapeau && !actif) resultat[m.drapeau] = false;
     for (const d of (actif ? m.dependances || [] : [])) if (choix[d] === false) throw new ErreurHttp(409, 'module_dependance', { module: code, dependance: d });
   }
   return resultat;
@@ -84,7 +86,8 @@ function moduleActif(etab, code) {
   if (!m || !m.types.includes(etab.type_etablissement || 'hopital')) return false;
   if (m.statut === 'inclus') return true;
   if (m.statut !== 'disponible') return false;
-  return (etab.modules || {})[m.drapeau] !== false;
+  // Optionnel : actif seulement s'il a été choisi ; sinon : actif sauf désactivation explicite
+  return m.categorie === 'optionnel' ? (etab.modules || {})[m.drapeau] === true : (etab.modules || {})[m.drapeau] !== false;
 }
 
 /* Configuration propre aux CHSLD, dérivée du profil pays : unités d'hébergement et références de résidents R-00000. */
@@ -104,4 +107,6 @@ async function configChsld(c, profilId) {
   }
   return id;
 }
-module.exports = { TYPES, TYPES_OPERATIONNELS, MODULES, catalogue, drapeaux, exigerTypeOperationnel, drapeauxDepuisChoix, moduleActif, configChsld, UNITES_CHSLD };
+/** Drapeaux des modules optionnels (désactivés par défaut). */
+const drapeauxOptionnels = (type) => [...new Set(MODULES.filter((m) => m.types.includes(type) && m.categorie === 'optionnel' && m.statut === 'disponible' && m.drapeau).map((m) => m.drapeau))];
+module.exports = { drapeauxOptionnels, TYPES, TYPES_OPERATIONNELS, MODULES, catalogue, drapeaux, exigerTypeOperationnel, drapeauxDepuisChoix, moduleActif, configChsld, UNITES_CHSLD };

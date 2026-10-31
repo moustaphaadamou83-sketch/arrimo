@@ -965,3 +965,45 @@ CREATE TABLE IF NOT EXISTS communications_proches (
   par                int REFERENCES utilisateurs(id),
   cree_le            timestamptz NOT NULL DEFAULT now()
 );
+
+-- Portail des proches (phase pilote, démonstration et recette seulement) : accès individuel sur invitation, révocable,
+-- limité dans le temps ; aucune chambre, localisation ni donnée clinique ; messagerie dans l'application seulement.
+CREATE TABLE IF NOT EXISTS proches_acces (
+  id                 serial PRIMARY KEY,
+  contact_id         int  NOT NULL REFERENCES resident_contacts(id),
+  resident_id        int  NOT NULL REFERENCES residents(id),
+  etablissement_id   int  NOT NULL REFERENCES etablissements(id),
+  courriel           text NOT NULL,
+  invitation_hash    text,                                 -- empreinte du jeton d'invitation (jamais le jeton)
+  invitation_expire_le timestamptz,
+  mot_de_passe_hash  text,
+  actif              boolean NOT NULL DEFAULT false,      -- vrai après l'acceptation de l'invitation
+  expire_le          timestamptz,                         -- fin d'accès décidée par l'établissement (facultative)
+  revoque_le         timestamptz,
+  revoque_par        int REFERENCES utilisateurs(id),
+  echecs             int NOT NULL DEFAULT 0,
+  bloque_jusqu_au    timestamptz,
+  derniere_connexion timestamptz,
+  cree_par           int REFERENCES utilisateurs(id),
+  cree_le            timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS proches_acces_contact_ouvert ON proches_acces (contact_id) WHERE revoque_le IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS proches_acces_courriel_ouvert ON proches_acces (lower(courriel)) WHERE revoque_le IS NULL;
+CREATE TABLE IF NOT EXISTS proches_sessions (
+  jeton_hash         text PRIMARY KEY,
+  acces_id           int  NOT NULL REFERENCES proches_acces(id),
+  expire_le          timestamptz NOT NULL,
+  cree_le            timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS messages_proches (
+  id                 bigserial PRIMARY KEY,
+  resident_id        int  NOT NULL REFERENCES residents(id),
+  contact_id         int  NOT NULL REFERENCES resident_contacts(id),
+  sens               text NOT NULL CHECK (sens IN ('proche', 'etablissement')),
+  categorie          text NOT NULL CHECK (categorie IN ('administratif', 'hebergement', 'rendez_vous', 'mouvements')),
+  texte              text NOT NULL CHECK (length(texte) BETWEEN 1 AND 2000),
+  par                int REFERENCES utilisateurs(id),
+  lu_le              timestamptz,
+  cree_le            timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS messages_proches_fil ON messages_proches (resident_id, contact_id, cree_le);

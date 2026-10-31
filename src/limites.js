@@ -30,7 +30,7 @@ function limiteur({ parSession = Number(process.env.API_LIMITE_SESSION || 600), 
     const sh = cleShValide(req.get('x-sh-key'));
     // Les routes sans session (connexion, mot de passe, invitation) sont toujours comptées par adresse IP :
     // un en-tête Authorization inventé ne doit pas ouvrir un nouveau compteur.
-    const anonymeForce = /^\/(connexion|mot-de-passe|invitations)(\/|$)/.test(req.path);
+    const anonymeForce = /^\/(connexion|mot-de-passe|invitations|proches\/(connexion|invitation))(\/|$)/.test(req.path);
     let cle = sh ? 'sh' : entete.startsWith('Bearer ') && !anonymeForce ? `s:${crypto.createHash('sha256').update(entete.slice(7, 200)).digest('hex').slice(0, 32)}` : `ip:${req.ip}`;
     if (cle.startsWith('s:')) {
       // Au plus JETONS_PAR_IP jetons distincts par adresse et par minute : au-delà, les requêtes reviennent au compteur de l'adresse

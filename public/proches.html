@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="fr-CA" translate="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arrimo · Portail des proches</title>
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0E5E6F">
+<meta name="google" content="notranslate">
+<meta name="referrer" content="no-referrer">
+<script src="apparence.js"></script>
+<link rel="stylesheet" href="style.css">
+<style>
+  /* Portail des proches : grands caractères et grands boutons, lisible sur téléphone et tablette */
+  body.portail { font-size: 18px; }
+  .portail main { max-width: 720px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+  .portail .btn { min-height: 52px; font-size: 18px; padding: 0 20px; }
+  .portail input, .portail select, .portail textarea { min-height: 52px; font-size: 18px; width: 100%; }
+  .portail textarea { min-height: 120px; }
+  .portail .tete { background: var(--principal-plein); color: #fff; padding: 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .portail .tete h1 { font-size: 22px; margin: 0; color: #fff; }
+  .portail .message { border: 1px solid var(--bordure); border-radius: var(--rayon-carte); padding: 12px 14px; background: var(--carte); }
+  .portail .message.proche { border-left: 6px solid var(--secondaire); }
+  .portail .message.etablissement { border-left: 6px solid var(--principal); }
+  .portail .fil { display: flex; flex-direction: column; gap: 10px; }
+  .portail .note { font-size: 16px; }
+</style>
+</head>
+<body class="portail">
+<header class="tete"><h1 id="titre">Portail des proches</h1>
+  <div class="bascule-langue" role="group" aria-label="Langue"><button type="button" class="barre-btn" data-langue="fr">FR</button><button type="button" class="barre-btn" data-langue="en">EN</button></div></header>
+<main id="contenu" aria-live="polite"></main>
+<script src="proches.js"></script>
+</body>
+</html>

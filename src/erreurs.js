@@ -186,6 +186,12 @@ const MESSAGES = {
   formation_recette_seulement: 'Les données de formation ne peuvent être générées qu’en recette.',
   // établissements et import CSV
   apparence_invalide: 'Apparence invalide.',
+  proche_courriel_requis: "Ce proche n’a pas de courriel : ajoutez-en un avant de l’inviter au portail.",
+  proche_sans_autorisation: "Ce proche n’a aucune autorisation : accordez au moins une catégorie avant de l’inviter.",
+  proche_courriel_deja_invite: "Ce courriel a déjà un accès ouvert au portail.",
+  acces_introuvable: "Accès introuvable.",
+  acces_proche_revoque: "Votre accès au portail n’est plus actif. Communiquez avec l’établissement.",
+  invitation_invalide: "Ce lien d’invitation n’est plus valide. Demandez-en un nouveau à l’établissement.",
   residents_reserve_demo: "Les fiches de résidents (identités fictives) ne sont disponibles qu’en démonstration et en recette.",
   etab_non_chsld: "Cet établissement n’est pas un CHSLD.",
   role_insuffisant: "Votre rôle ne permet pas cette opération.",

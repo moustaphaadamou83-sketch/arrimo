@@ -46,6 +46,7 @@ function creerApp(pool, options = {}) {
   });
   app.use(express.static(path.join(__dirname, '..', 'public')));
   // Pages légales, accessibles sans connexion (français et anglais)
+  app.get('/proches', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'proches.html')));
   app.get(['/confidentialite', '/conditions', '/privacy', '/terms'], (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'legal.html')));
 
   const api = express.Router();
@@ -147,6 +148,8 @@ function creerApp(pool, options = {}) {
   }));
 
   /* ---------- tout le reste exige une session ---------- */
+  // Portail des proches : sessions séparées (préfixe « P. »), branché avant la session du personnel
+  require('./portail-proches').brancherPublic(api, pool, route);
   api.use(exigerSession(pool));
   api.use((req, res, next) => { req.utilisateur.langue = req.langue; next(); });
 
@@ -361,6 +364,7 @@ function creerApp(pool, options = {}) {
   api.post('/chsld/contacts/:id/verifier-representant', route((req) => ch.verifierRepresentant(pool, req.utilisateur, entier(req.params.id, 'id'))));
   const ACTIONS_RESIDENT = { 'reserver-place': ch.reserverPlace, arrivee: ch.confirmerArrivee, 'changer-chambre': ch.changerChambre, sortie: ch.sortie, absence: ch.absence,
     hospitalisation: ch.preparerHospitalisation, 'transfert-chsld': ch.preparerTransfertChsld, communications: ch.creerCommunication };
+  require('./portail-proches').brancherPersonnel(api, pool, route, entier);
   api.post('/chsld/residents/:id/:action', route((req) => {
     const f = ACTIONS_RESIDENT[req.params.action]; if (!f) throw new ErreurHttp(404, 'action_inconnue');
     return f(pool, req.utilisateur, entier(req.params.id, 'id'), req.body);

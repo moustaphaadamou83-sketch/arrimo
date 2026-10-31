@@ -23,9 +23,12 @@ function empreinte(e) {
 }
 function fusionner(modules, modifications, type = 'hopital') {
   const resultat = { ...modules };
+  const optionnels = type === 'hopital' ? [] : require('./types-etablissement').drapeauxOptionnels(type);
   for (const k of modulesDuType(type)) {
-    if (modifications[k] === false) resultat[k] = false;
-    else delete resultat[k]; // absent signifie activé dans Arrimo ; conserver les autres paramètres.
+    // Optionnel : vrai seulement sur choix explicite ; sinon : absent signifie activé dans Arrimo.
+    if (optionnels.includes(k)) { if (modifications[k] === true) resultat[k] = true; else delete resultat[k]; }
+    else if (modifications[k] === false) resultat[k] = false;
+    else delete resultat[k];
   }
   return resultat;
 }
