@@ -761,3 +761,205 @@ CREATE TABLE IF NOT EXISTS og_actions (
   termine_le       timestamptz,
   UNIQUE (utilisateur_id, idempotence)
 );
+
+-- =====================================================================================================
+-- Types d'établissement et produit CHSLD (31 oct. 2026)
+-- Un seul socle : l'établissement porte un type ; les modules et l'interface dépendent du type.
+-- Les CHSLD ont leur propre configuration (unités d'hébergement, références R-00000) : les vues de capacité
+-- hospitalières, qui filtrent par configuration, ne les mélangent jamais aux lits d'hôpital.
+-- Identités de résidents et de proches : fictives, en démonstration et en recette seulement (même règle que patients).
+-- Aucune donnée clinique : besoins d'accessibilité et équipements seulement, sous forme de codes opérationnels.
+-- =====================================================================================================
+ALTER TABLE etablissements ADD COLUMN IF NOT EXISTS type_etablissement text NOT NULL DEFAULT 'hopital';
+DO $$ BEGIN
+  ALTER TABLE etablissements ADD CONSTRAINT etab_type_etablissement
+    CHECK (type_etablissement IN ('hopital', 'chsld', 'maison_aines', 'rpa', 'ressource_intermediaire'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- Politique de conservation de la place pendant une hospitalisation (jours ; NULL = conservée jusqu'au retour ou à la sortie)
+ALTER TABLE etablissements ADD COLUMN IF NOT EXISTS conservation_place_jours int CHECK (conservation_place_jours IS NULL OR conservation_place_jours BETWEEN 1 AND 365);
+
+ALTER TABLE utilisateurs DROP CONSTRAINT IF EXISTS utilisateurs_role_check;
+ALTER TABLE utilisateurs ADD CONSTRAINT utilisateurs_role_check
+  CHECK (role IN ('coordonnateur', 'gestionnaire', 'entretien', 'admin_etab', 'equipe_soins'));
+
+CREATE SEQUENCE IF NOT EXISTS resident_seq;
+CREATE TABLE IF NOT EXISTS residents (
+  id                 serial PRIMARY KEY,
+  etablissement_id   int  NOT NULL REFERENCES etablissements(id),
+  reference          text NOT NULL,                       -- identifiant interne stable (R-00000), distinct des identifiants officiels
+  prenom             text NOT NULL,
+  nom                text NOT NULL,
+  nom_usage          text,
+  date_naissance     date NOT NULL,
+  dossier_officiel   text,                                -- identifiant de dossier autorisé (saisi, jamais déduit)
+  langue             text NOT NULL DEFAULT 'fr' CHECK (langue IN ('fr', 'en', 'autre')),
+  telephone          text,
+  courriel           text,
+  adresse_precedente text,
+  statut             text NOT NULL DEFAULT 'preadmission'
+                     CHECK (statut IN ('preadmission', 'present', 'hospitalise', 'absent', 'transfert_en_cours', 'transfere', 'sorti')),
+  lit_id             int REFERENCES lits(id),
+  arrivee_prevue     date,
+  admis_le           timestamptz,
+  responsable_accueil int REFERENCES utilisateurs(id),
+  accessibilite      text[] NOT NULL DEFAULT '{}',        -- codes opérationnels : fauteuil, deambulateur, leve_personne, lit_electrique, malentendant, malvoyant
+  etapes_accueil     jsonb NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(etapes_accueil) = 'object'),
+  version            int  NOT NULL DEFAULT 1,
+  cree_par           int REFERENCES utilisateurs(id),
+  cree_le            timestamptz NOT NULL DEFAULT now(),
+  modifie_le         timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (etablissement_id, reference)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS residents_lit_actif ON residents (lit_id) WHERE lit_id IS NOT NULL AND statut NOT IN ('sorti', 'transfere');
+CREATE INDEX IF NOT EXISTS residents_nom ON residents (etablissement_id, lower(nom), lower(prenom));
+
+CREATE TABLE IF NOT EXISTS resident_contacts (
+  id                 serial PRIMARY KEY,
+  resident_id        int  NOT NULL REFERENCES residents(id),
+  prenom             text NOT NULL,
+  nom                text NOT NULL,
+  relation           text NOT NULL CHECK (relation IN ('fille', 'fils', 'conjoint', 'soeur', 'frere', 'parent', 'petit_enfant', 'ami', 'voisin', 'tuteur', 'autre')),
+  telephone          text,
+  courriel           text,
+  adresse            text,
+  rang               int  NOT NULL DEFAULT 1 CHECK (rang BETWEEN 1 AND 20),
+  principal          boolean NOT NULL DEFAULT false,
+  -- Rôles distincts : être à prévenir n'autorise pas à consulter le dossier.
+  contact_urgence    boolean NOT NULL DEFAULT true,
+  proche_aidant      boolean NOT NULL DEFAULT false,
+  representant_legal boolean NOT NULL DEFAULT false,
+  representant_verifie_le timestamptz,                    -- document de représentation vérifié par une personne habilitée
+  representant_verifie_par int REFERENCES utilisateurs(id),
+  -- Catégories d'informations que ce proche peut recevoir (accordées individuellement, révocables)
+  autorisations      text[] NOT NULL DEFAULT '{}',        -- administratif, hebergement, rendez_vous, mouvements
+  disponibilites     text,
+  langue             text NOT NULL DEFAULT 'fr' CHECK (langue IN ('fr', 'en', 'autre')),
+  actif              boolean NOT NULL DEFAULT true,
+  version            int  NOT NULL DEFAULT 1,
+  cree_le            timestamptz NOT NULL DEFAULT now(),
+  modifie_le         timestamptz NOT NULL DEFAULT now(),
+  CHECK (telephone IS NOT NULL OR courriel IS NOT NULL)
+);
+CREATE INDEX IF NOT EXISTS resident_contacts_resident ON resident_contacts (resident_id) WHERE actif;
+
+CREATE TABLE IF NOT EXISTS resident_mouvements (
+  id                 bigserial PRIMARY KEY,
+  resident_id        int  NOT NULL REFERENCES residents(id),
+  etablissement_id   int  NOT NULL REFERENCES etablissements(id),
+  type               text NOT NULL CHECK (type IN ('preadmission', 'admission', 'changement_chambre', 'depart_hopital', 'hospitalisation_confirmee',
+                       'retour_prevu', 'retour', 'transfert_prepare', 'transfert_sortant', 'transfert_entrant', 'absence', 'fin_absence', 'sortie', 'annulation', 'modification')),
+  de_lit_id          int REFERENCES lits(id),
+  vers_lit_id        int REFERENCES lits(id),
+  autre_etablissement_id int REFERENCES etablissements(id),
+  coordination_id    int,
+  detail             text,
+  date               timestamptz NOT NULL DEFAULT now(),
+  par                int REFERENCES utilisateurs(id)
+);
+CREATE INDEX IF NOT EXISTS resident_mouvements_resident ON resident_mouvements (resident_id, date);
+
+-- Demandes d'hébergement reçues par les circuits autorisés : suivi administratif seulement (aucun classement clinique).
+CREATE SEQUENCE IF NOT EXISTS demande_hebergement_seq;
+CREATE TABLE IF NOT EXISTS demandes_hebergement (
+  id                 serial PRIMARY KEY,
+  etablissement_id   int  NOT NULL REFERENCES etablissements(id),
+  numero             text NOT NULL UNIQUE,
+  provenance         text NOT NULL CHECK (provenance IN ('mecanisme_acces', 'hopital', 'autre_chsld', 'domicile')),
+  reference_externe  text,                                -- numéro donné par le mécanisme d'accès (saisi)
+  resident_id        int REFERENCES residents(id),
+  prenom             text,
+  nom                text,
+  date_naissance     date,
+  type_id            int REFERENCES types_unite(id),
+  arrivee_souhaitee  date,
+  statut             text NOT NULL DEFAULT 'recue'
+                     CHECK (statut IN ('recue', 'documents_manquants', 'en_verification', 'place_proposee', 'acceptee', 'admise', 'refusee', 'annulee')),
+  documents          jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(documents) = 'array'),
+  lit_propose_id     int REFERENCES lits(id),
+  version            int  NOT NULL DEFAULT 1,
+  cree_par           int REFERENCES utilisateurs(id),
+  cree_le            timestamptz NOT NULL DEFAULT now(),
+  modifie_le         timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS demande_hebergement_etapes (
+  id                 bigserial PRIMARY KEY,
+  demande_id         int  NOT NULL REFERENCES demandes_hebergement(id),
+  statut             text NOT NULL,
+  detail             text,
+  par                int REFERENCES utilisateurs(id),
+  date               timestamptz NOT NULL DEFAULT now()
+);
+
+-- Coordination entre établissements : hospitalisation d'un résident, retour de l'hôpital, transfert inter-CHSLD.
+-- Les autres établissements ne voient que la référence du résident (jamais son nom), comme les vues réseau.
+CREATE SEQUENCE IF NOT EXISTS coordination_seq;
+CREATE TABLE IF NOT EXISTS coordinations (
+  id                 serial PRIMARY KEY,
+  numero             text NOT NULL UNIQUE,
+  type               text NOT NULL CHECK (type IN ('hospitalisation', 'retour', 'transfert_chsld')),
+  resident_id        int  NOT NULL REFERENCES residents(id),
+  resident_ref       text NOT NULL,
+  origine_id         int  NOT NULL REFERENCES etablissements(id),
+  destination_id     int  NOT NULL REFERENCES etablissements(id),
+  statut             text NOT NULL DEFAULT 'preparee'
+                     CHECK (statut IN ('preparee', 'envoyee', 'acceptee', 'en_cours', 'recue', 'refusee', 'annulee', 'expiree')),
+  lit_id             int REFERENCES lits(id),          -- place réservée à destination (transfert inter-CHSLD) ou place conservée (retour)
+  retour_prevu_le    timestamptz,
+  motif_admin        text,
+  incident           text CHECK (incident IN ('retour_retarde', 'chambre_indisponible', 'informations_manquantes', 'changement_hopital', 'hospitalisation_prolongee')),
+  liee_id            int REFERENCES coordinations(id),  -- retour lié à l'hospitalisation
+  expire_le          timestamptz,
+  version            int  NOT NULL DEFAULT 1,
+  cree_par           int REFERENCES utilisateurs(id),
+  cree_le            timestamptz NOT NULL DEFAULT now(),
+  modifie_le         timestamptz NOT NULL DEFAULT now(),
+  CHECK (origine_id <> destination_id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS coordinations_ouverte_resident ON coordinations (resident_id, type)
+  WHERE statut IN ('preparee', 'envoyee', 'acceptee', 'en_cours');
+CREATE TABLE IF NOT EXISTS coordination_etapes (
+  id                 bigserial PRIMARY KEY,
+  coordination_id    int  NOT NULL REFERENCES coordinations(id),
+  statut             text NOT NULL,
+  etablissement_id   int REFERENCES etablissements(id),
+  detail             text,
+  par                int REFERENCES utilisateurs(id),
+  date               timestamptz NOT NULL DEFAULT now()
+);
+
+-- Tâches et transmissions administratives (entretien, préparation de chambre, documents, relances)
+CREATE TABLE IF NOT EXISTS taches_etab (
+  id                 serial PRIMARY KEY,
+  etablissement_id   int  NOT NULL REFERENCES etablissements(id),
+  type               text NOT NULL CHECK (type IN ('entretien', 'preparation_chambre', 'administratif', 'transmission', 'relance')),
+  titre              text NOT NULL,
+  detail             text,
+  lit_id             int REFERENCES lits(id),
+  resident_id        int REFERENCES residents(id),
+  assigne_role       text CHECK (assigne_role IN ('coordonnateur', 'entretien', 'admin_etab', 'equipe_soins')),
+  statut             text NOT NULL DEFAULT 'a_faire' CHECK (statut IN ('a_faire', 'en_cours', 'faite', 'annulee')),
+  echeance           timestamptz,
+  version            int  NOT NULL DEFAULT 1,
+  cree_par           int REFERENCES utilisateurs(id),
+  cree_le            timestamptz NOT NULL DEFAULT now(),
+  fait_par           int REFERENCES utilisateurs(id),
+  fait_le            timestamptz
+);
+CREATE INDEX IF NOT EXISTS taches_etab_ouvertes ON taches_etab (etablissement_id, statut) WHERE statut IN ('a_faire', 'en_cours');
+
+-- Communications avec les proches, côté personnel : journal des appels, rappels demandés, échanges planifiés.
+-- Aucun contenu clinique ; le sujet est administratif. Rien n'est envoyé en clair par courriel ou SMS.
+CREATE TABLE IF NOT EXISTS communications_proches (
+  id                 serial PRIMARY KEY,
+  resident_id        int  NOT NULL REFERENCES residents(id),
+  contact_id         int  NOT NULL REFERENCES resident_contacts(id),
+  type               text NOT NULL CHECK (type IN ('appel', 'message', 'rappel_demande', 'rendez_vous')),
+  sens               text NOT NULL DEFAULT 'sortant' CHECK (sens IN ('sortant', 'entrant')),
+  categorie          text NOT NULL CHECK (categorie IN ('administratif', 'hebergement', 'rendez_vous', 'mouvements')),
+  sujet              text NOT NULL,
+  statut             text NOT NULL DEFAULT 'a_faire' CHECK (statut IN ('a_faire', 'fait', 'annule')),
+  prevu_le           timestamptz,
+  fait_le            timestamptz,
+  par                int REFERENCES utilisateurs(id),
+  cree_le            timestamptz NOT NULL DEFAULT now()
+);
