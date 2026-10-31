@@ -186,6 +186,12 @@ const MESSAGES = {
   formation_recette_seulement: 'Les données de formation ne peuvent être générées qu’en recette.',
   // établissements et import CSV
   apparence_invalide: 'Apparence invalide.',
+  demo_mot_de_passe_absent: "Le mot de passe de démonstration n’est pas configuré dans cet environnement.",
+  demo_chsld_absents: "Les deux CHSLD de démonstration doivent d’abord être créés et activés depuis SH.",
+  demo_chsld_deja_peuplee: "La démonstration CHSLD contient déjà des résidents.",
+  demo_hopital_b_absent: "L’Hôpital B de démonstration est introuvable.",
+  demo_chsld_comptes_incomplets: "Les comptes des CHSLD de démonstration sont incomplets.",
+  demo_chsld_echec: "Une étape de la démonstration CHSLD a échoué.",
   proche_courriel_requis: "Ce proche n’a pas de courriel : ajoutez-en un avant de l’inviter au portail.",
   proche_sans_autorisation: "Ce proche n’a aucune autorisation : accordez au moins une catégorie avant de l’inviter.",
   proche_courriel_deja_invite: "Ce courriel a déjà un accès ouvert au portail.",

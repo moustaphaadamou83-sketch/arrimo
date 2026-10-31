@@ -337,8 +337,8 @@ function brancher(api, pool, route, journal, { cibles, appeler, env }) {
     const mrr = (await pool.query(`SELECT devise, sum(CASE periodicite WHEN 'mensuel' THEN m ELSE m/12 END)::numeric(14,2) mrr FROM
       (SELECT a.devise, a.periodicite, (SELECT sum((l->>'montant')::numeric) FROM jsonb_array_elements(a.lignes) l) m FROM sh_abonnements a WHERE statut='actif') s GROUP BY devise`)).rows;
     const encaisse = (await pool.query(`SELECT f.devise, sum(p.montant)::numeric(14,2) total FROM sh_paiements p JOIN sh_factures f ON f.id=p.facture_id
-      WHERE p.recu_le >= date_trunc('month', now())::date GROUP BY f.devise`)).rows;
-    const aFacturer = (await pool.query(`SELECT count(*)::int n FROM sh_abonnements WHERE statut='actif' AND prochaine_facture_le <= now()::date AND (fin IS NULL OR prochaine_facture_le <= fin)`)).rows[0].n;
+      WHERE p.recu_le >= date_trunc('month', now() AT TIME ZONE 'America/Toronto')::date GROUP BY f.devise`)).rows; // mois du Québec (dates métier), pas le mois UTC
+    const aFacturer = (await pool.query(`SELECT count(*)::int n FROM sh_abonnements WHERE statut='actif' AND prochaine_facture_le <= (now() AT TIME ZONE 'America/Toronto')::date AND (fin IS NULL OR prochaine_facture_le <= fin)`)).rows[0].n;
     return { etats, mrr, encaisse_mois: encaisse, abonnements_a_facturer: aFacturer };
   }));
 
