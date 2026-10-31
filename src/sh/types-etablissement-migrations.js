@@ -14,15 +14,15 @@ async function migrerTypesEtablissement(c) {
     ADD COLUMN IF NOT EXISTS nom_en text,
     ADD COLUMN IF NOT EXISTS note text`);
   const { MODULES } = require('../types-etablissement');
-  // Les modules existants (lits, civières, transferts, OG, notifications, rapports) gardent leur code et leurs licences.
+  // Les modules existants (lits, civières, transferts, OG, notifications, rapports) gardent leur code, leurs licences et leurs
+  // dépendances : une dépendance absente du catalogue d'un type est ignorée à la lecture du catalogue (src/sh/app.js).
   const anciens = { civieres: 'urgence' };
   for (const [i, m] of MODULES.entries()) {
     const code = Object.keys(anciens).find((k) => anciens[k] === m.code) || m.code;
     await c.query(`INSERT INTO sh_modules_catalogue (code, nom, description, dependances, categorie, types, statut, ordre, nom_en, note)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       ON CONFLICT (code) DO UPDATE SET categorie = EXCLUDED.categorie, types = EXCLUDED.types, statut = EXCLUDED.statut, ordre = EXCLUDED.ordre,
-        nom_en = EXCLUDED.nom_en, note = EXCLUDED.note,
-        dependances = CASE WHEN sh_modules_catalogue.code IN ('og') THEN '{}' ELSE sh_modules_catalogue.dependances END`,
+        nom_en = EXCLUDED.nom_en, note = EXCLUDED.note`,
     [code, m.nom, m.note || m.nom, m.dependances || [], m.categorie, m.types, m.statut, i + 1, m.nom_en, m.note || null]);
   }
   await c.query('INSERT INTO sh_migrations(version) VALUES($1)', [TYPES_ETABLISSEMENT_VERSION]);

@@ -296,7 +296,7 @@ function creerAppSh(pool, { env = process.env } = {}) {
   }));
 
   /* Catalogue de modules par type : communs, propres au type, optionnels (à venir ou à l'étude, jamais souscriptibles). */
-  const catalogueType = async (db, type) => (await db.query(`SELECT code, nom, nom_en, description, dependances, categorie, types, statut, ordre, note
+  const catalogueType = async (db, type) => (await db.query(`SELECT code, nom, nom_en, description, ARRAY(SELECT d FROM unnest(dependances) d WHERE d IN (SELECT x.code FROM sh_modules_catalogue x WHERE x.actif AND $1 = ANY(x.types))) AS dependances, categorie, types, statut, ordre, note
       FROM sh_modules_catalogue WHERE actif AND $1 = ANY(types) ORDER BY ordre, nom`, [type])).rows;
   api.get('/catalogue-modules', route(async (req) => {
     const TE = require('../types-etablissement');
@@ -481,7 +481,7 @@ function creerAppSh(pool, { env = process.env } = {}) {
     const activations = (await pool.query('SELECT * FROM activations WHERE hopital_id = $1 ORDER BY quand DESC LIMIT 50', [h.id])).rows;
     const sites = (await pool.query('SELECT * FROM sh_sites WHERE hopital_id=$1 ORDER BY id', [h.id])).rows;
     const contacts = (await pool.query('SELECT * FROM sh_contacts WHERE hopital_id=$1 ORDER BY id', [h.id])).rows;
-    const modules = (await pool.query(`SELECT c.code,c.nom,c.nom_en,c.description,c.version,c.dependances,c.parametres AS parametres_defaut,c.categorie,c.statut,c.note,
+    const modules = (await pool.query(`SELECT c.code,c.nom,c.nom_en,c.description,c.version,ARRAY(SELECT d FROM unnest(c.dependances) d WHERE d IN (SELECT x.code FROM sh_modules_catalogue x WHERE x.actif AND $2 = ANY(x.types))) AS dependances,c.parametres AS parametres_defaut,c.categorie,c.statut,c.note,
       COALESCE(m.licence,'non_selectionne') AS licence,COALESCE(m.parametres,'{}'::jsonb) AS parametres
       FROM sh_modules_catalogue c LEFT JOIN sh_hopital_modules m ON m.module_code=c.code AND m.hopital_id=$1 WHERE c.actif AND $2 = ANY(c.types) ORDER BY c.ordre, c.nom`, [h.id, h.type_etablissement || 'hopital'])).rows;
     let comptes = { prevus: h.utilisateurs_prevus || 0, autorises: h.utilisateurs_autorises || 0, actifs: null, invites: null, par_role: null };
@@ -629,7 +629,7 @@ function creerAppSh(pool, { env = process.env } = {}) {
     const h=await hopital(entier(req.params.id)); const modules=Array.isArray(req.body.modules)?req.body.modules:[];
     if (modules.length>30) throw new ErreurSh(400,'Trop de modules dans la requête.');
     if(req.u.role==='commercial'&&modules.some((m)=>!['non_selectionne','propose'].includes(m.licence))) throw new ErreurSh(403,'Le rôle commercial peut préparer une proposition, mais seul l’administrateur enregistre une licence souscrite ou suspendue.');
-    const catalogue=(await pool.query('SELECT code,nom,dependances,types,statut FROM sh_modules_catalogue WHERE actif AND $1 = ANY(types)',[h.type_etablissement||'hopital'])).rows;
+    const catalogue=(await pool.query('SELECT code,nom,ARRAY(SELECT d FROM unnest(dependances) d WHERE d IN (SELECT x.code FROM sh_modules_catalogue x WHERE x.actif AND $1 = ANY(x.types))) AS dependances,types,statut FROM sh_modules_catalogue WHERE actif AND $1 = ANY(types)',[h.type_etablissement||'hopital'])).rows;
     const map=new Map(catalogue.map((m)=>[m.code,m])); const choisis=new Set(modules.filter((m)=>m.licence==='souscrit').map((m)=>m.code));
     for (const m of modules) {
       const c=map.get(m.code); if(!c) throw new ErreurSh(400,'Module inconnu, inactif ou incompatible avec ce type d’établissement.');
