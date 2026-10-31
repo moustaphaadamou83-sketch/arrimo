@@ -2012,7 +2012,8 @@ test('console SH : première connexion (mot de passe, double authentification), 
   const { migrerSh, VERSION } = require('../src/sh/migrations');
   const repriseMigration = await migrerSh(pool, { SH_INITIAL_ADMIN_EMAIL: 'sh@exemple.ca', SH_MFA_ENCRYPTION_KEY: Buffer.alloc(32,7).toString('base64') });
   assert.deepStrictEqual([VERSION, repriseMigration.appliquee], [4, false], 'la migration SH Lot 3 est idempotente');
-  assert.strictEqual((await pool.query('SELECT count(*)::int AS n FROM sh_modules_catalogue')).rows[0].n, 6, 'le catalogue n’est pas dupliqué');
+  // Catalogue par type (migration 37) : un module par code du référentiel, sans doublon après une reprise de migration
+  assert.strictEqual((await pool.query('SELECT count(*)::int AS n FROM sh_modules_catalogue')).rows[0].n, require('../src/types-etablissement').MODULES.length, 'le catalogue n’est pas dupliqué');
   const courierSh = require('../src/courriel');
   courierSh.definirTransport(async () => {});
   const { premierCompteSh } = require('../db/sh-premier-compte');
@@ -2250,7 +2251,8 @@ test('C4 : patients fictifs en recette seulement, formation par rôle, go-live s
     dossier = await sh('PUT', `/hopitaux/${h.id}/dossier`, { sites: dossier.corps.sites, contacts: dossier.corps.contacts });
     assert.strictEqual(dossier.corps.contacts.length, 1, 'réenregistrer le dossier ne duplique pas les contacts');
     const modulesH = dossier.corps.modules;
-    assert.strictEqual((await sh('PUT', `/hopitaux/${h.id}/modules`, { modules: [{ code: 'og', licence: 'souscrit' }] })).statut, 409, 'dépendances de modules requises');
+    // OG fait partie du socle commun (toujours inclus) ; les dépendances se vérifient sur Transferts, qui requiert Lits.
+    assert.strictEqual((await sh('PUT', `/hopitaux/${h.id}/modules`, { modules: [{ code: 'transferts', licence: 'souscrit' }] })).statut, 409, 'dépendances de modules requises');
     assert.strictEqual((await sh('PUT', `/hopitaux/${h.id}/modules`, { modules: [{ code: 'lits', licence: 'souscrit' }, { code: 'transferts', licence: 'souscrit' }, { code: 'og', licence: 'souscrit', parametres: { recommandations_humaines: true } }] })).statut, 200);
     assert.ok(modulesH.some((m) => m.code === 'og'));
     assert.deepStrictEqual((await sh('GET', `/hopitaux/${h.id}`)).corps.modules.find((m)=>m.code==='og').parametres, { recommandations_humaines: true });
