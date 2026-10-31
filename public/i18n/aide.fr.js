@@ -122,7 +122,7 @@ window.ARRIMO_I18N.fr.aide = {
       gestes: [
         'Ajoutez une demande : type d’unité, référence patient, priorité, provenance et besoins.',
         'Cliquez sur « Assigner » pour réserver le lit proposé.',
-        'Sans lit adapté ici, « Chercher ailleurs » propose l’établissement le plus proche qui en a un.',
+        'Sans lit adapté ici, les alternatives du réseau s’affichent d’elles-mêmes sous la demande (« Capacité insuffisante ») ; « Voir toutes les destinations » ouvre la liste complète. Rien n’est réservé sans validation.',
         'À l’arrivée du patient dans l’unité, cliquez sur « Admettre ».',
       ],
       erreurs: [

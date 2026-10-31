@@ -1,11 +1,13 @@
 <!doctype html>
-<html lang="fr-CA">
+<html lang="fr-CA" translate="no">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Arrimo</title>
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <meta name="theme-color" content="#0E5E6F">
+<!-- Interface bilingue (sélecteur FR | EN) : pas de traduction automatique du navigateur, qui rendait « Free » par « Gratuit ». -->
+<meta name="google" content="notranslate">
 <script src="apparence.js"></script>
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="copilote.css">
@@ -85,14 +87,17 @@
 
 <!-- Application -->
 <div id="ecran-app" hidden>
+ <div class="entete-app">
   <header class="barre">
     <div class="barre-in">
+      <button class="btn icone barre-btn" id="b-nav" type="button" aria-controls="onglets" aria-expanded="false" data-i18n-attr="aria-label:nav.ouvrir;title:nav.ouvrir"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-menu"/></svg></button>
       <div class="marque"><img src="logo.svg" alt="" width="30" height="30"><div><strong>Arrimo</strong><small id="nom-utilisateur"></small></div></div>
       <div class="infos-lieu" id="infos-lieu" hidden></div>
       <div class="barre-droite">
         <label class="ctx" for="ctx"><span data-i18n="barre.etablissement">Établissement</span>
           <select id="ctx"></select>
         </label>
+        <div class="bascule-langue" role="group" data-i18n-attr="aria-label:langue.choisir"><button type="button" class="barre-btn" data-langue-choix="fr" lang="fr" aria-label="Français">FR</button><button type="button" class="barre-btn" data-langue-choix="en" lang="en" aria-label="English">EN</button></div>
         <button class="btn icone barre-btn" id="b-disposition" type="button" data-i18n-attr="aria-label:disposition.basculer;title:disposition.basculer"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-panel-left"/></svg></button>
         <button class="btn icone barre-btn" id="b-theme" type="button" data-i18n-attr="aria-label:apparence.basculer;title:apparence.basculer"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-sun-moon"/></svg></button>
         <button class="btn icone barre-btn" id="b-notif" aria-label="Notifications" title="Notifications" data-i18n-attr="aria-label:barre.notifications;title:barre.notifications">
@@ -118,7 +123,9 @@
         </div>
       </div>
     </div>
-    <nav class="onglets" id="onglets" role="tablist">
+  </header>
+  <div class="voile-nav" id="voile-nav" hidden></div>
+  <nav class="onglets" id="onglets" role="tablist" data-i18n-attr="aria-label:nav.principale">
       <button role="tab" data-v="copilote" aria-selected="true"><img class="og-nav-robot" src="og-robot.svg" width="22" height="22" alt=""><span data-i18n="onglets.copilote"></span></button>
       <span class="onglets-groupe" aria-hidden="true" data-i18n="nav.operations">Opérations</span>
       <button role="tab" data-v="lits" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-bed-double"/></svg><span data-i18n="onglets.lits"></span></button>
@@ -138,8 +145,9 @@
       <button role="tab" data-v="admin" aria-selected="false" hidden><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-shield-check"/></svg><span data-i18n="onglets.admin"></span></button>
       <button role="tab" class="hors-menu" data-v="journal" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-history"/></svg><span data-i18n="onglets.journal"></span></button>
       <button role="tab" class="hors-menu" data-v="support" aria-selected="false"><span data-i18n="support.titre"></span></button>
-    </nav>
-  </header>
+  </nav>
+ </div>
+ <div class="corps-app">
   <div id="bandeau" class="bandeau" hidden></div>
   <div id="bandeau-dispo" class="bandeau bandeau-dispo" role="status" aria-live="polite" hidden></div>
   <main class="contenu">
@@ -162,10 +170,11 @@
     <section id="v-compte" hidden></section>
   </main>
   <footer class="pied"><nav class="liens-legaux"><a href="/confidentialite" data-i18n="pied.confidentialite">Confidentialité</a> · <a href="/conditions" data-i18n="pied.conditions">Conditions d’utilisation</a></nav></footer>
-  <button id="og-open" class="og-launcher" type="button" aria-haspopup="dialog" aria-controls="og-panel" data-i18n-attr="aria-label:og.ouvrir;title:og.ouvrir"><img src="og-robot.svg" width="44" height="44" alt=""><span>OG</span></button>
+ </div>
+  <button id="og-open" class="og-launcher" type="button" aria-haspopup="dialog" aria-controls="og-panel" data-i18n-attr="aria-label:og.ouvrir;title:og.ouvrir"><img src="og-robot.svg" width="44" height="44" alt=""><span data-og-nom>OG</span></button>
   <dialog id="og-panel" aria-labelledby="og-title">
     <div class="og-interieur">
-      <header class="og-entete"><img src="og-robot.svg" width="55" height="55" alt=""><div><h2 id="og-title">OG</h2><p data-i18n="og.sous_titre"></p></div><button id="og-close" class="btn" type="button" data-i18n-attr="aria-label:general.fermer" autofocus><svg class="ic" aria-hidden="true"><use href="icones.svg#i-x"/></svg></button></header>
+      <header class="og-entete"><img src="og-robot.svg" width="55" height="55" alt=""><div><h2 id="og-title" data-og-nom>OG</h2><p data-i18n="og.sous_titre"></p></div><button id="og-close" class="btn" type="button" data-i18n-attr="aria-label:general.fermer" autofocus><svg class="ic" aria-hidden="true"><use href="icones.svg#i-x"/></svg></button></header>
       <div id="og-contexte" class="og-contexte"></div>
       <div id="og-messages" class="og-messages" role="log" aria-live="polite" aria-relevant="additions text" data-i18n-attr="aria-label:og.conversation"></div>
       <section class="og-raccourcis"><h3 data-i18n="og.actions"></h3><div id="og-actions" class="og-actions"></div></section>
@@ -179,11 +188,13 @@
 
 <div id="modale" class="modale" hidden></div>
 <div id="toasts" class="toasts" aria-live="polite"></div>
+<script src="og-langue.js"></script>
 <script src="og-avatar.js"></script>
 <script src="support-client.js"></script>
 <script src="app.js"></script>
 <script src="og.js"></script>
 <script src="og-vocal-moteur.js"></script>
 <script src="og-vocal.js"></script>
+<script src="og-message-vocal.js"></script>
 </body>
 </html>

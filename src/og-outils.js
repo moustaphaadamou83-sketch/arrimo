@@ -506,7 +506,7 @@ async function repondre(pool, utilisateur, etabId, question, { historique } = {}
         return;
       }
       blocs.push([`${f.length} patients attendent un lit${seuil ? ` depuis plus de ${duree(seuil)}` : ''} (durée depuis la demande de lit) :`, ...f.map((d) => `• ${d.patient_ref} · ${d.type_nom} · ${d.priorite_affichage} · attend depuis ${duree(d.attente_min)}${d.civiere_code ? ` · civière ${d.civiere_code}` : ''}${d.lit_suggere ? ` · lit compatible libre : ${d.lit_suggere.code}` : ' · aucun lit compatible libre ici'} · ${d.priorite_explication}`)].join('\n'));
-      if (f.some((d) => !d.lit_suggere)) actions.push('Pour les demandes sans lit compatible ici : « Chercher ailleurs » dans Admissions.');
+      if (f.some((d) => !d.lit_suggere)) actions.push('Pour les demandes sans lit compatible ici : les alternatives du réseau sont affichées sous chaque demande dans Admissions.');
     },
     async civieres() {
       const { civieres, stats } = await charger('civ', () => civ.listeCivieres(pool, utilisateur, etabId), 'Urgence');

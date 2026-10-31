@@ -1,5 +1,6 @@
 'use strict';
 const test=require('node:test');
+const { allerOnglet } = require('./aide-navigation.cjs');
 const assert=require('node:assert/strict');
 const {creerPool}=require('../src/db');
 const {demarrerServeur}=require('./serveur-test.cjs');
@@ -49,12 +50,13 @@ test('Suivi OG interhospitalier : quatorze validations PostgreSQL et API', {time
   await t.test('4 — C suit directement le numéro du transfert',async()=>{const r=await q('c',`Suivi du transfert ${numer}`);assert.match(r.reponse,/Statut du transfert : Reçu/);assert.match(r.reponse,/Acceptation|Départ confirmé|Réception/);});
   await t.test('5 — B ne voit aucun dossier ni détail du transfert',async()=>{for(const question of ['P-43267',`Suivi du transfert ${numer}`]){const r=await q('b',question);assert.doesNotMatch(r.reponse,/SI-108|URG-02|Sainte-Aurore|Val-des-Pins|Statut du transfert/);}await api('b','POST','/copilote/question',{etablissement_id:ids.a,question:'P-43267'},403);});
   await t.test('6 — coordination régionale : suivi autorisé',async()=>{const r=await q('reseau',`Suivi du transfert ${numer}`);assert.match(r.reponse,/SI-108/);assert.match(r.reponse,/Reçu/);});
-  await t.test('bilingue : questions FR/EN, réponses choisies FR/EN et mêmes permissions A/B/C',async()=>{
+  // Cahier du 31 oct. 2026 : la réponse suit la langue de la question (la langue choisie ne sert qu'aux questions ambiguës).
+  await t.test('bilingue : questions FR/EN, réponses dans la langue de la question et mêmes permissions A/B/C',async()=>{
     const questions=['OG, where is patient P-43267 currently located? Which hospital, department, room and bed is the patient assigned to?','Où se trouve le patient P-43267 ?'];
     for(const n of ['a','b','c'])for(const langue of ['fr','en'])for(const question of questions){
-      const r=await api(n,'POST','/copilote/question',{etablissement_id:ids[n],question,langue});
-      if(n==='b'){assert.doesNotMatch(r.reponse,/SI-108|URG-02|Val-des-Pins|Sainte-Aurore/);assert.match(r.reponse,langue==='en'?/No accessible active record/:/Aucune situation active/);}
-      else{assert.match(r.reponse,/SI-108/);assert.match(r.reponse,langue==='en'?/Room 108/:/chambre 108/);assert.match(r.reponse,langue==='en'?/Intensive care/i:/Soins intensifs/);assert.match(r.reponse,langue==='en'?/Transfer status: Received/:/Statut du transfert : Reçu/);}
+      const r=await api(n,'POST','/copilote/question',{etablissement_id:ids[n],question,langue});const attendue=question===questions[0]?'en':'fr';assert.equal(r.langue,attendue);
+      if(n==='b'){assert.doesNotMatch(r.reponse,/SI-108|URG-02|Val-des-Pins|Sainte-Aurore/);assert.match(r.reponse,attendue==='en'?/No accessible active record/:/Aucune situation active/);}
+      else{assert.match(r.reponse,/SI-108/);assert.match(r.reponse,attendue==='en'?/Room 108/:/chambre 108/);assert.match(r.reponse,attendue==='en'?/Intensive care/i:/Soins intensifs/);assert.match(r.reponse,attendue==='en'?/Transfer status: Received/:/Statut du transfert : Reçu/);}
     }
     const en=await api('c','POST','/copilote/question',{etablissement_id:ids.c,langue:'fr',question:'Réponds en anglais : où se trouve P-43267 ?'});assert.match(en.reponse,/Verified current location/);
     const fr=await api('c','POST','/copilote/question',{etablissement_id:ids.c,langue:'en',question:'Answer in French: where is patient P-43267?'});assert.match(fr.reponse,/Situation actuelle vérifiée/);
@@ -104,10 +106,11 @@ test('Suivi OG interhospitalier : quatorze validations PostgreSQL et API', {time
     const browser=await require('playwright').chromium.launch({headless:true});
     try {
       const page=await browser.newPage();
+      await api('c','PUT','/moi/langue',{langue_interface:'fr'});   // la langue du compte s'applique à la connexion
       await page.addInitScript(p=>{localStorage.setItem('arrimo-token',p.token);localStorage.setItem('arrimo-ctx',String(p.ctx));localStorage.setItem('arrimo-langue','fr');},{token:tokens.c,ctx:ids.c});
       await page.goto(base);await page.waitForSelector('body[data-pret="1"]');
       if(await page.locator('#b-premiers-pas-ok').isVisible())await page.click('#b-premiers-pas-ok');
-      await page.click('#onglets button[data-v="transferts"]');
+      await allerOnglet(page, 'transferts');
       const fiche=page.locator('#v-transferts .fiche').filter({hasText:numer});await fiche.waitFor();
       const texte=await fiche.textContent();assert.match(texte,/Trajet routier estimé/);assert.match(texte,/Temps écoulé depuis la création/);assert.match(texte,/Durée réelle du transport/);
     } finally {await browser.close();}

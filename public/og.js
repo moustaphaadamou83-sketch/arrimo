@@ -9,11 +9,22 @@
   let occupe = false;
   let patientSelectionne = null;
   const O = (cle, vars) => t(`og.${cle}`, vars);
+  // Nom affiché de l'assistant (Paramètres → OG de l'établissement) ; « OG » reste l'identifiant technique.
+  const nomOg = () => window.ArrimoNomOg?.nom() || 'OG';
+  const avecNom = (x) => (window.ArrimoNomOg ? window.ArrimoNomOg.appliquer(x) : x);
+  /** Langue de conversation (préférence vocale personnelle, sinon langue de l'interface) : repli des questions ambiguës. */
+  const langueConversation = () => window.ArrimoOgVoixPrefs?.langueConversation?.() || langue;
+  /** « Charles, combien de lits ? » : l'appel par le nom de l'assistant n'est pas une partie de la question. */
+  function sansAppel(q) {
+    const n = nomOg().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const r = new RegExp(`^(?:(?:hey|hé|he|ok|okay|dis|dites|bonjour|salut|hello|hi)[ ,]+)?(?:${n}|OG)\\s*[,:!.]?\\s+(?=\\S)`, 'i');
+    return q.replace(r, '').trim() || q;
+  }
   const heureOg = () => new Date().toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit', timeZone: fuseau() });
   function message(texte, utilisateur = false, mode = null) {
     const el = document.createElement('div');
     el.className = `og-message${utilisateur ? ' utilisateur' : ''}`;
-    const nom = document.createElement('span'); nom.className = 'og-auteur'; nom.textContent = utilisateur ? O('vous') : (configurationOg?.personnalisation?.nom || 'OG');
+    const nom = document.createElement('span'); nom.className = 'og-auteur'; nom.textContent = utilisateur ? O('vous') : nomOg();
     const contenu = document.createElement('span'); contenu.textContent = texte;
     el.append(nom, contenu);
     if (mode) {
@@ -72,7 +83,7 @@
       : `${champ(`oa-titre-${a.id}`, T('Titre', 'Title'), a.entree.titre, 'maxlength="160"')}<label class="lbl" for="oa-desc-${a.id}">${T('Description (sans référence patient)', 'Description (no patient reference)')}</label><textarea id="oa-desc-${a.id}" maxlength="2000"></textarea>`;
     const liste = (l) => (l || []).map((x) => ({ numero: T('numéro du transfert', 'transfer number'), patient_ref: T('référence patient', 'patient reference'), type_id: T('unité', 'unit'), destination_id: T('destination', 'destination'), titre: T('titre', 'title'), description: T('description', 'description') }[x] || x)).join(', ');
     carte.innerHTML = `<b>${titre}</b><p class="note">${T('Niveau', 'Level')} ${a.niveau} · ${T('Validation', 'Validation')} : ${a.validateur}</p>
-      ${a.resume?.trajet ? `<p>${T('Trajet', 'Travel')} : ${a.resume.trajet}</p>` : ''}${a.resume?.lits_libres != null ? `<p>${T('Lits libres dans cette unité', 'Free beds in this unit')} : ${a.resume.lits_libres} · ${T('mis à jour', 'updated')} ${new Date(a.resume.mise_a_jour).toLocaleTimeString(en ? 'en-CA' : 'fr-CA')}</p>` : ''}
+      ${a.resume?.trajet ? `<p>${T('Trajet', 'Travel')} : ${a.resume.trajet}</p>` : ''}${a.resume?.lits_libres != null ? `<p>${T('Lits libres dans cette unité', 'Available beds in this unit')} : ${a.resume.lits_libres} · ${T('mis à jour', 'updated')} ${new Date(a.resume.mise_a_jour).toLocaleTimeString(en ? 'en-CA' : 'fr-CA')}</p>` : ''}
       <div class="og-carte-champs">${champs}</div>
       ${a.manquants?.length ? `<p class="og-avert">${T('À compléter', 'Missing')} : ${liste(a.manquants)}</p>` : ''}${a.incertains?.length ? `<p class="og-avert">${T('À vérifier', 'To check')} : ${liste(a.incertains)}</p>` : ''}
       <p>${T('Conséquence', 'Consequence')} : ${a.consequence}</p>
@@ -135,7 +146,7 @@
     return /(?:creer|enregistrer|ajouter|nouveau|nouvelle|create|register|add)\b.{0,48}\b(?:patient|dossier)|\b(?:patient|dossier)\b.{0,48}\b(?:creer|enregistrer|ajouter|create|register|add)\b/.test(n);
   }
   function formulaireCreationPatient() {
-    const host=message(langue==='en'?'Prepare a fictitious patient record. Review every field; OG will check for possible duplicates before asking for your confirmation.':'Préparez un dossier patient fictif. Vérifiez chaque champ; OG recherchera les doublons possibles avant de demander votre confirmation.');
+    const host=message(avecNom(langue==='en'?'Prepare a fictitious patient record. Review every field; OG will check for possible duplicates before asking for your confirmation.':'Préparez un dossier patient fictif. Vérifiez chaque champ; OG recherchera les doublons possibles avant de demander votre confirmation.'));
     const form=document.createElement('form');form.className='og-patient-form';
     const champs=[['prenom',langue==='en'?'First name':'Prénom','text'],['nom',langue==='en'?'Last name':'Nom','text'],['date_naissance',langue==='en'?'Date of birth':'Date de naissance','date'],['reference_locale',langue==='en'?'Local ID (optional)':'Identifiant local (facultatif)','text']];
     for(const [name,label,type] of champs){const wrap=document.createElement('label');wrap.className='champ';wrap.textContent=label;const input=document.createElement('input');input.name=name;input.type=type;input.maxLength=type==='date'?undefined:40;input.required=name!=='reference_locale';wrap.append(input);form.append(wrap);}
@@ -169,14 +180,14 @@
         const title=document.createElement('strong');title.textContent=langue==='en'?'Review patient draft':'Vérifier le brouillon patient';resume.append(title);
         const fields=[`${d.patient.prenom} ${d.patient.nom}`,`${langue==='en'?'Date of birth':'Date de naissance'}: ${d.patient.date_naissance}`,d.patient.reference_locale?`${langue==='en'?'Local ID':'Identifiant local'}: ${d.patient.reference_locale}`:''].filter(Boolean);
         const list=document.createElement('ul');for(const value of fields){const li=document.createElement('li');li.textContent=value;list.append(li);}resume.append(list);
-        let noteDoublons=null;if(d.doublons_possibles.length){noteDoublons=document.createElement('p');noteDoublons.textContent=(langue==='en'?'Possible existing records: ':'Dossiers possiblement existants : ')+d.doublons_possibles.join(', ')+'. '+(langue==='en'?'Review them; OG will not merge records.':'Vérifiez-les; OG ne fusionnera aucun dossier.');resume.append(noteDoublons);}
+        let noteDoublons=null;if(d.doublons_possibles.length){noteDoublons=document.createElement('p');noteDoublons.textContent=(langue==='en'?'Possible existing records: ':'Dossiers possiblement existants : ')+d.doublons_possibles.join(', ')+'. '+avecNom(langue==='en'?'Review them; OG will not merge records.':'Vérifiez-les; OG ne fusionnera aucun dossier.');resume.append(noteDoublons);}
         const ops=document.createElement('div');ops.className='ligne';const modifier=document.createElement('button');modifier.type='button';modifier.className='btn';modifier.textContent=langue==='en'?'Edit':'Modifier';const confirmer=document.createElement('button');confirmer.type='button';confirmer.className='btn pri';confirmer.textContent=langue==='en'?'Confirm record creation':'Confirmer la création';const annuler2=document.createElement('button');annuler2.type='button';annuler2.className='btn';annuler2.textContent=langue==='en'?'Cancel':'Annuler';ops.append(modifier,confirmer,annuler2);resume.append(ops);host.append(resume);
         modifier.onclick=async()=>{modifier.disabled=true;confirmer.disabled=true;annuler2.disabled=true;await annulerDraft();resume.remove();for(const [k,v] of Object.entries(d.patient)){if(form.elements[k])form.elements[k].value=v||'';}host.append(form);verifier.disabled=false;annuler.disabled=false;};
         let accepteDoublons=false,consentDoublons=null,caseDoublons=null;
         const finaliser=async()=>{confirmer.disabled=true;annuler2.disabled=true;try{const result=await api('POST',`/copilote/patients/brouillons/${encodeURIComponent(d.id)}/confirmer`,{etablissement_id:ctx,accepter_doublons:accepteDoublons});if(ctx!==etat.ctx||token!==etat.token||!panneau.open)return;
           if(result.confirmation_requise){
             if(result.doublons_possibles.length){
-              const texte=(langue==='en'?'Possible existing records: ':'Dossiers possiblement existants : ')+result.doublons_possibles.join(', ')+'. '+(langue==='en'?'Review them; OG will not merge records.':'Vérifiez-les; OG ne fusionnera aucun dossier.');
+              const texte=(langue==='en'?'Possible existing records: ':'Dossiers possiblement existants : ')+result.doublons_possibles.join(', ')+'. '+avecNom(langue==='en'?'Review them; OG will not merge records.':'Vérifiez-les; OG ne fusionnera aucun dossier.');
               if(noteDoublons)noteDoublons.textContent=texte;else{noteDoublons=document.createElement('p');noteDoublons.textContent=texte;resume.insertBefore(noteDoublons,ops);}
               if(!consentDoublons){consentDoublons=document.createElement('label');consentDoublons.className='case';caseDoublons=document.createElement('input');caseDoublons.type='checkbox';const text=document.createElement('span');text.textContent=langue==='en'?'I reviewed these possible matches and authorize a separate fictitious record.':'J’ai vérifié ces correspondances et j’autorise la création d’un dossier fictif distinct.';consentDoublons.append(caseDoublons,text);resume.insertBefore(consentDoublons,ops);caseDoublons.onchange=()=>{accepteDoublons=caseDoublons.checked;confirmer.disabled=!accepteDoublons;};}
               caseDoublons.checked=false;accepteDoublons=false;confirmer.disabled=true;confirmer.textContent=langue==='en'?'Confirm separate record':'Confirmer le dossier distinct';
@@ -191,35 +202,42 @@
       }catch{message(O('erreur'));verifier.disabled=false;annuler.disabled=false;}
     };
   }
-  async function question(q) {
+  async function question(qBrute, source = null) {
     if (occupe || !etat.token || !panneau.open || !etat.moi || !etabCtx()?.module_actif) return;
+    const q = sansAppel(qBrute);
+    // Langue de la réponse : demandée, sinon celle de la question, sinon la langue de conversation (le serveur applique la même règle).
+    const langueQ = window.ArrimoOgLangue ? window.ArrimoOgLangue.langueReponse(q, langueConversation()) : langue;
     if(demandeCreationPatient(q)){window.dispatchEvent(new CustomEvent('arrimo:og-interaction-manuelle'));message(q,true);champ.value='';formulaireCreationPatient();return;}
     const contexte = etat.ctx; const token = etat.token; const revision = sequence;
     const entretien = estEntretien();
     const valide = () => panneau.open && revision === sequence && contexte === etat.ctx && token === etat.token;
     occupe = true; envoyer.disabled = true;
-    message(q, true); champ.value = '';
+    const bulle = message(qBrute, true); champ.value = '';
+    if (source === 'message_vocal') { const n = document.createElement('span'); n.className = 'og-source'; n.textContent = O('message_vocal'); bulle.append(n); }
     const attente = message(O('attente'));
     try {
       let reponse;
       if (/(posolog|dosage|\bdose\b|traitement|diagnos|prescri|medicament|treatment|medication)/i.test(q.normalize('NFD').replace(/[\u0300-\u036f]/g, ''))) {
-        reponse = { reponse: O('hors_perimetre'), mode: 'local' };
+        reponse = { reponse: tL(langueQ, 'og.hors_perimetre'), mode: 'local', langue: langueQ };
       } else if (entretien) {
         if (/(nettoy|entretien|clean|priorit|tache|task)/i.test(q)) {
           const file = await api('GET', `/nettoyage?etablissement_id=${contexte}`);
-          reponse = { reponse: O('nettoyage', { n: file.length }) + (file.length ? '\n' + O('nettoyage_codes', { codes: file.slice(0, 5).map(x => x.code).join(', ') }) : ''), mode: 'local' };
-        } else reponse = { reponse: O('entretien_limite'), mode: 'local' };
+          reponse = { reponse: tL(langueQ, 'og.nettoyage', { n: file.length }) + (file.length ? '\n' + tL(langueQ, 'og.nettoyage_codes', { codes: file.slice(0, 5).map(x => x.code).join(', ') }) : ''), mode: 'local', langue: langueQ };
+        } else reponse = { reponse: tL(langueQ, 'og.entretien_limite'), mode: 'local', langue: langueQ };
       } else {
-        reponse = await api('POST', '/copilote/question', { etablissement_id: contexte, question: q, langue, patient_id_context:patientSelectionne });
+        reponse = await api('POST', '/copilote/question', { etablissement_id: contexte, question: q, langue: langueConversation(), patient_id_context:patientSelectionne });
       }
-      if (valide()) { attente.remove(); message(reponse.reponse, false, reponse.mode);
+      const texteReponse = avecNom(String(reponse.reponse ?? ''));
+      if (valide()) { attente.remove(); message(texteReponse, false, reponse.mode);
         if(Array.isArray(reponse.patients)){patientSelectionne=null;cartesPatients(log.lastElementChild,reponse.patients,reponse.limite);}
         if(reponse.proposition)carteAction(log.lastElementChild,reponse.proposition,contexte);
         if(reponse.ouvrir){const b=document.createElement('button');b.type='button';b.className='btn';b.textContent=langue==='en'?'Open this screen':'Ouvrir cet écran';b.onclick=()=>naviguer(reponse.ouvrir);log.lastElementChild.append(b);}
-        window.dispatchEvent(new CustomEvent('arrimo:og-reponse',{detail:{texte:reponse.reponse,langue:reponse.langue||langue,sensible:!!reponse.sensible||!!reponse.patients||!!patientSelectionne||/\b(?:P|TR)-\d{1,12}\b|\badmission\s*(?:n[°o]\s*|#\s*)?\d+|\bpatient\s+(?:interne|id)\s*\d+\b/i.test(q)}}));
+        // Langue du texte reçue du serveur : la voix lit toujours dans la langue du texte affiché.
+        window.dispatchEvent(new CustomEvent('arrimo:og-reponse',{detail:{texte:texteReponse,langue:reponse.langue||langueQ,voix:!!source,sensible:!!reponse.sensible||!!reponse.patients||!!patientSelectionne||/\b(?:P|TR)-\d{1,12}\b|\badmission\s*(?:n[°o]\s*|#\s*)?\d+|\bpatient\s+(?:interne|id)\s*\d+\b/i.test(q)}}));
       }
     } catch {
-      if (valide()) { attente.remove(); message(O('erreur')); window.dispatchEvent(new CustomEvent('arrimo:og-echec')); }
+      // La question n'est pas perdue : elle revient dans le champ pour un nouvel essai.
+      if (valide()) { attente.remove(); message(O('erreur')); if (!champ.value) champ.value = qBrute; window.dispatchEvent(new CustomEvent('arrimo:og-echec')); }
     } finally {
       if (revision === sequence) { occupe = false; envoyer.disabled = false; }
     }
@@ -232,20 +250,21 @@
     if (etabId !== etat.ctx) return;
     const p = configurationOg.personnalisation, e = configurationOg.effectif;
     appliquerIdentite(p, e);
+    window.dispatchEvent(new CustomEvent('arrimo:og-effectif', { detail: e }));
     const vocal = document.querySelector('#og-vocal'); if (vocal && !e.vocal) vocal.hidden = true;
     if (!e.texte) { champ.disabled = true; envoyer.disabled = true; message(t('ogperso.desactive')); return; }
-    if (p.accueil) message(p.accueil);
+    if (p.accueil) message(avecNom(p.accueil));
     // Raccourcis du cahier OG (§17), affichés seulement pour les fonctions actives de l'établissement.
     const en = langue === 'en', T = (fr, anglais) => (en ? anglais : fr);
     if (e.patients) action(T('Créer un patient', 'Create a patient'), () => { message(T('Créer un patient', 'Create a patient'), true); formulaireCreationPatient(); });
     if (e.actions) action(T('Préparer une admission', 'Prepare an admission'), () => question(T('Prépare une admission', 'Prepare an admission')));
-    action(T('Rechercher un lit', 'Find a bed'), () => question(T('Quels lits sont libres ?', 'Which beds are free?')));
+    action(T('Rechercher un lit', 'Find a bed'), () => question(T('Quels lits sont libres ?', 'Which beds are available?')));
     action(T('Consulter les alertes', 'View alerts'), () => question(T('Quelles alertes sont en cours ?', 'Which alerts are active?')));
     if (e.rapports) action(T('Générer un rapport', 'Generate a report'), () => naviguer('indicateurs'));
   }
   /** Nom, avatar et voix d'OG pour cet établissement : appliqués à l'ouverture et dès un enregistrement. */
   function appliquerIdentite(p, e) {
-    const titre = document.querySelector('#og-title'); if (titre) titre.textContent = p.nom;
+    const titre = document.querySelector('#og-title'); if (titre) titre.textContent = nomOg();
     const image = document.querySelector('.og-entete img, .og-entete .og-avatar');
     if (image && window.ArrimoOgAvatar && e.personnalisation) { const span = document.createElement('span'); span.className = 'og-avatar'; span.innerHTML = window.ArrimoOgAvatar.svg(p.avatar, 55); image.replaceWith(span); }
     window.ArrimoOgVoix = p.voix;
@@ -286,6 +305,10 @@
   });
   document.querySelector('#og-close').onclick = fermer;
   panneau.addEventListener('close', () => { sequence++; occupe = false; envoyer.disabled = false; ouvrir.focus(); });
-  document.querySelector('#og-form').onsubmit = ev => { ev.preventDefault(); const q = champ.value.trim(); if (q) question(q); };
+  document.querySelector('#og-form').onsubmit = ev => {
+    ev.preventDefault(); const q = champ.value.trim(); const source = champ.dataset.source || null; delete champ.dataset.source;
+    if (q) question(q, source);
+  };
+  champ.addEventListener('input', (e) => { if (e.isTrusted && champ.dataset.source === 'voix') delete champ.dataset.source; });
   window.addEventListener('arrimo:session-reset', reinitialiser);
 })();

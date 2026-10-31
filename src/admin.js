@@ -57,6 +57,22 @@ function brancher(api, pool, route, entier, options = {}) {
     await pool.query('UPDATE utilisateurs SET apparence = $2 WHERE id = $1', [req.utilisateur.id, apparence]);
     return { apparence };
   }));
+  // Langue de l'interface : enregistrée sur le compte pour être retrouvée après reconnexion.
+  api.put('/moi/langue', route(async (req) => {
+    const langue = String(req.body.langue_interface || '');
+    if (!['fr', 'en'].includes(langue)) throw new ErreurHttp(400, 'langue_invalide');
+    await pool.query('UPDATE utilisateurs SET langue_interface = $2 WHERE id = $1', [req.utilisateur.id, langue]);
+    return { langue_interface: langue };
+  }));
+  // Préférences vocales personnelles d'OG (jamais d'audio ni de texte de conversation).
+  api.put('/moi/og-voix', route(async (req) => {
+    const b = req.body || {};
+    const p = { consentement: b.consentement === true, langue: ['auto', 'fr', 'en'].includes(b.langue) ? b.langue : null, automatique: b.automatique === true };
+    if (p.langue == null || (b.consentement != null && typeof b.consentement !== 'boolean') || (b.automatique != null && typeof b.automatique !== 'boolean')) throw new ErreurHttp(400, 'og_reglage_invalide');
+    const r = await pool.query(`UPDATE utilisateurs SET preferences_og = $2::jsonb || jsonb_build_object('modifie_le', now()) WHERE id = $1 RETURNING preferences_og`,
+      [req.utilisateur.id, JSON.stringify(p)]);
+    return r.rows[0].preferences_og;
+  }));
   api.post('/moi/premiers-pas', route(async (req) => {
     await pool.query('UPDATE utilisateurs SET premiers_pas_vus = true WHERE id = $1', [req.utilisateur.id]);
   }));

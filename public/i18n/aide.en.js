@@ -69,35 +69,35 @@ window.ARRIMO_I18N.en.aide = {
       ],
       erreurs: [
         ['“Invalid patient reference”', 'Use the format shown (e.g. P-00000). Never enter a name or diagnosis.'],
-        ['“No free bed left at …”', 'The last bed was just taken. Search again.'],
+        ['“No available bed left at …”', 'The last bed was just taken. Search again.'],
       ],
     },
     national: {
       nom: 'National',
-      but: 'Every facility that shares its capacity, from nearest to farthest, with no distance limit: free and expected beds by unit type, stretchers, alert level.',
+      but: 'Every facility that shares its capacity, from nearest to farthest, with no distance limit: available and expected beds by unit type, stretchers, alert level.',
       gestes: [
-        'Choose the unit type and the patient’s needs, then check “With a free bed only”.',
+        'Choose the unit type and the patient’s needs, then check “With a available bed only”.',
         'Limit the drive time if needed (30 min, 1 h, 2 h, 4 h).',
         'Open the map to see each facility’s alert level.',
         'Click “Transfer here”, enter the patient reference and confirm: the bed is held and the receiving facility is notified.',
       ],
       erreurs: [
-        ['“No free bed left at …”', 'The last bed was just taken. Choose the next facility in the list.'],
+        ['“No available bed left at …”', 'The last bed was just taken. Choose the next facility in the list.'],
         ['“This facility does not share its capacity”', 'It does not appear on the national dashboard; call it directly.'],
       ],
     },
     lits: {
       nom: 'Beds',
-      but: 'All the facility’s beds by state: free, reserved, occupied, cleaning, unavailable. Every change is logged.',
+      but: 'All the facility’s beds by state: available, reserved, occupied, cleaning, unavailable. Every change is logged.',
       gestes: [
         'Filter by unit with the chips at the top.',
-        'Reserve a free bed with the patient reference, then “Admit” on arrival.',
+        'Reserve a available bed with the patient reference, then “Admit” on arrival.',
         'When the patient leaves, “Release”: the bed goes to cleaning.',
         'Record a planned discharge or designate an ALC patient from an occupied bed.',
         'Take a bed out of service with its reason (staff shortage, equipment…).',
       ],
       erreurs: [
-        ['“Transition not allowed”', 'The cycle is fixed: free → reserved → occupied → cleaning → free. Follow the order.'],
+        ['“Transition not allowed”', 'The cycle is fixed: available → reserved → occupied → cleaning → available. Follow the order.'],
         ['“This bed is linked to transfer … in progress”', 'Decline the transfer in the Transfers tab to free the bed.'],
       ],
     },
@@ -105,10 +105,10 @@ window.ARRIMO_I18N.en.aide = {
       nom: 'ER',
       but: 'The ER stretchers: who is on a stretcher, for how long, in the hallway or not, and who is still waiting for a bed. The occupancy rate can exceed 100%.',
       gestes: [
-        'Free: “Place a patient” with their reference (e.g. P-00000).',
+        'Available: “Place a patient” with their reference (e.g. P-00000).',
         'Occupied: “Request a bed” adds the patient to the admission queue, linked to their stretcher.',
         'When a regular stretcher frees up, “Change stretcher” moves a patient out of the hallway.',
-        'When the patient is admitted to a bed, the stretcher goes to cleaning on its own; “Cleaning done” makes it free.',
+        'When the patient is admitted to a bed, the stretcher goes to cleaning on its own; “Cleaning done” makes it available.',
         'Watch times in orange (over 24 h) and red (over 48 h).',
       ],
       erreurs: [
@@ -118,11 +118,11 @@ window.ARRIMO_I18N.en.aide = {
     },
     admissions: {
       nom: 'Admissions',
-      but: 'The queue of patients waiting for a bed, often on a stretcher in the ER, with the best free bed matching their needs.',
+      but: 'The queue of patients waiting for a bed, often on a stretcher in the ER, with the best available bed matching their needs.',
       gestes: [
         'Add a request: unit type, patient reference, priority, origin and needs.',
         'Click “Assign” to reserve the proposed bed.',
-        'With no suitable bed here, “Find elsewhere” proposes the closest facility that has one.',
+        'With no suitable bed here, network alternatives appear automatically under the request (“Insufficient capacity”); “See all destinations” opens the full list. Nothing is reserved without approval.',
         'When the patient arrives in the unit, click “Admit”.',
       ],
       erreurs: [
@@ -162,7 +162,7 @@ window.ARRIMO_I18N.en.aide = {
       gestes: [
         'Take the bed at the top of the list.',
         'Press “Start” when you enter the room.',
-        'Press “Done” when the room is ready: the bed becomes free everywhere.',
+        'Press “Done” when the room is ready: the bed becomes available everywhere.',
       ],
       erreurs: [
         ['“This bed is not waiting for cleaning”', 'Cleaning was already started or confirmed by a colleague.'],

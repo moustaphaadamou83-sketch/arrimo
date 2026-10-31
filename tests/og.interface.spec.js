@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { allerOnglet } = require('./aide-navigation.cjs');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
@@ -87,8 +88,8 @@ for (const L of largeurs) test(`OG : avant/après, chat, clavier et pages princi
     assert.ok(repartition.includes('Occupé') && repartition.includes('Libre'));
     const pages = ['copilote', 'reseau', 'national', 'lits', 'urgence', 'admissions', 'transferts', 'nettoyage', 'nsa', 'indicateurs', 'journal', 'params'];
     for (const vue of pages) {
-      if (vue === 'journal') { await page.locator('#onglets button[data-v="params"]').click(); await page.waitForSelector('#v-params [data-param-nav="journal"]'); await page.locator('#v-params [data-param-nav="journal"]').click(); }
-      else await page.locator(`#onglets button[data-v="${vue}"]`).click();
+      if (vue === 'journal') { await allerOnglet(page, 'params'); await page.waitForSelector('#v-params [data-param-nav="journal"]'); await page.locator('#v-params [data-param-nav="journal"]').click(); }
+      else await allerOnglet(page, vue);
       await page.waitForFunction(() => !enCours);
       assert.ok(await page.locator('#og-open').isVisible(), `${vue} : accès OG`);
       await ouvrirOg(page);
@@ -113,7 +114,7 @@ for (const L of largeurs) test(`OG : avant/après, chat, clavier et pages princi
     await page.waitForFunction(() => document.querySelector('#og-messages').textContent.includes('aucun traitement ni diagnostic'));
     await page.screenshot({ path: path.join(sortie, `${L.nom}-og.png`) });
     await page.keyboard.press('Escape');
-    await page.locator('#onglets button[data-v="copilote"]').click();
+    await allerOnglet(page, 'copilote');
     await page.waitForFunction(() => !enCours);
     assert.deepEqual(page.erreurs, []);
   } finally { await contexte.close(); }

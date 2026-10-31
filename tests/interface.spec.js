@@ -1,4 +1,5 @@
 const { demarrerServeur } = require('./serveur-test.cjs');
+const { allerOnglet } = require('./aide-navigation.cjs');
 /**
  * Test de l'interface dans un vrai navigateur (Chromium, Playwright).
  * Suit GUIDE-DEMO.md avec les comptes X, Y, entretien et réseau, en largeur ordinateur, tablette et téléphone.
@@ -91,10 +92,10 @@ async function onglet(page, vue) {
   if (process.env.SH_RECETTE_FILTRE) page.on('pageerror', (e) => console.log('ERREUR PAGE', vue, String(e).slice(0, 300)));
   // Journal et Support client ne sont plus dans la barre principale : on y va par Paramètres, comme un utilisateur.
   if (await page.locator(`#onglets button[data-v="${vue}"].hors-menu`).count()) {
-    await page.click('#onglets button[data-v="params"]');
+    await allerOnglet(page, 'params');
     await page.waitForSelector('#v-params [data-param-nav]');
     await page.click(`#v-params [data-param-nav="${vue}"]`);
-  } else await page.click(`#onglets button[data-v="${vue}"]`);
+  } else await allerOnglet(page, vue);
   // 60 s : sur un serveur partagé chargé, certaines vues dépassent ponctuellement 30 s (aucune erreur, rendu seulement plus lent).
   await page.waitForFunction((v) => !document.querySelector(`#v-${v}`).hidden && document.querySelector(`#v-${v}`).children.length > 0, vue, { timeout: 60000 }).catch(async (e) => {
     if (process.env.SH_RECETTE_FILTRE) console.log('DIAGNOSTIC', vue, JSON.stringify(await page.evaluate((v) => ({ cache: document.querySelector(`#v-${v}`).hidden, enfants: document.querySelector(`#v-${v}`).children.length,
@@ -703,7 +704,7 @@ test('environnement neuf : premier compte, mot de passe choisi, premier établis
     await page.fill('#a-code', totp.codePourPas(secret, totp.pasActuel()));
     await page.click('#b-2fa-ok');
     await toast(page, 'activée');
-    await page.click('#onglets [data-v="admin"]');
+    await allerOnglet(page, 'admin');
     await page.waitForSelector('#ne-code');
     assert.deepStrictEqual(await page.$$eval('#onglets button', (bs) => bs.filter((b) => !b.hidden).map((b) => b.dataset.v)), ['admin']);
     assert.match(await page.textContent('#bandeau-demo'), /Recette/);

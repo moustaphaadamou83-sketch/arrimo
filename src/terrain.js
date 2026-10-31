@@ -218,16 +218,91 @@ async function fileAdmission(pool, utilisateur, etabId) {
     d.attente_min = Math.round(Number(d.attente_min));
     d.depasse = d.attente_min > d.attente_admission_max_min;
     d.heures_civiere = d.heures_civiere == null ? null : Math.floor(Number(d.heures_civiere));
-    if (d.statut === 'attente') {
-      const l = await pool.query(
-        `SELECT l.id, l.code, l.version FROM lits l WHERE l.etablissement_id = $1 AND l.type_id = $2 AND l.etat = 'libre'${s.sqlBesoins(besoinsDemande(d))}${sqlAge('l', d.groupe_age)}
-          ORDER BY l.isolement, l.pression_negative, l.ventilation, l.telemetrie, l.code LIMIT 1`, [etabId, d.type_id]);
-      d.lit_suggere = l.rows[0] || null;
-    }
   }
   const priorites = require('./priorites');
   const { referentiel } = await priorites.referentiel(pool, utilisateur, etabId);
-  return priorites.organiserFile(rows, referentiel, utilisateur.langue);
+  const file = priorites.organiserFile(rows, referentiel, utilisateur.langue);
+  await repartirLitsLocaux(pool, etabId, file);
+  return file;
+}
+
+/**
+ * Répartition indicative des lits libres compatibles entre les demandes en attente, dans l'ordre de la file :
+ * un même lit n'est proposé qu'à une seule demande ; les suivantes sont signalées « capacité insuffisante »
+ * avec le déficit de leur type d'unité. Rien n'est réservé : l'attribution reste une décision du personnel.
+ */
+async function repartirLitsLocaux(pool, etabId, file) {
+  const pris = new Set();
+  const parType = new Map();   // type_id → { demandes, couvertes, lits: Set }
+  for (const d of file) {
+    if (d.statut !== 'attente') continue;
+    const l = await pool.query(
+      `SELECT l.id, l.code, l.version FROM lits l WHERE l.etablissement_id = $1 AND l.type_id = $2 AND l.etat = 'libre'${s.sqlBesoins(besoinsDemande(d))}${sqlAge('l', d.groupe_age)}
+        ORDER BY l.isolement, l.pression_negative, l.ventilation, l.telemetrie, l.code`, [etabId, d.type_id]);
+    const libre = l.rows.find((x) => !pris.has(x.id)) || null;
+    if (libre) pris.add(libre.id);
+    d.lit_suggere = libre;
+    d.lits_compatibles_locaux = l.rows.length;
+    // Lit compatible déjà proposé à une demande placée avant dans la file : le personnel peut décider autrement.
+    d.lit_concurrent = !libre && l.rows.length ? l.rows[0] : null;
+    d.couverture_locale = libre ? 'lit' : 'insuffisante';
+    const t = parType.get(d.type_id) || { demandes: 0, couvertes: 0, lits: new Set() };
+    t.demandes++; if (libre) t.couvertes++; l.rows.forEach((x) => t.lits.add(x.id));
+    parType.set(d.type_id, t);
+  }
+  for (const d of file) {
+    if (d.statut !== 'attente' || d.lit_suggere) continue;
+    const t = parType.get(d.type_id);
+    d.deficit = { demandes: t.demandes, lits: t.lits.size, manque: t.demandes - t.couvertes };
+  }
+}
+
+/* Alternatives du réseau pour les demandes sans lit local : calculées automatiquement (sans clic « Chercher ailleurs »),
+   avec un cache court partagé par établissement et critères, des recherches simultanées regroupées et un rythme limité.
+   Le cache est invalidé dès qu'un lit change d'état quelque part (journal) ou qu'une disponibilité est confirmée. */
+const CACHE_ALT = new Map();
+const ALT_DUREE_MS = 60000, ALT_INTERVALLE_MIN_MS = 5000, ALT_MAX = 300;
+async function signatureCapacite(pool) {
+  const r = await pool.query(`SELECT (SELECT COALESCE(max(id), 0) FROM journal) AS j,
+      (SELECT COALESCE(max(disponibilite_confirmee_le), 'epoch') FROM lits) AS c,
+      (SELECT count(*) FROM demandes_admission WHERE statut = 'attente') AS d`);
+  const x = r.rows[0];
+  return `${x.j}|${new Date(x.c).getTime()}|${x.d}`;
+}
+async function alternativesAdmission(pool, utilisateur, etabId) {
+  exigerEtablissement(utilisateur, etabId);
+  const file = await fileAdmission(pool, utilisateur, etabId);
+  const sansLit = file.filter((d) => d.statut === 'attente' && !d.lit_suggere);
+  const verifie = new Date().toISOString();
+  if (!sansLit.length) return { verifie_le: verifie, demandes: [] };
+  const signature = await signatureCapacite(pool);
+  const parCle = new Map();
+  for (const d of sansLit) {
+    const besoins = { ...besoinsDemande(d), groupe_age: d.groupe_age || undefined };
+    const cle = [etabId, d.type_id, ...Object.keys(besoins).sort().map((k) => `${k}=${besoins[k] ?? ''}`), utilisateur.langue].join('|');
+    if (!parCle.has(cle)) parCle.set(cle, { besoins, type_id: d.type_id, demandes: [] });
+    parCle.get(cle).demandes.push(d);
+  }
+  const demandes = [];
+  for (const [cle, g] of parCle) {
+    const maintenant = Date.now();
+    let e = CACHE_ALT.get(cle);
+    const frais = e && ((e.signature === signature && maintenant - e.quand < ALT_DUREE_MS) || maintenant - e.quand < ALT_INTERVALLE_MIN_MS);
+    if (!frais) {
+      const promesse = s.recommander(pool, utilisateur, etabId, g.type_id, g.besoins);
+      e = { signature, quand: maintenant, promesse };
+      CACHE_ALT.set(cle, e);
+      promesse.catch(() => { if (CACHE_ALT.get(cle) === e) CACHE_ALT.delete(cle); });
+      if (CACHE_ALT.size > ALT_MAX) CACHE_ALT.delete(CACHE_ALT.keys().next().value);
+    }
+    const res = await e.promesse;
+    const suggestions = res.suggestions.filter((x) => x.libres > 0);
+    for (const d of g.demandes) {
+      demandes.push({ demande_id: d.id, type_id: d.type_id, type_nom: d.type_nom, deficit: d.deficit, lit_concurrent: d.lit_concurrent,
+        suggestions, routage: res.routage, capacite_verifiee_le: res.capacite_verifiee_le, en_cache: frais });
+    }
+  }
+  return { verifie_le: verifie, demandes };
 }
 
 async function lireDemande(c, utilisateur, id) {
@@ -592,7 +667,7 @@ function indicateursCsv(ind) {
 
 module.exports = {
   designerNsa, retirerNsa, changerNsaOrientation, majConge, debuterNettoyage, fileNettoyage,
-  creerDemande, fileAdmission, assignerLit, admettreDemande, annulerDemande, transfererDemande,
+  creerDemande, fileAdmission, alternativesAdmission, assignerLit, admettreDemande, annulerDemande, transfererDemande,
   admettreDepuisLit, annulerDepuisLit, reserverDepuisLit, synchroniserConge, synchroniserDemandeAdmise,
   niveauAlerte, listeNsa, detailNsa, indicateurs, indicateursCsv, besoinsDemande, ORIENTATIONS, groupeAgeDepuisNaissance,
 };

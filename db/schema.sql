@@ -52,6 +52,10 @@ ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS invitation_en_attente boolean 
 -- Apparence choisie par l'utilisateur (clair, sombre, automatique selon le système, soleil selon l'établissement)
 ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS apparence text NOT NULL DEFAULT 'automatique'
   CHECK (apparence IN ('clair', 'sombre', 'automatique', 'soleil'));
+-- Langue de l'interface choisie par l'utilisateur (retrouvée à la reconnexion, sur tout appareil) ; NULL = pas encore choisie
+ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS langue_interface text CHECK (langue_interface IN ('fr', 'en'));
+-- Préférences vocales personnelles d'OG : autorisation, langue de conversation (auto = langue de l'interface), lecture automatique
+ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS preferences_og jsonb NOT NULL DEFAULT '{}'::jsonb;
 
 CREATE TABLE IF NOT EXISTS utilisateur_etablissements (
   utilisateur_id    int NOT NULL REFERENCES utilisateurs(id) ON DELETE CASCADE,

@@ -18,3 +18,37 @@
 .og-vocal-bouton.actif { animation: og-ecoute 1.6s ease-in-out infinite; }
 @keyframes og-ecoute { 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--principal-plein) 30%, transparent); } }
 @media (prefers-reduced-motion: reduce) { .og-vocal-bouton.actif { animation: none; } }
+/* Indicateur d'état de la voix : pastille de statut (couleurs de statut seulement) + texte, jamais la couleur seule. */
+#og-vocal .ov-barre { align-items: center; }
+.ov-pastille { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--inactif, #94A3B8); }
+.ov-pastille[data-etat="ecoute"] { background: var(--succes, #16A34A); box-shadow: 0 0 0 3px color-mix(in srgb, var(--succes, #16A34A) 25%, transparent); }
+.ov-pastille[data-etat="parole"] { background: var(--info, #2563EB); }
+.ov-pastille[data-etat="attente"] { background: var(--attention, #F59E0B); }
+.ov-pastille[data-etat="erreur"] { background: var(--critique, #DC2626); }
+.ov-pastille[data-etat="coupe"] { background: var(--inactif, #94A3B8); }
+/* Conversation en cours : transcription en direct, langue, micro, Terminer (toujours visible pendant la session). */
+.ov-conv { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; padding: 8px 10px; border: 1px solid var(--th-bordure, #E2E8F0); border-radius: 10px; background: var(--doux, #EEF4F6); }
+.ov-conv[hidden] { display: none; }
+.ov-direct { margin: 0; min-height: 1.5em; font-style: italic; color: var(--texte, #1F2937); overflow-wrap: anywhere; }
+.ov-direct:empty::before { content: "…"; color: var(--texte-2-fond, #5B6B7F); }
+.ov-commandes { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ov-commandes #ov-terminer { margin-left: auto; }
+.ov-langue { display: inline-flex; }
+.ov-langue .btn { min-width: 44px; border-radius: 0; }
+.ov-langue .btn:first-child { border-radius: var(--rayon, 8px) 0 0 var(--rayon, 8px); }
+.ov-langue .btn:last-child { border-radius: 0 var(--rayon, 8px) var(--rayon, 8px) 0; margin-left: -1px; }
+.ov-langue .btn[aria-pressed="true"], #ov-micro[aria-pressed="true"] { background: var(--principal-plein, #0E5E6F); color: #fff; border-color: var(--principal-plein, #0E5E6F); }
+.ov-latence { margin: 0; }
+.ov-latence:empty { display: none; }
+/* Message vocal : enregistrement, niveau du micro, réécoute, transcription modifiable. */
+#ov-message { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; padding: 8px 10px; border: 1px solid var(--th-bordure, #E2E8F0); border-radius: 10px; }
+#ov-message[hidden] { display: none; }
+#ov-message audio { width: 100%; height: 40px; }
+#ov-message textarea { width: 100%; resize: vertical; }
+.ovm-etat { margin: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ovm-rec { width: 10px; height: 10px; border-radius: 50%; background: var(--critique, #DC2626); animation: ovm-clignote 1s steps(2) infinite; }
+@keyframes ovm-clignote { 50% { opacity: 0.25; } }
+.ovm-niveau { height: 8px; border-radius: 4px; background: var(--th-bordure, #E2E8F0); overflow: hidden; }
+.ovm-niveau i { display: block; height: 100%; width: 0; background: var(--secondaire, #159895); transition: width 80ms linear; }
+.ovm-direct { margin: 0; font-style: italic; min-height: 1.5em; overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) { .ovm-rec { animation: none; } .ovm-niveau i { transition: none; } }

@@ -212,7 +212,8 @@ function creerApp(pool, options = {}) {
          FROM config_pays c LEFT JOIN types_unite t ON t.config_id = c.id
         WHERE c.id = ANY($1::int[]) GROUP BY c.id`, [[...new Set(rows.map((e) => e.config_id))]]);
     return { utilisateur: { id: u.id, nom: u.nom, email: u.email, role: u.role, admin: u.admin, gestionnaire: u.gestionnaire,
-      totp_actif: u.totp_actif, mdp_temporaire: u.mdp_temporaire, premiers_pas_vus: u.premiers_pas_vus, apparence: u.apparence || 'automatique' },
+      totp_actif: u.totp_actif, mdp_temporaire: u.mdp_temporaire, premiers_pas_vus: u.premiers_pas_vus, apparence: u.apparence || 'automatique',
+      langue_interface: u.langue_interface || null, preferences_og: u.preferences_og || {} },
     etablissements: rows, configs: configs.rows, demo: env.estDemo(), environnement: env.environnement(),
     patients_fictifs: ['demo', 'recette'].includes(env.environnement()) || process.env.ARRIMO_PATIENTS_FICTIFS === '1' };
   }));
@@ -344,6 +345,7 @@ function creerApp(pool, options = {}) {
     entier(req.body.etablissement_id, 'etablissement_id'), entier(req.params.utilisateurId, 'utilisateurId'), req.body)));
   api.post('/admissions/:id/priorite', route((req) => priorites.valider(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   api.get('/admissions', route((req) => t.fileAdmission(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
+  api.get('/admissions/alternatives', route((req) => t.alternativesAdmission(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   api.post('/admissions', route((req) => t.creerDemande(pool, req.utilisateur, req.body)));
   api.post('/admissions/:id/:etape', route(async (req) => {
     const id = entier(req.params.id, 'id');

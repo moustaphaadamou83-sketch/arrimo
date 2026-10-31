@@ -186,6 +186,7 @@ const MESSAGES = {
   formation_recette_seulement: 'Les données de formation ne peuvent être générées qu’en recette.',
   // établissements et import CSV
   apparence_invalide: 'Apparence invalide.',
+  langue_invalide: 'Langue invalide.',
   og_reglage_invalide: 'Réglage OG invalide.',
   og_document_type: "Type de document non accepté.",
   og_document_invalide: "Image refusée : PNG ou JPEG de 5 Mo au plus.",

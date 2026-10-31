@@ -374,9 +374,14 @@ async function questionIa(contexte, question, fetchImpl = fetch, langue = 'fr') 
   return (data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
 }
 
+/** Réponse d'OG, dans la langue de la question ; `langue` indique au navigateur la langue du texte (et donc de la voix). */
 async function question(pool, utilisateur, etabId, q, fetchImpl, patientContexteId) {
-  const L = require('./og-localisation').langueDemandee(q,utilisateur.langue);
-  utilisateur={...utilisateur,langue:L};
+  const L = require('./og-localisation').langueDemandee(q, utilisateur.langue);
+  const r = await repondreQuestion(pool, { ...utilisateur, langue: L }, etabId, q, fetchImpl, patientContexteId, L);
+  return r && typeof r === 'object' ? { ...r, langue: L } : r;
+}
+
+async function repondreQuestion(pool, utilisateur, etabId, q, fetchImpl, patientContexteId, L) {
   // Guide d'utilisation : étapes et écran à ouvrir, selon les modules actifs de l'établissement.
   const og_guide = require('./og-guide');
   if (og_guide.guider(q, L, {})) {

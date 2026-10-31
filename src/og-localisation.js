@@ -1,11 +1,8 @@
 'use strict';
-/** La langue de sortie est indépendante de celle de la question. Aucun appel de traduction externe. */
-function langueDemandee(question,langue='fr'){
-  const q=String(question).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-  if(/(?:reponds?|repondez|reponse|answer|reply|respond)\s+(?:moi\s+)?(?:en\s+|in\s+)?(?:anglais|english)\b/.test(q))return 'en';
-  if(/(?:reponds?|repondez|reponse|answer|reply|respond)\s+(?:moi\s+)?(?:en\s+|in\s+)?(?:francais|french)\b/.test(q))return 'fr';
-  return langue==='en'?'en':'fr';
-}
+const OgLangue=require('../public/og-langue');
+/** Langue de la réponse : demande explicite (« réponds en anglais »), sinon langue de la question,
+ *  sinon préférence de conversation (question ambiguë, ex. une référence seule). Aucun appel de traduction externe. */
+function langueDemandee(question,langue='fr'){return OgLangue.langueReponse(question,langue);}
 const EVENEMENTS={
   'Référence transmise':'Reference sent','Transfert validé':'Transfer approved','Chambre prête':'Room ready',
   'Transport organisé':'Transport arranged','Civière':'Stretcher','Départ confirmé':'Departure confirmed',

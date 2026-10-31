@@ -10,8 +10,9 @@ test('Arrimo : chaque clé française dispose d’une traduction anglaise avec l
   assert.ok(Object.keys(fr).length>1000);
   for(const k of Object.keys(fr)){assert.ok(k in en,'Traduction absente : '+k);assert.deepEqual(vars(fr[k]),vars(en[k]),'Variables différentes : '+k);}
 });
-test('OG : langue demandée distincte de la langue de la question et du contexte',()=>{
-  assert.equal(langueDemandee('Where is P-43267?','fr'),'fr');assert.equal(langueDemandee('Où est P-43267 ?','en'),'en');
+test('OG : réponse dans la langue de la question (cahier 31 oct.), demande explicite prioritaire, préférence si ambiguë',()=>{
+  assert.equal(langueDemandee('Where is P-43267?','fr'),'en');assert.equal(langueDemandee('Où est P-43267 ?','en'),'fr');
+  assert.equal(langueDemandee('P-43267','fr'),'fr');assert.equal(langueDemandee('P-43267','en'),'en');
   assert.equal(langueDemandee('Réponds en anglais : où se trouve P-43267 ?','fr'),'en');
   assert.equal(langueDemandee('Answer in French: where is P-43267?','en'),'fr');
 });

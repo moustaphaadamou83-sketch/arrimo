@@ -40,10 +40,51 @@ function t(cle, vars) {
   let v = chercher(langue, cle);
   if (v == null) v = chercher('fr', cle);
   if (v == null) return cle;
-  if (typeof v !== 'string' || !vars) return v;
+  if (typeof v !== 'string') return v;
+  if (!vars) return avecNomOg(v);
   // Pluriels {n|un|plusieurs}, nombres selon la langue ; une variable « *_etat » est un état de lit ou de civière
-  return F.remplir(locale(), v, vars, (k, x) => (k.endsWith('_etat') ? t(`etats.${x}`) : undefined));
+  return avecNomOg(F.remplir(locale(), v, vars, (k, x) => (k.endsWith('_etat') ? t(`etats.${x}`) : undefined)));
 }
+
+/* ---------------- Nom de l'assistant : source unique, propre à l'établissement courant ---------------- */
+// « OG » reste l'identifiant technique (API, code, journaux) ; seul l'affichage prend le nom choisi par l'établissement.
+let nomAssistant = 'OG';
+// Mêmes caractères que ceux acceptés pour un nom (lettres, chiffres, espace, point, trait d'union, apostrophe typographique).
+const nomPropre = (n) => String(n || '').replace(/'/g, '’').replace(/[^\p{L}\p{N} .\-’]/gu, '').trim().slice(0, 30) || 'OG';
+/** Remplace « OG » par le nom de l'établissement dans un texte affiché ou lu (élision française comprise : « d’OG » → « de Charles »). */
+function avecNomOg(texte) {
+  if (typeof texte !== 'string' || nomAssistant === 'OG' || !texte.includes('OG')) return texte;
+  const voyelle = /^[aeiouyhàâäéèêëîïôöûüœ]/i.test(nomAssistant);
+  return texte.replace(/\b(d|D|qu|Qu)['’]OG\b/g, (m, p) => (voyelle ? `${p}’${nomAssistant}` : `${{ d: 'de', D: 'De', qu: 'que', Qu: 'Que' }[p]} ${nomAssistant}`))
+    .replace(/\bOG\b/g, nomAssistant);
+}
+window.ArrimoNomOg = { nom: () => nomAssistant, appliquer: (x) => avecNomOg(x) };
+function definirNomOg(nom, rendre = true) {
+  const nouveau = nomPropre(nom);
+  if (nouveau === nomAssistant) return;
+  nomAssistant = nouveau;
+  appliquerLangue();
+  window.dispatchEvent(new Event('arrimo:og-nom'));
+  // Les écrans à formulaire ne sont pas redessinés (saisie en cours) : leurs titres suivront au prochain affichage.
+  if (rendre && etat.moi && !VUES_FORMULAIRES.includes(etat.vue)) rafraichir();
+}
+/** Nom de l'assistant de l'établissement courant : affiché tout de suite depuis le dernier connu, puis confirmé par le serveur. */
+async function chargerNomOg() {
+  const ctx = etat.ctx;
+  if (!ctx || !etat.token) { definirNomOg('OG', false); return; }
+  definirNomOg(lire(`arrimo-og-nom-${ctx}`) || 'OG', false);
+  try {
+    const c = await api('GET', `/og/configuration?etablissement_id=${ctx}`);
+    if (ctx !== etat.ctx) return;
+    const nom = nomPropre(c.personnalisation?.nom);
+    ecrire(`arrimo-og-nom-${ctx}`, nom);
+    window.ArrimoOgVoix = c.personnalisation?.voix || 'feminine';
+    definirNomOg(nom);
+  } catch { /* nom connu conservé */ }
+}
+window.addEventListener('arrimo:og-configuration', chargerNomOg);
+/** Texte dans une langue donnée (réponse de l'assistant dans la langue de la question, quelle que soit celle de l'interface). */
+function tL(l, cle, vars) { const avant = langue; langue = LANGUES.includes(l) ? l : avant; try { return t(cle, vars); } finally { langue = avant; } }
 const F = window.ArrimoFormat;
 const locale = () => chercher(langue, 'langue.locale') || 'fr-CA';
 /** Mise en forme selon la langue : nombre, pourcentage, durée (minutes). */
@@ -62,6 +103,8 @@ function appliquerLangue() {
     el.dataset.i18nAttr.split(';').forEach((paire) => { const [attr, cle] = paire.split(':'); el.setAttribute(attr, t(cle)); });
   });
   document.querySelectorAll('select.choix-langue').forEach((s) => { s.value = langue; });
+  document.querySelectorAll('[data-langue-choix]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.langueChoix === langue)));
+  document.querySelectorAll('[data-og-nom]').forEach((el) => { el.textContent = nomAssistant; });
   majApparence();
   if (etat.lien) $('#c-lien').textContent = t('connexion.lien', { nom: etat.lien.nom });
 }
@@ -93,15 +136,41 @@ $('#b-theme')?.addEventListener('click', () => {
   const actuel = etat.moi?.utilisateur?.apparence || window.ArrimoApparence?.mode() || 'automatique';
   choisirApparence(ordre[(ordre.indexOf(actuel) + 1) % ordre.length]);
 });
-function changerLangue(l) {
+/** Valeurs saisies dans l'écran courant (par identifiant de champ), pour les retrouver après un nouveau rendu. */
+function saisiesEcran() {
+  const s = document.querySelector(`#v-${etat.vue}`); if (!s) return [];
+  return [...s.querySelectorAll('input[id], select[id], textarea[id]')].filter((el) => el.type !== 'file')
+    .map((el) => [el.id, ['checkbox', 'radio'].includes(el.type) ? el.checked : el.value]);
+}
+function restaurerSaisies(saisies) {
+  for (const [id, v] of saisies) {
+    const el = document.getElementById(id); if (!el || el.disabled) continue;
+    if (['checkbox', 'radio'].includes(el.type)) el.checked = v;
+    else if (el.tagName !== 'SELECT' || [...el.options].some((o) => o.value === v)) el.value = v;
+  }
+}
+/**
+ * Langue de l'interface : textes changés tout de suite, sans déconnexion ; saisies et écran conservés ;
+ * préférence enregistrée sur cet appareil et sur le compte (retrouvée à la reconnexion).
+ * La conversation avec l'assistant n'est pas effacée : seule sa langue par défaut suit.
+ */
+async function changerLangue(l, { enregistrer = true } = {}) {
   if (!LANGUES.includes(l) || l === langue) return;
+  const saisies = etat.moi ? saisiesEcran() : [];
   langue = l;
-  window.dispatchEvent(new Event('arrimo:session-reset'));
   ecrire('arrimo-langue', l);
   appliquerLangue();
+  window.dispatchEvent(new Event('arrimo:langue'));
   if (etat.environnement) bandeauEnvironnement(etat.environnement);
-  if (etat.moi) { majNomUtilisateur(); majSelecteurCtx(); etat.reponse = ''; rafraichir(); }
+  if (enregistrer && etat.token && etat.moi) api('PUT', '/moi/langue', { langue_interface: l }).then((r) => { if (etat.moi) etat.moi.utilisateur.langue_interface = r.langue_interface; }).catch(() => {});
+  if (etat.moi) {
+    majNomUtilisateur(); majSelecteurCtx(); etat.reponse = '';
+    await rafraichir();
+    while (enCours) await new Promise((ok) => setTimeout(ok, 40));
+    restaurerSaisies(saisies);
+  }
 }
+document.querySelectorAll('[data-langue-choix]').forEach((b) => { b.onclick = () => changerLangue(b.dataset.langueChoix); });
 document.querySelectorAll('select.choix-langue').forEach((s) => {
   s.innerHTML = LANGUES.map((l) => `<option value="${l}">${esc(dicoDe(l).langue?.court || l.toUpperCase())} · ${esc(dicoDe(l).langue?.nom || l)}</option>`).join('');
   s.onchange = () => changerLangue(s.value);
@@ -291,6 +360,7 @@ $('#f-mdp-temp').addEventListener('submit', async (e) => {
 });
 
 function deconnecter(expire) {
+  ouvrirNav(false); definirNomOg('OG', false);
   etat.supportBrouillons={};etat.supportFiche=null;etat.supportNavigation=null;
   $('#v-support').innerHTML='';
   window.dispatchEvent(new Event('arrimo:session-reset'));
@@ -312,8 +382,9 @@ const disposition = () => (lire('arrimo-disposition') === 'verticale' ? 'vertica
 function appliquerDisposition(d) {
   const v = d === 'verticale';
   document.body.classList.toggle('nav-verticale', v);
-  const infos = $('#infos-lieu'); const nav = $('#onglets');
-  if (infos && nav) { if (v) nav.prepend(infos); else $('.barre-in .marque')?.after(infos); }
+  // Météo, heure et date : en tête de la barre verticale ou du tiroir du téléphone, sinon dans l'en-tête (déplacées seulement si besoin).
+  const infos = $('#infos-lieu'); const nav = $('#onglets'); const dansNav = v || window.matchMedia('(max-width: 600px)').matches;
+  if (infos && nav && (infos.parentElement === nav) !== dansNav) { if (dansNav) nav.prepend(infos); else $('.barre-in .marque')?.after(infos); }
   const b = $('#b-disposition');
   if (b) { const l = `${t('disposition.basculer')} · ${t(`disposition.${d}`)}`; b.setAttribute('aria-label', l); b.title = l; b.setAttribute('aria-pressed', String(v)); }
   majHauteurBarre();
@@ -322,9 +393,28 @@ function choisirDisposition(d) {
   if (!DISPOSITIONS.includes(d)) return;
   ecrire('arrimo-disposition', d); appliquerDisposition(d); toast(t('disposition.enregistree'));
 }
-/** Hauteur réelle de l'en-tête : la barre verticale commence juste dessous. */
-function majHauteurBarre() { const h = $('.barre-in')?.getBoundingClientRect().height; if (h) document.body.style.setProperty('--haut-barre', `${Math.round(h)}px`); }
-if (window.ResizeObserver && $('.barre-in')) new ResizeObserver(majHauteurBarre).observe($('.barre-in'));
+/** Hauteur réelle de l'en-tête : la barre verticale commence juste dessous (mesurée seulement quand elle change, jamais au défilement). */
+function majHauteurBarre() { const h = $('.barre')?.getBoundingClientRect().height; if (h) document.body.style.setProperty('--haut-barre', `${Math.ceil(h)}px`); }
+if (window.ResizeObserver && $('.barre')) new ResizeObserver(majHauteurBarre).observe($('.barre'));
+/* Menu tiroir du téléphone : ouverture et fermeture contrôlées (bouton, voile, Échap, choix d'un écran). */
+const telephone = window.matchMedia('(max-width: 600px)');
+function ouvrirNav(ouvrir) {
+  const b = $('#b-nav'); if (!b) return;
+  const ouvert = !!ouvrir && telephone.matches;
+  if (ouvert === document.body.classList.contains('nav-ouverte')) return;
+  document.body.classList.toggle('nav-ouverte', ouvert);
+  $('#voile-nav').hidden = !ouvert;
+  b.setAttribute('aria-expanded', String(ouvert));
+  const l = t(ouvert ? 'nav.fermer' : 'nav.ouvrir'); b.setAttribute('aria-label', l); b.title = l;
+  if (ouvert) ($('#onglets button[aria-selected="true"]:not([hidden])') || $('#onglets button:not([hidden])'))?.focus();
+  else if (document.activeElement?.closest?.('#onglets')) b.focus();
+}
+$('#b-nav')?.addEventListener('click', () => ouvrirNav(!document.body.classList.contains('nav-ouverte')));
+$('#voile-nav')?.addEventListener('click', () => ouvrirNav(false));
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') ouvrirNav(false); });
+telephone.addEventListener?.('change', () => { ouvrirNav(false); appliquerDisposition(disposition()); });
+/** Changement d'écran : la page repart du haut (pas de position héritée de l'écran précédent ni de saut). */
+const hautDePage = () => { if (window.scrollY) window.scrollTo(0, 0); };
 $('#b-disposition')?.addEventListener('click', () => choisirDisposition(disposition() === 'verticale' ? 'horizontale' : 'verticale'));
 
 /* ---------------- Météo, heure et date de l'établissement (fuseau de sa configuration) ---------------- */
@@ -366,6 +456,8 @@ function quitterSansEnregistrer() {
 window.addEventListener('beforeunload', (e) => { if (etat.ogModifie) { e.preventDefault(); e.returnValue = ''; } });
 function allerA(vue) {
   if (vue !== etat.vue && !quitterSansEnregistrer()) return;
+  if (vue !== etat.vue) hautDePage();
+  ouvrirNav(false);
   etat.vue = vue;
   document.querySelectorAll('#onglets button').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.v === vue)));
   document.querySelectorAll('.contenu > section').forEach((sec) => { sec.hidden = sec.id !== `v-${vue}`; });
@@ -385,6 +477,10 @@ function majSelecteurCtx() {
 
 async function demarrer() {
   etat.moi = await api('GET', '/moi');
+  // Langue retrouvée sur le compte ; à défaut, le choix fait sur cet appareil est enregistré sur le compte.
+  const langueCompte = etat.moi.utilisateur.langue_interface;
+  if (LANGUES.includes(langueCompte)) { if (langueCompte !== langue) { langue = langueCompte; ecrire('arrimo-langue', langue); appliquerLangue(); window.dispatchEvent(new Event('arrimo:langue')); } }
+  else api('PUT', '/moi/langue', { langue_interface: langue }).catch(() => {});
   window.ArrimoApparence?.definir(etat.moi.utilisateur.apparence || 'automatique', { lieu: lieuApparence() });
   majApparence();
   bandeauEnvironnement(etat.moi.environnement);
@@ -416,7 +512,7 @@ async function demarrer() {
   $('#ecran-app').hidden = false;
   const entretien = estEntretien();
   appliquerModules();
-  appliquerDisposition(disposition()); majInfosLieu(); majMeteo(true);
+  appliquerDisposition(disposition()); majInfosLieu(); majMeteo(true); chargerNomOg();
   $('#b-notif').hidden = entretien;
   if (entretien) etat.vue = 'nettoyage';
   document.querySelectorAll('#onglets button').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.v === etat.vue)));
@@ -452,11 +548,13 @@ $('#ctx').onchange = async (e) => {
   etat.recherche = { ...etat.recherche, res: null, choix: null };
   etat.reponse = '';
   appliquerModules();
-  majInfosLieu(); majMeteo(true);
+  majInfosLieu(); majMeteo(true); chargerNomOg();
   await rafraichir();
 };
 document.querySelectorAll('#onglets button').forEach((b) => {
   b.onclick = async () => {
+    ouvrirNav(false);
+    if (etat.vue !== b.dataset.v) hautDePage();
     etat.vue = b.dataset.v;
     document.querySelectorAll('#onglets button').forEach((x) => x.setAttribute('aria-selected', String(x === b)));
     document.querySelectorAll('.contenu > section').forEach((s) => { s.hidden = s.id !== `v-${etat.vue}`; });
@@ -485,7 +583,7 @@ async function rafraichir() {
       admin: vueAdmin, compte: vueCompte, support:vueSupportClient, patients: vuePatients,
     })[etat.vue]()]);
     poserMenuParametres();
-    appliquerDisposition(disposition()); majInfosLieu();
+    majInfosLieu();
     if (!$('#panneau-aide').hidden) afficherAide();
   } catch (err) {
     if (etat.token) toast(err.message, true);
@@ -1066,16 +1164,7 @@ async function panneauOg(etab) {
   const lireAvatar = () => ({ modele: $('#og-modele').value, style: $('#og-style').value, couleur: $('#og-couleur').value, peau: $('#og-peau').value, tenue: $('#og-tenue').value, accessoire: $('#og-accessoire').value });
   const apercu = () => { $('#og-apercu').innerHTML = A ? A.svg(lireAvatar(), 96) : ''; };
   zone.querySelectorAll('select').forEach((s) => { s.onchange = apercu; }); apercu();
-  $('#og-tester').onclick = () => {
-    if (!('speechSynthesis' in window)) { toast(t('ogperso.voix_indisponible'), true); return; }
-    const langueVoix = $('#og-langue').value, texte = t('ogperso.essai_voix', { nom: $('#og-nom').value || 'OG' });
-    const u2 = new SpeechSynthesisUtterance(texte); u2.lang = langueVoix === 'en' ? 'en-CA' : 'fr-CA';
-    const voix = speechSynthesis.getVoices().filter((v) => v.lang.startsWith(langueVoix));
-    // Les navigateurs n'indiquent pas le genre des voix : choix indicatif par nom, sinon la voix par défaut.
-    const masc = /male|homme|thomas|daniel|paul|nicolas|alex/i, fem = /female|femme|amelie|marie|julie|samantha|karen|hortense/i;
-    u2.voice = voix.find((v) => ($('#og-voix').value === 'masculine' ? masc : fem).test(v.name)) || voix[0] || null;
-    speechSynthesis.cancel(); speechSynthesis.speak(u2);
-  };
+  $('#og-tester').onclick = () => essayerVoix($('#og-langue').value, $('#og-voix').value, nomPropre($('#og-nom').value));
   const reinit = $('#og-reinit'); if (reinit) reinit.onclick = () => {
     $('#og-nom').value = 'OG'; $('#og-modele').value = 'robot'; $('#og-style').value = 'professionnel'; $('#og-couleur').value = '#0E5E6F'; $('#og-peau').value = '#C68642';
     $('#og-tenue').value = 'blouse'; $('#og-accessoire').value = 'aucun'; $('#og-accueil').value = ''; apercu(); marquer(true);
@@ -1100,18 +1189,38 @@ function menuParametres(actif) {
   return `<nav class="params-nav" aria-label="${esc(t('params.titre'))}">${entreesParametres().map(([cible, cle]) =>
     `<button type="button" class="btn${cible === actif ? ' actif' : ''}" data-param-nav="${cible}"${cible === actif ? ' aria-current="page"' : ''}>${esc(t(`params.nav_${cle}`))}</button>`).join('')}</nav>`;
 }
-/** Voix d'OG : réglages personnels (autorisation, langue du micro, lecture automatique), enregistrés à chaque changement. */
+/** Essai de voix : même choix que pendant les conversations (langue stricte, genre si disponible), avec un message clair sinon. */
+function essayerVoix(langueVoix, genre, nom) {
+  const V = window.ArrimoOgVocal, synthese = window.speechSynthesis;
+  if (!synthese || !window.SpeechSynthesisUtterance || !V) { toast(t('ogperso.voix_indisponible'), true); return; }
+  const code = langueVoix === 'en' ? 'en-CA' : 'fr-CA';
+  const lancer = () => {
+    const choix = V.choisirVoix(synthese.getVoices(), code, genre);
+    if (!choix.voix) { toast(window.ArrimoOgVoixPrefs?.texte(langueVoix === 'en' ? 'voix_indisponible_en' : 'voix_indisponible_fr') || t('ogperso.voix_indisponible'), true); return; }
+    const u = new SpeechSynthesisUtterance(tL(langueVoix, 'ogperso.essai_voix', { nom })); u.lang = choix.voix.lang || code; u.voice = choix.voix;
+    u.volume = window.ArrimoOgVoixPrefs?.lire().volume ?? 1;
+    synthese.cancel(); synthese.speak(u);
+    toast(`${t('ogperso.voix_utilisee', { voix: choix.voix.name || code })}${choix.genreRespecte ? '' : ` ${window.ArrimoOgVoixPrefs?.texte('voix_genre') || ''}`}`);
+  };
+  if (synthese.getVoices().length) lancer(); else { synthese.addEventListener('voiceschanged', lancer, { once: true }); setTimeout(() => { if (!synthese.getVoices().length) toast(t('ogperso.voix_indisponible'), true); }, 1500); }
+}
+/** Voix : réglages personnels (autorisation, langue de conversation, lecture automatique, volume), enregistrés à chaque changement. */
 function panneauVoixOg() {
   const zone = $('#params-og-voix'); const V = window.ArrimoOgVoixPrefs;
   if (!zone || !V || !V.disponible()) return;
   const p = V.lire(); const x = (k) => esc(V.texte(k));
+  const opt = (v, l) => `<option value="${v}"${p.langue === v ? ' selected' : ''}>${l}</option>`;
   zone.innerHTML = `<section class="panneau-c og-voix-perso" aria-labelledby="pv-titre"><h3 id="pv-titre">${x('titre')}</h3><p class="note">${x('information')}</p>
     <label class="case"><input type="checkbox" id="pv-consentement"${p.consentement ? ' checked' : ''}> ${x('consentement')}</label>
-    <div class="ligne"><div class="champ"><label class="lbl" for="pv-langue">${x('langue')}</label><select id="pv-langue"><option value="fr-CA"${p.langue === 'fr-CA' ? ' selected' : ''}>Français</option><option value="en-CA"${p.langue === 'en-CA' ? ' selected' : ''}>English</option></select></div></div>
+    <div class="ligne"><div class="champ"><label class="lbl" for="pv-langue">${x('langue')}</label><select id="pv-langue" aria-describedby="pv-langue-aide">${opt('auto', x('langue_auto'))}${opt('fr', 'Français')}${opt('en', 'English')}</select><p class="note" id="pv-langue-aide">${x('langue_aide')}</p></div>
+      <div class="champ"><label class="lbl" for="pv-volume">${x('volume')}</label><input type="range" id="pv-volume" min="0.2" max="1" step="0.1" value="${p.volume}"></div></div>
     <label class="case"><input type="checkbox" id="pv-automatique"${p.automatique ? ' checked' : ''}> ${x('automatique')}</label>
+    <div class="ligne serre"><button type="button" class="btn" id="pv-tester">${esc(t('ogperso.tester'))}</button></div>
     <p class="note">${x('perso')}</p></section>`;
-  const enregistrer = () => { V.ecrire({ consentement: $('#pv-consentement').checked, langue: $('#pv-langue').value, automatique: $('#pv-automatique').checked }); toast(V.texte('enregistre')); };
+  const enregistrer = () => V.ecrire({ consentement: $('#pv-consentement').checked, langue: $('#pv-langue').value, automatique: $('#pv-automatique').checked });
   ['#pv-consentement', '#pv-langue', '#pv-automatique'].forEach((id) => { $(id).onchange = enregistrer; });
+  $('#pv-volume').onchange = () => { V.ecrire({ volume: Number($('#pv-volume').value) }); toast(V.texte('enregistre')); };
+  $('#pv-tester').onclick = () => essayerVoix(V.langueConversation(), window.ArrimoOgVoix || 'feminine', nomAssistant);
 }
 window.addEventListener('arrimo:ouvrir-parametres', (e) => ouvrirParametre(e.detail || 'params'));
 function ouvrirParametre(cible) {
@@ -1619,6 +1728,62 @@ function tableauPrevisions(p) {
 }
 
 /* ---------------- Admissions ---------------- */
+/* Alternatives du réseau (demandes sans lit local) : dernier résultat gardé par établissement pour un affichage
+   immédiat lors des rafraîchissements, puis actualisé (le serveur limite et met en cache les recherches). */
+function alternativesConnues(id) { return etat.alternatives?.ctx === etat.ctx ? etat.alternatives.parDemande.get(Number(id)) : undefined; }
+function panneauAlternatives(d, alt) {
+  const A = (k, vars) => esc(t(`admissions.${k}`, vars));
+  const def = d.deficit || alt?.deficit;
+  const tete = `<h4>${A(def && def.manque > 0 ? 'alt_titre_deficit' : 'alt_titre')}</h4>${def ? `<p class="note">${A('alt_manque', { n: def.manque, type: d.type_nom, d: def.demandes, l: def.lits })}</p>` : ''}`;
+  if (alt === undefined) return `${tete}<p class="note" role="status">${A('alt_recherche')}</p>`;
+  if (alt === null) return `${tete}<p class="note">${A('alt_erreur')}</p>`;
+  const sug = alt.suggestions || [];
+  if (!sug.length) return `${tete}<p>${A('alt_aucune')}</p>`;
+  const hm = (iso) => new Date(iso).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit', timeZone: fuseau() });
+  const statut = (x) => x.confirmation?.statut === 'capacite_confirmee' ? ['ok', A('alt_confirme')] : x.confirmation?.statut === 'capacite_perimee' ? ['perime', A('alt_a_reconfirmer')] : ['verifier', A('alt_non_confirme')];
+  return `${tete}<ul class="alt-liste">${sug.slice(0, 3).map((x, i) => { const [cls, lib] = statut(x); return `<li class="alt-item">
+      <div><strong>${esc(x.nom)}</strong>${x.recommande ? ` <span class="badge fort">${esc(t('reseau.recommande'))}</span>` : ''}
+        <div class="note">${esc(d.type_nom)} · ${A('alt_lits', { n: x.libres })}</div>
+        <div class="note"><span class="alt-statut alt-${cls}">${lib}</span>${x.confirmation?.confirme_le ? ` · ${A('alt_confirme_le', { heure: hm(x.confirmation.confirme_le) })}` : ''}</div>
+        ${x.statut_route === 'calcule' ? `<div class="note num">${A('alt_route', { km: nb(x.distance_km), duree: duree(x.minutes_route) })}</div>` : ''}
+        ${x.exclusions && (x.exclusions.age || x.exclusions.besoins) ? `<div class="note">${A('alt_exclus', { age: x.exclusions.age, besoins: x.exclusions.besoins })}</div>` : ''}</div>
+      ${etabCtx()?.module_actif ? `<button class="btn" data-adm="${d.id}" data-a="alt-transfert" data-i="${i}">${A('alt_preparer')}</button>` : ''}</li>`; }).join('')}</ul>
+    <p class="note">${A('alt_maj', { heure: hm(alt.capacite_verifiee_le || alt.verifie_le) })}${sug.length > 3 ? ` · <button class="lien" type="button" data-adm="${d.id}" data-a="alt-tout">${A('alt_tout_voir', { n: sug.length })}</button>` : ''}</p>`;
+}
+let alternativesEnCours = null;
+async function chargerAlternatives(v, file) {
+  const ctx = etat.ctx;
+  if (alternativesEnCours?.ctx === ctx) return alternativesEnCours.p;   // une seule recherche à la fois par établissement
+  const p = (async () => {
+    let r = null;
+    try { r = await api('GET', `/admissions/alternatives?etablissement_id=${ctx}`); } catch { r = null; }
+    if (ctx !== etat.ctx) return;
+    const parDemande = new Map((r?.demandes || []).map((x) => [x.demande_id, { ...x, verifie_le: r.verifie_le }]));
+    etat.alternatives = { ctx, parDemande, echec: !r };
+    if (etat.vue !== 'admissions') return;
+    document.querySelectorAll('#v-admissions [data-alt]').forEach((zone) => {
+      const d = file.find((x) => String(x.id) === zone.dataset.alt); if (!d) return;
+      zone.innerHTML = panneauAlternatives(d, r ? parDemande.get(d.id) || { suggestions: [], verifie_le: r.verifie_le } : null);
+      zone.querySelectorAll('[data-adm]').forEach((b) => { const orig = document.querySelector(`#v-admissions .actions [data-adm="${b.dataset.adm}"][data-a="ailleurs"]`);
+        b.onclick = b.dataset.a === 'alt-tout' ? () => orig?.click() : () => preparerTransfert(d, parDemande.get(d.id)?.suggestions?.[Number(b.dataset.i)]); });
+    });
+  })().finally(() => { alternativesEnCours = null; });
+  alternativesEnCours = { ctx, p };
+  return p;
+}
+/** Préparer une demande de transfert vers une destination proposée : confirmation explicite ; le receveur doit accepter. */
+function preparerTransfert(d, x) {
+  if (!d || !x) return null;
+  const A = (k, vars) => esc(t(`admissions.${k}`, vars)); const etab = etat.ctx;
+  modale(t('admissions.alt_confirmer_titre', { ref: d.patient_ref }), `<p><strong>${esc(x.nom)}</strong></p><p class="note num">${esc(x.raison || '')}</p>
+    <p class="note">${A('alt_confirmer_aide', { etab: x.nom })}</p><label><input type="checkbox" id="m-transfert-urgent"> ${esc(t('priorites_ui.transport_urgent'))}</label>`,
+  [{ label: t('general.annuler') }, { label: t('admissions.demander_transfert'), pri: true, run: async () => {
+    if (etab !== etat.ctx) return false;
+    return (await agir(null, () => api('POST', `/admissions/${d.id}/transferer`, { destination_id: x.etablissement_id, lit_id: x.lit?.id, version: x.lit?.version, urgent: $('#m-transfert-urgent').checked }),
+      (tr) => t('admissions.transfert_ok', { numero: tr.numero, etab: x.nom }))) !== null || false;
+  } }]);
+  return null;
+}
 /** Types d'unité proposés dans les formulaires : ceux qui existent dans l'établissement (sinon tout le catalogue de la configuration). */
 function typesEtab(cfg) {
   const presents = (etabCtx() && etabCtx().types_presents) || [];
@@ -1639,9 +1804,11 @@ async function vueAdmissions() {
       <div class="note">${esc(d.type_nom)} · ${esc(t(`provenances.${d.provenance}`).toLowerCase())} · ${esc(besoinsTexte(d))}</div>
       ${d.civiere_code ? `<div class="note">${t('admissions.sur_civiere', { code: esc(d.civiere_code) })} · <span class="${classeDuree(d.heures_civiere)}">${esc(t('urgence.depuis_h', { duree: duree(d.heures_civiere * 60) }))}</span></div>` : ''}
       ${d.statut === 'assignee' ? `<div class="note">${t('admissions.lit_assigne', { code: esc(d.lit_code) })}</div>` : d.lit_suggere ? `<div class="note">${t('admissions.lit_adapte', { code: esc(d.lit_suggere.code) })}</div>` : `<div class="alerte">${A('aucun_lit')}</div>`}
+      ${d.statut === 'attente' && !d.lit_suggere ? `${d.lit_concurrent ? `<p class="note">${A('alt_lit_concurrent', { code: d.lit_concurrent.code })}</p>` : ''}<div class="alternatives" data-alt="${d.id}">${panneauAlternatives(d, alternativesConnues(d.id))}</div>` : ''}
       ${actif ? `<div class="actions">${d.statut === 'attente'
     ? `${d.lit_suggere ? `<button class="btn pri" data-adm="${d.id}" data-a="assigner" data-lit="${d.lit_suggere.id}" data-version="${d.lit_suggere.version}">${A('assigner', { code: d.lit_suggere.code })}</button>` : ''}
-           <button class="btn${d.lit_suggere ? '' : ' pri'}" data-adm="${d.id}" data-a="ailleurs">${A('chercher_ailleurs')}</button>`
+           ${!d.lit_suggere && d.lit_concurrent ? `<button class="btn" data-adm="${d.id}" data-a="assigner" data-lit="${d.lit_concurrent.id}" data-version="${d.lit_concurrent.version}">${A('alt_assigner_quand_meme', { code: d.lit_concurrent.code })}</button>` : ''}
+           <button class="btn" data-adm="${d.id}" data-a="ailleurs">${A('chercher_ailleurs')}</button>`
     : `<button class="btn pri" data-adm="${d.id}" data-a="admettre">${A('admettre')}</button>`}
         ${priorites.peut_valider && priorites.referentiel ? `<button class="btn" data-adm="${d.id}" data-a="priorite">${esc(t('priorites_ui.valider'))}</button>` : ''}
         <button class="btn dan" data-adm="${d.id}" data-a="annuler">${A('annuler')}</button></div>` : ''}</div>`;
@@ -1673,18 +1840,21 @@ async function vueAdmissions() {
     agir(ev.target, () => api('POST', '/admissions', { etablissement_id: etat.ctx, type_id: Number($('#a-type').value), patient_ref: $('#a-ref').value.trim(),
       priorite: $('#a-prio').value, provenance: $('#a-prov').value, besoins, civiere_id: civ, groupe_age: $('#a-age').value || undefined }), t('admissions.ajoutee'));
   };
+  // Alternatives du réseau : chargées sans bloquer l'écran, puis placées sous chaque demande sans lit local.
+  if (actif && attenteF.some((d) => !d.lit_suggere)) chargerAlternatives(v, file);
   const selCiv = $('#a-civ');
   if ($('#p-habilitations')) $('#p-habilitations').onclick = () => gererHabilitationsPriorites();
   if ($('#p-referentiel')) $('#p-referentiel').onclick = () => configurerPriorites(priorites.referentiel);
   if (selCiv) selCiv.onchange = () => { const o = selCiv.selectedOptions[0]; if (o && o.dataset.ref) { $('#a-ref').value = o.dataset.ref; $('#a-prov').value = 'urgence'; } };
   v.querySelectorAll('[data-adm]').forEach((b) => {
     b.onclick = async () => {
-      const id = b.dataset.adm; const a = b.dataset.a;
+      const id = b.dataset.adm; const a = b.dataset.a === 'alt-tout' ? 'ailleurs' : b.dataset.a;
       if (a === 'priorite') return validerPriorite(file.find((d) => String(d.id) === id), priorites.referentiel);
       if (a === 'assigner') return agir(b, () => api('POST', `/admissions/${id}/assigner`, { lit_id: Number(b.dataset.lit), version: Number(b.dataset.version) }), t('admissions.assigne_ok'));
       if (a === 'admettre') return agir(b, () => api('POST', `/admissions/${id}/admettre`), t('admissions.admis_ok'));
       if (a === 'annuler') return agir(b, () => api('POST', `/admissions/${id}/annuler`), t('admissions.annule_ok'));
       const d = file.find((x) => String(x.id) === id);
+      if (a === 'alt-transfert') return preparerTransfert(d, alternativesConnues(d.id)?.suggestions?.[Number(b.dataset.i)]);
       const be = {}; BESOINS.forEach((k) => { be[k] = d[`besoin_${k}`]; });
       const res = await api('GET', `/recherche?depuis=${etat.ctx}&type_id=${d.type_id}${qsBesoins(be)}&groupe_age=${d.groupe_age || 'adulte'}`).catch((e) => { toast(e.message, true); return null; });
       if (!res) return null;
