@@ -323,7 +323,8 @@ function creerAppSh(pool, { env = process.env } = {}) {
       return d;
     };
     const crees = await provisionner(sh, { environnement, modules: { portail_proches: true, messagerie_securisee: true } });
-    const peuplement = await appeler(cible(environnement), 'POST', '/sh/demo-chsld/peupler', {});
+    // Le peuplement saisit environ 130 résidents par l'API : délai prolongé pour cet appel seulement
+    const peuplement = await appeler(cible(environnement), 'POST', '/sh/demo-chsld/peupler', {}, { delaiMs: 600000 });
     await journal(pool, req.u, 'Démonstration CHSLD créée', crees.map((c) => c.code).join(', '), `environnement ${environnement} · ${peuplement.comptes.length} comptes`, null);
     return { etablissements: crees.map((c) => ({ id: c.hopital_id, code: c.code, nom: c.nom })), comptes: peuplement.comptes, proche: peuplement.proche, scenarios: peuplement.scenarios };
   }));

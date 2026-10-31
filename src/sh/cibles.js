@@ -24,14 +24,14 @@ function cibles(env = process.env) {
 }
 
 /** Appel à l'API d'un environnement. Rend le JSON (ou le texte si brut), ou lève une erreur avec le message de l'environnement. */
-async function appeler(cible, methode, chemin, corps, { brut = false } = {}) {
+async function appeler(cible, methode, chemin, corps, { brut = false, delaiMs = null } = {}) {
   let r;
   try {
     r = await fetch(`${cible.url}/api${chemin}`, {
       method: methode,
       headers: { 'Content-Type': 'application/json', 'X-SH-Key': cible.cle },
       body: corps ? JSON.stringify(corps) : undefined,
-      signal: AbortSignal.timeout(Number(process.env.SH_DELAI_MS || 15000)),
+      signal: AbortSignal.timeout(delaiMs || Number(process.env.SH_DELAI_MS || 15000)),
     });
   } catch {
     throw new ErreurCible(502, `L’environnement ${cible.nom} ne répond pas.`, 'injoignable');
