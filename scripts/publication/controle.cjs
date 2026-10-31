@@ -6,6 +6,15 @@ const { execFileSync } = require('node:child_process');
 const assert = require('node:assert/strict');
 const ident = (x) => `"${String(x).replaceAll('"', '""')}"`;
 const copie = (x) => /^arrimo_publication_restore_[a-z0-9_]+$/.test(x);
+// Seule exception au contrôle « données existantes » : ajouts du catalogue SH par la migration 37 (types d'établissement).
+// Liste fermée ; les lignes déjà présentes doivent rester identiques (colonnes d'origine), aucune suppression ni renommage.
+const AJOUTS_CATALOGUE_SH = new Set(['comptes', 'documents', 'support', 'journal', 'parametres', 'admissions_hopital', 'nsa', 'nettoyage',
+  'national', 'residents', 'chambres', 'demandes_hebergement', 'entretien_chsld', 'taches', 'proches', 'hospitalisations', 'reseau_chsld',
+  'portail_proches', 'messagerie_securisee', 'appels_video']);
+async function lignesCatalogue(c, cols) {
+  const r = await c.query(`SELECT code, row_to_json(x)::text AS ligne FROM (SELECT ${cols.map(ident).join(',')} FROM public.sh_modules_catalogue) x`);
+  return new Map(r.rows.map((x) => [x.code, x.ligne]));
+}
 function verifierCible(url, nom) {
   const u = new URL(url);
   assert.ok(['postgres:', 'postgresql:'].includes(u.protocol));
@@ -32,9 +41,11 @@ async function empreintes(c, cols) {
 async function migration(c, p) {
   const cols = await colonnes(c);
   // Les métadonnées de migration SH peuvent recevoir les versions nouvelles, pas les données métier.
-  const metier = Object.fromEntries(Object.entries(cols).filter(([t]) => t !== 'sh_migrations'));
+  const catalogue = p.type === 'sh' && cols.sh_modules_catalogue?.includes('code') ? cols.sh_modules_catalogue : null;
+  const metier = Object.fromEntries(Object.entries(cols).filter(([t]) => t !== 'sh_migrations' && !(catalogue && t === 'sh_modules_catalogue')));
   for (const t of Object.keys(cols)) await c.query(`LOCK TABLE public.${ident(t)} IN SHARE ROW EXCLUSIVE MODE`);
   const avant = await empreintes(c, metier);
+  const catalogueAvant = catalogue ? await lignesCatalogue(c, catalogue) : null;
   const sequences = (await c.query("SELECT sequencename,last_value::text FROM pg_sequences WHERE schemaname='public' ORDER BY sequencename")).rows;
   if (p.type === 'sh') {
     await c.query(fs.readFileSync(path.join(p.code, 'db/sh-schema.sql'), 'utf8'));
@@ -48,9 +59,18 @@ async function migration(c, p) {
     for (const f of ['20261025-priorites.sql','20261025-simulation.sql']) await c.query(fs.readFileSync(path.join(p.code,'db/migrations',f),'utf8'));
   }
   assert.deepEqual(await empreintes(c, metier), avant, 'Données existantes modifiées : publication refusée');
+  const ajouts = [];
+  if (catalogue) {
+    const apres = await lignesCatalogue(c, catalogue);
+    for (const [code, ligne] of catalogueAvant) assert.equal(apres.get(code), ligne, 'Données existantes modifiées : publication refusée');
+    for (const code of apres.keys()) if (!catalogueAvant.has(code)) {
+      assert.ok(AJOUTS_CATALOGUE_SH.has(code), 'Ajout non prévu au catalogue SH : publication refusée');
+      ajouts.push(code);
+    }
+  }
   const apresSequences=(await c.query("SELECT sequencename,last_value::text FROM pg_sequences WHERE schemaname='public' AND sequencename=ANY($1::text[]) ORDER BY sequencename",[sequences.map(x=>x.sequencename)])).rows;
   assert.deepEqual(apresSequences,sequences,'Compteurs existants modifiés : publication refusée');
-  return { donnees_preservees: true, tables: Object.keys(metier).length };
+  return { donnees_preservees: true, tables: Object.keys(metier).length + (catalogue ? 1 : 0), catalogue_ajouts: ajouts.sort() };
 }
 async function base(p) {
   verifierCible(p.url, p.nom);
@@ -229,4 +249,4 @@ if(require.main===module){
   Promise.resolve().then(()=>main(JSON.parse(input))).then(r=>process.stdout.write(JSON.stringify(r))).catch(e=>{console.error('CONTROLE_ECHOUE '+(e.code||e.name||'erreur'));process.exitCode=1;});
  });
 }
-module.exports={verifierCible,copie};
+module.exports={verifierCible,copie,AJOUTS_CATALOGUE_SH};
