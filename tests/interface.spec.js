@@ -1024,8 +1024,12 @@ for (const L of LARGEURS.filter((l) => l.nom !== 'tablette')) {
     await x.click('#v-params [data-param-nav="params:apparence"]'); await x.waitForSelector('input[name="p-apparence"][value="sombre"]:checked');
     await verifier(x, L, 'params-apparence-sombre');
     // Heure et date de l'établissement toujours affichées (la météo dépend du fournisseur, coupé dans ce test).
+    // Téléphone : météo, heure et date sont en tête du menu tiroir (l'en-tête reste sur une ligne).
+    const tiroir = await x.locator('#b-nav').isVisible();
+    if (tiroir) { await x.click('#b-nav'); await x.waitForFunction(() => document.body.classList.contains('nav-ouverte')); }
     await x.waitForSelector('#infos-lieu:not([hidden]) .il-heure');
     assert.match(await x.textContent('#infos-lieu .il-heure'), /\d{1,2}\D+\d{2}/);
+    if (tiroir) { await x.keyboard.press('Escape'); await x.waitForFunction(() => !document.body.classList.contains('nav-ouverte')); }
     // Disposition du menu : barre verticale à gauche sur ordinateur, retenue après rechargement, puis retour en haut.
     if (L.nom === 'ordinateur') {
       await x.check('input[name="p-disposition"][value="verticale"]');

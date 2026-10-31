@@ -153,8 +153,8 @@ function creerApp(pool, options = {}) {
   // Le rôle entretien n'a accès qu'à l'écran Nettoyage
   api.use((req, res, next) => {
     if (req.utilisateur.role !== 'entretien') return next();
-    // La météo de l'en-tête (lecture seule, propre à l'établissement) s'affiche aussi pour l'entretien.
-    const ok = (req.method === 'GET' && ['/moi', '/nettoyage', '/meteo'].includes(req.path)) || req.path.startsWith('/moi/')
+    // La météo de l'en-tête et le nom de l'assistant (lecture seule, propres à l'établissement) s'affichent aussi pour l'entretien.
+    const ok = (req.method === 'GET' && ['/moi', '/nettoyage', '/meteo', '/og/configuration'].includes(req.path)) || req.path.startsWith('/moi/')
       || (req.method === 'POST' && (req.path === '/deconnexion' || /^\/nettoyage\/\d+\/debut$/.test(req.path)
         || (/^\/(lits|civieres)\/\d+\/action$/.test(req.path) && req.body && req.body.action === 'nettoyage_ok')));
     return ok ? next() : next(new ErreurHttp(403, 'role_entretien'));

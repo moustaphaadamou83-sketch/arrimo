@@ -477,10 +477,12 @@ function majSelecteurCtx() {
 
 async function demarrer() {
   etat.moi = await api('GET', '/moi');
-  // Langue retrouvée sur le compte ; à défaut, le choix fait sur cet appareil est enregistré sur le compte.
+  // Langue : un choix fait sur cet appareil l'emporte et est recopié sur le compte ; sur un appareil sans choix,
+  // la langue enregistrée sur le compte est reprise (reconnexion sur un autre appareil).
   const langueCompte = etat.moi.utilisateur.langue_interface;
-  if (LANGUES.includes(langueCompte)) { if (langueCompte !== langue) { langue = langueCompte; ecrire('arrimo-langue', langue); appliquerLangue(); window.dispatchEvent(new Event('arrimo:langue')); } }
-  else api('PUT', '/moi/langue', { langue_interface: langue }).catch(() => {});
+  const choixAppareil = LANGUES.includes(lire('arrimo-langue')) ? lire('arrimo-langue') : null;
+  if (choixAppareil) { if (choixAppareil !== langueCompte) api('PUT', '/moi/langue', { langue_interface: choixAppareil }).then((r) => { if (etat.moi) etat.moi.utilisateur.langue_interface = r.langue_interface; }).catch(() => {}); }
+  else if (LANGUES.includes(langueCompte) && langueCompte !== langue) { langue = langueCompte; ecrire('arrimo-langue', langue); appliquerLangue(); window.dispatchEvent(new Event('arrimo:langue')); }
   window.ArrimoApparence?.definir(etat.moi.utilisateur.apparence || 'automatique', { lieu: lieuApparence() });
   majApparence();
   bandeauEnvironnement(etat.moi.environnement);

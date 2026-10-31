@@ -106,7 +106,6 @@ test('Suivi OG interhospitalier : quatorze validations PostgreSQL et API', {time
     const browser=await require('playwright').chromium.launch({headless:true});
     try {
       const page=await browser.newPage();
-      await api('c','PUT','/moi/langue',{langue_interface:'fr'});   // la langue du compte s'applique à la connexion
       await page.addInitScript(p=>{localStorage.setItem('arrimo-token',p.token);localStorage.setItem('arrimo-ctx',String(p.ctx));localStorage.setItem('arrimo-langue','fr');},{token:tokens.c,ctx:ids.c});
       await page.goto(base);await page.waitForSelector('body[data-pret="1"]');
       if(await page.locator('#b-premiers-pas-ok').isVisible())await page.click('#b-premiers-pas-ok');

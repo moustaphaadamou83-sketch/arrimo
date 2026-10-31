@@ -180,7 +180,7 @@ test('activation réelle SH et parité avec Hôpital B, sans données publiques'
     let cv=(await poolPilote.query('SELECT * FROM civieres WHERE id=$1',[civNew.id])).rows[0];assert.strictEqual(cv.etat,'nettoyage');
     await api('entretien','POST',`/civieres/${cv.id}/action`,{action:'nettoyage_ok',version:cv.version});
     for(const langue of ['fr','en']){
-      const r=await api('new','POST','/copilote/question',{etablissement_id:nouvel.id,question:'Where is patient '+ref+'?',langue});assert.match(r.reponse,/PAR-101/);assert.match(r.reponse,langue==='en'?/Verified current location|bed|room/i:/Situation actuelle|lit|chambre/);
+      const r=await api('new','POST','/copilote/question',{etablissement_id:nouvel.id,question:'Where is patient '+ref+'?',langue});assert.match(r.reponse,/PAR-101/);assert.equal(r.langue,'en');assert.match(r.reponse,/Verified current location|bed|room/i); // question anglaise → réponse anglaise (cahier du 31 oct.)
     }
     const l=(await poolPilote.query('SELECT * FROM lits WHERE id=$1',[litNew.id])).rows[0];await api('new','POST',`/lits/${l.id}/action`,{action:'liberer',version:l.version});
     const dirty=(await poolPilote.query('SELECT * FROM lits WHERE id=$1',[l.id])).rows[0];assert.strictEqual(dirty.etat,'nettoyage');await api('entretien','POST',`/lits/${l.id}/action`,{action:'nettoyage_ok',version:dirty.version});

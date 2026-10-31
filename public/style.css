@@ -181,7 +181,7 @@ input[type=checkbox], input[type=radio] { min-height: 0; accent-color: var(--pri
   padding: 0 var(--e2); border: 0; background: transparent; color: #D7ECEF; cursor: pointer; }
 .bascule-langue button + button { border-left: 1px solid rgba(255, 255, 255, 0.4); }
 .bascule-langue button:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
-.bascule-langue button[aria-pressed="true"] { background: #fff; color: var(--principal); }
+.bascule-langue button[aria-pressed="true"] { background: #fff; color: #0E5E6F; }   /* identique en clair et en sombre (contraste AA) */
 /* Cartes Leaflet : leurs calques (z-index 400 et plus) restent dans la carte et ne passent jamais devant l'en-tête */
 .leaflet-container { z-index: 0; }
 .barre-in, .onglets, .contenu, .bandeau { max-width: 1280px; margin: 0 auto; padding-left: var(--e4); padding-right: var(--e4); }
@@ -640,9 +640,10 @@ label.item input[type=radio] { order: -1; width: 20px; height: 20px; flex: none;
   body.nav-ouverte { overflow: hidden; }
   body.nav-ouverte .og-launcher { visibility: hidden; }
   .entete-app .bascule-langue button { min-width: 36px; }
-  /* En-tête du téléphone sur une seule ligne : menu, établissement, FR | EN, notifications, compte (le thème est dans Compte) */
+  /* En-tête du téléphone sur une seule ligne : menu, établissement, FR | EN, thème, notifications, compte */
   .entete-app .barre-in { flex-wrap: nowrap; gap: 6px; padding: 6px 12px; }
-  .entete-app .barre-in .marque, .entete-app #b-theme { display: none; }
+  .entete-app .barre-in .marque, .entete-app #b-menu .ic.petit { display: none; }
+  .entete-app .barre-btn.icone, .entete-app #b-menu { min-width: 40px; padding: 0 var(--e2); }
   .entete-app .barre-droite { flex: 1 1 auto; flex-wrap: nowrap; gap: 6px; justify-content: flex-end; min-width: 0; }
   .entete-app .ctx { flex: 1 1 auto; min-width: 0; }
   .entete-app .ctx select { width: 100%; max-width: none; min-width: 0; }
