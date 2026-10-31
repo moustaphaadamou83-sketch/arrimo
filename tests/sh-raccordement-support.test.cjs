@@ -1,5 +1,6 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
+const { allerOnglet } = require('./aide-navigation.cjs');
 const {Pool}=require('pg'),{creerPool}=require('../src/db'),{demarrerServeur}=require('./serveur-test.cjs');
 const {hacherAsync}=require('../src/auth'),{premierCompteSh}=require('../db/sh-premier-compte');
 const courriel=require('../src/courriel'),totp=require('../src/totp');
@@ -71,7 +72,7 @@ test('raccordement support : même code dans deux bases, liens SH et parcours cl
   const browser=await require('playwright').chromium.launch({headless:true});try{
    const s=sources[1],page=await browser.newPage({viewport:{width:390,height:844}}),erreurs=[];page.on('pageerror',e=>erreurs.push(e.message));
    await page.goto(s.base);await page.fill('#c-email','hy.demo_abc@example.invalid');await page.fill('#c-mdp',mdp);await page.click('#f-connexion button[type=submit]');await page.waitForSelector('body[data-pret="1"]');
-   if(await page.locator('#b-premiers-pas-ok').isVisible())await page.click('#b-premiers-pas-ok');await page.click('#onglets [data-v="params"]');await page.click('#v-params [data-param-nav="support"]');await page.waitForSelector('#support-creer',{state:'attached'});await page.click('#v-support summary');
+   if(await page.locator('#b-premiers-pas-ok').isVisible())await page.click('#b-premiers-pas-ok');await allerOnglet(page,'params');await page.click('#v-params [data-param-nav="support"]');await page.waitForSelector('#support-creer',{state:'attached'});await page.click('#v-support summary');
    await page.fill('#sc-titre','Raccordement navigateur');await page.fill('#sc-description','Demande fictive du navigateur');await page.locator('#support-creer').evaluate(f=>f.requestSubmit());
    await page.locator('[data-support-ticket]',{hasText:'Raccordement navigateur'}).click();await page.waitForSelector('#sc-repondre');
    const created=(await pool.query("SELECT id,hopital_id FROM sh_support_tickets WHERE titre='Raccordement navigateur'")).rows[0];assert.equal(created.hopital_id,ids[1]);

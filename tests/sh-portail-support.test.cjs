@@ -1,5 +1,6 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),crypto=require('node:crypto');
+const { allerOnglet } = require('./aide-navigation.cjs');
 const {creerPool}=require('../src/db'),{hacherAsync}=require('../src/auth'),{empreinte}=require('../src/sh/security');
 const courriel=require('../src/courriel');
 const {demarrerServeur}=require('./serveur-test.cjs');
@@ -146,7 +147,7 @@ test('portail client : serveurs hospitalier et SH, isolation, messages publics e
       await page.addInitScript(({token,id})=>{localStorage.setItem('arrimo-token',token);localStorage.setItem('arrimo-ctx',String(id));localStorage.setItem('arrimo-langue','fr');},{token:tokens[0],id:es[0].id});
       await page.goto(base);await page.waitForSelector('body[data-pret="1"]');if(await page.locator('#b-premiers-pas-ok').isVisible())await page.click('#b-premiers-pas-ok');
       // Support client : dans Paramètres depuis la refonte de la navigation (plus d'onglet dans la barre principale).
-      await page.click('#onglets [data-v="params"]');await page.click('#v-params [data-param-nav="support"]');await page.waitForSelector('#support-creer',{state:'attached'});await page.click('#v-support summary');
+      await allerOnglet(page,'params');await page.click('#v-params [data-param-nav="support"]');await page.waitForSelector('#support-creer',{state:'attached'});await page.click('#v-support summary');
       await page.fill('#sc-titre','Demande créée au navigateur');await page.fill('#sc-description','Description Test du portail');
       await page.waitForFunction(()=>!enCours);await page.evaluate(()=>rafraichir());assert.equal(await page.inputValue('#sc-titre'),'Demande créée au navigateur');
       await page.locator('#support-creer').evaluate(f=>f.requestSubmit());
