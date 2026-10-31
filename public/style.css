@@ -171,6 +171,8 @@ input[type=checkbox], input[type=radio] { min-height: 0; accent-color: var(--pri
    Aucun calcul JavaScript pendant le défilement ; seule la hauteur de l'en-tête est mesurée quand elle change. */
 .entete-app { position: sticky; top: 0; z-index: 15; background: var(--principal-plein); }
 .barre { background: var(--principal-plein); color: #fff; }
+/* Console SH (même feuille de style, en-tête sans bloc .entete-app) : en-tête collant comme avant */
+#ecran-app > .barre { position: sticky; top: 0; z-index: 5; }
 #b-nav { display: none; }
 .voile-nav { display: none; }
 /* Sélecteur de langue de l'interface, toujours visible : FR | EN */
@@ -437,6 +439,7 @@ dt { color: var(--texte-2-fond); } dd { margin: 0; }
 }
 /* Téléphone : en-tête compact et collant ; tuiles deux par ligne */
 @media (max-width: 600px) {
+  #ecran-app > .barre { position: static; }
   .barre-in { padding-block: var(--e2); gap: var(--e2); }
   .ctx { font-size: 0; gap: 0; }
   .ctx select { max-width: 52vw; }
@@ -624,29 +627,29 @@ label.item input[type=radio] { order: -1; width: 20px; height: 20px; flex: none;
 /* Téléphone : menu tiroir ouvert et fermé par le bouton de l'en-tête (au lieu d'une barre d'onglets défilante) */
 @media (max-width: 600px) {
   #b-nav { display: inline-flex; }
-  .onglets { position: fixed; top: 0; left: 0; bottom: 0; width: min(300px, 86vw); max-width: none; margin: 0; z-index: 2;
+  .entete-app .onglets { position: fixed; top: 0; left: 0; bottom: 0; width: min(300px, 86vw); max-width: none; margin: 0; z-index: 2;
     flex-direction: column; align-items: stretch; gap: 2px; padding: var(--e4) var(--e2) var(--e6); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain;
     background: var(--principal-plein); box-shadow: 8px 0 30px rgba(0, 0, 0, 0.25);
     transform: translateX(-105%); visibility: hidden; transition: transform 0.2s ease, visibility 0s linear 0.2s; }
-  body.nav-ouverte .onglets { transform: none; visibility: visible; transition: transform 0.2s ease; }
-  .onglets button { justify-content: flex-start; width: 100%; border-bottom: 0; border-left: 3px solid transparent; border-radius: 0 8px 8px 0; padding: 10px 12px; flex: none; }
-  .onglets button[aria-selected="true"] { border-left-color: var(--accent); background: rgba(255, 255, 255, 0.12); }
-  .onglets button .n { margin-left: auto; }
-  .onglets-groupe { align-self: flex-start; margin: var(--e4) 0 var(--e1) var(--e2); }
+  body.nav-ouverte .entete-app .onglets { transform: none; visibility: visible; transition: transform 0.2s ease; }
+  .entete-app .onglets button { justify-content: flex-start; width: 100%; border-bottom: 0; border-left: 3px solid transparent; border-radius: 0 8px 8px 0; padding: 10px 12px; flex: none; }
+  .entete-app .onglets button[aria-selected="true"] { border-left-color: var(--accent); background: rgba(255, 255, 255, 0.12); }
+  .entete-app .onglets button .n { margin-left: auto; }
+  .entete-app .onglets-groupe { align-self: flex-start; margin: var(--e4) 0 var(--e1) var(--e2); }
   .voile-nav:not([hidden]) { display: block; position: fixed; inset: 0; z-index: 1; background: rgba(14, 40, 48, 0.45); }
   body.nav-ouverte { overflow: hidden; }
   body.nav-ouverte .og-launcher { visibility: hidden; }
-  .bascule-langue button { min-width: 36px; }
+  .entete-app .bascule-langue button { min-width: 36px; }
   /* En-tête du téléphone sur une seule ligne : menu, établissement, FR | EN, notifications, compte (le thème est dans Compte) */
-  .barre-in { flex-wrap: nowrap; gap: 6px; padding: 6px 12px; }
-  .barre-in .marque, #b-theme { display: none; }
-  .barre-droite { flex: 1 1 auto; flex-wrap: nowrap; gap: 6px; justify-content: flex-end; min-width: 0; }
-  .ctx { flex: 1 1 auto; min-width: 0; }
-  .ctx select { width: 100%; max-width: none; min-width: 0; }
-  .onglets .infos-lieu { flex-direction: column; align-items: flex-start; gap: 4px; padding: var(--e2) var(--e3) var(--e3); margin-bottom: var(--e2);
+  .entete-app .barre-in { flex-wrap: nowrap; gap: 6px; padding: 6px 12px; }
+  .entete-app .barre-in .marque, .entete-app #b-theme { display: none; }
+  .entete-app .barre-droite { flex: 1 1 auto; flex-wrap: nowrap; gap: 6px; justify-content: flex-end; min-width: 0; }
+  .entete-app .ctx { flex: 1 1 auto; min-width: 0; }
+  .entete-app .ctx select { width: 100%; max-width: none; min-width: 0; }
+  .entete-app .onglets .infos-lieu { flex-direction: column; align-items: flex-start; gap: 4px; padding: var(--e2) var(--e3) var(--e3); margin-bottom: var(--e2);
     border-bottom: 1px solid rgba(255, 255, 255, 0.18); flex: none; }
-  .onglets .infos-lieu .il-ciel, .onglets .infos-lieu .il-lieu { display: inline-flex; }
-  .onglets .infos-lieu .il-heure { font-size: 20px; }
+  .entete-app .onglets .infos-lieu .il-ciel, .entete-app .onglets .infos-lieu .il-lieu { display: inline-flex; }
+  .entete-app .onglets .infos-lieu .il-heure { font-size: 20px; }
 }
 @media (max-width: 900px) { #b-disposition { display: none; } }
 /* Admissions : alternatives du réseau affichées automatiquement sous une demande sans lit local */
