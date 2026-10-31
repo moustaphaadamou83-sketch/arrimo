@@ -137,12 +137,38 @@ async function connexion(pool, b) {
   await pool.query('UPDATE proches_acces SET echecs = 0, bloque_jusqu_au = NULL, derniere_connexion = now() WHERE id = $1', [a.id]);
   return { token: `P.${jeton}` };
 }
+/**
+ * Situation du résident, seulement dans les catégories autorisées, à partir des faits enregistrés :
+ * - « hebergement » : présent, absence temporaire (jamais la chambre) ;
+ * - « mouvements » : hospitalisation (hôpital nommé avec la date de confirmation de réception, ou départ confirmé
+ *   avec « arrivée non encore confirmée »), retour prévu. Jamais de position en temps réel.
+ */
+async function situation(pool, p) {
+  const voitHebergement = p.autorisations.includes('hebergement'), voitMouvements = p.autorisations.includes('mouvements');
+  if (!voitHebergement && !voitMouvements) return null;
+  const r = (await pool.query('SELECT statut FROM residents WHERE id = $1', [p.resident_id])).rows[0];
+  const maj = (await pool.query(`SELECT max(date) d FROM resident_mouvements WHERE resident_id = $1 AND type <> 'modification'`, [p.resident_id])).rows[0].d;
+  const s = { mis_a_jour_le: maj };
+  if (r.statut === 'hospitalise') {
+    if (!voitMouvements) return { ...s, statut: 'absent_etablissement' };
+    const h = (await pool.query(`SELECT c.statut, d.nom AS hopital, (SELECT max(date) FROM coordination_etapes x WHERE x.coordination_id = c.id AND x.statut = c.statut) AS depuis
+      FROM coordinations c JOIN etablissements d ON d.id = c.destination_id WHERE c.resident_id = $1 AND c.type = 'hospitalisation' AND c.statut IN ('en_cours', 'recue') ORDER BY c.cree_le DESC LIMIT 1`, [p.resident_id])).rows[0];
+    const ret = (await pool.query(`SELECT statut, retour_prevu_le FROM coordinations WHERE resident_id = $1 AND type = 'retour' AND statut IN ('acceptee', 'en_cours') ORDER BY cree_le DESC LIMIT 1`, [p.resident_id])).rows[0];
+    return { ...s, statut: h?.statut === 'recue' ? 'hospitalise_confirme' : 'hospitalise_depart_confirme', hopital: h?.hopital || null, depuis: h?.depuis || null,
+      retour_prevu_le: ret?.retour_prevu_le || null };
+  }
+  if (!voitHebergement) return null;
+  return { ...s, statut: r.statut === 'absent' ? 'absence_temporaire' : r.statut === 'present' ? 'present' : 'autre' };
+}
 async function moi(pool, p) {
+  const nouveaux = (await pool.query(`SELECT count(*)::int n FROM messages_proches WHERE resident_id = $1 AND contact_id = $2 AND sens = 'etablissement' AND lu_le IS NULL AND categorie = ANY($3)`,
+    [p.resident_id, p.contact_id, p.autorisations])).rows[0].n;
+  const etatResident = await situation(pool, p);
   const messages = (await pool.query(`SELECT id, sens, categorie, texte, cree_le, lu_le FROM messages_proches WHERE resident_id = $1 AND contact_id = $2 AND categorie = ANY($3) ORDER BY cree_le`,
     [p.resident_id, p.contact_id, p.autorisations])).rows;
   await pool.query(`UPDATE messages_proches SET lu_le = now() WHERE resident_id = $1 AND contact_id = $2 AND sens = 'etablissement' AND lu_le IS NULL AND categorie = ANY($3)`, [p.resident_id, p.contact_id, p.autorisations]);
   return { proche: { prenom: p.prenom, nom: p.contact_nom, relation: p.relation, langue: p.langue }, resident: { prenom: p.r_prenom, initiale: `${String(p.r_nom).slice(0, 1)}.` },
-    etablissement: { nom: p.etab_nom }, autorisations: p.autorisations, expire_le: p.expire_le, messages };
+    etablissement: { nom: p.etab_nom }, autorisations: p.autorisations, expire_le: p.expire_le, messages, nouveaux_messages: nouveaux, situation: etatResident };
 }
 async function messageProche(pool, p, b) {
   if (!p.autorisations.includes(b.categorie)) throw new ErreurHttp(403, 'proche_non_autorise', { categorie: b.categorie });

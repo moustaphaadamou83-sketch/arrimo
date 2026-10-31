@@ -20,7 +20,7 @@ const invitations = require('../src/sh/invitations');
 const totp = require('../src/totp');
 const courriel = require('../src/courriel');
 const { demarrerServeur } = require('./serveur-test.cjs');
-const { provisionner, peupler, CHSLD } = require('../db/provisionner-chsld');
+const { CHSLD } = require('../db/provisionner-chsld');
 
 const URL_TEST = process.env.TEST_DATABASE_URL;
 const CLE_MFA = Buffer.alloc(32, 7).toString('base64');
@@ -105,7 +105,13 @@ test('SH : le type d’établissement vient en premier et commande les modules p
 
 let crees, ids;
 test('SH : création, provisionnement et activation des deux CHSLD fictifs, sans configuration manuelle', { timeout: 300000 }, async () => {
-  crees = await provisionner(sh, { environnement: 'pilote', modules: { reseau_chsld: true, proches: true } });
+  // Bouton SH « Créer les CHSLD de démonstration » (administration) : parcours SH complet, puis scénarios dans l'environnement
+  const demo = await sh('POST', '/demo-chsld', { environnement: 'pilote' });
+  assert.deepStrictEqual(demo.etablissements.map((e) => e.nom), ['CHSLD 1 — des Érables', 'CHSLD 2 — du Saint-Laurent']);
+  assert.strictEqual((await appelSh('POST', '/demo-chsld', { environnement: 'pilote' })).statut, 409, 'pas de doublon');
+  assert.strictEqual((await appelSh('POST', '/demo-chsld', { environnement: 'production' })).statut, 409, 'jamais hors environnement fictif');
+  const { ROLES, courrielDe } = require('../db/provisionner-chsld');
+  crees = CHSLD.map((c) => ({ ...c, hopital_id: demo.etablissements.find((e) => e.code === c.code).id, comptes: Object.fromEntries(ROLES.map(([, cle, role]) => [cle, { courriel: courrielDe(c, cle), role }])) }));
   for (const c of crees) {
     const fiche = await sh('GET', `/hopitaux/${c.hopital_id}`);
     assert.strictEqual(fiche.type_etablissement, 'chsld');
@@ -129,11 +135,11 @@ test('SH : création, provisionnement et activation des deux CHSLD fictifs, sans
   assert.ok(hop.length === 3 && hop.every((h) => h.type_etablissement === 'hopital' && h.cfg === 'QC'));
 });
 
-test('personnel : invitations, connexions réelles et interface adaptée au type', async () => {
+test('personnel : connexions réelles avec le mot de passe de démonstration, comptes distincts, interface adaptée au type', async () => {
   for (const c of crees) for (const [cle, x] of Object.entries(c.comptes)) {
-    const jeton = courriels.findLast((m) => m.a === x.courriel).texte.match(/#reinit=([a-f0-9]{64})/)[1];
-    await api(null, 'POST', '/mot-de-passe/reinitialiser', { jeton, nouveau: MDP });
     sessions[`${c.code === 'CHSLD-ERA' ? 'era' : 'stl'}_${cle}`] = (await api(null, 'POST', '/connexion', { email: x.courriel, mot_de_passe: MDP })).token;
+    const m = await api(`${c.code === 'CHSLD-ERA' ? 'era' : 'stl'}_${cle}`, 'GET', '/moi');
+    assert.strictEqual(m.utilisateur.role, x.role); assert.strictEqual(m.utilisateur.mdp_temporaire, false); assert.deepStrictEqual(m.etablissements.map((e) => e.code), [c.code]);
   }
   sessions.era = sessions.era_coordination; sessions.stl = sessions.stl_coordination;
   sessions.b = (await api(null, 'POST', '/connexion', { email: 'hopital.b@demo.arrimo', mot_de_passe: MDP })).token;
@@ -146,7 +152,12 @@ test('personnel : invitations, connexions réelles et interface adaptée au type
 let p;
 test('parcours CHSLD réels : peuplement par le personnel, places, contacts, demandes, hospitalisation, transfert', { timeout: 300000 }, async () => {
   const hopitalB = (await poolPilote.query("SELECT id FROM etablissements WHERE code = 'HY'")).rows[0].id;
-  p = await peupler(api, { hopitalB }); ids = p.ids;
+  // Scénarios déjà saisis par l'environnement à la demande de SH : on retrouve leurs identifiants
+  const id = async (sql, v) => (await poolPilote.query(sql, v)).rows[0].id;
+  ids = { era: await id("SELECT id FROM etablissements WHERE code='CHSLD-ERA'"), stl: await id("SELECT id FROM etablissements WHERE code='CHSLD-STL'") };
+  p = { ids, dupont: await id("SELECT id FROM residents WHERE nom='Dupont' AND prenom='Jean'"), martin: await id("SELECT id FROM residents WHERE nom='Martin' AND prenom='Gilles'"),
+    hospitalisation: await id("SELECT id FROM coordinations WHERE type='hospitalisation'"), retour: await id("SELECT id FROM coordinations WHERE type='retour'"), transfert: await id("SELECT id FROM coordinations WHERE type='transfert_chsld'") };
+  assert.ok(hopitalB);
   const accueilEra = await api('era', 'GET', `/chsld/accueil?etablissement_id=${ids.era}`);
   assert.strictEqual(accueilEra.places.dotees + accueilEra.places.bloquees, 60);
   assert.strictEqual(accueilEra.places.occupees, 49, 'Érables : 50 admis, 1 fin d’hébergement'); assert.strictEqual(accueilEra.places.reservees, 1); assert.strictEqual(accueilEra.places.preparation, 1); assert.strictEqual(accueilEra.places.bloquees, 1);
@@ -287,13 +298,17 @@ test('phase 2 — portail des proches : activé depuis SH, invitation, accès li
   const era = crees.find((c) => c.code === 'CHSLD-ERA');
   const fd = await api('era', 'GET', `/chsld/residents/${p.dupont}`);
   const fille = fd.contacts.find((k) => k.relation === 'fille'), fils = fd.contacts.find((k) => k.relation === 'fils');
-  // Module optionnel désactivé par défaut : aucune invitation possible
+  // Compte de démonstration du proche (créé par SH) : même mot de passe de démonstration ; situation autorisée, message reçu
+  sessions.marie = (await api(null, 'POST', '/proches/connexion', { courriel: 'marie.dupont@example.invalid', mot_de_passe: MDP })).token;
+  const vue = await api('marie', 'GET', '/proches/moi');
+  assert.strictEqual(vue.situation.statut, 'present'); assert.ok(vue.situation.mis_a_jour_le); assert.ok(vue.nouveaux_messages >= 1);
+  // Désactivation puis réactivation depuis SH (configuration opérationnelle publiée vers l'environnement)
+  const cfg0 = await sh('GET', `/hopitaux/${era.hopital_id}/configuration-operationnelle`);
+  assert.ok(cfg0.modules_modifiables.includes('portail_proches'));
+  await sh('PUT', `/hopitaux/${era.hopital_id}/configuration-operationnelle`, { version: cfg0.version, vocation: 'general', modules: Object.fromEntries(cfg0.modules_modifiables.map((k) => [k, k !== 'portail_proches'])) });
   await refuse('era', 'POST', `/chsld/contacts/${fille.id}/acces-portail`, {}, 403, 'module_desactive');
-  // Activation depuis SH : licence souscrite, puis configuration opérationnelle publiée vers l'environnement
-  const fiche = await sh('GET', `/hopitaux/${era.hopital_id}`);
-  await sh('PUT', `/hopitaux/${era.hopital_id}/modules`, { modules: fiche.modules.map((m) => ({ code: m.code, licence: ['portail_proches', 'messagerie_securisee'].includes(m.code) ? 'souscrit' : m.licence })) });
+  await refuse('marie', 'GET', '/proches/moi', null, 401);
   const cfg = await sh('GET', `/hopitaux/${era.hopital_id}/configuration-operationnelle`);
-  assert.ok(cfg.modules_modifiables.includes('portail_proches'));
   await sh('PUT', `/hopitaux/${era.hopital_id}/configuration-operationnelle`, { version: cfg.version, vocation: 'general', modules: Object.fromEntries(cfg.modules_modifiables.map((k) => [k, true])) });
   // Invitations : un contact sans courriel ni autorisation est refusé ; le lien n'est remis qu'une fois
   await refuse('era', 'POST', `/chsld/contacts/${fils.id}/acces-portail`, {}, 409, 'proche_courriel_requis');
@@ -309,7 +324,7 @@ test('phase 2 — portail des proches : activé depuis SH, invitation, accès li
   assert.match(sessions.marie, /^P\./);
   // Ce que voit le proche : profil, prénom et initiale du résident, établissement, catégories autorisées ; jamais la chambre ni la référence
   const moi = await api('marie', 'GET', '/proches/moi');
-  assert.deepStrictEqual(moi.resident, { prenom: 'Jean', initiale: 'D.' }); assert.strictEqual(moi.etablissement.nom, 'CHSLD des Érables');
+  assert.deepStrictEqual(moi.resident, { prenom: 'Jean', initiale: 'D.' }); assert.strictEqual(moi.etablissement.nom, 'CHSLD 1 — des Érables');
   assert.doesNotMatch(JSON.stringify(moi), /ERA-\d|R-\d{5}|chambre|lit_id|hospital/i);
   // Sessions étanches : le jeton du proche n'ouvre pas l'API du personnel, et inversement
   await refuse('marie', 'GET', '/moi', null, 401); await refuse('era', 'GET', '/proches/moi', null, 401);

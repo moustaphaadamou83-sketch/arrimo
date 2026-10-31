@@ -470,7 +470,10 @@ function majNomUtilisateur() {
   $('#menu-qui').innerHTML = `<strong>${esc(u.nom)}</strong><span>${esc(u.email)}</span>`;
 }
 function majSelecteurCtx() {
-  $('#ctx').innerHTML = etat.moi.etablissements.map((e) => `<option value="${e.id}">${esc(e.nom)}${e.module_actif ? '' : esc(t('barre.module_desactive'))}</option>`).join('');
+  // Hôpitaux et CHSLD distingués : groupes séparés dans le sélecteur quand l'utilisateur a accès aux deux types
+  const option = (e) => `<option value="${e.id}" data-type="${esc(e.type_etablissement || 'hopital')}">${esc(e.nom)}${e.module_actif ? '' : esc(t('barre.module_desactive'))}</option>`;
+  const groupes = [['hopital', t('types_etab.hopitaux')], ['chsld', t('types_etab.chsld')]].map(([ty, lib]) => [lib, etat.moi.etablissements.filter((e) => (e.type_etablissement || 'hopital') === ty)]).filter(([, l]) => l.length);
+  $('#ctx').innerHTML = groupes.length > 1 ? groupes.map(([lib, l]) => `<optgroup label="${esc(lib)}">${l.map(option).join('')}</optgroup>`).join('') : etat.moi.etablissements.map(option).join('');
   $('#ctx').value = etat.ctx;
   $('label.ctx').hidden = !etat.moi.etablissements.length;   // environnement neuf : rien à choisir
 }

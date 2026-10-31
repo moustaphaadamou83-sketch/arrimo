@@ -290,7 +290,7 @@ async function afficherModulesType(type, zone) {
     const groupes = ['commun', type === 'hopital' ? 'hopital' : 'chsld', 'optionnel'];
     zone.innerHTML = groupes.map((g) => { const ms = r.modules.filter((m) => m.categorie === g); if (!ms.length) return '';
       return `<fieldset class="modules-type"><legend>${esc(CATEGORIE_MODULE[g])}</legend>${ms.map((m) => `<label class="case module-${m.statut}">
-        <input type="checkbox" data-module="${esc(m.code)}"${m.statut === 'inclus' || m.statut === 'disponible' ? ' checked' : ''}${m.statut === 'disponible' ? '' : ' disabled'}>
+        <input type="checkbox" data-module="${esc(m.code)}"${m.statut === 'inclus' || (m.statut === 'disponible' && m.categorie !== 'optionnel') ? ' checked' : ''}${m.statut === 'disponible' ? '' : ' disabled'}>
         <span>${esc(m.nom)} <span class="badge">${esc(STATUT_MODULE[m.statut])}</span>${m.dependances?.length ? ` <span class="note">requiert : ${esc(m.dependances.join(', '))}</span>` : ''}${m.note ? ` <span class="note">· ${esc(m.note)}</span>` : ''}</span></label>`).join('')}</fieldset>`; }).join('');
   } catch (e) { zone.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; }
 }
@@ -386,7 +386,7 @@ async function vueHopitaux(v) {
   const voitEnvs = ['administration', 'implantation', 'support'].includes(etat.moi.utilisateur.role);
   const [liste, envs] = await Promise.all([api('GET', `/hopitaux${qs ? `?${qs}` : ''}`), voitEnvs ? api('GET', '/environnements') : []]);
   v.innerHTML = `<div class="entete"><div><h2>Établissements clients</h2><p>Chaque établissement suit un assistant en 6 étapes. Les 7 étapes de contrôle existantes restent conservées sous le capot, et le module ne s’active qu’après validation des prérequis.</p></div>
-      <button class="btn pri" id="b-nouveau">${icone('plus')}Nouvel établissement</button></div>
+      <div class="actions">${etat.moi?.utilisateur?.role === 'administration' ? `<button class="btn" id="b-demo-chsld">Créer les CHSLD de démonstration</button>` : ''}<button class="btn pri" id="b-nouveau">${icone('plus')}Nouvel établissement</button></div></div>
     <div class="envs">${envs.map((e) => `<span class="env"><span class="etat-niveau ${e.joignable ? 'n-vert' : 'n-rouge'}">${esc(e.nom)}</span>
       <span class="note">${e.joignable ? pl('{n|aucun établissement|# établissement|# établissements}', { n: e.etablissements }) : 'ne répond pas'}</span></span>`).join('') || '<span class="note">Aucun environnement relié à la console.</span>'}</div>
     <div class="ligne filtres">
@@ -423,6 +423,14 @@ async function vueHopitaux(v) {
     afficherModulesType($('#h-type').value, $('#h-modules'));
     $('#h-type').onchange = (e) => afficherModulesType(e.target.value, $('#h-modules'));
   };
+  if ($('#b-demo-chsld')) $('#b-demo-chsld').onclick = () => modale('Créer les CHSLD de démonstration',
+    `<p>Crée <b>CHSLD 1 — des Érables</b> (60 lits) et <b>CHSLD 2 — du Saint-Laurent</b> (90 lits) par le parcours SH habituel : type CHSLD et modules, création dans l’environnement, import de la structure et des comptes, liste de contrôle, activation ; puis les scénarios fictifs (résidents, proches, hospitalisation à l’Hôpital B, transfert inter-CHSLD).</p>
+     <p class="note">Environnement fictif seulement. Les comptes des CHSLD utilisent le mot de passe de démonstration déjà en place pour les hôpitaux A, B et C. Aucun compte existant n’est modifié.</p>
+     <div class="champ"><label class="lbl" for="dc-env">Environnement</label><select id="dc-env"><option value="demo_abc">Démonstration ABC (demo.arrimo.senseafri.com)</option><option value="pilote">Pilote fictif</option></select></div>`,
+    [{ label: 'Annuler' }, { label: 'Créer', pri: true, run: async () => {
+      try { const r = await api('POST', '/demo-chsld', { environnement: $('#dc-env').value }); toast(`${r.etablissements.map((e) => e.nom).join(' et ')} : créés et activés.`); afficher(); return true; }
+      catch (e) { toast(e.message, true); return false; }
+    } }]);
 }
 
 async function vueHopital(v) {

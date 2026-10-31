@@ -7,14 +7,20 @@
       bonjour: 'Bonjour {prenom}', resident: 'Vous êtes associé(e) à {resident}, {etab}.', categories: 'Vous pouvez échanger sur : {liste}.', messages: 'Vos échanges avec l’établissement',
       aucun: 'Aucun message pour l’instant.', ecrire: 'Écrire à l’établissement', categorie: 'Sujet', texte: 'Votre message', envoyer: 'Envoyer', rappel: 'Demander qu’on me rappelle',
       envoye: 'Message envoyé à l’établissement.', rappel_ok: 'Demande de rappel transmise.', deconnexion: 'Se déconnecter', vous: 'Vous', etab: 'L’établissement',
-      expire: 'Accès valable jusqu’au {date}.', confidentialite: 'Ce portail ne contient aucune information médicale. Pour une urgence, appelez le 911.',
+      expire: 'Accès valable jusqu’au {date}.', situation: 'Situation de {resident}', maj: 'Mis à jour le {date}.', nouveaux: '{n} nouveau(x) message(s) de l’établissement.',
+      s_present: 'Présent(e) à l’établissement.', s_absence_temporaire: 'En absence temporaire.', s_absent_etablissement: 'Absent(e) de l’établissement pour le moment.',
+      s_hospitalise_confirme: 'Hospitalisé(e) à {hopital} — arrivée confirmée par l’hôpital le {date}.', s_hospitalise_depart_confirme: 'Parti(e) vers {hopital} le {date} — arrivée non encore confirmée par l’hôpital.',
+      retour: 'Retour prévu le {date}.', s_autre: 'Situation en cours de mise à jour.', pas_temps_reel: 'Ces informations reprennent les dernières étapes confirmées ; ce n’est pas une position en temps réel.', confidentialite: 'Ce portail ne contient aucune information médicale. Pour une urgence, appelez le 911.',
       cat: { administratif: 'Questions administratives', hebergement: 'Hébergement', rendez_vous: 'Rendez-vous et visites', mouvements: 'Hospitalisation et retour' } },
     en: { titre: 'Family portal', connexion: 'Sign in', courriel: 'Email', mdp: 'Password', entrer: 'Sign in', invitation: 'Welcome',
       invitation_aide: 'Choose your password: at least 12 characters, with letters and numbers.', choisir: 'Save my password', invitation_ok: 'Your access is ready. Sign in.',
       bonjour: 'Hello {prenom}', resident: 'You are linked to {resident}, {etab}.', categories: 'You can exchange about: {liste}.', messages: 'Your exchanges with the facility',
       aucun: 'No message yet.', ecrire: 'Write to the facility', categorie: 'Subject', texte: 'Your message', envoyer: 'Send', rappel: 'Ask to be called back',
       envoye: 'Message sent to the facility.', rappel_ok: 'Callback request sent.', deconnexion: 'Sign out', vous: 'You', etab: 'The facility',
-      expire: 'Access valid until {date}.', confidentialite: 'This portal contains no medical information. In an emergency, call 911.',
+      expire: 'Access valid until {date}.', situation: '{resident}’s situation', maj: 'Updated on {date}.', nouveaux: '{n} new message(s) from the facility.',
+      s_present: 'At the facility.', s_absence_temporaire: 'Temporarily away.', s_absent_etablissement: 'Away from the facility for now.',
+      s_hospitalise_confirme: 'In hospital at {hopital} — arrival confirmed by the hospital on {date}.', s_hospitalise_depart_confirme: 'Left for {hopital} on {date} — arrival not yet confirmed by the hospital.',
+      retour: 'Return planned on {date}.', s_autre: 'Situation being updated.', pas_temps_reel: 'This reflects the latest confirmed steps; it is not a real-time location.', confidentialite: 'This portal contains no medical information. In an emergency, call 911.',
       cat: { administratif: 'Administrative questions', hebergement: 'Accommodation', rendez_vous: 'Appointments and visits', mouvements: 'Hospital stay and return' } },
   };
   let langue = (() => { try { return localStorage.getItem('arrimo-langue') === 'en' ? 'en' : 'fr'; } catch { return 'fr'; } })();
@@ -46,13 +52,18 @@
     $('#f').onsubmit = async (ev) => { ev.preventDefault(); try { await api('POST', '/proches/invitation', { jeton: cle, mot_de_passe: $('#m').value });
       history.replaceState(null, '', '/proches'); ecranConnexion(T('invitation_ok')); } catch (e) { $('#e').innerHTML = message('erreur', e.message); } };
   }
+  const dt = (iso) => (iso ? new Date(iso).toLocaleString(langue === 'en' ? 'en-CA' : 'fr-CA', { dateStyle: 'medium', timeStyle: 'short' }) : '');
   async function ecranAccueil(info) {
     let d; try { d = await api('GET', '/proches/moi'); } catch (e) { ecranConnexion(); $('#contenu').insertAdjacentHTML('afterbegin', message('erreur', e.message)); return; }
     const cats = d.autorisations;
     z().innerHTML = `<section class="panneau-c"><h2>${esc(T('bonjour', { prenom: d.proche.prenom }))}</h2>
         <p>${esc(T('resident', { resident: `${d.resident.prenom} ${d.resident.initiale}`, etab: d.etablissement.nom }))}</p>
         <p class="note">${esc(T('categories', { liste: cats.map((c) => T(`cat.${c}`)).join(', ') }))}</p>${d.expire_le ? `<p class="note">${esc(T('expire', { date: new Date(d.expire_le).toLocaleDateString(langue === 'en' ? 'en-CA' : 'fr-CA') }))}</p>` : ''}
-        ${info ? message('succes-msg', info) : ''}</section>
+        ${info ? message('succes-msg', info) : ''}${d.nouveaux_messages ? message('succes-msg', T('nouveaux', { n: d.nouveaux_messages })) : ''}</section>
+      ${d.situation ? `<section class="panneau-c"><h2>${esc(T('situation', { resident: `${d.resident.prenom} ${d.resident.initiale}` }))}</h2>
+        <p><b>${esc(T(`s_${d.situation.statut}`, { hopital: d.situation.hopital || '', date: dt(d.situation.depuis) }))}</b></p>
+        ${d.situation.retour_prevu_le ? `<p>${esc(T('retour', { date: dt(d.situation.retour_prevu_le) }))}</p>` : ''}
+        ${d.situation.mis_a_jour_le ? `<p class="note">${esc(T('maj', { date: dt(d.situation.mis_a_jour_le) }))}</p>` : ''}<p class="note">${esc(T('pas_temps_reel'))}</p></section>` : ''}
       <section class="panneau-c"><h2>${esc(T('ecrire'))}</h2><label class="lbl" for="cat">${esc(T('categorie'))}</label>
         <select id="cat">${cats.map((c) => `<option value="${c}">${esc(T(`cat.${c}`))}</option>`).join('')}</select>
         <label class="lbl" for="txt">${esc(T('texte'))}</label><textarea id="txt" maxlength="2000"></textarea><div id="e"></div>

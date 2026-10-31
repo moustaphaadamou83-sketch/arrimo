@@ -12,6 +12,7 @@ window.ARRIMO_I18N.fr = {
     t_blouse: 'Blouse', t_veste: 'Veste', t_polo: 'Polo', a_aucun: 'Aucun', a_lunettes: 'Lunettes', a_casque: 'Casque-micro', v_feminine: 'Féminine', v_masculine: 'Masculine',
     f_texte: 'Assistant texte', f_vocal: 'Fonctions vocales', f_dictee: 'Dictée', f_conversation: 'Conversation continue', f_personnalisation: 'Personnalisation', f_actions: 'Actions administratives supervisées',
     f_patients: 'Patients fictifs (démo et recette)', f_documents: 'Lecture de documents', f_rapports: 'Rapports', couleur_n: 'Teinte {n}', peau_n: 'Teinte {n}' },
+  types_etab: { hopitaux: 'Hôpitaux', chsld: 'CHSLD' },
   nav: { operations: 'Opérations', pilotage: 'Pilotage', gestion: 'Gestion', principale: 'Navigation principale', ouvrir: 'Ouvrir le menu', fermer: 'Fermer le menu' },
   apparence: { basculer: 'Changer le thème', choisir: 'Apparence', clair: 'Clair', sombre: 'Sombre', automatique: 'Automatique (système)', soleil: 'Selon le soleil (établissement)', enregistree: 'Apparence enregistrée.' },
   priorites_ui: {

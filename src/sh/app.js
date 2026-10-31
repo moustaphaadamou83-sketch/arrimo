@@ -304,6 +304,29 @@ function creerAppSh(pool, { env = process.env } = {}) {
     if (!Object.hasOwn(TE.TYPES, type)) throw new ErreurSh(400, 'Type d’établissement invalide.');
     return { types: Object.entries(TE.TYPES).map(([code, t]) => ({ code, ...t })), type, modules: await catalogueType(pool, type) };
   }));
+  /**
+   * Démonstration CHSLD : l'administration crée les deux CHSLD fictifs dans un environnement fictif, par le parcours SH
+   * habituel (type CHSLD et modules, relier, import de la structure et des comptes, liste de contrôle, activation), exécuté
+   * avec sa propre session ; puis l'environnement saisit les scénarios. Tout est journalisé au nom de l'administration.
+   */
+  api.post('/demo-chsld', route(async (req) => {
+    const environnement = String(req.body.environnement || '');
+    if (!['demo_abc', 'pilote'].includes(environnement)) throw new ErreurSh(409, 'La démonstration CHSLD se crée seulement dans un environnement fictif (Démo ABC ou pilote).');
+    const { provisionner, CHSLD } = require('../../db/provisionner-chsld');
+    const deja = (await pool.query('SELECT code_etab FROM hopitaux WHERE environnement = $1 AND code_etab = ANY($2)', [environnement, CHSLD.map((c) => c.code)])).rows;
+    if (deja.length) throw new ErreurSh(409, `Déjà créés dans cet environnement : ${deja.map((x) => x.code_etab).join(', ')}.`);
+    const base = `http://127.0.0.1:${req.socket.localPort}`;
+    const sh = async (methode, chemin, corps) => {
+      const r = await fetch(`${base}/api${chemin}`, { method: methode, headers: { 'Content-Type': 'application/json', Authorization: req.get('authorization') }, body: corps ? JSON.stringify(corps) : undefined });
+      const d = await r.json().catch(() => null);
+      if (!r.ok) throw new ErreurSh(r.status, (d && d.erreur) || `Étape SH refusée (${r.status}).`);
+      return d;
+    };
+    const crees = await provisionner(sh, { environnement, modules: { portail_proches: true, messagerie_securisee: true } });
+    const peuplement = await appeler(cible(environnement), 'POST', '/sh/demo-chsld/peupler', {});
+    await journal(pool, req.u, 'Démonstration CHSLD créée', crees.map((c) => c.code).join(', '), `environnement ${environnement} · ${peuplement.comptes.length} comptes`, null);
+    return { etablissements: crees.map((c) => ({ id: c.hopital_id, code: c.code, nom: c.nom })), comptes: peuplement.comptes, proche: peuplement.proche, scenarios: peuplement.scenarios };
+  }));
   /** Licences proposées à la création : modules inclus souscrits, modules disponibles selon le choix, les autres non sélectionnés. */
   async function licencesInitiales(c, h, type, choix = {}, u) {
     for (const m of await catalogueType(c, type)) {

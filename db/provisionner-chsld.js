@@ -7,9 +7,9 @@
  *      hospitalisation à l'Hôpital B et retour, transfert inter-CHSLD, tâches. Données synthétiques seulement.
  */
 const CHSLD = [
-  { code: 'CHSLD-ERA', nom: 'CHSLD des Érables', ville: 'Val-des-Pins', latitude: 45.392, longitude: -71.905, prefixe: 'ERA', courriel: 'erables',
+  { code: 'CHSLD-ERA', nom: 'CHSLD 1 — des Érables', ville: 'Val-des-Pins', latitude: 45.392, longitude: -71.905, prefixe: 'ERA', courriel: 'erables',
     unites: [['Unité des Pins', 'HLD', 14, 5], ['Unité des Lilas', 'HLD', 10, 5], ['Unité prothétique Le Phare', 'PROT', 16, 0]] },
-  { code: 'CHSLD-STL', nom: 'CHSLD du Saint-Laurent', ville: 'Mont-Clair', latitude: 45.288, longitude: -72.135, prefixe: 'STL', courriel: 'saint-laurent',
+  { code: 'CHSLD-STL', nom: 'CHSLD 2 — du Saint-Laurent', ville: 'Mont-Clair', latitude: 45.288, longitude: -72.135, prefixe: 'STL', courriel: 'saint-laurent',
     unites: [['Unité du Fleuve', 'HLD', 18, 9], ['Unité des Îles', 'HLD', 12, 9], ['Unité Transition', 'TEMP', 24, 0]] },
 ];
 // [unité, type, chambres individuelles, chambres doubles] : 60 lits pour les Érables (14+2×5, 10+2×5, 16) ; 90 pour le Saint-Laurent (18+2×9, 12+2×9, 24)
