@@ -527,16 +527,29 @@ async function demarrer() {
 const estEntretien = () => etat.moi && etat.moi.utilisateur.role === 'entretien';
 /** Modules de l'établissement courant : un module désactivé (ex. NSA pour un hôpital pédiatrique) n'a pas d'onglet. */
 const MODULE_ONGLET = { urgence: 'urgence', nsa: 'nsa', nettoyage: 'nettoyage', national: 'national' };
+/** Type de l'établissement courant (hôpital par défaut) : la navigation et l'écran d'accueil en dépendent. */
+const typeEtab = () => etabCtx()?.type_etablissement || 'hopital';
 function appliquerModules() {
   const entretien = estEntretien();
   const mods = (etabCtx() && etabCtx().modules) || {};
+  const type = typeEtab();
+  document.body.dataset.typeEtab = type;
   document.querySelectorAll('#onglets button').forEach((b) => {
     const mod = Object.keys(MODULE_ONGLET).find((k) => MODULE_ONGLET[k] === b.dataset.v);
-    b.hidden = (entretien && b.dataset.v !== 'nettoyage') || (b.dataset.v === 'admin' && !etat.moi.utilisateur.admin) || (mod && mods[mod] === false)
-      || (b.dataset.v === 'patients' && !etat.moi.patients_fictifs);
+    const autreType = b.dataset.type && b.dataset.type !== type;
+    // Entretien : nettoyage (et ses tâches en CHSLD) seulement
+    const entretienInterdit = entretien && !(b.dataset.v === 'nettoyage' || (type === 'chsld' && b.dataset.v === 'c-taches'));
+    b.hidden = autreType || entretienInterdit || (b.dataset.v === 'admin' && !etat.moi.utilisateur.admin) || (mod && mods[mod] === false)
+      || (b.dataset.module && mods[b.dataset.module] === false) || (b.dataset.v === 'patients' && !etat.moi.patients_fictifs);
   });
+  document.querySelectorAll('#onglets .onglets-groupe[data-type]').forEach((g) => { g.hidden = g.dataset.type !== type || entretien; });
+  // Nettoyage (commun) : dans le groupe Hébergement d'un CHSLD, dans Opérations d'un hôpital
+  const net = $('#onglets button[data-v="nettoyage"]');
+  const ancre = type === 'chsld' ? $('#onglets button[data-v="c-admissions"]') : $('#onglets button[data-v="transferts"]');
+  if (net && ancre && ancre.nextElementSibling !== net) ancre.after(net);
+  const accueil = type === 'chsld' ? 'c-accueil' : 'copilote';
   const cur = document.querySelector(`#onglets button[data-v="${etat.vue}"]`);
-  if (cur && cur.hidden && !entretien) { etat.vue = 'copilote'; document.querySelectorAll('.contenu > section').forEach((sec) => { sec.hidden = sec.id !== 'v-copilote'; }); }
+  if (cur && cur.hidden && !entretien) { etat.vue = accueil; document.querySelectorAll('#onglets button').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.v === accueil))); document.querySelectorAll('.contenu > section').forEach((sec) => { sec.hidden = sec.id !== `v-${accueil}`; }); }
 }
 const libelleAge = (g) => (g && g !== 'adulte' ? `<span class="badge age-${esc(g)}">${esc(t(`fin.age_${g}`))}</span>` : '');
 
@@ -582,7 +595,7 @@ async function rafraichir() {
     await Promise.all([e ? majCompteurs() : null, ({
       copilote: vueCopilote, reseau: vueReseau, national: vueNational, lits: vueLits, urgence: vueUrgence, admissions: vueAdmissions, transferts: vueTransferts,
       nettoyage: vueNettoyage, vigilance: vueVigilance, nsa: vueNsa, indicateurs: vueIndicateurs, journal: vueJournal, params: vueParams,
-      admin: vueAdmin, compte: vueCompte, support:vueSupportClient, patients: vuePatients,
+      admin: vueAdmin, compte: vueCompte, support:vueSupportClient, patients: vuePatients, ...(window.ArrimoChsld?.vues || {}),
     })[etat.vue]()]);
     poserMenuParametres();
     majInfosLieu();
@@ -596,7 +609,7 @@ async function rafraichir() {
 }
 // Rafraîchissement automatique des écrans opérationnels seulement : les formulaires (paramètres, compte, administration)
 // ne sont jamais redessinés pendant une saisie, sinon les modifications en cours seraient effacées.
-const VUES_FORMULAIRES = ['params', 'compte', 'admin', 'patients'];
+const VUES_FORMULAIRES = ['params', 'compte', 'admin', 'patients', 'c-residents', 'c-demandes', 'c-taches'];
 setInterval(() => {
   if ($('#modale').hidden && document.visibilityState === 'visible' && !VUES_FORMULAIRES.includes(etat.vue) && !etat.ogModifie
     && !$('#v-support').contains(document.activeElement)) rafraichir();
@@ -646,6 +659,7 @@ async function majCompteurs() {
   const net = await api('GET', `/nettoyage?etablissement_id=${etat.ctx}`);
   $('#n-net').textContent = net.length;
   if (estEntretien()) return;
+  if (typeEtab() === 'chsld') { etat.notifs = await api('GET', `/notifications?etablissement_id=${etat.ctx}`); const nl = etat.notifs.filter((n) => !n.lu).length; $('#n-notif').hidden = !nl; $('#n-notif').textContent = nl; return; }
   const [notifs, trs, adm] = await Promise.all([
     api('GET', `/notifications?etablissement_id=${etat.ctx}`),
     api('GET', `/transferts?etablissement_id=${etat.ctx}`),
@@ -1099,6 +1113,9 @@ async function vueTransferts() {
   }; });
   v.querySelectorAll('[data-tout-termines]').forEach((b) => { b.onclick = () => { etat.toutTermines = true; rafraichir(); }; });
   majDecomptes();
+  // Résidents de CHSLD hospitalisés ici et leurs retours (coordination CHSLD ↔ hôpital)
+  v.insertAdjacentHTML('beforeend', '<div id="ch-hopital"></div>');
+  await window.ArrimoChsld?.panneauHopital($('#ch-hopital'));
 }
 const besoinsTransfert = (x) => BESOINS.filter((k) => x.besoins?.[k]).map((k) => t(`besoins.${k}`).toLowerCase()).join(', ');
 

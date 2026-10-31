@@ -662,3 +662,25 @@ label.item input[type=radio] { order: -1; width: 20px; height: 20px; flex: none;
 .alt-item > div { min-width: 0; flex: 1 1 160px; }
 .alt-statut::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; background: var(--inactif); }
 .alt-ok::before { background: var(--succes); } .alt-perime::before { background: var(--attention); } .alt-verifier::before { background: var(--info); }
+/* ---------------- CHSLD ---------------- */
+.ch-etat { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-libelle); font-weight: 600; white-space: nowrap; }
+.ch-etat::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--inactif); flex: none; }
+.ch-libre::before, .ch-present::before, .ch-recue::before, .ch-faite::before, .ch-admise::before, .ch-acceptee::before { background: var(--succes); }
+.ch-reserve::before, .ch-preadmission::before, .ch-place_proposee::before, .ch-envoyee::before, .ch-en_cours::before, .ch-en_verification::before { background: var(--info); }
+.ch-occupe::before { background: var(--secondaire); }
+.ch-conservee::before, .ch-hospitalise::before, .ch-absent::before, .ch-nettoyage::before, .ch-a_faire::before, .ch-documents_manquants::before, .ch-transfert_en_cours::before { background: var(--attention); }
+.ch-indispo::before, .ch-refusee::before, .ch-expiree::before { background: var(--critique); }
+.ch-places { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: var(--e2); margin-bottom: var(--e4); }
+.ch-place { background: var(--carte); border: 1px solid var(--bordure); border-left: 4px solid var(--inactif); border-radius: var(--rayon); padding: var(--e2) var(--e3); display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ch-p-libre { border-left-color: var(--succes); } .ch-p-reserve { border-left-color: var(--info); } .ch-p-occupe { border-left-color: var(--secondaire); }
+.ch-p-conservee, .ch-p-nettoyage { border-left-color: var(--attention); } .ch-p-indispo { border-left-color: var(--critique); }
+.ch-place-tete { display: flex; justify-content: space-between; align-items: center; gap: var(--e2); }
+.ch-legende { display: flex; flex-wrap: wrap; gap: var(--e2) var(--e4); margin-bottom: var(--e3); align-items: center; }
+.ch-dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px var(--e3); margin: 0; }
+.ch-dl dt { color: var(--texte-2-fond); font-size: var(--t-note); } .ch-dl dd { margin: 0; overflow-wrap: anywhere; }
+.ch-historique { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow: auto; }
+.liste-simple { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.entete-panneau { display: flex; justify-content: space-between; align-items: center; gap: var(--e2); flex-wrap: wrap; }
+.ch-contact { border: 1px solid var(--bordure); border-radius: var(--rayon); padding: var(--e3); margin: 0 0 var(--e3); display: flex; flex-direction: column; gap: var(--e2); }
+.ch-loc { margin: var(--e1) 0 0; font-weight: 600; color: var(--principal); }
+.ch-alertes ul { margin: 0; padding-left: 18px; }

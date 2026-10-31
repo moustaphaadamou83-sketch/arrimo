@@ -277,18 +277,43 @@ const champ = (id, libelle, valeur, attrs = '') => `<div class="champ"><label cl
 const choixEnv = (id, choisi, verrou) => `<div class="champ"><label class="lbl" for="${id}">Environnement</label><select id="${id}"${verrou ? ' disabled' : ''}>
   ${Object.entries(ENVS).map(([k, n]) => `<option value="${k}"${k === choisi ? ' selected' : ''}>${esc(n)}${etat.moi.environnements.some((e) => e.code === k) ? '' : ' (non relié)'}</option>`).join('')}</select></div>`;
 const nb = (n) => F.nombre(L, n, 6);
+/* Type d'établissement : premier choix du formulaire ; seuls les types opérationnels sont sélectionnables. */
+const TYPES_ETAB = [['hopital', 'Hôpital', true], ['chsld', 'CHSLD', true], ['maison_aines', 'Maison des aînés', false], ['rpa', 'Résidence privée pour aînés (RPA)', false], ['ressource_intermediaire', 'Ressource intermédiaire', false]];
+const libelleType = (t) => (TYPES_ETAB.find((x) => x[0] === t) || [, 'Hôpital'])[1];
+const STATUT_MODULE = { inclus: 'Inclus', disponible: 'Disponible', a_venir: 'À venir', etude: 'À l’étude' };
+const CATEGORIE_MODULE = { commun: 'Modules communs', hopital: 'Modules hospitaliers', chsld: 'Modules CHSLD', optionnel: 'Modules optionnels' };
+/** Modules proposés pour le type : inclus (cochés, figés), disponibles (cochables), à venir ou à l'étude (non cochables). */
+async function afficherModulesType(type, zone) {
+  zone.innerHTML = '<p class="note">Chargement des modules…</p>';
+  try {
+    const r = await api('GET', `/catalogue-modules?type=${encodeURIComponent(type)}`);
+    const groupes = ['commun', type === 'hopital' ? 'hopital' : 'chsld', 'optionnel'];
+    zone.innerHTML = groupes.map((g) => { const ms = r.modules.filter((m) => m.categorie === g); if (!ms.length) return '';
+      return `<fieldset class="modules-type"><legend>${esc(CATEGORIE_MODULE[g])}</legend>${ms.map((m) => `<label class="case module-${m.statut}">
+        <input type="checkbox" data-module="${esc(m.code)}"${m.statut === 'inclus' || m.statut === 'disponible' ? ' checked' : ''}${m.statut === 'disponible' ? '' : ' disabled'}>
+        <span>${esc(m.nom)} <span class="badge">${esc(STATUT_MODULE[m.statut])}</span>${m.dependances?.length ? ` <span class="note">requiert : ${esc(m.dependances.join(', '))}</span>` : ''}${m.note ? ` <span class="note">· ${esc(m.note)}</span>` : ''}</span></label>`).join('')}</fieldset>`; }).join('');
+  } catch (e) { zone.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; }
+}
+const lireModulesType = () => Object.fromEntries([...document.querySelectorAll('#h-modules [data-module]:not(:disabled)')].map((c) => [c.dataset.module, c.checked]));
 function formHopital(h = {}) {
   const verrou = !!h.relie;
-  return `<div class="ligne">${champ('h-nom', 'Nom de l’hôpital', h.nom)}${champ('h-code', 'Code d’établissement', h.code_etab, `placeholder="HOP-A"${verrou ? ' disabled' : ''}`)}${choixEnv('h-env', h.environnement || 'recette', verrou)}</div>
+  const type = h.type_etablissement || 'hopital';
+  return `<fieldset class="type-etab"><legend>1. Type d’établissement</legend><div class="ligne"><div class="champ"><label class="lbl" for="h-type">Type d’établissement</label>
+      <select id="h-type"${verrou ? ' disabled' : ''}>${TYPES_ETAB.map(([c, n, ok]) => `<option value="${c}"${c === type ? ' selected' : ''}${ok ? '' : ' disabled'}>${esc(n)}${ok ? '' : ' (à venir)'}</option>`).join('')}</select></div></div>
+      <p class="note">Hôpital et CHSLD sont opérationnels. Maison des aînés, RPA et Ressource intermédiaire sont prévus : ils seront activables après le développement et les tests de leurs parcours.</p>
+      ${h.id ? '' : '<div id="h-modules" class="modules-proposes"></div>'}</fieldset>
+    <fieldset><legend>2. Identité et environnement</legend>
+    <div class="ligne">${champ('h-nom', 'Nom de l’établissement', h.nom)}${champ('h-code', 'Code d’établissement', h.code_etab, `placeholder="HOP-A"${verrou ? ' disabled' : ''}`)}${choixEnv('h-env', h.environnement || 'recette', verrou)}</div>
     <div class="ligne">${champ('h-raison', 'Raison sociale', h.raison_sociale)}${champ('h-legal', 'Identifiant légal', h.identifiant_legal)}${champ('h-pays', 'Pays (ISO)', h.pays_code || 'CA', `maxlength="2"${h.relie?' disabled':''}`)}</div>
     ${h.relie?'<p class="note">Le pays suit l’établissement relié.</p>':''}
     <div class="ligne">${champ('h-adresse', 'Adresse', h.adresse)}${champ('h-ville', 'Ville', h.ville)}</div>
     <div class="ligne">${champ('h-region', 'Province / région', h.region)}${champ('h-tz', 'Fuseau horaire', h.fuseau_horaire || 'America/Toronto')}${champ('h-prevus', 'Utilisateurs prévus', h.utilisateurs_prevus ?? 0, 'type="number" min="0"')}${champ('h-autorises', 'Utilisateurs autorisés', h.utilisateurs_autorises ?? 0, 'type="number" min="0"')}</div>
     <div class="ligne">${champ('h-lat', 'Latitude', h.latitude == null ? '' : nb(h.latitude), `inputmode="decimal" placeholder="${nb(45.4)}"`)}${champ('h-lon', 'Longitude', h.longitude == null ? '' : nb(h.longitude), `inputmode="decimal" placeholder="${nb(-71.89)}"`)}
       ${champ('h-sd', 'Lien propre (sous-domaine)', h.sous_domaine, 'placeholder="hopital-x"')}</div>
-    <div class="ligne">${champ('h-cnom', 'Contact : nom', h.contact_nom)}${champ('h-ccourriel', 'Contact : courriel', h.contact_courriel, 'type="email"')}${champ('h-ctel', 'Contact : téléphone', h.contact_telephone, 'type="tel"')}</div>`;
+    </fieldset><div class="ligne">${champ('h-cnom', 'Contact : nom', h.contact_nom)}${champ('h-ccourriel', 'Contact : courriel', h.contact_courriel, 'type="email"')}${champ('h-ctel', 'Contact : téléphone', h.contact_telephone, 'type="tel"')}</div>`;
 }
 const lireFormHopital = () => ({
+  type_etablissement: $('#h-type').value, ...($('#h-modules') ? { modules: lireModulesType() } : {}),
   nom: $('#h-nom').value, code_etab: $('#h-code').value, environnement: $('#h-env').value, adresse: $('#h-adresse').value, ville: $('#h-ville').value,
   raison_sociale: $('#h-raison').value, identifiant_legal: $('#h-legal').value, pays_code: $('#h-pays').value, region: $('#h-region').value,
   fuseau_horaire: $('#h-tz').value, utilisateurs_prevus: Number($('#h-prevus').value), utilisateurs_autorises: Number($('#h-autorises').value),
@@ -360,8 +385,8 @@ async function vueHopitaux(v) {
   // L'état des environnements est réservé à l'administration, à l'implantation et au support
   const voitEnvs = ['administration', 'implantation', 'support'].includes(etat.moi.utilisateur.role);
   const [liste, envs] = await Promise.all([api('GET', `/hopitaux${qs ? `?${qs}` : ''}`), voitEnvs ? api('GET', '/environnements') : []]);
-  v.innerHTML = `<div class="entete"><div><h2>Hôpitaux clients</h2><p>Chaque hôpital suit un assistant en 6 étapes. Les 7 étapes de contrôle existantes restent conservées sous le capot, et le module ne s’active qu’après validation des prérequis.</p></div>
-      <button class="btn pri" id="b-nouveau">${icone('plus')}Nouvel hôpital</button></div>
+  v.innerHTML = `<div class="entete"><div><h2>Établissements clients</h2><p>Chaque établissement suit un assistant en 6 étapes. Les 7 étapes de contrôle existantes restent conservées sous le capot, et le module ne s’active qu’après validation des prérequis.</p></div>
+      <button class="btn pri" id="b-nouveau">${icone('plus')}Nouvel établissement</button></div>
     <div class="envs">${envs.map((e) => `<span class="env"><span class="etat-niveau ${e.joignable ? 'n-vert' : 'n-rouge'}">${esc(e.nom)}</span>
       <span class="note">${e.joignable ? pl('{n|aucun établissement|# établissement|# établissements}', { n: e.etablissements }) : 'ne répond pas'}</span></span>`).join('') || '<span class="note">Aucun environnement relié à la console.</span>'}</div>
     <div class="ligne filtres">
@@ -369,8 +394,9 @@ async function vueHopitaux(v) {
       <div class="champ"><label class="lbl" for="f-statut">Statut</label><select id="f-statut"><option value="">Tous</option>${Object.entries(STATUTS).map(([k, n]) => `<option value="${k}"${f.statut === k ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></div>
       <div class="champ"><label class="lbl" for="f-env">Environnement</label><select id="f-env"><option value="">Tous</option>${Object.entries(ENVS).map(([k, n]) => `<option value="${k}"${f.environnement === k ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></div>
     </div>
-    ${liste.length ? `<div class="tableau"><table><thead><tr><th>Hôpital</th><th>Contact</th><th>Environnement</th><th>Statut</th><th>Étape en cours</th><th>Lien d’accès</th></tr></thead><tbody>
+    ${liste.length ? `<div class="tableau"><table><thead><tr><th>Établissement</th><th>Type</th><th>Contact</th><th>Environnement</th><th>Statut</th><th>Étape en cours</th><th>Lien d’accès</th></tr></thead><tbody>
       ${liste.map((h) => `<tr><td><button class="lien-ligne" data-h="${h.id}">${esc(h.nom)}</button><div class="note">${esc([h.code_etab, h.ville].filter(Boolean).join(' · '))}</div></td>
+        <td><span class="badge">${esc(libelleType(h.type_etablissement))}</span></td>
         <td class="note">${esc(h.contact_nom || '—')}${h.contact_courriel ? `<br>${esc(h.contact_courriel)}` : ''}</td>
         <td>${esc(ENVS[h.environnement])}${h.distant && h.distant.injoignable ? '<div class="note">ne répond pas</div>' : ''}</td>
         <td>${statutHTML(h.statut)}</td>
@@ -383,8 +409,8 @@ async function vueHopitaux(v) {
   $('#f-env').onchange = (e) => { f.environnement = e.target.value; afficher(); };
   v.querySelectorAll('[data-h]').forEach((b) => { b.onclick = () => { etat.hopital = Number(b.dataset.h); etat.imports = {}; afficher(); window.scrollTo(0, 0); }; });
   $('#b-nouveau').onclick = () => {
-    modale('Nouvel hôpital', `<div class="form-modale">${formHopital()}</div><p class="note">La position sert à créer l’établissement dans l’environnement (proximité, carte). Vous pourrez tout modifier ensuite.</p>`,
-      [{ label: 'Annuler' }, { label: 'Créer l’hôpital', pri: true, run: async () => {
+    modale('Nouvel établissement', `<div class="form-modale">${formHopital()}</div><p class="note">La position sert à créer l’établissement dans l’environnement (proximité, carte). Vous pourrez tout modifier ensuite.</p>`,
+      [{ label: 'Annuler' }, { label: 'Créer l’établissement', pri: true, run: async () => {
         try {
           const h = await api('POST', '/hopitaux', lireFormHopital());
           toast(`${h.nom} est créé.`);
@@ -394,6 +420,8 @@ async function vueHopitaux(v) {
         } catch (e) { toast(e.message, true); return false; }
       } }]);
     $('#modale .boite').classList.add('large');
+    afficherModulesType($('#h-type').value, $('#h-modules'));
+    $('#h-type').onchange = (e) => afficherModulesType(e.target.value, $('#h-modules'));
   };
 }
 

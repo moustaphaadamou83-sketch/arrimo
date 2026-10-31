@@ -775,6 +775,8 @@ DO $$ BEGIN
   ALTER TABLE etablissements ADD CONSTRAINT etab_type_etablissement
     CHECK (type_etablissement IN ('hopital', 'chsld', 'maison_aines', 'rpa', 'ressource_intermediaire'));
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- Profil pays d'origine quand la configuration de l'établissement en dérive (CHSLD : configuration « <profil>-CHSLD »)
+ALTER TABLE etablissements ADD COLUMN IF NOT EXISTS profil_config_id int REFERENCES config_pays(id);
 -- Politique de conservation de la place pendant une hospitalisation (jours ; NULL = conservée jusqu'au retour ou à la sortie)
 ALTER TABLE etablissements ADD COLUMN IF NOT EXISTS conservation_place_jours int CHECK (conservation_place_jours IS NULL OR conservation_place_jours BETWEEN 1 AND 365);
 

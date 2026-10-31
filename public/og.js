@@ -109,6 +109,27 @@
       } catch (e) { ev.currentTarget.disabled = false; res.textContent = e.message; }
     };
   }
+  /** Proposition OG en CHSLD (tâche, demande de rappel) : rien n'est écrit avant la confirmation ; même API que l'interface. */
+  function carteChsld(parent, p, etab) {
+    const en = langue === 'en', carte = document.createElement('div'); carte.className = 'og-carte-action';
+    const titre = document.createElement('b'); titre.textContent = p.type === 'tache' ? (en ? 'Proposed task' : 'Tâche proposée') : (en ? 'Proposed callback request' : 'Demande de rappel proposée');
+    const detail = document.createElement('p'); detail.textContent = p.corps.titre || p.corps.sujet;
+    const res = document.createElement('p'); res.className = 'og-resultat'; res.setAttribute('aria-live', 'polite');
+    const ligne = document.createElement('div'); ligne.className = 'ligne serre';
+    const annuler = document.createElement('button'); annuler.type = 'button'; annuler.className = 'btn'; annuler.textContent = en ? 'Cancel' : 'Annuler';
+    const confirmer = document.createElement('button'); confirmer.type = 'button'; confirmer.className = 'btn pri'; confirmer.textContent = en ? 'Confirm' : 'Confirmer';
+    const clore = (t2) => { annuler.disabled = true; confirmer.disabled = true; res.textContent = t2; };
+    annuler.onclick = () => clore(en ? 'Proposal cancelled. Nothing was done.' : 'Proposition annulée. Rien n’a été fait.');
+    confirmer.onclick = async () => {
+      confirmer.disabled = true;
+      try {
+        if (p.type === 'tache') await api('POST', '/chsld/taches', { etablissement_id: etab, ...p.corps });
+        else await api('POST', `/chsld/residents/${p.resident_id}/communications`, p.corps);
+        clore(en ? 'Done: recorded and logged.' : 'Fait : enregistré et journalisé.');
+      } catch (e) { confirmer.disabled = false; res.textContent = e.message; }
+    };
+    ligne.append(annuler, confirmer); carte.append(titre, detail, ligne, res); parent.append(carte);
+  }
   function cartesPatients(parent, resultats, limite) {
     const box=document.createElement('div');box.className='og-patients';
     if (!resultats.length) {const vide=document.createElement('p');vide.textContent=langue==='en'?'No matching patient in this hospital.':'Aucun patient correspondant dans cet établissement.';box.append(vide);}
@@ -231,6 +252,8 @@
       if (valide()) { attente.remove(); message(texteReponse, false, reponse.mode);
         if(Array.isArray(reponse.patients)){patientSelectionne=null;cartesPatients(log.lastElementChild,reponse.patients,reponse.limite);}
         if(reponse.proposition)carteAction(log.lastElementChild,reponse.proposition,contexte);
+        if(reponse.formulaire==='nouveau_resident'&&window.ArrimoChsldNouveauResident){const b=document.createElement('button');b.type='button';b.className='btn pri';b.textContent=langue==='en'?'Open the registration form':'Ouvrir le formulaire d’enregistrement';b.onclick=()=>{fermer();window.ArrimoChsldNouveauResident();};log.lastElementChild.append(b);}
+        if(reponse.proposition_chsld)carteChsld(log.lastElementChild,reponse.proposition_chsld,contexte);
         if(reponse.ouvrir){const b=document.createElement('button');b.type='button';b.className='btn';b.textContent=langue==='en'?'Open this screen':'Ouvrir cet écran';b.onclick=()=>naviguer(reponse.ouvrir);log.lastElementChild.append(b);}
         // Langue du texte reçue du serveur : la voix lit toujours dans la langue du texte affiché.
         window.dispatchEvent(new CustomEvent('arrimo:og-reponse',{detail:{texte:texteReponse,langue:reponse.langue||langueQ,voix:!!source,sensible:!!reponse.sensible||!!reponse.patients||!!patientSelectionne||/\b(?:P|TR)-\d{1,12}\b|\badmission\s*(?:n[°o]\s*|#\s*)?\d+|\bpatient\s+(?:interne|id)\s*\d+\b/i.test(q)}}));
@@ -256,6 +279,13 @@
     if (p.accueil) message(avecNom(p.accueil));
     // Raccourcis du cahier OG (§17), affichés seulement pour les fonctions actives de l'établissement.
     const en = langue === 'en', T = (fr, anglais) => (en ? anglais : fr);
+    if (etabCtx()?.type_etablissement === 'chsld') {
+      action(T('Places disponibles', 'Available places'), () => question(T('Combien de chambres sont disponibles aujourd’hui ?', 'How many rooms are available today?')));
+      action(T('Résidents hospitalisés', 'Residents in hospital'), () => question(T('Quels résidents sont actuellement hospitalisés ?', 'Which residents are currently in hospital?')));
+      action(T('Retours prévus', 'Planned returns'), () => question(T('Quels retours sont prévus ?', 'Which returns are planned?')));
+      action(T('Nouveau résident', 'New resident'), () => question(T('Aide-moi à enregistrer un nouveau résident', 'Help me register a new resident')));
+      return;
+    }
     if (e.patients) action(T('Créer un patient', 'Create a patient'), () => { message(T('Créer un patient', 'Create a patient'), true); formulaireCreationPatient(); });
     if (e.actions) action(T('Préparer une admission', 'Prepare an admission'), () => question(T('Prépare une admission', 'Prepare an admission')));
     action(T('Rechercher un lit', 'Find a bed'), () => question(T('Quels lits sont libres ?', 'Which beds are available?')));
@@ -279,7 +309,7 @@
     const u = etat.moi.utilisateur; const etab = etabCtx(); const entretien = estEntretien();
     document.querySelector('#og-contexte').textContent = O('contexte', { etab: etab?.nom || 'Arrimo', role: t(`roles.${u.role}`) });
     document.querySelector('#og-actions').replaceChildren();
-    message(O(entretien ? 'bienvenue_entretien' : 'bienvenue', { nom: u.nom }));
+    message(O(entretien ? 'bienvenue_entretien' : etab?.type_etablissement === 'chsld' ? 'bienvenue_chsld' : 'bienvenue', { nom: u.nom }));
     if(patientSelectionne)message(langue==='en'?'The selected patient context is retained for this authorized session.':'Le contexte du patient sélectionné est conservé pour cette session autorisée.');
     const actif = !!etab?.module_actif;
     champ.disabled = !actif; envoyer.disabled = !actif;
@@ -288,6 +318,8 @@
     if (actif && entretien) {
       action(O('priorites'), () => question(langue === 'en' ? 'Cleaning priorities' : 'Priorités de nettoyage'));
       action(t('onglets.nettoyage'), () => naviguer('nettoyage'));
+    } else if (actif && etab?.type_etablissement === 'chsld') {
+      for (const vue of ['c-accueil', 'c-residents', 'c-chambres']) action(t(`chsld.nav.${vue.slice(2)}`), () => naviguer(vue));
     } else if (actif) {
       action(O('priorites'), () => question(langue === 'en' ? 'What should I do first?' : 'Que faire en priorité ?'));
       for (const vue of ['copilote', 'urgence', 'lits', 'transferts']) action(t(`onglets.${vue}`), () => naviguer(vue));

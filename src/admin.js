@@ -14,7 +14,7 @@ const cx = require('./connecteurs');
 const demo = require('./demo');
 const s = require('./services');
 
-const ROLES = ['coordonnateur', 'entretien', 'admin_etab', 'gestionnaire'];
+const ROLES = ['coordonnateur', 'entretien', 'admin_etab', 'gestionnaire', 'equipe_soins'];
 
 async function journalAdmin(db, u, action, cible, detail, etablissementId = null) {
   await db.query(`INSERT INTO journal_admin (utilisateur_id, etablissement_id, action, cible, detail) VALUES ($1, $2, $3, $4, $5)`,
@@ -31,14 +31,21 @@ async function creerEtablissement(pool, b, journaliserCreation,{env=process.env}
   if (!(lat >= -90 && lat <= 90) || !(lon >= -180 && lon <= 180) || b.latitude === '' || b.longitude === '' || b.latitude == null || b.longitude == null) throw new ErreurHttp(400, 'position_invalide');
   const partage = b.partage || 'complet';
   if (!['complet', 'agrege', 'aucun'].includes(partage)) throw new ErreurHttp(400, 'partage_invalide');
-  const profils=require('./profils-pays').profilsAvecPays((await pool.query('SELECT id,code,nom FROM config_pays ORDER BY id')).rows,env);
+  // Les configurations dérivées (« <profil>-CHSLD ») ne sont pas des profils pays : on choisit toujours parmi les profils d'origine.
+  const profils=require('./profils-pays').profilsAvecPays((await pool.query("SELECT id,code,nom FROM config_pays WHERE code NOT LIKE '%-CHSLD' ORDER BY id")).rows,env);
   if(!profils.length)throw new ErreurHttp(400,'config_introuvable');
   const config=require('./profils-pays').choisirProfil(profils,b);
+  // Type d'établissement (hôpital par défaut) : seuls les types opérationnels sont créés ; modules choisis dans SH, validés ici.
+  const TE = require('./types-etablissement');
+  const type = b.type_etablissement === undefined ? 'hopital' : String(b.type_etablissement);
+  TE.exigerTypeOperationnel(type);
+  const modules = TE.drapeauxDepuisChoix(type, b.modules || {});
   return transaction(pool, async (c) => {
     if ((await c.query('SELECT 1 FROM etablissements WHERE code = $1', [code])).rows[0]) throw new ErreurHttp(409, 'code_etab_existe');
-    const e = (await c.query(`INSERT INTO etablissements (code, nom, ville, adresse, latitude, longitude, config_id, partage, module_actif)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false) RETURNING id, code, nom, ville, adresse, partage, module_actif`,
-    [code, nom, String(b.ville || '').trim() || null, String(b.adresse || '').trim() || null, lat, lon, config.id, partage])).rows[0];
+    const configId = type === 'chsld' ? await TE.configChsld(c, config.id) : config.id;
+    const e = (await c.query(`INSERT INTO etablissements (code, nom, ville, adresse, latitude, longitude, config_id, partage, module_actif, type_etablissement, modules, profil_config_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, $9, $10, $11) RETURNING id, code, nom, ville, adresse, partage, module_actif, type_etablissement, modules`,
+    [code, nom, String(b.ville || '').trim() || null, String(b.adresse || '').trim() || null, lat, lon, configId, partage, type, modules, configId === config.id ? null : config.id])).rows[0];
     await journaliserCreation(c, e);
     return {...e,config_id:config.id,configuration_code:config.code};
   });

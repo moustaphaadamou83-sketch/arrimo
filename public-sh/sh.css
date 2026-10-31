@@ -109,3 +109,11 @@ table.compact { min-width: 0; }
 .sh-profil-presence { position:sticky; bottom:0; display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:8px 16px; border-top:1px solid var(--bordure); background:var(--carte); z-index:2; }
 .sh-profil-presence[hidden] { display:none; }
 .note-longue { overflow-wrap: anywhere; word-break: break-word; min-width: 0; }
+/* Création d'établissement : type d'abord, modules proposés selon le type */
+.type-etab, .form-modale fieldset { border: 1px solid var(--bordure); border-radius: var(--rayon); padding: var(--e3); margin: 0 0 var(--e3); }
+.form-modale legend { font-weight: 650; padding: 0 var(--e1); }
+.modules-proposes { display: grid; gap: var(--e2); margin-top: var(--e2); }
+.modules-type { border: 0; padding: 0; margin: 0; display: grid; gap: 4px; }
+.modules-type legend { font-size: var(--t-note); text-transform: uppercase; letter-spacing: 0.05em; color: var(--texte-2-fond); }
+.modules-type .case { align-items: flex-start; }
+.module-a_venir, .module-etude { opacity: 0.75; }

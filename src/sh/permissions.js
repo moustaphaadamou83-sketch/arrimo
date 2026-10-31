@@ -32,6 +32,7 @@ const PERMISSIONS = {
   'GET /environnements': ['administration', 'implantation', 'support'],
   'GET /hopitaux': ROLES_SH,
   'GET /hopitaux/:id': ROLES_SH,
+  'GET /catalogue-modules': ROLES_SH,
   'GET /hopitaux/:id/structure': ['administration', 'implantation'],
   'GET /hopitaux/:id/profils-pays': ['administration','implantation'],
   'GET /hopitaux/:id/suivi': ROLES_SH,

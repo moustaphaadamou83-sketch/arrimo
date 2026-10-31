@@ -77,7 +77,8 @@ async function migrerSh(pool, env = process.env) {
     const recherche=await migrerRecherche(c);
     const deploiement=await migrerDeploiement(c);
     const collaborateurs=await migrerCollaborateurs(c);
-    return { version: COLLABORATEURS_VERSION, appliquee: socle || erp || acces || projets || presence || perimetre || cycle || pilote || concurrence || liens || support || supportDroits || notificationsFinances || supportPagination || notificationsPerimetres || raccordementSupport || supportSla || supportPj || supportCourriels || supportCalendrier || preferences || fiscalite || change || apparence || parametres || financesProjets || tachesSuivi || projetsPilotage || competences || recherche || deploiement || collaborateurs };
+    const typesEtablissement=await require('./types-etablissement-migrations').migrerTypesEtablissement(c);
+    return { version: require('./types-etablissement-migrations').TYPES_ETABLISSEMENT_VERSION, appliquee: socle || erp || acces || projets || presence || perimetre || cycle || pilote || concurrence || liens || support || supportDroits || notificationsFinances || supportPagination || notificationsPerimetres || raccordementSupport || supportSla || supportPj || supportCourriels || supportCalendrier || preferences || fiscalite || change || apparence || parametres || financesProjets || tachesSuivi || projetsPilotage || competences || recherche || deploiement || collaborateurs || typesEtablissement };
   });
 }
 

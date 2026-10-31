@@ -17,7 +17,7 @@ const { hacherAsync, motDePasseTemporaire } = require('./auth');
 const { journaliser } = require('./regles');
 
 const MAX_LIGNES = 5000;
-const ROLES = ['coordonnateur', 'entretien', 'admin_etab'];
+const ROLES = ['coordonnateur', 'entretien', 'admin_etab', 'equipe_soins'];
 const CATEGORIES = { reguliere: 'reguliere', 'régulière': 'reguliere', regular: 'reguliere', debordement: 'debordement', 'débordement': 'debordement', corridor: 'debordement', overflow: 'debordement',
   isolement: 'isolement', isolation: 'isolement', pediatrique: 'pediatrique', 'pédiatrique': 'pediatrique', paediatric: 'pediatrique', pediatric: 'pediatrique', fauteuil: 'fauteuil', chair: 'fauteuil' };
 const GROUPES_AGE = { adulte: 'adulte', adult: 'adulte', pediatrique: 'pediatrique', 'pédiatrique': 'pediatrique', pediatric: 'pediatrique', paediatric: 'pediatrique',

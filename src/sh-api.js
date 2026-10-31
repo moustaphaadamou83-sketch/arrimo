@@ -41,7 +41,7 @@ function brancherSh(api, pool, route) {
   };
 
   api.get('/sh/capacites', sh(async () => ({ api: 1, invitationsSecurisees: true, courrielActif: courriel.actif(), configurationOperationnelle: true,
-    selectionPays:true,profilsPays:require('./profils-pays').profilsAvecPays((await pool.query('SELECT id,code,nom FROM config_pays ORDER BY id')).rows) })));
+    selectionPays:true,profilsPays:require('./profils-pays').profilsAvecPays((await pool.query("SELECT id,code,nom FROM config_pays WHERE code NOT LIKE '%-CHSLD' ORDER BY id")).rows), typesEtablissement:true })));
 
   // Licence OG décidée dans SH (module OG souscrit et ses fonctions) ; les réglages de l'établissement sont conservés.
   api.get('/sh/etablissements/:code/og-licence', sh(async (req) => require('./og-configuration').lire(pool, (await etabParCode(req.params.code)).id)));
@@ -53,20 +53,21 @@ function brancherSh(api, pool, route) {
   }));
   api.get('/sh/etablissements/:code/configuration-operationnelle', sh(async (req) => {
     const e = await etabParCode(req.params.code);
-    const etat = (await pool.query('SELECT modules, vocation, config_id FROM etablissements WHERE id=$1', [e.id])).rows[0];
+    const etat = (await pool.query('SELECT modules, vocation, config_id, type_etablissement FROM etablissements WHERE id=$1', [e.id])).rows[0];
     const catalogue = (await pool.query('SELECT code, nom, groupe_age FROM specialites_catalogue ORDER BY ordre')).rows;
     const specialites = (await pool.query('SELECT code, nom, groupe_age FROM types_unite WHERE config_id=$1 ORDER BY ordre', [etat.config_id])).rows;
     const referentiel = (await pool.query('SELECT revision, categories, approuve_le FROM admission_referentiels WHERE etablissement_id=$1', [e.id])).rows[0] || null;
-    return { modules: etat.modules, vocation: etat.vocation, version: require('./configuration-operationnelle').empreinte(etat), catalogue, specialites, referentiel_priorites: referentiel };
+    return { modules: etat.modules, vocation: etat.vocation, version: require('./configuration-operationnelle').empreinte(etat), catalogue, specialites, referentiel_priorites: referentiel,
+      type_etablissement: etat.type_etablissement, modules_modifiables: require('./configuration-operationnelle').modulesDuType(etat.type_etablissement) };
   }));
   api.put('/sh/etablissements/:code/configuration-operationnelle', sh(async (req) => {
     const configuration = require('./configuration-operationnelle');
-    const b = configuration.normaliser(req.body);
     const e = await etabParCode(req.params.code);
     return transaction(pool, async (c) => {
-      const avant = (await c.query('SELECT modules, vocation FROM etablissements WHERE id=$1 FOR UPDATE', [e.id])).rows[0];
+      const avant = (await c.query('SELECT modules, vocation, type_etablissement FROM etablissements WHERE id=$1 FOR UPDATE', [e.id])).rows[0];
+      const b = configuration.normaliser(req.body, avant.type_etablissement);
       if (typeof req.body.version !== 'string' || req.body.version !== configuration.empreinte(avant)) throw new ErreurHttp(409, 'configuration_operationnelle_conflit');
-      const modules = configuration.fusionner(avant.modules, b.modules);
+      const modules = configuration.fusionner(avant.modules, b.modules, avant.type_etablissement);
       const r = (await c.query('UPDATE etablissements SET modules=$2::jsonb, vocation=$3 WHERE id=$1 RETURNING modules,vocation', [e.id, modules, b.vocation])).rows[0];
       await journalAdmin(c, systeme, 'Configuration opérationnelle SH modifiée', e.nom, `${JSON.stringify({ avant, apres: r })} · ${parSh(req.body)}`, e.id);
       return { ...r, version: configuration.empreinte(r) };
@@ -75,14 +76,15 @@ function brancherSh(api, pool, route) {
 
   api.get('/sh/etablissements', sh(async () => {
     const rows=(await pool.query(
-    `SELECT e.id, e.code, e.nom, e.ville, e.adresse, e.partage, e.module_actif, e.sous_domaine,e.config_id,profil.code configuration_code,
+    `SELECT e.id, e.code, e.nom, e.ville, e.adresse, e.partage, e.module_actif, e.sous_domaine,COALESCE(e.profil_config_id,e.config_id) config_id,profil.code configuration_code,
+            e.type_etablissement, e.modules,
             (SELECT count(*)::int FROM unites u WHERE u.etablissement_id = e.id) AS unites,
             (SELECT count(*)::int FROM chambres ch JOIN unites u ON u.id = ch.unite_id WHERE u.etablissement_id = e.id) AS chambres,
             (SELECT count(*)::int FROM lits l WHERE l.etablissement_id = e.id) AS lits,
             (SELECT count(*)::int FROM civieres c WHERE c.etablissement_id = e.id) AS civieres,
             (SELECT count(*)::int FROM utilisateur_etablissements ue JOIN utilisateurs us ON us.id = ue.utilisateur_id AND us.actif
               WHERE ue.etablissement_id = e.id) AS comptes
-       FROM etablissements e JOIN config_pays profil ON profil.id=e.config_id WHERE e.actif ORDER BY e.nom`)).rows;
+       FROM etablissements e JOIN config_pays profil ON profil.id=COALESCE(e.profil_config_id,e.config_id) WHERE e.actif ORDER BY e.nom`)).rows;
     const profils=require('./profils-pays').profilsAvecPays(rows.map(e=>({id:e.config_id,code:e.configuration_code})));
     const paysParProfil=new Map(profils.map(p=>[p.id,p.pays_code]));
     return rows.map(e=>({...e,pays_code:paysParProfil.get(e.config_id)}));

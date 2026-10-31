@@ -154,7 +154,8 @@ function creerApp(pool, options = {}) {
   api.use((req, res, next) => {
     if (req.utilisateur.role !== 'entretien') return next();
     // La météo de l'en-tête et le nom de l'assistant (lecture seule, propres à l'établissement) s'affichent aussi pour l'entretien.
-    const ok = (req.method === 'GET' && ['/moi', '/nettoyage', '/meteo', '/og/configuration'].includes(req.path)) || req.path.startsWith('/moi/')
+    const ok = (req.method === 'GET' && ['/moi', '/nettoyage', '/meteo', '/og/configuration', '/chsld/accueil', '/chsld/taches', '/chsld/places'].includes(req.path)) || req.path.startsWith('/moi/')
+      || (req.method === 'POST' && /^\/chsld\/taches\/\d+\/statut$/.test(req.path))
       || (req.method === 'POST' && (req.path === '/deconnexion' || /^\/nettoyage\/\d+\/debut$/.test(req.path)
         || (/^\/(lits|civieres)\/\d+\/action$/.test(req.path) && req.body && req.body.action === 'nettoyage_ok')));
     return ok ? next() : next(new ErreurHttp(403, 'role_entretien'));
@@ -202,7 +203,7 @@ function creerApp(pool, options = {}) {
   api.get('/moi', route(async (req) => {
     const u = req.utilisateur;
     const { rows } = await pool.query(
-      `SELECT e.id, e.code, e.nom, e.ville, e.partage, e.module_actif, e.config_id, e.rayon_alerte_km, e.modules, e.vocation, e.latitude, e.longitude,
+      `SELECT e.id, e.code, e.nom, e.ville, e.partage, e.module_actif, e.config_id, e.rayon_alerte_km, e.modules, e.vocation, e.latitude, e.longitude, e.type_etablissement,
               ARRAY(SELECT DISTINCT l.type_id FROM lits l WHERE l.etablissement_id = e.id) AS types_presents
          FROM etablissements e
         WHERE e.actif AND ($1 OR e.id = ANY($2::int[]))
@@ -345,6 +346,37 @@ function creerApp(pool, options = {}) {
     entier(req.body.etablissement_id, 'etablissement_id'), entier(req.params.utilisateurId, 'utilisateurId'), req.body)));
   api.post('/admissions/:id/priorite', route((req) => priorites.valider(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   api.get('/admissions', route((req) => t.fileAdmission(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
+  /* ---------- CHSLD : résidents, places, demandes d'hébergement, coordinations, tâches, proches ---------- */
+  const ch = require('./chsld');
+  const E = (req) => entier(req.query.etablissement_id, 'etablissement_id');
+  api.get('/chsld/accueil', route((req) => ch.accueil(pool, req.utilisateur, E(req))));
+  api.get('/chsld/places', route((req) => ch.places(pool, req.utilisateur, E(req))));
+  api.get('/chsld/indicateurs', route((req) => ch.indicateurs(pool, req.utilisateur, E(req), req.query.jours)));
+  api.get('/chsld/residents', route((req) => ch.listeResidents(pool, req.utilisateur, E(req), { q: req.query.q, statut: req.query.statut })));
+  api.post('/chsld/residents', route((req) => ch.creerResident(pool, req.utilisateur, req.body)));
+  api.get('/chsld/residents/:id', route((req) => ch.ficheResident(pool, req.utilisateur, entier(req.params.id, 'id'))));
+  api.put('/chsld/residents/:id', route((req) => ch.modifierResident(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
+  api.post('/chsld/residents/:id/contacts', route((req) => ch.ajouterContact(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
+  api.put('/chsld/contacts/:id', route((req) => ch.modifierContact(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
+  api.post('/chsld/contacts/:id/verifier-representant', route((req) => ch.verifierRepresentant(pool, req.utilisateur, entier(req.params.id, 'id'))));
+  const ACTIONS_RESIDENT = { 'reserver-place': ch.reserverPlace, arrivee: ch.confirmerArrivee, 'changer-chambre': ch.changerChambre, sortie: ch.sortie, absence: ch.absence,
+    hospitalisation: ch.preparerHospitalisation, 'transfert-chsld': ch.preparerTransfertChsld, communications: ch.creerCommunication };
+  api.post('/chsld/residents/:id/:action', route((req) => {
+    const f = ACTIONS_RESIDENT[req.params.action]; if (!f) throw new ErreurHttp(404, 'action_inconnue');
+    return f(pool, req.utilisateur, entier(req.params.id, 'id'), req.body);
+  }));
+  api.get('/chsld/demandes', route((req) => ch.listeDemandes(pool, req.utilisateur, E(req), { toutes: req.query.toutes === '1' })));
+  api.post('/chsld/demandes', route((req) => ch.creerDemande(pool, req.utilisateur, req.body)));
+  api.post('/chsld/demandes/:id/action', route((req) => ch.actionDemande(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
+  api.get('/chsld/reseau', route((req) => ch.reseau(pool, req.utilisateur, E(req))));
+  api.get('/chsld/taches', route((req) => ch.listeTaches(pool, req.utilisateur, E(req), { toutes: req.query.toutes === '1' })));
+  api.post('/chsld/taches', route((req) => ch.creerTache(pool, req.utilisateur, req.body)));
+  api.post('/chsld/taches/:id/statut', route((req) => ch.statutTache(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
+  api.post('/chsld/communications/:id/statut', route((req) => ch.statutCommunication(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
+  // Coordinations entre établissements (hôpitaux et CHSLD) : chacun ne voit et n'agit que de son côté
+  api.get('/coordinations', route((req) => ch.listeCoordinations(pool, req.utilisateur, E(req), { toutes: req.query.toutes === '1' })));
+  api.post('/coordinations/:id/action', route((req) => ch.actionCoordination(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
+  api.post('/coordinations/:id/retour', route((req) => ch.preparerRetour(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   api.get('/admissions/alternatives', route((req) => t.alternativesAdmission(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   api.post('/admissions', route((req) => t.creerDemande(pool, req.utilisateur, req.body)));
   api.post('/admissions/:id/:etape', route(async (req) => {

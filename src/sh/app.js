@@ -295,6 +295,38 @@ function creerAppSh(pool, { env = process.env } = {}) {
     return rows.map((h) => presenter(h, dist));
   }));
 
+  /* Catalogue de modules par type : communs, propres au type, optionnels (à venir ou à l'étude, jamais souscriptibles). */
+  const catalogueType = async (db, type) => (await db.query(`SELECT code, nom, nom_en, description, dependances, categorie, types, statut, ordre, note
+      FROM sh_modules_catalogue WHERE actif AND $1 = ANY(types) ORDER BY ordre, nom`, [type])).rows;
+  api.get('/catalogue-modules', route(async (req) => {
+    const TE = require('../types-etablissement');
+    const type = String(req.query.type || 'hopital');
+    if (!Object.hasOwn(TE.TYPES, type)) throw new ErreurSh(400, 'Type d’établissement invalide.');
+    return { types: Object.entries(TE.TYPES).map(([code, t]) => ({ code, ...t })), type, modules: await catalogueType(pool, type) };
+  }));
+  /** Licences proposées à la création : modules inclus souscrits, modules disponibles selon le choix, les autres non sélectionnés. */
+  async function licencesInitiales(c, h, type, choix = {}, u) {
+    for (const m of await catalogueType(c, type)) {
+      const voulu = choix && typeof choix === 'object' ? choix[m.code] : undefined;
+      if (voulu !== undefined && typeof voulu !== 'boolean') throw new ErreurSh(400, 'Choix de module invalide.');
+      if (voulu === true && ['a_venir', 'etude'].includes(m.statut)) throw new ErreurSh(409, `Le module « ${m.nom} » n’est pas encore disponible.`);
+      const licence = m.statut === 'inclus' || (m.statut === 'disponible' && voulu !== false) ? 'souscrit' : 'non_selectionne';
+      await c.query(`INSERT INTO sh_hopital_modules(hopital_id,module_code,licence,modifie_par) VALUES($1,$2,$3,$4) ON CONFLICT(hopital_id,module_code) DO NOTHING`,
+        [h, m.code, licence, u.email]);
+    }
+    const souscrits = (await c.query(`SELECT m.code FROM sh_hopital_modules l JOIN sh_modules_catalogue m ON m.code = l.module_code WHERE l.hopital_id = $1 AND l.licence = 'souscrit'`, [h])).rows.map((r) => r.code);
+    for (const m of await catalogueType(c, type)) {
+      const manque = souscrits.includes(m.code) ? m.dependances.filter((d) => !souscrits.includes(d)) : [];
+      if (manque.length) throw new ErreurSh(409, `Le module ${m.nom} requiert : ${manque.join(', ')}.`);
+    }
+  }
+  /** Choix de modules à transmettre à l'environnement (codes du référentiel Arrimo → actif ou non). */
+  async function choixModulesEnvironnement(db, h) {
+    const SH_VERS_ARRIMO = { civieres: 'urgence' };
+    const rows = (await db.query(`SELECT c.code, c.statut, COALESCE(l.licence, 'non_selectionne') licence FROM sh_modules_catalogue c
+      LEFT JOIN sh_hopital_modules l ON l.module_code = c.code AND l.hopital_id = $1 WHERE c.actif AND $2 = ANY(c.types) AND c.statut = 'disponible'`, [h.id, h.type_etablissement || 'hopital'])).rows;
+    return Object.fromEntries(rows.map((r) => [SH_VERS_ARRIMO[r.code] || r.code, r.licence === 'souscrit']));
+  }
   function champsHopital(b, existant = {}) {
     const v = {
       nom: texte(b.nom ?? existant.nom, 120),
@@ -315,8 +347,14 @@ function creerAppSh(pool, { env = process.env } = {}) {
       fuseau_horaire: String(b.fuseau_horaire ?? existant.fuseau_horaire ?? 'America/Toronto').trim(),
       utilisateurs_prevus: Number(b.utilisateurs_prevus ?? existant.utilisateurs_prevus ?? 0),
       utilisateurs_autorises: Number(b.utilisateurs_autorises ?? existant.utilisateurs_autorises ?? 0),
+      type_etablissement: String(b.type_etablissement ?? existant.type_etablissement ?? 'hopital'),
     };
-    if (!v.nom) throw new ErreurSh(400, 'Le nom de l’hôpital est requis.');
+    // Type d'établissement : choisi en premier, seulement parmi les types opérationnels ; fixé une fois l'établissement relié.
+    const TE = require('../types-etablissement');
+    if (!Object.hasOwn(TE.TYPES, v.type_etablissement)) throw new ErreurSh(400, 'Type d’établissement invalide.');
+    if (existant.type_etablissement !== v.type_etablissement && TE.TYPES[v.type_etablissement].statut !== 'operationnel') throw new ErreurSh(409, `Le type « ${TE.TYPES[v.type_etablissement].nom} » est prévu mais pas encore opérationnel : ses parcours ne sont pas développés.`);
+    if (existant.id && existant.relie && existant.type_etablissement !== v.type_etablissement) throw new ErreurSh(409, 'Le type ne change plus une fois l’établissement créé dans son environnement.');
+    if (!v.nom) throw new ErreurSh(400, 'Le nom de l’établissement est requis.');
     if (!Object.hasOwn(NOMS,v.environnement)) throw new ErreurSh(400, 'Choisissez l’environnement : démonstration principale, Démo ABC, recette, pilote ou production.');
     if (!CODE_ETAB.test(v.code_etab)) throw new ErreurSh(400, 'Code d’établissement invalide : 2 à 12 lettres majuscules, chiffres ou tirets (ex. HOP-A).');
     if (!/^[A-Z]{2}$/.test(v.pays_code) || !Number.isInteger(v.utilisateurs_prevus) || v.utilisateurs_prevus < 0 ||
@@ -356,11 +394,12 @@ function creerAppSh(pool, { env = process.env } = {}) {
     const v = champsHopital(req.body);
     const id = await transaction(pool, async (c) => {
       const h = (await c.query(`INSERT INTO hopitaux (nom, adresse, ville, contact_nom, contact_courriel, contact_telephone, environnement, code_etab, sous_domaine, latitude, longitude,
-        raison_sociale,identifiant_legal,pays_code,region,fuseau_horaire,utilisateurs_prevus,utilisateurs_autorises)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING id`,
+        raison_sociale,identifiant_legal,pays_code,region,fuseau_horaire,utilisateurs_prevus,utilisateurs_autorises,type_etablissement)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING id`,
       [v.nom, v.adresse, v.ville, v.contact_nom, v.contact_courriel, v.contact_telephone, v.environnement, v.code_etab, v.sous_domaine, v.latitude, v.longitude,
-        v.raison_sociale,v.identifiant_legal,v.pays_code,v.region,v.fuseau_horaire,v.utilisateurs_prevus,v.utilisateurs_autorises]).catch(unique)).rows[0].id;
+        v.raison_sociale,v.identifiant_legal,v.pays_code,v.region,v.fuseau_horaire,v.utilisateurs_prevus,v.utilisateurs_autorises,v.type_etablissement]).catch(unique)).rows[0].id;
       await creerEtapes(c, h);
+      await licencesInitiales(c, h, v.type_etablissement, req.body.modules, req.u);
       await journal(c, req.u, 'Hôpital créé', `${v.code_etab} · ${v.nom}`, `environnement ${v.environnement}`, h);
       return h;
     });
@@ -380,11 +419,12 @@ function creerAppSh(pool, { env = process.env } = {}) {
       const actuelle=(await c.query('SELECT hopital_id FROM sh_crm_organisations WHERE id=$1 FOR UPDATE',[org.id])).rows[0];
       if(!actuelle||actuelle.hopital_id)throw new ErreurSh(409,'Cette organisation a déjà sa fiche établissement.');
       const h = (await c.query(`INSERT INTO hopitaux (nom, adresse, ville, contact_nom, contact_courriel, contact_telephone, environnement, code_etab, sous_domaine, latitude, longitude,
-        raison_sociale,identifiant_legal,pays_code,region,fuseau_horaire,utilisateurs_prevus,utilisateurs_autorises,organisation_id)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING id`,
+        raison_sociale,identifiant_legal,pays_code,region,fuseau_horaire,utilisateurs_prevus,utilisateurs_autorises,organisation_id,type_etablissement)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING id`,
       [v.nom, v.adresse, v.ville, v.contact_nom, v.contact_courriel, v.contact_telephone, v.environnement, v.code_etab, v.sous_domaine, v.latitude, v.longitude,
-        v.raison_sociale, v.identifiant_legal, v.pays_code, v.region, v.fuseau_horaire, v.utilisateurs_prevus, v.utilisateurs_autorises,org.id]).catch(unique)).rows[0].id;
+        v.raison_sociale, v.identifiant_legal, v.pays_code, v.region, v.fuseau_horaire, v.utilisateurs_prevus, v.utilisateurs_autorises,org.id,v.type_etablissement]).catch(unique)).rows[0].id;
       await creerEtapes(c, h);
+      await licencesInitiales(c, h, v.type_etablissement, req.body.modules, req.u);
       await c.query(`UPDATE sh_crm_organisations SET hopital_id = $2, modifie_le = now() WHERE id = $1`, [org.id, h]);
       await c.query('UPDATE sh_projets SET hopital_id = $2, modifie_le = now() WHERE organisation_id = $1 AND hopital_id IS NULL', [org.id, h]);
       await c.query('UPDATE sh_contrats SET hopital_id = $2 WHERE hopital_id IS NULL AND opportunite_id IN (SELECT id FROM sh_opportunites WHERE organisation_id = $1)', [org.id, h]);
@@ -408,9 +448,9 @@ function creerAppSh(pool, { env = process.env } = {}) {
     const activations = (await pool.query('SELECT * FROM activations WHERE hopital_id = $1 ORDER BY quand DESC LIMIT 50', [h.id])).rows;
     const sites = (await pool.query('SELECT * FROM sh_sites WHERE hopital_id=$1 ORDER BY id', [h.id])).rows;
     const contacts = (await pool.query('SELECT * FROM sh_contacts WHERE hopital_id=$1 ORDER BY id', [h.id])).rows;
-    const modules = (await pool.query(`SELECT c.code,c.nom,c.description,c.version,c.dependances,c.parametres AS parametres_defaut,
+    const modules = (await pool.query(`SELECT c.code,c.nom,c.nom_en,c.description,c.version,c.dependances,c.parametres AS parametres_defaut,c.categorie,c.statut,c.note,
       COALESCE(m.licence,'non_selectionne') AS licence,COALESCE(m.parametres,'{}'::jsonb) AS parametres
-      FROM sh_modules_catalogue c LEFT JOIN sh_hopital_modules m ON m.module_code=c.code AND m.hopital_id=$1 WHERE c.actif ORDER BY c.nom`, [h.id])).rows;
+      FROM sh_modules_catalogue c LEFT JOIN sh_hopital_modules m ON m.module_code=c.code AND m.hopital_id=$1 WHERE c.actif AND $2 = ANY(c.types) ORDER BY c.ordre, c.nom`, [h.id, h.type_etablissement || 'hopital'])).rows;
     let comptes = { prevus: h.utilisateurs_prevus || 0, autorises: h.utilisateurs_autorises || 0, actifs: null, invites: null, par_role: null };
     try {
       const distComptes = await appeler(cible(h.environnement), 'GET', `/sh/etablissements/${h.code_etab}/comptes`);
@@ -466,9 +506,14 @@ function creerAppSh(pool, { env = process.env } = {}) {
     await transaction(pool, async (c) => {
       await c.query(`UPDATE hopitaux SET nom = $2, adresse = $3, ville = $4, contact_nom = $5, contact_courriel = $6, contact_telephone = $7,
         environnement = $8, code_etab = $9, sous_domaine = $10, latitude = $11, longitude = $12, statut = $13,
-        raison_sociale=$14,identifiant_legal=$15,pays_code=$16,region=$17,fuseau_horaire=$18,utilisateurs_prevus=$19,utilisateurs_autorises=$20 WHERE id = $1`,
+        raison_sociale=$14,identifiant_legal=$15,pays_code=$16,region=$17,fuseau_horaire=$18,utilisateurs_prevus=$19,utilisateurs_autorises=$20,type_etablissement=$21 WHERE id = $1`,
       [avant.id, v.nom, v.adresse, v.ville, v.contact_nom, v.contact_courriel, v.contact_telephone, v.environnement, v.code_etab, v.sous_domaine,
-        v.latitude, v.longitude, statut, v.raison_sociale, v.identifiant_legal, v.pays_code, v.region, v.fuseau_horaire, v.utilisateurs_prevus, v.utilisateurs_autorises]).catch(unique);
+        v.latitude, v.longitude, statut, v.raison_sociale, v.identifiant_legal, v.pays_code, v.region, v.fuseau_horaire, v.utilisateurs_prevus, v.utilisateurs_autorises, v.type_etablissement]).catch(unique);
+      // Changement de type avant la création dans l'environnement : les licences repartent des modules du nouveau type.
+      if (v.type_etablissement !== (avant.type_etablissement || 'hopital')) {
+        await c.query(`DELETE FROM sh_hopital_modules WHERE hopital_id = $1`, [avant.id]);
+        await licencesInitiales(c, avant.id, v.type_etablissement, req.body.modules, req.u);
+      }
       if (v.sous_domaine && avant.relie) await cocher(c, avant.id, 'lien_defini', req.u);
       if (v.raison_sociale && v.identifiant_legal && v.contact_nom) await terminerTacheAuto(c, avant.id, 'donnees_administratives', req.u);
       if (changes.length) await journal(c, req.u, 'Fiche modifiée', `${v.code_etab} · ${v.nom}`, changes.join(', '), avant.id);
@@ -533,7 +578,7 @@ function creerAppSh(pool, { env = process.env } = {}) {
   }));
   api.put('/hopitaux/:id/configuration-operationnelle', route(async (req) => {
     const h = await hopital(entier(req.params.id));
-    const b = require('../configuration-operationnelle').normaliser(req.body);
+    const b = require('../configuration-operationnelle').normaliser(req.body, h.type_etablissement || 'hopital');
     const resultat = await appeler(cible(h.environnement), 'PUT', `/sh/etablissements/${encodeURIComponent(h.code_etab)}/configuration-operationnelle`,
       { ...b, version: req.body.version, par: req.u.email });
     await journal(pool, req.u, 'Configuration opérationnelle publiée', h.code_etab, JSON.stringify(b), h.id);
@@ -551,8 +596,13 @@ function creerAppSh(pool, { env = process.env } = {}) {
     const h=await hopital(entier(req.params.id)); const modules=Array.isArray(req.body.modules)?req.body.modules:[];
     if (modules.length>30) throw new ErreurSh(400,'Trop de modules dans la requête.');
     if(req.u.role==='commercial'&&modules.some((m)=>!['non_selectionne','propose'].includes(m.licence))) throw new ErreurSh(403,'Le rôle commercial peut préparer une proposition, mais seul l’administrateur enregistre une licence souscrite ou suspendue.');
-    const catalogue=(await pool.query('SELECT code,dependances FROM sh_modules_catalogue WHERE actif')).rows;
+    const catalogue=(await pool.query('SELECT code,nom,dependances,types,statut FROM sh_modules_catalogue WHERE actif AND $1 = ANY(types)',[h.type_etablissement||'hopital'])).rows;
     const map=new Map(catalogue.map((m)=>[m.code,m])); const choisis=new Set(modules.filter((m)=>m.licence==='souscrit').map((m)=>m.code));
+    for (const m of modules) {
+      const c=map.get(m.code); if(!c) throw new ErreurSh(400,'Module inconnu, inactif ou incompatible avec ce type d’établissement.');
+      if(['a_venir','etude'].includes(c.statut)&&['souscrit','propose'].includes(m.licence)) throw new ErreurSh(409,`Le module « ${c.nom} » n’est pas encore disponible.`);
+      if(c.statut==='inclus'&&m.licence!=='souscrit') throw new ErreurSh(409,`Le module « ${c.nom} » fait partie du socle commun : il reste inclus.`);
+    }
     for (const code of choisis) {
       const m=map.get(code); if(!m) throw new ErreurSh(400,'Module inconnu ou inactif.');
       const manque=m.dependances.filter((d)=>!choisis.has(d)); if(manque.length) throw new ErreurSh(409,`Le module ${code} requiert : ${manque.join(', ')}.`);
@@ -599,10 +649,12 @@ function creerAppSh(pool, { env = process.env } = {}) {
     if(existant&&req.body.config_id!==undefined&&Number(req.body.config_id)!==Number(existant.config_id))throw new ErreurHttp(409,'profil_pays_incompatible');
     const profil=await profilsPays.lireProfilCible(appeler,c,h,existant?.config_id??req.body.config_id);
     if(existant)profilsPays.verifierEtablissementPays(existant,h);
+    if(existant&&(existant.type_etablissement||'hopital')!==(h.type_etablissement||'hopital'))throw new ErreurSh(409,'Un établissement de même code existe dans cet environnement avec un autre type.');
     let cree = false; let actif = existant?.module_actif;
     if (!existant) {
       if (h.latitude == null || h.longitude == null) throw new ErreurSh(400, 'Indiquez la position de l’hôpital (latitude et longitude) avant de créer son établissement.');
-      actif = (await appeler(c, 'POST', '/sh/etablissements', { code: h.code_etab, nom: h.nom,pays_code:h.pays_code,config_id:profil.id, ville: h.ville, adresse: h.adresse, latitude: h.latitude, longitude: h.longitude, par: req.u.email })).module_actif;
+      actif = (await appeler(c, 'POST', '/sh/etablissements', { code: h.code_etab, nom: h.nom,pays_code:h.pays_code,config_id:profil.id, ville: h.ville, adresse: h.adresse, latitude: h.latitude, longitude: h.longitude, par: req.u.email,
+        type_etablissement: h.type_etablissement || 'hopital', modules: await choixModulesEnvironnement(pool, h) })).module_actif;
       cree = true;
     }
     if (h.sous_domaine) await appeler(c, 'PUT', `/sh/etablissements/${h.code_etab}`, { sous_domaine: h.sous_domaine, par: req.u.email });

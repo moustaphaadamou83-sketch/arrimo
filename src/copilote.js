@@ -382,6 +382,9 @@ async function question(pool, utilisateur, etabId, q, fetchImpl, patientContexte
 }
 
 async function repondreQuestion(pool, utilisateur, etabId, q, fetchImpl, patientContexteId, L) {
+  // CHSLD : même moteur et mêmes droits, intentions propres à l'hébergement (src/og-chsld.js)
+  const type = (await pool.query('SELECT type_etablissement FROM etablissements WHERE id = $1', [etabId])).rows[0]?.type_etablissement;
+  if (type === 'chsld') { require('./auth').exigerEtablissement(utilisateur, etabId); return require('./og-chsld').repondre(pool, utilisateur, etabId, q, L); }
   // Guide d'utilisation : étapes et écran à ouvrir, selon les modules actifs de l'établissement.
   const og_guide = require('./og-guide');
   if (og_guide.guider(q, L, {})) {

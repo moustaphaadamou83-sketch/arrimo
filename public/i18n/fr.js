@@ -107,7 +107,7 @@ window.ARRIMO_I18N.fr = {
   risques: { eleve: 'Saturation', modere: 'Tension', faible: 'Disponible' },
   blocages_niveaux: { eleve: 'Prioritaire', modere: 'À vérifier', faible: 'Info' },
   motifs_refus: { pas_de_lit: 'pas de lit', pas_de_personnel: 'pas de personnel', plateau_technique: 'plateau technique', autre: 'autre' },
-  roles: { coordonnateur: 'Coordination', entretien: 'Entretien', admin_etab: 'Admin d’établissement', gestionnaire: 'Gestionnaire réseau' },
+  roles: { coordonnateur: 'Coordination', entretien: 'Entretien', admin_etab: 'Admin d’établissement', gestionnaire: 'Gestionnaire réseau', equipe_soins: 'Équipe de soins' },
   roles_texte: { coordonnateur: 'coordination', entretien: 'entretien', admin_etab: 'administration d’établissement', gestionnaire: 'gestionnaire réseau' },
   // Actions inscrites au journal (texte enregistré → libellé)
   journal_actions: {
@@ -227,7 +227,7 @@ window.ARRIMO_I18N.fr = {
   og: {
     historique_patient: 'Historique des passages', 
     message_vocal: 'Message vocal', ouvrir: 'Ouvrir OG', sous_titre: 'Votre appui à la coordination', conversation: 'Conversation avec OG', actions: 'Actions rapides', question: 'Votre question à OG', envoyer: 'Envoyer',
-    bienvenue: 'Bonjour {nom}. Je suis OG. Je peux vous aider à lire les capacités et à préparer les priorités de votre établissement.',
+    bienvenue_chsld: 'Bonjour {nom}. Je suis OG. Je peux vous aider pour les places, les résidents, leurs proches, les hospitalisations, les retours et les demandes d’hébergement.', bienvenue: 'Bonjour {nom}. Je suis OG. Je peux vous aider à lire les capacités et à préparer les priorités de votre établissement.',
     bienvenue_entretien: 'Bonjour {nom}. Je suis OG. Je peux résumer votre file de nettoyage et vous orienter vers les tâches accessibles à votre rôle.',
     contexte: '{etab} · {role}', confidentialite: 'Données autorisées selon votre rôle. Ne saisissez aucune donnée personnelle ou médicale. OG propose ; vous décidez.',
     priorites: 'Mes priorités', civières: 'Voir les civières', attente: 'OG prépare une réponse…', erreur: 'La réponse n’a pas pu être chargée. Réessayez dans un instant.',
