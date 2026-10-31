@@ -347,7 +347,7 @@ test('SH lot accès : PostgreSQL isolé, API et navigateur', {timeout:180000},as
     for(let n=0;n<3;n++){
       await require('../db/sh-vider').viderBaseSh(pool);
       await pool.query(fs.readFileSync(require.resolve('../db/sh-schema.sql'),'utf8'));
-      assert.equal((await migrerSh(pool,env)).version,36);
+      assert.equal((await migrerSh(pool,env)).version,37);
       assert.equal((await migrerSh(pool,env)).appliquee,false);
     }
   });
