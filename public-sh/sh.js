@@ -428,8 +428,15 @@ async function vueHopitaux(v) {
      <p class="note">Environnement fictif seulement. Les comptes des CHSLD utilisent le mot de passe de démonstration déjà en place pour les hôpitaux A, B et C. Aucun compte existant n’est modifié.</p>
      <div class="champ"><label class="lbl" for="dc-env">Environnement</label><select id="dc-env"><option value="demo_abc">Démonstration ABC (demo.arrimo.senseafri.com)</option><option value="pilote">Pilote fictif</option></select></div>`,
     [{ label: 'Annuler' }, { label: 'Créer', pri: true, run: async () => {
-      try { const r = await api('POST', '/demo-chsld', { environnement: $('#dc-env').value }); toast(`${r.etablissements.map((e) => e.nom).join(' et ')} : créés et activés.`); afficher(); return true; }
-      catch (e) { toast(e.message, true); return false; }
+      const env = $('#dc-env').value;
+      try {
+        await api('POST', '/demo-chsld', { environnement: env }); toast('Création lancée : structure, comptes, activation, puis scénarios (environ 2 minutes).');
+        const suivre = async () => { const r = await api('GET', `/demo-chsld?environnement=${env}`).catch(() => null);
+          if (r?.statut === 'en_cours') return setTimeout(suivre, 4000);
+          if (r?.statut === 'termine') toast(`${r.etablissements.map((e) => e.nom).join(' et ')} : créés et activés.`); else if (r?.statut === 'echec') toast(r.erreur, true);
+          afficher(); };
+        setTimeout(suivre, 4000); return true;
+      } catch (e) { toast(e.message, true); return false; }
     } }]);
 }
 

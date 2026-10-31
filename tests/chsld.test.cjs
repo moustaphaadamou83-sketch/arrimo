@@ -106,7 +106,10 @@ test('SH : le type d’établissement vient en premier et commande les modules p
 let crees, ids;
 test('SH : création, provisionnement et activation des deux CHSLD fictifs, sans configuration manuelle', { timeout: 300000 }, async () => {
   // Bouton SH « Créer les CHSLD de démonstration » (administration) : parcours SH complet, puis scénarios dans l'environnement
-  const demo = await sh('POST', '/demo-chsld', { environnement: 'pilote' });
+  await sh('POST', '/demo-chsld', { environnement: 'pilote' });
+  assert.strictEqual((await appelSh('POST', '/demo-chsld', { environnement: 'pilote' })).statut, 409, 'une seule création à la fois');
+  let demo; for (let i = 0; i < 150; i += 1) { demo = await sh('GET', '/demo-chsld?environnement=pilote'); if (demo.statut !== 'en_cours') break; await new Promise((r) => setTimeout(r, 2000)); }
+  assert.strictEqual(demo.statut, 'termine', JSON.stringify(demo));
   assert.deepStrictEqual(demo.etablissements.map((e) => e.nom), ['CHSLD 1 — des Érables', 'CHSLD 2 — du Saint-Laurent']);
   assert.strictEqual((await appelSh('POST', '/demo-chsld', { environnement: 'pilote' })).statut, 409, 'pas de doublon');
   assert.strictEqual((await appelSh('POST', '/demo-chsld', { environnement: 'production' })).statut, 409, 'jamais hors environnement fictif');
