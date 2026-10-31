@@ -1017,9 +1017,11 @@ for (const L of LARGEURS.filter((l) => l.nom !== 'tablette')) {
     assert.ok(await x.locator('#v-params .compteurs dt').count() === 6, 'structure et capacités');
     assert.match(await x.textContent('#v-params'), /Fuseau horaire/);
     // Bascule de l'en-tête : immédiate et enregistrée, indépendante de l'heure.
-    await x.click('#b-theme'); await x.waitForFunction(() => document.documentElement.dataset.theme === 'clair');
+    // On attend la réponse du serveur : en mode automatique sur un système clair, la page est déjà « clair » avant l'enregistrement.
+    const theme = async () => { const r = x.waitForResponse((q) => q.url().includes('/api/moi/apparence') && q.request().method() === 'PUT'); await x.click('#b-theme'); assert.strictEqual((await r).status(), 200); };
+    await theme(); await x.waitForFunction(() => document.documentElement.dataset.theme === 'clair');
     assert.strictEqual(await apparence(), 'clair');
-    await x.click('#b-theme'); await x.waitForFunction(() => document.documentElement.dataset.theme === 'sombre');
+    await theme(); await x.waitForFunction(() => document.documentElement.dataset.theme === 'sombre');
     assert.strictEqual(await apparence(), 'sombre');
     await x.click('#v-params [data-param-nav="params:apparence"]'); await x.waitForSelector('input[name="p-apparence"][value="sombre"]:checked');
     await verifier(x, L, 'params-apparence-sombre');
