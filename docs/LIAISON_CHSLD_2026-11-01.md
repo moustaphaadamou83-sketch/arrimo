@@ -104,3 +104,8 @@ Côté CHSLD :
 - **Démo et SH seulement**, après une recette complète réussie. Le mécanisme est le même que pour la release CHSLD (`.local/livrer-demo-sh.py`) : sauvegarde, restauration vérifiée sur copie, migration répétée, bascule atomique, retour arrière applicatif.
 - **Exception du contrôle de publication SH** : élargie d'un seul code, `liaison_chsld` (liste fermée ; aucune ligne existante modifiée). Voir `docs/CHSLD_MIGRATION_CATALOGUE_SH.md`.
 - **Défaut antérieur, hors module** : le test unitaire « API SH : aucune donnée de parcours dans la lecture du référentiel » (`tests/configuration-operationnelle.test.cjs`) échoue déjà sur l'état committé. La réponse contient désormais `type_etablissement` et `modules_modifiables`, ajoutés avec les CHSLD. Ce n'est pas corrigé ici.
+
+## 8. Publication faite (1er novembre 2026, 21 h 31 UTC)
+- Release `liaison-20261101t2131` sur la démo (https://demo.arrimo.senseafri.com) et SH. Rapport : `.local/liaison-release-20261101t2131/rapport.json`.
+- Recette sur l'empreinte `c7b65769…` : SH 10 suites (`20261101210215_6048ee`), api 71/71 (`20261101212555_bb8e23`), scénarios ABC 8/8 et OG de base, chsld 17/17, interface hospitalière 16/16, OG 21/21. Le test de performance du briefing avait dépassé 1,5 s pendant les quatre recettes simultanées ; relancé seul, il est vert.
+- Vérifié en ligne : santé `ok` ; migration SH n° 38 ; module actif pour A, B et C ; comptes et scénario ABC préservés. Aucune remise à zéro.
