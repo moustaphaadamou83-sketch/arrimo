@@ -198,15 +198,29 @@ function brancherSh(api, pool, route) {
     const journal = (c, u, action, cible, detail, etab) => journalAdmin(c, systeme, action, cible, `${detail} · ${parSh(req.body)}`, etab);
     const type = String(req.body.type || '');
     if (req.body.invitations === true && type !== 'utilisateurs') throw new ErreurHttp(400, 'parametre_invalide', { nom: 'type' });
-    if (req.body.invitations === true && !courriel.actif()) throw new ErreurHttp(503, 'courriel_non_configure');
+    // Environnement fictif sans courriel : comptes fictifs (domaine .example.invalid) importés sans invitation ;
+    // leur accès est ouvert ensuite par la démonstration (mot de passe de démonstration). Ailleurs, le courriel reste exigé.
+    const sansEnvoi = req.body.invitations === true && !courriel.actif() && ['demo', 'recette'].includes(env.environnement())
+      && comptesFictifsSeulement(String(req.body.contenu || ''));
+    if (req.body.invitations === true && !courriel.actif() && !sansEnvoi) throw new ErreurHttp(503, 'courriel_non_configure');
     const r = await imp.importer(pool, systeme, e.id, type, String(req.body.contenu || ''), String(req.body.empreinte || ''), journal,
       { invitations: req.body.invitations === true });
+    if (sansEnvoi) return { lignes: r.lignes, resume: r.resume, invitations_envoyees: 0, comptes_fictifs_sans_invitation: (r.comptes || []).length };
     if (req.body.invitations === true) {
       for (const compte of r.comptes || []) await motdepasse.inviter(pool, compte.courriel, compte.nom, req.body.par);
       return { lignes: r.lignes, resume: r.resume, invitations_envoyees: (r.comptes || []).length };
     }
     return r;
   }));
+}
+
+/** Vrai si chaque courriel du fichier de comptes appartient au domaine fictif réservé .example.invalid. */
+function comptesFictifsSeulement(contenu) {
+  const lignes = contenu.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const entete = (lignes.shift() || '').toLowerCase().split(';').map((x) => x.trim());
+  const col = entete.indexOf('courriel');
+  if (col < 0 || !lignes.length) return false;
+  return lignes.every((l) => /^[^@\s;]+@([a-z0-9-]+\.)*example\.invalid$/i.test((l.split(';')[col] || '').trim()));
 }
 
 /** Lien propre d'un hôpital : <sous_domaine>.<hôte de l'environnement> mène à son établissement. */

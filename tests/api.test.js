@@ -418,6 +418,28 @@ test('détection des blocages et prévision', async () => {
   assert.ok(res.corps.etablissements.find((e) => e.moi).unites.some((u) => u.prevus > 0));
 });
 
+test('import SH en démonstration sans courriel : comptes fictifs (.example.invalid) importés sans invitation ; sinon refus', async () => {
+  const cle = { 'X-SH-Key': 'cle-de-test-sh-123456' }, avant = process.env.ARRIMO_ENV;
+  require('../src/courriel').definirTransport(null);
+  const importer = async (contenu) => {
+    const v = await appel(null, 'POST', '/sh/import/verifier', { code: 'RC', type: 'utilisateurs', contenu }, cle);
+    assert.strictEqual(v.statut, 200, JSON.stringify(v.corps));
+    return appel(null, 'POST', '/sh/import/importer', { code: 'RC', type: 'utilisateurs', contenu, empreinte: v.corps.empreinte, invitations: true, par: 'test' }, cle);
+  };
+  try {
+    process.env.ARRIMO_ENV = 'demo';
+    const reel = await importer('nom;courriel;role\nCompte réel;coord@hopital.exemple;coordonnateur\nFictif;fictif.a@chsld.example.invalid;coordonnateur\n');
+    assert.strictEqual(reel.statut, 503, 'un seul courriel non fictif : invitation exigée');
+    assert.strictEqual(reel.corps.code, 'courriel_non_configure');
+    const r = await importer('nom;courriel;role\nFictif B;fictif.b@chsld.example.invalid;coordonnateur\n');
+    assert.strictEqual(r.statut, 200, JSON.stringify(r.corps));
+    assert.deepStrictEqual([r.corps.invitations_envoyees, r.corps.comptes_fictifs_sans_invitation], [0, 1]);
+    assert.ok((await pool.query("SELECT 1 FROM utilisateurs WHERE email = 'fictif.b@chsld.example.invalid'")).rowCount);
+    process.env.ARRIMO_ENV = 'production';
+    assert.strictEqual((await importer('nom;courriel;role\nFictif C;fictif.c@chsld.example.invalid;coordonnateur\n')).statut, 503, 'hors démonstration et recette : courriel exigé');
+  } finally { if (avant === undefined) delete process.env.ARRIMO_ENV; else process.env.ARRIMO_ENV = avant; }
+});
+
 test('Assistant Arrimo répond à partir des données', async () => {
   const r = await appel('tremblay', 'POST', '/assistant', { etablissement_id: await id('MB'), question: 'Où trouver un lit de chirurgie le plus proche ?' });
   assert.strictEqual(r.statut, 200);
