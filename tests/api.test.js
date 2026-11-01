@@ -1797,7 +1797,7 @@ test('migration OG : deux exécutions conservent les lignes métier', async () =
 });
 
 test('schéma rejouable sur des comptes existants de tous les rôles (administration d’établissement, équipe de soins)', async () => {
-  const rc = await id('RC');
+  const rc = (await pool.query('SELECT id FROM etablissements ORDER BY id LIMIT 1')).rows[0].id;
   const cree = [];
   for (const role of ['admin_etab', 'equipe_soins']) {
     const u = (await pool.query(`INSERT INTO utilisateurs (email, nom, role, mot_de_passe_hash) VALUES ($1, $2, $3, 'x') RETURNING id`, [`rejeu.${role}@test.example.invalid`, `Rejeu ${role}`, role])).rows[0];
