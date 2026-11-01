@@ -1062,7 +1062,8 @@ for (const L of LARGEURS.filter((l) => l.nom !== 'tablette')) {
     await x.check('#pv-consentement'); await toast(x, 'Préférences vocales enregistrées');
     assert.strictEqual(await x.evaluate(() => window.ArrimoOgVoixPrefs.lire().consentement), true);
     await x.click('#og-open'); await x.waitForFunction(() => document.querySelector('#og-title')?.textContent === 'Charles');
-    assert.ok(await x.locator('.og-entete .og-avatar svg').count(), 'avatar appliqué');
+    // Le nom peut précéder la configuration OG (nom de l'assistant par hôpital) : l'avatar suit dès sa lecture.
+    assert.ok(await x.waitForSelector('.og-entete .og-avatar svg', { timeout: 10000 }).then(() => true, () => false), 'avatar appliqué');
     assert.strictEqual(await x.evaluate(() => window.ArrimoOgVoix), 'masculine', 'voix transmise au moteur vocal');
     await x.keyboard.press('Escape');
     await x.reload(); await x.waitForSelector('body[data-pret="1"]');
