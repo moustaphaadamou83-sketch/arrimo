@@ -117,6 +117,21 @@ async function repondre(pool, u, etabId, q, L) {
       return local(T(L, `Voici une demande de rappel à confirmer pour ${k.prenom} ${k.nom} (${k.relation}). Rien n’est envoyé par courriel ou SMS.`, `Here is a callback request to confirm for ${k.prenom} ${k.nom} (${k.relation}). Nothing is sent by email or SMS.`),
         { intentions: ['communication'], proposition_chsld: { type: 'communication', resident_id: r.id, corps: { contact_id: k.id, type: 'rappel_demande', categorie: 'administratif', sujet: T(L, 'Demande de rappel de l’établissement', 'Callback request from the facility') } } });
     }
+    // Où en est la demande vers l'hôpital : dernière étape confirmée et son horodatage, jamais une localisation supposée
+    if (/(ou en est|statut|status|suivi|demande de transfert|where is the request|progress)/.test(qn) && /(demande|transfert|hopital|hospital|request|transfer)/.test(qn)) {
+      const h = f.coordinations.find((c) => c.type === 'hospitalisation');
+      if (!h) return local(T(L, `Aucune demande vers un hôpital n’est enregistrée pour ${nomResident(r)}.`, `No hospital request is recorded for ${nomResident(r)}.`), { intentions: ['liaison'] });
+      const etape = ['refusee', 'annulee', 'expiree'].includes(h.statut) ? h.statut : h.cloturee_le ? 'cloturee' : h.statut === 'envoyee' ? (h.recue_hopital_le ? 'recue_hopital' : 'transmise')
+        : h.statut === 'en_cours' ? 'depart_confirme' : h.statut === 'recue' ? (h.orientation || 'arrivee_confirmee') : h.statut;
+      const E = { fr: { transmise: 'transmise, réception non encore confirmée par l’hôpital', recue_hopital: 'reçue par l’hôpital', acceptee: 'acceptée par l’hôpital', refusee: 'refusée par l’hôpital', annulee: 'annulée', expiree: 'expirée',
+        depart_confirme: 'départ confirmé, arrivée non encore confirmée par l’hôpital', arrivee_confirmee: 'arrivée confirmée par l’hôpital', admission: 'arrivée confirmée, admission préparée', urgence: 'arrivée confirmée, accueil à l’urgence', cloturee: 'parcours clos, retour reçu' },
+      en: { transmise: 'sent, receipt not yet confirmed by the hospital', recue_hopital: 'received by the hospital', acceptee: 'accepted by the hospital', refusee: 'declined by the hospital', annulee: 'cancelled', expiree: 'expired',
+        depart_confirme: 'departure confirmed, arrival not yet confirmed by the hospital', arrivee_confirmee: 'arrival confirmed by the hospital', admission: 'arrival confirmed, admission prepared', urgence: 'arrival confirmed, emergency reception', cloturee: 'pathway closed, return received' } }[L === 'en' ? 'en' : 'fr'];
+      const quand = new Date(h.derniere?.date || h.modifie_le).toLocaleString(L === 'en' ? 'en-CA' : 'fr-CA', { dateStyle: 'short', timeStyle: 'short' });
+      const retour = f.coordinations.find((c) => c.type === 'retour' && ['envoyee', 'acceptee', 'en_cours'].includes(c.statut));
+      return local(T(L, `Demande ${h.numero} de ${nomResident(r)} vers ${h.destination} : ${E[etape] || etape}. Dernière confirmation enregistrée le ${quand}.${retour ? ` Retour en préparation (${retour.numero}, ${retour.statut}).` : ''}`,
+        `Request ${h.numero} for ${nomResident(r)} to ${h.destination}: ${E[etape] || etape}. Last confirmation recorded on ${quand}.${retour ? ` Return being prepared (${retour.numero}, ${retour.statut}).` : ''}`), { intentions: ['liaison'], ouvrir: 'c-mouvements' });
+    }
     if (/(hopital|hospital|ou se trouve|where is)/.test(qn) && r.statut === 'hospitalise') {
       return local(f.localisation ? T(L, `D’après la dernière hospitalisation ${f.localisation.confirmee ? 'confirmée par l’hôpital' : 'au départ confirmé (réception non encore confirmée)'}, ${nomResident(r)} est à ${f.localisation.hopital} (${f.localisation.numero}).`,
         `According to the latest hospital stay ${f.localisation.confirmee ? 'confirmed by the hospital' : 'at confirmed departure (arrival not yet confirmed)'}, ${nomResident(r)} is at ${f.localisation.hopital} (${f.localisation.numero}).`)

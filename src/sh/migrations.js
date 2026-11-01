@@ -78,7 +78,8 @@ async function migrerSh(pool, env = process.env) {
     const deploiement=await migrerDeploiement(c);
     const collaborateurs=await migrerCollaborateurs(c);
     const typesEtablissement=await require('./types-etablissement-migrations').migrerTypesEtablissement(c);
-    return { version: require('./types-etablissement-migrations').TYPES_ETABLISSEMENT_VERSION, appliquee: socle || erp || acces || projets || presence || perimetre || cycle || pilote || concurrence || liens || support || supportDroits || notificationsFinances || supportPagination || notificationsPerimetres || raccordementSupport || supportSla || supportPj || supportCourriels || supportCalendrier || preferences || fiscalite || change || apparence || parametres || financesProjets || tachesSuivi || projetsPilotage || competences || recherche || deploiement || collaborateurs || typesEtablissement };
+    const liaisonChsld=await require('./types-etablissement-migrations').migrerLiaisonChsld(c);
+    return { version: require('./types-etablissement-migrations').VERSION_SH, appliquee: liaisonChsld || socle || erp || acces || projets || presence || perimetre || cycle || pilote || concurrence || liens || support || supportDroits || notificationsFinances || supportPagination || notificationsPerimetres || raccordementSupport || supportSla || supportPj || supportCourriels || supportCalendrier || preferences || fiscalite || change || apparence || parametres || financesProjets || tachesSuivi || projetsPilotage || competences || recherche || deploiement || collaborateurs || typesEtablissement };
   });
 }
 

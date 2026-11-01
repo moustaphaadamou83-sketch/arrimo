@@ -13,7 +13,7 @@ test('raccordement support : même code dans deux bases, liens SH et parcours cl
  const mails=[];courriel.definirTransport(async m=>{mails.push(m);});
  await pool.query(fs.readFileSync(require.resolve('../db/sh-schema.sql'),'utf8'));
  const env={SH_MFA_ENCRYPTION_KEY:process.env.SH_MFA_ENCRYPTION_KEY,SH_SUPPORT_DEMO_CLE:crypto.randomBytes(32).toString('hex'),SH_SUPPORT_DEMO_ABC_CLE:crypto.randomBytes(32).toString('hex')};
- assert.equal((await require('../src/sh/migrations').migrerSh(pool,env)).version,37);
+ assert.equal((await require('../src/sh/migrations').migrerSh(pool,env)).version,38);
  const mdp='Raccordement-Fictif-2026';await premierCompteSh(pool,'raccordement.sh@example.invalid','Administration fictive');
  const invitation=mails.at(-1).texte.match(/#invitation=([a-f0-9]{64})/)[1];await require('../src/sh/invitations').consommer(pool,{jeton:invitation,nouveau:mdp},env);
  const sh=await demarrerServeur(require('../src/sh/app').creerAppSh(pool,{env}));t.after(()=>new Promise(r=>sh.close(r)));const baseSh=`http://127.0.0.1:${sh.address().port}`;

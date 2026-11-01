@@ -373,6 +373,10 @@ function creerApp(pool, options = {}) {
   api.post('/chsld/demandes', route((req) => ch.creerDemande(pool, req.utilisateur, req.body)));
   api.post('/chsld/demandes/:id/action', route((req) => ch.actionDemande(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   api.get('/chsld/reseau', route((req) => ch.reseau(pool, req.utilisateur, E(req))));
+  // Hôpitaux destinataires : ceux qui ont activé la Liaison CHSLD (indépendant du module réseau inter-CHSLD)
+  api.get('/chsld/hopitaux', route((req) => ch.listeHopitauxLiaison(pool, req.utilisateur, E(req))));
+  // Module hospitalier Liaison CHSLD : arrivées, accueil, hospitalisations et retours, historique
+  api.get('/liaison-chsld', route((req) => require('./liaison-chsld').vue(pool, req.utilisateur, E(req))));
   api.get('/chsld/taches', route((req) => ch.listeTaches(pool, req.utilisateur, E(req), { toutes: req.query.toutes === '1' })));
   api.post('/chsld/taches', route((req) => ch.creerTache(pool, req.utilisateur, req.body)));
   api.post('/chsld/taches/:id/statut', route((req) => ch.statutTache(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));

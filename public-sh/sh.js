@@ -343,7 +343,9 @@ function friseSixEtapes(h) {
 async function configurationOperationnelle(h) {
   const config = await api('GET', `/hopitaux/${h.id}/configuration-operationnelle`).catch((e) => { toast(e.message, true); return null; });
   if (!config || etat.hopital !== h.id) return;
-  const noms = { urgence: 'Urgences et civières', nsa: 'NSA', nettoyage: 'Nettoyage', national: 'Vue nationale' };
+  // Cases construites depuis les drapeaux réellement exposés par l'environnement (compatibilité entre versions)
+  const libelles = { urgence: 'Urgences et civières', nsa: 'NSA', nettoyage: 'Nettoyage', national: 'Vue nationale', liaison_chsld: 'Liaison CHSLD (arrivées, accueil, retours)' };
+  const noms = Object.fromEntries((config.modules_modifiables || ['urgence', 'nsa', 'nettoyage', 'national']).map((k) => [k, libelles[k] || k]));
   const actives = new Set(config.specialites.map((s) => s.code));
   modale('Configuration hospitalière Arrimo', `<p>${esc(h.nom)} · ${esc(ENVS[h.environnement])}</p>
     <label class="lbl" for="co-vocation">Vocation</label><select id="co-vocation">${[['general','Hôpital général'],['pediatrique','Hôpital pédiatrique'],['specialise','Établissement spécialisé']].map(([k, nom]) => `<option value="${k}"${config.vocation === k ? ' selected' : ''}>${nom}</option>`).join('')}</select>

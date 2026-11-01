@@ -144,6 +144,20 @@ window.ARRIMO_I18N.fr.aide = {
         ['« Le transfert … n’est plus au statut attendu »', 'Quelqu’un a déjà fait l’étape. La page se met à jour.'],
       ],
     },
+    liaison: {
+      nom: 'Liaison CHSLD',
+      but: 'Les demandes et mouvements des résidents de CHSLD vers votre hôpital, séparés des transferts interhospitaliers : arrivées, accueil, hospitalisations, retours et historique. Seule la référence du résident (R-00000) est visible.',
+      gestes: [
+        'Arrivées CHSLD : « Confirmer la réception » de la demande, puis « Accepter » ou « Refuser » selon vos règles.',
+        'À accueillir : après le départ confirmé par le CHSLD, « Confirmer l’arrivée » quand le résident est physiquement là.',
+        '« Préparer l’admission ou l’urgence » : décision du personnel habilité, avec la référence de l’épisode à l’hôpital. Aucune priorité clinique n’est attribuée.',
+        'Hospitalisations et retours : « Préparer le retour au CHSLD » ; le CHSLD l’accepte, vous confirmez le départ, il confirme le retour.',
+      ],
+      erreurs: [
+        ['« Cette étape n’est pas possible à ce stade de la coordination »', 'Une autre étape doit d’abord être confirmée (par exemple le départ par le CHSLD). La fiche indique la dernière confirmation.'],
+        ['« Un retour vers le CHSLD est déjà en préparation »', 'Le retour existe déjà : suivez-le dans « Hospitalisations et retours ».'],
+      ],
+    },
     vigilance: {
       nom: 'Congés et alertes',
       but: 'Voir lit par lit les départs prévus (avec leur statut, l’heure et la source) et les blocages expliqués : origine, seuil, fait ou hypothèse, action proposée et responsable.',

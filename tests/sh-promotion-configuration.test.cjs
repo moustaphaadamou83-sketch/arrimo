@@ -37,3 +37,14 @@ test('promotion : une version absente ou un conflit cible arrête sans nouvelle 
   await assert.rejects(promouvoirConfiguration(async(c,m)=>{tentatives++;if(m==='GET')return {modules:{},vocation:'general',version:'avant'};throw Object.assign(new Error('conflit'),{statut:409});},{},'TEST',source,'admin'),{statut:409});
   assert.equal(tentatives,2);
 });
+test('Liaison CHSLD : transportée si la source la déclare, jamais vers une cible plus ancienne qui ne la connaît pas',async()=>{
+  const recente={modules:{nsa:false,liaison_chsld:false},vocation:'general',modules_modifiables:['urgence','nsa','nettoyage','national','liaison_chsld']};
+  const lue=configurationPromouvable(recente);
+  assert.deepEqual(lue.modules,{urgence:true,nsa:false,nettoyage:true,national:true,liaison_chsld:false});
+  assert.deepEqual(configurationPromouvable({modules:{},vocation:'general'}).modules,{urgence:true,nsa:true,nettoyage:true,national:true},'source ancienne : quatre drapeaux');
+  for(const [cible,attendu] of [[{modules:{},vocation:'general',version:'v'},['urgence','nsa','nettoyage','national']],
+    [{modules:{},vocation:'general',version:'v',modules_modifiables:recente.modules_modifiables},['urgence','nsa','nettoyage','national','liaison_chsld']]]){
+    const appels=[];await promouvoirConfiguration(async(...a)=>{appels.push(a);return a[1]==='GET'?cible:{ok:true};},{},'T',lue,'admin');
+    assert.deepEqual(Object.keys(appels[1][3].modules),attendu);
+  }
+});

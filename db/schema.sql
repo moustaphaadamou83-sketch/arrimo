@@ -919,6 +919,26 @@ CREATE TABLE IF NOT EXISTS coordinations (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS coordinations_ouverte_resident ON coordinations (resident_id, type)
   WHERE statut IN ('preparee', 'envoyee', 'acceptee', 'en_cours');
+-- Liaison CHSLD (module hospitalier) : même moteur de coordination, étapes confirmées côté hôpital.
+-- Chaque horodatage est la preuve d'une confirmation humaine ; aucun statut ne change automatiquement.
+ALTER TABLE coordinations ADD COLUMN IF NOT EXISTS recue_hopital_le timestamptz;     -- demande vue et accusée par l'hôpital
+ALTER TABLE coordinations ADD COLUMN IF NOT EXISTS acceptee_le timestamptz;          -- demande acceptée par l'hôpital
+ALTER TABLE coordinations ADD COLUMN IF NOT EXISTS arrivee_le timestamptz;           -- arrivée physique confirmée par l'hôpital
+ALTER TABLE coordinations ADD COLUMN IF NOT EXISTS orientation text;                 -- décision humaine : admission ou urgence
+ALTER TABLE coordinations ADD COLUMN IF NOT EXISTS orientation_le timestamptz;
+ALTER TABLE coordinations ADD COLUMN IF NOT EXISTS patient_ref_hopital text;         -- référence de l'épisode hospitalier (format de l'hôpital)
+ALTER TABLE coordinations ADD COLUMN IF NOT EXISTS demande_admission_id int REFERENCES demandes_admission(id);
+ALTER TABLE coordinations ADD COLUMN IF NOT EXISTS cloturee_le timestamptz;          -- parcours clos (retour reçu par le CHSLD)
+ALTER TABLE coordinations ADD COLUMN IF NOT EXISTS cle_idempotence text;             -- renvoi après coupure réseau : jamais de doublon
+CREATE UNIQUE INDEX IF NOT EXISTS coordinations_idempotence ON coordinations (origine_id, cle_idempotence) WHERE cle_idempotence IS NOT NULL;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'coordinations'::regclass AND conname = 'coordinations_orientation_check') THEN
+    ALTER TABLE coordinations ADD CONSTRAINT coordinations_orientation_check CHECK (orientation IN ('admission', 'urgence'));
+  END IF;
+END $$;
+ALTER TABLE coordinations DROP CONSTRAINT IF EXISTS coordinations_incident_check;
+ALTER TABLE coordinations ADD CONSTRAINT coordinations_incident_check
+  CHECK (incident IN ('retour_retarde', 'chambre_indisponible', 'informations_manquantes', 'changement_hopital', 'hospitalisation_prolongee', 'arrivee_retardee'));
 CREATE TABLE IF NOT EXISTS coordination_etapes (
   id                 bigserial PRIMARY KEY,
   coordination_id    int  NOT NULL REFERENCES coordinations(id),

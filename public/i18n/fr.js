@@ -84,7 +84,7 @@ window.ARRIMO_I18N.fr = {
     vigilance: 'Congés et alertes',
     national: 'National',
     urgence: 'Urgence',
-    copilote: 'OG', reseau: 'Réseau', lits: 'Lits', admissions: 'Admissions', transferts: 'Transferts', nettoyage: 'Nettoyage',
+    copilote: 'OG', reseau: 'Réseau', lits: 'Lits', admissions: 'Admissions', transferts: 'Transferts', liaison: 'Liaison CHSLD', nettoyage: 'Nettoyage',
     nsa: 'NSA', indicateurs: 'Indicateurs', journal: 'Journal', params: 'Paramètres', admin: 'Administration', compte: 'Mon compte',
   },
   pied: { confidentialite: 'Confidentialité', conditions: 'Conditions d’utilisation' },

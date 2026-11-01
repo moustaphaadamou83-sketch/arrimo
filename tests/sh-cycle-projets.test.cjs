@@ -11,7 +11,7 @@ test('cycle des projets : PostgreSQL isolé, archivage, restauration et suppress
   assert.equal((await pool.query("SELECT count(*)::int n FROM pg_tables WHERE schemaname='public'")).rows[0].n,0);
   await pool.query(fs.readFileSync(require.resolve('../db/sh-schema.sql'),'utf8'));
   const env={SH_PUBLIC_URL:'https://sh.example.invalid',SH_MFA_ENCRYPTION_KEY:Buffer.alloc(32,4).toString('base64')};
- assert.equal((await migrerSh(pool,env)).version,37);assert.deepEqual(await migrerSh(pool,env),{version:37,appliquee:false});
+ assert.equal((await migrerSh(pool,env)).version,38);assert.deepEqual(await migrerSh(pool,env),{version:38,appliquee:false});
   // Sessions de fixture explicites : l'authentification complète est couverte par la suite accès.
   const users={},tokens={};
   for(const role of ['administration','implantation','support']){

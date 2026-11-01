@@ -144,6 +144,20 @@ window.ARRIMO_I18N.en.aide = {
         ['“Transfer … is no longer at the expected status”', 'Someone already did this step. The page refreshes.'],
       ],
     },
+    liaison: {
+      nom: 'CHSLD liaison',
+      but: 'Requests and movements of CHSLD residents to your hospital, kept apart from inter-hospital transfers: arrivals, reception, hospital stays, returns and history. Only the resident reference (R-00000) is visible.',
+      gestes: [
+        'CHSLD arrivals: “Confirm receipt” of the request, then “Accept” or “Decline” according to your rules.',
+        'To receive: after the CHSLD confirms departure, “Confirm arrival” once the resident is physically here.',
+        '“Prepare admission or emergency”: decided by authorized staff, with the hospital episode reference. No clinical priority is assigned.',
+        'Hospital stays and returns: “Prepare the return to the CHSLD”; the CHSLD accepts, you confirm departure, it confirms the return.',
+      ],
+      erreurs: [
+        ['“This step is not possible at this stage of the coordination”', 'Another step must be confirmed first (for example departure by the CHSLD). The card shows the last confirmation.'],
+        ['“A return to the CHSLD is already being prepared”', 'The return already exists: follow it in “Hospital stays and returns”.'],
+      ],
+    },
     vigilance: {
       nom: 'Discharges and alerts',
       but: 'See planned departures bed by bed (status, time and source) and explained blockages: origin, threshold, fact or hypothesis, suggested action and owner.',

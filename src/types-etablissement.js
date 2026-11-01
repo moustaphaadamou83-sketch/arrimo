@@ -35,6 +35,9 @@ const MODULES = [
   { code: 'nsa', categorie: 'hopital', types: ['hopital'], statut: 'disponible', drapeau: 'nsa', nom: 'Niveaux de soins alternatifs (NSA)', nom_en: 'Alternate level of care (ALC)' },
   { code: 'nettoyage', categorie: 'hopital', types: ['hopital'], statut: 'disponible', drapeau: 'nettoyage', nom: 'Nettoyage', nom_en: 'Cleaning' },
   { code: 'national', categorie: 'hopital', types: ['hopital'], statut: 'disponible', drapeau: 'national', nom: 'Tableau national', nom_en: 'National dashboard' },
+  // Un seul module commun à tous les hôpitaux : arrivées depuis les CHSLD, accueil, hospitalisations et retours (moteur de coordination commun)
+  { code: 'liaison_chsld', categorie: 'hopital', types: ['hopital'], statut: 'disponible', drapeau: 'liaison_chsld', nom: 'Liaison CHSLD', nom_en: 'CHSLD liaison',
+    note: 'Arrivées depuis les CHSLD, accueil, hospitalisations et retours', dependances: ['admissions_hopital', 'transferts'] },
   // CHSLD
   { code: 'residents', categorie: 'chsld', types: ['chsld'], statut: 'inclus', nom: 'Résidents et accueil', nom_en: 'Residents and admission', note: 'Dossier, contacts, autorisations, mouvements' },
   { code: 'chambres', categorie: 'chsld', types: ['chsld'], statut: 'inclus', nom: 'Chambres et lits', nom_en: 'Rooms and beds' },

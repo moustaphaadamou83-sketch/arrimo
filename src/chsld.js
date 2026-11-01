@@ -15,6 +15,7 @@ const { exigerEtablissement } = require('./auth');
 const { changerEtat, journaliser } = require('./regles');
 const { environnement } = require('./environnement');
 const TE = require('./types-etablissement');
+const { notifier } = require('./services');
 const crypto = require('node:crypto');
 
 const GERER = ['coordonnateur', 'admin_etab', 'gestionnaire'];
@@ -115,7 +116,9 @@ async function ficheResident(pool, u, id) {
     FROM resident_mouvements m LEFT JOIN lits de ON de.id = m.de_lit_id LEFT JOIN lits vers ON vers.id = m.vers_lit_id
     LEFT JOIN etablissements a ON a.id = m.autre_etablissement_id LEFT JOIN utilisateurs u ON u.id = m.par WHERE m.resident_id = $1 ORDER BY m.date DESC, m.id DESC LIMIT 100`, [r.id])).rows;
   const coordinations = (await pool.query(`SELECT c.id, c.numero, c.type, c.statut, c.retour_prevu_le, c.incident, c.version, c.cree_le, c.modifie_le, o.nom AS origine, d.nom AS destination,
-      c.origine_id, c.destination_id FROM coordinations c JOIN etablissements o ON o.id = c.origine_id JOIN etablissements d ON d.id = c.destination_id
+      c.origine_id, c.destination_id, c.recue_hopital_le, c.acceptee_le, c.arrivee_le, c.orientation, c.cloturee_le,
+      (SELECT json_build_object('statut', x.statut, 'date', x.date) FROM coordination_etapes x WHERE x.coordination_id = c.id ORDER BY x.date DESC, x.id DESC LIMIT 1) AS derniere
+    FROM coordinations c JOIN etablissements o ON o.id = c.origine_id JOIN etablissements d ON d.id = c.destination_id
     WHERE c.resident_id = $1 OR (c.resident_ref = $2 AND (c.origine_id = $3 OR c.destination_id = $3)) ORDER BY c.cree_le DESC LIMIT 30`, [r.id, r.reference, e.id])).rows;
   const taches = (await pool.query(`SELECT id, type, titre, statut, echeance, cree_le FROM taches_etab WHERE resident_id = $1 ORDER BY cree_le DESC LIMIT 30`, [r.id])).rows;
   const communications = GERER.includes(u.role) || u.role === 'equipe_soins' ? (await pool.query(`SELECT cp.id, cp.type, cp.sens, cp.categorie, cp.sujet, cp.statut, cp.prevu_le, cp.fait_le, cp.cree_le,
@@ -421,20 +424,54 @@ const numeroCoordination = async (c) => (await c.query(`SELECT 'CO-' || lpad(nex
 async function etape(c, co, statut, etabId, u, detail) {
   await c.query('INSERT INTO coordination_etapes (coordination_id, statut, etablissement_id, par, detail) VALUES ($1, $2, $3, $4, $5)', [co.id, statut, etabId, u?.id || null, detail || null]);
 }
-/** Départ d'un résident vers un hôpital : préparé et envoyé par le CHSLD après vérification d'identité. */
+/** Hôpitaux qui peuvent recevoir une demande d'un CHSLD : actifs, ouverts et Liaison CHSLD activée (aucune dépendance au réseau inter-CHSLD). */
+async function hopitauxLiaison(db, { id = null } = {}) {
+  const rows = (await db.query(`SELECT id, nom, ville, modules, type_etablissement FROM etablissements
+    WHERE type_etablissement = 'hopital' AND actif AND module_actif ${id ? 'AND id = $1' : ''} ORDER BY nom`, id ? [id] : [])).rows;
+  return rows.filter((h) => TE.moduleActif(h, 'liaison_chsld')).map(({ id: i, nom, ville }) => ({ id: i, nom, ville }));
+}
+async function listeHopitauxLiaison(pool, u, etabId) {
+  await etabChsld(pool, u, etabId, { module: 'hospitalisations' });
+  return hopitauxLiaison(pool);
+}
+const nomEtab = async (c, id) => (await c.query('SELECT nom FROM etablissements WHERE id = $1', [id])).rows[0]?.nom;
+/** Notification à l'autre établissement : enregistrée dans la même transaction que l'étape (la coordination reste la référence). */
+async function notifierCo(c, etabId, code, co) {
+  const [origine, dest] = await Promise.all([nomEtab(c, co.origine_id), nomEtab(c, co.destination_id)]);
+  await notifier(c, etabId, null, code, { numero: co.numero, ref: co.resident_ref, origine, dest });
+}
+/**
+ * Demande d'un CHSLD vers un hôpital (Liaison CHSLD) : préparée et transmise par le CHSLD après vérification d'identité.
+ * Une demande transmise ne signifie pas que le résident est parti : le départ et l'arrivée sont confirmés séparément.
+ * `cle` (facultative) : identifiant d'envoi produit par le poste ; un renvoi après coupure réseau rend la même demande.
+ */
 async function preparerHospitalisation(pool, u, residentId, b) {
   const { e } = await lireResident(pool, u, residentId, { roles: [...GERER, 'equipe_soins'], module: 'hospitalisations' });
   if (b.identite_verifiee !== true) throw new ErreurHttp(400, 'identite_a_verifier');
-  const h = (await pool.query(`SELECT id, nom FROM etablissements WHERE id = $1 AND type_etablissement = 'hopital' AND actif`, [Number(b.hopital_id)])).rows[0];
-  if (!h) throw new ErreurHttp(404, 'hopital_introuvable');
+  const cle = b.cle == null || b.cle === '' ? null : String(b.cle);
+  if (cle && !/^[A-Za-z0-9_-]{8,64}$/.test(cle)) throw new ErreurHttp(400, 'cle_idempotence_invalide');
+  const h0 = (await pool.query(`SELECT id FROM etablissements WHERE id = $1 AND type_etablissement = 'hopital' AND actif`, [Number(b.hopital_id)])).rows[0];
+  if (!h0) throw new ErreurHttp(404, 'hopital_introuvable');
+  const h = (await hopitauxLiaison(pool, { id: h0.id }))[0];
+  if (!h) throw new ErreurHttp(409, 'liaison_chsld_inactive');
   return transaction(pool, async (c) => {
-    const r = await verrouResident(c, residentId); versionAttendue(r, b.version);
+    // Le verrou du résident sérialise les envois simultanés : le second voit la demande du premier.
+    const r = await verrouResident(c, residentId);
+    if (cle) {
+      const deja = (await c.query('SELECT * FROM coordinations WHERE origine_id = $1 AND cle_idempotence = $2', [e.id, cle])).rows[0];
+      if (deja && deja.resident_id !== r.id) throw new ErreurHttp(409, 'cle_idempotence_conflit');
+      if (deja) return { ...deja, rejoue: true };
+    }
+    versionAttendue(r, b.version);
+    const ouverte = (await c.query(`SELECT numero FROM coordinations WHERE resident_id = $1 AND type = 'hospitalisation' AND statut IN ('preparee', 'envoyee', 'acceptee', 'en_cours')`, [r.id])).rows[0];
+    if (ouverte) throw new ErreurHttp(409, 'hospitalisation_deja_ouverte', { numero: ouverte.numero });
     if (!['present', 'absent'].includes(r.statut)) throw new ErreurHttp(409, 'resident_statut_incompatible');
-    const co = (await c.query(`INSERT INTO coordinations (numero, type, resident_id, resident_ref, origine_id, destination_id, statut, motif_admin, lit_id, cree_par)
-      VALUES ($1, 'hospitalisation', $2, $3, $4, $5, 'envoyee', $6, $7, $8) RETURNING *`, [await numeroCoordination(c), r.id, r.reference, e.id, h.id, texte(b.motif_admin, 200), r.lit_id, u.id])).rows[0];
-    await etape(c, co, 'envoyee', e.id, u, `Départ préparé vers ${h.nom} ; identité vérifiée`);
-    await mouvement(c, r, 'depart_hopital', u, { autre: h.id, coordination: co.id, detail: `Départ préparé (${co.numero})` });
+    const co = (await c.query(`INSERT INTO coordinations (numero, type, resident_id, resident_ref, origine_id, destination_id, statut, motif_admin, lit_id, cree_par, cle_idempotence)
+      VALUES ($1, 'hospitalisation', $2, $3, $4, $5, 'envoyee', $6, $7, $8, $9) RETURNING *`, [await numeroCoordination(c), r.id, r.reference, e.id, h.id, texte(b.motif_admin, 200), r.lit_id, u.id, cle])).rows[0];
+    await etape(c, co, 'envoyee', e.id, u, `Demande transmise à ${h.nom} ; identité vérifiée`);
+    await mouvement(c, r, 'depart_hopital', u, { autre: h.id, coordination: co.id, detail: `Demande transmise (${co.numero}) ; départ à confirmer` });
     await journalChsld(c, e.id, u, 'Hospitalisation préparée', `${r.reference} · ${co.numero}`);
+    await notifierCo(c, h.id, 'chsld_demande', co);
     return co;
   });
 }
@@ -455,29 +492,53 @@ async function actionCoordination(pool, u, id, b) {
     const maj = async (statut, champs = {}) => (await c.query(`UPDATE coordinations SET statut = $2, incident = COALESCE($3, incident), retour_prevu_le = COALESCE($4, retour_prevu_le),
         lit_id = COALESCE($5, lit_id), destination_id = COALESCE($6, destination_id), version = version + 1, modifie_le = now() WHERE id = $1 RETURNING *`,
       [co.id, statut, champs.incident || null, champs.retour || null, champs.lit || null, champs.destination || null])).rows[0];
-    const ouvert = ['preparee', 'envoyee', 'acceptee', 'en_cours'].includes(co.statut);
+    // Une hospitalisation reçue reste ouverte côté hôpital (orientation, retour, incidents) jusqu'à sa clôture.
+    const ouvert = ['preparee', 'envoyee', 'acceptee', 'en_cours'].includes(co.statut) || (co.type === 'hospitalisation' && co.statut === 'recue' && !co.cloturee_le);
     if (!ouvert && !['incident'].includes(a)) throw new ErreurHttp(409, 'coordination_close');
     const t = co.type;
     let n;
     // -------- hospitalisation (CHSLD → hôpital)
     if (t === 'hospitalisation' && cote === 'origine' && a === 'confirmer_depart') {
-      if (co.statut !== 'envoyee') throw new ErreurHttp(409, 'coordination_statut_incompatible');
+      // L'acceptation par l'hôpital est facultative (« lorsque applicable ») : départ possible depuis « transmise » ou « acceptée ».
+      if (!['envoyee', 'acceptee'].includes(co.statut)) throw new ErreurHttp(409, 'coordination_statut_incompatible');
       n = await maj('en_cours');
       await c.query(`UPDATE residents SET statut = 'hospitalise', version = version + 1, modifie_le = now() WHERE id = $1`, [r.id]);
       await mouvement(c, r, 'depart_hopital', u, { autre: co.destination_id, coordination: co.id, detail: 'Départ confirmé ; hospitalisation en cours ; place conservée' });
+      await notifierCo(c, co.destination_id, 'chsld_depart', co);
+    // -------- Liaison CHSLD, côté hôpital : accusé de réception, acceptation ou refus, arrivée physique, orientation
+    } else if (t === 'hospitalisation' && cote === 'destination' && a === 'accuser_reception') {
+      if (!['envoyee', 'acceptee', 'en_cours'].includes(co.statut) || co.recue_hopital_le) throw new ErreurHttp(409, 'coordination_statut_incompatible');
+      n = (await c.query('UPDATE coordinations SET recue_hopital_le = now(), version = version + 1, modifie_le = now() WHERE id = $1 RETURNING *', [co.id])).rows[0];
+    } else if (t === 'hospitalisation' && cote === 'destination' && a === 'accepter') {
+      if (co.statut !== 'envoyee') throw new ErreurHttp(409, 'coordination_statut_incompatible');
+      n = (await c.query(`UPDATE coordinations SET statut = 'acceptee', recue_hopital_le = COALESCE(recue_hopital_le, now()), acceptee_le = now(), version = version + 1, modifie_le = now()
+        WHERE id = $1 RETURNING *`, [co.id])).rows[0];
+      await notifierCo(c, co.origine_id, 'chsld_acceptee', co);
+    } else if (t === 'hospitalisation' && cote === 'destination' && a === 'refuser') {
+      // Refus possible tant que le résident n'est pas parti : il reste présent au CHSLD, sa place n'a jamais été libérée.
+      if (!['envoyee', 'acceptee'].includes(co.statut)) throw new ErreurHttp(409, 'coordination_statut_incompatible');
+      n = (await c.query(`UPDATE coordinations SET statut = 'refusee', recue_hopital_le = COALESCE(recue_hopital_le, now()), version = version + 1, modifie_le = now() WHERE id = $1 RETURNING *`, [co.id])).rows[0];
+      await mouvement(c, r, 'annulation', u, { autre: co.destination_id, coordination: co.id, detail: `Demande ${co.numero} refusée par l’hôpital` });
+      await notifierCo(c, co.origine_id, 'chsld_refusee', co);
     } else if (t === 'hospitalisation' && cote === 'destination' && a === 'confirmer_reception') {
+      // Arrivée physique : seulement après le départ confirmé par le CHSLD (aucune localisation déduite d'une demande).
       if (co.statut !== 'en_cours') throw new ErreurHttp(409, 'coordination_statut_incompatible');
       n = await maj('recue');
-      await mouvement(c, r, 'hospitalisation_confirmee', u, { etablissementId: r.etablissement_id, autre: co.destination_id, coordination: co.id, detail: 'Réception confirmée par l’hôpital' });
+      n = (await c.query('UPDATE coordinations SET arrivee_le = now(), recue_hopital_le = COALESCE(recue_hopital_le, now()) WHERE id = $1 RETURNING *', [co.id])).rows[0];
+      await mouvement(c, r, 'hospitalisation_confirmee', u, { etablissementId: r.etablissement_id, autre: co.destination_id, coordination: co.id, detail: 'Arrivée confirmée par l’hôpital' });
+      await notifierCo(c, co.origine_id, 'chsld_arrivee', co);
+    } else if (t === 'hospitalisation' && cote === 'destination' && a === 'orienter') {
+      n = await orienter(c, pool, u, co, b);
     } else if (t === 'hospitalisation' && cote === 'origine' && a === 'changer_hopital') {
       if (!['envoyee', 'en_cours'].includes(co.statut)) throw new ErreurHttp(409, 'coordination_statut_incompatible');
       const h = (await c.query(`SELECT id, nom FROM etablissements WHERE id = $1 AND type_etablissement = 'hopital' AND actif`, [Number(b.hopital_id)])).rows[0];
       if (!h || h.id === co.destination_id) throw new ErreurHttp(404, 'hopital_introuvable');
       n = await maj(co.statut, { incident: 'changement_hopital', destination: h.id });
     } else if (t === 'hospitalisation' && cote === 'origine' && a === 'annuler') {
-      if (co.statut !== 'envoyee') throw new ErreurHttp(409, 'coordination_statut_incompatible');
+      if (!['envoyee', 'acceptee'].includes(co.statut)) throw new ErreurHttp(409, 'coordination_statut_incompatible');
       n = await maj('annulee');
       await mouvement(c, r, 'annulation', u, { coordination: co.id, detail: 'Départ vers l’hôpital annulé' });
+      await notifierCo(c, co.destination_id, 'chsld_annulee', co);
     // -------- retour (hôpital → CHSLD), préparé par l'hôpital qui a reçu le résident
     } else if (t === 'retour' && cote === 'destination' && a === 'accepter') {
       if (co.statut !== 'envoyee') throw new ErreurHttp(409, 'coordination_statut_incompatible');
@@ -489,6 +550,7 @@ async function actionCoordination(pool, u, id, b) {
         lit = l.id; await c.query('UPDATE residents SET lit_id = $2 WHERE id = $1', [r.id, lit]);
       }
       n = await maj('acceptee', { lit });
+      await notifierCo(c, co.origine_id, 'chsld_retour_accepte', co);
       await tache(c, r.etablissement_id, u, { type: 'preparation_chambre', titre: `Préparer la chambre pour le retour de ${r.reference}`, lit_id: lit, resident_id: r.id, assigne_role: 'entretien', echeance: co.retour_prevu_le });
       await mouvement(c, r, 'retour_prevu', u, { autre: co.origine_id, coordination: co.id, detail: `Retour accepté${co.retour_prevu_le ? ` pour le ${new Date(co.retour_prevu_le).toISOString().slice(0, 10)}` : ''}` });
     } else if (t === 'retour' && cote === 'destination' && a === 'refuser') {
@@ -503,8 +565,12 @@ async function actionCoordination(pool, u, id, b) {
       if (etat === 'reserve') await changerEtat(c, pool, u.id, r.lit_id, 'occupe', { detail: `Retour de ${r.reference}` });
       n = await maj('recue');
       await c.query(`UPDATE residents SET statut = 'present', version = version + 1, modifie_le = now() WHERE id = $1`, [r.id]);
-      if (co.liee_id) await c.query(`UPDATE coordinations SET statut = 'recue', version = version + 1, modifie_le = now() WHERE id = $1 AND statut IN ('en_cours')`, [co.liee_id]);
+      // Parcours clos : l'hospitalisation d'origine est clôturée (retour reçu par le CHSLD).
+      if (co.liee_id) await c.query(`UPDATE coordinations SET statut = CASE WHEN statut = 'en_cours' THEN 'recue' ELSE statut END, cloturee_le = COALESCE(cloturee_le, now()),
+        version = version + 1, modifie_le = now() WHERE id = $1 AND statut IN ('en_cours', 'recue')`, [co.liee_id]);
+      if (co.liee_id) await c.query('INSERT INTO coordination_etapes (coordination_id, statut, etablissement_id, par, detail) VALUES ($1, $2, $3, $4, $5)', [co.liee_id, 'cloturee', etabId, u.id, `Retour reçu (${co.numero})`]);
       await mouvement(c, r, 'retour', u, { autre: co.origine_id, coordination: co.id, detail: 'Retour confirmé ; résident présent' });
+      await notifierCo(c, co.origine_id, 'chsld_retour_recu', co);
     // -------- transfert inter-CHSLD (origine → destination)
     } else if (t === 'transfert_chsld' && cote === 'destination' && a === 'accepter') {
       if (co.statut !== 'envoyee') throw new ErreurHttp(409, 'coordination_statut_incompatible');
@@ -548,12 +614,14 @@ async function actionCoordination(pool, u, id, b) {
     // -------- incidents (retard, prolongation, informations manquantes), signalés par l'un ou l'autre
     } else if (a === 'incident') {
       const inc = String(b.incident || '');
-      if (!['retour_retarde', 'chambre_indisponible', 'informations_manquantes', 'hospitalisation_prolongee'].includes(inc)) throw new ErreurHttp(400, 'incident_invalide');
+      if (!['retour_retarde', 'chambre_indisponible', 'informations_manquantes', 'hospitalisation_prolongee', 'arrivee_retardee'].includes(inc)) throw new ErreurHttp(400, 'incident_invalide');
       const retour = b.retour_prevu_le ? new Date(b.retour_prevu_le) : null;
       if (retour && Number.isNaN(retour.getTime())) throw new ErreurHttp(400, 'date_invalide');
       n = await maj(co.statut, { incident: inc, retour });
     } else throw new ErreurHttp(409, 'action_coordination_interdite');
-    await etape(c, n, a === 'incident' ? `incident:${b.incident}` : n.statut, etabId, u, texte(b.detail, 200));
+    const nomEtape = a === 'incident' ? `incident:${b.incident}` : a === 'accuser_reception' ? 'recue_hopital' : a === 'orienter' ? `orientation:${n.orientation}`
+      : t === 'hospitalisation' && a === 'confirmer_reception' ? 'arrivee' : n.statut;
+    await etape(c, n, nomEtape, etabId, u, texte(b.detail || b.motif, 200));
     await journalChsld(c, etabId, u, 'Coordination', `${co.numero} · ${a} · ${co.resident_ref}`);
     return n;
   });
@@ -568,7 +636,9 @@ async function preparerRetour(pool, u, hospitalisationId, b) {
   if (!retour || Number.isNaN(retour.getTime())) throw new ErreurHttp(400, 'date_invalide');
   return transaction(pool, async (c) => {
     const h = (await c.query('SELECT * FROM coordinations WHERE id = $1 FOR UPDATE', [hospitalisationId])).rows[0];
-    if (!['en_cours', 'recue'].includes(h.statut)) throw new ErreurHttp(409, 'coordination_statut_incompatible');
+    if (!['en_cours', 'recue'].includes(h.statut) || h.cloturee_le) throw new ErreurHttp(409, 'coordination_statut_incompatible');
+    const ouvert = (await c.query(`SELECT numero FROM coordinations WHERE resident_id = $1 AND type = 'retour' AND statut IN ('preparee', 'envoyee', 'acceptee', 'en_cours')`, [h.resident_id])).rows[0];
+    if (ouvert) throw new ErreurHttp(409, 'retour_deja_ouvert', { numero: ouvert.numero });
     const co = (await c.query(`INSERT INTO coordinations (numero, type, resident_id, resident_ref, origine_id, destination_id, statut, retour_prevu_le, liee_id, expire_le, cree_par, motif_admin)
       VALUES ($1, 'retour', $2, $3, $4, $5, 'envoyee', $6, $7, $6::timestamptz + interval '2 days', $8, $9) RETURNING *`,
     [await numeroCoordination(c), h.resident_id, h.resident_ref, h.destination_id, h.origine_id, retour, h.id, u.id, texte(b.motif_admin, 200)])).rows[0];
@@ -576,6 +646,7 @@ async function preparerRetour(pool, u, hospitalisationId, b) {
     const r = (await c.query('SELECT * FROM residents WHERE id = $1', [h.resident_id])).rows[0];
     await mouvement(c, r, 'retour_prevu', u, { autre: h.destination_id, coordination: co.id, detail: `Retour proposé par l’hôpital pour le ${retour.toISOString().slice(0, 10)}` });
     await journalChsld(c, h.destination_id, u, 'Retour vers CHSLD préparé', `${h.resident_ref} · ${co.numero}`);
+    await notifierCo(c, h.origine_id, 'chsld_retour_propose', co);
     return co;
   });
 }
@@ -600,6 +671,8 @@ async function listeCoordinations(pool, u, etabId, q = {}) {
   exigerEtablissement(u, etabId);
   await expirerCoordinations(pool);
   return (await pool.query(`SELECT c.id, c.numero, c.type, c.statut, c.resident_ref, c.retour_prevu_le, c.incident, c.version, c.cree_le, c.modifie_le, c.liee_id,
+      c.recue_hopital_le, c.acceptee_le, c.arrivee_le, c.orientation, c.orientation_le, c.cloturee_le, c.motif_admin,
+      CASE WHEN c.destination_id = $1 OR c.origine_id = $1 AND c.type = 'retour' THEN c.patient_ref_hopital END AS patient_ref_hopital,
       c.origine_id, o.nom AS origine, c.destination_id, d.nom AS destination, (c.destination_id = $1) AS entrante, l.code AS lit,
       (SELECT json_agg(json_build_object('statut', x.statut, 'date', x.date, 'detail', x.detail) ORDER BY x.date) FROM coordination_etapes x WHERE x.coordination_id = c.id) AS etapes
     FROM coordinations c JOIN etablissements o ON o.id = c.origine_id JOIN etablissements d ON d.id = c.destination_id LEFT JOIN lits l ON l.id = c.lit_id AND l.etablissement_id = $1
@@ -715,7 +788,32 @@ async function indicateurs(pool, u, etabId, jours = 30) {
     preparation_minutes: preparation == null ? null : Math.round(preparation), taches };
 }
 
-module.exports = { accueil, listeResidents, ficheResident, creerResident, modifierResident, ajouterContact, modifierContact, verifierRepresentant,
+/**
+ * Orientation décidée par le personnel hospitalier habilité, après l'arrivée confirmée : admission (demande d'admission
+ * ordinaire, mêmes contrôles de référence et de doublon) ou accueil à l'urgence (module Urgence actif). Aucune priorité
+ * clinique n'est attribuée : la priorité reste validée par les personnes habilitées dans la file d'admission.
+ * L'épisode hospitalier porte la référence de l'hôpital ; l'identité et le dossier du CHSLD ne sont ni copiés ni modifiés.
+ */
+async function orienter(c, pool, u, co, b) {
+  if (co.statut !== 'recue' || co.cloturee_le) throw new ErreurHttp(409, 'coordination_statut_incompatible');
+  if (co.orientation) throw new ErreurHttp(409, 'orientation_deja_faite');
+  const o = String(b.orientation || '');
+  if (!['admission', 'urgence'].includes(o)) throw new ErreurHttp(400, 'orientation_invalide');
+  const s = require('./services');
+  const etab = await s.etablissement(c, co.destination_id);
+  const ref = String(b.patient_ref || '').trim();
+  if (!new RegExp(etab.config.reference_regex).test(ref)) throw new ErreurHttp(400, 'reference_invalide', { exemple: etab.config.reference_exemple });
+  let demandeId = null;
+  if (o === 'admission') {
+    const d = await require('./terrain').creerDemande(pool, u, { etablissement_id: co.destination_id, patient_ref: ref, type_id: Number(b.type_id), provenance: 'externe' }, c);
+    demandeId = d.id;
+  } else if ((etab.modules || {}).urgence === false) throw new ErreurHttp(409, 'urgence_inactive');
+  const n = (await c.query(`UPDATE coordinations SET orientation = $2, orientation_le = now(), patient_ref_hopital = $3, demande_admission_id = $4, version = version + 1, modifie_le = now()
+    WHERE id = $1 RETURNING *`, [co.id, o, ref, demandeId])).rows[0];
+  return n;
+}
+
+module.exports = { hopitauxLiaison, listeHopitauxLiaison, accueil, listeResidents, ficheResident, creerResident, modifierResident, ajouterContact, modifierContact, verifierRepresentant,
   reserverPlace, confirmerArrivee, changerChambre, sortie, absence, listeDemandes, creerDemande, actionDemande, preparerHospitalisation, actionCoordination,
   preparerRetour, preparerTransfertChsld, listeCoordinations, reseau, listeTaches, creerTache, statutTache, creerCommunication, statutCommunication,
   places, indicateurs, etabChsld, CATEGORIES, RELATIONS, DOCUMENTS, ACCESSIBILITE, exigerFictifs };

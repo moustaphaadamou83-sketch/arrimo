@@ -57,3 +57,8 @@ Une dépendance qui n'existe pas dans le catalogue d'un type d'établissement es
 - Avant la migration, l'outil de publication fait une sauvegarde `pg_dump`, en vérifie l'empreinte et la restaure dans une copie isolée identique. La migration y est d'abord jouée deux fois, puis l'ancien et le nouveau code y sont essayés.
 - La migration en ligne s'exécute dans une seule transaction : en cas d'échec, rien n'est modifié.
 - **Retour arrière** : remettre la release précédente (`/opt/arrimo-sh/releases/correction-20261031t2045`) et restaurer la sauvegarde de préparation avec `pg_restore`. Les colonnes et lignes ajoutées n'ont aucun effet sur l'ancien code ; la restauration n'est donc nécessaire que pour revenir exactement à l'état d'avant.
+
+## Migration SH n° 38 : Liaison CHSLD (1er novembre 2026)
+- Ajoute **une seule ligne** au catalogue : `liaison_chsld` (catégorie hôpital, disponible, dépendances `admissions_hopital` et `transferts`). Aucune ligne existante n'est modifiée (`ON CONFLICT DO NOTHING`).
+- La liste fermée `AJOUTS_CATALOGUE_SH` passe de 20 à 21 codes ; `tests/publication-cibles.test.cjs` vérifie qu'elle correspond exactement au référentiel.
+- Détail du module : `docs/LIAISON_CHSLD_2026-11-01.md`.

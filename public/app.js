@@ -1116,9 +1116,7 @@ async function vueTransferts() {
   }; });
   v.querySelectorAll('[data-tout-termines]').forEach((b) => { b.onclick = () => { etat.toutTermines = true; rafraichir(); }; });
   majDecomptes();
-  // Résidents de CHSLD hospitalisés ici et leurs retours (coordination CHSLD ↔ hôpital)
-  v.insertAdjacentHTML('beforeend', '<div id="ch-hopital"></div>');
-  await window.ArrimoChsld?.panneauHopital($('#ch-hopital'));
+  // Les arrivées depuis les CHSLD ne sont pas mêlées aux transferts interhospitaliers : module Liaison CHSLD.
 }
 const besoinsTransfert = (x) => BESOINS.filter((k) => x.besoins?.[k]).map((k) => t(`besoins.${k}`).toLowerCase()).join(', ');
 

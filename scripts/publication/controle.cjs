@@ -6,11 +6,13 @@ const { execFileSync } = require('node:child_process');
 const assert = require('node:assert/strict');
 const ident = (x) => `"${String(x).replaceAll('"', '""')}"`;
 const copie = (x) => /^arrimo_publication_restore_[a-z0-9_]+$/.test(x);
-// Seule exception au contrôle « données existantes » : ajouts du catalogue SH par la migration 37 (types d'établissement).
+// Seule exception au contrôle « données existantes » : ajouts du catalogue SH par les migrations 37 (types d'établissement) et 38 (Liaison CHSLD).
 // Liste fermée ; les lignes déjà présentes doivent rester identiques (colonnes d'origine), aucune suppression ni renommage.
 const AJOUTS_CATALOGUE_SH = new Set(['comptes', 'documents', 'support', 'journal', 'parametres', 'admissions_hopital', 'nsa', 'nettoyage',
   'national', 'residents', 'chambres', 'demandes_hebergement', 'entretien_chsld', 'taches', 'proches', 'hospitalisations', 'reseau_chsld',
-  'portail_proches', 'messagerie_securisee', 'appels_video']);
+  'portail_proches', 'messagerie_securisee', 'appels_video',
+  // Migration 38 : module hospitalier Liaison CHSLD (une ligne ajoutée, aucune ligne existante modifiée)
+  'liaison_chsld']);
 async function lignesCatalogue(c, cols) {
   const r = await c.query(`SELECT code, row_to_json(x)::text AS ligne FROM (SELECT ${cols.map(ident).join(',')} FROM public.sh_modules_catalogue) x`);
   return new Map(r.rows.map((x) => [x.code, x.ligne]));

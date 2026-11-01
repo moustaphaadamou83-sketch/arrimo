@@ -21,6 +21,7 @@ Propriétaire : Moustafa Adamou. Langue de travail et de l’interface : **fran�
 - `src/services.js` capacité réseau, recommandation (proximité), transferts, journal, assistant
 - `src/terrain.js` file d’admission, NSA, congés, nettoyage, niveaux d’alerte, indicateurs
 - `src/copilote.js` briefing, recommandations, vue réseau, questions (mode local ; mode IA facultatif sans référence patient)
+- `src/liaison-chsld.js` module hospitalier Liaison CHSLD (arrivées, accueil, retours ; moteur de coordination de `src/chsld.js`) · `src/og-liaison.js` OG pour ce module
 - `src/connecteurs.js` réception d’événements HL7 ADT traduits en JSON, capacité réseau en lecture
 - `src/admin.js` mon compte, double authentification, administration · `src/totp.js` codes à 6 chiffres (RFC 6238)
 - `db/schema.sql` schéma (idempotent, rejouable) · `db/seed.js` ancienne démo à 6 établissements (tests) · `db/demo-reseau.js` démo : réseau de 20 hôpitaux (comptes hopital.x, hopital.y, reseau)

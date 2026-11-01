@@ -156,7 +156,7 @@ function brancherSh(api, pool, route) {
     // Configuration modulaire préparée par SH : modules désactivés (false) et vocation de l'établissement
     if (b.modules !== undefined) {
       const m = {};
-      for (const k of ['urgence', 'nsa', 'nettoyage', 'national']) if (b.modules && b.modules[k] === false) m[k] = false;
+      for (const k of require('./configuration-operationnelle').MODULES) if (b.modules && b.modules[k] === false) m[k] = false;
       vals.push(m); sets.push(`modules = $${vals.length}::jsonb`); detail.push(`modules désactivés : ${Object.keys(m).join(', ') || 'aucun'}`);
     }
     if (b.vocation !== undefined) {

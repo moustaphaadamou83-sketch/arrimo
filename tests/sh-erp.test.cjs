@@ -413,7 +413,7 @@ test('activation et Go Live : recette activée, structure transférée à la pro
   const prod = (await poolProd.query(`SELECT module_actif,modules,vocation FROM etablissements WHERE code='HOP-D'`)).rows[0];
   assert.strictEqual(prod.module_actif, false, 'en production, l’établissement reste inactif jusqu’à l’activation');
   assert.deepStrictEqual(prod.modules,{nsa:false,national:false});assert.strictEqual(prod.vocation,'pediatrique');
-  assert.deepStrictEqual(g.configuration.modules,{urgence:true,nsa:false,nettoyage:true,national:false});
+  assert.deepStrictEqual(g.configuration.modules,{urgence:true,nsa:false,nettoyage:true,national:false,liaison_chsld:true});
   const p = await ok('implantation', 'GET', `/projets/${ids.projet}`);
   assert.strictEqual(p.taches.find((t) => t.code_auto === 'golive').statut, 'terminee');
   assert.strictEqual(p.avancement, 100, 'les six tâches modèle se sont terminées avec les étapes réelles');
