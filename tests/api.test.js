@@ -1796,6 +1796,22 @@ test('migration OG : deux exécutions conservent les lignes métier', async () =
     WHERE table_schema='public' AND table_name='transferts' AND column_name='distance_km'`)).rows[0].data_type, 'numeric');
 });
 
+test('schéma rejouable sur des comptes existants de tous les rôles (administration d’établissement, équipe de soins)', async () => {
+  const rc = await id('RC');
+  const cree = [];
+  for (const role of ['admin_etab', 'equipe_soins']) {
+    const u = (await pool.query(`INSERT INTO utilisateurs (email, nom, role, mot_de_passe_hash) VALUES ($1, $2, $3, 'x') RETURNING id`, [`rejeu.${role}@test.example.invalid`, `Rejeu ${role}`, role])).rows[0];
+    await pool.query('INSERT INTO utilisateur_etablissements (utilisateur_id, etablissement_id) VALUES ($1, $2)', [u.id, rc]); cree.push(u.id);
+  }
+  try {
+    await pool.query(fs.readFileSync(path.join(__dirname, '..', 'db', 'schema.sql'), 'utf8'));
+    assert.strictEqual((await pool.query('SELECT count(*)::int n FROM utilisateurs WHERE id = ANY($1)', [cree])).rows[0].n, 2);
+  } finally {
+    await pool.query('DELETE FROM utilisateur_etablissements WHERE utilisateur_id = ANY($1)', [cree]);
+    await pool.query('DELETE FROM utilisateurs WHERE id = ANY($1)', [cree]);
+  }
+});
+
 test('migration invitations : ajoute la colonne de façon additive et idempotente', async () => {
   const fs = require('fs');
   const path = require('path');

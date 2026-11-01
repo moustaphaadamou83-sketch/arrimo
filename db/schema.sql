@@ -239,7 +239,7 @@ CREATE INDEX IF NOT EXISTS notif_etab ON notifications (etablissement_id, lu, da
 -- Rôle entretien (écran Nettoyage seulement) et rôle connecteur (systèmes externes)
 ALTER TABLE utilisateurs DROP CONSTRAINT IF EXISTS utilisateurs_role_check;
 ALTER TABLE utilisateurs ADD CONSTRAINT utilisateurs_role_check
-  CHECK (role IN ('coordonnateur', 'gestionnaire', 'entretien'));
+  CHECK (role IN ('coordonnateur', 'gestionnaire', 'entretien', 'admin_etab', 'equipe_soins'));  -- liste complète : le schéma reste rejouable sur des comptes existants
 
 -- Seuils d'alerte et protocoles, par pays
 ALTER TABLE config_pays ADD COLUMN IF NOT EXISTS seuil_jaune int NOT NULL DEFAULT 85;
@@ -330,7 +330,7 @@ ALTER TABLE config_pays ADD COLUMN IF NOT EXISTS penalite_rouge_km int NOT NULL 
 -- Version 4 : comptes, double authentification, administration
 ALTER TABLE utilisateurs DROP CONSTRAINT IF EXISTS utilisateurs_role_check;
 ALTER TABLE utilisateurs ADD CONSTRAINT utilisateurs_role_check
-  CHECK (role IN ('coordonnateur', 'gestionnaire', 'entretien', 'admin_etab'));
+  CHECK (role IN ('coordonnateur', 'gestionnaire', 'entretien', 'admin_etab', 'equipe_soins'));  -- liste complète : le schéma reste rejouable sur des comptes existants
 ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS totp_secret text;
 ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS totp_actif boolean NOT NULL DEFAULT false;
 ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS totp_dernier_pas bigint NOT NULL DEFAULT 0;
