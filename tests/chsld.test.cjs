@@ -119,7 +119,9 @@ test('SH : création, provisionnement et activation des deux CHSLD fictifs, sans
     const fiche = await sh('GET', `/hopitaux/${c.hopital_id}`);
     assert.strictEqual(fiche.type_etablissement, 'chsld');
     assert.ok(fiche.modules.every((m) => ['commun', 'chsld', 'optionnel'].includes(m.categorie)), 'licences limitées au type');
-    assert.ok(fiche.modules.filter((m) => m.statut === 'inclus').every((m) => m.licence === 'souscrit'));
+    // Modules inclus souscrits ; OG reste sans décision SH (licence par défaut de l'environnement, fonctions décidées à part)
+    assert.ok(fiche.modules.filter((m) => m.statut === 'inclus' && m.code !== 'og').every((m) => m.licence === 'souscrit'));
+    assert.strictEqual(fiche.modules.find((m) => m.code === 'og').licence, 'non_selectionne');
     assert.ok(fiche.modules.filter((m) => ['a_venir', 'etude'].includes(m.statut)).every((m) => m.licence === 'non_selectionne'));
     const e = (await poolPilote.query('SELECT e.*, c.code AS config, p.code AS profil FROM etablissements e JOIN config_pays c ON c.id = e.config_id LEFT JOIN config_pays p ON p.id = e.profil_config_id WHERE e.code = $1', [c.code])).rows[0];
     assert.ok(e.module_actif && e.type_etablissement === 'chsld' && e.config === 'QC-CHSLD' && e.profil === 'QC');

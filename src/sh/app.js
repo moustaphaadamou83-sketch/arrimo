@@ -339,6 +339,8 @@ function creerAppSh(pool, { env = process.env } = {}) {
   /** Licences proposées à la création : modules inclus souscrits, modules disponibles selon le choix, les autres non sélectionnés. */
   async function licencesInitiales(c, h, type, choix = {}, u) {
     for (const m of await catalogueType(c, type)) {
+      // OG : licence décidée à part (fonctions détaillées) ; sans décision, l'établissement garde sa licence par défaut.
+      if (m.code === 'og') continue;
       const voulu = choix && typeof choix === 'object' ? choix[m.code] : undefined;
       if (voulu !== undefined && typeof voulu !== 'boolean') throw new ErreurSh(400, 'Choix de module invalide.');
       if (voulu === true && ['a_venir', 'etude'].includes(m.statut)) throw new ErreurSh(409, `Le module « ${m.nom} » n’est pas encore disponible.`);
