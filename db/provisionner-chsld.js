@@ -30,16 +30,43 @@ function csvChsld(c) {
 }
 
 /** Crée et active les deux CHSLD par la console SH. `sh(methode, chemin, corps)` appelle l'API SH avec un compte administrateur. */
-async function provisionner(sh, { environnement = 'pilote', modules = {} } = {}) {
+/** Reprise d'une installation interrompue : compare la structure existante à la cible, sans rien supprimer.
+ *  Un élément hors cible ou une modification d'un élément existant demande une décision humaine (arrêt). */
+async function ecartStructure(sh, h, c, csv) {
+  const s = await sh('GET', `/hopitaux/${h.id}/structure`);
+  const cible = (type, cle) => new Set(csv[type].trim().split('\n').slice(1).map((l) => cle(l.split(';'))));
+  const tUnites = cible('unites', (x) => x[0]), tChambres = cible('chambres', (x) => `${x[0]}/${x[1]}`), tLits = cible('lits', (x) => x[2]);
+  const hors = [...s.unites.filter((u) => !tUnites.has(u.unite)).map((u) => `unité ${u.unite}`),
+    ...s.chambres.filter((ch) => !tChambres.has(`${ch.unite}/${ch.chambre}`)).map((ch) => `chambre ${ch.unite}/${ch.chambre}`),
+    ...s.lits.filter((l) => !tLits.has(l.lit)).map((l) => `lit ${l.lit}`)];
+  if (hors.length) throw new Error(`${c.code} : ${hors.length} élément(s) hors configuration cible (${hors.slice(0, 10).join(', ')}) ; décision requise, rien n’a été supprimé.`);
+  return { unites: s.unites.length, chambres: s.chambres.length, lits: s.lits.length, cible_lits: tLits.size };
+}
+
+async function provisionner(sh, { environnement = 'pilote', modules = {}, existants = {} } = {}) {
   const resultats = [];
   for (const c of CHSLD) {
-    const h = await sh('POST', '/hopitaux', { type_etablissement: 'chsld', modules, nom: c.nom, code_etab: c.code, environnement, pays_code: 'CA', ville: c.ville,
-      latitude: c.latitude, longitude: c.longitude, utilisateurs_prevus: ROLES.length, utilisateurs_autorises: ROLES.length + 4, contact_nom: `Direction fictive · ${c.nom}` });
-    await sh('POST', `/hopitaux/${h.id}/relier`, {});
     const csv = csvChsld(c);
+    let h, reprise = null;
+    if (existants[c.code]) {
+      h = await sh('GET', `/hopitaux/${existants[c.code]}`);
+      if (h.type_etablissement !== 'chsld') throw new Error(`${c.code} : fiche existante d’un autre type ; décision requise.`);
+      if (!h.relie) await sh('POST', `/hopitaux/${h.id}/relier`, {});
+      reprise = { avant: await ecartStructure(sh, h, c, csv), ajouts: {} };
+    } else {
+      h = await sh('POST', '/hopitaux', { type_etablissement: 'chsld', modules, nom: c.nom, code_etab: c.code, environnement, pays_code: 'CA', ville: c.ville,
+        latitude: c.latitude, longitude: c.longitude, utilisateurs_prevus: ROLES.length, utilisateurs_autorises: ROLES.length + 4, contact_nom: `Direction fictive · ${c.nom}` });
+      await sh('POST', `/hopitaux/${h.id}/relier`, {});
+    }
     for (const type of ['departements', 'services', 'unites', 'chambres', 'lits', 'utilisateurs']) {
       const v = await sh('POST', `/hopitaux/${h.id}/import/verifier`, { type, contenu: csv[type] });
       if (v.nb_erreurs) throw new Error(`${c.code} ${type} : ${JSON.stringify(v.erreurs).slice(0, 400)}`);
+      if (reprise) {
+        // Reprise : seuls les ajouts sont faits ; une mise à jour d'un élément existant demande une décision
+        if (v.resume.maj) throw new Error(`${c.code} ${type} : ${v.resume.maj} élément(s) existant(s) différent(s) de la cible ; décision requise.`);
+        reprise.ajouts[type] = v.resume.creer;
+        if (!v.resume.creer) continue;
+      }
       await sh('POST', `/hopitaux/${h.id}/import/importer`, { type, contenu: csv[type], empreinte: v.empreinte });
     }
     let fiche = await sh('GET', `/hopitaux/${h.id}`);
@@ -47,7 +74,7 @@ async function provisionner(sh, { environnement = 'pilote', modules = {} } = {})
     fiche = await sh('GET', `/hopitaux/${h.id}`);
     for (const v of fiche.etapes.filter((e) => e.rang < 6).flatMap((e) => e.verifications).filter((v) => !v.faite)) await sh('PUT', `/verifications/${v.id}`, { faite: true });
     await sh('POST', `/hopitaux/${h.id}/activation`, {});
-    resultats.push({ ...c, hopital_id: h.id, comptes: Object.fromEntries(ROLES.map(([, cle, role]) => [cle, { courriel: courrielDe(c, cle), role }])) });
+    resultats.push({ ...c, hopital_id: h.id, reprise, comptes: Object.fromEntries(ROLES.map(([, cle, role]) => [cle, { courriel: courrielDe(c, cle), role }])) });
   }
   return resultats;
 }

@@ -317,8 +317,11 @@ function creerAppSh(pool, { env = process.env } = {}) {
     if (DEMO_CHSLD.get(environnement)?.statut === 'en_cours') throw new ErreurSh(409, 'Une création est déjà en cours dans cet environnement.');
     if (!['demo_abc', 'pilote'].includes(environnement)) throw new ErreurSh(409, 'La démonstration CHSLD se crée seulement dans un environnement fictif (Démo ABC ou pilote).');
     const { provisionner, CHSLD } = require('../../db/provisionner-chsld');
-    const deja = (await pool.query('SELECT code_etab FROM hopitaux WHERE environnement = $1 AND code_etab = ANY($2)', [environnement, CHSLD.map((c) => c.code)])).rows;
-    if (deja.length) throw new ErreurSh(409, `Déjà créés dans cet environnement : ${deja.map((x) => x.code_etab).join(', ')}.`);
+    // Une installation interrompue (fiche CHSLD non activée) est reprise ; une fiche active ou d'un autre type est refusée.
+    const deja = (await pool.query('SELECT id, code_etab, statut, type_etablissement FROM hopitaux WHERE environnement = $1 AND code_etab = ANY($2)', [environnement, CHSLD.map((c) => c.code)])).rows;
+    const bloquants = deja.filter((x) => x.type_etablissement !== 'chsld' || !['prospect', 'implantation'].includes(x.statut));
+    if (bloquants.length) throw new ErreurSh(409, `Déjà créés dans cet environnement : ${bloquants.map((x) => x.code_etab).join(', ')}.`);
+    const existants = Object.fromEntries(deja.map((x) => [x.code_etab, x.id]));
     const base = `http://127.0.0.1:${req.socket.localPort}`;
     const sh = async (methode, chemin, corps) => {
       const r = await fetch(`${base}/api${chemin}`, { method: methode, headers: { 'Content-Type': 'application/json', Authorization: req.get('authorization') }, body: corps ? JSON.stringify(corps) : undefined });
@@ -328,11 +331,11 @@ function creerAppSh(pool, { env = process.env } = {}) {
     };
     const etat = { statut: 'en_cours', debut: new Date().toISOString() }; DEMO_CHSLD.set(environnement, etat);
     (async () => {
-      const crees = await provisionner(sh, { environnement, modules: { portail_proches: true, messagerie_securisee: true } });
+      const crees = await provisionner(sh, { environnement, modules: { portail_proches: true, messagerie_securisee: true }, existants });
       // Le peuplement saisit environ 130 résidents par l'API : délai prolongé pour cet appel seulement
       const peuplement = await appeler(cible(environnement), 'POST', '/sh/demo-chsld/peupler', {}, { delaiMs: 600000 });
       await journal(pool, req.u, 'Démonstration CHSLD créée', crees.map((c) => c.code).join(', '), `environnement ${environnement} · ${peuplement.comptes.length} comptes`, null);
-      Object.assign(etat, { statut: 'termine', fin: new Date().toISOString(), etablissements: crees.map((c) => ({ id: c.hopital_id, code: c.code, nom: c.nom })), comptes: peuplement.comptes, proche: peuplement.proche, scenarios: peuplement.scenarios });
+      Object.assign(etat, { statut: 'termine', fin: new Date().toISOString(), etablissements: crees.map((c) => ({ id: c.hopital_id, code: c.code, nom: c.nom, reprise: c.reprise })), comptes: peuplement.comptes, proche: peuplement.proche, scenarios: peuplement.scenarios });
     })().catch((e) => Object.assign(etat, { statut: 'echec', fin: new Date().toISOString(), erreur: e.message }));
     return etat;
   }));

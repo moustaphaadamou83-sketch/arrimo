@@ -105,12 +105,28 @@ test('SH : le type d’établissement vient en premier et commande les modules p
 
 let crees, ids;
 test('SH : création, provisionnement et activation des deux CHSLD fictifs, sans configuration manuelle', { timeout: 300000 }, async () => {
-  // Bouton SH « Créer les CHSLD de démonstration » (administration) : parcours SH complet, puis scénarios dans l'environnement
+  // Installation interrompue (cas réel du 1er nov.) : fiche CHSLD 1 créée, reliée, structure importée, comptes absents.
+  const { csvChsld } = require('../db/provisionner-chsld');
+  const era = CHSLD[0], csvEra = csvChsld(era);
+  const partiel = await sh('POST', '/hopitaux', { type_etablissement: 'chsld', modules: { portail_proches: true, messagerie_securisee: true }, nom: era.nom, code_etab: era.code, environnement: 'pilote', pays_code: 'CA',
+    ville: era.ville, latitude: era.latitude, longitude: era.longitude, utilisateurs_prevus: 4, utilisateurs_autorises: 8, contact_nom: `Direction fictive · ${era.nom}` });
+  await sh('POST', `/hopitaux/${partiel.id}/relier`, {});
+  for (const type of ['departements', 'services', 'unites', 'chambres', 'lits']) {
+    const v = await sh('POST', `/hopitaux/${partiel.id}/import/verifier`, { type, contenu: csvEra[type] });
+    await sh('POST', `/hopitaux/${partiel.id}/import/importer`, { type, contenu: csvEra[type], empreinte: v.empreinte });
+  }
+  // Bouton SH « Créer les CHSLD de démonstration » (administration) : reprise du CHSLD 1, création du CHSLD 2, puis scénarios
   await sh('POST', '/demo-chsld', { environnement: 'pilote' });
   assert.strictEqual((await appelSh('POST', '/demo-chsld', { environnement: 'pilote' })).statut, 409, 'une seule création à la fois');
   let demo; for (let i = 0; i < 150; i += 1) { demo = await sh('GET', '/demo-chsld?environnement=pilote'); if (demo.statut !== 'en_cours') break; await new Promise((r) => setTimeout(r, 2000)); }
   assert.strictEqual(demo.statut, 'termine', JSON.stringify(demo));
   assert.deepStrictEqual(demo.etablissements.map((e) => e.nom), ['CHSLD 1 — des Érables', 'CHSLD 2 — du Saint-Laurent']);
+  // Reprise : même fiche, aucun doublon, structure existante conservée (60 lits), seuls les comptes ajoutés
+  assert.strictEqual(demo.etablissements[0].id, partiel.id);
+  assert.deepStrictEqual(demo.etablissements[0].reprise, { avant: { unites: 3, chambres: 50, lits: 60, cible_lits: 60 },
+    ajouts: { departements: 0, services: 0, unites: 0, chambres: 0, lits: 0, utilisateurs: 4 } });
+  assert.strictEqual(demo.etablissements[1].reprise, null);
+  assert.strictEqual((await poolPilote.query("SELECT count(*)::int n FROM etablissements WHERE code LIKE 'CHSLD-%'")).rows[0].n, 2, 'aucun doublon');
   assert.strictEqual((await appelSh('POST', '/demo-chsld', { environnement: 'pilote' })).statut, 409, 'pas de doublon');
   assert.strictEqual((await appelSh('POST', '/demo-chsld', { environnement: 'production' })).statut, 409, 'jamais hors environnement fictif');
   const { ROLES, courrielDe } = require('../db/provisionner-chsld');
