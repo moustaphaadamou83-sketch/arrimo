@@ -430,7 +430,7 @@ test('captures : formulaire SH (type puis modules), liste SH, écrans CHSLD rée
       await pg.addInitScript(({ jeton, id }) => { localStorage.setItem('arrimo-token', jeton); localStorage.setItem('arrimo-ctx', String(id)); localStorage.setItem('arrimo-langue', 'fr'); }, { jeton: sessions.era, id: ids.era });
       await pg.goto(basePilote); await pg.waitForSelector('body[data-pret="1"]');
       if (await pg.locator('#b-premiers-pas-ok').isVisible().catch(() => false)) await pg.click('#b-premiers-pas-ok');
-      await pg.waitForSelector('#v-c-accueil .tuiles');
+      await pg.waitForSelector('#v-c-accueil .ch-kpis');
       assert.strictEqual(await pg.locator('#onglets button[data-v="urgence"]').isHidden(), true, 'aucun onglet d’urgence en CHSLD');
       await pg.screenshot({ path: `${dossier}/chsld-accueil-${nom}.png`, fullPage: nom === 'ordinateur' });
       if (nom === 'ordinateur') {
@@ -453,4 +453,77 @@ test('captures : formulaire SH (type puis modules), liste SH, écrans CHSLD rée
   } finally { await navigateur.close(); }
   assert.deepStrictEqual(erreurs, []);
   RESULTATS.captures = fs.readdirSync(path.resolve('.local/captures-chsld'));
+});
+
+test('démonstration : un seul compte par CHSLD (administrateur), six comptes désactivés sans perte ; thème CHSLD clair et sombre, trois largeurs', { timeout: 240000 }, async () => {
+  const { simplifierComptesDemo } = require('../src/demo-chsld');
+  const { ROLES, courrielDe } = require('../db/provisionner-chsld');
+  const compte = async (sql, v) => (await poolPilote.query(sql, v)).rows[0].n;
+  const avant = { residents: await compte('SELECT count(*)::int n FROM residents'), mouvements: await compte('SELECT count(*)::int n FROM resident_mouvements'), lits: await compte(`SELECT count(*)::int n FROM lits l JOIN etablissements e ON e.id = l.etablissement_id WHERE e.type_etablissement = 'chsld'`),
+    journal: await compte('SELECT count(*)::int n FROM journal'), hop: (await poolPilote.query(`SELECT string_agg(u.email || u.role || u.mot_de_passe_hash || u.actif, ',' ORDER BY u.id) s FROM utilisateurs u WHERE u.email LIKE 'hopital.%'`)).rows[0].s };
+  const envAvant = process.env.ARRIMO_ENV;
+  try {
+    process.env.ARRIMO_ENV = 'recette';
+    await assert.rejects(simplifierComptesDemo(poolPilote), (e) => e.statut === 403 || e.status === 403 || /residents_reserve_demo/.test(String(e.code || e.message)), 'jamais hors démonstration publique');
+    process.env.ARRIMO_ENV = 'demo';
+    const r = await simplifierComptesDemo(poolPilote);
+    assert.deepStrictEqual(r.actifs, CHSLD.map((c) => courrielDe(c, 'coordination')));
+    assert.strictEqual(r.desactives.length, 6);
+    assert.deepStrictEqual(await simplifierComptesDemo(poolPilote), r, 'idempotent');
+  } finally { if (envAvant === undefined) delete process.env.ARRIMO_ENV; else process.env.ARRIMO_ENV = envAvant; }
+  for (const c of CHSLD) for (const [, cle] of ROLES) {
+    const x = await appel(null, 'POST', '/connexion', { email: courrielDe(c, cle), mot_de_passe: MDP });
+    if (cle === 'coordination') { assert.strictEqual(x.statut, 200, `${cle} ${c.code}`); sessions[`${c.code}_admin`] = x.corps.token; }
+    else assert.strictEqual(x.statut, 401, `${cle} ${c.code} : connexion refusée`);
+  }
+  const moi = await api(`${CHSLD[0].code}_admin`, 'GET', '/moi');
+  assert.strictEqual(moi.utilisateur.role, 'admin_etab'); assert.deepStrictEqual(moi.etablissements.map((e) => e.code), ['CHSLD-ERA']);
+  // Accès aux modules de l'établissement, jamais à l'autre CHSLD ni aux hôpitaux
+  for (const chemin of ['/chsld/accueil', '/chsld/residents', '/chsld/places', '/chsld/demandes', '/chsld/taches', '/chsld/indicateurs']) await api(`${CHSLD[0].code}_admin`, 'GET', `${chemin}?etablissement_id=${ids.era}`);
+  assert.strictEqual((await appel(`${CHSLD[0].code}_admin`, 'GET', `/chsld/residents?etablissement_id=${ids.stl}`)).statut, 403);
+  const hy = (await poolPilote.query(`SELECT id FROM etablissements WHERE code = 'HY'`)).rows[0].id;
+  assert.strictEqual((await appel(`${CHSLD[0].code}_admin`, 'GET', `/copilote/briefing?etablissement_id=${hy}`)).statut, 403);
+  // Données, journaux et autres comptes intacts ; changements journalisés
+  assert.deepStrictEqual({ residents: await compte('SELECT count(*)::int n FROM residents'), mouvements: await compte('SELECT count(*)::int n FROM resident_mouvements'), lits: avant.lits }, { residents: avant.residents, mouvements: avant.mouvements, lits: avant.lits });
+  assert.ok(await compte('SELECT count(*)::int n FROM journal') >= avant.journal);
+  assert.strictEqual((await poolPilote.query(`SELECT string_agg(u.email || u.role || u.mot_de_passe_hash || u.actif, ',' ORDER BY u.id) s FROM utilisateurs u WHERE u.email LIKE 'hopital.%'`)).rows[0].s, avant.hop);
+  assert.strictEqual(await compte(`SELECT count(*)::int n FROM journal_admin WHERE action = 'Compte de démonstration CHSLD désactivé'`), 6);
+  assert.strictEqual(await compte(`SELECT count(*)::int n FROM utilisateurs WHERE email LIKE '%@chsld.example.invalid' AND NOT actif`), 6, 'désactivés, pas supprimés');
+  // Thème CHSLD : clair et sombre, ordinateur, tablette, téléphone ; OG visible ; aucun débordement ; hôpital inchangé
+  const { chromium } = require('playwright'); const dossier = path.resolve('.local/captures-chsld'); fs.mkdirSync(dossier, { recursive: true });
+  const navigateur = await chromium.launch(); const erreurs = [];
+  try {
+    for (const [nom, vp] of [['ordinateur', { width: 1440, height: 1000 }], ['tablette', { width: 820, height: 1180 }], ['telephone', { width: 390, height: 844 }]]) {
+      for (const theme of ['clair', 'sombre']) {
+        const ctx = await navigateur.newContext({ viewport: vp, colorScheme: theme === 'sombre' ? 'dark' : 'light' }); const pg = await ctx.newPage(); pg.on('pageerror', (e) => erreurs.push(`${nom} ${theme} ${e}`));
+        await pg.addInitScript(({ jeton, id }) => { localStorage.setItem('arrimo-token', jeton); localStorage.setItem('arrimo-ctx', String(id)); localStorage.setItem('arrimo-langue', 'fr'); }, { jeton: sessions[`${CHSLD[0].code}_admin`], id: ids.era });
+        await pg.goto(basePilote); await pg.waitForSelector('body[data-pret="1"]');
+        if (await pg.locator('#b-premiers-pas-ok').isVisible().catch(() => false)) await pg.click('#b-premiers-pas-ok');
+        if (theme === 'sombre') await pg.evaluate(() => { document.documentElement.dataset.theme = 'sombre'; });
+        await pg.waitForSelector('#v-c-accueil .ch-kpis');
+        assert.strictEqual(await pg.evaluate(() => document.documentElement.dataset.typeEtab), 'chsld');
+        assert.match(await pg.evaluate(() => getComputedStyle(document.querySelector('.entete-app')).backgroundImage), /linear-gradient/, 'barre CHSLD');
+        assert.strictEqual(await pg.locator('#v-c-accueil .ch-kpi').count(), 12, '7 capacités et 5 résidents');
+        assert.ok(await pg.locator('#v-c-accueil .ch-situation').isVisible() && await pg.locator('#v-c-accueil .ch-actions').isVisible());
+        assert.ok(await pg.locator('#og-open').isVisible(), 'OG visible');
+        assert.ok(await pg.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), `${nom} ${theme} : aucun débordement horizontal`);
+        await pg.screenshot({ path: `${dossier}/chsld-theme-accueil-${nom}-${theme}.png`, fullPage: true });
+        if (nom === 'ordinateur' && theme === 'clair') {
+          await pg.click('#v-c-accueil [data-ch-aller="c-chambres"]'); await pg.waitForSelector('#v-c-chambres .ch-place');
+          await pg.click('#og-open'); await pg.waitForSelector('#og-panel[open]'); assert.ok(await pg.locator('#og-panel .og-actions button, #og-actions button').count() > 0, 'OG : raccourcis CHSLD');
+          await pg.screenshot({ path: `${dossier}/chsld-theme-og.png` });
+        }
+        await ctx.close();
+      }
+    }
+    // Hôpital B : identité graphique inchangée
+    const ctxH = await navigateur.newContext({ viewport: { width: 1366, height: 900 } }); const ph = await ctxH.newPage(); ph.on('pageerror', (e) => erreurs.push(`hôpital ${e}`));
+    await ph.addInitScript(({ jeton, id }) => { localStorage.setItem('arrimo-token', jeton); localStorage.setItem('arrimo-ctx', String(id)); localStorage.setItem('arrimo-langue', 'fr'); }, { jeton: sessions.b, id: hy });
+    await ph.goto(basePilote); await ph.waitForSelector('body[data-pret="1"]');
+    assert.notStrictEqual(await ph.evaluate(() => document.documentElement.dataset.typeEtab), 'chsld');
+    assert.strictEqual(await ph.evaluate(() => getComputedStyle(document.querySelector('.entete-app')).backgroundColor), 'rgb(14, 94, 111)', 'charte hospitalière #0E5E6F');
+    await ph.screenshot({ path: `${dossier}/hopital-b-inchange.png` });
+    await ctxH.close();
+  } finally { await navigateur.close(); }
+  assert.deepStrictEqual(erreurs, []);
 });

@@ -76,6 +76,7 @@ function brancherSh(api, pool, route) {
 
   // Démonstration CHSLD : scénarios fictifs après la création des deux CHSLD par la console (environnement fictif seulement)
   api.post('/sh/demo-chsld/peupler', sh((req) => require('./demo-chsld').peuplerDemo(pool, `http://127.0.0.1:${req.socket.localPort}`)));
+  api.post('/sh/demo-chsld/comptes', sh(() => require('./demo-chsld').simplifierComptesDemo(pool)));
   api.get('/sh/etablissements', sh(async () => {
     const rows=(await pool.query(
     `SELECT e.id, e.code, e.nom, e.ville, e.adresse, e.partage, e.module_actif, e.sous_domaine,COALESCE(e.profil_config_id,e.config_id) config_id,profil.code configuration_code,

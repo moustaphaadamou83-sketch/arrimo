@@ -27,6 +27,30 @@ function brancher(api,pool,route,journal,env){
       return (await c.query('SELECT * FROM sh_projets WHERE id=$1',[p.id])).rows[0];
     })));
   }
+  // Projet créé par erreur : suppression directe (administration), seulement s'il est encore vide ; sinon le parcours
+  // archivage, demande et délai de conservation reste obligatoire. Confirmation tapée, motif et journal exigés.
+  api.post('/projets/:id/supprimer-erreur',route(req=>transaction(pool,async c=>{
+    const p=await verrouiller(c,req);
+    if(req.body.confirmation!==`SUPPRIMER ${reference(p.id)}`)throw erreur(400,'Confirmation de suppression invalide.');
+    const motif=String(req.body.motif||'').trim();
+    if(motif.length<10||motif.length>2000)throw erreur(400,'Décrivez le motif de suppression (10 à 2000 caractères).');
+    const h=(await c.query('SELECT environnement FROM hopitaux WHERE id=$1 FOR UPDATE',[p.hopital_id])).rows[0];
+    if(h?.environnement==='production')throw erreur(409,'La suppression d’un projet de production exige une procédure de conservation et de restitution dédiée.');
+    await c.query('SELECT id FROM sh_taches WHERE projet_id=$1 FOR UPDATE',[p.id]);
+    const contenu=(await c.query(`SELECT (SELECT count(*) FROM sh_taches WHERE projet_id=$1)::int taches,(SELECT count(*) FROM sh_jalons WHERE projet_id=$1)::int jalons,
+      (SELECT count(*) FROM sh_projet_finances WHERE projet_id=$1)::int finances,(SELECT count(*) FROM sh_projet_registre WHERE projet_id=$1)::int registre,
+      (SELECT count(*) FROM sh_documents WHERE projet_id=$1)::int documents,(SELECT count(*) FROM sh_support_tickets WHERE projet_id=$1)::int tickets`,[p.id])).rows[0];
+    const lies=Object.entries(contenu).filter(([,n])=>n>0).map(([k,n])=>`${n} ${k}`);
+    if(p.contrat_id)lies.unshift('un contrat');
+    if(lies.length)throw erreur(409,`Ce projet n’est plus vide (${lies.join(', ')}) : archivez-le puis demandez sa suppression.`);
+    const affectations=(await c.query("DELETE FROM sh_affectations WHERE type='projet' AND projet_id=$1 RETURNING utilisateur_id",[p.id])).rows;
+    for(const utilisateur of new Set(affectations.map(a=>a.utilisateur_id)))await c.query('DELETE FROM sh_sessions WHERE utilisateur_id=$1',[utilisateur]);
+    await c.query("SELECT set_config('app.sh_suppression_projet',$1,true)",[String(p.id)]);
+    await c.query('DELETE FROM sh_projet_membres WHERE projet_id=$1',[p.id]);
+    await journal(c,req.u,'Projet supprimé (créé par erreur)',reference(p.id),`${p.nom} ; motif : ${motif} ; affectations révoquées : ${affectations.length}`,p.hopital_id);
+    await c.query('DELETE FROM sh_projets WHERE id=$1',[p.id]);
+    return {ok:true,reference:reference(p.id)};
+  })));
   api.post('/projets/:id/supprimer',route(req=>transaction(pool,async c=>{
     const p=await verrouiller(c,req);
     if(!p.archive_le||!p.suppression_demandee_le)throw erreur(409,'Une demande de suppression d’un projet archivé est requise.');

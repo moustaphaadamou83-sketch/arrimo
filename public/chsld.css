@@ -1,0 +1,107 @@
+/* Thème CHSLD (cahier « refonte visuelle », 1er nov. 2026) : appliqué automatiquement par le type d'établissement
+   (attribut data-type-etab posé sur <html> par app.js). Les hôpitaux gardent la charte de style.css.
+   Même socle : seules les variables changent ; les couleurs pourront être personnalisées plus tard (mêmes variables). */
+:root[data-type-etab="chsld"] {
+  --ch-sauge: #3E8B77;
+  --ch-foret: #18594D;
+  --ch-petrole: #164B61;
+  --ch-turquoise: #DDF4EF;
+  --ch-ambre: #E6A23C;
+  --principal: #18594D;
+  --principal-plein: #18594D;
+  --secondaire: #3E8B77;
+  --secondaire-plein: #2F7363;
+  --accent: #8EE3CF;
+  --fond: #F6FAF8;
+  --doux: #DDF4EF;
+  --survol: #134A40;
+  --bordure: #D7E7E1;
+  --th-bordure: #C3DAD2;
+  /* Familles des indicateurs : fond teinté, bordure, icône et texte lisible (contraste AA sur le fond teinté) */
+  --k-petrole-fond: #E3EEF3; --k-petrole: #164B61;
+  --k-vert-fond: #E2F3EA;    --k-vert: #166534;
+  --k-turquoise-fond: #DDF4EF; --k-turquoise: #0F5E55;
+  --k-bleu-fond: #E3ECFB;    --k-bleu: #1E4FB0;
+  --k-violet-fond: #EEE9FA;  --k-violet: #5B3FA0;
+  --k-ambre-fond: #FBF0DD;   --k-ambre: #8A5A0F;
+  --k-rouge-fond: #FBE9E9;   --k-rouge: #A42727;
+}
+:root[data-type-etab="chsld"][data-theme="sombre"] {
+  --principal: #8FD3C1;
+  --principal-plein: #18594D;
+  --secondaire: #6CC0A9;
+  --secondaire-plein: #2F7363;
+  --accent: #8EE3CF;
+  --fond: #0B1714;
+  --carte: #11221E;
+  --doux: #17352E;
+  --survol: #0F3E35;
+  --bordure: #24463E;
+  --th-surface: #11221E; --th-doux: #17352E; --th-bordure: #2C5249; --th-principal: #8FD3C1;
+  --k-petrole-fond: #12303D; --k-petrole: #9CCBE0;
+  --k-vert-fond: #12301F;    --k-vert: #7EDB9F;
+  --k-turquoise-fond: #123A34; --k-turquoise: #8EE3CF;
+  --k-bleu-fond: #17284A;    --k-bleu: #9DBAF5;
+  --k-violet-fond: #2A2145;  --k-violet: #C6B4F2;
+  --k-ambre-fond: #3A2C10;   --k-ambre: #F2C47A;
+  --k-rouge-fond: #3A1717;   --k-rouge: #F5A3A3;
+}
+
+/* Barre et navigation : vert forêt vers bleu pétrole ; onglet actif en turquoise, bien visible */
+:root[data-type-etab="chsld"] .entete-app { background: linear-gradient(100deg, var(--ch-foret) 0%, var(--ch-petrole) 100%); }
+:root[data-type-etab="chsld"] .barre { background: transparent; }
+:root[data-type-etab="chsld"] .onglets { gap: var(--e1); padding-bottom: 2px; }
+:root[data-type-etab="chsld"] .onglets button { border-radius: 10px 10px 0 0; }
+:root[data-type-etab="chsld"] .onglets button:hover { background: rgba(255, 255, 255, 0.08); }
+:root[data-type-etab="chsld"] .onglets button[aria-selected="true"] { background: rgba(221, 244, 239, 0.16); border-bottom: 3px solid var(--accent); color: #fff; }
+:root[data-type-etab="chsld"] .onglets-groupe { background: rgba(221, 244, 239, 0.14); color: #DDF4EF; }
+
+/* Accueil : 1. situation de l'établissement */
+.ch-situation { display: flex; flex-wrap: wrap; gap: var(--e5); align-items: center; justify-content: space-between;
+  padding: var(--e5); border-radius: var(--rayon-carte); color: #fff; margin-bottom: var(--e4);
+  background: linear-gradient(120deg, #18594D 0%, #3E8B77 60%, #164B61 100%); box-shadow: 0 6px 18px rgba(24, 89, 77, 0.18); }
+.ch-situation h2 { color: #fff; }
+.ch-situation p { margin: var(--e1) 0 0; color: #E6F5F0; max-width: 60ch; }
+.ch-surtitre { font-size: var(--t-libelle); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #CDEFE6; }
+.ch-situation-chiffres { display: grid; grid-template-columns: repeat(4, minmax(90px, 1fr)); gap: var(--e3); }
+.ch-situation-chiffres > div { background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.22); border-radius: var(--rayon); padding: var(--e2) var(--e3); display: flex; flex-direction: column; }
+.ch-situation-chiffres .v { font-size: var(--t-chiffre); font-weight: 700; line-height: 1.1; color: #fff; }
+.ch-situation-chiffres .lbl { color: #E6F5F0; }
+
+/* 2. actions à traiter : accent ambre */
+.ch-actions { border-left: 4px solid var(--ch-ambre, #E6A23C); margin-bottom: var(--e5); }
+.ch-actions h3 { display: flex; align-items: center; gap: var(--e2); }
+.ch-actions h3 .ic { width: 18px; height: 18px; color: var(--k-ambre, #8A5A0F); }
+.ch-actions ul { margin: var(--e2) 0; padding-left: var(--e5); }
+
+/* 3 à 5. indicateurs teintés (jamais entièrement saturés) */
+.ch-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: var(--e3); }
+.ch-kpi { position: relative; display: flex; flex-direction: column; gap: var(--e1); padding: var(--e3) var(--e4); border-radius: var(--rayon-carte);
+  background: var(--k-fond); border: 1px solid color-mix(in srgb, var(--k-coul) 22%, transparent); border-left: 4px solid var(--k-coul); }
+.ch-kpi .lbl { color: var(--k-coul); padding-right: 34px; }
+.ch-kpi .v { font-size: var(--t-chiffre); font-weight: 700; line-height: 1.1; color: var(--texte); }
+.ch-kpi-ic { position: absolute; top: var(--e3); right: var(--e3); width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--k-coul) 14%, transparent); color: var(--k-coul); }
+.ch-kpi-ic .ic { width: 16px; height: 16px; }
+.ch-k-petrole { --k-fond: var(--k-petrole-fond); --k-coul: var(--k-petrole); }
+.ch-k-vert { --k-fond: var(--k-vert-fond); --k-coul: var(--k-vert); }
+.ch-k-turquoise { --k-fond: var(--k-turquoise-fond); --k-coul: var(--k-turquoise); }
+.ch-k-bleu { --k-fond: var(--k-bleu-fond); --k-coul: var(--k-bleu); }
+.ch-k-violet { --k-fond: var(--k-violet-fond); --k-coul: var(--k-violet); }
+.ch-k-ambre { --k-fond: var(--k-ambre-fond); --k-coul: var(--k-ambre); }
+.ch-k-rouge { --k-fond: var(--k-rouge-fond); --k-coul: var(--k-rouge); }
+
+/* 6. notifications et raccourcis */
+.ch-raccourcis { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--e3); }
+.ch-raccourci { display: flex; align-items: center; gap: var(--e2); min-height: 48px; padding: var(--e3); font: inherit; font-weight: 600; cursor: pointer;
+  background: var(--carte); color: var(--principal); border: 1px solid var(--bordure); border-radius: var(--rayon-carte); text-align: left; }
+.ch-raccourci:hover { background: var(--doux); border-color: var(--secondaire); }
+.ch-raccourci:focus-visible { outline: 2px solid var(--principal); outline-offset: 2px; }
+.ch-raccourci .ic { width: 18px; height: 18px; flex: none; color: var(--secondaire); }
+
+@media (max-width: 720px) {
+  .ch-situation { padding: var(--e4); }
+  .ch-situation-chiffres { grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+  .ch-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ch-raccourcis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

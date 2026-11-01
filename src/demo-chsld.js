@@ -7,7 +7,8 @@
  * - Les scénarios sont saisis par connexion normale de ces comptes et du compte de l'Hôpital B (même mot de passe),
  *   par l'API d'Arrimo ; les sessions sont fermées à la fin.
  */
-const { ErreurHttp } = require('./db');
+const { ErreurHttp, transaction } = require('./db');
+const { journalAdmin } = require('./admin');
 const { hacherAsync } = require('./auth');
 const { environnement } = require('./environnement');
 const { peupler, ROLES, courrielDe, CHSLD } = require('../db/provisionner-chsld');
@@ -53,9 +54,52 @@ async function peuplerDemo(pool, base) {
       await appel('era', 'POST', `/chsld/residents/${r.dupont}/messages`, { contact_id: marie.id, categorie: 'rendez_vous', texte: 'Bonjour, la visite de samedi à 14 h est confirmée.' });
       proche = marie.courriel;
     } catch (e) { if (e.code !== 'module_desactive') throw e; }
-    return { cree: true, comptes: courriels, proche, scenarios: ['Jean Dupont (deux proches, autorisations distinctes)', 'Gilles Martin (Hôpital B, retour proposé)', 'transfert inter-CHSLD en attente', 'demandes d’hébergement', 'tâches'] };
+    // Démonstration publique : un seul compte par CHSLD (la recette et les pilotes gardent les quatre rôles)
+    const simplification = environnement() === 'demo' ? await simplifierComptesDemo(pool) : null;
+    return { cree: true, comptes: simplification ? simplification.actifs : courriels, comptes_desactives: simplification ? simplification.desactives : [], proche, scenarios: ['Jean Dupont (deux proches, autorisations distinctes)', 'Gilles Martin (Hôpital B, retour proposé)', 'transfert inter-CHSLD en attente', 'demandes d’hébergement', 'tâches'] };
   } finally {
     for (const qui of Object.keys(sessions)) await appel(qui, 'POST', '/deconnexion').catch(() => {});
   }
 }
-module.exports = { peuplerDemo };
+/**
+ * Démonstration : un seul compte par CHSLD (cahier « refonte visuelle et simplification », 1er nov. 2026).
+ * Le compte de coordination devient administrateur de démonstration de son établissement (rôle admin_etab : tous les
+ * modules et l'administration de ce seul établissement) ; les trois autres comptes sont désactivés, sans suppression
+ * (données, historiques et journaux conservés) et leurs sessions fermées. Comptes fictifs @chsld.example.invalid des deux
+ * CHSLD de démonstration seulement ; idempotent ; journalisé. Les rôles du produit restent inchangés.
+ */
+async function simplifierComptesDemo(pool) {
+  if (environnement() !== 'demo') throw new ErreurHttp(403, 'residents_reserve_demo');
+  const etabs = (await pool.query(`SELECT id, code FROM etablissements WHERE code = ANY($1) AND type_etablissement = 'chsld'`, [CHSLD.map((c) => c.code)])).rows;
+  if (etabs.length !== CHSLD.length) throw new ErreurHttp(409, 'demo_chsld_absents');
+  const actifs = [], desactives = [];
+  await transaction(pool, async (c) => {
+    for (const ch of CHSLD) {
+      const etab = etabs.find((e) => e.code === ch.code);
+      for (const [, cle] of ROLES) {
+        const email = courrielDe(ch, cle);
+        // Compte rattaché à ce seul CHSLD de démonstration
+        const u = (await c.query(`SELECT u.id, u.role, u.actif FROM utilisateurs u WHERE u.email = $1 AND u.email LIKE '%@chsld.example.invalid'
+          AND EXISTS (SELECT 1 FROM utilisateur_etablissements ue WHERE ue.utilisateur_id = u.id AND ue.etablissement_id = $2)
+          AND NOT EXISTS (SELECT 1 FROM utilisateur_etablissements ue WHERE ue.utilisateur_id = u.id AND ue.etablissement_id <> $2) FOR UPDATE`, [email, etab.id])).rows[0];
+        if (!u) throw new ErreurHttp(409, 'demo_chsld_comptes_incomplets');
+        if (cle === 'coordination') {
+          if (u.role !== 'admin_etab' || !u.actif) {
+            await c.query(`UPDATE utilisateurs SET role = 'admin_etab', actif = true WHERE id = $1`, [u.id]);
+            await journalAdmin(c, { id: null }, 'Compte de démonstration CHSLD : administrateur de l’établissement', email, 'démonstration fictive · compte unique', etab.id);
+          }
+          actifs.push(email);
+        } else {
+          if (u.actif) {
+            await c.query('UPDATE utilisateurs SET actif = false WHERE id = $1', [u.id]);
+            await c.query('DELETE FROM sessions WHERE utilisateur_id = $1', [u.id]);
+            await journalAdmin(c, { id: null }, 'Compte de démonstration CHSLD désactivé', email, 'démonstration fictive · compte unique par CHSLD ; données conservées', etab.id);
+          }
+          desactives.push(email);
+        }
+      }
+    }
+  });
+  return { actifs, desactives };
+}
+module.exports = { peuplerDemo, simplifierComptesDemo };

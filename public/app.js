@@ -300,7 +300,7 @@ $('#f-connexion').addEventListener('submit', async (e) => {
 
 function montrerFormulaire(sel) {
   ['#f-connexion', '#f-2fa', '#f-mdp-temp', '#f-oubli', '#f-reinit'].forEach((f) => { $(f).hidden = f !== sel; });
-  $('#ecran-connexion').hidden = false;
+  $('#ecran-connexion').hidden = false; delete document.documentElement.dataset.typeEtab;
   $('#ecran-app').hidden = true;
 }
 async function ouvrir(token) {
@@ -536,7 +536,7 @@ function appliquerModules() {
   const entretien = estEntretien();
   const mods = (etabCtx() && etabCtx().modules) || {};
   const type = typeEtab();
-  document.body.dataset.typeEtab = type;
+  document.body.dataset.typeEtab = type; document.documentElement.dataset.typeEtab = type;
   document.querySelectorAll('#onglets button').forEach((b) => {
     const mod = Object.keys(MODULE_ONGLET).find((k) => MODULE_ONGLET[k] === b.dataset.v);
     const autreType = b.dataset.type && b.dataset.type !== type;

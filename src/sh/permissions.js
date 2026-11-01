@@ -130,6 +130,7 @@ const PERMISSIONS = {
   'POST /projets/:id/restaurer': ['administration','implantation'],
   'POST /projets/:id/demander-suppression': ['administration','implantation'],
   'POST /projets/:id/supprimer': ['administration'],
+  'POST /projets/:id/supprimer-erreur': ['administration'],
   'POST /projets/:id/jalons': ['administration', 'implantation'],
   'PUT /jalons/:id': ['administration', 'implantation'],
   'GET /taches': ROLES_SH,

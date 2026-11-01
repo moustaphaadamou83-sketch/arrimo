@@ -82,4 +82,22 @@ test('cycle des projets : PostgreSQL isolé, archivage, restauration et suppress
     assert.equal((await pool.query('SELECT count(*)::int n FROM sh_taches WHERE projet_id=$1',[p.id])).rows[0].n,0);
     assert.equal((await pool.query("SELECT count(*)::int n FROM sh_journal WHERE action='Projet supprimé'")).rows[0].n,1);
   });
+  await t.test('projet créé par erreur : suppression directe si vide, administration seulement, refus dès qu’il a du contenu',async()=>{
+    const erreur=await api('administration','POST','/projets',{hopital_id:h.id,nom:'Projet créé par erreur'});
+    const ref=`SUPPRIMER PRJ-${String(erreur.id).padStart(6,'0')}`, motif='Projet créé par erreur lors de la démonstration.';
+    await api('implantation','POST',`/projets/${erreur.id}/supprimer-erreur`,{confirmation:ref,motif},403);
+    await api('administration','POST',`/projets/${erreur.id}/supprimer-erreur`,{confirmation:'SUPPRIMER AUTRE',motif},400);
+    await api('administration','POST',`/projets/${erreur.id}/supprimer-erreur`,{confirmation:ref,motif:'court'},400);
+    // Un projet qui a du contenu suit le parcours normal (archivage, demande, conservation)
+    const plein=await api('administration','POST','/projets',{hopital_id:h.id,nom:'Projet avec contenu'});
+    await api('administration','POST',`/projets/${plein.id}/taches`,{titre:'Tâche réelle'});
+    const refus=await api('administration','POST',`/projets/${plein.id}/supprimer-erreur`,{confirmation:`SUPPRIMER PRJ-${String(plein.id).padStart(6,'0')}`,motif},409);
+    assert.match(refus.erreur,/n’est plus vide \(1 taches\)/);
+    await api('administration','POST',`/projets/${erreur.id}/supprimer-erreur`,{confirmation:ref,motif});
+    await api('administration','GET',`/projets/${erreur.id}`,null,404);
+    assert.equal((await api('administration','GET',`/projets/${plein.id}`)).nom,'Projet avec contenu');
+    assert.equal((await api('administration','GET',`/projets/${voisin.id}`)).nom,'Projet voisin à préserver');
+    const j=(await pool.query("SELECT detail FROM sh_journal WHERE action='Projet supprimé (créé par erreur)'")).rows;
+    assert.equal(j.length,1);assert.match(j[0].detail,/Projet créé par erreur ; motif : Projet créé par erreur lors/);
+  });
 });

@@ -19,21 +19,41 @@
     const v = $('#v-c-accueil');
     const a = await api('GET', `/chsld/accueil?etablissement_id=${ctx()}`);
     const p = a.places, r = a.residents;
-    v.innerHTML = `<div class="entete"><div><h2>${C('accueil.titre', { etab: a.etablissement.nom })}</h2><p>${C('accueil.intro')}</p></div></div>
-      ${a.alertes.length ? `<div class="panneau-c ch-alertes"><h3>${C('accueil.alertes')}</h3><ul>${a.alertes.map((x) => `<li>${C(`accueil.alerte_${x.code}`, { n: x.n })}</li>`).join('')}</ul></div>` : ''}
-      <h3 class="titre-section">${C('accueil.places')}</h3>
-      <div class="tuiles">${tuile(C('accueil.dotees'), p.dotees)}${tuile(C('accueil.libres'), p.libres, 'ch-t-libre')}${tuile(C('accueil.reservees'), p.reservees)}
-        ${tuile(C('accueil.occupees'), p.occupees)}${tuile(C('accueil.conservees'), p.conservees)}${tuile(C('accueil.preparation'), p.preparation)}${tuile(C('accueil.bloquees'), p.bloquees)}</div>
+    // Carte d'indicateur : fond légèrement teinté, bordure et icône de la famille (thème CHSLD)
+    const kpi = (lib, val, ton, ic) => `<div class="ch-kpi ch-k-${ton}"><span class="ch-kpi-ic">${icone(ic)}</span><span class="lbl">${lib}</span><span class="v num">${esc(String(val ?? 0))}</span></div>`;
+    const taux = p.dotees ? Math.round((p.occupees + p.conservees + p.reservees) / p.dotees * 100) : 0;
+    const actions = a.alertes.map((x) => C(`accueil.alerte_${x.code}`, { n: x.n }));
+    const raccourci = (vue, ic, lib) => `<button class="ch-raccourci" type="button" data-ch-aller="${vue}">${icone(ic)}<span>${lib}</span></button>`;
+    v.innerHTML = `<section class="ch-situation" aria-labelledby="ch-sit-titre">
+        <div class="ch-situation-txt"><span class="ch-surtitre">${C('accueil.situation')}</span><h2 id="ch-sit-titre">${C('accueil.titre', { etab: a.etablissement.nom })}</h2><p>${C('accueil.intro')}</p></div>
+        <div class="ch-situation-chiffres">
+          <div><span class="v num">${taux} %</span><span class="lbl">${C('accueil.taux')}</span></div>
+          <div><span class="v num">${esc(String(p.libres))}</span><span class="lbl">${C('accueil.libres')}</span></div>
+          <div><span class="v num">${esc(String(r.present || 0))}</span><span class="lbl">${C('accueil.present')}</span></div>
+          <div><span class="v num">${esc(String(r.hospitalise || 0))}</span><span class="lbl">${C('accueil.hospitalise')}</span></div>
+        </div></section>
+      <section class="panneau-c ch-actions" aria-labelledby="ch-act-titre"><h3 id="ch-act-titre">${icone('clipboard-check')}${C('accueil.alertes')}</h3>
+        ${actions.length ? `<ul>${actions.map((x) => `<li>${x}</li>`).join('')}</ul>` : `<p class="note">${C('accueil.aucune_action')}</p>`}
+        <p class="note">${C('accueil.taches', { n: a.taches.ouvertes })} · ${C('accueil.en_retard', { n: a.taches.en_retard })}</p></section>
+      <h3 class="titre-section">${C('accueil.capacites')}</h3>
+      <div class="ch-kpis">${kpi(C('accueil.dotees'), p.dotees, 'petrole', 'bed-double')}${kpi(C('accueil.libres'), p.libres, 'vert', 'check')}${kpi(C('accueil.reservees'), p.reservees, 'turquoise', 'log-in')}
+        ${kpi(C('accueil.occupees'), p.occupees, 'bleu', 'house')}${kpi(C('accueil.conservees'), p.conservees, 'violet', 'shield-check')}${kpi(C('accueil.preparation'), p.preparation, 'ambre', 'spray-can')}${kpi(C('accueil.bloquees'), p.bloquees, 'rouge', 'x')}</div>
       <h3 class="titre-section">${C('accueil.residents')}</h3>
-      <div class="tuiles">${['present', 'hospitalise', 'absent', 'preadmission', 'transfert_en_cours'].map((s) => tuile(C(`accueil.${s}`), r[s] || 0)).join('')}</div>
+      <div class="ch-kpis">${kpi(C('accueil.present'), r.present, 'vert', 'users')}${kpi(C('accueil.hospitalise'), r.hospitalise, 'violet', 'ambulance')}${kpi(C('accueil.absent'), r.absent, 'petrole', 'clock')}
+        ${kpi(C('accueil.preadmission'), r.preadmission, 'ambre', 'hourglass')}${kpi(C('accueil.transfert_en_cours'), r.transfert_en_cours, 'turquoise', 'arrow-right-left')}</div>
+      <h3 class="titre-section">${C('accueil.mouvements')}</h3>
       <div class="deux"><div class="pile">
         <div class="panneau-c"><h3>${C('accueil.retours')}</h3>${a.retours.length ? `<ul class="liste-simple">${a.retours.map((x) => `<li><b>${esc(x.resident_ref)}</b> · ${esc(x.hopital)} · ${x.retour_prevu_le ? esc(dateHeure(x.retour_prevu_le)) : ''} · ${esc(t(`chsld.coord_statut.${x.statut}`))}</li>`).join('')}</ul>` : `<p class="note">${C('accueil.aucun_retour')}</p>`}</div>
-        <div class="panneau-c"><h3>${C('accueil.demandes')}</h3>${Object.keys(a.demandes).length ? `<ul class="liste-simple">${Object.entries(a.demandes).map(([s, n]) => `<li>${esc(t(`chsld.demande_statut.${s}`))} : <b class="num">${n}</b></li>`).join('')}</ul>` : `<p class="note">${C('demandes.aucune')}</p>`}</div>
-      </div><div class="pile">
         <div class="panneau-c"><h3>${C('accueil.coordinations')}</h3>${a.coordinations.length ? `<ul class="liste-simple">${a.coordinations.map((x) => `<li>${esc(t(`chsld.coord.type_${x.type}`))} · ${esc(t(x.entrante ? 'chsld.coord.entrantes' : 'chsld.coord.sortantes'))} · ${esc(t(`chsld.coord_statut.${x.statut}`))} : <b class="num">${x.n}</b></li>`).join('')}</ul>` : `<p class="note">${C('accueil.aucune_coordination')}</p>`}</div>
-        <div class="panneau-c"><h3>${C('accueil.aujourdhui')}</h3>${a.aujourdhui.length ? `<ul class="liste-simple">${a.aujourdhui.map((x) => `<li>${esc(t(`chsld.mvt.${x.type}`))} : <b class="num">${x.n}</b></li>`).join('')}</ul>` : `<p class="note">${C('accueil.aucun_mouvement')}</p>`}
-          <p class="note">${C('accueil.taches', { n: a.taches.ouvertes })} · ${C('accueil.en_retard', { n: a.taches.en_retard })}</p></div>
-      </div></div>`;
+      </div><div class="pile">
+        <div class="panneau-c"><h3>${C('accueil.aujourdhui')}</h3>${a.aujourdhui.length ? `<ul class="liste-simple">${a.aujourdhui.map((x) => `<li>${esc(t(`chsld.mvt.${x.type}`))} : <b class="num">${x.n}</b></li>`).join('')}</ul>` : `<p class="note">${C('accueil.aucun_mouvement')}</p>`}</div>
+        <div class="panneau-c"><h3>${C('accueil.demandes')}</h3>${Object.keys(a.demandes).length ? `<ul class="liste-simple">${Object.entries(a.demandes).map(([s, n]) => `<li>${esc(t(`chsld.demande_statut.${s}`))} : <b class="num">${n}</b></li>`).join('')}</ul>` : `<p class="note">${C('demandes.aucune')}</p>`}</div>
+      </div></div>
+      <h3 class="titre-section">${C('accueil.raccourcis')}</h3>
+      <div class="ch-raccourcis">${raccourci('c-residents', 'users', t('chsld.nav.residents'))}${raccourci('c-chambres', 'bed-double', t('chsld.nav.chambres'))}${raccourci('c-demandes', 'clipboard-list', t('chsld.nav.demandes'))}
+        ${raccourci('c-taches', 'clipboard-check', t('chsld.nav.taches'))}${raccourci('c-mouvements', 'ambulance', t('chsld.nav.mouvements'))}<button class="ch-raccourci" type="button" data-ch-og>${icone('sparkles')}<span>${esc(window.ArrimoNomOg?.nom() || 'OG')}</span></button></div>`;
+    v.querySelectorAll('[data-ch-aller]').forEach((b) => { b.onclick = () => allerA(b.dataset.chAller); });
+    const og = v.querySelector('[data-ch-og]'); if (og) og.onclick = () => document.querySelector('#og-open')?.click();
   }
 
   /* ------------------------------------------------------------------ Résidents */
