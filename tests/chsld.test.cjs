@@ -104,6 +104,31 @@ test('SH : le type d’établissement vient en premier et commande les modules p
 });
 
 let crees, ids;
+test('reprise en Démo ABC : jamais l’éditeur de structure SH (refusé hors recette), lecture seule de l’environnement ; refus si déjà activé', async () => {
+  // Reproduit l'erreur du 1er nov. : GET /hopitaux/:id/structure refusé en demo_abc (garde Go Live de l'éditeur)
+  const { provisionner, csvChsld } = require('../db/provisionner-chsld');
+  const MESSAGE = 'La structure est modifiable dans SH uniquement avant le Go Live en recette. Après activation, Arrimo est la référence opérationnelle.';
+  const appels = [];
+  const faux = (statut) => async (methode, chemin, corps) => {
+    appels.push(`${methode} ${chemin}`);
+    if (/^\/hopitaux\/\d+\/structure$/.test(chemin)) throw new Error(MESSAGE);
+    if (methode === 'GET' && /^\/hopitaux\/\d+$/.test(chemin)) return { id: Number(chemin.split('/')[2]), type_etablissement: 'chsld', relie: true, statut, golive_le: null, environnement: 'demo_abc', formation: [], etapes: [] };
+    if (methode === 'POST' && chemin === '/hopitaux') return { id: 99 };
+    if (chemin.endsWith('/import/verifier')) return { nb_erreurs: 0, empreinte: 'e', resume: { creer: corps.type === 'utilisateurs' ? 4 : 0, maj: 0, inchange: 1 } };
+    return {};
+  };
+  const era = csvChsld(CHSLD[0]), lignes = (t) => era[t].trim().split('\n').slice(1).map((l) => l.split(';'));
+  const structure = { unites: lignes('unites').map((x) => ({ unite: x[0] })), chambres: lignes('chambres').map((x) => ({ unite: x[0], chambre: x[1] })), lits: lignes('lits').map((x) => ({ lit: x[2] })) };
+  const r = await provisionner(faux('implantation'), { environnement: 'demo_abc', existants: { 'CHSLD-ERA': 43 }, lireStructure: async () => structure });
+  assert.ok(!appels.some((a) => /\/structure$/.test(a)), 'l’éditeur de structure SH n’est jamais appelé');
+  assert.deepStrictEqual(r[0].reprise, { avant: { unites: 3, chambres: 50, lits: 60, cible_lits: 60 }, ajouts: { departements: 0, services: 0, unites: 0, chambres: 0, lits: 0, utilisateurs: 4 } });
+  assert.ok(appels.includes('POST /hopitaux'), 'le CHSLD 2 est créé');
+  // Élément hors cible : arrêt, rien n'est supprimé
+  await assert.rejects(provisionner(faux('implantation'), { environnement: 'demo_abc', existants: { 'CHSLD-ERA': 43 }, lireStructure: async () => ({ ...structure, lits: [...structure.lits, { lit: 'ERA-999' }] }) }), /hors configuration cible.*ERA-999/);
+  // Fiche déjà activée : reprise refusée (procédure de correction à décider)
+  await assert.rejects(provisionner(faux('actif'), { environnement: 'demo_abc', existants: { 'CHSLD-ERA': 43 }, lireStructure: async () => structure }), /déjà activée/);
+});
+
 test('SH : création, provisionnement et activation des deux CHSLD fictifs, sans configuration manuelle', { timeout: 300000 }, async () => {
   // Installation interrompue (cas réel du 1er nov.) : fiche CHSLD 1 créée, reliée, structure importée, comptes absents.
   const { csvChsld } = require('../db/provisionner-chsld');

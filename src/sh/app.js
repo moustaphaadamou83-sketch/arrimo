@@ -331,7 +331,9 @@ function creerAppSh(pool, { env = process.env } = {}) {
     };
     const etat = { statut: 'en_cours', debut: new Date().toISOString() }; DEMO_CHSLD.set(environnement, etat);
     (async () => {
-      const crees = await provisionner(sh, { environnement, modules: { portail_proches: true, messagerie_securisee: true }, existants });
+      // Reprise : structure lue en lecture seule auprès de l'environnement fictif (l'éditeur de structure SH reste réservé à la recette)
+      const lireStructure = (h) => appeler(cible(environnement), 'GET', `/sh/etablissements/${encodeURIComponent(h.code_etab)}/structure/detaillee`);
+      const crees = await provisionner(sh, { environnement, modules: { portail_proches: true, messagerie_securisee: true }, existants, lireStructure });
       // Le peuplement saisit environ 130 résidents par l'API : délai prolongé pour cet appel seulement
       const peuplement = await appeler(cible(environnement), 'POST', '/sh/demo-chsld/peupler', {}, { delaiMs: 600000 });
       await journal(pool, req.u, 'Démonstration CHSLD créée', crees.map((c) => c.code).join(', '), `environnement ${environnement} · ${peuplement.comptes.length} comptes`, null);

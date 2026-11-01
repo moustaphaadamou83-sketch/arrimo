@@ -32,8 +32,9 @@ function csvChsld(c) {
 /** Crée et active les deux CHSLD par la console SH. `sh(methode, chemin, corps)` appelle l'API SH avec un compte administrateur. */
 /** Reprise d'une installation interrompue : compare la structure existante à la cible, sans rien supprimer.
  *  Un élément hors cible ou une modification d'un élément existant demande une décision humaine (arrêt). */
-async function ecartStructure(sh, h, c, csv) {
-  const s = await sh('GET', `/hopitaux/${h.id}/structure`);
+async function ecartStructure(lireStructure, h, c, csv) {
+  // Lecture seule auprès de l'environnement (pas l'éditeur de structure SH, réservé à la recette avant Go Live)
+  const s = await lireStructure(h);
   const cible = (type, cle) => new Set(csv[type].trim().split('\n').slice(1).map((l) => cle(l.split(';'))));
   const tUnites = cible('unites', (x) => x[0]), tChambres = cible('chambres', (x) => `${x[0]}/${x[1]}`), tLits = cible('lits', (x) => x[2]);
   const hors = [...s.unites.filter((u) => !tUnites.has(u.unite)).map((u) => `unité ${u.unite}`),
@@ -43,7 +44,7 @@ async function ecartStructure(sh, h, c, csv) {
   return { unites: s.unites.length, chambres: s.chambres.length, lits: s.lits.length, cible_lits: tLits.size };
 }
 
-async function provisionner(sh, { environnement = 'pilote', modules = {}, existants = {} } = {}) {
+async function provisionner(sh, { environnement = 'pilote', modules = {}, existants = {}, lireStructure } = {}) {
   const resultats = [];
   for (const c of CHSLD) {
     const csv = csvChsld(c);
@@ -52,7 +53,9 @@ async function provisionner(sh, { environnement = 'pilote', modules = {}, exista
       h = await sh('GET', `/hopitaux/${existants[c.code]}`);
       if (h.type_etablissement !== 'chsld') throw new Error(`${c.code} : fiche existante d’un autre type ; décision requise.`);
       if (!h.relie) await sh('POST', `/hopitaux/${h.id}/relier`, {});
-      reprise = { avant: await ecartStructure(sh, h, c, csv), ajouts: {} };
+      if (h.statut === 'actif' || h.golive_le) throw new Error(`${c.code} : fiche déjà activée ; reprise impossible, décision requise.`);
+      if (typeof lireStructure !== 'function') throw new Error(`${c.code} : lecture de la structure indisponible pour la reprise.`);
+      reprise = { avant: await ecartStructure(lireStructure, h, c, csv), ajouts: {} };
     } else {
       h = await sh('POST', '/hopitaux', { type_etablissement: 'chsld', modules, nom: c.nom, code_etab: c.code, environnement, pays_code: 'CA', ville: c.ville,
         latitude: c.latitude, longitude: c.longitude, utilisateurs_prevus: ROLES.length, utilisateurs_autorises: ROLES.length + 4, contact_nom: `Direction fictive · ${c.nom}` });
