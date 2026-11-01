@@ -33,14 +33,19 @@ const ligne = (L, c) => `• ${c.resident_ref} · ${c.origine} · ${etapeTxt(L, 
 
 /** Question qui relève de la Liaison CHSLD ? (mentions CHSLD, résident, référence R-00000, retour vers un CHSLD) */
 function concerne(qn, q) {
-  if (/\bchsld\b|residents?\b|residente?s?\b|liaison/.test(qn) || /\bR-\d{5}\b/i.test(q)) return true;
+  if (/(demande|request)s?\b.*(reponse|response|repondre|respond)/.test(qn)) return true;
+  if (/\bchslds?\b|residents?\b|residente?s?\b|liaison/.test(qn) || /\b(?:R|RES)[\s-]?\d{1,5}\b/i.test(q) || /\bCO[\s-]?\d{1,5}\b/i.test(q)) return true;
   // « Où en est le transfert de Jean Dupont ? » : sans référence hospitalière (P-, TR-), la question peut viser un résident de CHSLD
   return /(ou en est|where is|status of).*(transfert|transfer) (de|of) [a-z]/.test(qn) && !/\b(?:P|TR)-\d/i.test(q);
 }
 
 async function repondre(pool, u, etabId, q, L) {
-  const qn = norm(q);
-  if (!concerne(qn, q)) return null;
+  const qn = norm(q).replace(/-/g, ' ');
+  if (!concerne(qn, q)) {
+    // Nom d'un CHSLD cité sans le mot « CHSLD » (« demandes provenant des Érables »)
+    const noms = (await pool.query("SELECT nom FROM etablissements WHERE type_etablissement = 'chsld' AND actif")).rows.map((x) => norm(x.nom));
+    if (!noms.some((n) => n.split(/[^a-z0-9]+/).filter((m) => m.length > 5 && m !== 'chsld').some((m) => qn.includes(m)))) return null;
+  }
   const local = (reponse, extra = {}) => ({ mode: 'local', reponse, sources: ['arrimo'], intentions: ['liaison_chsld'], ouvrir: 'liaison', ...extra });
   let d;
   try { d = await lia.vue(pool, u, etabId); } catch (e) {
@@ -56,7 +61,18 @@ async function repondre(pool, u, etabId, q, L) {
       'I do not decide clinical orientation or priority: admission or emergency reception is decided by authorized staff. I can show requests and prepare a step for confirmation.'));
   }
   // Résident désigné : référence explicite, ou mémorisée pour « ce résident »
-  const ref = (q.match(/\bR-\d{5}\b/i) || [])[0]?.toUpperCase() || (/(ce resident|cette residente|this resident|son chsld|his chsld|her chsld|their chsld)/.test(qn) ? CONTEXTE.get(cle) : null);
+  // Références tolérantes : R-00001, r00001, R 1, RES-0001 ; numéro de coordination CO-00012
+  const mRef = q.match(/\b(?:R|RES)[\s-]?(\d{1,5})\b/i);
+  const mCo = q.match(/\bCO[\s-]?(\d{1,5})\b/i);
+  const parCo = mCo ? tous.find((c) => c.numero === `CO-${mCo[1].padStart(5, '0')}` || c.retour?.numero === `CO-${mCo[1].padStart(5, '0')}`) : null;
+  if (mCo && !parCo) return local(T(L, `Aucune coordination ${mCo[0].toUpperCase()} n’est visible pour cet hôpital.`, `No coordination ${mCo[0].toUpperCase()} is visible for this hospital.`));
+  const ref = parCo?.resident_ref || (mRef ? `R-${mRef[1].padStart(5, '0')}` : null)
+    || (/\b(ce resident|cette residente|this resident|son chsld|his chsld|her chsld|their chsld|ce transfert|this transfer|cette demande|this request|il|elle|he|she|origine|provenance|vient)\b/.test(qn.replace(/\b(y a t|fait|faut|s agit) il\b/g, '')) ? CONTEXTE.get(cle) : null);
+  // Quel CHSLD est à l'origine (d'après la référence ou le contexte)
+  if (ref && /(origine|provenance|vient|from which|\borigin\b|comes? from which)/.test(qn)) {
+    const c = tous.find((x) => x.resident_ref === ref);
+    if (c) { CONTEXTE.set(cle, ref); return local(T(L, `${ref} (${c.numero}) vient de ${c.origine} ; ${confirmation(L, c)}.`, `${ref} (${c.numero}) comes from ${c.origine}; ${confirmation(L, c)}.`)); }
+  }
   // Préparer le retour : carte à confirmer (date choisie par la personne), jamais d'écriture directe
   if (/(prepare|preparer|prepare\b).*(retour|return)/.test(qn)) {
     if (!ref) return local(T(L, 'Précisez la référence du résident (R-00000) : je ne vois que les références des résidents de CHSLD.', 'Specify the resident reference (R-00000): I only see CHSLD resident references.'));
@@ -88,14 +104,11 @@ async function repondre(pool, u, etabId, q, L) {
       `${r.length} return(s) to CHSLDs being prepared:\n${r.map((c) => `• ${c.resident_ref} → ${c.origine} · ${etapeTxt(L, c.retour.etape)} (${c.retour.numero})${c.retour.retour_prevu_le ? ` · planned ${heure(L, c.retour.retour_prevu_le)}` : ''}`).join('\n')}`)
       : T(L, 'Aucun retour vers un CHSLD n’est en préparation.', 'No return to a CHSLD is being prepared.'));
   }
-  // Arrivés, en attente d'accueil / de confirmation d'accueil
-  if (/(arrive|accueil|confirmation|attendent|waiting|awaiting|to receive)/.test(qn) && !/(attendus|expected)/.test(qn)) {
-    const arrives = d.a_accueillir.filter((c) => c.etape === 'arrivee_confirmee');
-    const aConfirmer = d.a_accueillir.filter((c) => c.etape === 'depart_confirme');
-    const parts = [];
-    if (aConfirmer.length) parts.push(T(L, `Départ confirmé, arrivée à confirmer (${aConfirmer.length}) :`, `Departure confirmed, arrival to confirm (${aConfirmer.length}):`), ...aConfirmer.map((c) => ligne(L, c)));
-    if (arrives.length) parts.push(T(L, `Arrivés, accueil à préparer (${arrives.length}) :`, `Arrived, reception to prepare (${arrives.length}):`), ...arrives.map((c) => ligne(L, c)));
-    return local(parts.length ? parts.join('\n') : T(L, 'Aucun résident de CHSLD n’attend un accueil.', 'No CHSLD resident is awaiting reception.'));
+  // Demandes qui attendent une réponse de l'hôpital (réception, acceptation ou refus)
+  if (/(demande|request)/.test(qn) && /(reponse|repondre|response|respond|pending|en attente|attendent)/.test(qn)) {
+    const l = d.arrivees.filter((c) => ['transmise', 'recue_hopital'].includes(c.etape));
+    return local(l.length ? T(L, `${l.length} demande(s) de CHSLD en attente de votre réponse :\n${l.map((c) => ligne(L, c)).join('\n')}`, `${l.length} CHSLD request(s) awaiting your response:\n${l.map((c) => ligne(L, c)).join('\n')}`)
+      : T(L, 'Aucune demande de CHSLD n’attend votre réponse.', 'No CHSLD request is awaiting your response.'));
   }
   // Demandes d'un CHSLD nommé
   const chsldNomme = [...new Set(tous.map((c) => c.origine))].find((nom) => norm(nom).split(/[^a-z0-9]+/).filter((m) => m.length > 4 && !['chsld'].includes(m)).some((m) => qn.includes(m)));
@@ -103,6 +116,15 @@ async function repondre(pool, u, etabId, q, L) {
     const l = tous.filter((c) => c.origine === chsldNomme && !['cloturee', 'refusee', 'annulee', 'expiree'].includes(c.etape));
     return local(l.length ? T(L, `${l.length} demande(s) ouverte(s) de ${chsldNomme} :\n${l.map((c) => ligne(L, c)).join('\n')}`, `${l.length} open request(s) from ${chsldNomme}:\n${l.map((c) => ligne(L, c)).join('\n')}`)
       : T(L, `Aucune demande ouverte de ${chsldNomme}.`, `No open request from ${chsldNomme}.`));
+  }
+  // Arrivés, en attente d'accueil / de confirmation d'accueil
+  if (/(sont arrive|arrived|accueil|confirmation|attendent|waiting|awaiting|to receive|to be received)/.test(qn) && !/(attendu|expected)/.test(qn)) {
+    const arrives = d.a_accueillir.filter((c) => c.etape === 'arrivee_confirmee');
+    const aConfirmer = d.a_accueillir.filter((c) => c.etape === 'depart_confirme');
+    const parts = [];
+    if (aConfirmer.length) parts.push(T(L, `Départ confirmé, arrivée à confirmer (${aConfirmer.length}) :`, `Departure confirmed, arrival to confirm (${aConfirmer.length}):`), ...aConfirmer.map((c) => ligne(L, c)));
+    if (arrives.length) parts.push(T(L, `Arrivés, accueil à préparer (${arrives.length}) :`, `Arrived, reception to prepare (${arrives.length}):`), ...arrives.map((c) => ligne(L, c)));
+    return local(parts.length ? parts.join('\n') : T(L, 'Aucun résident de CHSLD n’attend un accueil.', 'No CHSLD resident is awaiting reception.'));
   }
   // Résidents attendus (aujourd'hui) : demandes transmises ou acceptées, départs confirmés
   if (/(attendu|expected|arrivee|arrival|demande|request|aujourd|today)/.test(qn)) {

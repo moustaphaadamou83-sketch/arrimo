@@ -121,7 +121,9 @@
     const r = f.resident; const g = gerer();
     const portail = await api('GET', `/chsld/residents/${id}/portail`).catch(() => null);
     const ligneId = (k, val) => (val ? `<dt>${C(`fiche.${k}`)}</dt><dd>${esc(val)}</dd>` : '');
-    const loc = f.localisation ? `<p class="ch-loc">${C('fiche.localisation', { etat: t(f.localisation.confirmee ? 'chsld.fiche.loc_confirmee' : 'chsld.fiche.loc_envoyee'), hopital: f.localisation.hopital, numero: f.localisation.numero })}</p>` : '';
+    const ri = f.reintegration;
+    const loc = (f.localisation ? `<p class="ch-loc">${C('fiche.localisation', { etat: t(f.localisation.confirmee ? 'chsld.fiche.loc_confirmee' : 'chsld.fiche.loc_envoyee'), hopital: f.localisation.hopital, numero: f.localisation.numero })}</p>` : '')
+      + (ri ? `<p class="ch-loc">${ri.conservee ? C('reint.conservee', { lit: ri.lit.code }) : ''} ${ri.pret ? `<b>${C('reint.pret')}</b>` : ri.raisons.map((x) => C(`reint.r_${x}`)).join(' · ')}</p>` : '');
     const actions = [];
     if (g && r.statut === 'preadmission' && !r.lit_id) actions.push(['reserver', 'reserver-place']);
     if (g && r.statut === 'preadmission' && r.lit_id) actions.push(['arrivee', 'arrivee']);
@@ -130,6 +132,7 @@
     if ((g || role() === 'equipe_soins') && r.statut === 'present') actions.push(['absence', 'absence']);
     if ((g || role() === 'equipe_soins') && r.statut === 'absent') actions.push(['fin_absence', 'fin-absence']);
     if (g && ['present', 'absent', 'hospitalise', 'preadmission'].includes(r.statut)) actions.push(['sortie', 'sortie']);
+    if (g && r.statut === 'hospitalise' && r.lit_id) actions.push(['liberer_place', 'liberer-place']);
     v.innerHTML = `<div class="entete"><div><button class="btn discret" id="ch-retour">← ${C('fiche.retour')}</button>
         <h2>${esc(r.prenom)} ${esc(r.nom)} <span class="note num">${esc(r.reference)}</span></h2><p>${statutResident(r.statut)} · ${C('residents.ne_le', { date: jour(r.date_naissance) })}</p>${loc}</div>
         <div class="actions">${actions.map(([k, a]) => `<button class="btn${['arrivee', 'reserver'].includes(k) ? ' pri' : ''}" data-ch-action="${a}">${C(`actions.${k}`)}</button>`).join('')}</div></div>
@@ -226,6 +229,8 @@
     }
     if (a === 'absence') return modale(t('chsld.actions.absence'), champ('ab-retour', C('actions.retour_prevu'), '', 'type="date"'), [{ label: t('general.annuler') }, { label: t('general.confirmer'), pri: true,
       run: async () => (await agir(null, () => api('POST', `/chsld/residents/${r.id}/absence`, { version: r.version, retour_prevu: $('#ab-retour').value || null }), ok)) !== null || false }]);
+    if (a === 'liberer-place') return modale(C('actions.liberer_place'), `<p class="note">${C('reint.liberer_aide')}</p>${champ('lp-motif', C('actions.motif'), '', 'maxlength="200"')}`,
+      [{ label: t('general.annuler') }, { label: t('general.confirmer'), pri: true, run: async () => (await agir(null, () => api('POST', `/chsld/residents/${r.id}/liberer-place`, { version: r.version, motif: $('#lp-motif').value }), ok)) !== null || false }]);
     if (a === 'sortie') return modale(t('chsld.actions.sortie'), sel('so-motif', C('actions.motif'), ['domicile', 'autre_milieu', 'deces', 'autre'].map((m) => [m, t(`chsld.actions.motif_${m}`)])),
       [{ label: t('general.annuler') }, { label: t('general.confirmer'), pri: true, run: async () => (await agir(null, () => api('POST', `/chsld/residents/${r.id}/sortie`, { version: r.version, motif: $('#so-motif').value }), ok)) !== null || false }]);
     if (a === 'hospitalisation' || a === 'transfert-chsld') {
@@ -250,10 +255,11 @@
     const places = await api('GET', `/chsld/places?etablissement_id=${ctx()}`);
     const unites = [...new Set(places.map((p) => p.unite))];
     const cle = (p) => (p.etat === 'occupe' && p.resident_statut && p.resident_statut !== 'present' ? 'conservee' : p.etat);
+    const ent = (p) => (p.entretien && p.entretien !== 'propre' ? ` ${pastille('nettoyage', t(`chsld.entretien.${p.entretien}`))}` : '');
     v.innerHTML = `<div class="entete"><div><h2>${C('chambres.titre')}</h2><p>${C('chambres.intro')}</p></div></div>
       <div class="ch-legende">${['libre', 'reserve', 'occupe', 'conservee', 'nettoyage', 'indispo'].map((k) => `${pastille(k, t(`chsld.chambres.${k}`))} <b class="num">${places.filter((p) => cle(p) === k).length}</b>`).join(' ')}</div>
       ${unites.map((u) => { const ps = places.filter((p) => p.unite === u); return `<h3 class="titre-section">${esc(u)} <span class="note">${esc(ps[0].type_unite)}</span></h3>
-        <div class="ch-places">${ps.map((p) => `<div class="ch-place ch-p-${cle(p)}"><div class="ch-place-tete"><b class="num">${esc(p.code)}</b>${pastille(cle(p), t(`chsld.chambres.${cle(p)}`))}</div>
+        <div class="ch-places">${ps.map((p) => `<div class="ch-place ch-p-${cle(p)}"><div class="ch-place-tete"><b class="num">${esc(p.code)}</b>${pastille(cle(p), t(`chsld.chambres.${cle(p)}`))}${ent(p)}</div>
           <div class="note">${C('residents.chambre')} ${esc(p.chambre)}${p.type_chambre ? ` · ${esc(p.type_chambre)}` : ''} · ${C('chambres.depuis', { duree: depuis(p.etat_depuis) })}</div>
           ${p.resident_ref ? `<div>${p.resident_nom ? `<button class="lien" data-res="${p.resident_id}">${esc(p.resident_nom)}</button> ` : ''}<span class="note num">${esc(p.resident_ref)}</span></div>` : ''}
           ${gerer() && p.etat === 'libre' ? `<div class="actions"><button class="btn" data-conf="${p.id}">${C('chambres.confirmer')}</button></div>` : ''}</div>`).join('')}</div>`; }).join('')}`;
@@ -340,10 +346,12 @@
     : ['recue_hopital', 'arrivee', 'cloturee', 'envoyee'].includes(s) ? t(`chsld.liaison.journal_${s}`) : t(`chsld.coord_statut.${s}`));
   function carteCoordination(c) {
     const cote = c.entrante ? 'destination' : 'origine';
-    const actions = (ACTIONS_CO[c.type]?.[cote]?.[c.statut] || []).filter((a) => a !== 'retour' || gererCo());
+    const actions = (ACTIONS_CO[c.type]?.[cote]?.[c.statut] || []).filter((a) => a !== 'retour' || gererCo())
+      .concat(c.reintegration?.bloquante && gererCo() && ['acceptee', 'en_cours'].includes(c.statut) ? ['resoudre'] : []);
     const statutVu = c.type === 'hospitalisation' ? etapePartagee(c) : c.statut;
     return `<div class="item ch-coord"><div><b class="num">${esc(c.numero)}</b> · ${C(`coord.type_${c.type}`)} · <span class="num">${esc(c.resident_ref)}</span> ${pastille(c.statut, t(`chsld.liaison.etape_${statutVu}`) || t(`chsld.coord_statut.${c.statut}`))}
       <div class="note">${esc(c.origine)} → ${esc(c.destination)}${c.lit ? ` · ${esc(c.lit)}` : ''}${c.retour_prevu_le ? ` · ${C('coord.retour_le', { date: dateHeure(c.retour_prevu_le) })}` : ''}${c.incident ? ` · <b>${C(`coord.incident_${c.incident}`)}</b>` : ''}</div>
+      ${c.reintegration ? `<div class="note">${c.reintegration.lit ? `${esc(c.reintegration.lit.code)} · ` : ''}${c.reintegration.pret ? `<b>${C('reint.pret')}</b>` : c.reintegration.raisons.map((x) => C(`reint.r_${x}`)).join(' · ')}</div>` : ''}
       ${c.etapes?.length ? `<details><summary class="note">${C('coord.etapes')}</summary><ol class="ch-historique">${c.etapes.map((e) => `<li><span class="note num">${esc(dateHeure(e.date))}</span> ${esc(libelleEtape(e.statut))}${e.detail ? ` · ${esc(e.detail)}` : ''}</li>`).join('')}</ol></details>` : ''}</div>
       ${actions.length ? `<div class="actions">${actions.map((a) => `<button class="btn${['confirmer_depart', 'confirmer_reception', 'confirmer_arrivee', 'accepter'].includes(a) ? ' pri' : a === 'refuser' || a === 'annuler' ? ' dan' : ''}" data-co="${a}" data-id="${c.id}" data-version="${c.version}" data-type="${c.type}">${C(`coord.${a === 'retour' ? 'preparer_retour' : a}`)}</button>`).join('')}</div>` : ''}</div>`;
   }
@@ -364,6 +372,12 @@
         [{ label: t('general.annuler') }, { label: t('general.confirmer'), pri: true, run: async () => (await agir(null, () => api('POST', `/coordinations/${id}/retour`, { retour_prevu_le: $('#rt-date').value, motif_admin: $('#rt-motif').value }), ok)) !== null || false }]);
       if (a === 'incident') return modale(t('chsld.coord.incident'), `${sel('in-code', C('coord.incident'), ['retour_retarde', 'hospitalisation_prolongee', 'informations_manquantes', 'chambre_indisponible'].map((x) => [x, t(`chsld.coord.incident_${x}`)]))}${champ('in-date', C('actions.retour_prevu'), '', 'type="datetime-local"')}`,
         [{ label: t('general.annuler') }, { label: t('general.confirmer'), pri: true, run: async () => (await agir(null, () => api('POST', `/coordinations/${id}/action`, { etablissement_id: ctx(), version, action: 'incident', incident: $('#in-code').value, retour_prevu_le: $('#in-date').value || null }), ok)) !== null || false }]);
+      if (a === 'resoudre') {
+        const libres = await placesLibres();
+        return modale(t('chsld.reint.resoudre'), `<p class="note">${C('reint.resoudre_aide')}</p>${libres.length ? sel('rs-lit', C('actions.choisir_place'), libres.map((p) => [p.id, `${p.unite} · ${p.code}`])) : `<p>${C('actions.aucune_place')}</p>`}`,
+          [{ label: t('general.annuler') }, ...(libres.length ? [{ label: t('general.confirmer'), pri: true, run: async () => { const p = libres.find((x) => x.id === Number($('#rs-lit').value));
+            return (await agir(null, () => api('POST', `/coordinations/${id}/action`, { etablissement_id: ctx(), version, action: 'resoudre', lit_id: p.id, version_lit: p.version }), ok)) !== null || false; } }] : [])]);
+      }
       if (a === 'accepter' && b.dataset.type === 'transfert_chsld') {
         const libres = await placesLibres();
         return modale(t('chsld.coord.place_accueil'), libres.length ? sel('ac-lit', C('actions.choisir_place'), libres.map((p) => [p.id, `${p.unite} · ${p.code}`])) : `<p>${C('actions.aucune_place')}</p>`,

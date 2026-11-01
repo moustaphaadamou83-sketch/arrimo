@@ -13,7 +13,9 @@
   const EN = new Set(('the an is are how many much which what where who whom whose bed beds free available with in of to do does did can could '
     + 'should would will my me your this that these those there their any some all and but not more less show give find list please '
     + 'today tomorrow yesterday when why hello thanks yes no status room ward unit units emergency stretcher stretchers request requests '
-    + 'waiting alerts alert priority priorities first next need i we you it its open icu intensive care hi hey').split(/\s+/));
+    + 'waiting alerts alert priority priorities first next need i we you it its open icu intensive care hi hey '
+    + 'for latest movement movements resident residents return returns held cleaning cleaned his her he she task tasks overdue housekeeping expected arrived arrival '
+    + 'confirm family contacts authorized callback daughter rooms occupied blocked ready coming back planned pending').split(/\s+/));
   const DEMANDE_EN = /(?:reponds?|repondez|reponse|parle|parlez|answer|reply|respond|speak|talk)\s+(?:moi\s+|to me\s+)?(?:en\s+|in\s+)?(?:anglais|english)\b|\b(?:en anglais|in english)\s*(?:svp|please|stp)?\s*[:,.!?]?\s*$/;
   const DEMANDE_FR = /(?:reponds?|repondez|reponse|parle|parlez|answer|reply|respond|speak|talk)\s+(?:moi\s+|to me\s+)?(?:en\s+|in\s+)?(?:francais|french)\b|\b(?:en francais|in french)\s*(?:svp|please|stp)?\s*[:,.!?]?\s*$/;
 

@@ -582,6 +582,206 @@ test('Liaison CHSLD : désactivation et réactivation depuis SH sans perte ; fut
   RESULTATS.liaison.sh = { desactivation: 'accès masqué, envois refusés, données conservées, réactivation avec historique', futur_hopital: { code: 'HD-ESSAI', module_actif: eD.module_actif } };
 });
 
+/* ------------------------------------------------------------------ Conservation de chambre, réintégration, nettoyage (1er nov. 2026) */
+const placeDe = async (qui, etab, litId) => (await api(qui, 'GET', `/chsld/places?etablissement_id=${etab}`)).find((x) => x.id === litId);
+async function hospitaliser(qui, etab, residentId, hopital, quiH, ref) {
+  const r = (await api(qui, 'GET', `/chsld/residents/${residentId}`)).resident;
+  let co = await api(qui, 'POST', `/chsld/residents/${residentId}/hospitalisation`, { hopital_id: hopital, identite_verifiee: true, version: r.version });
+  co = await api(qui, 'POST', `/coordinations/${co.id}/action`, { etablissement_id: etab, action: 'confirmer_depart', version: co.version });
+  co = await api(quiH, 'POST', `/coordinations/${co.id}/action`, { etablissement_id: hopital, action: 'confirmer_reception', version: co.version });
+  if (ref) co = await api(quiH, 'POST', `/coordinations/${co.id}/action`, { etablissement_id: hopital, action: 'orienter', orientation: 'admission', patient_ref: ref, type_id: (await poolPilote.query('SELECT t.id FROM types_unite t JOIN etablissements e ON e.config_id = t.config_id WHERE e.id = $1 ORDER BY t.ordre LIMIT 1', [hopital])).rows[0].id, version: co.version });
+  return co;
+}
+const coDe = async (qui, etab, id) => (await api(qui, 'GET', `/coordinations?etablissement_id=${etab}`)).find((c) => c.id === id);
+let R = {};
+test('réintégration : défaut ERA117A reproduit puis corrigé ; Jean Dupont Érables → B → Érables, place conservée et nettoyée, retour dans le même lit, double confirmation', async () => {
+  const og = async (question, qui = 'era', etab = ids.era) => (await ogQ(qui, etab, question)).reponse;
+  // Défaut : une référence seule (ERA117A) tombait sur la liste générique des fonctions
+  const p117 = (await api('era', 'GET', `/chsld/places?etablissement_id=${ids.era}`)).find((x) => x.code === 'ERA-117A');
+  assert.ok(p117, 'le lit ERA-117A existe dans le jeu de données');
+  const attendu117 = p117.resident_ref || 'ERA-117A';
+  for (const q of ['ERA117A', 'ERA-117A', 'era 117a', 'Era-117a ?']) {
+    const rep = await og(q);
+    assert.ok(rep.includes(attendu117), `${q} → ${rep}`); assert.doesNotMatch(rep, /Je peux vous aider avec|Que peux-tu faire/);
+  }
+  assert.match(await og('ERA-999Z'), /Aucun résultat autorisé pour « ERA-999Z »/);
+  // Départ : la place reste attribuée et conservée ; jamais disponible
+  const avant = (await api('era', 'GET', `/chsld/residents/${p.dupont}`));
+  const litDupont = avant.resident.lit_id; const refDupont = avant.resident.reference;
+  const libresAvant = (await api('era', 'GET', `/chsld/places?etablissement_id=${ids.era}`)).filter((x) => x.occupation === 'disponible').length;
+  const hosp = await hospitaliser('era', ids.era, p.dupont, L.B, 'b', 'P-71101');
+  let pl = await placeDe('era', ids.era, litDupont);
+  assert.strictEqual(pl.occupation, 'conservee_hospitalisation'); assert.strictEqual(pl.resident_ref, refDupont);
+  assert.strictEqual((await api('era', 'GET', `/chsld/places?etablissement_id=${ids.era}`)).filter((x) => x.occupation === 'disponible').length, libresAvant, 'aucune place libérée');
+  assert.ok(!(await api('era', 'GET', `/chsld/places?etablissement_id=${ids.era}`)).some((x) => x.id === litDupont && x.etat === 'libre'));
+  assert.match(await og('Où est Jean Dupont ?'), /Selon le dernier événement confirmé, Jean Dupont \(R-\d{5}\) a été reçu à Hôpital B — Mont-Clair le .* Son CHSLD de rattachement est CHSLD 1 — des Érables\. Place conservée/s);
+  assert.match(await og('Sa place est-elle conservée ?'), /^Oui, sa place est conservée/);
+  assert.match(await og('Quelles places sont conservées pour des résidents hospitalisés ?'), new RegExp(pl.code));
+  // Nettoyage pendant l'hospitalisation : l'entretien change, jamais l'attribution (tâches antérieures de ce lit terminées d'abord)
+  for (const x of (await api('era_entretien', 'GET', `/chsld/taches?etablissement_id=${ids.era}`)).filter((y) => y.lit_id === litDupont)) await api('era_entretien', 'POST', `/chsld/taches/${x.id}/statut`, { statut: 'faite', version: x.version });
+  const tache = await api('era', 'POST', '/chsld/taches', { etablissement_id: ids.era, type: 'entretien', titre: 'Nettoyage de la place conservée', lit_id: litDupont, assigne_role: 'entretien' });
+  assert.strictEqual((await placeDe('era', ids.era, litDupont)).entretien, 'a_nettoyer');
+  assert.match(await og('Quelles chambres conservées doivent être nettoyées ?'), new RegExp(pl.code));
+  let t = await api('era_entretien', 'POST', `/chsld/taches/${tache.id}/statut`, { statut: 'en_cours', version: tache.version });
+  assert.strictEqual((await placeDe('era', ids.era, litDupont)).entretien, 'en_cours');
+  await api('era_entretien', 'POST', `/chsld/taches/${t.id}/statut`, { statut: 'faite', version: t.version });
+  pl = await placeDe('era', ids.era, litDupont);
+  assert.strictEqual(pl.entretien, 'propre'); assert.strictEqual(pl.occupation, 'conservee_hospitalisation', 'propre et toujours conservée'); assert.ok(pl.entretien_par);
+  assert.strictEqual((await api('era', 'GET', `/chsld/residents/${p.dupont}`)).resident.lit_id, litDupont);
+  let rep = await og(`La chambre de ${refDupont} a-t-elle été nettoyée ?`);
+  assert.match(rep, /propre, nettoyage confirmé le/); assert.ok(rep.includes(pl.entretien_par), rep);
+  // Retour préparé par l'hôpital : chambre d'origine retrouvée, préparation à faire, puis « prête »
+  let ret = await api('b', 'POST', `/coordinations/${hosp.id}/retour`, { retour_prevu_le: new Date(Date.now() + 3600000).toISOString() });
+  let vue = await coDe('era', ids.era, ret.id);
+  assert.strictEqual(vue.reintegration.lit.code, pl.code); assert.strictEqual(vue.reintegration.pret, true, 'chambre propre, attribuée, libre d’un autre résident');
+  assert.match(await og('Sa chambre est-elle prête pour son retour ?'), /Chambre prête pour le retour/);
+  const prop = await ogQ('era', ids.era, 'Prépare sa réinstallation dans sa chambre habituelle');
+  assert.strictEqual(prop.proposition_chsld.type, 'coordination'); assert.strictEqual(prop.proposition_chsld.action, 'accepter');
+  assert.strictEqual((await coDe('era', ids.era, ret.id)).statut, 'envoyee', 'OG n’accepte rien sans confirmation');
+  ret = await api('era', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: ids.era, action: ret.version ? 'accepter' : 'accepter', version: ret.version });
+  vue = await coDe('era', ids.era, ret.id);
+  assert.deepStrictEqual(vue.reintegration.raisons, ['preparation_en_cours'], 'tâche de préparation créée');
+  assert.match(await og('Pourquoi sa réintégration est-elle bloquée ?'), /la préparation ou le nettoyage n’est pas terminé/);
+  for (const x of (await api('era_entretien', 'GET', `/chsld/taches?etablissement_id=${ids.era}`)).filter((y) => y.lit_id === litDupont)) await api('era_entretien', 'POST', `/chsld/taches/${x.id}/statut`, { statut: 'faite', version: x.version });
+  assert.strictEqual((await coDe('era', ids.era, ret.id)).reintegration.pret, true);
+  assert.match(await og('Confirme son arrivée'), /Je ne confirme pas une arrivée physique/);
+  ret = await api('b', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: L.B, action: 'confirmer_depart', version: ret.version });
+  // Deux confirmations simultanées : une seule réintégration
+  const [c1, c2] = await Promise.all([1, 2].map(() => appel('era', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: ids.era, action: 'confirmer_arrivee', version: ret.version })));
+  assert.ok([c1, c2].every((x) => x.statut === 200), JSON.stringify([c1.corps, c2.corps]));
+  assert.strictEqual([c1, c2].filter((x) => x.corps.deja_confirme).length, 1, 'la seconde confirmation ne change rien');
+  const apres = await api('era', 'GET', `/chsld/residents/${p.dupont}`);
+  assert.strictEqual(apres.resident.statut, 'present'); assert.strictEqual(apres.resident.lit_id, litDupont, 'même lit'); assert.strictEqual(apres.resident.reference, refDupont, 'même dossier');
+  assert.strictEqual((await placeDe('era', ids.era, litDupont)).occupation, 'occupee');
+  assert.strictEqual(apres.mouvements.filter((m) => m.type === 'retour').length, 2, 'un retour par parcours (le parcours du matin et celui-ci), jamais deux pour la même confirmation');
+  assert.strictEqual((await poolPilote.query(`SELECT count(*)::int n FROM residents WHERE lit_id = $1 AND statut NOT IN ('sorti','transfere')`, [litDupont])).rows[0].n, 1);
+  rep = await og('Qui a confirmé sa réception ?');
+  assert.match(rep, /Le retour de Jean Dupont .* a été confirmé le .* par /s);
+  RESULTATS.reintegration = { era117a: attendu117, lit: pl.code, parcours: 'départ → reçu à B → nettoyage pendant la conservation → retour → prête → réintégré dans le même lit (double confirmation sans effet)' };
+});
+
+test('réintégration : chambre bloquée, place libérée puis réattribuée, retour annulé — aucune autre place attribuée sans validation', async () => {
+  const og = async (question) => (await ogQ('era', ids.era, question)).reponse;
+  // Chambre bloquée (incohérence simulée sur la place conservée) : réintégration refusée, résolution explicite par un responsable
+  const x = await residentPresent('era', ids.era, [p.dupont]);
+  const litX = (await api('era', 'GET', `/chsld/residents/${x.id}`)).resident.lit_id;
+  const hx = await hospitaliser('era', ids.era, x.id, L.B, 'b');
+  await poolPilote.query(`UPDATE lits SET etat = 'indispo', patient_ref = NULL, motif_indispo = 'travaux', version = version + 1 WHERE id = $1`, [litX]); // donnée de départ : place bloquée pendant l'absence
+  let ret = await api('b', 'POST', `/coordinations/${hx.id}/retour`, { retour_prevu_le: new Date(Date.now() + 3600000).toISOString() });
+  ret = await api('era', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: ids.era, action: 'accepter', version: ret.version });
+  assert.ok((await coDe('era', ids.era, ret.id)).reintegration.raisons.includes('place_bloquee'));
+  ret = await api('b', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: L.B, action: 'confirmer_depart', version: ret.version });
+  await refuse('era', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: ids.era, action: 'confirmer_arrivee', version: ret.version }, 409, 'reintegration_bloquee');
+  assert.strictEqual((await api('era', 'GET', `/chsld/residents/${x.id}`)).resident.statut, 'hospitalise', 'rien n’a changé');
+  assert.match(await og(`Pourquoi la réintégration de ${x.reference} est-elle bloquée ?`), /sa place est bloquée.*Aucune autre place n’est attribuée automatiquement/s);
+  await refuse('era_soins', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: ids.era, action: 'resoudre', lit_id: 1, version: ret.version }, 403);
+  const libre = (await api('era', 'GET', `/chsld/places?etablissement_id=${ids.era}`)).find((y) => y.occupation === 'disponible');
+  ret = await api('era', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: ids.era, action: 'resoudre', lit_id: libre.id, version_lit: libre.version, version: ret.version });
+  ret = await api('era', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: ids.era, action: 'confirmer_arrivee', version: ret.version });
+  const rx = (await api('era', 'GET', `/chsld/residents/${x.id}`)).resident;
+  assert.ok(rx.statut === 'present' && rx.lit_id === libre.id, 'nouvelle place validée explicitement');
+  await poolPilote.query(`UPDATE lits SET etat = 'libre', motif_indispo = NULL, version = version + 1 WHERE id = $1`, [litX]);
+  // Place libérée par un responsable puis réattribuée : le retour ne prend jamais la place d'un autre résident
+  const y = await residentPresent('era', ids.era, [p.dupont, x.id]);
+  const litY = (await api('era', 'GET', `/chsld/residents/${y.id}`)).resident.lit_id;
+  const hy = await hospitaliser('era', ids.era, y.id, L.B, 'b');
+  await refuse('era', 'POST', `/chsld/residents/${y.id}/liberer-place`, { motif: '' }, 400, 'motif_requis');
+  const ry = (await api('era', 'GET', `/chsld/residents/${y.id}`)).resident;
+  await api('era', 'POST', `/chsld/residents/${y.id}/liberer-place`, { version: ry.version, motif: 'Hospitalisation prolongée, décision de la direction' });
+  const net = (await api('era_entretien', 'GET', `/nettoyage?etablissement_id=${ids.era}`)).find((l) => l.id === litY);
+  await api('era_entretien', 'POST', `/lits/${litY}/action`, { action: 'nettoyage_ok', version: net.version });
+  const z = await residentPresent('era', ids.era, [p.dupont, x.id, y.id]);
+  const placeY = await placeDe('era', ids.era, litY);
+  await api('era', 'POST', `/chsld/residents/${z.id}/changer-chambre`, { lit_id: litY, version: placeY.version, version_resident: z.version });
+  let rety = await api('b', 'POST', `/coordinations/${hy.id}/retour`, { retour_prevu_le: new Date(Date.now() + 7200000).toISOString() });
+  assert.deepStrictEqual((await coDe('era', ids.era, rety.id)).reintegration.raisons, ['aucune_place_attribuee']);
+  assert.match(await og(`Pourquoi le retour de ${y.reference} est-il bloqué ?`), /aucune place n’est plus attribuée/);
+  const libre2 = (await api('era', 'GET', `/chsld/places?etablissement_id=${ids.era}`)).find((w) => w.occupation === 'disponible');
+  rety = await api('era', 'POST', `/coordinations/${rety.id}/action`, { etablissement_id: ids.era, action: 'accepter', lit_id: libre2.id, version_lit: libre2.version, version: rety.version });
+  // Retour annulé par l'hôpital : le résident reste hospitalisé, la place réservée reste la sienne
+  rety = await api('b', 'POST', `/coordinations/${rety.id}/action`, { etablissement_id: L.B, action: 'annuler', version: rety.version });
+  assert.strictEqual(rety.statut, 'annulee');
+  assert.strictEqual((await api('era', 'GET', `/chsld/residents/${y.id}`)).resident.statut, 'hospitalise');
+  assert.ok((await notifs('era', ids.era)).some((n) => n.code === 'chsld_retour_annule'));
+  assert.strictEqual((await poolPilote.query(`SELECT count(*)::int n FROM residents WHERE lit_id = $1 AND statut NOT IN ('sorti','transfere')`, [litY])).rows[0].n, 1, 'la place réattribuée garde un seul résident');
+  // Nouveau retour, mené à terme dans la place validée
+  rety = await api('b', 'POST', `/coordinations/${hy.id}/retour`, { retour_prevu_le: new Date(Date.now() + 7200000).toISOString() });
+  rety = await api('era', 'POST', `/coordinations/${rety.id}/action`, { etablissement_id: ids.era, action: 'accepter', version: rety.version });
+  for (const tt of (await api('era_entretien', 'GET', `/chsld/taches?etablissement_id=${ids.era}`)).filter((w) => w.lit_id === libre2.id)) await api('era_entretien', 'POST', `/chsld/taches/${tt.id}/statut`, { statut: 'faite', version: tt.version });
+  rety = await api('b', 'POST', `/coordinations/${rety.id}/action`, { etablissement_id: L.B, action: 'confirmer_depart', version: rety.version });
+  await api('era', 'POST', `/coordinations/${rety.id}/action`, { etablissement_id: ids.era, action: 'confirmer_arrivee', version: rety.version });
+  assert.strictEqual((await api('era', 'GET', `/chsld/residents/${y.id}`)).resident.lit_id, libre2.id);
+  const doubles = (await poolPilote.query(`SELECT lit_id FROM residents WHERE lit_id IS NOT NULL AND statut NOT IN ('sorti','transfere') GROUP BY lit_id HAVING count(*) > 1`)).rows;
+  assert.deepStrictEqual(doubles, [], 'aucune double attribution');
+  RESULTATS.reintegration.exceptions = 'place bloquée (refus, résolution validée), place libérée puis réattribuée (refus, place choisie), retour annulé (place conservée), aucune double attribution';
+});
+
+test('OG : 600 cas de questions sur données fictives réelles (références, chambres, admissions, hospitalisations, retours, liaison, proches, tâches, sécurité)', { timeout: 600000 }, async () => {
+  const nz = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[’']/g, ' ');
+  // Situation de départ, construite par les API ordinaires
+  const homonyme = await api('era', 'POST', '/chsld/residents', { etablissement_id: ids.era, prenom: 'Paul', nom: 'Dupont', date_naissance: '1941-05-06', confirmer_doublon: true });
+  const hospDup = await hospitaliser('era', ids.era, p.dupont, L.B, 'b', 'P-71201');
+  const litDup = (await api('era', 'GET', `/chsld/residents/${p.dupont}`)).resident.lit_id;
+  const tache = await api('era', 'POST', '/chsld/taches', { etablissement_id: ids.era, type: 'entretien', titre: 'Nettoyage de la place conservée', lit_id: litDup, assigne_role: 'entretien' });
+  await api('era_entretien', 'POST', `/chsld/taches/${tache.id}/statut`, { statut: 'faite', version: tache.version });
+  const retDup = await api('b', 'POST', `/coordinations/${hospDup.id}/retour`, { retour_prevu_le: new Date(Date.now() + 2 * 3600000).toISOString() });
+  const envoyer = async (h) => { const r = await residentPresent('era', ids.era, [p.dupont]); const co = await api('era', 'POST', `/chsld/residents/${r.id}/hospitalisation`, { hopital_id: h, identite_verifiee: true, version: r.version }); return { ...co, ref: r.reference, id_resident: r.id }; };
+  const h2 = await envoyer(L.A);
+  let h3 = await envoyer(L.C); h3 = { ...(await api('era', 'POST', `/coordinations/${h3.id}/action`, { etablissement_id: ids.era, action: 'confirmer_depart', version: h3.version })), ref: h3.ref };
+  const h4 = await envoyer(L.B);
+  const places = await api('era', 'GET', `/chsld/places?etablissement_id=${ids.era}`);
+  const residents = await api('era', 'GET', `/chsld/residents?etablissement_id=${ids.era}`);
+  const ouverts = (await poolPilote.query(`SELECT resident_id FROM coordinations WHERE statut IN ('preparee','envoyee','acceptee','en_cours')`)).rows.map((x) => x.resident_id);
+  const presents = residents.filter((r) => r.statut === 'present' && r.lit && !ouverts.includes(r.id) && r.id !== p.dupont)
+    .map((r) => ({ ref: r.reference, lit: r.lit, chambre: r.chambre, prenom: r.prenom, nom: r.nom, nomUnique: residents.filter((x) => x.nom === r.nom).length === 1 }));
+  const p117 = places.find((x) => x.code === 'ERA-117A');
+  const demandes = await api('era', 'GET', `/chsld/demandes?etablissement_id=${ids.era}&toutes=1`);
+  const d = { era: ids.era, stl: ids.stl, A: L.A, B: L.B, C: L.C,
+    dupont: { ref: (await api('era', 'GET', `/chsld/residents/${p.dupont}`)).resident.reference, lit: places.find((x) => x.id === litDup).code },
+    hospDup, h2, h3, h4, presents, attendu117: p117.resident_ref || 'ERA-117A',
+    libres: places.filter((x) => x.occupation === 'disponible').length, occupees: places.filter((x) => x.occupation === 'occupee').length,
+    bloquee: places.find((x) => x.occupation === 'bloquee'), preparation: places.find((x) => x.occupation === 'preparation'),
+    preadmission: (await api('era', 'GET', `/chsld/residents?etablissement_id=${ids.era}&statut=preadmission`)).map((r) => ({ ref: r.reference }))[0],
+    demande: demandes.find((x) => !['admise', 'refusee', 'annulee'].includes(x.statut)), demandeRef: demandes[0],
+    nettoyeur: places.find((x) => x.id === litDup).entretien_par,
+    refsStl: (await api('stl', 'GET', `/chsld/residents?etablissement_id=${ids.stl}&statut=tous`)).map((r) => r.reference) };
+  assert.ok(homonyme.id && d.nettoyeur && presents.length >= 12, `situation incomplète : ${presents.length} résidents présents`);
+  const { construire, DOMAINES } = require('./og-cas-chsld.cjs');
+  const cas = construire(d);
+  const resultats = [];
+  for (const c of cas) {
+    for (const q of c.contexte) await ogQ(c.qui, c.etab, q);
+    const r = await appel(c.qui, 'POST', '/copilote/question', { etablissement_id: c.etab, question: c.question, langue: 'fr' });
+    const rep = nz(r.corps?.reponse);
+    const erreurs = [];
+    if (r.statut !== (c.attendu.statut || 200)) erreurs.push(`HTTP ${r.statut} ${JSON.stringify(r.corps)}`);
+    if (c.attendu.statut === 403 && JSON.stringify(r.corps || {}).includes('Dupont')) erreurs.push('donnée exposée malgré le refus');
+    for (const x of c.attendu.contient || []) { const alts = Array.isArray(x) ? x : [x]; if (!alts.some((y) => rep.includes(nz(y)))) erreurs.push(`attendu : ${alts.join(' | ')}`); }
+    for (const x of c.attendu.pas || []) if (rep.includes(nz(x))) erreurs.push(`interdit : ${x}`);
+    if (c.attendu.proposition && r.corps?.proposition_chsld?.type !== c.attendu.proposition) erreurs.push(`proposition ${c.attendu.proposition} attendue`);
+    if (c.attendu.sansProposition && (r.corps?.proposition_chsld || r.corps?.proposition)) erreurs.push('aucune proposition attendue');
+    resultats.push({ id: c.id, domaine: c.domaine, qui: c.qui, question: c.question, contexte: c.contexte, reussi: !erreurs.length, erreurs, reponse: String(r.corps?.reponse || '').slice(0, 400) });
+  }
+  const parDomaine = Object.fromEntries(Object.keys(DOMAINES).map((k) => { const x = resultats.filter((y) => y.domaine === k); return [k, { cas: x.length, minimum: DOMAINES[k], reussis: x.filter((y) => y.reussi).length }]; }));
+  const echecs = resultats.filter((x) => !x.reussi);
+  fs.mkdirSync(path.resolve('.local'), { recursive: true });
+  fs.writeFileSync(path.resolve('.local/og-600-rapport.json'), JSON.stringify({ date: new Date().toISOString(), total: resultats.length, reussis: resultats.length - echecs.length, par_domaine: parDomaine, echecs, cas: resultats }, null, 2));
+  RESULTATS.og600 = { total: resultats.length, reussis: resultats.length - echecs.length, par_domaine: parDomaine };
+  for (const [k, v] of Object.entries(parDomaine)) assert.ok(v.cas >= v.minimum, `${k} : ${v.cas} cas < ${v.minimum}`);
+  assert.ok(resultats.length >= 600);
+  assert.deepStrictEqual(echecs.map((x) => `${x.id} « ${x.question} » → ${x.erreurs.join(' ; ')} :: ${x.reponse.slice(0, 160)}`), [], `${echecs.length} échec(s) sur ${resultats.length}`);
+  // Remise en état : Jean Dupont revient dans son lit ; demandes ouvertes annulées ; le départ vers C est reçu
+  let ret = await api('era', 'POST', `/coordinations/${retDup.id}/action`, { etablissement_id: ids.era, action: 'accepter', version: retDup.version });
+  for (const x of (await api('era_entretien', 'GET', `/chsld/taches?etablissement_id=${ids.era}`)).filter((y) => y.lit_id === litDup)) await api('era_entretien', 'POST', `/chsld/taches/${x.id}/statut`, { statut: 'faite', version: x.version });
+  ret = await api('b', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: L.B, action: 'confirmer_depart', version: ret.version });
+  await api('era', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: ids.era, action: 'confirmer_arrivee', version: ret.version });
+  for (const h of [h2, h4]) await api('era', 'POST', `/coordinations/${h.id}/action`, { etablissement_id: ids.era, action: 'annuler', version: h.version });
+  await api('c', 'POST', `/coordinations/${h3.id}/action`, { etablissement_id: L.C, action: 'confirmer_reception', version: h3.version });
+  assert.strictEqual((await api('era', 'GET', `/chsld/residents/${p.dupont}`)).resident.statut, 'present');
+  const hom = (await api('era', 'GET', `/chsld/residents/${homonyme.id}`)).resident;
+  await api('era', 'POST', `/chsld/residents/${homonyme.id}/sortie`, { version: hom.version, motif: 'autre' }); // accueil prévu annulé : l'homonyme fictif quitte la liste active
+});
+
 test('phase 2 — portail des proches : activé depuis SH, invitation, accès limité, messagerie, révocation, blocage', async () => {
   const era = crees.find((c) => c.code === 'CHSLD-ERA');
   const fd = await api('era', 'GET', `/chsld/residents/${p.dupont}`);

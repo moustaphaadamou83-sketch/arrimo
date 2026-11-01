@@ -1027,3 +1027,17 @@ CREATE TABLE IF NOT EXISTS messages_proches (
   cree_le            timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS messages_proches_fil ON messages_proches (resident_id, contact_id, cree_le);
+
+-- Entretien indépendant de l'occupation (CHSLD) : une place conservée pendant une hospitalisation peut être nettoyée
+-- sans jamais changer d'attribution ni devenir disponible. NULL = propre (aucun entretien en attente).
+ALTER TABLE lits ADD COLUMN IF NOT EXISTS entretien_statut text;
+ALTER TABLE lits ADD COLUMN IF NOT EXISTS entretien_le timestamptz;
+ALTER TABLE lits ADD COLUMN IF NOT EXISTS entretien_par int REFERENCES utilisateurs(id);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'lits'::regclass AND conname = 'lits_entretien_statut_check') THEN
+    ALTER TABLE lits ADD CONSTRAINT lits_entretien_statut_check CHECK (entretien_statut IN ('propre', 'a_nettoyer', 'en_cours', 'termine'));
+  END IF;
+END $$;
+-- Recherche par référence normalisée (ERA117A, era-117a, R00001) : index sur les codes sans tiret ni espace
+CREATE INDEX IF NOT EXISTS lits_code_normalise ON lits (etablissement_id, upper(regexp_replace(code, '[^A-Za-z0-9]', '', 'g')));
+CREATE INDEX IF NOT EXISTS residents_reference_normalisee ON residents (etablissement_id, upper(regexp_replace(reference, '[^A-Za-z0-9]', '', 'g')));

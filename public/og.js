@@ -112,8 +112,8 @@
   /** Proposition OG en CHSLD (tâche, demande de rappel) : rien n'est écrit avant la confirmation ; même API que l'interface. */
   function carteChsld(parent, p, etab) {
     const en = langue === 'en', carte = document.createElement('div'); carte.className = 'og-carte-action';
-    const titre = document.createElement('b'); titre.textContent = p.type === 'tache' ? (en ? 'Proposed task' : 'Tâche proposée') : p.type === 'retour' ? (en ? 'Proposed return to the CHSLD' : 'Retour vers le CHSLD proposé') : (en ? 'Proposed callback request' : 'Demande de rappel proposée');
-    const detail = document.createElement('p'); detail.textContent = p.type === 'retour' ? `${p.resident_ref} → ${p.chsld}` : (p.corps.titre || p.corps.sujet);
+    const titre = document.createElement('b'); titre.textContent = p.type === 'tache' ? (en ? 'Proposed task' : 'Tâche proposée') : p.type === 'retour' ? (en ? 'Proposed return to the CHSLD' : 'Retour vers le CHSLD proposé') : p.type === 'coordination' ? (en ? 'Accept the return' : 'Accepter le retour') : (en ? 'Proposed callback request' : 'Demande de rappel proposée');
+    const detail = document.createElement('p'); detail.textContent = p.type === 'retour' ? `${p.resident_ref} → ${p.chsld}` : p.type === 'coordination' ? `${p.resident_ref}` : (p.corps.titre || p.corps.sujet);
     // Retour : la date prévue est choisie par la personne (OG ne la fixe pas)
     let date = null;
     if (p.type === 'retour') { date = document.createElement('input'); date.type = 'datetime-local'; date.setAttribute('aria-label', en ? 'Planned return date' : 'Date de retour prévue'); }
@@ -128,6 +128,7 @@
       try {
         if (p.type === 'tache') await api('POST', '/chsld/taches', { etablissement_id: etab, ...p.corps });
         else if (p.type === 'retour') await api('POST', `/coordinations/${p.coordination_id}/retour`, { retour_prevu_le: date.value });
+        else if (p.type === 'coordination') await api('POST', `/coordinations/${p.coordination_id}/action`, { etablissement_id: etab, action: p.action, version: p.version });
         else await api('POST', `/chsld/residents/${p.resident_id}/communications`, p.corps);
         clore(en ? 'Done: recorded and logged.' : 'Fait : enregistré et journalisé.');
       } catch (e) { confirmer.disabled = false; res.textContent = e.message; }

@@ -363,7 +363,7 @@ function creerApp(pool, options = {}) {
   api.put('/chsld/contacts/:id', route((req) => ch.modifierContact(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   api.post('/chsld/contacts/:id/verifier-representant', route((req) => ch.verifierRepresentant(pool, req.utilisateur, entier(req.params.id, 'id'))));
   const ACTIONS_RESIDENT = { 'reserver-place': ch.reserverPlace, arrivee: ch.confirmerArrivee, 'changer-chambre': ch.changerChambre, sortie: ch.sortie, absence: ch.absence,
-    hospitalisation: ch.preparerHospitalisation, 'transfert-chsld': ch.preparerTransfertChsld, communications: ch.creerCommunication };
+    hospitalisation: ch.preparerHospitalisation, 'transfert-chsld': ch.preparerTransfertChsld, communications: ch.creerCommunication, 'liberer-place': ch.libererPlace };
   require('./portail-proches').brancherPersonnel(api, pool, route, entier);
   api.post('/chsld/residents/:id/:action', route((req) => {
     const f = ACTIONS_RESIDENT[req.params.action]; if (!f) throw new ErreurHttp(404, 'action_inconnue');

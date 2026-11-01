@@ -60,10 +60,47 @@ async function mouvement(c, r, type, u, extra = {}) {
 }
 const journalChsld = (c, etabId, u, action, detail) => journaliser(c, { etablissementId: etabId, utilisateurId: u?.id, action, detail });
 async function tache(c, etabId, u, t) {
-  return (await c.query(`INSERT INTO taches_etab (etablissement_id, type, titre, detail, lit_id, resident_id, assigne_role, echeance, cree_par)
+  const n = (await c.query(`INSERT INTO taches_etab (etablissement_id, type, titre, detail, lit_id, resident_id, assigne_role, echeance, cree_par)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`, [etabId, t.type, t.titre, t.detail || null, t.lit_id || null, t.resident_id || null, t.assigne_role || null, t.echeance || null, u?.id || null])).rows[0];
+  // Une préparation de place conservée ou réservée la marque « à nettoyer » sans changer son attribution.
+  if (t.type === 'preparation_chambre' && n.lit_id) await c.query(`UPDATE lits SET entretien_statut = 'a_nettoyer' WHERE id = $1 AND etat IN ('occupe', 'reserve')`, [n.lit_id]);
+  return n;
 }
 const codeLit = async (c, litId) => (await c.query('SELECT code FROM lits WHERE id = $1', [litId])).rows[0]?.code;
+/** Statut d'occupation affiché, indépendant de l'entretien : une place conservée n'est jamais disponible. */
+const OCCUPATION_SQL = `CASE WHEN l.etat = 'indispo' THEN 'bloquee' WHEN r.statut = 'hospitalise' THEN 'conservee_hospitalisation'
+  WHEN r.id IS NOT NULL AND l.etat = 'reserve' THEN 'reservee' WHEN r.id IS NOT NULL THEN 'occupee' WHEN l.etat = 'libre' THEN 'disponible'
+  WHEN l.etat = 'nettoyage' THEN 'preparation' ELSE l.etat END`;
+/**
+ * Réintégration d'un résident dans sa place habituelle : contrôles lus, jamais d'écriture.
+ * Raisons de blocage : aucune place attribuée, place bloquée, place occupée par un autre résident, place hors service,
+ * entretien ou préparation non terminés. Une autre place n'est jamais choisie automatiquement.
+ */
+async function etatReintegration(db, residentId) {
+  const r = (await db.query('SELECT id, lit_id, statut, etablissement_id FROM residents WHERE id = $1', [residentId])).rows[0];
+  if (!r) return null;
+  const raisons = [];
+  if (!r.lit_id) return { lit: null, attribuee: false, conservee: false, pret: false, raisons: ['aucune_place_attribuee'], taches: [] };
+  const lit = (await db.query(`SELECT l.id, l.code, l.etat, l.version, l.actif, COALESCE(l.entretien_statut, 'propre') AS entretien, l.entretien_le, ep.nom AS entretien_par,
+      COALESCE(l.motif_indispo, l.blocage_motif) AS motif_blocage, ch.numero AS chambre, un.nom AS unite, l.etablissement_id
+    FROM lits l JOIN chambres ch ON ch.id = l.chambre_id JOIN unites un ON un.id = l.unite_id LEFT JOIN utilisateurs ep ON ep.id = l.entretien_par WHERE l.id = $1`, [r.lit_id])).rows[0];
+  const autres = (await db.query(`SELECT reference FROM residents WHERE lit_id = $1 AND id <> $2 AND statut NOT IN ('sorti', 'transfere')`, [r.lit_id, r.id])).rows;
+  const taches = (await db.query(`SELECT id, type, titre, statut, echeance FROM taches_etab WHERE lit_id = $1 AND statut IN ('a_faire', 'en_cours') ORDER BY cree_le`, [r.lit_id])).rows;
+  if (!lit.actif || lit.etablissement_id !== r.etablissement_id) raisons.push('place_hors_service');
+  if (lit.etat === 'indispo') raisons.push('place_bloquee');
+  if (autres.length) raisons.push('place_reattribuee');
+  if (!['occupe', 'reserve', 'indispo'].includes(lit.etat) && !autres.length) raisons.push('place_non_reservee');
+  if (['a_nettoyer', 'en_cours'].includes(lit.entretien) || taches.length) raisons.push('preparation_en_cours');
+  const attribuee = !autres.length && ['occupe', 'reserve'].includes(lit.etat) && lit.actif;
+  return { lit, attribuee, conservee: attribuee && r.statut === 'hospitalise', propre: ['propre', 'termine'].includes(lit.entretien), taches,
+    pret: raisons.length === 0, raisons, bloquante: raisons.some((x) => x !== 'preparation_en_cours') };
+}
+/** Entretien d'une place, indépendant de son attribution : suit les tâches d'entretien et de préparation liées au lit. */
+async function majEntretien(c, litId, statut, u) {
+  if (!litId) return;
+  if (statut === 'propre') await c.query('UPDATE lits SET entretien_statut = $2, entretien_le = now(), entretien_par = $3 WHERE id = $1', [litId, 'propre', u?.id || null]);
+  else await c.query('UPDATE lits SET entretien_statut = $2 WHERE id = $1', [litId, statut]);
+}
 
 /* ------------------------------------------------------------------ tableau de bord */
 async function accueil(pool, u, etabId) {
@@ -126,7 +163,8 @@ async function ficheResident(pool, u, id) {
   // Localisation hospitalière : seulement d'après la dernière hospitalisation confirmée (jamais supposée)
   const hosp = coordinations.find((c) => c.type === 'hospitalisation' && ['en_cours', 'recue'].includes(c.statut));
   const localisation = r.statut === 'hospitalise' && hosp ? { hopital: hosp.destination, confirmee: hosp.statut === 'recue', numero: hosp.numero } : null;
-  return { resident: r, lit, contacts, mouvements, coordinations, taches, communications, localisation };
+  const reintegration = ['hospitalise', 'absent'].includes(r.statut) || coordinations.some((c) => c.type === 'retour' && ['envoyee', 'acceptee', 'en_cours'].includes(c.statut)) ? await etatReintegration(pool, r.id) : null;
+  return { resident: r, lit: lit ? { ...lit, entretien: (await pool.query("SELECT COALESCE(entretien_statut, 'propre') e FROM lits WHERE id = $1", [lit.id])).rows[0].e } : null, contacts, mouvements, coordinations, taches, communications, localisation, reintegration };
 }
 function lireIdentite(b) {
   const prenom = texte(b.prenom, 80), nom = texte(b.nom, 80), dn = dateIso(b.date_naissance);
@@ -424,6 +462,24 @@ const numeroCoordination = async (c) => (await c.query(`SELECT 'CO-' || lpad(nex
 async function etape(c, co, statut, etabId, u, detail) {
   await c.query('INSERT INTO coordination_etapes (coordination_id, statut, etablissement_id, par, detail) VALUES ($1, $2, $3, $4, $5)', [co.id, statut, etabId, u?.id || null, detail || null]);
 }
+/**
+ * Libération volontaire d'une place conservée (hospitalisation prolongée, décision d'hébergement) : responsable seulement,
+ * motif obligatoire, journalisée. Jamais automatique. Le retour devra ensuite recevoir une place validée explicitement.
+ */
+async function libererPlace(pool, u, residentId, b) {
+  const { e } = await lireResident(pool, u, residentId, { roles: GERER, module: 'hospitalisations' });
+  const motif = texte(b.motif, 200); if (!motif) throw new ErreurHttp(400, 'motif_requis');
+  return transaction(pool, async (c) => {
+    const r = await verrouResident(c, residentId); versionAttendue(r, b.version);
+    if (r.statut !== 'hospitalise' || !r.lit_id) throw new ErreurHttp(409, 'resident_statut_incompatible');
+    const l = await changerEtat(c, pool, u.id, r.lit_id, 'nettoyage', { detail: `Place conservée de ${r.reference} libérée : ${motif}` });
+    await tache(c, e.id, u, { type: 'entretien', titre: `Nettoyer ${l.code} (place libérée)`, lit_id: l.id, assigne_role: 'entretien' });
+    const n = (await c.query('UPDATE residents SET lit_id = NULL, version = version + 1, modifie_le = now() WHERE id = $1 RETURNING *', [r.id])).rows[0];
+    await mouvement(c, n, 'modification', u, { de: l.id, detail: `Place conservée libérée : ${motif}` });
+    await journalChsld(c, e.id, u, 'Place conservée libérée', `${r.reference} · ${l.code}`);
+    return n;
+  });
+}
 /** Hôpitaux qui peuvent recevoir une demande d'un CHSLD : actifs, ouverts et Liaison CHSLD activée (aucune dépendance au réseau inter-CHSLD). */
 async function hopitauxLiaison(db, { id = null } = {}) {
   const rows = (await db.query(`SELECT id, nom, ville, modules, type_etablissement FROM etablissements
@@ -487,7 +543,11 @@ async function actionCoordination(pool, u, id, b) {
   const a = String(b.action || '');
   return transaction(pool, async (c) => {
     await expirerCoordinations(c);
-    const co = (await c.query('SELECT * FROM coordinations WHERE id = $1 FOR UPDATE', [id])).rows[0]; versionAttendue(co, b.version);
+    const co = (await c.query('SELECT * FROM coordinations WHERE id = $1 FOR UPDATE', [id])).rows[0];
+    // Confirmations répétées ou simultanées d'une même arrivée : la seconde ne change rien (aucune double occupation).
+    if (a === 'confirmer_arrivee' && cote === 'destination' && co.statut === 'recue') return { ...co, deja_confirme: true };
+    if (a === 'confirmer_reception' && cote === 'destination' && co.type === 'hospitalisation' && co.statut === 'recue') return { ...co, deja_confirme: true };
+    versionAttendue(co, b.version);
     const r = await verrouResident(c, co.resident_id);
     const maj = async (statut, champs = {}) => (await c.query(`UPDATE coordinations SET statut = $2, incident = COALESCE($3, incident), retour_prevu_le = COALESCE($4, retour_prevu_le),
         lit_id = COALESCE($5, lit_id), destination_id = COALESCE($6, destination_id), version = version + 1, modifie_le = now() WHERE id = $1 RETURNING *`,
@@ -553,6 +613,24 @@ async function actionCoordination(pool, u, id, b) {
       await notifierCo(c, co.origine_id, 'chsld_retour_accepte', co);
       await tache(c, r.etablissement_id, u, { type: 'preparation_chambre', titre: `Préparer la chambre pour le retour de ${r.reference}`, lit_id: lit, resident_id: r.id, assigne_role: 'entretien', echeance: co.retour_prevu_le });
       await mouvement(c, r, 'retour_prevu', u, { autre: co.origine_id, coordination: co.id, detail: `Retour accepté${co.retour_prevu_le ? ` pour le ${new Date(co.retour_prevu_le).toISOString().slice(0, 10)}` : ''}` });
+    } else if (t === 'retour' && cote === 'destination' && a === 'resoudre') {
+      // Résolution validée par un responsable : une autre place libre est choisie explicitement (jamais automatiquement).
+      if (!['acceptee', 'en_cours'].includes(co.statut)) throw new ErreurHttp(409, 'coordination_statut_incompatible');
+      if (!GERER.includes(u.role)) throw new ErreurHttp(403, 'role_insuffisant');
+      const ri = await etatReintegration(c, r.id);
+      if (!ri.bloquante) throw new ErreurHttp(409, 'reintegration_possible');
+      const lit = (await c.query('SELECT etablissement_id FROM lits WHERE id = $1', [Number(b.lit_id)])).rows[0];
+      if (!lit || lit.etablissement_id !== r.etablissement_id) throw new ErreurHttp(404, 'lit_introuvable');
+      const l = await changerEtat(c, pool, u.id, Number(b.lit_id), 'reserve', { versionAttendue: b.version_lit, patientRef: r.reference, detail: `Retour de ${r.reference} : nouvelle place validée` });
+      await c.query('UPDATE residents SET lit_id = $2, version = version + 1, modifie_le = now() WHERE id = $1', [r.id, l.id]);
+      await mouvement(c, r, 'modification', u, { vers: l.id, coordination: co.id, detail: `Nouvelle place validée pour le retour (${ri.raisons.join(', ')})` });
+      n = await maj(co.statut, { lit: l.id });
+    } else if (t === 'retour' && cote === 'origine' && a === 'annuler') {
+      // Retour annulé par l'hôpital : le résident reste hospitalisé, sa place reste conservée.
+      if (!['envoyee', 'acceptee'].includes(co.statut)) throw new ErreurHttp(409, 'coordination_statut_incompatible');
+      n = await maj('annulee');
+      await mouvement(c, r, 'annulation', u, { autre: co.origine_id, coordination: co.id, detail: `Retour ${co.numero} annulé par l’hôpital ; place conservée` });
+      await notifierCo(c, co.destination_id, 'chsld_retour_annule', co);
     } else if (t === 'retour' && cote === 'destination' && a === 'refuser') {
       if (!['envoyee', 'acceptee'].includes(co.statut)) throw new ErreurHttp(409, 'coordination_statut_incompatible');
       n = await maj('refusee', { incident: ['chambre_indisponible', 'informations_manquantes'].includes(b.incident) ? b.incident : null });
@@ -561,7 +639,11 @@ async function actionCoordination(pool, u, id, b) {
       n = await maj('en_cours');
     } else if (t === 'retour' && cote === 'destination' && a === 'confirmer_arrivee') {
       if (co.statut !== 'en_cours') throw new ErreurHttp(409, 'coordination_statut_incompatible');
-      const etat = (await c.query('SELECT etat FROM lits WHERE id = $1', [r.lit_id])).rows[0]?.etat;
+      // Réintégration dans la place habituelle seulement si elle est toujours attribuée, libre d'un autre résident et non bloquée.
+      const ri = await etatReintegration(c, r.id);
+      if (ri.bloquante) throw new ErreurHttp(409, 'reintegration_bloquee', { raisons: ri.raisons.join(', ') });
+      if (ri.lit) await c.query('SELECT id FROM lits WHERE id = $1 FOR UPDATE', [ri.lit.id]);
+      const etat = ri.lit?.etat;
       if (etat === 'reserve') await changerEtat(c, pool, u.id, r.lit_id, 'occupe', { detail: `Retour de ${r.reference}` });
       n = await maj('recue');
       await c.query(`UPDATE residents SET statut = 'present', version = version + 1, modifie_le = now() WHERE id = $1`, [r.id]);
@@ -668,16 +750,29 @@ async function preparerTransfertChsld(pool, u, residentId, b) {
 }
 /** Coordinations visibles pour un établissement (hôpital ou CHSLD) : références seulement, jamais les noms des résidents. */
 async function listeCoordinations(pool, u, etabId, q = {}) {
+  const liste = await listeCoordinationsBrute(pool, u, etabId, q);
+  // Retours attendus par ce CHSLD : contrôle de réintégration dans la place habituelle (« Retour prêt à confirmer »)
+  for (const c of liste) {
+    if (c.type === 'retour' && c.entrante && ['envoyee', 'acceptee', 'en_cours'].includes(c.statut)) {
+      const rid = (await pool.query('SELECT resident_id FROM coordinations WHERE id = $1', [c.id])).rows[0].resident_id;
+      const ri = await etatReintegration(pool, rid);
+      c.reintegration = ri && { pret: ri.pret, raisons: ri.raisons, bloquante: ri.bloquante, lit: ri.lit && { code: ri.lit.code, chambre: ri.lit.chambre, unite: ri.lit.unite, entretien: ri.lit.entretien } };
+    }
+  }
+  return liste;
+}
+async function listeCoordinationsBrute(pool, u, etabId, q = {}) {
   exigerEtablissement(u, etabId);
   await expirerCoordinations(pool);
   return (await pool.query(`SELECT c.id, c.numero, c.type, c.statut, c.resident_ref, c.retour_prevu_le, c.incident, c.version, c.cree_le, c.modifie_le, c.liee_id,
       c.recue_hopital_le, c.acceptee_le, c.arrivee_le, c.orientation, c.orientation_le, c.cloturee_le, c.motif_admin,
       CASE WHEN c.destination_id = $1 OR c.origine_id = $1 AND c.type = 'retour' THEN c.patient_ref_hopital END AS patient_ref_hopital,
       c.origine_id, o.nom AS origine, c.destination_id, d.nom AS destination, (c.destination_id = $1) AS entrante, l.code AS lit,
-      (SELECT json_agg(json_build_object('statut', x.statut, 'date', x.date, 'detail', x.detail) ORDER BY x.date) FROM coordination_etapes x WHERE x.coordination_id = c.id) AS etapes
+      (SELECT json_agg(json_build_object('statut', x.statut, 'date', x.date, 'detail', x.detail, 'etablissement_id', x.etablissement_id,
+         'par', CASE WHEN x.etablissement_id = $1 THEN pu.nom END) ORDER BY x.date) FROM coordination_etapes x LEFT JOIN utilisateurs pu ON pu.id = x.par WHERE x.coordination_id = c.id) AS etapes
     FROM coordinations c JOIN etablissements o ON o.id = c.origine_id JOIN etablissements d ON d.id = c.destination_id LEFT JOIN lits l ON l.id = c.lit_id AND l.etablissement_id = $1
     WHERE (c.origine_id = $1 OR c.destination_id = $1) ${q.toutes ? '' : "AND (c.statut IN ('preparee', 'envoyee', 'acceptee', 'en_cours') OR c.modifie_le > now() - interval '3 days')"}
-    ORDER BY c.modifie_le DESC LIMIT 200`, [etabId])).rows;
+    ORDER BY c.modifie_le DESC LIMIT 200`, [etabId])).rows.map((c) => ({ ...c, resident_id: undefined }));
 }
 /** Capacités partagées des autres CHSLD (nombre de places par type d'unité) ; aucune garantie d'admission. */
 async function reseau(pool, u, etabId) {
@@ -710,6 +805,7 @@ async function creerTache(pool, u, b) {
   if (echeance && Number.isNaN(echeance.getTime())) throw new ErreurHttp(400, 'date_invalide');
   return transaction(pool, async (c) => {
     const t = await tache(c, e.id, u, { type: b.type, titre, detail: texte(b.detail, 1000), lit_id: Number(b.lit_id) || null, resident_id: Number(b.resident_id) || null, assigne_role: assigne, echeance });
+    if (['entretien', 'preparation_chambre'].includes(b.type) && t.lit_id) await majEntretien(c, t.lit_id, 'a_nettoyer', u);
     // Le titre est un texte libre (il peut contenir un nom) : le journal immuable ne garde que le type et le numéro.
     await journalChsld(c, e.id, u, 'Tâche créée', `${b.type} · n° ${t.id}`);
     return t;
@@ -726,6 +822,12 @@ async function statutTache(pool, u, id, b) {
     if (['faite', 'annulee'].includes(t.statut)) throw new ErreurHttp(409, 'tache_close');
     const n = (await c.query(`UPDATE taches_etab SET statut = $2, fait_par = CASE WHEN $2 = 'faite' THEN $3::int ELSE fait_par END, fait_le = CASE WHEN $2 = 'faite' THEN now() ELSE fait_le END,
       version = version + 1 WHERE id = $1 RETURNING *`, [id, b.statut, u.id])).rows[0];
+    // Entretien du lit : en cours, puis propre quand plus aucune tâche d'entretien n'est ouverte. L'attribution ne change jamais ici.
+    if (t.lit_id && ['entretien', 'preparation_chambre'].includes(t.type)) {
+      const ouvertes = (await c.query(`SELECT count(*)::int n FROM taches_etab WHERE lit_id = $1 AND type IN ('entretien', 'preparation_chambre') AND statut IN ('a_faire', 'en_cours')`, [t.lit_id])).rows[0].n;
+      if (b.statut === 'en_cours') await majEntretien(c, t.lit_id, 'en_cours', u);
+      else if (!ouvertes) await majEntretien(c, t.lit_id, 'propre', u);
+    }
     await journalChsld(c, e.id, u, 'Tâche', `${t.type} · n° ${t.id} · ${b.statut}`);
     return n;
   });
@@ -766,9 +868,11 @@ async function statutCommunication(pool, u, id, b) {
 async function places(pool, u, etabId) {
   const e = await etabChsld(pool, u, etabId, { roles: [...CONSULTER, 'entretien'] });
   return (await pool.query(`SELECT l.id, l.code, l.etat, l.version, l.etat_depuis, l.disponibilite_confirmee_le, ch.numero AS chambre, ch.type_chambre, un.nom AS unite, t.nom AS type_unite,
-      r.id AS resident_id, r.reference AS resident_ref, CASE WHEN $2 THEN r.prenom || ' ' || r.nom END AS resident_nom, r.statut AS resident_statut
+      r.id AS resident_id, r.reference AS resident_ref, CASE WHEN $2 THEN r.prenom || ' ' || r.nom END AS resident_nom, r.statut AS resident_statut,
+      ${OCCUPATION_SQL} AS occupation, COALESCE(l.entretien_statut, 'propre') AS entretien, l.entretien_le, ep.nom AS entretien_par, COALESCE(l.motif_indispo, l.blocage_motif) AS motif_blocage
     FROM lits l JOIN chambres ch ON ch.id = l.chambre_id JOIN unites un ON un.id = l.unite_id JOIN types_unite t ON t.id = l.type_id
-    LEFT JOIN residents r ON r.lit_id = l.id AND r.statut NOT IN ('sorti', 'transfere') WHERE l.etablissement_id = $1 AND l.actif ORDER BY un.nom, ch.numero, l.code`,
+    LEFT JOIN residents r ON r.lit_id = l.id AND r.statut NOT IN ('sorti', 'transfere') LEFT JOIN utilisateurs ep ON ep.id = l.entretien_par
+    WHERE l.etablissement_id = $1 AND l.actif ORDER BY un.nom, ch.numero, l.code`,
   [e.id, u.role !== 'entretien'])).rows;
 }
 async function indicateurs(pool, u, etabId, jours = 30) {
@@ -813,7 +917,7 @@ async function orienter(c, pool, u, co, b) {
   return n;
 }
 
-module.exports = { hopitauxLiaison, listeHopitauxLiaison, accueil, listeResidents, ficheResident, creerResident, modifierResident, ajouterContact, modifierContact, verifierRepresentant,
+module.exports = { etatReintegration, libererPlace, OCCUPATION_SQL, hopitauxLiaison, listeHopitauxLiaison, accueil, listeResidents, ficheResident, creerResident, modifierResident, ajouterContact, modifierContact, verifierRepresentant,
   reserverPlace, confirmerArrivee, changerChambre, sortie, absence, listeDemandes, creerDemande, actionDemande, preparerHospitalisation, actionCoordination,
   preparerRetour, preparerTransfertChsld, listeCoordinations, reseau, listeTaches, creerTache, statutTache, creerCommunication, statutCommunication,
   places, indicateurs, etabChsld, CATEGORIES, RELATIONS, DOCUMENTS, ACCESSIBILITE, exigerFictifs };

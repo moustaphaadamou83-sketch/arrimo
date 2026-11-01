@@ -54,7 +54,7 @@ function derniereConfirmation(c) {
 function actionsHopital(c, u, retour) {
   if (!GERER.includes(u.role) && u.role !== 'equipe_soins') return [];
   const gerer = GERER.includes(u.role);
-  if (c.type === 'retour') return c.statut === 'acceptee' ? ['confirmer_depart'] : c.statut === 'envoyee' ? ['incident'] : [];
+  if (c.type === 'retour') return c.statut === 'acceptee' ? ['confirmer_depart', ...(gerer ? ['annuler'] : [])] : c.statut === 'envoyee' ? ['incident', ...(gerer ? ['annuler'] : [])] : [];
   if (c.cloturee_le) return [];
   const a = [];
   if (c.statut === 'envoyee') { if (!c.recue_hopital_le) a.push('accuser_reception'); if (gerer) a.push('accepter', 'refuser'); }

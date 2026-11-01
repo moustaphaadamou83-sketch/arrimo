@@ -83,6 +83,7 @@ const TEXTES = {
       chsld_retour_propose: '{dest} prépare le retour du résident {ref} ({numero}) : à confirmer.',
       chsld_retour_accepte: '{origine} accepte le retour du résident {ref} ({numero}).',
       chsld_retour_recu: '{origine} confirme le retour du résident {ref} ({numero}) : parcours clos.',
+      chsld_retour_annule: '{origine} annule le retour du résident {ref} ({numero}) ; la place reste conservée.',
     },
     // Copilote : recommandations
     r_assigner: 'Assigner le lit {lit} à {ref}',
@@ -280,6 +281,7 @@ const TEXTES = {
       chsld_retour_propose: '{dest} is preparing the return of resident {ref} ({numero}): to confirm.',
       chsld_retour_accepte: '{origine} accepted the return of resident {ref} ({numero}).',
       chsld_retour_recu: '{origine} confirmed the return of resident {ref} ({numero}): pathway closed.',
+      chsld_retour_annule: '{origine} cancelled the return of resident {ref} ({numero}); the place remains held.',
     },
     r_assigner: 'Assign bed {lit} to {ref}',
     r_assigner_raison: 'Waiting for a bed in {type} for {duree} ({prio}, {prov}). This available bed meets their needs.',
