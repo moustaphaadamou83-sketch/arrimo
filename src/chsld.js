@@ -68,7 +68,7 @@ async function tache(c, etabId, u, t) {
 }
 const codeLit = async (c, litId) => (await c.query('SELECT code FROM lits WHERE id = $1', [litId])).rows[0]?.code;
 /** Statut d'occupation affiché, indépendant de l'entretien : une place conservée n'est jamais disponible. */
-const OCCUPATION_SQL = `CASE WHEN l.etat = 'indispo' THEN 'bloquee' WHEN r.statut = 'hospitalise' THEN 'conservee_hospitalisation'
+const OCCUPATION_SQL = `CASE WHEN l.etat = 'indispo' THEN 'bloquee' WHEN r.statut IN ('hospitalise', 'retour_a_reintegrer') THEN 'conservee_hospitalisation'
   WHEN r.id IS NOT NULL AND l.etat = 'reserve' THEN 'reservee' WHEN r.id IS NOT NULL THEN 'occupee' WHEN l.etat = 'libre' THEN 'disponible'
   WHEN l.etat = 'nettoyage' THEN 'preparation' ELSE l.etat END`;
 /**
@@ -77,22 +77,24 @@ const OCCUPATION_SQL = `CASE WHEN l.etat = 'indispo' THEN 'bloquee' WHEN r.statu
  * entretien ou préparation non terminés. Une autre place n'est jamais choisie automatiquement.
  */
 async function etatReintegration(db, residentId) {
-  const r = (await db.query('SELECT id, lit_id, statut, etablissement_id FROM residents WHERE id = $1', [residentId])).rows[0];
+  const r = (await db.query('SELECT id, lit_id, statut, etablissement_id, reference FROM residents WHERE id = $1', [residentId])).rows[0];
   if (!r) return null;
   const raisons = [];
   if (!r.lit_id) return { lit: null, attribuee: false, conservee: false, pret: false, raisons: ['aucune_place_attribuee'], taches: [] };
-  const lit = (await db.query(`SELECT l.id, l.code, l.etat, l.version, l.actif, COALESCE(l.entretien_statut, 'propre') AS entretien, l.entretien_le, ep.nom AS entretien_par,
+  const lit = (await db.query(`SELECT l.id, l.code, l.etat, l.version, l.actif, l.patient_ref, COALESCE(l.entretien_statut, 'propre') AS entretien, l.entretien_le, ep.nom AS entretien_par,
       COALESCE(l.motif_indispo, l.blocage_motif) AS motif_blocage, ch.numero AS chambre, un.nom AS unite, l.etablissement_id
     FROM lits l JOIN chambres ch ON ch.id = l.chambre_id JOIN unites un ON un.id = l.unite_id LEFT JOIN utilisateurs ep ON ep.id = l.entretien_par WHERE l.id = $1`, [r.lit_id])).rows[0];
   const autres = (await db.query(`SELECT reference FROM residents WHERE lit_id = $1 AND id <> $2 AND statut NOT IN ('sorti', 'transfere')`, [r.lit_id, r.id])).rows;
   const taches = (await db.query(`SELECT id, type, titre, statut, echeance FROM taches_etab WHERE lit_id = $1 AND statut IN ('a_faire', 'en_cours') ORDER BY cree_le`, [r.lit_id])).rows;
   if (!lit.actif || lit.etablissement_id !== r.etablissement_id) raisons.push('place_hors_service');
   if (lit.etat === 'indispo') raisons.push('place_bloquee');
-  if (autres.length) raisons.push('place_reattribuee');
+  // Autre résident rattaché à la place, ou lit réservé ou occupé sous une autre référence
+  const autreReference = ['occupe', 'reserve'].includes(lit.etat) && lit.patient_ref && lit.patient_ref !== r.reference;
+  if (autres.length || autreReference) raisons.push('place_reattribuee');
   if (!['occupe', 'reserve', 'indispo'].includes(lit.etat) && !autres.length) raisons.push('place_non_reservee');
   if (['a_nettoyer', 'en_cours'].includes(lit.entretien) || taches.length) raisons.push('preparation_en_cours');
-  const attribuee = !autres.length && ['occupe', 'reserve'].includes(lit.etat) && lit.actif;
-  return { lit, attribuee, conservee: attribuee && r.statut === 'hospitalise', propre: ['propre', 'termine'].includes(lit.entretien), taches,
+  const attribuee = !autres.length && !autreReference && ['occupe', 'reserve'].includes(lit.etat) && lit.actif;
+  return { lit, attribuee, conservee: attribuee && ['hospitalise', 'retour_a_reintegrer'].includes(r.statut), propre: ['propre', 'termine'].includes(lit.entretien), taches,
     pret: raisons.length === 0, raisons, bloquante: raisons.some((x) => x !== 'preparation_en_cours') };
 }
 /** Entretien d'une place, indépendant de son attribution : suit les tâches d'entretien et de préparation liées au lit. */
@@ -104,11 +106,11 @@ async function majEntretien(c, litId, statut, u) {
 
 /* ------------------------------------------------------------------ tableau de bord */
 async function accueil(pool, u, etabId) {
-  const e = await etabChsld(pool, u, etabId, { roles: [...CONSULTER, 'entretien'] });
+  const e = await etabChsld(pool, u, etabId); // tableau de bord général : jamais pour le rôle entretien
   const places = (await pool.query(`SELECT count(*) FILTER (WHERE l.etat <> 'indispo')::int AS dotees,
       count(*) FILTER (WHERE l.etat = 'libre')::int AS libres, count(*) FILTER (WHERE l.etat = 'reserve')::int AS reservees,
       count(*) FILTER (WHERE l.etat = 'occupe' AND r.statut = 'present')::int AS occupees,
-      count(*) FILTER (WHERE l.etat = 'occupe' AND r.statut IN ('hospitalise', 'absent'))::int AS conservees,
+      count(*) FILTER (WHERE l.etat = 'occupe' AND r.statut IN ('hospitalise', 'retour_a_reintegrer', 'absent'))::int AS conservees,
       count(*) FILTER (WHERE l.etat = 'nettoyage')::int AS preparation, count(*) FILTER (WHERE l.etat = 'indispo')::int AS bloquees
     FROM lits l LEFT JOIN residents r ON r.lit_id = l.id AND r.statut NOT IN ('sorti', 'transfere') WHERE l.etablissement_id = $1 AND l.actif`, [e.id])).rows[0];
   const residents = Object.fromEntries((await pool.query(`SELECT statut, count(*)::int n FROM residents WHERE etablissement_id = $1 AND statut NOT IN ('sorti', 'transfere') GROUP BY statut`, [e.id])).rows.map((x) => [x.statut, x.n]));
@@ -163,7 +165,7 @@ async function ficheResident(pool, u, id) {
   // Localisation hospitalière : seulement d'après la dernière hospitalisation confirmée (jamais supposée)
   const hosp = coordinations.find((c) => c.type === 'hospitalisation' && ['en_cours', 'recue'].includes(c.statut));
   const localisation = r.statut === 'hospitalise' && hosp ? { hopital: hosp.destination, confirmee: hosp.statut === 'recue', numero: hosp.numero } : null;
-  const reintegration = ['hospitalise', 'absent'].includes(r.statut) || coordinations.some((c) => c.type === 'retour' && ['envoyee', 'acceptee', 'en_cours'].includes(c.statut)) ? await etatReintegration(pool, r.id) : null;
+  const reintegration = ['hospitalise', 'retour_a_reintegrer', 'absent'].includes(r.statut) || coordinations.some((c) => c.type === 'retour' && ['envoyee', 'acceptee', 'en_cours'].includes(c.statut)) ? await etatReintegration(pool, r.id) : null;
   return { resident: r, lit: lit ? { ...lit, entretien: (await pool.query("SELECT COALESCE(entretien_statut, 'propre') e FROM lits WHERE id = $1", [lit.id])).rows[0].e } : null, contacts, mouvements, coordinations, taches, communications, localisation, reintegration };
 }
 function lireIdentite(b) {
@@ -351,7 +353,7 @@ async function sortie(pool, u, residentId, b) {
   if (!MOTIFS_SORTIE.includes(b.motif)) throw new ErreurHttp(400, 'motif_sortie_requis');
   return transaction(pool, async (c) => {
     const r = await verrouResident(c, residentId); versionAttendue(r, b.version);
-    if (!['present', 'absent', 'hospitalise', 'preadmission'].includes(r.statut)) throw new ErreurHttp(409, 'resident_statut_incompatible');
+    if (!['present', 'absent', 'hospitalise', 'retour_a_reintegrer', 'preadmission'].includes(r.statut)) throw new ErreurHttp(409, 'resident_statut_incompatible');
     let lit = null;
     if (r.lit_id) {
       const etat = (await c.query('SELECT etat FROM lits WHERE id = $1', [r.lit_id])).rows[0].etat;
@@ -359,6 +361,8 @@ async function sortie(pool, u, residentId, b) {
       if (lit.etat === 'nettoyage') await tache(c, e.id, u, { type: 'entretien', titre: `Nettoyer ${lit.code} après la fin d’hébergement`, lit_id: lit.id, assigne_role: 'entretien' });
     }
     await c.query(`UPDATE coordinations SET statut = 'annulee', version = version + 1, modifie_le = now() WHERE resident_id = $1 AND statut IN ('preparee', 'envoyee', 'acceptee')`, [r.id]);
+    // Fin d'hébergement d'un résident déjà revenu de l'hôpital : son parcours est clos des deux côtés
+    if (r.statut === 'retour_a_reintegrer') await c.query(`UPDATE coordinations SET cloturee_le = now(), version = version + 1, modifie_le = now() WHERE resident_id = $1 AND statut = 'recue' AND cloturee_le IS NULL`, [r.id]);
     const n = (await c.query(`UPDATE residents SET statut = 'sorti', lit_id = NULL, version = version + 1, modifie_le = now() WHERE id = $1 RETURNING *`, [r.id])).rows[0];
     await mouvement(c, n, r.statut === 'preadmission' ? 'annulation' : 'sortie', u, { de: lit?.id, detail: `Motif : ${b.motif}` });
     await journalChsld(c, e.id, u, 'Fin d’hébergement', `${r.reference} · ${b.motif}`);
@@ -468,7 +472,7 @@ async function etape(c, co, statut, etabId, u, detail) {
  */
 async function libererPlace(pool, u, residentId, b) {
   const { e } = await lireResident(pool, u, residentId, { roles: GERER, module: 'hospitalisations' });
-  const motif = texte(b.motif, 200); if (!motif) throw new ErreurHttp(400, 'motif_requis');
+  const motif = texte(b.motif, 200); if (!motif) throw new ErreurHttp(400, 'motif_liberation_requis');
   return transaction(pool, async (c) => {
     const r = await verrouResident(c, residentId); versionAttendue(r, b.version);
     if (r.statut !== 'hospitalise' || !r.lit_id) throw new ErreurHttp(409, 'resident_statut_incompatible');
@@ -488,7 +492,22 @@ async function hopitauxLiaison(db, { id = null } = {}) {
 }
 async function listeHopitauxLiaison(pool, u, etabId) {
   await etabChsld(pool, u, etabId, { module: 'hospitalisations' });
-  return hopitauxLiaison(pool);
+  const liste = await hopitauxLiaison(pool);
+  // Services (types d'unité) de chaque hôpital, pour le « service souhaité » du formulaire
+  const types = (await pool.query(`SELECT e.id AS hopital_id, t.id, t.nom, t.nom_en FROM etablissements e JOIN types_unite t ON t.config_id = e.config_id WHERE e.id = ANY($1) ORDER BY t.ordre`, [liste.map((h) => h.id)])).rows;
+  return liste.map((h) => ({ ...h, services: types.filter((t) => t.hopital_id === h.id).map(({ id, nom, nom_en }) => ({ id, nom, nom_en })) }));
+}
+const URGENCES_DECLAREES = ['courante', 'prioritaire', 'immediate'];
+const TRANSPORTS = ['ambulance', 'transport_adapte', 'autre'];
+/** Informations opérationnelles autorisées : listes fermées, jamais de texte libre ni de donnée clinique. */
+function infosOperationnelles(b = {}) {
+  const x = b && typeof b === 'object' ? b : {};
+  const r = {};
+  if (Array.isArray(x.accessibilite)) { if (x.accessibilite.some((a) => !ACCESSIBILITE.includes(a))) throw new ErreurHttp(400, 'infos_operationnelles_invalides'); r.accessibilite = [...new Set(x.accessibilite)]; }
+  if (x.transport != null && x.transport !== '') { if (!TRANSPORTS.includes(x.transport)) throw new ErreurHttp(400, 'infos_operationnelles_invalides'); r.transport = x.transport; }
+  if (x.accompagnateur != null) r.accompagnateur = x.accompagnateur === true;
+  if (x.langue != null && x.langue !== '') { if (!['fr', 'en', 'autre'].includes(x.langue)) throw new ErreurHttp(400, 'infos_operationnelles_invalides'); r.langue = x.langue; }
+  return r;
 }
 const nomEtab = async (c, id) => (await c.query('SELECT nom FROM etablissements WHERE id = $1', [id])).rows[0]?.nom;
 /** Notification à l'autre établissement : enregistrée dans la même transaction que l'étape (la coordination reste la référence). */
@@ -510,6 +529,11 @@ async function preparerHospitalisation(pool, u, residentId, b) {
   if (!h0) throw new ErreurHttp(404, 'hopital_introuvable');
   const h = (await hopitauxLiaison(pool, { id: h0.id }))[0];
   if (!h) throw new ErreurHttp(409, 'liaison_chsld_inactive');
+  const urgence = b.urgence_declaree == null || b.urgence_declaree === '' ? null : String(b.urgence_declaree);
+  if (urgence && !URGENCES_DECLAREES.includes(urgence)) throw new ErreurHttp(400, 'urgence_declaree_invalide');
+  const infos = infosOperationnelles(b.infos_operationnelles);
+  const service = b.service_souhaite_id ? Number(b.service_souhaite_id) : null;
+  if (service && !(await pool.query('SELECT 1 FROM types_unite t JOIN etablissements e ON e.config_id = t.config_id WHERE e.id = $1 AND t.id = $2', [h.id, service])).rowCount) throw new ErreurHttp(400, 'type_unite_inconnu');
   return transaction(pool, async (c) => {
     // Le verrou du résident sérialise les envois simultanés : le second voit la demande du premier.
     const r = await verrouResident(c, residentId);
@@ -522,8 +546,8 @@ async function preparerHospitalisation(pool, u, residentId, b) {
     const ouverte = (await c.query(`SELECT numero FROM coordinations WHERE resident_id = $1 AND type = 'hospitalisation' AND statut IN ('preparee', 'envoyee', 'acceptee', 'en_cours')`, [r.id])).rows[0];
     if (ouverte) throw new ErreurHttp(409, 'hospitalisation_deja_ouverte', { numero: ouverte.numero });
     if (!['present', 'absent'].includes(r.statut)) throw new ErreurHttp(409, 'resident_statut_incompatible');
-    const co = (await c.query(`INSERT INTO coordinations (numero, type, resident_id, resident_ref, origine_id, destination_id, statut, motif_admin, lit_id, cree_par, cle_idempotence)
-      VALUES ($1, 'hospitalisation', $2, $3, $4, $5, 'envoyee', $6, $7, $8, $9) RETURNING *`, [await numeroCoordination(c), r.id, r.reference, e.id, h.id, texte(b.motif_admin, 200), r.lit_id, u.id, cle])).rows[0];
+    const co = (await c.query(`INSERT INTO coordinations (numero, type, resident_id, resident_ref, origine_id, destination_id, statut, motif_admin, lit_id, cree_par, cle_idempotence, urgence_declaree, service_souhaite_id, infos_operationnelles)
+      VALUES ($1, 'hospitalisation', $2, $3, $4, $5, 'envoyee', $6, $7, $8, $9, $10, $11, $12) RETURNING *`, [await numeroCoordination(c), r.id, r.reference, e.id, h.id, texte(b.motif_admin, 200), r.lit_id, u.id, cle, urgence, service, JSON.stringify(infos)])).rows[0];
     await etape(c, co, 'envoyee', e.id, u, `Demande transmise à ${h.nom} ; identité vérifiée`);
     await mouvement(c, r, 'depart_hopital', u, { autre: h.id, coordination: co.id, detail: `Demande transmise (${co.numero}) ; départ à confirmer` });
     await journalChsld(c, e.id, u, 'Hospitalisation préparée', `${r.reference} · ${co.numero}`);
@@ -544,6 +568,7 @@ async function actionCoordination(pool, u, id, b) {
   return transaction(pool, async (c) => {
     await expirerCoordinations(c);
     const co = (await c.query('SELECT * FROM coordinations WHERE id = $1 FOR UPDATE', [id])).rows[0];
+    if (a === 'reintegrer' && cote === 'destination' && co.type === 'retour' && co.reintegree_le) return { ...co, deja_confirme: true };
     // Confirmations répétées ou simultanées d'une même arrivée : la seconde ne change rien (aucune double occupation).
     if (a === 'confirmer_arrivee' && cote === 'destination' && co.statut === 'recue') return { ...co, deja_confirme: true };
     if (a === 'confirmer_reception' && cote === 'destination' && co.type === 'hospitalisation' && co.statut === 'recue') return { ...co, deja_confirme: true };
@@ -553,7 +578,9 @@ async function actionCoordination(pool, u, id, b) {
         lit_id = COALESCE($5, lit_id), destination_id = COALESCE($6, destination_id), version = version + 1, modifie_le = now() WHERE id = $1 RETURNING *`,
       [co.id, statut, champs.incident || null, champs.retour || null, champs.lit || null, champs.destination || null])).rows[0];
     // Une hospitalisation reçue reste ouverte côté hôpital (orientation, retour, incidents) jusqu'à sa clôture.
-    const ouvert = ['preparee', 'envoyee', 'acceptee', 'en_cours'].includes(co.statut) || (co.type === 'hospitalisation' && co.statut === 'recue' && !co.cloturee_le);
+    const ouvert = ['preparee', 'envoyee', 'acceptee', 'en_cours'].includes(co.statut) || (co.type === 'hospitalisation' && co.statut === 'recue' && !co.cloturee_le)
+      || (co.type === 'retour' && co.statut === 'recue' && co.arrivee_le && !co.cloturee_le);
+    let detailJournal = '';
     if (!ouvert && !['incident'].includes(a)) throw new ErreurHttp(409, 'coordination_close');
     const t = co.type;
     let n;
@@ -588,7 +615,9 @@ async function actionCoordination(pool, u, id, b) {
       await mouvement(c, r, 'hospitalisation_confirmee', u, { etablissementId: r.etablissement_id, autre: co.destination_id, coordination: co.id, detail: 'Arrivée confirmée par l’hôpital' });
       await notifierCo(c, co.origine_id, 'chsld_arrivee', co);
     } else if (t === 'hospitalisation' && cote === 'destination' && a === 'orienter') {
+      if (!GERER.includes(u.role)) throw new ErreurHttp(403, 'role_insuffisant');
       n = await orienter(c, pool, u, co, b);
+      detailJournal = ` · ${n.orientation} · ${n.patient_ref_hopital}${n.emplacement ? ` · ${n.emplacement}` : ''}${n.service_corrige ? ' · service corrigé' : ''}`;
     } else if (t === 'hospitalisation' && cote === 'origine' && a === 'changer_hopital') {
       if (!['envoyee', 'en_cours'].includes(co.statut)) throw new ErreurHttp(409, 'coordination_statut_incompatible');
       const h = (await c.query(`SELECT id, nom FROM etablissements WHERE id = $1 AND type_etablissement = 'hopital' AND actif`, [Number(b.hopital_id)])).rows[0];
@@ -615,7 +644,7 @@ async function actionCoordination(pool, u, id, b) {
       await mouvement(c, r, 'retour_prevu', u, { autre: co.origine_id, coordination: co.id, detail: `Retour accepté${co.retour_prevu_le ? ` pour le ${new Date(co.retour_prevu_le).toISOString().slice(0, 10)}` : ''}` });
     } else if (t === 'retour' && cote === 'destination' && a === 'resoudre') {
       // Résolution validée par un responsable : une autre place libre est choisie explicitement (jamais automatiquement).
-      if (!['acceptee', 'en_cours'].includes(co.statut)) throw new ErreurHttp(409, 'coordination_statut_incompatible');
+      if (!['acceptee', 'en_cours', 'recue'].includes(co.statut)) throw new ErreurHttp(409, 'coordination_statut_incompatible');
       if (!GERER.includes(u.role)) throw new ErreurHttp(403, 'role_insuffisant');
       const ri = await etatReintegration(c, r.id);
       if (!ri.bloquante) throw new ErreurHttp(409, 'reintegration_possible');
@@ -625,6 +654,8 @@ async function actionCoordination(pool, u, id, b) {
       await c.query('UPDATE residents SET lit_id = $2, version = version + 1, modifie_le = now() WHERE id = $1', [r.id, l.id]);
       await mouvement(c, r, 'modification', u, { vers: l.id, coordination: co.id, detail: `Nouvelle place validée pour le retour (${ri.raisons.join(', ')})` });
       n = await maj(co.statut, { lit: l.id });
+      // La nouvelle place doit être vérifiée à son tour
+      n = (await c.query('UPDATE coordinations SET chambre_verifiee_le = NULL WHERE id = $1 RETURNING *', [co.id])).rows[0];
     } else if (t === 'retour' && cote === 'origine' && a === 'annuler') {
       // Retour annulé par l'hôpital : le résident reste hospitalisé, sa place reste conservée.
       if (!['envoyee', 'acceptee'].includes(co.statut)) throw new ErreurHttp(409, 'coordination_statut_incompatible');
@@ -637,21 +668,40 @@ async function actionCoordination(pool, u, id, b) {
     } else if (t === 'retour' && cote === 'origine' && a === 'confirmer_depart') {
       if (co.statut !== 'acceptee') throw new ErreurHttp(409, 'coordination_statut_incompatible');
       n = await maj('en_cours');
+      await libererPlacementHopital(c, pool, u, co);
+    } else if (t === 'retour' && cote === 'origine' && a === 'transport') {
+      if (co.statut !== 'en_cours' || co.transport_le) throw new ErreurHttp(409, 'coordination_statut_incompatible');
+      n = (await c.query('UPDATE coordinations SET transport_le = now(), version = version + 1, modifie_le = now() WHERE id = $1 RETURNING *', [co.id])).rows[0];
+    } else if (t === 'retour' && cote === 'destination' && a === 'verifier_chambre') {
+      // Vérification de la place par le CHSLD, relue à la réintégration : elle ne vaut que si tout est prêt
+      if (!['acceptee', 'en_cours', 'recue'].includes(co.statut) || co.chambre_verifiee_le) throw new ErreurHttp(409, 'coordination_statut_incompatible');
+      const ri = await etatReintegration(c, r.id);
+      if (!ri.pret) throw new ErreurHttp(409, 'reintegration_bloquee', { raisons: ri.raisons.join(', ') });
+      n = (await c.query('UPDATE coordinations SET chambre_verifiee_le = now(), version = version + 1, modifie_le = now() WHERE id = $1 RETURNING *', [co.id])).rows[0];
     } else if (t === 'retour' && cote === 'destination' && a === 'confirmer_arrivee') {
       if (co.statut !== 'en_cours') throw new ErreurHttp(409, 'coordination_statut_incompatible');
-      // Réintégration dans la place habituelle seulement si elle est toujours attribuée, libre d'un autre résident et non bloquée.
-      const ri = await etatReintegration(c, r.id);
-      if (ri.bloquante) throw new ErreurHttp(409, 'reintegration_bloquee', { raisons: ri.raisons.join(', ') });
-      if (ri.lit) await c.query('SELECT id FROM lits WHERE id = $1 FOR UPDATE', [ri.lit.id]);
-      const etat = ri.lit?.etat;
-      if (etat === 'reserve') await changerEtat(c, pool, u.id, r.lit_id, 'occupe', { detail: `Retour de ${r.reference}` });
+      // Arrivée physique : toujours enregistrable. La place reste conservée ; la réintégration est une action distincte.
       n = await maj('recue');
+      n = (await c.query('UPDATE coordinations SET arrivee_le = now() WHERE id = $1 RETURNING *', [co.id])).rows[0];
+      await c.query(`UPDATE residents SET statut = 'retour_a_reintegrer', version = version + 1, modifie_le = now() WHERE id = $1`, [r.id]);
+      await mouvement(c, r, 'retour', u, { autre: co.origine_id, coordination: co.id, detail: 'Arrivée confirmée au CHSLD ; réintégration à confirmer' });
+      await notifierCo(c, co.origine_id, 'chsld_retour_arrive', co);
+    } else if (t === 'retour' && cote === 'destination' && a === 'reintegrer') {
+      // « Réintégrer dans sa chambre » : identité, place conservée, nettoyage et conditions d'accueil, puis clôture du parcours
+      if (co.statut !== 'recue' || !co.arrivee_le || r.statut !== 'retour_a_reintegrer') throw new ErreurHttp(409, 'coordination_statut_incompatible');
+      if (b.identite_verifiee !== true) throw new ErreurHttp(400, 'identite_a_verifier');
+      if (b.conditions_accueil !== true) throw new ErreurHttp(400, 'conditions_accueil_a_confirmer');
+      if (!co.chambre_verifiee_le) throw new ErreurHttp(409, 'chambre_a_verifier');
+      const ri = await etatReintegration(c, r.id);
+      if (!ri.pret) throw new ErreurHttp(409, 'reintegration_bloquee', { raisons: ri.raisons.join(', ') });
+      if (ri.lit.etat === 'reserve') await changerEtat(c, pool, u.id, r.lit_id, 'occupe', { detail: `Réintégration de ${r.reference}` });
       await c.query(`UPDATE residents SET statut = 'present', version = version + 1, modifie_le = now() WHERE id = $1`, [r.id]);
-      // Parcours clos : l'hospitalisation d'origine est clôturée (retour reçu par le CHSLD).
-      if (co.liee_id) await c.query(`UPDATE coordinations SET statut = CASE WHEN statut = 'en_cours' THEN 'recue' ELSE statut END, cloturee_le = COALESCE(cloturee_le, now()),
-        version = version + 1, modifie_le = now() WHERE id = $1 AND statut IN ('en_cours', 'recue')`, [co.liee_id]);
-      if (co.liee_id) await c.query('INSERT INTO coordination_etapes (coordination_id, statut, etablissement_id, par, detail) VALUES ($1, $2, $3, $4, $5)', [co.liee_id, 'cloturee', etabId, u.id, `Retour reçu (${co.numero})`]);
-      await mouvement(c, r, 'retour', u, { autre: co.origine_id, coordination: co.id, detail: 'Retour confirmé ; résident présent' });
+      n = (await c.query('UPDATE coordinations SET reintegree_le = now(), cloturee_le = now(), version = version + 1, modifie_le = now() WHERE id = $1 RETURNING *', [co.id])).rows[0];
+      if (co.liee_id) {
+        await c.query(`UPDATE coordinations SET statut = CASE WHEN statut = 'en_cours' THEN 'recue' ELSE statut END, cloturee_le = COALESCE(cloturee_le, now()), version = version + 1, modifie_le = now() WHERE id = $1 AND statut IN ('en_cours', 'recue')`, [co.liee_id]);
+        await c.query('INSERT INTO coordination_etapes (coordination_id, statut, etablissement_id, par, detail) VALUES ($1, $2, $3, $4, $5)', [co.liee_id, 'cloturee', etabId, u.id, `Réintégration confirmée (${co.numero})`]);
+      }
+      await mouvement(c, r, 'reintegration', u, { vers: r.lit_id, autre: co.origine_id, coordination: co.id, detail: `Réintégré dans ${ri.lit.code}` });
       await notifierCo(c, co.origine_id, 'chsld_retour_recu', co);
     // -------- transfert inter-CHSLD (origine → destination)
     } else if (t === 'transfert_chsld' && cote === 'destination' && a === 'accepter') {
@@ -696,15 +746,18 @@ async function actionCoordination(pool, u, id, b) {
     // -------- incidents (retard, prolongation, informations manquantes), signalés par l'un ou l'autre
     } else if (a === 'incident') {
       const inc = String(b.incident || '');
-      if (!['retour_retarde', 'chambre_indisponible', 'informations_manquantes', 'hospitalisation_prolongee', 'arrivee_retardee'].includes(inc)) throw new ErreurHttp(400, 'incident_invalide');
+      if (!['retour_retarde', 'chambre_indisponible', 'informations_manquantes', 'hospitalisation_prolongee', 'arrivee_retardee', 'arrivee_anticipee'].includes(inc)) throw new ErreurHttp(400, 'incident_invalide');
       const retour = b.retour_prevu_le ? new Date(b.retour_prevu_le) : null;
       if (retour && Number.isNaN(retour.getTime())) throw new ErreurHttp(400, 'date_invalide');
       n = await maj(co.statut, { incident: inc, retour });
+      // Arrivée anticipée : l'autre établissement est prévenu ; l'étape manquante reste à confirmer par lui
+      if (inc === 'arrivee_anticipee') await notifierCo(c, cote === 'origine' ? co.destination_id : co.origine_id, 'chsld_arrivee_anticipee', co);
     } else throw new ErreurHttp(409, 'action_coordination_interdite');
     const nomEtape = a === 'incident' ? `incident:${b.incident}` : a === 'accuser_reception' ? 'recue_hopital' : a === 'orienter' ? `orientation:${n.orientation}`
-      : t === 'hospitalisation' && a === 'confirmer_reception' ? 'arrivee' : n.statut;
+      : t === 'hospitalisation' && a === 'confirmer_reception' ? 'arrivee' : a === 'verifier_chambre' ? 'chambre_verifiee' : a === 'transport' ? 'transport' : a === 'reintegrer' ? 'reintegree' : n.statut;
     await etape(c, n, nomEtape, etabId, u, texte(b.detail || b.motif, 200));
-    await journalChsld(c, etabId, u, 'Coordination', `${co.numero} · ${a} · ${co.resident_ref}`);
+    if (a === 'reintegrer') await etape(c, n, 'cloturee', etabId, u, null);
+    await journalChsld(c, etabId, u, 'Coordination', `${co.numero} · ${a} · ${co.resident_ref}${detailJournal}`);
     return n;
   });
 }
@@ -719,7 +772,7 @@ async function preparerRetour(pool, u, hospitalisationId, b) {
   return transaction(pool, async (c) => {
     const h = (await c.query('SELECT * FROM coordinations WHERE id = $1 FOR UPDATE', [hospitalisationId])).rows[0];
     if (!['en_cours', 'recue'].includes(h.statut) || h.cloturee_le) throw new ErreurHttp(409, 'coordination_statut_incompatible');
-    const ouvert = (await c.query(`SELECT numero FROM coordinations WHERE resident_id = $1 AND type = 'retour' AND statut IN ('preparee', 'envoyee', 'acceptee', 'en_cours')`, [h.resident_id])).rows[0];
+    const ouvert = (await c.query(`SELECT numero FROM coordinations WHERE resident_id = $1 AND type = 'retour' AND (statut IN ('preparee', 'envoyee', 'acceptee', 'en_cours') OR (statut = 'recue' AND arrivee_le IS NOT NULL AND cloturee_le IS NULL))`, [h.resident_id])).rows[0];
     if (ouvert) throw new ErreurHttp(409, 'retour_deja_ouvert', { numero: ouvert.numero });
     const co = (await c.query(`INSERT INTO coordinations (numero, type, resident_id, resident_ref, origine_id, destination_id, statut, retour_prevu_le, liee_id, expire_le, cree_par, motif_admin)
       VALUES ($1, 'retour', $2, $3, $4, $5, 'envoyee', $6, $7, $6::timestamptz + interval '2 days', $8, $9) RETURNING *`,
@@ -751,9 +804,13 @@ async function preparerTransfertChsld(pool, u, residentId, b) {
 /** Coordinations visibles pour un établissement (hôpital ou CHSLD) : références seulement, jamais les noms des résidents. */
 async function listeCoordinations(pool, u, etabId, q = {}) {
   const liste = await listeCoordinationsBrute(pool, u, etabId, q);
-  // Retours attendus par ce CHSLD : contrôle de réintégration dans la place habituelle (« Retour prêt à confirmer »)
   for (const c of liste) {
-    if (c.type === 'retour' && c.entrante && ['envoyee', 'acceptee', 'en_cours'].includes(c.statut)) {
+    const retour = c.type === 'hospitalisation' ? liste.filter((x) => x.type === 'retour' && x.liee_id === c.id).sort((x, y) => new Date(y.cree_le) - new Date(x.cree_le))[0] || null : null;
+    c.etape = etapeParcours(c, retour);
+    c.chronologie = chronologie(c, retour);
+    c.a_reintegrer = c.type === 'retour' && c.statut === 'recue' && !!c.arrivee_le && !c.cloturee_le;
+    // Retours attendus par ce CHSLD : contrôle de réintégration dans la place habituelle (« Retour prêt à confirmer »)
+    if (c.type === 'retour' && c.entrante && (['envoyee', 'acceptee', 'en_cours'].includes(c.statut) || c.a_reintegrer)) {
       const rid = (await pool.query('SELECT resident_id FROM coordinations WHERE id = $1', [c.id])).rows[0].resident_id;
       const ri = await etatReintegration(pool, rid);
       c.reintegration = ri && { pret: ri.pret, raisons: ri.raisons, bloquante: ri.bloquante, lit: ri.lit && { code: ri.lit.code, chambre: ri.lit.chambre, unite: ri.lit.unite, entretien: ri.lit.entretien } };
@@ -765,13 +822,19 @@ async function listeCoordinationsBrute(pool, u, etabId, q = {}) {
   exigerEtablissement(u, etabId);
   await expirerCoordinations(pool);
   return (await pool.query(`SELECT c.id, c.numero, c.type, c.statut, c.resident_ref, c.retour_prevu_le, c.incident, c.version, c.cree_le, c.modifie_le, c.liee_id,
-      c.recue_hopital_le, c.acceptee_le, c.arrivee_le, c.orientation, c.orientation_le, c.cloturee_le, c.motif_admin,
+      c.recue_hopital_le, c.acceptee_le, c.arrivee_le, c.orientation, c.orientation_le, c.cloturee_le, c.motif_admin, c.urgence_declaree, c.infos_operationnelles,
+      c.chambre_verifiee_le, c.transport_le, c.reintegree_le, c.service_souhaite_id, ss.nom AS service_souhaite, ss.nom_en AS service_souhaite_en, sr.nom AS service_retenu, sr.nom_en AS service_retenu_en,
+      (SELECT count(*)::int FROM taches_etab tp WHERE c.type = 'retour' AND tp.lit_id = c.lit_id AND tp.type IN ('entretien', 'preparation_chambre') AND tp.statut IN ('a_faire', 'en_cours')) AS preparation_ouvertes,
+      (SELECT max(tp.fait_le) FROM taches_etab tp WHERE c.type = 'retour' AND tp.lit_id = c.lit_id AND tp.type IN ('entretien', 'preparation_chambre') AND tp.cree_le >= c.cree_le) AS preparation_le,
+      CASE WHEN c.destination_id = $1 THEN (SELECT json_build_object('demande_id', da.id, 'statut', da.statut, 'lit', dl.code) FROM demandes_admission da LEFT JOIN lits dl ON dl.id = da.lit_id WHERE da.id = c.demande_admission_id) END AS admission,
+      CASE WHEN c.destination_id = $1 THEN (SELECT cv.code FROM civieres cv WHERE cv.id = c.civiere_id) END AS civiere,
       CASE WHEN c.destination_id = $1 OR c.origine_id = $1 AND c.type = 'retour' THEN c.patient_ref_hopital END AS patient_ref_hopital,
       c.origine_id, o.nom AS origine, c.destination_id, d.nom AS destination, (c.destination_id = $1) AS entrante, l.code AS lit,
       (SELECT json_agg(json_build_object('statut', x.statut, 'date', x.date, 'detail', x.detail, 'etablissement_id', x.etablissement_id,
-         'par', CASE WHEN x.etablissement_id = $1 THEN pu.nom END) ORDER BY x.date) FROM coordination_etapes x LEFT JOIN utilisateurs pu ON pu.id = x.par WHERE x.coordination_id = c.id) AS etapes
+         'par', CASE WHEN x.etablissement_id = $1 THEN pu.nom END) ORDER BY x.date, x.id) FROM coordination_etapes x LEFT JOIN utilisateurs pu ON pu.id = x.par WHERE x.coordination_id = c.id) AS etapes
     FROM coordinations c JOIN etablissements o ON o.id = c.origine_id JOIN etablissements d ON d.id = c.destination_id LEFT JOIN lits l ON l.id = c.lit_id AND l.etablissement_id = $1
-    WHERE (c.origine_id = $1 OR c.destination_id = $1) ${q.toutes ? '' : "AND (c.statut IN ('preparee', 'envoyee', 'acceptee', 'en_cours') OR c.modifie_le > now() - interval '3 days')"}
+      LEFT JOIN types_unite ss ON ss.id = c.service_souhaite_id LEFT JOIN types_unite sr ON sr.id = c.service_retenu_id
+    WHERE (c.origine_id = $1 OR c.destination_id = $1) ${q.toutes ? '' : "AND (c.statut IN ('preparee', 'envoyee', 'acceptee', 'en_cours') OR c.modifie_le > now() - interval '3 days' OR (c.statut = 'recue' AND c.cloturee_le IS NULL))"}
     ORDER BY c.modifie_le DESC LIMIT 200`, [etabId])).rows.map((c) => ({ ...c, resident_id: undefined }));
 }
 /** Capacités partagées des autres CHSLD (nombre de places par type d'unité) ; aucune garantie d'admission. */
@@ -791,8 +854,11 @@ async function listeTaches(pool, u, etabId, q = {}) {
   const p = [e.id]; let cond = '';
   if (u.role === 'entretien') cond = ` AND t.type IN ('entretien', 'preparation_chambre')`;
   if (!q.toutes) cond += ` AND t.statut IN ('a_faire', 'en_cours')`;
-  return (await pool.query(`SELECT t.*, l.code AS lit, r.reference AS resident_ref, cu.nom AS cree_par_nom FROM taches_etab t LEFT JOIN lits l ON l.id = t.lit_id
+  const taches = (await pool.query(`SELECT t.*, l.code AS lit, r.reference AS resident_ref, cu.nom AS cree_par_nom FROM taches_etab t LEFT JOIN lits l ON l.id = t.lit_id
     LEFT JOIN residents r ON r.id = t.resident_id LEFT JOIN utilisateurs cu ON cu.id = t.cree_par WHERE t.etablissement_id = $1${cond} ORDER BY t.echeance NULLS LAST, t.cree_le LIMIT 300`, p)).rows;
+  // Entretien : la chambre suffit ; aucune référence de résident ni détail de dossier
+  if (u.role !== 'entretien') return taches;
+  return taches.map((t) => ({ ...t, resident_id: null, resident_ref: null, detail: null, titre: String(t.titre).replace(/\s*(de|of)?\s*R-\d{5}/g, '').trim() }));
 }
 async function creerTache(pool, u, b) {
   const e = await etabChsld(pool, u, Number(b.etablissement_id), { roles: CONSULTER, module: 'taches' });
@@ -868,7 +934,7 @@ async function statutCommunication(pool, u, id, b) {
 async function places(pool, u, etabId) {
   const e = await etabChsld(pool, u, etabId, { roles: [...CONSULTER, 'entretien'] });
   return (await pool.query(`SELECT l.id, l.code, l.etat, l.version, l.etat_depuis, l.disponibilite_confirmee_le, ch.numero AS chambre, ch.type_chambre, un.nom AS unite, t.nom AS type_unite,
-      r.id AS resident_id, r.reference AS resident_ref, CASE WHEN $2 THEN r.prenom || ' ' || r.nom END AS resident_nom, r.statut AS resident_statut,
+      CASE WHEN $2 THEN r.id END AS resident_id, CASE WHEN $2 THEN r.reference END AS resident_ref, CASE WHEN $2 THEN r.prenom || ' ' || r.nom END AS resident_nom, r.statut AS resident_statut,
       ${OCCUPATION_SQL} AS occupation, COALESCE(l.entretien_statut, 'propre') AS entretien, l.entretien_le, ep.nom AS entretien_par, COALESCE(l.motif_indispo, l.blocage_motif) AS motif_blocage
     FROM lits l JOIN chambres ch ON ch.id = l.chambre_id JOIN unites un ON un.id = l.unite_id JOIN types_unite t ON t.id = l.type_id
     LEFT JOIN residents r ON r.lit_id = l.id AND r.statut NOT IN ('sorti', 'transfere') LEFT JOIN utilisateurs ep ON ep.id = l.entretien_par
@@ -893,31 +959,119 @@ async function indicateurs(pool, u, etabId, jours = 30) {
 }
 
 /**
- * Orientation décidée par le personnel hospitalier habilité, après l'arrivée confirmée : admission (demande d'admission
- * ordinaire, mêmes contrôles de référence et de doublon) ou accueil à l'urgence (module Urgence actif). Aucune priorité
- * clinique n'est attribuée : la priorité reste validée par les personnes habilitées dans la file d'admission.
- * L'épisode hospitalier porte la référence de l'hôpital ; l'identité et le dossier du CHSLD ne sont ni copiés ni modifiés.
+ * Étape d'un parcours, déduite uniquement des statuts et horodatages enregistrés : même résultat pour le CHSLD et l'hôpital.
+ * Aller : transmise → reçue → acceptée (ou refusée) → départ confirmé → arrivée confirmée → admission ou urgence → retour → clôturée.
+ * Retour : proposé → accepté → chambre vérifiée → en route → arrivé → réintégré.
+ */
+function etapeParcours(c, retour = null) {
+  if (['refusee', 'annulee', 'expiree'].includes(c.statut)) return c.statut;
+  if (c.type === 'retour') {
+    if (c.statut === 'envoyee') return 'retour_propose';
+    if (c.statut === 'acceptee') return c.chambre_verifiee_le ? 'retour_chambre_verifiee' : 'retour_accepte';
+    if (c.statut === 'en_cours') return 'retour_en_route';
+    if (c.statut === 'recue') return c.reintegree_le ? 'retour_reintegre' : c.arrivee_le ? 'retour_arrive' : 'retour_recu';
+    return c.statut;
+  }
+  if (c.type !== 'hospitalisation') return c.statut;
+  if (c.cloturee_le) return 'cloturee';
+  if (c.statut === 'envoyee') return c.recue_hopital_le ? 'recue_hopital' : 'transmise';
+  if (c.statut === 'en_cours') return 'depart_confirme';
+  if (c.statut === 'recue') {
+    if (retour && (['preparee', 'envoyee', 'acceptee', 'en_cours'].includes(retour.statut))) return 'retour_preparation';
+    if (retour && retour.statut === 'recue' && retour.arrivee_le) return 'retour_arrive';
+    return c.orientation || 'arrivee_confirmee';
+  }
+  return c.statut;
+}
+/** Chronologie partagée : mêmes étapes et mêmes dates pour les deux établissements ; ni nom, ni lit, ni référence hospitalière. */
+function chronologie(c, retour = null) {
+  const date = (s) => (c.etapes || []).filter((e) => e.statut === s).at(-1)?.date || null;
+  const pas = (code, d, fait = !!d) => ({ code, fait, date: d || null });
+  if (c.type === 'retour') {
+    const passee = ['acceptee', 'en_cours', 'recue'].includes(c.statut);
+    return [pas('demande', c.cree_le), pas('acceptation', date('acceptee')), pas('preparation', c.preparation_le, passee && !c.preparation_ouvertes), pas('chambre_verifiee', c.chambre_verifiee_le),
+      pas('depart', date('en_cours')), pas('transport', c.transport_le), pas('arrivee', c.arrivee_le), pas('reintegration', c.reintegree_le), pas('cloture', c.cloturee_le)];
+  }
+  if (c.type !== 'hospitalisation') return [];
+  return [pas('demande', c.cree_le), pas('reception', c.recue_hopital_le), pas('acceptation', c.acceptee_le), pas('depart', date('en_cours')), pas('arrivee', c.arrivee_le),
+    pas('orientation', c.orientation_le), pas('retour', retour?.cree_le), pas('cloture', c.cloturee_le)];
+}
+/** Une même référence hospitalière ne peut pas occuper deux emplacements ni servir à deux parcours ouverts. */
+async function exigerPatientLibre(c, etabId, ref, coId) {
+  const place = (await c.query(`SELECT code FROM lits WHERE etablissement_id = $1 AND patient_ref = $2 AND etat IN ('reserve', 'occupe')
+    UNION ALL SELECT code FROM civieres WHERE etablissement_id = $1 AND patient_ref = $2 AND etat = 'occupee' LIMIT 1`, [etabId, ref])).rows[0];
+  if (place) throw new ErreurHttp(409, 'patient_deja_place', { ref, code: place.code });
+  const autre = (await c.query('SELECT numero FROM coordinations WHERE destination_id = $1 AND patient_ref_hopital = $2 AND cloturee_le IS NULL AND id <> $3', [etabId, ref, coId])).rows[0];
+  if (autre) throw new ErreurHttp(409, 'reference_deja_utilisee', { ref, numero: autre.numero });
+}
+/**
+ * « Orienter / admettre le patient » : décision du personnel hospitalier habilité, après l'arrivée confirmée.
+ * - Admission : demande d'admission ordinaire (mêmes contrôles) ; avec un lit choisi, attribution et admission dans la même
+ *   transaction (lit compatible, version vérifiée, verrou de regles.js) ; sans lit, la demande attend dans la file.
+ * - Urgence : placement sur une civière libre choisie (verrou de regles.js). Une civière peut ensuite mener à une admission.
+ * Aucune priorité clinique n'est attribuée. L'épisode porte la référence de l'hôpital ; le dossier du CHSLD n'est ni copié ni modifié.
  */
 async function orienter(c, pool, u, co, b) {
   if (co.statut !== 'recue' || co.cloturee_le) throw new ErreurHttp(409, 'coordination_statut_incompatible');
-  if (co.orientation) throw new ErreurHttp(409, 'orientation_deja_faite');
   const o = String(b.orientation || '');
   if (!['admission', 'urgence'].includes(o)) throw new ErreurHttp(400, 'orientation_invalide');
-  const s = require('./services');
+  const correction = co.orientation === 'urgence' && o === 'admission' && !co.demande_admission_id; // de la civière vers un lit
+  if (co.orientation && !correction) throw new ErreurHttp(409, 'orientation_deja_faite');
+  const s = require('./services'); const t = require('./terrain'); const { changerEtatCiviere } = require('./regles');
   const etab = await s.etablissement(c, co.destination_id);
-  const ref = String(b.patient_ref || '').trim();
+  s.exigerActif(etab);
+  const ref = correction ? co.patient_ref_hopital : String(b.patient_ref || '').trim();
   if (!new RegExp(etab.config.reference_regex).test(ref)) throw new ErreurHttp(400, 'reference_invalide', { exemple: etab.config.reference_exemple });
-  let demandeId = null;
+  if (!correction) await exigerPatientLibre(c, etab.id, ref, co.id);
+  let demandeId = null, civiereId = co.civiere_id || null, emplacement = null, serviceRetenu = co.service_retenu_id || null;
   if (o === 'admission') {
-    const d = await require('./terrain').creerDemande(pool, u, { etablissement_id: co.destination_id, patient_ref: ref, type_id: Number(b.type_id), provenance: 'externe' }, c);
+    serviceRetenu = Number(b.type_id) || null;
+    const d = await t.creerDemande(pool, u, { etablissement_id: etab.id, patient_ref: ref, type_id: serviceRetenu, provenance: 'externe', besoins: b.besoins, ...(correction ? { civiere_id: civiereId } : {}) }, c);
     demandeId = d.id;
-  } else if ((etab.modules || {}).urgence === false) throw new ErreurHttp(409, 'urgence_inactive');
-  const n = (await c.query(`UPDATE coordinations SET orientation = $2, orientation_le = now(), patient_ref_hopital = $3, demande_admission_id = $4, version = version + 1, modifie_le = now()
-    WHERE id = $1 RETURNING *`, [co.id, o, ref, demandeId])).rows[0];
-  return n;
+    if (b.lit_id) {
+      const assignee = await t.assignerLit(pool, u, d.id, Number(b.lit_id), b.version_lit, c);
+      await t.admettreDemande(pool, u, d.id, c);
+      emplacement = assignee.lit_code;
+    }
+  } else {
+    if ((etab.modules || {}).urgence === false) throw new ErreurHttp(409, 'urgence_inactive');
+    if (!b.civiere_id) throw new ErreurHttp(400, 'civiere_requise');
+    const cv = (await c.query('SELECT id, code FROM civieres WHERE id = $1 AND etablissement_id = $2', [Number(b.civiere_id), etab.id])).rows[0];
+    if (!cv) throw new ErreurHttp(404, 'civiere_introuvable');
+    await changerEtatCiviere(c, pool, u.id, cv.id, 'occupee', { versionAttendue: b.version_civiere, patientRef: ref, detail: `Accueil d’un résident de CHSLD (${co.numero})` });
+    civiereId = cv.id; emplacement = cv.code;
+  }
+  try {
+    const n = (await c.query(`UPDATE coordinations SET orientation = $2, orientation_le = now(), patient_ref_hopital = $3, demande_admission_id = $4, civiere_id = $5, service_retenu_id = $6,
+        version = version + 1, modifie_le = now() WHERE id = $1 RETURNING *`, [co.id, o, ref, demandeId, civiereId, serviceRetenu])).rows[0];
+    return { ...n, emplacement, service_corrige: !!(co.service_souhaite_id && serviceRetenu && co.service_souhaite_id !== serviceRetenu) };
+  } catch (err) {
+    if (err.code === '23505') throw new ErreurHttp(409, 'reference_deja_utilisee', { ref, numero: '' });
+    throw err;
+  }
+}
+/** Départ confirmé vers le CHSLD : le lit ou la civière de l'hôpital part au nettoyage ; une demande encore en attente est annulée. */
+async function libererPlacementHopital(c, pool, u, retour) {
+  if (!retour.liee_id) return;
+  const { changerEtatCiviere } = require('./regles');
+  const h = (await c.query('SELECT * FROM coordinations WHERE id = $1', [retour.liee_id])).rows[0];
+  const detail = `Retour vers le CHSLD (${retour.numero})`;
+  if (h?.demande_admission_id) {
+    const d = (await c.query('SELECT * FROM demandes_admission WHERE id = $1 FOR UPDATE', [h.demande_admission_id])).rows[0];
+    if (d.statut === 'assignee') await changerEtat(c, pool, u.id, d.lit_id, 'libre', { detail });
+    if (['attente', 'assignee'].includes(d.statut)) await c.query(`UPDATE demandes_admission SET statut = 'annulee', terminee_le = now() WHERE id = $1`, [d.id]);
+    if (d.statut === 'admise' && d.lit_id) {
+      const l = (await c.query('SELECT etat, patient_ref FROM lits WHERE id = $1', [d.lit_id])).rows[0];
+      if (l.etat === 'occupe' && l.patient_ref === d.patient_ref) await changerEtat(c, pool, u.id, d.lit_id, 'nettoyage', { detail });
+    }
+  }
+  if (h?.civiere_id) {
+    const cv = (await c.query('SELECT etat, patient_ref FROM civieres WHERE id = $1', [h.civiere_id])).rows[0];
+    if (cv.etat === 'occupee' && cv.patient_ref === h.patient_ref_hopital) await changerEtatCiviere(c, pool, u.id, h.civiere_id, 'nettoyage', { depuisDemande: true, detail });
+  }
 }
 
-module.exports = { etatReintegration, libererPlace, OCCUPATION_SQL, hopitauxLiaison, listeHopitauxLiaison, accueil, listeResidents, ficheResident, creerResident, modifierResident, ajouterContact, modifierContact, verifierRepresentant,
+module.exports = { etapeParcours, chronologie, etatReintegration, libererPlace, OCCUPATION_SQL, hopitauxLiaison, listeHopitauxLiaison, accueil, listeResidents, ficheResident, creerResident, modifierResident, ajouterContact, modifierContact, verifierRepresentant,
   reserverPlace, confirmerArrivee, changerChambre, sortie, absence, listeDemandes, creerDemande, actionDemande, preparerHospitalisation, actionCoordination,
   preparerRetour, preparerTransfertChsld, listeCoordinations, reseau, listeTaches, creerTache, statutTache, creerCommunication, statutCommunication,
   places, indicateurs, etabChsld, CATEGORIES, RELATIONS, DOCUMENTS, ACCESSIBILITE, exigerFictifs };

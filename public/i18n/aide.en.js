@@ -150,8 +150,8 @@ window.ARRIMO_I18N.en.aide = {
       gestes: [
         'CHSLD arrivals: “Confirm receipt” of the request, then “Accept” or “Decline” according to your rules.',
         'To receive: after the CHSLD confirms departure, “Confirm arrival” once the resident is physically here.',
-        '“Prepare admission or emergency”: decided by authorized staff, with the hospital episode reference. No clinical priority is assigned.',
-        'Hospital stays and returns: “Prepare the return to the CHSLD”; the CHSLD accepts, you confirm departure, it confirms the return.',
+        '“Direct / admit the patient”: decided by authorized staff. Choose a free compatible bed, a free stretcher or the admission queue. No clinical priority is assigned.',
+        'Hospital stays: “Prepare the return to the CHSLD”. Returns in progress: the CHSLD accepts and checks the room, you confirm departure, it confirms arrival and then reinstates the resident.',
       ],
       erreurs: [
         ['“This step is not possible at this stage of the coordination”', 'Another step must be confirmed first (for example departure by the CHSLD). The card shows the last confirmation.'],

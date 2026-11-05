@@ -157,7 +157,7 @@ function creerApp(pool, options = {}) {
   api.use((req, res, next) => {
     if (req.utilisateur.role !== 'entretien') return next();
     // La météo de l'en-tête et le nom de l'assistant (lecture seule, propres à l'établissement) s'affichent aussi pour l'entretien.
-    const ok = (req.method === 'GET' && ['/moi', '/nettoyage', '/meteo', '/og/configuration', '/chsld/accueil', '/chsld/taches', '/chsld/places'].includes(req.path)) || req.path.startsWith('/moi/')
+    const ok = (req.method === 'GET' && ['/moi', '/nettoyage', '/meteo', '/og/configuration', '/chsld/taches', '/chsld/places'].includes(req.path)) || req.path.startsWith('/moi/')
       || (req.method === 'POST' && /^\/chsld\/taches\/\d+\/statut$/.test(req.path))
       || (req.method === 'POST' && (req.path === '/deconnexion' || /^\/nettoyage\/\d+\/debut$/.test(req.path)
         || (/^\/(lits|civieres)\/\d+\/action$/.test(req.path) && req.body && req.body.action === 'nettoyage_ok')));
@@ -377,6 +377,8 @@ function creerApp(pool, options = {}) {
   api.get('/chsld/hopitaux', route((req) => ch.listeHopitauxLiaison(pool, req.utilisateur, E(req))));
   // Module hospitalier Liaison CHSLD : arrivées, accueil, hospitalisations et retours, historique
   api.get('/liaison-chsld', route((req) => require('./liaison-chsld').vue(pool, req.utilisateur, E(req))));
+  // Emplacements réellement libres et compatibles pour « Orienter / admettre le patient »
+  api.get('/liaison-chsld/:id/emplacements', route((req) => require('./liaison-chsld').emplacements(pool, req.utilisateur, E(req), entier(req.params.id, 'id'), req.query)));
   api.get('/chsld/taches', route((req) => ch.listeTaches(pool, req.utilisateur, E(req), { toutes: req.query.toutes === '1' })));
   api.post('/chsld/taches', route((req) => ch.creerTache(pool, req.utilisateur, req.body)));
   api.post('/chsld/taches/:id/statut', route((req) => ch.statutTache(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));

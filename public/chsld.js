@@ -240,11 +240,21 @@
       // Identifiant d'envoi fixé à l'ouverture : un second clic ou un renvoi après coupure réseau rend la même demande.
       const cle = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`).replace(/[^A-Za-z0-9_-]/g, '');
       const choix = hosp ? res.hopitaux.map((h) => [h.id, h.nom]) : [...new Map(res.chsld.map((x) => [x.id, [x.id, `${x.nom} · ${t('chsld.reseau.libres', { n: res.chsld.filter((y) => y.id === x.id).reduce((s, y) => s + y.libres, 0) })}`]])).values()];
-      return modale(t(hosp ? 'chsld.actions.hospitalisation' : 'chsld.actions.transfert'), `${sel('co-dest', C(hosp ? 'actions.hopital' : 'actions.destination'), choix)}${champ('co-motif', C('actions.motif_admin'), '', 'maxlength="200"')}
+      const servicesDe = (id) => (res.hopitaux.find((h) => h.id === Number(id))?.services || []).map((x) => [x.id, nomType(x)]);
+      const formDepart = hosp ? `<div id="co-service-zone">${sel('co-service', C('depart.service'), [['', C('depart.sans_preference')], ...servicesDe(choix[0]?.[0])])}</div>
+        ${sel('co-urgence', C('depart.urgence'), ['courante', 'prioritaire', 'immediate'].map((x) => [x, t(`chsld.depart.urgence_${x}`)]))}<p class="note">${C('depart.urgence_note')}</p>
+        ${sel('co-transport', C('depart.transport'), [['', C('depart.sans_preference')], ...['ambulance', 'transport_adapte', 'autre'].map((x) => [x, t(`chsld.depart.transport_${x}`)])])}
+        <fieldset class="ch-cases"><legend class="lbl">${C('depart.accessibilite')}</legend>${['fauteuil', 'deambulateur', 'leve_personne', 'lit_electrique', 'malentendant', 'malvoyant'].map((x) => `<label class="case"><input type="checkbox" data-co-acc="${x}"${(r.accessibilite || []).includes(x) ? ' checked' : ''}> ${esc(t(`chsld.acces.${x}`))}</label>`).join('')}</fieldset>
+        <label class="case"><input type="checkbox" id="co-accompagnateur"> ${C('depart.accompagnateur')}</label>
+        <p class="note">${C('depart.motif_note')}</p>` : '';
+      const ouvrirForm = modale(t(hosp ? 'chsld.actions.hospitalisation' : 'chsld.actions.transfert'), `${sel('co-dest', C(hosp ? 'actions.hopital' : 'actions.destination'), choix)}${champ('co-motif', C('actions.motif_admin'), '', 'maxlength="200"')}${formDepart}
         ${hosp ? `<label class="case"><input type="checkbox" id="co-id"> ${C('actions.identite_verifiee')}</label>` : `<p class="note">${C('actions.non_garantie')}</p>`}`,
       [{ label: t('general.annuler') }, { label: t('general.confirmer'), pri: true, run: async () => (await agir(null, () => api('POST', `/chsld/residents/${r.id}/${a}`, hosp
-        ? { hopital_id: Number($('#co-dest').value), motif_admin: $('#co-motif').value, identite_verifiee: $('#co-id').checked, version: r.version, cle }
+        ? { hopital_id: Number($('#co-dest').value), motif_admin: $('#co-motif').value, identite_verifiee: $('#co-id').checked, version: r.version, cle, urgence_declaree: $('#co-urgence').value, service_souhaite_id: Number($('#co-service').value) || null,
+            infos_operationnelles: { accessibilite: [...document.querySelectorAll('[data-co-acc]:checked')].map((x) => x.dataset.coAcc), transport: $('#co-transport').value || null, accompagnateur: $('#co-accompagnateur').checked, langue: r.langue } }
         : { destination_id: Number($('#co-dest').value), motif_admin: $('#co-motif').value, version: r.version }), ok)) !== null || false }]);
+      if (hosp) $('#co-dest').onchange = () => { $('#co-service-zone').innerHTML = sel('co-service', C('depart.service'), [['', C('depart.sans_preference')], ...servicesDe($('#co-dest').value)]); };
+      return ouvrirForm;
     }
     return null;
   }
@@ -339,39 +349,34 @@
   /* ------------------------------------------------------------------ Coordinations (CHSLD et hôpital) */
   const ACTIONS_CO = {
     hospitalisation: { origine: { envoyee: ['confirmer_depart', 'annuler'], acceptee: ['confirmer_depart', 'annuler'], en_cours: ['incident'] }, destination: { en_cours: ['confirmer_reception', 'retour'], recue: ['retour', 'incident'] } },
-    retour: { origine: { acceptee: ['confirmer_depart'], envoyee: ['incident'] }, destination: { envoyee: ['accepter', 'refuser'], acceptee: ['incident'], en_cours: ['confirmer_arrivee'] } },
+    retour: { origine: { acceptee: ['confirmer_depart'], envoyee: ['incident'] }, destination: { envoyee: ['accepter', 'refuser', 'incident'], acceptee: ['verifier_chambre', 'incident'], en_cours: ['verifier_chambre', 'confirmer_arrivee'], recue: ['verifier_chambre', 'reintegrer'] } },
     transfert_chsld: { origine: { envoyee: ['annuler'], acceptee: ['confirmer_depart', 'annuler'] }, destination: { envoyee: ['accepter', 'refuser'], en_cours: ['confirmer_arrivee'] } },
   };
+  /** Chronologie calculée par le serveur : mêmes étapes et mêmes dates dans le CHSLD et à l'hôpital. */
+  const chronoHTML = (ch) => (ch?.length ? `<ol class="ch-chrono">${ch.map((p) => `<li class="${p.fait ? 'fait' : ''}"><span>${C(`chrono.${p.code}`)}</span>${p.date ? `<span class="note num">${esc(dateHeure(p.date))}</span>` : ''}</li>`).join('')}</ol>` : '');
   const libelleEtape = (s) => (s.startsWith('incident:') ? t(`chsld.coord.incident_${s.slice(9)}`) : s.startsWith('orientation:') ? t(`chsld.liaison.etape_${s.slice(12)}`)
-    : ['recue_hopital', 'arrivee', 'cloturee', 'envoyee'].includes(s) ? t(`chsld.liaison.journal_${s}`) : t(`chsld.coord_statut.${s}`));
+    : ['recue_hopital', 'arrivee', 'cloturee', 'envoyee', 'chambre_verifiee', 'transport', 'reintegree'].includes(s) ? t(`chsld.liaison.journal_${s}`) : t(`chsld.coord_statut.${s}`));
   function carteCoordination(c) {
     const cote = c.entrante ? 'destination' : 'origine';
-    const actions = (ACTIONS_CO[c.type]?.[cote]?.[c.statut] || []).filter((a) => a !== 'retour' || gererCo())
-      .concat(c.reintegration?.bloquante && gererCo() && ['acceptee', 'en_cours'].includes(c.statut) ? ['resoudre'] : []);
-    const statutVu = c.type === 'hospitalisation' ? etapePartagee(c) : c.statut;
-    return `<div class="item ch-coord"><div><b class="num">${esc(c.numero)}</b> · ${C(`coord.type_${c.type}`)} · <span class="num">${esc(c.resident_ref)}</span> ${pastille(c.statut, t(`chsld.liaison.etape_${statutVu}`) || t(`chsld.coord_statut.${c.statut}`))}
+    const actions = (ACTIONS_CO[c.type]?.[cote]?.[c.statut] || []).filter((a) => (a !== 'retour' || gererCo()) && (a !== 'verifier_chambre' || !c.chambre_verifiee_le) && (c.statut !== 'recue' || c.type !== 'retour' || c.a_reintegrer))
+      .concat(c.reintegration?.bloquante && gererCo() && (['acceptee', 'en_cours'].includes(c.statut) || c.a_reintegrer) ? ['resoudre'] : []);
+    return `<div class="item ch-coord"><div><b class="num">${esc(c.numero)}</b> · ${C(`coord.type_${c.type}`)} · <span class="num">${esc(c.resident_ref)}</span> ${pastille(c.statut, t(['hospitalisation', 'retour'].includes(c.type) ? `chsld.liaison.etape_${c.etape}` : `chsld.coord_statut.${c.statut}`))}
       <div class="note">${esc(c.origine)} → ${esc(c.destination)}${c.lit ? ` · ${esc(c.lit)}` : ''}${c.retour_prevu_le ? ` · ${C('coord.retour_le', { date: dateHeure(c.retour_prevu_le) })}` : ''}${c.incident ? ` · <b>${C(`coord.incident_${c.incident}`)}</b>` : ''}</div>
       ${c.reintegration ? `<div class="note">${c.reintegration.lit ? `${esc(c.reintegration.lit.code)} · ` : ''}${c.reintegration.pret ? `<b>${C('reint.pret')}</b>` : c.reintegration.raisons.map((x) => C(`reint.r_${x}`)).join(' · ')}</div>` : ''}
+      ${c.cloturee_le || ['refusee', 'annulee', 'expiree'].includes(c.statut) ? '' : chronoHTML(c.chronologie)}
       ${c.etapes?.length ? `<details><summary class="note">${C('coord.etapes')}</summary><ol class="ch-historique">${c.etapes.map((e) => `<li><span class="note num">${esc(dateHeure(e.date))}</span> ${esc(libelleEtape(e.statut))}${e.detail ? ` · ${esc(e.detail)}` : ''}</li>`).join('')}</ol></details>` : ''}</div>
-      ${actions.length ? `<div class="actions">${actions.map((a) => `<button class="btn${['confirmer_depart', 'confirmer_reception', 'confirmer_arrivee', 'accepter'].includes(a) ? ' pri' : a === 'refuser' || a === 'annuler' ? ' dan' : ''}" data-co="${a}" data-id="${c.id}" data-version="${c.version}" data-type="${c.type}">${C(`coord.${a === 'retour' ? 'preparer_retour' : a}`)}</button>`).join('')}</div>` : ''}</div>`;
+      ${actions.length ? `<div class="actions">${actions.map((a) => `<button class="btn${['confirmer_depart', 'confirmer_reception', 'confirmer_arrivee', 'accepter', 'reintegrer'].includes(a) ? ' pri' : a === 'refuser' || a === 'annuler' ? ' dan' : ''}" data-co="${a}" data-id="${c.id}" data-version="${c.version}" data-type="${c.type}">${C(`coord.${a === 'retour' ? 'preparer_retour' : a}`)}</button>`).join('')}</div>` : ''}</div>`;
   }
   const gererCo = () => ['coordonnateur', 'admin_etab', 'gestionnaire'].includes(role());
-  /** Étape partagée d'une hospitalisation, déduite des confirmations enregistrées (même règle que le serveur). */
-  function etapePartagee(c) {
-    if (['refusee', 'annulee', 'expiree'].includes(c.statut)) return c.statut;
-    if (c.cloturee_le) return 'cloturee';
-    if (c.statut === 'envoyee') return c.recue_hopital_le ? 'recue_hopital' : 'transmise';
-    if (c.statut === 'en_cours') return 'depart_confirme';
-    if (c.statut === 'recue') return c.orientation || 'arrivee_confirmee';
-    return c.statut;
-  }
   function brancherCoordinations(zone) {
     zone.querySelectorAll('[data-co]').forEach((b) => { b.onclick = async () => {
       const id = b.dataset.id, version = Number(b.dataset.version), a = b.dataset.co, ok = t('chsld.actions.ok');
       if (a === 'retour') return modale(t('chsld.coord.preparer_retour'), `${champ('rt-date', C('actions.retour_prevu'), '', 'type="datetime-local"')}${champ('rt-motif', C('actions.motif_admin'), '', 'maxlength="200"')}`,
         [{ label: t('general.annuler') }, { label: t('general.confirmer'), pri: true, run: async () => (await agir(null, () => api('POST', `/coordinations/${id}/retour`, { retour_prevu_le: $('#rt-date').value, motif_admin: $('#rt-motif').value }), ok)) !== null || false }]);
-      if (a === 'incident') return modale(t('chsld.coord.incident'), `${sel('in-code', C('coord.incident'), ['retour_retarde', 'hospitalisation_prolongee', 'informations_manquantes', 'chambre_indisponible'].map((x) => [x, t(`chsld.coord.incident_${x}`)]))}${champ('in-date', C('actions.retour_prevu'), '', 'type="datetime-local"')}`,
+      if (a === 'incident') return modale(t('chsld.coord.incident'), `${sel('in-code', C('coord.incident'), ['retour_retarde', 'hospitalisation_prolongee', 'informations_manquantes', 'chambre_indisponible', 'arrivee_anticipee'].map((x) => [x, t(`chsld.coord.incident_${x}`)]))}${champ('in-date', C('actions.retour_prevu'), '', 'type="datetime-local"')}`,
         [{ label: t('general.annuler') }, { label: t('general.confirmer'), pri: true, run: async () => (await agir(null, () => api('POST', `/coordinations/${id}/action`, { etablissement_id: ctx(), version, action: 'incident', incident: $('#in-code').value, retour_prevu_le: $('#in-date').value || null }), ok)) !== null || false }]);
+      if (a === 'reintegrer') return modale(t('chsld.coord.reintegrer'), `<p class="note">${C('reint.reintegrer_aide')}</p><label class="case"><input type="checkbox" id="ri-id"> ${C('actions.identite_verifiee')}</label><label class="case"><input type="checkbox" id="ri-cond"> ${C('reint.conditions')}</label>`,
+        [{ label: t('general.annuler') }, { label: t('chsld.coord.reintegrer'), pri: true, run: async () => (await agir(null, () => api('POST', `/coordinations/${id}/action`, { etablissement_id: ctx(), version, action: 'reintegrer', identite_verifiee: $('#ri-id').checked, conditions_accueil: $('#ri-cond').checked }), ok)) !== null || false }]);
       if (a === 'resoudre') {
         const libres = await placesLibres();
         return modale(t('chsld.reint.resoudre'), `<p class="note">${C('reint.resoudre_aide')}</p>${libres.length ? sel('rs-lit', C('actions.choisir_place'), libres.map((p) => [p.id, `${p.unite} · ${p.code}`])) : `<p>${C('actions.aucune_place')}</p>`}`,
@@ -399,10 +404,18 @@
   /* ------------------------------------------------------------------ Hôpital : module Liaison CHSLD */
   /* Un seul module commun à tous les hôpitaux. Les arrivées depuis les CHSLD ne sont jamais mêlées aux transferts
      interhospitaliers. L'hôpital ne voit que la référence du résident ; chaque étape est confirmée par une personne. */
-  const ONGLETS_LIAISON = ['arrivees', 'a_accueillir', 'hospitalisations', 'historique'];
+  const ONGLETS_LIAISON = ['arrivees', 'a_accueillir', 'hospitalisations', 'retours_en_cours', 'historique'];
   const L = (k, v) => C(`liaison.${k}`, v);
+  /** Renseignements transmis par le CHSLD, sans nouvelle saisie. */
+  const transmis = (c) => { const i = c.infos_operationnelles || {}; const x = [
+    c.urgence_declaree ? `${L('urgence_declaree')} : ${C(`depart.urgence_${c.urgence_declaree}`)}` : '',
+    c.service_souhaite ? `${L('service_souhaite')} : ${esc(locale().startsWith('en') ? c.service_souhaite_en || c.service_souhaite : c.service_souhaite)}` : '',
+    i.transport ? `${C('depart.transport')} : ${C(`depart.transport_${i.transport}`)}` : '',
+    i.accessibilite?.length ? `${C('depart.accessibilite')} : ${i.accessibilite.map((a) => C(`acces.${a}`)).join(', ')}` : '',
+    i.accompagnateur ? C('depart.accompagnateur') : ''].filter(Boolean);
+  return x.length ? `<div class="note li-transmis">${x.join(' · ')}</div>` : ''; };
   function carteLiaison(c) {
-    const act = (a, id = c.id, version = c.version, type = c.type) => `<button class="btn${['accepter', 'confirmer_reception', 'orienter', 'confirmer_depart'].includes(a) ? ' pri' : a === 'refuser' ? ' dan' : ''}"
+    const act = (a, id = c.id, version = c.version, type = c.type) => `<button class="btn${['accepter', 'confirmer_reception', 'orienter', 'confirmer_depart', 'transport'].includes(a) ? ' pri' : a === 'refuser' ? ' dan' : ''}"
       data-li="${a}" data-id="${id}" data-version="${version}" data-type="${type}" data-num="${esc(c.numero)}">${L(`action_${a}`)}</button>`;
     const d = c.derniere;
     const r = c.retour;
@@ -411,6 +424,9 @@
       <div class="note">${L('origine')} : <b>${esc(c.origine)}</b> → ${esc(c.destination)}${c.patient_ref_hopital ? ` · ${L('episode')} <span class="num">${esc(c.patient_ref_hopital)}</span>` : ''}${c.incident ? ` · <b>${C(`coord.incident_${c.incident}`)}</b>` : ''}</div>
       <div class="note">${L('transmise_le', { date: dateHeure(c.cree_le) })} · ${L('derniere', { etape: libelleEtape(d.statut), date: dateHeure(d.date) })}</div>
       ${c.motif_admin ? `<div class="note">${L('motif')} : ${esc(c.motif_admin)}</div>` : ''}
+      ${transmis(c)}
+      ${c.orientation ? `<div class="note">${L(`affiche_${c.orientation}`)}${c.service_retenu ? ` · ${esc(locale().startsWith('en') ? c.service_retenu_en || c.service_retenu : c.service_retenu)}` : ''}${c.admission?.lit ? ` · ${L('lit')} <b class="num">${esc(c.admission.lit)}</b>` : ''}${c.civiere ? ` · ${L('civiere')} <b class="num">${esc(c.civiere)}</b>` : ''}${c.admission ? ` · ${esc(t(`chsld.liaison.admission_${c.admission.statut}`))}` : ''}</div>` : ''}
+      ${r ? chronoHTML(r.chronologie) : chronoHTML(c.chronologie)}
       ${r ? `<div class="note li-retour">${L('retour_vers', { chsld: esc(c.origine) })} · <b>${esc(t(`chsld.liaison.etape_${r.etape}`))}</b>${r.retour_prevu_le ? ` · ${C('coord.retour_le', { date: dateHeure(r.retour_prevu_le) })}` : ''} <span class="num">${esc(r.numero)}</span></div>` : ''}
       ${c.etapes?.length ? `<details><summary class="note">${C('coord.etapes')}</summary><ol class="ch-historique">${c.etapes.map((e) => `<li><span class="note num">${esc(dateHeure(e.date))}</span> ${esc(libelleEtape(e.statut))}${e.detail ? ` · ${esc(e.detail)}` : ''}</li>`).join('')}</ol></details>` : ''}</div>
       ${c.actions.length || r?.actions.length ? `<div class="actions">${c.actions.map((a) => act(a)).join('')}${(r?.actions || []).map((a) => act(a, r.id, r.version, 'retour')).join('')}</div>` : ''}</article>`;
@@ -420,8 +436,9 @@
     const onglet = ONGLETS_LIAISON.includes(etat.liaisonOnglet) ? etat.liaisonOnglet : 'arrivees';
     let d;
     try { d = await api('GET', `/liaison-chsld?etablissement_id=${ctx()}`); } catch (e) { v.innerHTML = `<p class="note">${esc(e.message)}</p>`; return; }
-    const n = { arrivees: d.arrivees.length, a_accueillir: d.a_accueillir.length, hospitalisations: d.hospitalisations.length, historique: d.historique.length };
+    const n = Object.fromEntries(ONGLETS_LIAISON.map((o) => [o, d[o].length]));
     const liste = d[onglet];
+    etat.liaisonFiches = Object.fromEntries(ONGLETS_LIAISON.flatMap((o) => d[o]).map((x) => [x.id, x]));
     v.innerHTML = `<div class="entete"><div><h2>${L('titre', { etab: etabCtx().nom })}</h2><p>${L('intro')}</p></div></div>
       <p class="note">${L('regle')}</p>
       <div class="li-onglets" role="tablist" aria-label="${L('titre_court')}">${ONGLETS_LIAISON.map((o) => `<button type="button" role="tab" class="li-onglet" data-li-onglet="${o}" aria-selected="${o === onglet}">${L(`onglet_${o}`)} <span class="n num">${n[o]}</span></button>`).join('')}</div>
@@ -438,17 +455,32 @@
         [{ label: t('general.annuler') }, { label: t('general.confirmer'), pri: true, run: async () => (await agir(null, () => api('POST', `/coordinations/${id}/retour`, { retour_prevu_le: $('#li-date').value, motif_admin: $('#li-motif').value }), ok)) !== null || false }]);
       if (a === 'refuser') return modale(L('action_refuser'), `<p>${esc(numero)}</p>${champ('li-motif', L('motif_refus'), '', 'maxlength="200"')}`,
         [{ label: t('general.annuler') }, { label: L('action_refuser'), pri: true, run: async () => (await agir(null, () => action({ motif: $('#li-motif').value }), ok)) !== null || false }]);
-      if (a === 'incident') return modale(t('chsld.coord.incident'), `${sel('li-inc', C('coord.incident'), ['arrivee_retardee', 'informations_manquantes', 'hospitalisation_prolongee', 'retour_retarde'].map((x) => [x, t(`chsld.coord.incident_${x}`)]))}${champ('li-date', C('actions.retour_prevu'), '', 'type="datetime-local"')}`,
+      if (a === 'incident') return modale(t('chsld.coord.incident'), `${sel('li-inc', C('coord.incident'), ['arrivee_retardee', 'arrivee_anticipee', 'informations_manquantes', 'hospitalisation_prolongee', 'retour_retarde'].map((x) => [x, t(`chsld.coord.incident_${x}`)]))}${champ('li-date', C('actions.retour_prevu'), '', 'type="datetime-local"')}`,
         [{ label: t('general.annuler') }, { label: t('general.confirmer'), pri: true, run: async () => (await agir(null, () => action({ incident: $('#li-inc').value, retour_prevu_le: $('#li-date').value || null }), ok)) !== null || false }]);
       if (a === 'orienter') {
-        const cfg = configCtx(); const urgence = (etabCtx().modules || {}).urgence !== false;
-        const options = [['admission', L('orientation_admission')], ...(urgence ? [['urgence', L('orientation_urgence')]] : [])];
-        modale(L('action_orienter'), `<p class="note">${L('orienter_aide')}</p>${sel('li-orientation', L('orientation'), options)}
-          ${champ('li-ref', L('reference_hopital', { exemple: cfg.reference_exemple || '' }), '', `maxlength="40" autocomplete="off" placeholder="${esc(cfg.reference_exemple || '')}"`)}
-          <div id="li-type-zone">${sel('li-type', t('reseau.type_unite'), cfg.types.map((ty) => [ty.id, nomType(ty)]))}</div>`,
-        [{ label: t('general.annuler') }, { label: t('general.confirmer'), pri: true, run: async () => (await agir(null, () => action({ orientation: $('#li-orientation').value, patient_ref: $('#li-ref').value.trim(), type_id: Number($('#li-type').value) }), ok)) !== null || false }]);
-        const maj = () => { $('#li-type-zone').hidden = $('#li-orientation').value !== 'admission'; };
-        $('#li-orientation').onchange = maj; maj();
+        const chemin = (q = '') => `/liaison-chsld/${id}/emplacements?etablissement_id=${ctx()}${q}`;
+        let em = await api('GET', chemin());
+        const fiche = etat.liaisonFiches?.[id];
+        const dejaCiviere = fiche?.orientation === 'urgence';
+        const BES = ['isolement', 'pression_negative', 'ventilation', 'telemetrie'];
+        const optionsLit = () => [['', L('sans_lit')], ...em.lits.map((x) => [x.id, `${x.unite} · ${x.code} · ${C('residents.chambre')} ${x.chambre}`])];
+        modale(L('action_orienter'), `<p class="note">${L('orienter_aide')}</p>${transmis(fiche || {})}
+          ${sel('li-orientation', L('orientation'), [['admission', L('orientation_admission')], ...(em.urgence_active && !dejaCiviere ? [['urgence', L('orientation_urgence')]] : [])])}
+          ${dejaCiviere ? `<p class="note">${L('episode')} <span class="num">${esc(fiche.patient_ref_hopital)}</span></p>` : champ('li-ref', L('reference_hopital', { exemple: em.reference_exemple }), '', `maxlength="40" autocomplete="off" placeholder="${esc(em.reference_exemple)}"`)}
+          <div id="li-admission">${sel('li-type', L('service_retenu'), em.services.map((ty) => [ty.id, nomType(ty)]), em.type_id)}
+            <fieldset class="ch-cases"><legend class="lbl">${L('besoins_lit')}</legend>${BES.map((k) => `<label class="case"><input type="checkbox" data-li-besoin="${k}"> ${esc(t(`besoins.${k}`))}</label>`).join('')}</fieldset>
+            <div id="li-lit-zone">${sel('li-lit', L('lit_compatible', { n: em.lits.length }), optionsLit())}</div></div>
+          <div id="li-urgence" hidden>${em.civieres.length ? sel('li-civiere', L('civiere_libre'), em.civieres.map((x) => [x.id, x.code])) : `<p class="note">${L('aucune_civiere')}</p>`}</div>`,
+        [{ label: t('general.annuler') }, { label: t('general.confirmer'), pri: true, run: async () => {
+          const o = $('#li-orientation').value; const lit = em.lits.find((x) => x.id === Number($('#li-lit')?.value)); const cv = em.civieres.find((x) => x.id === Number($('#li-civiere')?.value));
+          const besoins = Object.fromEntries([...document.querySelectorAll('[data-li-besoin]')].map((x) => [x.dataset.liBesoin, x.checked]));
+          return (await agir(null, () => action({ orientation: o, patient_ref: ($('#li-ref')?.value || '').trim(), type_id: Number($('#li-type').value), besoins, ...(o === 'admission' && lit ? { lit_id: lit.id, version_lit: lit.version } : {}), ...(o === 'urgence' && cv ? { civiere_id: cv.id, version_civiere: cv.version } : {}) }), ok)) !== null || false;
+        } }]);
+        const maj = () => { const adm = $('#li-orientation').value === 'admission'; $('#li-admission').hidden = !adm; $('#li-urgence').hidden = adm; };
+        const relire = async () => { const b2 = [...document.querySelectorAll('[data-li-besoin]:checked')].map((x) => `&${x.dataset.liBesoin}=1`).join('');
+          em = await api('GET', chemin(`&type_id=${$('#li-type').value}${b2}`)); $('#li-lit-zone').innerHTML = sel('li-lit', L('lit_compatible', { n: em.lits.length }), optionsLit()); };
+        $('#li-orientation').onchange = maj; maj(); $('#li-type').onchange = relire;
+        document.querySelectorAll('[data-li-besoin]').forEach((x) => { x.onchange = relire; });
         return;
       }
       return agir(b, () => action({}), ok);

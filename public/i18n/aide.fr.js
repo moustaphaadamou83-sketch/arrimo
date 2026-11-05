@@ -150,8 +150,8 @@ window.ARRIMO_I18N.fr.aide = {
       gestes: [
         'Arrivées CHSLD : « Confirmer la réception » de la demande, puis « Accepter » ou « Refuser » selon vos règles.',
         'À accueillir : après le départ confirmé par le CHSLD, « Confirmer l’arrivée » quand le résident est physiquement là.',
-        '« Préparer l’admission ou l’urgence » : décision du personnel habilité, avec la référence de l’épisode à l’hôpital. Aucune priorité clinique n’est attribuée.',
-        'Hospitalisations et retours : « Préparer le retour au CHSLD » ; le CHSLD l’accepte, vous confirmez le départ, il confirme le retour.',
+        '« Orienter / admettre le patient » : décision du personnel habilité. Choisissez un lit libre et compatible, une civière libre ou la file d’admission. Aucune priorité clinique n’est attribuée.',
+        'Hospitalisations : « Préparer le retour au CHSLD ». Retours en cours : le CHSLD accepte et vérifie la chambre, vous confirmez le départ, il confirme l’arrivée puis réintègre le résident.',
       ],
       erreurs: [
         ['« Cette étape n’est pas possible à ce stade de la coordination »', 'Une autre étape doit d’abord être confirmée (par exemple le départ par le CHSLD). La fiche indique la dernière confirmation.'],

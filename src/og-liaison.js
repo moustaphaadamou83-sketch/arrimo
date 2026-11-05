@@ -14,10 +14,10 @@ const CONTEXTE = new Map();
 const ETAPES = {
   fr: { transmise: 'transmise, réception non confirmée', recue_hopital: 'reçue par l’hôpital', acceptee: 'acceptée', refusee: 'refusée', depart_confirme: 'départ confirmé par le CHSLD',
     arrivee_confirmee: 'arrivée confirmée, accueil à préparer', admission: 'admission préparée', urgence: 'accueil à l’urgence', retour_preparation: 'retour en préparation', cloturee: 'clôturée',
-    annulee: 'annulée', expiree: 'expirée', retour_propose: 'retour proposé, en attente du CHSLD', retour_accepte: 'retour accepté par le CHSLD', retour_en_route: 'départ vers le CHSLD confirmé', retour_recu: 'retour reçu' },
+    annulee: 'annulée', expiree: 'expirée', retour_propose: 'retour proposé, en attente du CHSLD', retour_accepte: 'retour accepté par le CHSLD', retour_chambre_verifiee: 'chambre vérifiée par le CHSLD', retour_en_route: 'départ vers le CHSLD confirmé', retour_arrive: 'arrivé au CHSLD, réintégration à confirmer', retour_reintegre: 'réintégré au CHSLD', retour_recu: 'retour reçu' },
   en: { transmise: 'sent, receipt not confirmed', recue_hopital: 'received by the hospital', acceptee: 'accepted', refusee: 'declined', depart_confirme: 'departure confirmed by the CHSLD',
     arrivee_confirmee: 'arrival confirmed, reception to prepare', admission: 'admission prepared', urgence: 'emergency reception', retour_preparation: 'return being prepared', cloturee: 'closed',
-    annulee: 'cancelled', expiree: 'expired', retour_propose: 'return proposed, awaiting the CHSLD', retour_accepte: 'return accepted by the CHSLD', retour_en_route: 'departure to the CHSLD confirmed', retour_recu: 'return received' },
+    annulee: 'cancelled', expiree: 'expired', retour_propose: 'return proposed, awaiting the CHSLD', retour_accepte: 'return accepted by the CHSLD', retour_chambre_verifiee: 'room checked by the CHSLD', retour_en_route: 'departure to the CHSLD confirmed', retour_arrive: 'arrived at the CHSLD, reinstatement to confirm', retour_reintegre: 'reinstated at the CHSLD', retour_recu: 'return received' },
 };
 const JOURNAL = {
   fr: { envoyee: 'demande transmise', recue_hopital: 'réception confirmée', acceptee: 'acceptée', refusee: 'refusée', en_cours: 'départ confirmé', arrivee: 'arrivée confirmée', recue: 'arrivée confirmée',
@@ -53,7 +53,7 @@ async function repondre(pool, u, etabId, q, L) {
     throw e;
   }
   fuseau = (await pool.query('SELECT c.fuseau FROM etablissements e JOIN config_pays c ON c.id = e.config_id WHERE e.id = $1', [etabId])).rows[0]?.fuseau || 'America/Toronto';
-  const tous = [...d.arrivees, ...d.a_accueillir, ...d.hospitalisations, ...d.historique];
+  const tous = [...d.arrivees, ...d.a_accueillir, ...d.hospitalisations, ...d.retours_en_cours, ...d.historique];
   const cle = `${u.id}:${etabId}`;
   // Décisions qui ne relèvent pas d'OG
   if (/(priorit\w* clinique|clinical priority|qui envoyer aux urgences|who should go|decide|decider|orientation clinique|clinical orientation)/.test(qn)) {
@@ -76,7 +76,7 @@ async function repondre(pool, u, etabId, q, L) {
   // Préparer le retour : carte à confirmer (date choisie par la personne), jamais d'écriture directe
   if (/(prepare|preparer|prepare\b).*(retour|return)/.test(qn)) {
     if (!ref) return local(T(L, 'Précisez la référence du résident (R-00000) : je ne vois que les références des résidents de CHSLD.', 'Specify the resident reference (R-00000): I only see CHSLD resident references.'));
-    const c = d.hospitalisations.concat(d.a_accueillir).find((x) => x.resident_ref === ref);
+    const c = d.hospitalisations.concat(d.a_accueillir, d.retours_en_cours).find((x) => x.resident_ref === ref);
     if (!c) return local(T(L, `Aucune hospitalisation confirmée ici pour ${ref} : je ne peux pas préparer de retour.`, `No confirmed hospital stay here for ${ref}: I cannot prepare a return.`));
     CONTEXTE.set(cle, ref);
     if (!c.actions.includes('retour')) return local(T(L, `${ref} : ${etapeTxt(L, c.etape)}. Le retour ne peut pas être préparé à cette étape ou par votre rôle.`, `${ref}: ${etapeTxt(L, c.etape)}. The return cannot be prepared at this step or with your role.`));
@@ -99,7 +99,7 @@ async function repondre(pool, u, etabId, q, L) {
   }
   // Retours vers les CHSLD en préparation
   if (/(retour|return)/.test(qn)) {
-    const r = d.hospitalisations.filter((c) => c.retour && ['retour_propose', 'retour_accepte', 'retour_en_route'].includes(c.retour.etape));
+    const r = d.retours_en_cours;
     return local(r.length ? T(L, `${r.length} retour(s) vers les CHSLD en préparation :\n${r.map((c) => `• ${c.resident_ref} → ${c.origine} · ${etapeTxt(L, c.retour.etape)} (${c.retour.numero})${c.retour.retour_prevu_le ? ` · prévu ${heure(L, c.retour.retour_prevu_le)}` : ''}`).join('\n')}`,
       `${r.length} return(s) to CHSLDs being prepared:\n${r.map((c) => `• ${c.resident_ref} → ${c.origine} · ${etapeTxt(L, c.retour.etape)} (${c.retour.numero})${c.retour.retour_prevu_le ? ` · planned ${heure(L, c.retour.retour_prevu_le)}` : ''}`).join('\n')}`)
       : T(L, 'Aucun retour vers un CHSLD n’est en préparation.', 'No return to a CHSLD is being prepared.'));

@@ -1041,3 +1041,33 @@ END $$;
 -- Recherche par référence normalisée (ERA117A, era-117a, R00001) : index sur les codes sans tiret ni espace
 CREATE INDEX IF NOT EXISTS lits_code_normalise ON lits (etablissement_id, upper(regexp_replace(code, '[^A-Za-z0-9]', '', 'g')));
 CREATE INDEX IF NOT EXISTS residents_reference_normalisee ON residents (etablissement_id, upper(regexp_replace(reference, '[^A-Za-z0-9]', '', 'g')));
+
+-- Parcours CHSLD ↔ hôpital complet : préparation du départ, orientation avec emplacement réel, retour en étapes distinctes.
+-- Degré d'urgence déclaré : information transmise, jamais une priorité clinique. Aucune donnée clinique dans ces colonnes.
+ALTER TABLE coordinations ADD COLUMN IF NOT EXISTS urgence_declaree text;
+ALTER TABLE coordinations ADD COLUMN IF NOT EXISTS service_souhaite_id int REFERENCES types_unite(id);
+ALTER TABLE coordinations ADD COLUMN IF NOT EXISTS service_retenu_id int REFERENCES types_unite(id);
+ALTER TABLE coordinations ADD COLUMN IF NOT EXISTS infos_operationnelles jsonb NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE coordinations ADD COLUMN IF NOT EXISTS civiere_id int REFERENCES civieres(id);
+ALTER TABLE coordinations ADD COLUMN IF NOT EXISTS chambre_verifiee_le timestamptz;
+ALTER TABLE coordinations ADD COLUMN IF NOT EXISTS transport_le timestamptz;
+ALTER TABLE coordinations ADD COLUMN IF NOT EXISTS reintegree_le timestamptz;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'coordinations'::regclass AND conname = 'coordinations_urgence_declaree_check') THEN
+    ALTER TABLE coordinations ADD CONSTRAINT coordinations_urgence_declaree_check CHECK (urgence_declaree IN ('courante', 'prioritaire', 'immediate'));
+  END IF;
+END $$;
+ALTER TABLE coordinations DROP CONSTRAINT IF EXISTS coordinations_incident_check;
+ALTER TABLE coordinations ADD CONSTRAINT coordinations_incident_check
+  CHECK (incident IN ('retour_retarde', 'chambre_indisponible', 'informations_manquantes', 'changement_hopital', 'hospitalisation_prolongee', 'arrivee_retardee', 'arrivee_anticipee'));
+-- Une référence hospitalière ne sert qu'à un seul parcours ouvert dans un hôpital (aucune double admission)
+CREATE UNIQUE INDEX IF NOT EXISTS coordinations_patient_ref_ouvert ON coordinations (destination_id, patient_ref_hopital)
+  WHERE patient_ref_hopital IS NOT NULL AND cloturee_le IS NULL;
+-- Résident arrivé au CHSLD, réintégration à confirmer : sa place reste conservée jusqu'à la réintégration
+ALTER TABLE residents DROP CONSTRAINT IF EXISTS residents_statut_check;
+ALTER TABLE residents ADD CONSTRAINT residents_statut_check
+  CHECK (statut IN ('preadmission', 'present', 'hospitalise', 'retour_a_reintegrer', 'absent', 'transfert_en_cours', 'transfere', 'sorti'));
+ALTER TABLE resident_mouvements DROP CONSTRAINT IF EXISTS resident_mouvements_type_check;
+ALTER TABLE resident_mouvements ADD CONSTRAINT resident_mouvements_type_check
+  CHECK (type IN ('preadmission', 'admission', 'changement_chambre', 'depart_hopital', 'hospitalisation_confirmee',
+    'retour_prevu', 'retour', 'reintegration', 'transfert_prepare', 'transfert_sortant', 'transfert_entrant', 'absence', 'fin_absence', 'sortie', 'annulation', 'modification'));

@@ -57,6 +57,7 @@ test.before(async () => {
   process.env.SH_API_KEY = 'cle-chsld-sh-0123456789abcdef'; process.env.SH_MFA_ENCRYPTION_KEY = CLE_MFA;
   process.env.ARRIMO_URL = 'https://arrimo.test.invalid'; process.env.SH_PUBLIC_URL = 'https://sh.test.invalid';
   process.env.SH_INITIAL_ADMIN_EMAIL = 'admin.chsld@sh.exemple'; process.env.ARRIMO_ENV = 'pilote'; process.env.ARRIMO_PATIENTS_FICTIFS = '1';
+  process.env.API_LIMITE_SESSION = '100000'; // batterie de 600 cas : limite de débit relevée pour ce test seulement
   delete process.env.ARRIMO_DEMO;
   courriel.definirTransport(async (m) => { courriels.push(m); });
   pool = creerPool(URL_TEST);
@@ -266,6 +267,7 @@ test('CHSLD ↔ hôpital : hospitalisation, réception, retour préparé par l�
   assert.ok((await api('stl', 'GET', `/chsld/taches?etablissement_id=${ids.stl}`)).some((x) => x.type === 'preparation_chambre' && /retour/.test(x.titre)));
   co = await api('b', 'POST', `/coordinations/${co.id}/action`, { etablissement_id: hosp.destination_id, action: 'confirmer_depart', version: co.version });
   co = await api('stl', 'POST', `/coordinations/${co.id}/action`, { etablissement_id: ids.stl, action: 'confirmer_arrivee', version: co.version });
+  co = await reintegrerRetour('stl', ids.stl, co.id);
   const apres = await api('stl', 'GET', `/chsld/residents/${p.martin}`);
   assert.strictEqual(apres.resident.statut, 'present');
   const types = apres.mouvements.map((m) => m.type).reverse();
@@ -350,6 +352,14 @@ async function residentPresent(qui, etab, exclure = []) {
   return (await api(qui, 'GET', `/chsld/residents?etablissement_id=${etab}`)).find((r) => r.statut === 'present' && !exclure.includes(r.id) && !ouverts.includes(r.id));
 }
 let L = {};
+/** Fin d'un retour côté CHSLD : préparation terminée par l'entretien, chambre vérifiée, réintégration par le personnel autorisé. */
+async function reintegrerRetour(qui, etab, retId) {
+  let co = (await api(qui, 'GET', `/coordinations?etablissement_id=${etab}`)).find((c) => c.id === retId);
+  const litCode = co.reintegration?.lit?.code;
+  for (const x of (await api(`${qui}_entretien`, 'GET', `/chsld/taches?etablissement_id=${etab}`)).filter((y) => y.lit === litCode)) await api(`${qui}_entretien`, 'POST', `/chsld/taches/${x.id}/statut`, { statut: 'faite', version: x.version });
+  if (!co.chambre_verifiee_le) co = await api(qui, 'POST', `/coordinations/${retId}/action`, { etablissement_id: etab, action: 'verifier_chambre', version: co.version });
+  return api(qui, 'POST', `/coordinations/${retId}/action`, { etablissement_id: etab, action: 'reintegrer', identite_verifiee: true, conditions_accueil: true, version: co.version });
+}
 test('Liaison CHSLD : un seul module, au catalogue SH, actif par défaut pour A, B et C, visible dans la navigation', async () => {
   const hop = await sh('GET', '/catalogue-modules?type=hopital');
   const m = hop.modules.find((x) => x.code === 'liaison_chsld');
@@ -362,7 +372,7 @@ test('Liaison CHSLD : un seul module, au catalogue SH, actif par défaut pour A,
     const e = (await api(qui, 'GET', '/moi')).etablissements.find((x) => x.code === code);
     assert.notStrictEqual((e.modules || {}).liaison_chsld, false, `${code} : module actif sans aucune modification des données`);
     const v = await api(qui, 'GET', `/liaison-chsld?etablissement_id=${e.id}`);
-    assert.deepStrictEqual(Object.keys(v).sort(), ['a_accueillir', 'arrivees', 'compteurs', 'historique', 'hospitalisations']);
+    assert.deepStrictEqual(Object.keys(v).sort(), ['a_accueillir', 'arrivees', 'compteurs', 'historique', 'hospitalisations', 'retours_en_cours']);
   }
   // Les CHSLD n'ont pas ce module ; l'interface porte un seul onglet commun
   await refuse('era', 'GET', `/liaison-chsld?etablissement_id=${ids.era}`, null, 409, 'etab_non_hopital');
@@ -456,10 +466,11 @@ test('Liaison CHSLD : défaut reproduit puis parcours complet Érables → Hôpi
   ret = await api('era', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: ids.era, action: 'accepter', version: ret.version });
   ret = await api('b', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: L.B, action: 'confirmer_depart', version: ret.version });
   ret = await api('era', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: ids.era, action: 'confirmer_arrivee', version: ret.version });
+  ret = await reintegrerRetour('era', ids.era, ret.id);
   assert.strictEqual((await api('era', 'GET', `/chsld/residents/${p.dupont}`)).resident.statut, 'present');
   vb = await api('b', 'GET', `/liaison-chsld?etablissement_id=${L.B}`);
   fiche = vb.historique.find((x) => x.id === co.id);
-  assert.ok(fiche && fiche.etape === 'cloturee' && fiche.retour.etape === 'retour_recu', 'parcours clôturé dans l’historique');
+  assert.ok(fiche && fiche.etape === 'cloturee' && fiche.retour.etape === 'retour_reintegre', 'parcours clôturé dans l’historique');
   assert.deepStrictEqual(fiche.etapes.map((e) => e.statut), ['envoyee', 'recue_hopital', 'acceptee', 'en_cours', 'arrivee', 'orientation:admission', 'cloturee']);
   assert.ok((await notifs('b', L.B)).some((n) => n.code === 'chsld_retour_recu'));
   r = await ogQ('era', ids.era, 'Où en est la demande de transfert de Jean Dupont ?');
@@ -477,13 +488,17 @@ test('Liaison CHSLD : Érables → A et Saint-Laurent → C, accueil à l’urge
   let co = await api('era', 'POST', `/chsld/residents/${r1.id}/hospitalisation`, { hopital_id: L.A, identite_verifiee: true, version: r1.version });
   co = await api('era', 'POST', `/coordinations/${co.id}/action`, { etablissement_id: ids.era, action: 'confirmer_depart', version: co.version }); // acceptation facultative
   co = await api('a', 'POST', `/coordinations/${co.id}/action`, { etablissement_id: L.A, action: 'confirmer_reception', version: co.version });
-  co = await api('a', 'POST', `/coordinations/${co.id}/action`, { etablissement_id: L.A, action: 'orienter', orientation: 'urgence', patient_ref: 'P-72001', version: co.version });
-  assert.strictEqual(co.orientation, 'urgence'); assert.strictEqual(co.demande_admission_id, null);
-  await refuse('a', 'POST', `/coordinations/${co.id}/action`, { etablissement_id: L.A, action: 'orienter', orientation: 'admission', patient_ref: 'P-72001', version: co.version }, 409, 'orientation_deja_faite');
+  await refuse('a', 'POST', `/coordinations/${co.id}/action`, { etablissement_id: L.A, action: 'orienter', orientation: 'urgence', patient_ref: 'P-72001', version: co.version }, 400, 'civiere_requise');
+  const emA = await api('a', 'GET', `/liaison-chsld/${co.id}/emplacements?etablissement_id=${L.A}`);
+  const civA = emA.civieres[0];
+  if (civA) { co = await api('a', 'POST', `/coordinations/${co.id}/action`, { etablissement_id: L.A, action: 'orienter', orientation: 'urgence', patient_ref: 'P-72001', civiere_id: civA.id, version_civiere: civA.version, version: co.version }); assert.strictEqual(co.orientation, 'urgence'); assert.strictEqual(co.demande_admission_id, null); }
+  else { assert.deepStrictEqual(emA.civieres, [], 'aucune civière libre à l’Hôpital A : aucune n’est proposée'); co = await api('a', 'POST', `/coordinations/${co.id}/action`, { etablissement_id: L.A, action: 'orienter', orientation: 'admission', patient_ref: 'P-72001', type_id: emA.type_id, version: co.version }); assert.strictEqual(co.orientation, 'admission'); }
+  await refuse('a', 'POST', `/coordinations/${co.id}/action`, { etablissement_id: L.A, action: 'orienter', orientation: 'urgence', patient_ref: 'P-72001', civiere_id: civA?.id || 1, version: co.version }, 409, 'orientation_deja_faite');
   let ret = await api('a', 'POST', `/coordinations/${co.id}/retour`, { retour_prevu_le: new Date(Date.now() + 3600000).toISOString() });
   ret = await api('era', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: ids.era, action: 'accepter', version: ret.version });
   ret = await api('a', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: L.A, action: 'confirmer_depart', version: ret.version });
   await api('era', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: ids.era, action: 'confirmer_arrivee', version: ret.version });
+  await reintegrerRetour('era', ids.era, ret.id);
   assert.ok((await api('a', 'GET', `/liaison-chsld?etablissement_id=${L.A}`)).historique.some((x) => x.id === co.id && x.etape === 'cloturee'));
   RESULTATS.liaison.parcours.push('Érables → A : transmise → départ → arrivée → urgence → retour → clôturée');
   // Saint-Laurent → Hôpital C : refus par l'hôpital ; le résident reste présent, sa place jamais libérée
@@ -508,6 +523,7 @@ test('Liaison CHSLD : Érables → A et Saint-Laurent → C, accueil à l’urge
   ret = await api('stl', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: ids.stl, action: 'accepter', version: ret.version });
   ret = await api('c', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: L.C, action: 'confirmer_depart', version: ret.version });
   await api('stl', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: ids.stl, action: 'confirmer_arrivee', version: ret.version });
+  await reintegrerRetour('stl', ids.stl, ret.id);
   assert.strictEqual((await api('stl', 'GET', `/chsld/residents/${r2.id}`)).resident.statut, 'present');
   RESULTATS.liaison.parcours.push('Saint-Laurent → C : refusée ; puis transmise → acceptée → départ → arrivée → admission → retour → clôturée');
   // Annulation par le CHSLD avant le départ ; notification à l'hôpital
@@ -650,7 +666,16 @@ test('réintégration : défaut ERA117A reproduit puis corrigé ; Jean Dupont É
   const [c1, c2] = await Promise.all([1, 2].map(() => appel('era', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: ids.era, action: 'confirmer_arrivee', version: ret.version })));
   assert.ok([c1, c2].every((x) => x.statut === 200), JSON.stringify([c1.corps, c2.corps]));
   assert.strictEqual([c1, c2].filter((x) => x.corps.deja_confirme).length, 1, 'la seconde confirmation ne change rien');
+  // Arrivée ≠ réintégration : la place reste conservée jusqu'à l'action explicite ; deux réintégrations simultanées n'en font qu'une
+  assert.strictEqual((await api('era', 'GET', `/chsld/residents/${p.dupont}`)).resident.statut, 'retour_a_reintegrer');
+  assert.strictEqual((await placeDe('era', ids.era, litDupont)).occupation, 'conservee_hospitalisation');
+  let vr = await coDe('era', ids.era, ret.id);
+  vr = await api('era', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: ids.era, action: 'verifier_chambre', version: vr.version });
+  const [ri1, ri2] = await Promise.all([1, 2].map(() => appel('era', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: ids.era, action: 'reintegrer', identite_verifiee: true, conditions_accueil: true, version: vr.version })));
+  assert.ok([ri1, ri2].every((x) => x.statut === 200), JSON.stringify([ri1.corps, ri2.corps]));
+  assert.strictEqual([ri1, ri2].filter((x) => x.corps.deja_confirme).length, 1);
   const apres = await api('era', 'GET', `/chsld/residents/${p.dupont}`);
+  assert.strictEqual(apres.mouvements.filter((m) => m.type === 'reintegration').length, 2, 'une réintégration par parcours');
   assert.strictEqual(apres.resident.statut, 'present'); assert.strictEqual(apres.resident.lit_id, litDupont, 'même lit'); assert.strictEqual(apres.resident.reference, refDupont, 'même dossier');
   assert.strictEqual((await placeDe('era', ids.era, litDupont)).occupation, 'occupee');
   assert.strictEqual(apres.mouvements.filter((m) => m.type === 'retour').length, 2, 'un retour par parcours (le parcours du matin et celui-ci), jamais deux pour la même confirmation');
@@ -671,13 +696,15 @@ test('réintégration : chambre bloquée, place libérée puis réattribuée, re
   ret = await api('era', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: ids.era, action: 'accepter', version: ret.version });
   assert.ok((await coDe('era', ids.era, ret.id)).reintegration.raisons.includes('place_bloquee'));
   ret = await api('b', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: L.B, action: 'confirmer_depart', version: ret.version });
-  await refuse('era', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: ids.era, action: 'confirmer_arrivee', version: ret.version }, 409, 'reintegration_bloquee');
-  assert.strictEqual((await api('era', 'GET', `/chsld/residents/${x.id}`)).resident.statut, 'hospitalise', 'rien n’a changé');
+  ret = await api('era', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: ids.era, action: 'confirmer_arrivee', version: ret.version });
+  await refuse('era', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: ids.era, action: 'verifier_chambre', version: ret.version }, 409, 'reintegration_bloquee');
+  await refuse('era', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: ids.era, action: 'reintegrer', identite_verifiee: true, conditions_accueil: true, version: ret.version }, 409, 'chambre_a_verifier');
+  assert.strictEqual((await api('era', 'GET', `/chsld/residents/${x.id}`)).resident.statut, 'retour_a_reintegrer', 'arrivé, jamais réintégré dans une place bloquée');
   assert.match(await og(`Pourquoi la réintégration de ${x.reference} est-elle bloquée ?`), /sa place est bloquée.*Aucune autre place n’est attribuée automatiquement/s);
   await refuse('era_soins', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: ids.era, action: 'resoudre', lit_id: 1, version: ret.version }, 403);
   const libre = (await api('era', 'GET', `/chsld/places?etablissement_id=${ids.era}`)).find((y) => y.occupation === 'disponible');
   ret = await api('era', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: ids.era, action: 'resoudre', lit_id: libre.id, version_lit: libre.version, version: ret.version });
-  ret = await api('era', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: ids.era, action: 'confirmer_arrivee', version: ret.version });
+  ret = await reintegrerRetour('era', ids.era, ret.id);
   const rx = (await api('era', 'GET', `/chsld/residents/${x.id}`)).resident;
   assert.ok(rx.statut === 'present' && rx.lit_id === libre.id, 'nouvelle place validée explicitement');
   await poolPilote.query(`UPDATE lits SET etat = 'libre', motif_indispo = NULL, version = version + 1 WHERE id = $1`, [litX]);
@@ -685,7 +712,7 @@ test('réintégration : chambre bloquée, place libérée puis réattribuée, re
   const y = await residentPresent('era', ids.era, [p.dupont, x.id]);
   const litY = (await api('era', 'GET', `/chsld/residents/${y.id}`)).resident.lit_id;
   const hy = await hospitaliser('era', ids.era, y.id, L.B, 'b');
-  await refuse('era', 'POST', `/chsld/residents/${y.id}/liberer-place`, { motif: '' }, 400, 'motif_requis');
+  await refuse('era', 'POST', `/chsld/residents/${y.id}/liberer-place`, { motif: '' }, 400, 'motif_liberation_requis');
   const ry = (await api('era', 'GET', `/chsld/residents/${y.id}`)).resident;
   await api('era', 'POST', `/chsld/residents/${y.id}/liberer-place`, { version: ry.version, motif: 'Hospitalisation prolongée, décision de la direction' });
   const net = (await api('era_entretien', 'GET', `/nettoyage?etablissement_id=${ids.era}`)).find((l) => l.id === litY);
@@ -710,10 +737,189 @@ test('réintégration : chambre bloquée, place libérée puis réattribuée, re
   for (const tt of (await api('era_entretien', 'GET', `/chsld/taches?etablissement_id=${ids.era}`)).filter((w) => w.lit_id === libre2.id)) await api('era_entretien', 'POST', `/chsld/taches/${tt.id}/statut`, { statut: 'faite', version: tt.version });
   rety = await api('b', 'POST', `/coordinations/${rety.id}/action`, { etablissement_id: L.B, action: 'confirmer_depart', version: rety.version });
   await api('era', 'POST', `/coordinations/${rety.id}/action`, { etablissement_id: ids.era, action: 'confirmer_arrivee', version: rety.version });
+  await reintegrerRetour('era', ids.era, rety.id);
   assert.strictEqual((await api('era', 'GET', `/chsld/residents/${y.id}`)).resident.lit_id, libre2.id);
   const doubles = (await poolPilote.query(`SELECT lit_id FROM residents WHERE lit_id IS NOT NULL AND statut NOT IN ('sorti','transfere') GROUP BY lit_id HAVING count(*) > 1`)).rows;
   assert.deepStrictEqual(doubles, [], 'aucune double attribution');
   RESULTATS.reintegration.exceptions = 'place bloquée (refus, résolution validée), place libérée puis réattribuée (refus, place choisie), retour annulé (place conservée), aucune double attribution';
+});
+
+test('parcours final : CHSLD A → Hôpital B → CHSLD A, formulaire, orientation réelle, retour en étapes, mêmes statuts des deux côtés, refus et concurrence', { timeout: 120000 }, async () => {
+  const act = (qui, etab, id, corps) => api(qui, 'POST', `/coordinations/${id}/action`, { etablissement_id: etab, ...corps });
+  const refAct = (qui, etab, id, corps, st, code) => refuse(qui, 'POST', `/coordinations/${id}/action`, { etablissement_id: etab, ...corps }, st, code);
+  // Les deux interfaces reçoivent la même étape et la même chronologie
+  const memes = async (id) => {
+    const de = async (qui, etab) => (await api(qui, 'GET', `/coordinations?etablissement_id=${etab}`)).find((c) => c.id === id);
+    const [a, b] = [await de('era', ids.era), await de('b', L.B)];
+    assert.ok(a && b, `coordination ${id} visible des deux côtés`);
+    assert.strictEqual(a.etape, b.etape); assert.deepStrictEqual(a.chronologie, b.chronologie);
+    return a;
+  };
+  const prochain = async (exclus = []) => residentPresent('era', ids.era, [p.dupont, ...exclus]);
+  // A. Formulaire de préparation : listes fermées, aucune saisie libre hors motif administratif
+  const x = await prochain();
+  const hopitaux = await api('era', 'GET', `/chsld/hopitaux?etablissement_id=${ids.era}`);
+  const services = hopitaux.find((h) => h.id === L.B).services; assert.ok(services.length >= 2);
+  const base = { hopital_id: L.B, identite_verifiee: true };
+  await refuse('era', 'POST', `/chsld/residents/${x.id}/hospitalisation`, { ...base, urgence_declaree: 'absolue' }, 400, 'urgence_declaree_invalide');
+  await refuse('era', 'POST', `/chsld/residents/${x.id}/hospitalisation`, { ...base, infos_operationnelles: { accessibilite: ['diagnostic'] } }, 400, 'infos_operationnelles_invalides');
+  await refuse('era', 'POST', `/chsld/residents/${x.id}/hospitalisation`, { ...base, service_souhaite_id: 999999 }, 400, 'type_unite_inconnu');
+  let co = await api('era', 'POST', `/chsld/residents/${x.id}/hospitalisation`, { ...base, version: x.version, motif_admin: 'Consultation planifiée', urgence_declaree: 'prioritaire', service_souhaite_id: services[0].id,
+    infos_operationnelles: { accessibilite: ['fauteuil'], transport: 'ambulance', accompagnateur: true, langue: 'fr' } });
+  // L'hôpital lit tout sans ressaisie ; aucune priorité clinique n'est déduite
+  let f = (await api('b', 'GET', `/liaison-chsld?etablissement_id=${L.B}`)).arrivees.find((c) => c.id === co.id);
+  assert.strictEqual(f.urgence_declaree, 'prioritaire'); assert.strictEqual(f.service_souhaite, services[0].nom); assert.deepStrictEqual(f.infos_operationnelles.accessibilite, ['fauteuil']);
+  assert.ok(!JSON.stringify(f).includes(x.nom), 'aucun nom transmis');
+  await memes(co.id);
+  // Arrivée anticipée à l'hôpital : refusée sans le départ ; l'incident prévient le CHSLD
+  await refAct('b', L.B, co.id, { action: 'confirmer_reception', version: co.version }, 409, 'coordination_statut_incompatible');
+  co = await act('b', L.B, co.id, { action: 'incident', incident: 'arrivee_anticipee', version: co.version });
+  assert.ok((await notifs('era', ids.era)).some((n) => n.code === 'chsld_arrivee_anticipee' && n.vars.numero === co.numero));
+  co = await act('b', L.B, co.id, { action: 'accepter', version: co.version }); await memes(co.id);
+  await refuse('b', 'GET', `/liaison-chsld/${co.id}/emplacements?etablissement_id=${L.B}`, null, 409, 'coordination_statut_incompatible');
+  co = await act('era', ids.era, co.id, { action: 'confirmer_depart', version: co.version }); await memes(co.id);
+  co = await act('b', L.B, co.id, { action: 'confirmer_reception', version: co.version }); await memes(co.id);
+  // B. Emplacements : uniquement libres et compatibles
+  const em = await api('b', 'GET', `/liaison-chsld/${co.id}/emplacements?etablissement_id=${L.B}&type_id=${services[0].id}`);
+  assert.ok(em.lits.length >= 1 && em.civieres.length >= 2, `emplacements : ${em.lits.length} lits, ${em.civieres.length} civières`);
+  const lignesLits = (await poolPilote.query('SELECT id, etat, type_id FROM lits WHERE id = ANY($1)', [em.lits.map((l) => l.id)])).rows;
+  assert.ok(lignesLits.every((l) => l.etat === 'libre' && l.type_id === services[0].id));
+  const isole = await api('b', 'GET', `/liaison-chsld/${co.id}/emplacements?etablissement_id=${L.B}&type_id=${services[0].id}&isolement=1`);
+  if (isole.lits.length) assert.ok((await poolPilote.query('SELECT bool_and(isolement) ok FROM lits WHERE id = ANY($1)', [isole.lits.map((l) => l.id)])).rows[0].ok);
+  // Vérification finale : lit périmé, occupé ou incompatible → aucun effet partiel (ni demande, ni orientation)
+  const refX = 'P-74001';
+  const nDemandes = async (ref) => (await poolPilote.query('SELECT count(*)::int n FROM demandes_admission WHERE patient_ref = $1', [ref])).rows[0].n;
+  await refAct('b', L.B, co.id, { action: 'orienter', orientation: 'admission', patient_ref: refX, type_id: services[0].id, lit_id: em.lits[0].id, version_lit: em.lits[0].version + 5, version: co.version }, 409);
+  const occupe = (await poolPilote.query(`SELECT id, version FROM lits WHERE etablissement_id = $1 AND type_id = $2 AND etat = 'occupe' LIMIT 1`, [L.B, services[0].id])).rows[0];
+  if (occupe) await refAct('b', L.B, co.id, { action: 'orienter', orientation: 'admission', patient_ref: refX, type_id: services[0].id, lit_id: occupe.id, version_lit: occupe.version, version: co.version }, 409);
+  const autreType = (await poolPilote.query(`SELECT id, version FROM lits WHERE etablissement_id = $1 AND type_id <> $2 AND etat = 'libre' LIMIT 1`, [L.B, services[0].id])).rows[0];
+  if (autreType) await refAct('b', L.B, co.id, { action: 'orienter', orientation: 'admission', patient_ref: refX, type_id: services[0].id, lit_id: autreType.id, version_lit: autreType.version, version: co.version }, 400, 'lit_inadapte');
+  assert.strictEqual(await nDemandes(refX), 0, 'panne en cours d’attribution : rien de partiel');
+  assert.strictEqual((await coDe('b', L.B, co.id)).orientation, null);
+  // Admission réelle dans un lit, statuts synchronisés
+  const litX = em.lits[0];
+  co = await act('b', L.B, co.id, { action: 'orienter', orientation: 'admission', patient_ref: refX, type_id: services[0].id, lit_id: litX.id, version_lit: litX.version, version: co.version });
+  let vb = await coDe('b', L.B, co.id);
+  assert.strictEqual(vb.admission.statut, 'admise'); assert.strictEqual(vb.admission.lit, litX.code);
+  assert.deepStrictEqual((await poolPilote.query('SELECT etat, patient_ref FROM lits WHERE id = $1', [litX.id])).rows[0], { etat: 'occupe', patient_ref: refX });
+  assert.strictEqual((await coDe('era', ids.era, co.id)).admission, null, 'le CHSLD ne voit ni le lit ni l’épisode hospitalier'); await memes(co.id);
+  const j = (await poolPilote.query(`SELECT utilisateur_id, detail FROM journal WHERE etablissement_id = $1 AND detail LIKE $2`, [L.B, `${co.numero} · orienter%`])).rows[0];
+  assert.ok(j && j.utilisateur_id && j.detail.includes(refX) && j.detail.includes(litX.code), `décision et auteur au journal : ${JSON.stringify(j)}`);
+  // Doublons et concurrence : même référence refusée ; même lit, un seul gagnant
+  const envoyerArrive = async (exclus) => { const r = await prochain(exclus); let c = await api('era', 'POST', `/chsld/residents/${r.id}/hospitalisation`, { ...base, version: r.version });
+    c = await act('era', ids.era, c.id, { action: 'confirmer_depart', version: c.version }); c = await act('b', L.B, c.id, { action: 'confirmer_reception', version: c.version }); return { c, r }; };
+  const y = await envoyerArrive([x.id]); const z = await envoyerArrive([x.id, y.r.id]);
+  const lit2 = (await api('b', 'GET', `/liaison-chsld/${y.c.id}/emplacements?etablissement_id=${L.B}&type_id=${services[0].id}`)).lits[0];
+  await refAct('b', L.B, y.c.id, { action: 'orienter', orientation: 'admission', patient_ref: refX, type_id: services[0].id, version: y.c.version }, 409, 'patient_deja_place');
+  if (lit2) {
+    const duel = await Promise.all([[y, 'P-74002'], [z, 'P-74003']].map(([w, ref]) => appel('b', 'POST', `/coordinations/${w.c.id}/action`, { etablissement_id: L.B, action: 'orienter', orientation: 'admission', patient_ref: ref, type_id: services[0].id, lit_id: lit2.id, version_lit: lit2.version, version: w.c.version })));
+    assert.deepStrictEqual(duel.map((d) => d.statut).sort(), [200, 409], JSON.stringify(duel.map((d) => d.corps)));
+    assert.strictEqual((await poolPilote.query(`SELECT count(*)::int n FROM demandes_admission WHERE lit_id = $1 AND statut = 'admise' AND patient_ref IN ('P-74002','P-74003')`, [lit2.id])).rows[0].n, 1);
+  }
+  // Urgence : civière choisie, puis correction vers un lit (la civière part au nettoyage)
+  const perdant = async (w) => coDe('b', L.B, w.c.id);
+  const zv = (await perdant(z)).orientation ? await perdant(y) : await perdant(z); const zId = zv.id;
+  const emZ = await api('b', 'GET', `/liaison-chsld/${zId}/emplacements?etablissement_id=${L.B}`);
+  const civ = emZ.civieres[0];
+  let cz = await act('b', L.B, zId, { action: 'orienter', orientation: 'urgence', patient_ref: 'P-74004', civiere_id: civ.id, version_civiere: civ.version, version: zv.version });
+  assert.deepStrictEqual((await poolPilote.query('SELECT etat, patient_ref FROM civieres WHERE id = $1', [civ.id])).rows[0], { etat: 'occupee', patient_ref: 'P-74004' });
+  assert.ok(!(await api('b', 'GET', `/liaison-chsld/${zId}/emplacements?etablissement_id=${L.B}`)).civieres.some((v) => v.id === civ.id), 'civière occupée retirée de la liste');
+  await refAct('b', L.B, zId, { action: 'orienter', orientation: 'urgence', patient_ref: 'P-74004', civiere_id: emZ.civieres[1].id, version: cz.version }, 409, 'orientation_deja_faite');
+  const typeLibre = (await poolPilote.query(`SELECT l.type_id, l.id, l.version FROM lits l WHERE l.etablissement_id = $1 AND l.etat = 'libre' AND l.groupe_age IN ('adulte', 'tous') AND NOT (l.isolement OR l.pression_negative OR l.ventilation OR l.telemetrie) LIMIT 1`, [L.B])).rows[0];
+  cz = await act('b', L.B, zId, { action: 'orienter', orientation: 'admission', type_id: typeLibre.type_id, lit_id: typeLibre.id, version_lit: typeLibre.version, version: cz.version });
+  assert.strictEqual((await poolPilote.query('SELECT etat FROM civieres WHERE id = $1', [civ.id])).rows[0].etat, 'nettoyage');
+  assert.strictEqual((await coDe('b', L.B, zId)).admission.statut, 'admise');
+  // C. Retour : section dédiée, chronologie complète, arrivée puis réintégration
+  let ret = await api('b', 'POST', `/coordinations/${co.id}/retour`, { retour_prevu_le: new Date(Date.now() + 3600000).toISOString() });
+  let vue = await api('b', 'GET', `/liaison-chsld?etablissement_id=${L.B}`);
+  const fr = vue.retours_en_cours.find((c) => c.id === co.id);
+  assert.ok(fr && !vue.hospitalisations.some((c) => c.id === co.id), 'dans « Retours en cours »');
+  assert.deepStrictEqual(fr.retour.chronologie.map((e) => e.code), ['demande', 'acceptation', 'preparation', 'chambre_verifiee', 'depart', 'transport', 'arrivee', 'reintegration', 'cloture']);
+  await memes(ret.id); await memes(co.id);
+  // Arrivée anticipée au CHSLD : refusée avant le départ de l'hôpital ; l'incident prévient l'hôpital
+  await refAct('era', ids.era, ret.id, { action: 'confirmer_arrivee', version: ret.version }, 409, 'coordination_statut_incompatible');
+  await refAct('era', ids.era, ret.id, { action: 'reintegrer', identite_verifiee: true, conditions_accueil: true, version: ret.version }, 409, 'coordination_statut_incompatible');
+  ret = await act('era', ids.era, ret.id, { action: 'incident', incident: 'arrivee_anticipee', version: ret.version });
+  assert.ok((await notifs('b', L.B)).some((n) => n.code === 'chsld_arrivee_anticipee' && n.vars.numero === ret.numero));
+  ret = await act('era', ids.era, ret.id, { action: 'accepter', version: ret.version });
+  // Chambre non prête : vérification refusée tant que la préparation n'est pas terminée
+  await refAct('era', ids.era, ret.id, { action: 'verifier_chambre', version: ret.version }, 409, 'reintegration_bloquee');
+  await refAct('era_soins', ids.era, ret.id, { action: 'verifier_chambre', version: ret.version }, 403, 'role_insuffisant');
+  const litResident = (await api('era', 'GET', `/chsld/residents/${x.id}`)).resident.lit_id;
+  // D. Entretien : confirme son intervention sans dossier ni tableau de bord ; propre ne libère jamais la place
+  for (const chemin of [`/chsld/accueil?etablissement_id=${ids.era}`, `/chsld/residents?etablissement_id=${ids.era}`, `/chsld/residents/${x.id}`, `/coordinations?etablissement_id=${ids.era}`, `/chsld/indicateurs?etablissement_id=${ids.era}`, `/journal?etablissement_id=${ids.era}`]) await refuse('era_entretien', 'GET', chemin, null, 403, 'role_entretien');
+  await refuse('era_entretien', 'POST', '/copilote/question', { etablissement_id: ids.era, question: 'Où est Jean Dupont ?' }, 403, 'role_entretien');
+  await refuse('era_entretien', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: ids.era, action: 'reintegrer', version: ret.version }, 403, 'role_entretien');
+  const vuesEnt = await api('era_entretien', 'GET', `/chsld/taches?etablissement_id=${ids.era}`);
+  const tacheRetour = vuesEnt.filter((t) => t.lit_id === litResident);
+  assert.ok(tacheRetour.length >= 1, 'tâche de préparation reçue par l’entretien');
+  assert.ok(vuesEnt.every((t) => !t.resident_ref && !/R-\d{5}/.test(t.titre)), 'aucune référence de résident pour l’entretien');
+  assert.ok((await api('era_entretien', 'GET', `/chsld/places?etablissement_id=${ids.era}`)).every((pl) => !pl.resident_ref && !pl.resident_nom && !pl.resident_id));
+  for (const t0 of tacheRetour) { const t1 = await api('era_entretien', 'POST', `/chsld/taches/${t0.id}/statut`, { statut: 'en_cours', version: t0.version }); assert.strictEqual((await placeDe('era', ids.era, litResident)).entretien, 'en_cours'); await api('era_entretien', 'POST', `/chsld/taches/${t1.id}/statut`, { statut: 'faite', version: t1.version }); }
+  let plc = await placeDe('era', ids.era, litResident);
+  assert.strictEqual(plc.entretien, 'propre'); assert.strictEqual(plc.occupation, 'conservee_hospitalisation', 'propre et toujours conservée');
+  assert.ok(!(await api('era', 'GET', `/chsld/places?etablissement_id=${ids.era}`)).some((q) => q.id === litResident && q.occupation === 'disponible'));
+  ret = await act('era', ids.era, ret.id, { action: 'verifier_chambre', version: ret.version }); await memes(ret.id);
+  // Départ de l'hôpital : le lit de l'hôpital part au nettoyage ; transport ; arrivée ; la place reste conservée
+  ret = await act('b', L.B, ret.id, { action: 'confirmer_depart', version: ret.version });
+  assert.strictEqual((await poolPilote.query('SELECT etat FROM lits WHERE id = $1', [litX.id])).rows[0].etat, 'nettoyage', 'lit hospitalier libéré au départ confirmé');
+  ret = await act('b', L.B, ret.id, { action: 'transport', version: ret.version });
+  await refAct('b', L.B, ret.id, { action: 'transport', version: ret.version }, 409, 'coordination_statut_incompatible');
+  await refAct('b', L.B, ret.id, { action: 'reintegrer', identite_verifiee: true, conditions_accueil: true, version: ret.version }, 409, 'action_coordination_interdite');
+  ret = await act('era', ids.era, ret.id, { action: 'confirmer_arrivee', version: ret.version });
+  assert.strictEqual((await memes(ret.id)).etape, 'retour_arrive'); assert.strictEqual((await memes(co.id)).etape, 'retour_arrive');
+  assert.ok((await notifs('b', L.B)).some((n) => n.code === 'chsld_retour_arrive' && n.vars.numero === ret.numero));
+  assert.strictEqual((await api('era', 'GET', `/chsld/residents/${x.id}`)).resident.statut, 'retour_a_reintegrer');
+  assert.ok(!(await coDe('era', ids.era, co.id)).cloturee_le, 'pas de clôture avant la réintégration');
+  // OG suit le même état : arrivé n'est pas réintégré ; il ne réintègre jamais à la place du personnel
+  assert.match((await ogQ('era', ids.era, `Où est ${x.reference} ?`)).reponse, /est arrivé au CHSLD \(arrivée confirmée\) ; sa réintégration .* reste à confirmer/s);
+  assert.match((await ogQ('era', ids.era, `Réintègre ${x.reference} dans sa chambre`)).reponse, /Je ne réintègre pas un résident à votre place/);
+  assert.strictEqual((await api('era', 'GET', `/chsld/residents/${x.id}`)).resident.statut, 'retour_a_reintegrer', 'OG n’a rien écrit');
+  assert.match((await ogQ('b', L.B, `Où en est ${x.reference} ?`)).reponse, /arrivé au CHSLD, réintégration à confirmer|retour/i);
+  // Conditions de réintégration : chambre redevenue non prête, identité, conditions d'accueil, rôle
+  const tard = await api('era', 'POST', '/chsld/taches', { etablissement_id: ids.era, type: 'entretien', titre: 'Nettoyage avant retour', lit_id: litResident, assigne_role: 'entretien' });
+  await refAct('era', ids.era, ret.id, { action: 'reintegrer', identite_verifiee: true, conditions_accueil: true, version: ret.version }, 409, 'reintegration_bloquee');
+  await api('era_entretien', 'POST', `/chsld/taches/${tard.id}/statut`, { statut: 'faite', version: tard.version });
+  await refAct('era', ids.era, ret.id, { action: 'reintegrer', conditions_accueil: true, version: ret.version }, 400, 'identite_a_verifier');
+  await refAct('era', ids.era, ret.id, { action: 'reintegrer', identite_verifiee: true, version: ret.version }, 400, 'conditions_accueil_a_confirmer');
+  await refAct('era_soins', ids.era, ret.id, { action: 'reintegrer', identite_verifiee: true, conditions_accueil: true, version: ret.version }, 403, 'role_insuffisant');
+  const ri = await act('era', ids.era, ret.id, { action: 'reintegrer', identite_verifiee: true, conditions_accueil: true, version: ret.version });
+  assert.ok(ri.cloturee_le && ri.reintegree_le);
+  const fin = await api('era', 'GET', `/chsld/residents/${x.id}`);
+  assert.strictEqual(fin.resident.statut, 'present'); assert.strictEqual(fin.resident.lit_id, litResident, 'même lit'); assert.strictEqual(fin.resident.reference, x.reference, 'même dossier');
+  assert.strictEqual((await placeDe('era', ids.era, litResident)).occupation, 'occupee');
+  const chrono = await memes(ret.id);
+  assert.ok(chrono.chronologie.every((e) => e.fait), JSON.stringify(chrono.chronologie)); assert.strictEqual(chrono.etape, 'retour_reintegre');
+  assert.strictEqual((await memes(co.id)).etape, 'cloturee');
+  assert.ok((await api('b', 'GET', `/liaison-chsld?etablissement_id=${L.B}`)).historique.some((c) => c.id === co.id));
+  assert.ok((await poolPilote.query(`SELECT utilisateur_id FROM journal WHERE etablissement_id = $1 AND detail LIKE $2`, [ids.era, `${ret.numero} · reintegrer%`])).rows[0].utilisateur_id, 'réintégration et auteur au journal');
+  assert.deepStrictEqual((await poolPilote.query(`SELECT detail FROM journal WHERE etablissement_id = ANY($1) AND detail LIKE '%' || $2 || '%'`, [[ids.era, L.B], x.nom])).rows, [], 'aucun nom au journal');
+  // Refus du retour par le CHSLD et retour de la civière : l'emplacement n'est libéré qu'au départ confirmé
+  const w = await envoyerArrive([x.id, y.r.id, z.r.id]);
+  const emW = await api('b', 'GET', `/liaison-chsld/${w.c.id}/emplacements?etablissement_id=${L.B}`);
+  const civW = emW.civieres[0];
+  const cw = await act('b', L.B, w.c.id, { action: 'orienter', orientation: 'urgence', patient_ref: 'P-74005', civiere_id: civW.id, version_civiere: civW.version, version: w.c.version });
+  let rw = await api('b', 'POST', `/coordinations/${cw.id}/retour`, { retour_prevu_le: new Date(Date.now() + 3600000).toISOString() });
+  rw = await act('era', ids.era, rw.id, { action: 'refuser', version: rw.version });
+  assert.strictEqual((await poolPilote.query('SELECT etat FROM civieres WHERE id = $1', [civW.id])).rows[0].etat, 'occupee', 'retour refusé : le patient reste sur sa civière');
+  rw = await api('b', 'POST', `/coordinations/${cw.id}/retour`, { retour_prevu_le: new Date(Date.now() + 3600000).toISOString() });
+  rw = await act('era', ids.era, rw.id, { action: 'accepter', version: rw.version });
+  rw = await act('b', L.B, rw.id, { action: 'confirmer_depart', version: rw.version });
+  assert.strictEqual((await poolPilote.query('SELECT etat FROM civieres WHERE id = $1', [civW.id])).rows[0].etat, 'nettoyage');
+  rw = await act('era', ids.era, rw.id, { action: 'confirmer_arrivee', version: rw.version });
+  await reintegrerRetour('era', ids.era, rw.id);
+  // Remise en état des autres parcours de ce test
+  for (const id of [y.c.id, z.c.id]) {
+    const h = await coDe('b', L.B, id);
+    let r2 = await api('b', 'POST', `/coordinations/${h.id}/retour`, { retour_prevu_le: new Date(Date.now() + 3600000).toISOString() });
+    r2 = await act('era', ids.era, r2.id, { action: 'accepter', version: r2.version });
+    r2 = await act('b', L.B, r2.id, { action: 'confirmer_depart', version: r2.version });
+    r2 = await act('era', ids.era, r2.id, { action: 'confirmer_arrivee', version: r2.version });
+    await reintegrerRetour('era', ids.era, r2.id);
+  }
+  const doubles = (await poolPilote.query(`SELECT lit_id FROM residents WHERE lit_id IS NOT NULL AND statut NOT IN ('sorti','transfere') GROUP BY lit_id HAVING count(*) > 1`)).rows;
+  assert.deepStrictEqual(doubles, [], 'aucune double occupation');
+  RESULTATS.parcours_final = 'A → B → A : formulaire, emplacements compatibles, admission réelle, civière, retour en neuf étapes, statuts identiques, refus et concurrence';
 });
 
 test('OG : 600 cas de questions sur données fictives réelles (références, chambres, admissions, hospitalisations, retours, liaison, proches, tâches, sécurité)', { timeout: 600000 }, async () => {
@@ -775,6 +981,7 @@ test('OG : 600 cas de questions sur données fictives réelles (références, ch
   for (const x of (await api('era_entretien', 'GET', `/chsld/taches?etablissement_id=${ids.era}`)).filter((y) => y.lit_id === litDup)) await api('era_entretien', 'POST', `/chsld/taches/${x.id}/statut`, { statut: 'faite', version: x.version });
   ret = await api('b', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: L.B, action: 'confirmer_depart', version: ret.version });
   await api('era', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: ids.era, action: 'confirmer_arrivee', version: ret.version });
+  await reintegrerRetour('era', ids.era, ret.id);
   for (const h of [h2, h4]) await api('era', 'POST', `/coordinations/${h.id}/action`, { etablissement_id: ids.era, action: 'annuler', version: h.version });
   await api('c', 'POST', `/coordinations/${h3.id}/action`, { etablissement_id: L.C, action: 'confirmer_reception', version: h3.version });
   assert.strictEqual((await api('era', 'GET', `/chsld/residents/${p.dupont}`)).resident.statut, 'present');
@@ -920,6 +1127,98 @@ test('captures : formulaire SH (type puis modules), liste SH, écrans CHSLD rée
   } finally { await navigateur.close(); }
   assert.deepStrictEqual(erreurs, []);
   RESULTATS.captures = fs.readdirSync(path.resolve('.local/captures-chsld'));
+});
+
+test('interface réelle : parcours CHSLD A → Hôpital B → CHSLD A dans le navigateur, sans appel direct pour les actions du personnel', { timeout: 240000 }, async () => {
+  const { chromium } = require('playwright'); const dossier = path.resolve('.local/captures-chsld'); fs.mkdirSync(dossier, { recursive: true });
+  const navigateur = await chromium.launch(); const erreurs = [];
+  const ouvrir = async (qui, etab, vp = { width: 1440, height: 1000 }) => {
+    const ctx = await navigateur.newContext({ viewport: vp }); const pg = await ctx.newPage(); pg.on('pageerror', (e) => erreurs.push(`${qui} ${e}`));
+    await pg.addInitScript(({ jeton, id }) => { localStorage.setItem('arrimo-token', jeton); localStorage.setItem('arrimo-ctx', String(id)); localStorage.setItem('arrimo-langue', 'fr'); }, { jeton: sessions[qui], id: etab });
+    await pg.goto(basePilote); await pg.waitForSelector('body[data-pret="1"]');
+    if (await pg.locator('#b-premiers-pas-ok').isVisible().catch(() => false)) await pg.click('#b-premiers-pas-ok');
+    return pg;
+  };
+  const confirmer = async (pg) => { await pg.click('#modale button.pri'); await pg.waitForFunction(() => !document.querySelector('#modale')?.open && document.querySelector('#modale')?.hidden !== false || !document.querySelector('#modale button.pri')); };
+  const onglet = async (pg, v, sel) => { await pg.click(`#onglets button[data-v="${v}"]`); await pg.waitForSelector(sel); };
+  try {
+    const x = await residentPresent('era', ids.era, [p.dupont]);
+    const era = await ouvrir('era', ids.era); const b = await ouvrir('b', L.B);
+    // Départ : formulaire de préparation
+    await onglet(era, 'c-residents', '#v-c-residents table');
+    await era.fill('#ch-q', x.reference); await era.waitForFunction(() => document.querySelectorAll('#v-c-residents tbody tr').length === 1);
+    await era.click('#v-c-residents [data-res]'); await era.click('[data-ch-action="hospitalisation"]');
+    await era.waitForSelector('#co-urgence');
+    await era.selectOption('#co-dest', String(L.B)); await era.fill('#co-motif', 'Consultation planifiée');
+    await era.selectOption('#co-urgence', 'immediate'); await era.selectOption('#co-transport', 'ambulance'); await era.check('#co-accompagnateur'); await era.check('#co-id');
+    await era.screenshot({ path: `${dossier}/parcours-1-formulaire-depart.png`, fullPage: true });
+    await confirmer(era);
+    const co0 = (await api('era', 'GET', `/coordinations?etablissement_id=${ids.era}`)).find((c) => c.resident_ref === x.reference && c.type === 'hospitalisation' && c.statut === 'envoyee');
+    assert.ok(co0, 'demande créée par le formulaire'); assert.strictEqual(co0.urgence_declaree, 'immediate');
+    // Hôpital : renseignements lus sans ressaisie, acceptation
+    await onglet(b, 'liaison', `#v-liaison [data-coordination="${co0.id}"]`);
+    assert.match(await b.locator(`#v-liaison [data-coordination="${co0.id}"]`).innerText(), /Immédiate[\s\S]*Ambulance/);
+    await b.click(`[data-li="accepter"][data-id="${co0.id}"]`); await b.waitForSelector(`#v-liaison [data-coordination="${co0.id}"] .ch-chrono li.fait:nth-child(3)`);
+    await onglet(era, 'c-mouvements', `[data-co="confirmer_depart"][data-id="${co0.id}"]`);
+    await era.click(`[data-co="confirmer_depart"][data-id="${co0.id}"]`); await era.waitForSelector(`[data-co="confirmer_depart"][data-id="${co0.id}"]`, { state: 'detached' });
+    // Arrivée, puis « Orienter / admettre le patient » : lit libre et compatible
+    await b.click('[data-li-onglet="a_accueillir"]'); await b.waitForSelector(`[data-li="confirmer_reception"][data-id="${co0.id}"]`);
+    await b.click(`[data-li="confirmer_reception"][data-id="${co0.id}"]`); await b.waitForSelector(`[data-li="orienter"][data-id="${co0.id}"]`);
+    assert.match(await b.locator(`[data-li="orienter"][data-id="${co0.id}"]`).innerText(), /Orienter \/ admettre le patient/);
+    await b.click(`[data-li="orienter"][data-id="${co0.id}"]`); await b.waitForSelector('#li-ref');
+    await b.fill('#li-ref', 'P-75001');
+    const emB = await api('b', 'GET', `/liaison-chsld/${co0.id}/emplacements?etablissement_id=${L.B}`);
+    const avecLit = []; for (const sv of emB.services) { const e2 = await api('b', 'GET', `/liaison-chsld/${co0.id}/emplacements?etablissement_id=${L.B}&type_id=${sv.id}`); if (e2.lits.length) avecLit.push([sv, e2.lits[0]]); }
+    assert.ok(avecLit.length, 'au moins un lit libre et compatible à l’Hôpital B');
+    await b.selectOption('#li-type', String(avecLit[0][0].id)); await b.waitForSelector(`#li-lit option[value="${avecLit[0][1].id}"]`, { state: 'attached' });
+    assert.strictEqual(await b.locator('#li-lit option').count() - 1, (await api('b', 'GET', `/liaison-chsld/${co0.id}/emplacements?etablissement_id=${L.B}&type_id=${avecLit[0][0].id}`)).lits.length, 'seuls les lits libres et compatibles');
+    await b.selectOption('#li-lit', String(avecLit[0][1].id));
+    await b.screenshot({ path: `${dossier}/parcours-2-orienter-admettre.png`, fullPage: true });
+    await confirmer(b);
+    await b.click('[data-li-onglet="hospitalisations"]'); await b.waitForSelector(`#v-liaison [data-coordination="${co0.id}"]`);
+    assert.ok((await b.locator(`#v-liaison [data-coordination="${co0.id}"]`).innerText()).includes(avecLit[0][1].code), 'le lit attribué est affiché');
+    // Retour préparé par l'hôpital : section « Retours en cours »
+    await b.click(`[data-li="retour"][data-id="${co0.id}"]`); await b.waitForSelector('#li-date');
+    await b.fill('#li-date', new Date(Date.now() + 3600000).toISOString().slice(0, 16)); await confirmer(b);
+    await b.click('[data-li-onglet="retours_en_cours"]'); await b.waitForSelector(`#v-liaison [data-coordination="${co0.id}"] .ch-chrono`);
+    const ret0 = (await api('b', 'GET', `/coordinations?etablissement_id=${L.B}`)).find((c) => c.liee_id === co0.id);
+    // CHSLD : acceptation, préparation par l'entretien dans ses tâches, chambre vérifiée
+    await onglet(era, 'c-mouvements', `[data-co="accepter"][data-id="${ret0.id}"]`);
+    await era.click(`[data-co="accepter"][data-id="${ret0.id}"]`); await era.waitForSelector(`[data-co="verifier_chambre"][data-id="${ret0.id}"]`);
+    const litCode = (await api('era', 'GET', `/coordinations?etablissement_id=${ids.era}`)).find((c) => c.id === ret0.id).reintegration.lit.code;
+    const ent = await ouvrir('era_entretien', ids.era);
+    await ent.click('#onglets button[data-v="c-taches"]'); await ent.waitForSelector('#v-c-taches');
+    assert.strictEqual(await ent.locator('#onglets button[data-v="c-accueil"]').isHidden(), true, 'aucun tableau de bord général pour l’entretien');
+    for (const tt of (await api('era_entretien', 'GET', `/chsld/taches?etablissement_id=${ids.era}`)).filter((y) => y.lit === litCode)) await api('era_entretien', 'POST', `/chsld/taches/${tt.id}/statut`, { statut: 'faite', version: tt.version });
+    await ent.context().close();
+    await onglet(era, 'c-residents', '#v-c-residents'); await onglet(era, 'c-mouvements', `[data-co="verifier_chambre"][data-id="${ret0.id}"]`);
+    await era.click(`[data-co="verifier_chambre"][data-id="${ret0.id}"]`); await era.waitForSelector(`[data-co="verifier_chambre"][data-id="${ret0.id}"]`, { state: 'detached' });
+    // Hôpital : départ et transport
+    await onglet(b, 'transferts', '#v-transferts .kanban'); await onglet(b, 'liaison', `[data-li="confirmer_depart"][data-id="${ret0.id}"]`);
+    await b.click(`[data-li="confirmer_depart"][data-id="${ret0.id}"]`); await b.waitForSelector(`[data-li="transport"][data-id="${ret0.id}"]`);
+    await b.click(`[data-li="transport"][data-id="${ret0.id}"]`); await b.waitForSelector(`[data-li="transport"][data-id="${ret0.id}"]`, { state: 'detached' });
+    // CHSLD : arrivée, puis action explicite « Réintégrer dans sa chambre »
+    await onglet(era, 'c-residents', '#v-c-residents'); await onglet(era, 'c-mouvements', `[data-co="confirmer_arrivee"][data-id="${ret0.id}"]`);
+    await era.click(`[data-co="confirmer_arrivee"][data-id="${ret0.id}"]`); await era.waitForSelector(`[data-co="reintegrer"][data-id="${ret0.id}"]`);
+    assert.match(await era.locator(`[data-co="reintegrer"][data-id="${ret0.id}"]`).innerText(), /Réintégrer dans sa chambre/);
+    await era.screenshot({ path: `${dossier}/parcours-3-retour-a-reintegrer.png`, fullPage: true });
+    await b.screenshot({ path: `${dossier}/parcours-4-retours-en-cours-hopital.png`, fullPage: true });
+    await era.click(`[data-co="reintegrer"][data-id="${ret0.id}"]`); await era.waitForSelector('#ri-id');
+    await era.check('#ri-id'); await era.check('#ri-cond'); await confirmer(era);
+    await era.waitForSelector(`[data-co="reintegrer"][data-id="${ret0.id}"]`, { state: 'detached' });
+    const fin = await api('era', 'GET', `/chsld/residents/${x.id}`);
+    assert.strictEqual(fin.resident.statut, 'present'); assert.strictEqual(fin.resident.lit_id, x.lit ? (await poolPilote.query('SELECT id FROM lits WHERE code = $1', [x.lit])).rows[0].id : fin.resident.lit_id, 'même lit');
+    const fini = (await api('era', 'GET', `/coordinations?etablissement_id=${ids.era}`)).find((c) => c.id === ret0.id);
+    assert.ok(fini.chronologie.every((e) => e.fait), JSON.stringify(fini.chronologie));
+    await onglet(b, 'transferts', '#v-transferts .kanban'); await onglet(b, 'liaison', '#v-liaison .li-onglets');
+    await b.click('[data-li-onglet="historique"]'); await b.waitForSelector(`#v-liaison [data-coordination="${co0.id}"]`);
+    // Téléphone : modules lisibles sans défilement horizontal
+    const tel = await ouvrir('b', L.B, { width: 390, height: 844 });
+    if (await tel.locator('#b-nav').isVisible()) await tel.click('#b-nav');
+    await tel.click('#onglets button[data-v="liaison"]'); await tel.waitForSelector('#v-liaison .li-onglets');
+    assert.ok(await tel.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'pas de défilement horizontal');
+  } finally { await navigateur.close(); }
+  assert.deepStrictEqual(erreurs, [], 'aucune erreur JavaScript dans les pages');
 });
 
 test('démonstration : un seul compte par CHSLD (administrateur), six comptes désactivés sans perte ; thème CHSLD clair et sombre, trois largeurs', { timeout: 240000 }, async () => {

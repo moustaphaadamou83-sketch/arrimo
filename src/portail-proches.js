@@ -158,7 +158,7 @@ async function situation(pool, p) {
       retour_prevu_le: ret?.retour_prevu_le || null };
   }
   if (!voitHebergement) return null;
-  return { ...s, statut: r.statut === 'absent' ? 'absence_temporaire' : r.statut === 'present' ? 'present' : 'autre' };
+  return { ...s, statut: r.statut === 'absent' ? 'absence_temporaire' : ['present', 'retour_a_reintegrer'].includes(r.statut) ? 'present' : 'autre' };
 }
 async function moi(pool, p) {
   const nouveaux = (await pool.query(`SELECT count(*)::int n FROM messages_proches WHERE resident_id = $1 AND contact_id = $2 AND sens = 'etablissement' AND lu_le IS NULL AND categorie = ANY($3)`,

@@ -695,3 +695,11 @@ label.item input[type=radio] { order: -1; width: 20px; height: 20px; flex: none;
 .li-carte .li-retour { border-left: 3px solid var(--secondaire); padding-left: var(--e2); margin-top: 4px; }
 .li-carte .actions { display: flex; flex-wrap: wrap; gap: var(--e2); }
 @media (max-width: 600px) { .li-onglet { flex: 1 1 calc(50% - var(--e2)); text-align: center; } }
+
+/* Chronologie partagée d'un parcours CHSLD ↔ hôpital */
+.ch-chrono { list-style: none; display: flex; flex-wrap: wrap; gap: 4px var(--e2); margin: var(--e2) 0; padding: 0; font-size: .85em; }
+.ch-chrono li { display: inline-flex; flex-direction: column; padding: 2px 8px; border: 1px solid var(--bordure); border-radius: 8px; color: var(--texte-2); }
+.ch-chrono li.fait { border-color: var(--secondaire); color: var(--texte); font-weight: 600; }
+.ch-chrono li .note { font-weight: 400; }
+.ch-cases { border: 0; padding: 0; margin: var(--e2) 0; display: flex; flex-wrap: wrap; gap: 4px var(--e3); }
+.ch-cases legend { padding: 0; }

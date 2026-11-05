@@ -146,8 +146,8 @@ const ENT = {
   en: { propre: 'clean', a_nettoyer: 'to clean', en_cours: 'cleaning in progress', termine: 'cleaning done, to validate' },
 };
 const STATUT = {
-  fr: { present: 'présent au CHSLD', hospitalise: 'hospitalisé', absent: 'en absence temporaire', preadmission: 'accueil prévu', sorti: 'sorti', transfere: 'transféré', transfert_en_cours: 'transfert en cours' },
-  en: { present: 'present at the CHSLD', hospitalise: 'in hospital', absent: 'temporarily absent', preadmission: 'admission planned', sorti: 'discharged', transfere: 'transferred', transfert_en_cours: 'transfer in progress' },
+  fr: { present: 'présent au CHSLD', hospitalise: 'hospitalisé', retour_a_reintegrer: 'arrivé au CHSLD, réintégration à confirmer', absent: 'en absence temporaire', preadmission: 'accueil prévu', sorti: 'sorti', transfere: 'transféré', transfert_en_cours: 'transfert en cours' },
+  en: { present: 'present at the CHSLD', hospitalise: 'in hospital', retour_a_reintegrer: 'arrived at the CHSLD, reinstatement to confirm', absent: 'temporarily absent', preadmission: 'admission planned', sorti: 'discharged', transfere: 'transferred', transfert_en_cours: 'transfer in progress' },
 };
 const RAISON = {
   fr: { aucune_place_attribuee: 'aucune place n’est plus attribuée au résident', place_bloquee: 'sa place est bloquée', place_reattribuee: 'sa place est attribuée à un autre résident',
@@ -162,30 +162,22 @@ async function contexteResident(pool, u, etabId, id) {
   const f = await ch.ficheResident(pool, u, id);
   const co = (await ch.listeCoordinations(pool, u, etabId, { toutes: true })).filter((c) => c.resident_ref === f.resident.reference);
   const hosp = co.find((c) => c.type === 'hospitalisation') || null;
-  const retour = co.find((c) => c.type === 'retour' && c.entrante && ['envoyee', 'acceptee', 'en_cours'].includes(c.statut)) || null;
+  const retour = co.find((c) => c.type === 'retour' && c.entrante && (['envoyee', 'acceptee', 'en_cours'].includes(c.statut) || c.a_reintegrer)) || null;
   const dernierRetour = co.find((c) => c.type === 'retour') || null;
   return { f, r: f.resident, hosp, retour, dernierRetour, ri: f.reintegration || (f.resident.lit_id ? await ch.etatReintegration(pool, f.resident.id) : null) };
 }
 const derniereEtape = (c) => (c?.etapes || []).at(-1) || null;
 const etape = (c, s) => (c?.etapes || []).filter((e) => e.statut === s).at(-1) || null;
-function etapeHosp(h) {
-  if (!h) return null;
-  if (['refusee', 'annulee', 'expiree'].includes(h.statut)) return h.statut;
-  if (h.cloturee_le) return 'cloturee';
-  if (h.statut === 'envoyee') return h.recue_hopital_le ? 'recue_hopital' : 'transmise';
-  if (h.statut === 'en_cours') return 'depart_confirme';
-  if (h.statut === 'recue') return h.orientation || 'arrivee_confirmee';
-  return h.statut;
-}
+const etapeHosp = (h) => h?.etape || null; // calculée par le serveur : même étape pour le CHSLD et l'hôpital
 const ETAPE_HOSP = {
   fr: { transmise: 'transmise, réception non encore confirmée par l’hôpital', recue_hopital: 'reçue par l’hôpital', acceptee: 'acceptée par l’hôpital', refusee: 'refusée par l’hôpital', annulee: 'annulée', expiree: 'expirée',
-    depart_confirme: 'départ confirmé, arrivée non encore confirmée par l’hôpital', arrivee_confirmee: 'arrivée confirmée par l’hôpital', admission: 'arrivée confirmée, admission préparée', urgence: 'arrivée confirmée, accueil à l’urgence', cloturee: 'parcours clos, retour reçu' },
+    depart_confirme: 'départ confirmé, arrivée non encore confirmée par l’hôpital', arrivee_confirmee: 'arrivée confirmée par l’hôpital', admission: 'arrivée confirmée, admission préparée', urgence: 'arrivée confirmée, accueil à l’urgence', retour_preparation: 'arrivée confirmée, retour en préparation', retour_arrive: 'arrivé au CHSLD, réintégration à confirmer', cloturee: 'parcours clos, retour reçu' },
   en: { transmise: 'sent, receipt not yet confirmed by the hospital', recue_hopital: 'received by the hospital', acceptee: 'accepted by the hospital', refusee: 'declined by the hospital', annulee: 'cancelled', expiree: 'expired',
-    depart_confirme: 'departure confirmed, arrival not yet confirmed by the hospital', arrivee_confirmee: 'arrival confirmed by the hospital', admission: 'arrival confirmed, admission prepared', urgence: 'arrival confirmed, emergency reception', cloturee: 'pathway closed, return received' },
+    depart_confirme: 'departure confirmed, arrival not yet confirmed by the hospital', arrivee_confirmee: 'arrival confirmed by the hospital', admission: 'arrival confirmed, admission prepared', urgence: 'arrival confirmed, emergency reception', retour_preparation: 'arrival confirmed, return being prepared', retour_arrive: 'arrived at the CHSLD, reinstatement to confirm', cloturee: 'pathway closed, return received' },
 };
 const RETOUR_TXT = {
-  fr: { envoyee: 'proposé par l’hôpital, en attente de votre acceptation', acceptee: 'accepté ; l’hôpital doit confirmer le départ', en_cours: 'départ confirmé par l’hôpital ; réception physique à confirmer par votre équipe', recue: 'reçu', refusee: 'refusé', annulee: 'annulé par l’hôpital', expiree: 'expiré' },
-  en: { envoyee: 'proposed by the hospital, awaiting your acceptance', acceptee: 'accepted; the hospital must confirm departure', en_cours: 'departure confirmed by the hospital; physical arrival to be confirmed by your team', recue: 'received', refusee: 'declined', annulee: 'cancelled by the hospital', expiree: 'expired' },
+  fr: { envoyee: 'proposé par l’hôpital, en attente de votre acceptation', acceptee: 'accepté ; l’hôpital doit confirmer le départ', en_cours: 'départ confirmé par l’hôpital ; réception physique à confirmer par votre équipe', recue: 'arrivé au CHSLD ; réintégration à confirmer par votre équipe', refusee: 'refusé', annulee: 'annulé par l’hôpital', expiree: 'expiré' },
+  en: { envoyee: 'proposed by the hospital, awaiting your acceptance', acceptee: 'accepted; the hospital must confirm departure', en_cours: 'departure confirmed by the hospital; physical arrival to be confirmed by your team', recue: 'arrived at the CHSLD; reinstatement to be confirmed by your team', refusee: 'declined', annulee: 'cancelled by the hospital', expiree: 'expired' },
 };
 
 /* ------------------------------------------------------------------ réponses sur un résident */
@@ -311,13 +303,16 @@ async function repondreResident(pool, u, etabId, e, x, qn, mots, L, fmt, local) 
     { intentions: ['resident', 'localisation'], ouvrir: 'c-residents', resident_id: r.id });
 }
 const MVT = {
-  fr: { preadmission: 'préadmission', admission: 'admission', changement_chambre: 'changement de chambre', depart_hopital: 'départ vers l’hôpital', hospitalisation_confirmee: 'hospitalisation confirmée', retour_prevu: 'retour prévu', retour: 'retour au CHSLD',
+  fr: { preadmission: 'préadmission', admission: 'admission', changement_chambre: 'changement de chambre', depart_hopital: 'départ vers l’hôpital', hospitalisation_confirmee: 'hospitalisation confirmée', retour_prevu: 'retour prévu', retour: 'arrivée au CHSLD', reintegration: 'réintégration',
     transfert_prepare: 'transfert demandé', transfert_sortant: 'transfert sortant', transfert_entrant: 'transfert entrant', absence: 'absence', fin_absence: 'fin d’absence', sortie: 'fin d’hébergement', annulation: 'annulation' },
-  en: { preadmission: 'pre-admission', admission: 'admission', changement_chambre: 'room change', depart_hopital: 'departure to hospital', hospitalisation_confirmee: 'hospital stay confirmed', retour_prevu: 'return planned', retour: 'return to the CHSLD',
+  en: { preadmission: 'pre-admission', admission: 'admission', changement_chambre: 'room change', depart_hopital: 'departure to hospital', hospitalisation_confirmee: 'hospital stay confirmed', retour_prevu: 'return planned', retour: 'arrival at the CHSLD', reintegration: 'reinstatement',
     transfert_prepare: 'transfer requested', transfert_sortant: 'outgoing transfer', transfert_entrant: 'incoming transfer', absence: 'absence', fin_absence: 'end of absence', sortie: 'discharge', annulation: 'cancellation' },
 };
 function localisation(L, n, r, e, hosp, ri, placeTxt, dernierMvt, fmt) {
   const maj = T(L, `Dernière mise à jour : ${fmt(dernierMvt?.date || r.modifie_le)}.`, `Last update: ${fmt(dernierMvt?.date || r.modifie_le)}.`);
+  if (r.statut === 'retour_a_reintegrer') {
+    return T(L, `${n} est arrivé au CHSLD (arrivée confirmée) ; sa réintégration dans ${placeTxt} reste à confirmer par le personnel. ${maj}`, `${n} has arrived at the CHSLD (arrival confirmed); reinstatement in ${placeTxt} remains to be confirmed by staff. ${maj}`);
+  }
   if (r.statut === 'hospitalise' && hosp?.statut === 'recue' && !hosp.cloturee_le) {
     const ar = etape(hosp, 'arrivee') || etape(hosp, 'recue');
     return T(L, `Selon le dernier événement confirmé, ${n} a été reçu à ${hosp.destination} le ${fmt(hosp.arrivee_le || ar?.date)}. Son CHSLD de rattachement est ${e.nom}.${ri?.conservee ? ` Place conservée : ${ri.lit.code} (chambre ${ri.lit.chambre}).` : ''}`,
@@ -400,10 +395,10 @@ async function repondreGeneral(pool, u, etabId, e, qn, mots, L, fmt, local) {
   }
   // Retours attendus, retours en attente de confirmation
   if (has('retour') || /(doivent revenir|revenir de l|come back from)/.test(qn)) {
-    const co = (await ch.listeCoordinations(pool, u, etabId, {})).filter((c) => c.type === 'retour' && c.entrante && ['envoyee', 'acceptee', 'en_cours'].includes(c.statut));
+    const co = (await ch.listeCoordinations(pool, u, etabId, {})).filter((c) => c.type === 'retour' && c.entrante && (['envoyee', 'acceptee', 'en_cours'].includes(c.statut) || c.a_reintegrer));
     const auj = /(aujourd|today)/.test(qn);
     let l2 = auj ? co.filter((c) => c.retour_prevu_le && new Date(c.retour_prevu_le).toDateString() === new Date().toDateString()) : co;
-    if (has('confirm') || /(attend|waiting|awaiting|pending)/.test(qn)) l2 = l2.filter((c) => ['envoyee', 'en_cours'].includes(c.statut));
+    if (has('confirm') || /(attend|waiting|awaiting|pending)/.test(qn)) l2 = l2.filter((c) => ['envoyee', 'en_cours'].includes(c.statut) || c.a_reintegrer);
     const ligne = (c) => `• ${c.resident_ref} depuis ${c.origine}${c.retour_prevu_le ? ` · ${fmt(c.retour_prevu_le)}` : ''} · ${RETOUR_TXT.fr[c.statut]}${c.reintegration ? ` · place ${c.reintegration.lit?.code || '—'} : ${c.reintegration.pret ? 'prête' : 'non prête'}` : ''}`;
     const ligneEn = (c) => `• ${c.resident_ref} from ${c.origine}${c.retour_prevu_le ? ` · ${fmt(c.retour_prevu_le)}` : ''} · ${RETOUR_TXT.en[c.statut]}${c.reintegration ? ` · place ${c.reintegration.lit?.code || '—'}: ${c.reintegration.pret ? 'ready' : 'not ready'}` : ''}`;
     return local(l2.length ? T(L, `${l2.length} retour(s) ${auj ? 'prévu(s) aujourd’hui' : 'annoncé(s)'} :\n${l2.map(ligne).join('\n')}`, `${l2.length} return(s) ${auj ? 'planned today' : 'announced'}:\n${l2.map(ligneEn).join('\n')}`)
@@ -487,6 +482,9 @@ async function repondre(pool, u, etabId, q, L) {
   if (/(confirme|confirm|valide)\w* (son |sa |la |le |l |the |his |her )?(arrivee|retour|reception|arrival|return)/.test(qn) && !/\b(qui|who|quand|when|est ce|has|is|a t il|a t elle)\b/.test(qn)) {
     return local(T(L, 'Je ne confirme pas une arrivée physique à votre place : la réception est confirmée par une personne habilitée, dans « Transferts et hospitalisations ». Je peux vérifier que la place est prête.', 'I do not confirm a physical arrival for you: reception is confirmed by an authorized person in “Transfers and hospital stays”. I can check that the place is ready.'), { intentions: ['decision_humaine'], ouvrir: 'c-mouvements' });
   }
+  if (/^(reintegre|reintegrer|reinstate)\b/.test(qn)) {
+    return local(T(L, 'Je ne réintègre pas un résident à votre place : l’action « Réintégrer dans sa chambre » revient au personnel autorisé, dans « Transferts et hospitalisations ». Je peux vérifier que la place est prête.', 'I do not reinstate a resident for you: “Reinstate in their room” belongs to authorized staff in “Transfers and hospital stays”. I can check that the place is ready.'), { intentions: ['decision_humaine'], ouvrir: 'c-mouvements' });
+  }
   // Enregistrer un nouveau résident : formulaire guidé
   if (/(enregistr|nouveau resident|nouvelle residente|new resident|register a resident|register a new|admettre un nouveau|accueil d.un nouveau)/.test(qn) && !/demande/.test(qn)) {
     return local(T(L, 'J’ouvre le formulaire d’enregistrement. Vérifiez chaque champ ; je vérifie les doublons et vos droits avant l’enregistrement.', 'I am opening the registration form. Check each field; I check duplicates and your permissions before saving.'), { intentions: ['formulaire'], formulaire: 'nouveau_resident', ouvrir: 'c-residents' });
@@ -562,7 +560,7 @@ async function repondre(pool, u, etabId, q, L) {
   if (sujet?.type === 'coordination') {
     const c = (await ch.listeCoordinations(pool, u, etabId, { toutes: true })).find((x) => x.id === sujet.id);
     const d = derniereEtape(c);
-    const et = c.type === 'hospitalisation' ? (L === 'en' ? ETAPE_HOSP.en : ETAPE_HOSP.fr)[etapeHosp(c)] : c.type === 'retour' ? RETOUR_TXT[lng(L)][c.statut] : c.statut;
+    const et = c.type === 'hospitalisation' ? (L === 'en' ? ETAPE_HOSP.en : ETAPE_HOSP.fr)[etapeHosp(c)] : c.type === 'retour' ? (c.reintegree_le || (c.statut === 'recue' && !c.arrivee_le) ? T(L, 'retour terminé', 'return completed') : RETOUR_TXT[lng(L)][c.statut]) : c.statut;
     return local(T(L, `${c.numero} (${c.type === 'hospitalisation' ? 'hospitalisation' : c.type === 'retour' ? 'retour d’hôpital' : 'transfert inter-CHSLD'}) · ${c.resident_ref} · ${c.origine} → ${c.destination} : ${et}. Dernière confirmation le ${fmt(d?.date || c.modifie_le)}.`,
       `${c.numero} (${c.type === 'hospitalisation' ? 'hospital stay' : c.type === 'retour' ? 'return from hospital' : 'inter-CHSLD transfer'}) · ${c.resident_ref} · ${c.origine} → ${c.destination}: ${et}. Last confirmation on ${fmt(d?.date || c.modifie_le)}.`), { intentions: ['coordination'], ouvrir: 'c-mouvements' });
   }
