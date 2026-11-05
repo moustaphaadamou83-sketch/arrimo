@@ -57,7 +57,7 @@ test.before(async () => {
   process.env.SH_API_KEY = 'cle-chsld-sh-0123456789abcdef'; process.env.SH_MFA_ENCRYPTION_KEY = CLE_MFA;
   process.env.ARRIMO_URL = 'https://arrimo.test.invalid'; process.env.SH_PUBLIC_URL = 'https://sh.test.invalid';
   process.env.SH_INITIAL_ADMIN_EMAIL = 'admin.chsld@sh.exemple'; process.env.ARRIMO_ENV = 'pilote'; process.env.ARRIMO_PATIENTS_FICTIFS = '1';
-  process.env.API_LIMITE_SESSION = '100000'; // batterie de 600 cas : limite de débit relevée pour ce test seulement
+  process.env.API_LIMITE_SESSION = '100000'; process.env.API_LIMITE_ANONYME = '100000'; // batteries de 600 cas et d'attaques : limites de débit relevées pour ce test seulement
   delete process.env.ARRIMO_DEMO;
   courriel.definirTransport(async (m) => { courriels.push(m); });
   pool = creerPool(URL_TEST);
@@ -1052,6 +1052,136 @@ test('phase 2 — portail des proches : activé depuis SH, invitation, accès li
   const j = (await poolPilote.query(`SELECT string_agg(detail, ' ') t FROM journal WHERE action = 'Portail des proches'`)).rows[0].t;
   assert.doesNotMatch(j, /Marie|samedi|Dupont|example\.invalid/);
   RESULTATS.portail = 'module optionnel activé depuis SH ; invitation à usage unique (empreinte seulement) ; mot de passe robuste ; aucune chambre ni référence exposée ; sessions étanches ; catégories respectées et retrait immédiat ; messagerie et rappel ; révocation immédiate ; blocage après 5 échecs ; journal sans donnée personnelle';
+});
+
+test('audit de sécurité : attaques automatiques sur toutes les routes, isolation, injections, XSS, en-têtes, journal immuable', { timeout: 240000 }, async () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'app.js'), 'utf8') + fs.readFileSync(path.join(__dirname, '..', 'src', 'portail-proches.js'), 'utf8');
+  const routes = [...new Set([...src.matchAll(/api\.(get|post|put|delete)\(\s*'([^']+)'/g)].map((m) => `${m[1].toUpperCase()} ${m[2]}`))];
+  assert.ok(routes.length > 100, `${routes.length} routes trouvées`);
+  const brut = async (jeton, methode, chemin, corps) => {
+    const r = await fetch(`${basePilote}/api${chemin}`, { method: methode, headers: { 'Content-Type': 'application/json', ...(jeton ? { Authorization: `Bearer ${jeton}` } : {}) }, body: methode === 'GET' ? undefined : JSON.stringify(corps || {}) });
+    return { statut: r.status, texte: await r.text(), entetes: r.headers };
+  };
+  const remplir = (c, id = 1) => `${c.replace(/:[a-zA-Z_]+/g, id)}${c.includes('?') ? '&' : '?'}etablissement_id=${ids.era}&depuis=${ids.era}`;
+  // 1. Sans session : seule une liste fermée de routes répond sans authentification
+  const PUBLIQUES = /^(POST|GET) \/(public$|connexion|sante|mot-de-passe|invitations|proches\/(connexion|invitation|mot-de-passe)|langue|config-publique|connecteurs|sh\/|interop)/;
+  const ouvertes = [];
+  for (const rt of routes) {
+    const [m, c] = rt.split(' ');
+    const r = await brut(null, m, remplir(c), {});
+    if (r.statut < 400 && !PUBLIQUES.test(rt)) ouvertes.push(`${rt} → ${r.statut}`);
+    assert.ok(r.statut < 500 && r.statut !== 429, `${rt} sans session → ${r.statut} ${r.texte.slice(0, 120)}`);
+  }
+  assert.deepStrictEqual(ouvertes, [], 'routes ouvertes sans session');
+  assert.doesNotMatch((await brut(null, 'GET', '/public')).texte, /KEY|secret|mot_de_passe"|DATABASE|token/i, 'réglages publics sans secret');
+  // 2. Rôle entretien : tout est refusé hors de sa liste fermée
+  const ENTRETIEN = /^(GET \/(moi|nettoyage|meteo|og\/configuration|chsld\/taches|chsld\/places)|POST \/(deconnexion|nettoyage\/:|lits\/:|civieres\/:|chsld\/taches\/:)|(PUT|POST|GET|DELETE) \/moi\/)/;
+  const fuites = [];
+  for (const rt of routes.filter((x) => !ENTRETIEN.test(x) && !/ \/(deconnexion|moi\b)/.test(x) && !PUBLIQUES.test(x))) {
+    const [m, c] = rt.split(' ');
+    const r = await brut(sessions.era_entretien, m, remplir(c), {});
+    if (r.statut < 400) fuites.push(`${rt} → ${r.statut}`);
+  }
+  assert.deepStrictEqual(fuites, [], 'routes accessibles au rôle entretien');
+  // 3. Isolation : ressources réelles du CHSLD des Érables, attaquées depuis un autre CHSLD et depuis un hôpital
+  const resident = await residentPresent('era', ids.era, [p.dupont]);
+  const co = await api('era', 'POST', `/chsld/residents/${resident.id}/hospitalisation`, { hopital_id: L.B, identite_verifiee: true, version: resident.version });
+  const tache = await api('era', 'POST', '/chsld/taches', { etablissement_id: ids.era, type: 'administratif', titre: 'Essai isolation' });
+  const contact = (await api('era', 'GET', `/chsld/residents/${p.dupont}`)).contacts[0];
+  const demande = (await api('era', 'GET', `/chsld/demandes?etablissement_id=${ids.era}&toutes=1`))[0];
+  const attaques = [['GET', `/chsld/residents/${resident.id}`], ['PUT', `/chsld/residents/${resident.id}`, { prenom: 'Pirate' }], ['POST', `/chsld/residents/${resident.id}/sortie`, { motif: 'autre' }], ['POST', `/chsld/residents/${resident.id}/hospitalisation`, { hopital_id: L.A, identite_verifiee: true }],
+    ['POST', `/chsld/residents/${resident.id}/liberer-place`, { motif: 'attaque de test' }], ['POST', `/chsld/residents/${p.dupont}/contacts`, { prenom: 'P', nom: 'P', relation: 'ami', telephone: '555' }], ['PUT', `/chsld/contacts/${contact.id}`, { actif: false }],
+    ['POST', `/chsld/taches/${tache.id}/statut`, { statut: 'faite' }], ['POST', `/chsld/demandes/${demande.id}/action`, { action: 'annuler' }], ['GET', `/chsld/residents?etablissement_id=${ids.era}`], ['GET', `/chsld/places?etablissement_id=${ids.era}`], ['GET', `/chsld/accueil?etablissement_id=${ids.era}`],
+    ['GET', `/chsld/taches?etablissement_id=${ids.era}`], ['GET', `/coordinations?etablissement_id=${ids.era}`], ['POST', `/coordinations/${co.id}/action`, { etablissement_id: ids.era, action: 'annuler' }], ['POST', `/coordinations/${co.id}/action`, { etablissement_id: L.B, action: 'accepter' }],
+    ['GET', `/liaison-chsld/${co.id}/emplacements?etablissement_id=${L.B}`], ['GET', `/liaison-chsld?etablissement_id=${L.B}`], ['GET', `/notifications?etablissement_id=${ids.era}`], ['GET', `/journal?etablissement_id=${ids.era}`]];
+  for (const qui of ['stl', 'c']) for (const [m, c, corps] of attaques) {
+    const r = await brut(sessions[qui], m, c, corps);
+    assert.ok([403, 404, 409].includes(r.statut) && !r.texte.includes(resident.nom), `${qui} ${m} ${c} → ${r.statut} ${r.texte.slice(0, 140)}`);
+  }
+  assert.strictEqual((await api('era', 'GET', `/chsld/residents/${resident.id}`)).resident.prenom, resident.prenom, 'dossier inchangé');
+  // 4. Gestionnaire réseau : capacités, jamais l'identité des résidents
+  const reseau = (await poolPilote.query("SELECT id FROM utilisateurs WHERE role = 'gestionnaire' AND actif LIMIT 1")).rows[0];
+  assert.ok(reseau, 'compte gestionnaire présent dans le jeu de test');
+  {
+    const jeton = require('node:crypto').randomBytes(32).toString('hex');
+    await poolPilote.query(`INSERT INTO sessions (token, utilisateur_id, expire_le) VALUES ($1, $2, now() + interval '1 hour')`, [require('../src/auth').empreinteJeton(jeton), reseau.id]);
+    for (const c of [`/chsld/residents?etablissement_id=${ids.era}`, `/chsld/residents/${p.dupont}`, `/chsld/places?etablissement_id=${ids.era}`, `/chsld/accueil?etablissement_id=${ids.era}`]) {
+      const r = await brut(jeton, 'GET', c);
+      assert.strictEqual(r.statut, 403, `gestionnaire ${c} → ${r.statut}`); assert.ok(!r.texte.includes('Dupont'));
+    }
+    assert.strictEqual((await brut(jeton, 'POST', '/copilote/question', { etablissement_id: ids.era, question: 'Où est Jean Dupont ?' })).texte.includes('R-'), false, 'OG n’ouvre pas les dossiers au gestionnaire');
+  }
+  // 5. Injections SQL : aucune erreur, aucune ligne de plus, aucune table touchée
+  const avant = (await poolPilote.query('SELECT count(*)::int n FROM residents')).rows[0].n;
+  for (const inj of ["' OR '1'='1", "'; DROP TABLE residents;--", '%\' OR 1=1--', '\\', "R-00001' UNION SELECT mot_de_passe_hash FROM utilisateurs--"]) {
+    const r = await brut(sessions.era, 'GET', `/chsld/residents?etablissement_id=${ids.era}&q=${encodeURIComponent(inj)}`);
+    assert.strictEqual(r.statut, 200, inj); assert.deepStrictEqual(JSON.parse(r.texte), [], `injection ${inj}`);
+    const og = await brut(sessions.era, 'POST', '/copilote/question', { etablissement_id: ids.era, question: inj });
+    assert.ok(og.statut < 500 && !/scrypt|\$2[aby]\$/.test(og.texte), `OG : ${inj}`);
+    const ogB = await brut(sessions.b, 'POST', '/copilote/question', { etablissement_id: L.B, question: `Où en est ${inj} ?` });
+    assert.ok(ogB.statut < 500, `OG hôpital : ${inj}`);
+    const id = await brut(sessions.era, 'GET', `/chsld/residents/${encodeURIComponent(inj)}`);
+    assert.ok([400, 404].includes(id.statut), `identifiant ${inj} → ${id.statut}`);
+  }
+  assert.strictEqual((await poolPilote.query('SELECT count(*)::int n FROM residents')).rows[0].n, avant);
+  // 6. Affectation massive : aucun champ protégé ne se change par le corps de la requête
+  const fiche = (await api('era', 'GET', `/chsld/residents/${p.dupont}`)).resident;
+  await appel('era', 'PUT', `/chsld/residents/${p.dupont}`, { version: fiche.version, prenom: fiche.prenom, nom: fiche.nom, date_naissance: fiche.date_naissance, etablissement_id: ids.stl, statut: 'sorti', reference: 'R-99999', lit_id: null });
+  const apres = (await api('era', 'GET', `/chsld/residents/${p.dupont}`)).resident;
+  assert.deepStrictEqual([apres.etablissement_id, apres.statut, apres.reference, apres.lit_id], [fiche.etablissement_id, fiche.statut, fiche.reference, fiche.lit_id]);
+  await refuse('era', 'POST', '/chsld/residents', { etablissement_id: ids.stl, prenom: 'P', nom: 'P', date_naissance: '1940-01-01' }, 403);
+  // 7. Erreurs : aucun détail technique renvoyé
+  const mal = await fetch(`${basePilote}/api/connexion`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{mal' });
+  assert.strictEqual(mal.status, 400);
+  const gros = await fetch(`${basePilote}/api/connexion`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ x: 'y'.repeat(60000) }) });
+  assert.strictEqual(gros.status, 413);
+  for (const r of [await mal.text(), await gros.text(), (await brut(sessions.era, 'GET', '/chsld/residents/abc')).texte, (await brut(sessions.era, 'GET', '/chsld/residents/99999999')).texte]) assert.doesNotMatch(r, /node_modules|at [\w.]+ \(|SELECT |pg_|ECONN|stack/);
+  // 8. Secrets jamais renvoyés
+  for (const c of ['/moi', `/admin/utilisateurs`, '/admin/comptes']) { const r = await brut(sessions.era_admin || sessions.era, 'GET', c); assert.doesNotMatch(r.texte, /mot_de_passe_hash|totp_secret|scrypt:/, c); }
+  assert.strictEqual((await poolPilote.query('SELECT count(*)::int n FROM sessions WHERE token = $1', [sessions.era])).rows[0].n, 0, 'jeton de session jamais stocké en clair');
+  // 9. Portail des proches : sessions étanches avec celles du personnel
+  assert.ok(sessions.marie, 'session de proche présente');
+  {
+    for (const c of [`/chsld/residents?etablissement_id=${ids.era}`, '/moi', `/coordinations?etablissement_id=${ids.era}`]) assert.ok([401, 403].includes((await brut(sessions.marie, 'GET', c)).statut), `proche ${c}`);
+    assert.ok([401, 403].includes((await brut(sessions.era, 'GET', '/proches/moi')).statut), 'le personnel n’entre pas dans le portail');
+  }
+  // 10. Journal immuable, y compris pour un accès direct à la base
+  for (const t of ['journal', 'journal_admin']) for (const q of [`UPDATE ${t} SET detail = 'falsifié'`, `DELETE FROM ${t}`]) await assert.rejects(poolPilote.query(q), undefined, `${q} doit être refusé`);
+  // 11. En-têtes
+  const pg = await fetch(`${basePilote}/`); const csp = pg.headers.get('content-security-policy');
+  assert.ok(!/script-src[^;]*unsafe-inline/.test(csp), `CSP : ${csp}`); assert.match(csp, /frame-ancestors 'none'/); assert.ok(pg.headers.get('x-content-type-options') === 'nosniff' && pg.headers.get('x-frame-options') === 'DENY');
+  assert.strictEqual((await brut(sessions.era, 'GET', '/moi')).entetes.get('cache-control'), 'no-store');
+  assert.strictEqual(pg.headers.get('x-powered-by'), null);
+  // 12. Garde-fous de production
+  const { problemesProduction } = require('../src/environnement');
+  assert.ok(problemesProduction({}).length === 1 && problemesProduction({ ARRIMO_PATIENTS_FICTIFS: '1', DEMO_MOT_DE_PASSE: 'x', SH_API_KEY: 'court' }).length === 4);
+  assert.deepStrictEqual(problemesProduction({ ARRIMO_MFA_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'), SH_API_KEY: 'c'.repeat(40) }), []);
+  // 13. XSS stockée : les textes saisis ne deviennent jamais du code, dans le CHSLD ni à l'hôpital
+  const CHARGE = '<img src=x onerror="window.__xss=1"><svg/onload=window.__xss=2>';
+  const victime = await api('era', 'POST', '/chsld/residents', { etablissement_id: ids.era, prenom: CHARGE, nom: 'Essai<script>window.__xss=3</script>', date_naissance: '1939-03-03', confirmer_doublon: true });
+  const r2 = await residentPresent('era', ids.era, [p.dupont, resident.id]);
+  const coX = await api('era', 'POST', `/chsld/residents/${r2.id}/hospitalisation`, { hopital_id: L.B, identite_verifiee: true, version: r2.version, motif_admin: CHARGE });
+  await api('era', 'POST', '/chsld/taches', { etablissement_id: ids.era, type: 'administratif', titre: CHARGE });
+  const { chromium } = require('playwright'); const nav = await chromium.launch();
+  try {
+    const ouvrir = async (qui, etab) => { const ctx = await nav.newContext({ bypassCSP: true }); const pg2 = await ctx.newPage(); // CSP désactivée : on prouve l'échappement lui-même
+      await pg2.addInitScript(({ jeton, id }) => { localStorage.setItem('arrimo-token', jeton); localStorage.setItem('arrimo-ctx', String(id)); localStorage.setItem('arrimo-langue', 'fr'); }, { jeton: sessions[qui], id: etab });
+      await pg2.goto(basePilote); await pg2.waitForSelector('body[data-pret="1"]'); if (await pg2.locator('#b-premiers-pas-ok').isVisible().catch(() => false)) await pg2.click('#b-premiers-pas-ok'); return pg2; };
+    const propre = async (pg2, ou) => { await pg2.waitForTimeout(300); assert.strictEqual(await pg2.evaluate(() => window.__xss), undefined, `XSS exécutée : ${ou}`); assert.strictEqual(await pg2.locator('img[src="x"]').count(), 0, `balise injectée : ${ou}`); };
+    const e = await ouvrir('era', ids.era);
+    await e.click('#onglets button[data-v="c-residents"]'); await e.waitForSelector('#v-c-residents table'); await e.fill('#ch-q', 'Essai'); await e.waitForFunction(() => document.querySelectorAll('#v-c-residents tbody tr').length >= 1); await propre(e, 'liste des résidents');
+    await e.click('#v-c-residents [data-res]'); await e.waitForSelector('[data-ch-action]'); await propre(e, 'fiche');
+    await e.click('#onglets button[data-v="c-taches"]'); await e.waitForSelector('#v-c-taches'); await propre(e, 'tâches');
+    await e.click('#onglets button[data-v="c-mouvements"]'); await e.waitForSelector(`#v-c-mouvements [data-co][data-id="${coX.id}"]`); await propre(e, 'mouvements');
+    const b = await ouvrir('b', L.B);
+    await b.click('#onglets button[data-v="liaison"]'); await b.waitForSelector(`#v-liaison [data-coordination="${coX.id}"]`); await propre(b, 'Liaison CHSLD');
+    assert.ok((await b.locator(`#v-liaison [data-coordination="${coX.id}"]`).innerText()).includes('<img'), 'le texte reste affiché tel quel');
+  } finally { await nav.close(); }
+  // Remise en état
+  for (const c of [co, coX]) await api('era', 'POST', `/coordinations/${c.id}/action`, { etablissement_id: ids.era, action: 'annuler', version: c.version });
+  const v2 = (await api('era', 'GET', `/chsld/residents/${victime.id}`)).resident;
+  await api('era', 'POST', `/chsld/residents/${victime.id}/sortie`, { version: v2.version, motif: 'autre' });
+  RESULTATS.audit = { routes: routes.length };
 });
 
 test('captures : formulaire SH (type puis modules), liste SH, écrans CHSLD réels', { timeout: 180000 }, async () => {

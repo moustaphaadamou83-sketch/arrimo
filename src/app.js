@@ -37,10 +37,13 @@ function creerApp(pool, options = {}) {
       'X-Content-Type-Options': 'nosniff',
       'X-Frame-Options': 'DENY',
       'Referrer-Policy': 'no-referrer',
+      'Permissions-Policy': 'camera=(), geolocation=(), payment=(), microphone=(self)',
+      // Réponses de l'API jamais conservées par le navigateur ni par un intermédiaire
+      ...(req.path.startsWith('/api/') ? { 'Cache-Control': 'no-store' } : {}),
       // Police hébergée ici (aucun appel à un service tiers)
       // Tuiles de la carte nationale : OpenStreetMap (images seulement)
       'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; "
-        + "font-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'",
+        + "font-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none'; frame-ancestors 'none'",
     });
     next();
   });

@@ -14,6 +14,13 @@ const port = Number(process.env.PORT || 3010);
 // Par défaut, écoute seulement en local : Nginx fait le pont avec Internet en HTTPS
 const hote = process.env.HOST || '127.0.0.1';
 
+{
+  const env = require('./environnement');
+  if (env.estProduction()) {
+    const problemes = env.problemesProduction();
+    if (problemes.length) { console.error(`Démarrage refusé en production : ${problemes.join(' ; ')}`); process.exit(1); }
+  }
+}
 app.listen(port, hote, () => console.log(`Arrimo sur ${hote}:${port}`));
 
 // Détection des blocages toutes les 15 minutes (et une fois au démarrage).

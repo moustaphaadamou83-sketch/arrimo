@@ -35,4 +35,16 @@ function urlPublique() {
   return h ? `https://${h}` : '';
 }
 
-module.exports = { ENVIRONNEMENTS, environnement, estDemo, estProduction, vocalFictifAutorise, hote, urlPublique };
+/**
+ * Garde-fous au démarrage d'un serveur de production : sans eux, il refuse de démarrer plutôt que de tourner sans protection.
+ * Secrets de double authentification chiffrés, aucune identité fictive, aucune clé de service trop courte.
+ */
+function problemesProduction(env = process.env) {
+  const p = [];
+  if (!/^[A-Za-z0-9+/]{43}=$/.test(String(env.ARRIMO_MFA_ENCRYPTION_KEY || ''))) p.push('ARRIMO_MFA_ENCRYPTION_KEY absente ou invalide (32 octets en base64)');
+  if (env.ARRIMO_PATIENTS_FICTIFS === '1') p.push('ARRIMO_PATIENTS_FICTIFS interdit en production');
+  if (env.DEMO_MOT_DE_PASSE) p.push('DEMO_MOT_DE_PASSE interdit en production');
+  if (env.SH_API_KEY && String(env.SH_API_KEY).length < 32) p.push('SH_API_KEY trop courte (32 caractères au moins)');
+  return p;
+}
+module.exports = { problemesProduction, ENVIRONNEMENTS, environnement, estDemo, estProduction, vocalFictifAutorise, hote, urlPublique };

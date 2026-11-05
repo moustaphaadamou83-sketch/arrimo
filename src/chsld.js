@@ -34,6 +34,8 @@ const dateIso = (v) => { const d = String(v || '').slice(0, 10); return /^\d{4}-
 /** Établissement CHSLD accessible à l'utilisateur, avec le rôle voulu et le module demandé. */
 async function etabChsld(db, u, etabId, { roles = CONSULTER, module = null } = {}) {
   exigerEtablissement(u, etabId);
+  // Le gestionnaire réseau voit les capacités du réseau, pas les dossiers : seuls les membres d'un CHSLD accèdent à ses résidents.
+  if (u.role === 'gestionnaire' && !(u.etabs || []).includes(Number(etabId))) throw new ErreurHttp(403, 'etab_interdit');
   const e = (await db.query('SELECT id, nom, code, type_etablissement, module_actif, modules, config_id, conservation_place_jours, partage FROM etablissements WHERE id = $1', [etabId])).rows[0];
   if (!e) throw new ErreurHttp(404, 'etab_introuvable');
   if (e.type_etablissement !== 'chsld') throw new ErreurHttp(409, 'etab_non_chsld');

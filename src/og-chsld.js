@@ -26,7 +26,11 @@ const CONTEXTE = new Map();
 const DUREE_CONTEXTE = 30 * 60 * 1000;
 const cle = (u, e) => `${u.id}:${e}`;
 function lireContexte(u, e) { const c = CONTEXTE.get(cle(u, e)); return c && Date.now() - c.t < DUREE_CONTEXTE ? c : {}; }
-function ecrireContexte(u, e, v) { CONTEXTE.set(cle(u, e), { ...lireContexte(u, e), ...v, t: Date.now() }); }
+function ecrireContexte(u, e, v) {
+  const k = cle(u, e); const avant = lireContexte(u, e);
+  CONTEXTE.delete(k); CONTEXTE.set(k, { ...avant, ...v, t: Date.now() });
+  if (CONTEXTE.size > 2000) CONTEXTE.delete(CONTEXTE.keys().next().value); // mémoire bornée
+}
 
 /* ------------------------------------------------------------------ compréhension tolérante aux fautes */
 function distance(a, b, max = 2) {

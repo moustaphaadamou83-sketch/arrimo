@@ -9,7 +9,11 @@ const lia = require('./liaison-chsld');
 const norm = (q) => String(q || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const T = (L, fr, en) => (L === 'en' ? en : fr);
 // Dernier résident évoqué, par utilisateur et établissement (mémoire de conversation, sans persistance)
+// Bornée : 30 minutes et 2000 conversations au plus ; les droits sont relus à chaque question.
 const CONTEXTE = new Map();
+const DUREE_CONTEXTE = 30 * 60 * 1000;
+const lireContexte = (k) => { const c = CONTEXTE.get(k); return c && Date.now() - c.t < DUREE_CONTEXTE ? c.ref : null; };
+const ecrireContexte = (k, ref) => { CONTEXTE.delete(k); CONTEXTE.set(k, { ref, t: Date.now() }); if (CONTEXTE.size > 2000) CONTEXTE.delete(CONTEXTE.keys().next().value); };
 
 const ETAPES = {
   fr: { transmise: 'transmise, réception non confirmée', recue_hopital: 'reçue par l’hôpital', acceptee: 'acceptée', refusee: 'refusée', depart_confirme: 'départ confirmé par le CHSLD',
@@ -25,8 +29,10 @@ const JOURNAL = {
   en: { envoyee: 'request sent', recue_hopital: 'receipt confirmed', acceptee: 'accepted', refusee: 'declined', en_cours: 'departure confirmed', arrivee: 'arrival confirmed', recue: 'arrival confirmed',
     'orientation:admission': 'admission prepared', 'orientation:urgence': 'directed to emergency', annulee: 'cancelled', cloturee: 'pathway closed' },
 };
-let fuseau = 'America/Toronto'; // remplacé par le fuseau du profil de l'établissement à chaque question
-const heure = (L, d) => new Date(d).toLocaleString(L === 'en' ? 'en-CA' : 'fr-CA', { dateStyle: 'short', timeStyle: 'short', timeZone: fuseau });
+// Fuseau du profil de l'établissement, propre à chaque requête (aucun état partagé entre deux questions simultanées)
+const { AsyncLocalStorage } = require('node:async_hooks');
+const fuseauRequete = new AsyncLocalStorage();
+const heure = (L, d) => new Date(d).toLocaleString(L === 'en' ? 'en-CA' : 'fr-CA', { dateStyle: 'short', timeStyle: 'short', timeZone: fuseauRequete.getStore() || 'America/Toronto' });
 const etapeTxt = (L, e) => ETAPES[L === 'en' ? 'en' : 'fr'][e] || e;
 const confirmation = (L, c) => { const d = c.derniere; const k = d.statut.startsWith('incident:') ? T(L, 'incident signalé', 'incident reported') : (JOURNAL[L === 'en' ? 'en' : 'fr'][d.statut] || d.statut); return T(L, `dernière confirmation : ${k}, ${heure(L, d.date)}`, `last confirmation: ${k}, ${heure(L, d.date)}`); };
 const ligne = (L, c) => `• ${c.resident_ref} · ${c.origine} · ${etapeTxt(L, c.etape)} (${c.numero}) — ${confirmation(L, c)}`;
@@ -39,7 +45,7 @@ function concerne(qn, q) {
   return /(ou en est|where is|status of).*(transfert|transfer) (de|of) [a-z]/.test(qn) && !/\b(?:P|TR)-\d/i.test(q);
 }
 
-async function repondre(pool, u, etabId, q, L) {
+async function traiter(pool, u, etabId, q, L) {
   const qn = norm(q).replace(/-/g, ' ');
   if (!concerne(qn, q)) {
     // Nom d'un CHSLD cité sans le mot « CHSLD » (« demandes provenant des Érables »)
@@ -52,7 +58,6 @@ async function repondre(pool, u, etabId, q, L) {
     if (e.code === 'module_desactive') return { mode: 'local', reponse: T(L, 'La Liaison CHSLD n’est pas activée dans cet hôpital : je n’ai accès à aucune demande de CHSLD.', 'CHSLD liaison is not enabled in this hospital: I have no access to CHSLD requests.'), sources: [], intentions: ['liaison_chsld'] };
     throw e;
   }
-  fuseau = (await pool.query('SELECT c.fuseau FROM etablissements e JOIN config_pays c ON c.id = e.config_id WHERE e.id = $1', [etabId])).rows[0]?.fuseau || 'America/Toronto';
   const tous = [...d.arrivees, ...d.a_accueillir, ...d.hospitalisations, ...d.retours_en_cours, ...d.historique];
   const cle = `${u.id}:${etabId}`;
   // Décisions qui ne relèvent pas d'OG
@@ -67,18 +72,18 @@ async function repondre(pool, u, etabId, q, L) {
   const parCo = mCo ? tous.find((c) => c.numero === `CO-${mCo[1].padStart(5, '0')}` || c.retour?.numero === `CO-${mCo[1].padStart(5, '0')}`) : null;
   if (mCo && !parCo) return local(T(L, `Aucune coordination ${mCo[0].toUpperCase()} n’est visible pour cet hôpital.`, `No coordination ${mCo[0].toUpperCase()} is visible for this hospital.`));
   const ref = parCo?.resident_ref || (mRef ? `R-${mRef[1].padStart(5, '0')}` : null)
-    || (/\b(ce resident|cette residente|this resident|son chsld|his chsld|her chsld|their chsld|ce transfert|this transfer|cette demande|this request|il|elle|he|she|origine|provenance|vient)\b/.test(qn.replace(/\b(y a t|fait|faut|s agit) il\b/g, '')) ? CONTEXTE.get(cle) : null);
+    || (/\b(ce resident|cette residente|this resident|son chsld|his chsld|her chsld|their chsld|ce transfert|this transfer|cette demande|this request|il|elle|he|she|origine|provenance|vient)\b/.test(qn.replace(/\b(y a t|fait|faut|s agit) il\b/g, '')) ? lireContexte(cle) : null);
   // Quel CHSLD est à l'origine (d'après la référence ou le contexte)
   if (ref && /(origine|provenance|vient|from which|\borigin\b|comes? from which)/.test(qn)) {
     const c = tous.find((x) => x.resident_ref === ref);
-    if (c) { CONTEXTE.set(cle, ref); return local(T(L, `${ref} (${c.numero}) vient de ${c.origine} ; ${confirmation(L, c)}.`, `${ref} (${c.numero}) comes from ${c.origine}; ${confirmation(L, c)}.`)); }
+    if (c) { ecrireContexte(cle, ref); return local(T(L, `${ref} (${c.numero}) vient de ${c.origine} ; ${confirmation(L, c)}.`, `${ref} (${c.numero}) comes from ${c.origine}; ${confirmation(L, c)}.`)); }
   }
   // Préparer le retour : carte à confirmer (date choisie par la personne), jamais d'écriture directe
   if (/(prepare|preparer|prepare\b).*(retour|return)/.test(qn)) {
     if (!ref) return local(T(L, 'Précisez la référence du résident (R-00000) : je ne vois que les références des résidents de CHSLD.', 'Specify the resident reference (R-00000): I only see CHSLD resident references.'));
     const c = d.hospitalisations.concat(d.a_accueillir, d.retours_en_cours).find((x) => x.resident_ref === ref);
     if (!c) return local(T(L, `Aucune hospitalisation confirmée ici pour ${ref} : je ne peux pas préparer de retour.`, `No confirmed hospital stay here for ${ref}: I cannot prepare a return.`));
-    CONTEXTE.set(cle, ref);
+    ecrireContexte(cle, ref);
     if (!c.actions.includes('retour')) return local(T(L, `${ref} : ${etapeTxt(L, c.etape)}. Le retour ne peut pas être préparé à cette étape ou par votre rôle.`, `${ref}: ${etapeTxt(L, c.etape)}. The return cannot be prepared at this step or with your role.`));
     return local(T(L, `Voici le retour de ${ref} vers ${c.origine} à confirmer. Choisissez la date prévue ; rien n’est enregistré avant votre confirmation, puis le CHSLD devra l’accepter.`,
       `Here is the return of ${ref} to ${c.origine} to confirm. Choose the planned date; nothing is recorded before you confirm, then the CHSLD must accept it.`),
@@ -88,7 +93,7 @@ async function repondre(pool, u, etabId, q, L) {
   if (ref) {
     const c = tous.find((x) => x.resident_ref === ref);
     if (!c) return local(T(L, `Aucune demande de CHSLD n’est enregistrée ici pour ${ref}.`, `No CHSLD request is recorded here for ${ref}.`));
-    CONTEXTE.set(cle, ref);
+    ecrireContexte(cle, ref);
     return local(T(L, `${ref}, depuis ${c.origine} (${c.numero}) : ${etapeTxt(L, c.etape)} ; ${confirmation(L, c)}.${c.retour ? `\nRetour : ${etapeTxt(L, c.retour.etape)} (${c.retour.numero}).` : ''}${['transmise', 'recue_hopital', 'acceptee'].includes(c.etape) ? '\nLe départ n’est pas encore confirmé : le résident n’est pas réputé parti.' : ''}`,
       `${ref}, from ${c.origine} (${c.numero}): ${etapeTxt(L, c.etape)}; ${confirmation(L, c)}.${c.retour ? `\nReturn: ${etapeTxt(L, c.retour.etape)} (${c.retour.numero}).` : ''}${['transmise', 'recue_hopital', 'acceptee'].includes(c.etape) ? '\nDeparture is not confirmed yet: the resident is not considered to have left.' : ''}`));
   }
@@ -136,5 +141,9 @@ async function repondre(pool, u, etabId, q, L) {
   }
   return local(T(L, `Liaison CHSLD : ${d.compteurs.arrivees} demande(s) en attente, ${d.compteurs.a_accueillir} à accueillir, ${d.compteurs.hospitalisations} hospitalisation(s) en cours, dont ${d.compteurs.retours} avec un retour.`,
     `CHSLD liaison: ${d.compteurs.arrivees} pending request(s), ${d.compteurs.a_accueillir} to receive, ${d.compteurs.hospitalisations} hospital stay(s), ${d.compteurs.retours} with a return.`));
+}
+async function repondre(pool, u, etabId, q, L) {
+  const fuseau = (await pool.query('SELECT c.fuseau FROM etablissements e JOIN config_pays c ON c.id = e.config_id WHERE e.id = $1', [etabId])).rows[0]?.fuseau;
+  return fuseauRequete.run(fuseau || 'America/Toronto', () => traiter(pool, u, etabId, q, L));
 }
 module.exports = { repondre, concerne };
