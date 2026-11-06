@@ -166,7 +166,7 @@ function creerApp(pool, options = {}) {
     // La météo de l'en-tête et le nom de l'assistant (lecture seule, propres à l'établissement) s'affichent aussi pour l'entretien.
     const ok = (req.method === 'GET' && ['/moi', '/nettoyage', '/meteo', '/og/configuration', '/chsld/taches', '/chsld/places'].includes(req.path)) || req.path.startsWith('/moi/')
       || (req.method === 'POST' && /^\/chsld\/taches\/\d+\/statut$/.test(req.path))
-      || (req.method === 'POST' && (req.path === '/deconnexion' || /^\/nettoyage\/\d+\/debut$/.test(req.path)
+      || (req.method === 'POST' && (req.path === '/deconnexion' || /^\/nettoyage\/\d+\/(debut|terminer)$/.test(req.path)
         || (/^\/(lits|civieres)\/\d+\/action$/.test(req.path) && req.body && req.body.action === 'nettoyage_ok')));
     return ok ? next() : next(new ErreurHttp(403, 'role_entretien'));
   });
@@ -304,6 +304,7 @@ function creerApp(pool, options = {}) {
     const id = entier(req.params.id, 'id'); await s.litVisible(pool, req.utilisateur, id);
     return t.majConge(pool, req.utilisateur, id, req.body.statut ?? null, req.body.sortie_prevue);
   }));
+  require('./nettoyage-securise').brancher(api, pool, route, entier);
   api.get('/nettoyage', route((req) => t.fileNettoyage(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   api.post('/nettoyage/:id/debut', route(async (req) => {
     const id = entier(req.params.id, 'id'); await s.litVisible(pool, req.utilisateur, id);

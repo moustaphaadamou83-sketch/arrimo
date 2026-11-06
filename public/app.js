@@ -1950,19 +1950,65 @@ async function gererHabilitationsPriorites() {
   selectionner();
 }
 
+/* Consignes de l'agent : la chambre, le protocole et les équipements ; jamais le patient ni un diagnostic. */
+function consignesNettoyageHTML(l) {
+  const N = (k, vars) => esc(t(`nettoyage.${k}`, vars));
+  if (!l.precautions?.length && !l.intervention) return '';
+  const raison = (b) => { const [c, x] = b.split(':'); return `${N(`b_${c}`)}${x ? ` (${c === 'epi_indisponible' ? N(`e_${x}`) : N(`f_${x}`)})` : ''}`; };
+  const p = l.protocole;
+  return `<div class="net-consignes"><div><b>${N('precautions_titre')} :</b> ${l.precautions.map((x) => N(`p_${x}`)).join(', ') || N('p_base')}</div>
+    ${p ? `<div>${N('protocole')} : ${esc(p.nom)} · ${N(`int_${p.type_intervention}`)}</div>${p.epi.length ? `<div>${N('epi')} : ${p.epi.map((x) => N(`e_${x}`)).join(', ')}</div>` : ''}${p.instructions ? `<div class="note" style="white-space:pre-wrap">${esc(p.instructions)}</div>` : ''}` : ''}
+    <div><b>${l.intervention ? N(`st_${l.intervention.statut}`) : l.autorisee ? N('autorisee') : N('bloquee')}</b>${l.blocages?.length && !l.intervention ? ` : ${l.blocages.map(raison).join(', ')}` : ''}${l.intervention?.version_changee ? ` · ${N('version_changee')}` : ''}</div></div>`;
+}
+async function chargerConfigNettoyage(superviseur) {
+  const z = $('#net-config-corps'); if (!z) return;
+  const N = (k, vars) => esc(t(`nettoyage.${k}`, vars));
+  const chambres = await api('GET', `/chambres/precautions?etablissement_id=${etat.ctx}`);
+  const toutes = ['contact', 'gouttelettes', 'aerien', 'acces_interdit', 'attente_validation'];
+  const cases = (nom, valeurs, coche, lib) => valeurs.map((x) => `<label class="case"><input type="checkbox" name="${nom}" value="${x}"${coche.includes(x) ? ' checked' : ''}> ${lib(x)}</label>`).join(' ');
+  let html = `<h3>${N('chambres')}</h3><div class="champ"><label class="lbl" for="net-chambre">${N('chambre_choix')}</label><select id="net-chambre">${chambres.map((c) => `<option value="${c.id}">${esc(c.unite)} · ${esc(c.numero)}${c.precautions.length ? ` · ${c.precautions.map((x) => N(`p_${x}`)).join(', ')}` : ''}</option>`).join('')}</select></div>
+    <fieldset id="net-chambre-cases"></fieldset><button class="btn pri" type="button" id="net-chambre-ok">${N('enregistrer')}</button>`;
+  let c = null;
+  if (superviseur) {
+    c = await api('GET', `/nettoyage/configuration?etablissement_id=${etat.ctx}`);
+    html += `<h3>${N('protocoles')}</h3><div class="liste">${c.protocoles.map((p) => `<div class="item"><div><b>${esc(p.nom)}</b> · ${N(`int_${p.type_intervention}`)} · ${p.precautions.map((x) => N(`p_${x}`)).join(', ')}</div>${p.actif ? `<button class="btn" type="button" data-proto-off="${p.id}">${N('desactiver')}</button>` : ''}</div>`).join('')}</div>
+      <form id="net-proto"><div class="ligne"><div class="champ"><label class="lbl" for="np-nom">${N('p_nom')}</label><input id="np-nom" required maxlength="120"></div><div class="champ"><label class="lbl" for="np-type">${N('p_type')}</label><select id="np-type">${c.catalogue.interventions.map((x) => `<option value="${x}">${N(`int_${x}`)}</option>`).join('')}</select></div><div class="champ"><label class="lbl" for="np-delai">${N('p_delai')}</label><input id="np-delai" type="number" min="0" max="1440" value="0"></div></div>
+      <fieldset><legend>${N('p_precautions')}</legend>${cases('np-prec', c.catalogue.precautions, [], (x) => N(`p_${x}`))}</fieldset><fieldset><legend>${N('p_formations')}</legend>${cases('np-form', c.catalogue.formations, [], (x) => N(`f_${x}`))}</fieldset><fieldset><legend>${N('epi')}</legend>${cases('np-epi', c.catalogue.epi, [], (x) => N(`e_${x}`))}</fieldset>
+      <div class="champ"><label class="lbl" for="np-inst">${N('p_instructions')}</label><textarea id="np-inst" maxlength="2000"></textarea></div><label class="case"><input type="checkbox" id="np-controle" checked> ${N('p_controle')}</label><div><button class="btn pri" type="submit">${N('ajouter')}</button></div></form>
+      <h3>${N('epi_titre')}</h3><div>${c.catalogue.epi.map((x) => `<label class="case"><input type="checkbox" data-epi="${x}"${c.epi.some((e) => e.epi === x && e.disponible) ? ' checked' : ''}> ${N(`e_${x}`)}</label>`).join(' ')}</div>
+      <h3>${N('habilitations')}</h3><form id="net-form"><div class="ligne"><div class="champ"><label class="lbl" for="nf-agent">${N('agent')}</label><select id="nf-agent">${c.agents.map((a) => `<option value="${a.id}">${esc(a.nom)}</option>`).join('')}</select></div><div class="champ"><label class="lbl" for="nf-formation">${N('formation')}</label><select id="nf-formation">${c.catalogue.formations.map((x) => `<option value="${x}">${N(`f_${x}`)}</option>`).join('')}</select></div><div class="champ"><label class="lbl" for="nf-expire">${N('expire')}</label><input id="nf-expire" type="date" required></div></div><button class="btn pri" type="submit">${N('accorder')}</button></form>`;
+  }
+  z.innerHTML = html;
+  const coches = (nom) => [...z.querySelectorAll(`input[name="${nom}"]:checked`)].map((x) => x.value);
+  const afficherCases = () => { const ch = chambres.find((x) => x.id === Number($('#net-chambre').value)); $('#net-chambre-cases').innerHTML = ch ? `<legend>${N('precautions_titre')}</legend>${cases('nc', toutes, ch.precautions, (x) => N(`p_${x}`))}` : ''; };
+  afficherCases(); $('#net-chambre').onchange = afficherCases;
+  $('#net-chambre-ok').onclick = (e) => { const ch = chambres.find((x) => x.id === Number($('#net-chambre').value)); if (ch) agir(e.currentTarget, () => api('PUT', `/chambres/${ch.id}/precautions`, { precautions: coches('nc'), version: ch.version }), t('nettoyage.ok')); };
+  if (!c) return;
+  $('#net-proto').onsubmit = (e) => { e.preventDefault(); agir(e.submitter, () => api('POST', '/nettoyage/protocoles', { etablissement_id: etat.ctx, nom: $('#np-nom').value, type_intervention: $('#np-type').value, delai_min: Number($('#np-delai').value), precautions: coches('np-prec'), formations: coches('np-form'), epi: coches('np-epi'), instructions: $('#np-inst').value, controle_requis: $('#np-controle').checked }), t('nettoyage.ok')); };
+  z.querySelectorAll('[data-proto-off]').forEach((b) => { b.onclick = () => agir(b, () => api('PUT', `/nettoyage/protocoles/${b.dataset.protoOff}`, { actif: false }), t('nettoyage.ok')); });
+  z.querySelectorAll('[data-epi]').forEach((b) => { b.onchange = () => agir(null, () => api('PUT', '/nettoyage/epi', { etablissement_id: etat.ctx, epi: b.dataset.epi, disponible: b.checked }), t('nettoyage.ok')); });
+  $('#net-form').onsubmit = (e) => { e.preventDefault(); agir(e.submitter, () => api('PUT', '/nettoyage/formations', { etablissement_id: etat.ctx, utilisateur_id: Number($('#nf-agent').value), formation: $('#nf-formation').value, expire_le: $('#nf-expire').value }), t('nettoyage.ok')); };
+}
 async function vueNettoyage() {
   const v = $('#v-nettoyage');
   const liste = await api('GET', `/nettoyage?etablissement_id=${etat.ctx}`);
   const couleur = { haute: 'var(--critique)', moyenne: 'var(--attention)', normale: 'var(--secondaire)' };
   const N = (k, vars) => esc(t(`nettoyage.${k}`, vars));
+  const role = etat.moi.utilisateur.role; const superviseur = ['coordonnateur', 'admin_etab', 'gestionnaire'].includes(role);
+  const actionsSous = (l) => { const i = l.intervention;
+    return `${!i && l.autorisee ? `<button class="btn" data-debut="${l.id}">${N('commencer')}</button>` : ''}${i?.statut === 'en_cours' ? `<button class="btn pri" data-terminer="${l.id}">${N('terminer')}</button>` : ''}${superviseur && i?.statut === 'controle_requis' && !i.version_changee ? `<button class="btn pri" data-valider="${l.id}">${N('valider')}</button>` : ''}${superviseur && i ? `<button class="btn" data-reprendre="${l.id}">${N('reprendre')}</button>` : ''}`; };
   v.innerHTML = `<div class="entete"><div><h2>${N('titre', { etab: etabCtx().nom })}</h2><p>${N('intro')}</p></div></div>
     <div class="liste">${liste.map((l, i) => `<div class="net-item" style="--c:${couleur[l.priorite]}"><div>
       <div class="grand">${i + 1}. ${esc(l.code)}</div>
       <div class="note">${l.genre === 'civiere' ? N('civiere', { cat: t(`urgence.une_${l.categorie}`) }) : `${N('chambre', { unite: l.unite, ch: l.chambre })}${l.isolement ? N('isolement') : ''}`}</div>
       <div style="font-size:13px">${esc(l.raison)}</div>
+      ${l.genre === 'lit' ? consignesNettoyageHTML(l) : ''}
       <div class="note">${l.nettoyage_debut ? N('commence_il_y_a', { duree: depuis(l.nettoyage_debut) }) : N('attente_depuis', { duree: depuis(l.etat_depuis) })}</div></div>
-      <div class="actions">${l.nettoyage_debut || l.genre === 'civiere' ? '' : `<button class="btn" data-debut="${l.id}">${N('commencer')}</button>`}
-        <button class="btn pri" data-fini="${l.id}" data-genre="${l.genre}" data-version="${l.version}" data-code="${esc(l.code)}">${N('termine')}</button></div></div>`).join('') || `<p class="note">${N('aucun')}</p>`}</div>`;
+      <div class="actions">${l.precautions?.length || l.intervention ? actionsSous(l) : l.nettoyage_debut || l.genre === 'civiere' ? '' : `<button class="btn" data-debut="${l.id}">${N('commencer')}</button>`}
+        ${l.precautions?.length || l.intervention ? '' : `<button class="btn pri" data-fini="${l.id}" data-genre="${l.genre}" data-version="${l.version}" data-code="${esc(l.code)}">${N('termine')}</button>`}</div></div>`).join('') || `<p class="note">${N('aucun')}</p>`}</div>`;
+  if (role !== 'entretien') { v.insertAdjacentHTML('beforeend', `<details class="panneau-c" id="net-config"${etat.netConfigOuverte ? ' open' : ''}><summary><b>${N('config')}</b></summary><div id="net-config-corps"></div></details>`);
+    const cfg = $('#net-config'); cfg.ontoggle = () => { etat.netConfigOuverte = cfg.open; if (cfg.open) chargerConfigNettoyage(superviseur); }; if (cfg.open) chargerConfigNettoyage(superviseur); }
+  for (const a of ['terminer', 'valider', 'reprendre']) v.querySelectorAll(`[data-${a}]`).forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/nettoyage/${b.dataset[a]}/${a}`), t('nettoyage.ok')); });
   v.querySelectorAll('[data-debut]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/nettoyage/${b.dataset.debut}/debut`), t('nettoyage.commence_ok')); });
   v.querySelectorAll('[data-fini]').forEach((b) => {
     const chemin = b.dataset.genre === 'civiere' ? 'civieres' : 'lits';

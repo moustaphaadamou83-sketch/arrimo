@@ -929,6 +929,8 @@ async function listeTaches(pool, u, etabId, q = {}) {
   const taches = (await pool.query(`SELECT t.*, l.code AS lit, r.reference AS resident_ref, cu.nom AS cree_par_nom FROM taches_etab t LEFT JOIN lits l ON l.id = t.lit_id
     LEFT JOIN residents r ON r.id = t.resident_id LEFT JOIN utilisateurs cu ON cu.id = t.cree_par WHERE t.etablissement_id = $1${cond} ORDER BY t.echeance NULLS LAST, t.cree_le LIMIT 300`, p)).rows;
   // Entretien : la chambre suffit ; aucune référence de résident ni détail de dossier
+  const NS = require('./nettoyage-securise');
+  for (const t of taches) if (t.lit_id && ['entretien', 'preparation_chambre'].includes(t.type)) t.consignes = await NS.consignes(pool, t.lit_id, u.id);
   if (u.role !== 'entretien') return taches;
   return taches.map((t) => ({ ...t, resident_id: null, resident_ref: null, detail: null, titre: String(t.titre).replace(/\s*(de|of)?\s*R-\d{5}/g, '').trim() }));
 }
@@ -955,20 +957,22 @@ async function statutTache(pool, u, id, b) {
   const e = await etabChsld(pool, u, t0.etablissement_id, { roles: [...CONSULTER, 'entretien'] });
   if (u.role === 'entretien' && !['entretien', 'preparation_chambre'].includes(t0.type)) throw new ErreurHttp(403, 'role_insuffisant');
   if (!['a_faire', 'en_cours', 'faite', 'annulee'].includes(b.statut)) throw new ErreurHttp(400, 'tache_invalide');
-  return transaction(pool, async (c) => {
+  const NS = require('./nettoyage-securise');
+  return NS.avecBlocage(pool, u, () => transaction(pool, async (c) => {
     const t = (await c.query('SELECT * FROM taches_etab WHERE id = $1 FOR UPDATE', [id])).rows[0]; versionAttendue(t, b.version);
     if (['faite', 'annulee'].includes(t.statut)) throw new ErreurHttp(409, 'tache_close');
+    const attenteControle = await NS.pourTache(c, pool, u, t, b.statut);
     const n = (await c.query(`UPDATE taches_etab SET statut = $2, fait_par = CASE WHEN $2 = 'faite' THEN $3::int ELSE fait_par END, fait_le = CASE WHEN $2 = 'faite' THEN now() ELSE fait_le END,
       version = version + 1 WHERE id = $1 RETURNING *`, [id, b.statut, u.id])).rows[0];
     // Entretien du lit : en cours, puis propre quand plus aucune tâche d'entretien n'est ouverte. L'attribution ne change jamais ici.
     if (t.lit_id && ['entretien', 'preparation_chambre'].includes(t.type)) {
       const ouvertes = (await c.query(`SELECT count(*)::int n FROM taches_etab WHERE lit_id = $1 AND type IN ('entretien', 'preparation_chambre') AND statut IN ('a_faire', 'en_cours')`, [t.lit_id])).rows[0].n;
       if (b.statut === 'en_cours') await majEntretien(c, t.lit_id, 'en_cours', u);
-      else if (!ouvertes) await majEntretien(c, t.lit_id, 'propre', u);
+      else if (!ouvertes && !attenteControle) await majEntretien(c, t.lit_id, 'propre', u);
     }
     await journalChsld(c, e.id, u, 'Tâche', `${t.type} · n° ${t.id} · ${b.statut}`);
     return n;
-  });
+  }));
 }
 
 /* ------------------------------------------------------------------ communications avec les proches */

@@ -1329,6 +1329,121 @@ test('transferts multiples : CHSLD → A → B → C → CHSLD, puis 2e et 3e ho
   assert.ok(!vueB.includes(r1.nom), 'aucun nom à l’hôpital');
 });
 
+test('nettoyage intelligent : précautions, protocole, habilitations, équipements, contrôle ; rien de changé sans précaution ; aucun patient visible', { timeout: 120000 }, async () => {
+  const A = 'era_entretien'; const S = 'era'; const E = ids.era;
+  const q = (sql, v) => poolPilote.query(sql, v).then((r) => r.rows);
+  const nettoyageSur = async () => { // Un lit libre et sa chambre, sans résident, mis au nettoyage par le parcours normal
+    const [l] = await q(`SELECT l.id, l.code, l.version, l.chambre_id FROM lits l WHERE l.etablissement_id = $1 AND l.etat = 'libre' AND l.actif AND NOT EXISTS (SELECT 1 FROM lits x WHERE x.chambre_id = l.chambre_id AND x.etat <> 'libre') ORDER BY l.id LIMIT 1`, [E]);
+    await poolPilote.query(`UPDATE lits SET etat = 'nettoyage', version = version + 1, patient_ref = NULL WHERE id = $1`, [l.id]);
+    return (await q('SELECT id, code, version, chambre_id FROM lits WHERE id = $1', [l.id]))[0];
+  };
+  const chambre = async (id) => (await api(S, 'GET', `/chambres/precautions?etablissement_id=${E}`)).find((c) => c.id === id);
+  const poser = async (id, precautions, qui = S) => api(qui, 'PUT', `/chambres/${id}/precautions`, { precautions, version: (await chambre(id)).version });
+  const dans = async (qui, id) => (await api(qui, 'GET', `/nettoyage?etablissement_id=${E}`)).find((x) => x.id === id);
+  const agentId = (await api(A, 'GET', '/moi')).utilisateur.id;
+
+  // 1. Chambre sans précaution : parcours habituel, aucune intervention
+  let l = await nettoyageSur();
+  let f = await dans(A, l.id);
+  assert.deepStrictEqual([f.precautions, f.autorisee, f.protocole, f.intervention], [[], true, null, null]);
+  await api(A, 'POST', `/nettoyage/${l.id}/debut`);
+  await api(A, 'POST', `/lits/${l.id}/action`, { action: 'nettoyage_ok', version: (await dans(A, l.id)).version });
+  assert.strictEqual((await q('SELECT count(*)::int n FROM nettoyage_interventions WHERE lit_id = $1', [l.id]))[0].n, 0);
+
+  // 2. Droits : l'agent ne pose ni précautions ni protocoles ; valeurs fermées ; isolation
+  l = await nettoyageSur();
+  await refuse(A, 'PUT', `/chambres/${l.chambre_id}/precautions`, { precautions: ['contact'], version: 0 }, 403);
+  await refuse(A, 'GET', `/chambres/precautions?etablissement_id=${E}`, null, 403);
+  await refuse(S, 'PUT', `/chambres/${l.chambre_id}/precautions`, { precautions: ['grippe'], version: (await chambre(l.chambre_id)).version }, 400, 'precautions_invalides');
+  await refuse('stl', 'PUT', `/chambres/${l.chambre_id}/precautions`, { precautions: ['contact'], version: 0 }, 403);
+  await refuse(S, 'PUT', `/chambres/${l.chambre_id}/precautions`, { precautions: ['contact'], version: 99 }, 409);
+  await refuse(A, 'GET', `/nettoyage/configuration?etablissement_id=${E}`, null, 403);
+  await refuse(A, 'POST', '/nettoyage/protocoles', { etablissement_id: E }, 403);
+
+  // 3. Précautions sans protocole validé : bloqué, superviseur averti, remise en service impossible
+  await poser(l.chambre_id, ['contact']);
+  f = await dans(A, l.id); assert.deepStrictEqual([f.autorisee, f.blocages], [false, ['protocole_absent']]);
+  await refuse(A, 'POST', `/nettoyage/${l.id}/debut`, null, 409, 'nettoyage_bloque');
+  assert.ok((await q(`SELECT 1 FROM notifications WHERE etablissement_id = $1 AND code = 'nettoyage_bloque'`, [E])).length, 'superviseur averti');
+  await refuse(A, 'POST', `/lits/${l.id}/action`, { action: 'nettoyage_ok', version: l.version }, 409, 'controle_nettoyage_requis');
+
+  // 4. Protocole : agent non formé, puis habilitation expirée, puis équipement indisponible
+  const proto = await api(S, 'POST', '/nettoyage/protocoles', { etablissement_id: E, nom: 'Contact, terminal (fictif)', type_intervention: 'terminal', precautions: ['contact'], formations: ['precautions_contact'], epi: ['gants', 'blouse'], instructions: 'Consignes fictives', controle_requis: true });
+  await refuse(S, 'POST', '/nettoyage/protocoles', { etablissement_id: E, nom: 'x', type_intervention: 'terminal', precautions: ['acces_interdit'] }, 400, 'protocole_invalide');
+  f = await dans(A, l.id); assert.ok(f.blocages.includes('formation_manquante:precautions_contact') && f.blocages.includes('epi_indisponible:gants'));
+  await refuse(A, 'POST', `/nettoyage/${l.id}/debut`, null, 409, 'nettoyage_bloque');
+  await api(S, 'PUT', '/nettoyage/formations', { etablissement_id: E, utilisateur_id: agentId, formation: 'precautions_contact', expire_le: new Date(Date.now() - 86400000).toISOString() });
+  f = await dans(A, l.id); assert.ok(f.blocages.includes('habilitation_expiree:precautions_contact'));
+  await api(S, 'PUT', '/nettoyage/formations', { etablissement_id: E, utilisateur_id: agentId, formation: 'precautions_contact', expire_le: new Date(Date.now() + 86400000 * 30).toISOString() });
+  f = await dans(A, l.id); assert.deepStrictEqual(f.blocages, ['epi_indisponible:gants', 'epi_indisponible:blouse']);
+  await api(S, 'PUT', '/nettoyage/epi', { etablissement_id: E, epi: 'gants', disponible: true });
+  await api(S, 'PUT', '/nettoyage/epi', { etablissement_id: E, epi: 'blouse', disponible: true });
+  f = await dans(A, l.id); assert.deepStrictEqual([f.autorisee, f.blocages], [true, []]);
+
+  // 5. Ce que voit l'agent : consignes, jamais de patient ni de diagnostic
+  const brut = JSON.stringify(f);
+  assert.ok(brut.includes('Consignes fictives') && !/patient_ref|resident|diagnostic|symptome|pathologie/i.test(brut));
+
+  // 6. Terminer sans avoir commencé refusé ; intervention ; pas de remise en service par l'agent
+  await refuse(A, 'POST', `/nettoyage/${l.id}/terminer`, null, 409, 'intervention_non_commencee');
+  const deux = await Promise.all([appel(A, 'POST', `/nettoyage/${l.id}/debut`), appel(A, 'POST', `/nettoyage/${l.id}/debut`)]);
+  assert.deepStrictEqual(deux.map((x) => x.statut).sort(), [200, 409], 'une seule intervention ouverte');
+  await refuse(A, 'POST', `/nettoyage/${l.id}/valider`, null, 403, 'role_entretien');
+  await refuse(S, 'POST', `/nettoyage/${l.id}/valider`, null, 409, 'controle_impossible');
+  const ter = await api(A, 'POST', `/nettoyage/${l.id}/terminer`); assert.strictEqual(ter.statut, 'controle_requis');
+  assert.strictEqual((await q('SELECT etat FROM lits WHERE id = $1', [l.id]))[0].etat, 'nettoyage', 'la fin de l’agent ne rend pas la chambre attribuable');
+  await refuse(A, 'POST', `/lits/${l.id}/action`, { action: 'nettoyage_ok', version: (await q('SELECT version FROM lits WHERE id = $1', [l.id]))[0].version }, 409, 'controle_nettoyage_requis');
+  await refuse(S, 'POST', `/lits/${l.id}/action`, { action: 'nettoyage_ok', version: (await q('SELECT version FROM lits WHERE id = $1', [l.id]))[0].version }, 409, 'controle_nettoyage_requis');
+  assert.ok((await api(S, 'GET', `/nettoyage/controles?etablissement_id=${E}`)).some((x) => x.lit_id === l.id));
+
+  // 7. Précautions modifiées pendant le contrôle : validation refusée, reprise obligatoire
+  await poser(l.chambre_id, ['contact', 'gouttelettes']);
+  assert.ok((await q(`SELECT 1 FROM notifications WHERE etablissement_id = $1 AND code = 'nettoyage_precautions_modifiees'`, [E])).length);
+  await refuse(S, 'POST', `/nettoyage/${l.id}/valider`, null, 409, 'precautions_modifiees');
+  await api(S, 'POST', `/nettoyage/${l.id}/reprendre`);
+  f = await dans(A, l.id); assert.deepStrictEqual(f.blocages, ['protocole_absent'], 'le protocole ne couvre plus les précautions');
+  await poser(l.chambre_id, ['contact']);
+
+  // 8. Délai du protocole, puis validation : lit libre, précautions toujours en place, traçabilité
+  await api(A, 'POST', `/nettoyage/${l.id}/debut`);
+  await poolPilote.query('UPDATE nettoyage_protocoles SET delai_min = 30 WHERE id = $1', [proto.id]);
+  await api(A, 'POST', `/nettoyage/${l.id}/terminer`);
+  await refuse(S, 'POST', `/nettoyage/${l.id}/valider`, null, 409, 'delai_non_ecoule');
+  await poolPilote.query(`UPDATE nettoyage_interventions SET fin_le = now() - interval '31 minutes' WHERE lit_id = $1 AND statut = 'controle_requis'`, [l.id]);
+  const val = await api(S, 'POST', `/nettoyage/${l.id}/valider`);
+  await poolPilote.query('UPDATE nettoyage_protocoles SET delai_min = 0 WHERE id = $1', [proto.id]);
+  assert.strictEqual(val.statut, 'validee');
+  assert.strictEqual((await q('SELECT etat FROM lits WHERE id = $1', [l.id]))[0].etat, 'libre');
+  assert.deepStrictEqual((await chambre(l.chambre_id)).precautions, ['contact'], 'le nettoyage ne lève jamais les précautions');
+  const trace = (await q(`SELECT i.agent_id, i.controle_par, i.debut_le, i.fin_le, i.controle_le FROM nettoyage_interventions i WHERE lit_id = $1 AND statut = 'validee'`, [l.id]))[0];
+  assert.ok(trace.agent_id === agentId && trace.controle_par && trace.debut_le && trace.fin_le && trace.controle_le);
+  const actions = (await q('SELECT action FROM journal WHERE lit_id = $1', [l.id])).map((x) => x.action);
+  assert.ok(['Précautions de la chambre modifiées', 'Nettoyage commencé', 'Nettoyage terminé', 'Nettoyage validé'].every((a) => actions.includes(a)), actions.join(', '));
+  assert.ok((await api(S, 'GET', `/chambres/${l.chambre_id}/precautions/historique`)).length >= 3);
+
+  // 9. Accès interdit : ni intervention, ni attribution, ni validation
+  await poser(l.chambre_id, ['acces_interdit']);
+  const litv = (await q('SELECT version FROM lits WHERE id = $1', [l.id]))[0].version;
+  const ex = await appel(S, 'POST', `/lits/${l.id}/action`, { action: 'reserver', version: litv, patient_ref: 'R-99999' });
+  assert.strictEqual(ex.statut, 409); assert.strictEqual(ex.corps.code, 'chambre_acces_restreint');
+  await poser(l.chambre_id, []);
+
+  // 10. Place conservée : la tâche d'entretien passe par les mêmes contrôles et la place reste à son résident
+  const [occ] = await q(`SELECT l.id, l.chambre_id, l.etat FROM lits l JOIN residents r ON r.lit_id = l.id WHERE r.etablissement_id = $1 AND r.statut = 'present' AND l.etat = 'occupe' ORDER BY l.id LIMIT 1`, [E]);
+  await poser(occ.chambre_id, ['contact']);
+  const tache = await api(S, 'POST', '/chsld/taches', { etablissement_id: E, type: 'entretien', titre: 'Entretien fictif', lit_id: occ.id, assigne_role: 'entretien' });
+  const vueAgent = (await api(A, 'GET', `/chsld/taches?etablissement_id=${E}`)).find((x) => x.id === tache.id);
+  assert.ok(vueAgent.consignes.precautions.includes('contact')); assert.strictEqual(vueAgent.resident_ref, null);
+  await refuse(A, 'POST', `/chsld/taches/${tache.id}/statut`, { statut: 'faite', version: tache.version }, 409, 'intervention_non_commencee');
+  const t1 = await api(A, 'POST', `/chsld/taches/${tache.id}/statut`, { statut: 'en_cours', version: tache.version });
+  await api(A, 'POST', `/chsld/taches/${tache.id}/statut`, { statut: 'faite', version: t1.version });
+  assert.strictEqual((await q('SELECT entretien_statut FROM lits WHERE id = $1', [occ.id]))[0].entretien_statut, 'en_cours', 'pas propre avant le contrôle');
+  await api(S, 'POST', `/nettoyage/${occ.id}/valider`);
+  const finie = (await q('SELECT etat, entretien_statut FROM lits WHERE id = $1', [occ.id]))[0];
+  assert.deepStrictEqual([finie.etat, finie.entretien_statut], ['occupe', 'propre'], 'propre sans changer l’occupation');
+  await poser(occ.chambre_id, []);
+});
+
 test('captures : formulaire SH (type puis modules), liste SH, écrans CHSLD réels', { timeout: 180000 }, async () => {
   const { chromium } = require('playwright'); const dossier = path.resolve('.local/captures-chsld'); fs.mkdirSync(dossier, { recursive: true });
   const navigateur = await chromium.launch(); const erreurs = [];

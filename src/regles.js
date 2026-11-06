@@ -95,6 +95,7 @@ async function changerEtat(client, pool, utilisateurId, litId, nouveau, opts = {
     await refuser(409, `Transition interdite : ${ETATS[lit.etat]} → ${ETATS[nouveau]}`,
       'transition_interdite', { code: lit.code, de_etat: lit.etat, vers_etat: nouveau });
   }
+  await require('./nettoyage-securise').garde(client, lit, nouveau, opts);
   if (lit.etat === 'reserve' && nouveau === 'libre' && lit.transfert_id && !opts.depuisTransfert) {
     const t = await client.query(`SELECT numero, statut FROM transferts WHERE id = $1`, [lit.transfert_id]);
     if (t.rows[0] && !['recu', 'refuse'].includes(t.rows[0].statut)) {

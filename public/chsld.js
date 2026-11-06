@@ -329,11 +329,15 @@
     const v = $('#v-c-taches');
     const liste = await api('GET', `/chsld/taches?etablissement_id=${ctx()}`);
     const peutCreer = role() !== 'entretien';
+    const superviseur = ['coordonnateur', 'admin_etab', 'gestionnaire'].includes(role());
+    const controles = superviseur ? await api('GET', `/nettoyage/controles?etablissement_id=${ctx()}`) : [];
     v.innerHTML = `<div class="entete"><div><h2>${C('taches.titre')}</h2><p>${C('taches.intro')}</p></div>${peutCreer ? `<button class="btn pri" id="ta-nouvelle">${icone('plus')}${C('taches.nouvelle')}</button>` : ''}</div>
-      ${liste.length ? `<div class="liste">${liste.map((x) => `<div class="item"><div><b>${esc(x.titre)}</b> · ${C(`tache_type.${x.type}`)} ${pastille(x.statut, t(`chsld.tache_statut.${x.statut}`))}
+      ${controles.length ? `<div class="panneau-c" id="ta-controles"><h3>${esc(t('nettoyage.st_controle_requis'))}</h3><div class="liste">${controles.map((x) => `<div class="item"><div><b>${esc(x.lit)}</b> · ${esc(x.chambre)}${x.version_changee ? ` · ${esc(t('nettoyage.version_changee'))}` : ''}</div><div class="actions">${x.version_changee ? '' : `<button class="btn pri" data-net-valider="${x.lit_id}">${esc(t('nettoyage.valider'))}</button>`}<button class="btn" data-net-reprendre="${x.lit_id}">${esc(t('nettoyage.reprendre'))}</button></div></div>`).join('')}</div></div>` : ''}
+      ${liste.length ? `<div class="liste">${liste.map((x) => `<div class="item"><div><b>${esc(x.titre)}</b> · ${C(`tache_type.${x.type}`)} ${pastille(x.statut, t(`chsld.tache_statut.${x.statut}`))}${x.consignes ? consignesNettoyageHTML(x.consignes) : ''}
         <div class="note">${[x.lit, x.resident_ref, x.assigne_role ? t(`roles.${x.assigne_role}`) : null, x.echeance ? `${t('chsld.taches.echeance')} ${dateHeure(x.echeance)}` : null].filter(Boolean).map(esc).join(' · ')}${x.echeance && new Date(x.echeance) < new Date() ? ` · <b class="duree-24">${C('taches.en_retard')}</b>` : ''}</div>${x.detail ? `<div class="note">${esc(x.detail)}</div>` : ''}</div>
         <div class="actions">${x.statut === 'a_faire' ? `<button class="btn" data-ta="en_cours" data-id="${x.id}" data-version="${x.version}">${C('taches.commencer')}</button>` : ''}<button class="btn pri" data-ta="faite" data-id="${x.id}" data-version="${x.version}">${C('taches.faite')}</button>
           ${peutCreer ? `<button class="btn dan" data-ta="annulee" data-id="${x.id}" data-version="${x.version}">${C('taches.annuler')}</button>` : ''}</div></div>`).join('')}</div>` : `<p class="vide">${C('taches.aucune')}</p>`}`;
+    for (const x of ['valider', 'reprendre']) v.querySelectorAll(`[data-net-${x}]`).forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/nettoyage/${b.dataset[`net${x[0].toUpperCase()}${x.slice(1)}`]}/${x}`), t('nettoyage.ok')); });
     v.querySelectorAll('[data-ta]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/chsld/taches/${b.dataset.id}/statut`, { statut: b.dataset.ta, version: Number(b.dataset.version) }), t('chsld.actions.ok')); });
     if ($('#ta-nouvelle')) $('#ta-nouvelle').onclick = async () => {
       const places = await api('GET', `/chsld/places?etablissement_id=${ctx()}`);

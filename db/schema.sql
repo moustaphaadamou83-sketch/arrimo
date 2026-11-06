@@ -1079,3 +1079,29 @@ ALTER TABLE resident_mouvements ADD CONSTRAINT resident_mouvements_type_check
 -- À l'arrivée, l'hospitalisation d'origine est close sans être écrasée, et une nouvelle s'ouvre dans l'hôpital d'accueil.
 ALTER TABLE coordinations DROP CONSTRAINT IF EXISTS coordinations_type_check;
 ALTER TABLE coordinations ADD CONSTRAINT coordinations_type_check CHECK (type IN ('hospitalisation', 'retour', 'transfert_chsld', 'transfert_hopital'));
+
+-- Nettoyage selon les précautions (avenant du 6 nov. 2026). Données opérationnelles : aucun diagnostic, aucune référence de patient.
+ALTER TABLE chambres ADD COLUMN IF NOT EXISTS precautions text[] NOT NULL DEFAULT '{}';
+ALTER TABLE chambres ADD COLUMN IF NOT EXISTS precautions_version int NOT NULL DEFAULT 0;
+CREATE TABLE IF NOT EXISTS chambre_precautions_historique (
+  id serial PRIMARY KEY, chambre_id int NOT NULL REFERENCES chambres(id), etablissement_id int NOT NULL REFERENCES etablissements(id),
+  precautions text[] NOT NULL, par int REFERENCES utilisateurs(id), le timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS nettoyage_protocoles (
+  id serial PRIMARY KEY, etablissement_id int NOT NULL REFERENCES etablissements(id), nom text NOT NULL,
+  type_intervention text NOT NULL CHECK (type_intervention IN ('courant', 'terminal')),
+  precautions text[] NOT NULL DEFAULT '{}', formations text[] NOT NULL DEFAULT '{}', epi text[] NOT NULL DEFAULT '{}', instructions text,
+  controle_requis boolean NOT NULL DEFAULT true, delai_min int NOT NULL DEFAULT 0 CHECK (delai_min BETWEEN 0 AND 1440),
+  valide_par int REFERENCES utilisateurs(id), valide_le timestamptz, actif boolean NOT NULL DEFAULT true);
+CREATE TABLE IF NOT EXISTS agent_formations (
+  etablissement_id int NOT NULL REFERENCES etablissements(id), utilisateur_id int NOT NULL REFERENCES utilisateurs(id), formation text NOT NULL,
+  expire_le timestamptz NOT NULL, accordee_par int REFERENCES utilisateurs(id), accordee_le timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (etablissement_id, utilisateur_id, formation));
+CREATE TABLE IF NOT EXISTS etablissement_epi (
+  etablissement_id int NOT NULL REFERENCES etablissements(id), epi text NOT NULL, disponible boolean NOT NULL DEFAULT false,
+  modifie_par int REFERENCES utilisateurs(id), modifie_le timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (etablissement_id, epi));
+CREATE TABLE IF NOT EXISTS nettoyage_interventions (
+  id serial PRIMARY KEY, etablissement_id int NOT NULL REFERENCES etablissements(id), lit_id int NOT NULL REFERENCES lits(id), chambre_id int NOT NULL REFERENCES chambres(id),
+  protocole_id int NOT NULL REFERENCES nettoyage_protocoles(id), precautions text[] NOT NULL, precautions_version int NOT NULL,
+  statut text NOT NULL CHECK (statut IN ('en_cours', 'controle_requis', 'validee', 'annulee')), agent_id int NOT NULL REFERENCES utilisateurs(id),
+  debut_le timestamptz NOT NULL DEFAULT now(), fin_le timestamptz, controle_par int REFERENCES utilisateurs(id), controle_le timestamptz, version int NOT NULL DEFAULT 1);
+CREATE UNIQUE INDEX IF NOT EXISTS nettoyage_intervention_ouverte ON nettoyage_interventions (lit_id) WHERE statut IN ('en_cours', 'controle_requis');

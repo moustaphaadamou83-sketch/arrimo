@@ -89,13 +89,15 @@ async function majConge(pool, utilisateur, litId, statut, date, client = null) {
 
 /* ------------------------------------------------------------------ nettoyage */
 async function debuterNettoyage(pool, utilisateur, litId) {
-  return transaction(pool, async (c) => {
+  const NS = require('./nettoyage-securise');
+  return NS.avecBlocage(pool, utilisateur, () => transaction(pool, async (c) => {
+    await NS.ouvrir(c, utilisateur, litId);
     const { rows } = await c.query(
       `UPDATE lits SET nettoyage_debut = now() WHERE id = $1 AND etat = 'nettoyage' AND nettoyage_debut IS NULL RETURNING *`, [litId]);
     if (!rows[0]) throw new ErreurHttp(409, 'nettoyage_impossible');
     await journaliser(c, { litId, utilisateurId: utilisateur.id, action: 'Nettoyage commencé' });
     return rows[0];
-  });
+  }));
 }
 
 /** Lits à nettoyer, du plus urgent au moins urgent : une unité avec des patients en attente passe en premier. */
@@ -118,6 +120,7 @@ async function fileNettoyage(pool, utilisateur, etabId) {
   const nomType = await traducteurTypes(pool, L);
   for (const r of rows) {
     r.genre = 'lit';
+    Object.assign(r, await require('./nettoyage-securise').consignes(pool, r.id, utilisateur.id));
     const manque = Math.max(0, r.en_attente - r.libres_unite);
     r.priorite_score = manque * 100 + Number(r.age_min);
     r.priorite = manque > 0 ? 'haute' : Number(r.age_min) > r.nettoyage_cible_min ? 'moyenne' : 'normale';
