@@ -498,6 +498,7 @@ function creerAppSh(pool, { env = process.env } = {}) {
   api.post('/hopitaux', route(async (req) => {
     const v = champsHopital(req.body);
     v.type_local_id = await resoudreTypeLocal(pool, req.body, v);
+    if (v.type_local_id) { const off = (await pool.query('SELECT modules_desactives FROM sh_types_locaux WHERE id = $1', [v.type_local_id])).rows[0].modules_desactives; req.body.modules = { ...Object.fromEntries(off.map((m) => [m, false])), ...(req.body.modules || {}) }; }
     const id = await transaction(pool, async (c) => {
       const h = (await c.query(`INSERT INTO hopitaux (nom, adresse, ville, contact_nom, contact_courriel, contact_telephone, environnement, code_etab, sous_domaine, latitude, longitude,
         raison_sociale,identifiant_legal,pays_code,region,fuseau_horaire,utilisateurs_prevus,utilisateurs_autorises,type_etablissement,type_local_id)

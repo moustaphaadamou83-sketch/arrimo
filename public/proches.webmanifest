@@ -1,0 +1,22 @@
+{
+ "name": "Arrimo Famille",
+ "short_name": "Arrimo Famille",
+ "start_url": "/proches",
+ "scope": "/proches",
+ "display": "standalone",
+ "background_color": "#F5F8FA",
+ "theme_color": "#0E5E6F",
+ "lang": "fr-CA",
+ "icons": [
+  {
+   "src": "/icone-proches-192.png",
+   "sizes": "192x192",
+   "type": "image/png"
+  },
+  {
+   "src": "/icone-proches-512.png",
+   "sizes": "512x512",
+   "type": "image/png"
+  }
+ ]
+}

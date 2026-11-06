@@ -23,8 +23,9 @@
     const kpi = (lib, val, ton, ic) => `<div class="ch-kpi ch-k-${ton}"><span class="ch-kpi-ic">${icone(ic)}</span><span class="lbl">${lib}</span><span class="v num">${esc(String(val ?? 0))}</span></div>`;
     const taux = p.dotees ? Math.round((p.occupees + p.conservees + p.reservees) / p.dotees * 100) : 0;
     const actions = a.alertes.map((x) => C(`accueil.alerte_${x.code}`, { n: x.n }));
+    const lignesSup = `<p class="note" id="ch-accueil-sup">${C('accueil.a_nettoyer', { n: a.entretien.a_nettoyer })} · ${C('accueil.nettoyes_jour', { n: a.entretien.termines_jour })} · ${C('accueil.messages_familles', { n: a.familles.messages })} · ${C('accueil.visites_familles', { n: a.familles.visites })}</p>`;
     const raccourci = (vue, ic, lib) => `<button class="ch-raccourci" type="button" data-ch-aller="${vue}">${icone(ic)}<span>${lib}</span></button>`;
-    v.innerHTML = `<section class="ch-situation" aria-labelledby="ch-sit-titre">
+    v.innerHTML = `${lignesSup}<section class="ch-situation" aria-labelledby="ch-sit-titre">
         <div class="ch-situation-txt"><span class="ch-surtitre">${C('accueil.situation')}</span><h2 id="ch-sit-titre">${C('accueil.titre', { etab: a.etablissement.nom })}</h2><p>${C('accueil.intro')}</p></div>
         <div class="ch-situation-chiffres">
           <div><span class="v num">${taux} %</span><span class="lbl">${C('accueil.taux')}</span></div>
@@ -120,7 +121,11 @@
   const evalHTML = (e) => `<dl class="ch-eval">${[['pathologies', e.pathologies], ['symptomes', e.symptomes], ['besoins', e.besoins], ['contraintes', e.contraintes_hebergement], ['equipements', e.equipements]].filter(([, x]) => x).map(([k, x]) => `<dt>${C(`evaluation.${k}`)}</dt><dd>${esc(x)}</dd>`).join('')}${e.precautions?.length ? `<dt>${C('evaluation.precautions')}</dt><dd>${e.precautions.map((x) => esc(t(`nettoyage.p_${x}`))).join(', ')}</dd>` : ''}</dl>`;
   async function panneauEvaluations(v, r) {
     if (!peutEvaluer()) return;
-    const liste = await api('GET', `/evaluations-fictives?etablissement_id=${ctx()}&reference=${encodeURIComponent(r.reference)}`).catch(() => []);
+    let liste = [];
+    try { liste = await api('GET', `/evaluations-fictives?etablissement_id=${ctx()}&reference=${encodeURIComponent(r.reference)}`); } catch (e) {
+      if (e.code === 'clinique_inactive' && role() === 'coordonnateur') { v.insertAdjacentHTML('beforeend', `<section class="panneau-c" id="evaluations-fictives"><p class="note">${C('evaluation.aide')}</p><button class="btn" id="eval-activer">${C('evaluation.activer')}</button></section>`); $('#eval-activer').onclick = (ev) => agir(ev.currentTarget, () => api('PUT', '/evaluations-fictives/activation', { etablissement_id: ctx(), actif: true }), t('chsld.actions.ok')); }
+      return;
+    }
     v.insertAdjacentHTML('beforeend', `<section class="panneau-c" id="evaluations-fictives"><h3>${C('evaluation.titre')}</h3><p class="note">${C('evaluation.aide')}</p>
       <div class="liste">${liste.map((e) => `<div class="item"><div>${pastille(e.statut === 'validee' ? 'recue' : 'envoyee', C(`evaluation.st_${e.statut}`))} <span class="note">${esc(dateHeure(e.cree_le))} · ${esc(e.auteur_nom || '')}</span>${evalHTML(e)}</div>${e.statut === 'a_valider' ? `<button class="btn" data-eval-valider="${e.id}">${C('evaluation.valider')}</button>` : ''}</div>`).join('') || `<p class="note">${C('evaluation.aucune')}</p>`}</div>
       <form id="eval-form"><div class="champ"><label class="lbl" for="ev-pat">${C('evaluation.pathologies')}</label><textarea id="ev-pat" maxlength="1000"></textarea></div><div class="champ"><label class="lbl" for="ev-sym">${C('evaluation.symptomes')}</label><textarea id="ev-sym" maxlength="1000"></textarea></div>
@@ -343,6 +348,28 @@
   }
 
   /* ------------------------------------------------------------------ Personnel et tâches */
+  /* Registre (fax, cahiers, appels), import vérifié, visites et activités */
+  async function panneauxCoordination(v) {
+    const E = (k, x) => C(`registre.${k}`, x); const TYPES_EV = ['demande_transfert', 'admission_retour', 'absence', 'communication', 'confirmation', 'tache_preparation', 'information'];
+    const [ev, visites, activites] = await Promise.all([api('GET', `/evenements?etablissement_id=${ctx()}`), api('GET', `/chsld/visites?etablissement_id=${ctx()}`).catch(() => []), api('GET', `/chsld/activites?etablissement_id=${ctx()}`).catch(() => [])]);
+    v.insertAdjacentHTML('beforeend', `<section class="panneau-c" id="registre"><h3>${E('titre')}</h3><p class="note">${E('aide')}</p>
+      <form id="ev-form"><div class="ligne">${sel('ev-type', E('type'), TYPES_EV.map((x) => [x, E(`t_${x}`)]))}${champ('ev-ref', E('reference'), '', 'maxlength="40"')}</div><div class="champ"><label class="lbl" for="ev-txt">${E('contenu')}</label><textarea id="ev-txt" maxlength="1000" required></textarea></div><button class="btn pri" type="submit">${E('ajouter')}</button></form>
+      <div class="liste">${ev.map((x) => `<div class="item"><div><b>${esc(E(`t_${x.type}`))}</b>${x.reference ? ` · <span class="num">${esc(x.reference)}</span>` : ''} · ${esc(E(`s_${x.statut}`))}<div>${esc(x.contenu)}</div><div class="note">${esc(x.auteur_nom || '')} · ${esc(dateHeure(x.cree_le))} · ${esc(E(`src_${x.source}`))}</div></div>${x.statut === 'ouvert' ? `<div class="actions"><button class="btn" type="button" data-ev="${x.id}" data-v="${x.version}" data-st="traite">${E('traiter')}</button></div>` : ''}</div>`).join('')}</div>
+      <details><summary>${E('import')}</summary><p class="note">${E('import_aide')}</p><input type="file" id="ev-fichier" accept=".csv,text/csv"><div id="ev-apercu"></div></details></section>
+      <section class="panneau-c" id="visites"><h3>${E('visites')}</h3><div class="liste">${visites.map((x) => `<div class="item"><div><span class="num">${esc(x.resident_ref)}</span> · ${esc(x.prenom)} ${esc(x.nom)} · ${esc(dateHeure(x.souhaitee_le))} · ${esc(E(`v_${x.statut}`))}</div>${x.statut === 'demandee' ? `<div class="actions"><button class="btn pri" type="button" data-vis="${x.id}" data-st="acceptee">${E('accepter')}</button><button class="btn" type="button" data-vis="${x.id}" data-st="refusee">${E('refuser')}</button></div>` : ''}</div>`).join('') || `<p class="note">${E('aucune_visite')}</p>`}</div></section>
+      <section class="panneau-c" id="activites"><h3>${E('activites')}</h3><form id="ac-form"><div class="ligne">${champ('ac-titre', E('ac_titre'), '', 'maxlength="120" required')}${champ('ac-date', E('ac_date'), '', 'type="datetime-local" required')}</div><button class="btn pri" type="submit">${E('publier')}</button></form><div class="liste">${activites.map((x) => `<div class="item"><div><b>${esc(x.titre)}</b> · ${esc(dateHeure(x.debut_le))}</div><button class="btn" type="button" data-ac="${x.id}">${E('retirer')}</button></div>`).join('')}</div></section>`);
+    const ok = t('chsld.actions.ok');
+    $('#ev-form').onsubmit = (e) => { e.preventDefault(); agir(e.submitter, () => api('POST', '/evenements', { etablissement_id: ctx(), type: $('#ev-type').value, reference: $('#ev-ref').value, contenu: $('#ev-txt').value }), ok); };
+    v.querySelectorAll('[data-ev]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/evenements/${b.dataset.ev}/statut`, { statut: b.dataset.st, version: Number(b.dataset.v) }), ok); });
+    v.querySelectorAll('[data-vis]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/chsld/visites/${b.dataset.vis}/reponse`, { statut: b.dataset.st }), ok); });
+    v.querySelectorAll('[data-ac]').forEach((b) => { b.onclick = () => agir(b, () => api('DELETE', `/chsld/activites/${b.dataset.ac}`), ok); });
+    $('#ac-form').onsubmit = (e) => { e.preventDefault(); agir(e.submitter, () => api('POST', '/chsld/activites', { etablissement_id: ctx(), titre: $('#ac-titre').value, debut_le: new Date($('#ac-date').value).toISOString() }), ok); };
+    $('#ev-fichier').onchange = async (e) => { const f = e.target.files[0]; if (!f) return; const contenu = await f.text();
+      try { const a = await api('POST', '/evenements/import/verifier', { etablissement_id: ctx(), contenu });
+        $('#ev-apercu').innerHTML = `<p>${E('apercu', { n: a.apercu.length, e: a.erreurs.length })}</p><ul>${a.apercu.slice(0, 20).map((x) => `<li>${esc(E(`t_${x.type}`))} · ${esc(x.reference || '')} · ${esc(x.contenu)}</li>`).join('')}</ul>${a.erreurs.map((x) => `<p class="erreur">${E('ligne', { n: x.ligne })}</p>`).join('')}${a.erreurs.length ? '' : `<button class="btn pri" type="button" id="ev-confirmer">${E('confirmer')}</button>`}`;
+        if (!a.erreurs.length) $('#ev-confirmer').onclick = (x) => agir(x.currentTarget, () => api('POST', '/evenements/import', { etablissement_id: ctx(), contenu, empreinte: a.empreinte, confirme: true }), ok);
+      } catch (x) { $('#ev-apercu').innerHTML = `<p class="erreur">${esc(x.message)}</p>`; } };
+  }
   async function vueTaches() {
     const v = $('#v-c-taches');
     const liste = await api('GET', `/chsld/taches?etablissement_id=${ctx()}`);
@@ -355,6 +382,7 @@
         <div class="note">${[x.lit, x.resident_ref, x.assigne_role ? t(`roles.${x.assigne_role}`) : null, x.echeance ? `${t('chsld.taches.echeance')} ${dateHeure(x.echeance)}` : null].filter(Boolean).map(esc).join(' · ')}${x.echeance && new Date(x.echeance) < new Date() ? ` · <b class="duree-24">${C('taches.en_retard')}</b>` : ''}</div>${x.detail ? `<div class="note">${esc(x.detail)}</div>` : ''}</div>
         <div class="actions">${x.statut === 'a_faire' ? `<button class="btn" data-ta="en_cours" data-id="${x.id}" data-version="${x.version}">${C('taches.commencer')}</button>` : ''}<button class="btn pri" data-ta="faite" data-id="${x.id}" data-version="${x.version}">${C('taches.faite')}</button>
           ${peutCreer ? `<button class="btn dan" data-ta="annulee" data-id="${x.id}" data-version="${x.version}">${C('taches.annuler')}</button>` : ''}</div></div>`).join('')}</div>` : `<p class="vide">${C('taches.aucune')}</p>`}`;
+    if (role() !== 'entretien') panneauxCoordination(v);
     for (const x of ['valider', 'reprendre']) v.querySelectorAll(`[data-net-${x}]`).forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/nettoyage/${b.dataset[`net${x[0].toUpperCase()}${x.slice(1)}`]}/${x}`), t('nettoyage.ok')); });
     v.querySelectorAll('[data-ta]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/chsld/taches/${b.dataset.id}/statut`, { statut: b.dataset.ta, version: Number(b.dataset.version) }), t('chsld.actions.ok')); });
     if ($('#ta-nouvelle')) $('#ta-nouvelle').onclick = async () => {

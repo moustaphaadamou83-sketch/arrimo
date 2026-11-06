@@ -167,8 +167,10 @@ async function moi(pool, p) {
   const messages = (await pool.query(`SELECT id, sens, categorie, texte, cree_le, lu_le FROM messages_proches WHERE resident_id = $1 AND contact_id = $2 AND categorie = ANY($3) ORDER BY cree_le`,
     [p.resident_id, p.contact_id, p.autorisations])).rows;
   await pool.query(`UPDATE messages_proches SET lu_le = now() WHERE resident_id = $1 AND contact_id = $2 AND sens = 'etablissement' AND lu_le IS NULL AND categorie = ANY($3)`, [p.resident_id, p.contact_id, p.autorisations]);
+  const visites = p.autorisations.includes('rendez_vous') ? (await pool.query(`SELECT id, souhaitee_le, statut FROM demandes_visite WHERE resident_id = $1 AND contact_id = $2 ORDER BY souhaitee_le DESC LIMIT 20`, [p.resident_id, p.contact_id])).rows : null;
+  const activites = (await pool.query(`SELECT id, titre, description, debut_le FROM activites_etab WHERE etablissement_id = $1 AND actif AND debut_le >= now() - interval '1 day' ORDER BY debut_le LIMIT 20`, [p.etablissement_id])).rows;
   return { proche: { prenom: p.prenom, nom: p.contact_nom, relation: p.relation, langue: p.langue }, resident: { prenom: p.r_prenom, initiale: `${String(p.r_nom).slice(0, 1)}.` },
-    etablissement: { nom: p.etab_nom }, autorisations: p.autorisations, expire_le: p.expire_le, messages, nouveaux_messages: nouveaux, situation: etatResident };
+    etablissement: { nom: p.etab_nom }, autorisations: p.autorisations, expire_le: p.expire_le, messages, nouveaux_messages: nouveaux, situation: etatResident, visites, activites };
 }
 async function messageProche(pool, p, b) {
   if (!p.autorisations.includes(b.categorie)) throw new ErreurHttp(403, 'proche_non_autorise', { categorie: b.categorie });
@@ -183,6 +185,16 @@ async function messageProche(pool, p, b) {
     return m;
   });
 }
+async function demanderVisite(pool, p, b) {
+  if (!p.autorisations.includes('rendez_vous')) throw new ErreurHttp(403, 'proche_non_autorise', { categorie: 'rendez_vous' });
+  const le = new Date(b?.souhaitee_le);
+  if (Number.isNaN(le.getTime()) || le <= new Date()) throw new ErreurHttp(400, 'date_invalide');
+  return transaction(pool, async (c) => {
+    const v = (await c.query('INSERT INTO demandes_visite (etablissement_id, resident_id, contact_id, souhaitee_le) VALUES ($1, $2, $3, $4) RETURNING id, souhaitee_le, statut', [p.etablissement_id, p.resident_id, p.contact_id, le])).rows[0];
+    await journaliser(c, { etablissementId: p.etablissement_id, action: 'Portail des proches', detail: 'demande de visite' });
+    return v;
+  });
+}
 async function deconnexion(pool, p) { await pool.query('DELETE FROM proches_sessions WHERE jeton_hash = $1', [p.jeton_hash]); return { ok: true }; }
 
 /** Routes publiques du portail : à brancher AVANT la session du personnel. */
@@ -192,10 +204,29 @@ function brancherPublic(api, pool, route) {
   const s = sessionPortail(pool);
   api.get('/proches/moi', s, route((req) => moi(pool, req.proche)));
   api.post('/proches/messages', s, route((req) => messageProche(pool, req.proche, req.body)));
+  api.post('/proches/visites', s, route((req) => demanderVisite(pool, req.proche, req.body)));
   api.post('/proches/deconnexion', s, route((req) => deconnexion(pool, req.proche)));
 }
 /** Routes du personnel (avec session). */
 function brancherPersonnel(api, pool, route, entier) {
+  const GESTION = ['coordonnateur', 'admin_etab', 'gestionnaire', 'equipe_soins'];
+  const garde = async (u, id) => { await ch.etabChsld(pool, u, id, { roles: GESTION }); };
+  api.get('/chsld/visites', route(async (req) => { const e = entier(req.query.etablissement_id, 'etablissement_id'); await garde(req.utilisateur, e);
+    return (await pool.query(`SELECT v.id, v.souhaitee_le, v.statut, r.reference AS resident_ref, k.prenom, k.nom FROM demandes_visite v JOIN residents r ON r.id = v.resident_id JOIN resident_contacts k ON k.id = v.contact_id WHERE v.etablissement_id = $1 ORDER BY v.souhaitee_le DESC LIMIT 100`, [e])).rows; }));
+  api.post('/chsld/visites/:id/reponse', route(async (req) => { const id = entier(req.params.id, 'id');
+    if (!['acceptee', 'refusee', 'annulee'].includes(req.body?.statut)) throw new ErreurHttp(400, 'visite_invalide');
+    const v = (await pool.query('SELECT etablissement_id FROM demandes_visite WHERE id = $1', [id])).rows[0]; if (!v) throw new ErreurHttp(404, 'visite_introuvable');
+    await garde(req.utilisateur, v.etablissement_id);
+    const n = (await pool.query(`UPDATE demandes_visite SET statut = $2, traite_par = $3, traite_le = now() WHERE id = $1 AND statut = 'demandee' RETURNING id, statut`, [id, req.body.statut, req.utilisateur.id])).rows[0];
+    if (!n) throw new ErreurHttp(409, 'visite_deja_traitee'); return n; }));
+  api.get('/chsld/activites', route(async (req) => { const e = entier(req.query.etablissement_id, 'etablissement_id'); await garde(req.utilisateur, e);
+    return (await pool.query('SELECT id, titre, description, debut_le FROM activites_etab WHERE etablissement_id = $1 AND actif ORDER BY debut_le DESC LIMIT 100', [e])).rows; }));
+  api.post('/chsld/activites', route(async (req) => { const b = req.body || {}; const e = entier(b.etablissement_id, 'etablissement_id'); await garde(req.utilisateur, e);
+    const titre = String(b.titre ?? '').trim(); const le = new Date(b.debut_le);
+    if (!titre || titre.length > 120 || Number.isNaN(le.getTime())) throw new ErreurHttp(400, 'activite_invalide');
+    return (await pool.query('INSERT INTO activites_etab (etablissement_id, titre, description, debut_le, publie_par) VALUES ($1, $2, $3, $4, $5) RETURNING id, titre, description, debut_le', [e, titre, String(b.description ?? '').trim().slice(0, 1000) || null, le, req.utilisateur.id])).rows[0]; }));
+  api.delete('/chsld/activites/:id', route(async (req) => { const id = entier(req.params.id, 'id'); const v = (await pool.query('SELECT etablissement_id FROM activites_etab WHERE id = $1', [id])).rows[0]; if (!v) throw new ErreurHttp(404, 'activite_invalide');
+    await garde(req.utilisateur, v.etablissement_id); await pool.query('UPDATE activites_etab SET actif = false WHERE id = $1', [id]); return { ok: true }; }));
   api.post('/chsld/contacts/:id/acces-portail', route((req) => inviter(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   api.post('/chsld/acces-portail/:id/revoquer', route((req) => revoquer(pool, req.utilisateur, entier(req.params.id, 'id'))));
   api.get('/chsld/residents/:id/portail', route((req) => accesResident(pool, req.utilisateur, entier(req.params.id, 'id'))));

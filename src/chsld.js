@@ -132,7 +132,11 @@ async function accueil(pool, u, etabId) {
   if (taches.en_retard) alertes.push({ code: 'taches_en_retard', n: taches.en_retard });
   const expirees = (await pool.query(`SELECT count(*)::int n FROM coordinations WHERE destination_id = $1 AND statut = 'expiree' AND modifie_le > now() - interval '2 days'`, [e.id])).rows[0].n;
   if (expirees) alertes.push({ code: 'confirmations_expirees', n: expirees });
-  return { etablissement: { id: e.id, nom: e.nom }, places, residents, aujourdhui, demandes, coordinations, retours, taches, alertes };
+  const entretien = (await pool.query(`SELECT count(*) FILTER (WHERE entretien_statut IN ('a_nettoyer', 'en_cours') OR etat = 'nettoyage')::int AS a_nettoyer,
+      count(*) FILTER (WHERE entretien_statut = 'propre' AND entretien_le >= date_trunc('day', now()))::int AS termines_jour FROM lits WHERE etablissement_id = $1 AND actif`, [e.id])).rows[0];
+  const familles = (await pool.query(`SELECT (SELECT count(*)::int FROM messages_proches m JOIN residents r ON r.id = m.resident_id WHERE r.etablissement_id = $1 AND m.sens = 'proche' AND m.lu_le IS NULL) AS messages,
+      (SELECT count(*)::int FROM demandes_visite WHERE etablissement_id = $1 AND statut = 'demandee') AS visites`, [e.id])).rows[0];
+  return { etablissement: { id: e.id, nom: e.nom }, places, residents, aujourdhui, demandes, coordinations, retours, taches, alertes, entretien, familles };
 }
 
 /* ------------------------------------------------------------------ résidents */

@@ -103,6 +103,17 @@ async function traiter(pool, u, etabId, q, L) {
     return local(T(L, 'Je ne vois que les références des résidents de CHSLD (R-00000), jamais leur nom. Donnez la référence pour connaître la dernière étape confirmée. Pour un transfert interhospitalier, indiquez son numéro (TR-…) ou la référence du patient (P-…).',
       'I only see CHSLD resident references (R-00000), never their names. Give the reference to get the last confirmed step. For an inter-hospital transfer, give its number (TR-…) or the patient reference (P-…).'));
   }
+  // Transferts vers un autre hôpital : numéro cité ou liste de ce qui demande une action. Dans le périmètre de cet hôpital seulement.
+  const numero = (q.match(/\bCO[\s-]?(\d{1,5})\b/i) || [])[1];
+  if (numero) {
+    const t = [...d.transferts, ...d.historique].find((c) => c.type === 'transfert_hopital' && c.numero === `CO-${numero.padStart(5, '0')}`);
+    if (t) return local(T(L, `${t.numero} : transfert de ${t.resident_ref}, ${t.origine} → ${t.destination}. ${t.statut === 'recue' ? 'Arrivée confirmée.' : `Étape : ${t.etape}.`}`, `${t.numero}: transfer of ${t.resident_ref}, ${t.origine} → ${t.destination}. ${t.statut === 'recue' ? 'Arrival confirmed.' : `Step: ${t.etape}.`}`));
+  }
+  if (/(transfert|transfer)/.test(qn) && /(action|attend|autre hopital|another hospital|waiting|hopital a|d hopital)/.test(qn) && /(chsld|resident|liaison)/.test(qn)) {
+    const a = d.transferts.filter((c) => c.actions.length);
+    return local(a.length ? T(L, `${a.length} transfert(s) d’hôpital demandent une action :\n${a.map((c) => `• ${c.numero} · ${c.resident_ref} · ${c.origine} → ${c.destination}`).join('\n')}`, `${a.length} hospital transfer(s) need action:\n${a.map((c) => `• ${c.numero} · ${c.resident_ref} · ${c.origine} → ${c.destination}`).join('\n')}`)
+      : T(L, 'Aucun transfert d’hôpital ne demande d’action.', 'No hospital transfer needs action.'));
+  }
   // Retours vers les CHSLD en préparation
   if (/(retour|return)/.test(qn)) {
     const r = d.retours_en_cours;

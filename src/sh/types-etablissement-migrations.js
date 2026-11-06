@@ -98,5 +98,18 @@ async function migrerDemandesSite(c) {
   await c.query('INSERT INTO sh_migrations(version) VALUES($1)', [DEMANDES_SITE_VERSION]);
   return true;
 }
-const VERSION_SH = DEMANDES_SITE_VERSION;
-module.exports = { TYPES_ETABLISSEMENT_VERSION, LIAISON_CHSLD_VERSION, PRODUCTIONS_VERSION, TYPES_LOCAUX_VERSION, DEMANDES_SITE_VERSION, VERSION_SH, migrerTypesEtablissement, migrerLiaisonChsld, migrerProductions, migrerTypesLocaux, migrerDemandesSite };
+/* Migration 42 : catégories pour aînés, sur le modèle CHSLD. Modules désactivés par défaut selon la catégorie ; soutien à domicile non inclus (pas de chambres). */
+const TYPES_AINES_VERSION = 42;
+async function migrerTypesAines(c) {
+  if ((await c.query('SELECT 1 FROM sh_migrations WHERE version=$1', [TYPES_AINES_VERSION])).rowCount) return false;
+  await c.query("ALTER TABLE sh_types_locaux ADD COLUMN IF NOT EXISTS modules_desactives text[] NOT NULL DEFAULT '{}'");
+  const seuls = ['reseau_chsld', 'demandes_hebergement'];
+  for (const [code, nom, en, off] of [['chsld_prive', 'CHSLD privé', 'Private CHSLD', []], ['maison_aines', 'Maison des aînés', 'Seniors’ home', []], ['rpa', 'Résidence privée pour aînés (RPA)', 'Private seniors’ residence (RPA)', seuls],
+    ['ri', 'Ressource intermédiaire (RI)', 'Intermediate resource (RI)', seuls], ['rtf', 'Ressource de type familial (RTF)', 'Family-type resource (RTF)', [...seuls, 'taches']], ['maison_retraite', 'Maison de retraite', 'Retirement home', seuls]]) {
+    await c.query(`INSERT INTO sh_types_locaux (pays_code, code, nom, nom_en, modele, modules_desactives) VALUES ('CA', $1, $2, $3, 'chsld', $4) ON CONFLICT (pays_code, code) DO NOTHING`, [code, nom, en, off]);
+  }
+  await c.query('INSERT INTO sh_migrations(version) VALUES($1)', [TYPES_AINES_VERSION]);
+  return true;
+}
+const VERSION_SH = TYPES_AINES_VERSION;
+module.exports = { TYPES_ETABLISSEMENT_VERSION, LIAISON_CHSLD_VERSION, PRODUCTIONS_VERSION, TYPES_LOCAUX_VERSION, DEMANDES_SITE_VERSION, VERSION_SH, migrerTypesEtablissement, migrerLiaisonChsld, migrerProductions, migrerTypesLocaux, migrerDemandesSite, migrerTypesAines };

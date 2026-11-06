@@ -16,6 +16,7 @@ const STATUTS = ['a_valider', 'validee'];
 function exigerDemo() { if (!env.estDemo()) throw new ErreurHttp(403, 'clinique_demo_seulement'); }
 const texte = (v, max) => { if (v !== undefined && v !== null && typeof v !== 'string') throw new ErreurHttp(400, 'evaluation_invalide'); const s = String(v ?? '').trim(); if (s.length > max) throw new ErreurHttp(400, 'evaluation_invalide'); return s || null; };
 function exiger(u, etabId) { exigerDemo(); exigerEtablissement(u, etabId); if (!ROLES.includes(u.role)) throw new ErreurHttp(403, 'role_insuffisant'); }
+const exigerActif = async (db, etabId) => { if (!(await db.query('SELECT 1 FROM etablissements WHERE id = $1 AND clinique_fictive', [etabId])).rowCount) throw new ErreurHttp(409, 'clinique_inactive'); };
 const tracer = (db, id, u, action) => db.query('INSERT INTO evaluations_fictives_acces (evaluation_id, utilisateur_id, action) VALUES ($1, $2, $3)', [id, u.id, action]);
 
 async function referenceDe(db, etabId, reference) {
@@ -25,7 +26,7 @@ async function referenceDe(db, etabId, reference) {
   return r;
 }
 async function creer(pool, u, b = {}) {
-  const etab = Number(b.etablissement_id); exiger(u, etab);
+  const etab = Number(b.etablissement_id); exiger(u, etab); await exigerActif(pool, etab);
   const reference = await referenceDe(pool, etab, b.reference);
   const pathologies = texte(b.pathologies, 1000); const symptomes = texte(b.symptomes, 1000);
   if (!pathologies && !symptomes) throw new ErreurHttp(400, 'evaluation_invalide');
@@ -39,7 +40,7 @@ async function creer(pool, u, b = {}) {
   });
 }
 async function liste(pool, u, etabId, reference) {
-  exiger(u, etabId);
+  exiger(u, etabId); await exigerActif(pool, etabId);
   const r = await referenceDe(pool, etabId, reference);
   const { rows } = await pool.query(`SELECT e.*, a.nom AS auteur_nom, v.nom AS valide_par_nom FROM evaluations_fictives e LEFT JOIN utilisateurs a ON a.id = e.auteur LEFT JOIN utilisateurs v ON v.id = e.valide_par
     WHERE e.etablissement_id = $1 AND e.reference = $2 ORDER BY e.id DESC LIMIT 50`, [etabId, r]);
@@ -82,6 +83,13 @@ async function precautionsTransmises(db, coId) {
   return (await db.query('SELECT e.precautions FROM coordinations c JOIN evaluations_fictives e ON e.id = c.evaluation_transmise_id WHERE c.id = $1', [coId])).rows[0]?.precautions || [];
 }
 function brancher(api, pool, route, entier) {
+  api.put('/evaluations-fictives/activation', route(async (req) => {
+    exigerDemo(); const u = req.utilisateur; const e = entier(req.body?.etablissement_id, 'etablissement_id'); exigerEtablissement(u, e);
+    if (!['coordonnateur', 'admin_etab', 'gestionnaire'].includes(u.role)) throw new ErreurHttp(403, 'role_insuffisant');
+    if (typeof req.body?.actif !== 'boolean') throw new ErreurHttp(400, 'evaluation_invalide');
+    await pool.query('UPDATE etablissements SET clinique_fictive = $2 WHERE id = $1', [e, req.body.actif]);
+    return { actif: req.body.actif };
+  }));
   api.post('/evaluations-fictives', route((req) => creer(pool, req.utilisateur, req.body)));
   api.get('/evaluations-fictives', route((req) => liste(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'), req.query.reference)));
   api.post('/evaluations-fictives/:id/valider', route((req) => valider(pool, req.utilisateur, entier(req.params.id, 'id'))));

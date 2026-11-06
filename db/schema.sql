@@ -1116,3 +1116,22 @@ CREATE INDEX IF NOT EXISTS evaluations_fictives_ref ON evaluations_fictives (eta
 CREATE TABLE IF NOT EXISTS evaluations_fictives_acces (
   id serial PRIMARY KEY, evaluation_id int NOT NULL REFERENCES evaluations_fictives(id), utilisateur_id int REFERENCES utilisateurs(id), action text NOT NULL, le timestamptz NOT NULL DEFAULT now());
 ALTER TABLE coordinations ADD COLUMN IF NOT EXISTS evaluation_transmise_id int REFERENCES evaluations_fictives(id);
+
+-- Numérisation : événements saisis ou importés après vérification humaine
+CREATE TABLE IF NOT EXISTS evenements_saisis (
+  id serial PRIMARY KEY, etablissement_id int NOT NULL REFERENCES etablissements(id),
+  type text NOT NULL CHECK (type IN ('demande_transfert', 'admission_retour', 'absence', 'communication', 'confirmation', 'tache_preparation', 'information')),
+  reference text, contenu text NOT NULL, source text NOT NULL CHECK (source IN ('saisie', 'import')), statut text NOT NULL DEFAULT 'ouvert' CHECK (statut IN ('ouvert', 'traite', 'annule')),
+  auteur int REFERENCES utilisateurs(id), cree_le timestamptz NOT NULL DEFAULT now(), version int NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS evenements_saisis_historique (
+  id serial PRIMARY KEY, evenement_id int NOT NULL REFERENCES evenements_saisis(id), statut text NOT NULL, par int REFERENCES utilisateurs(id), le timestamptz NOT NULL DEFAULT now());
+-- Portail des proches : visites et activités
+CREATE TABLE IF NOT EXISTS demandes_visite (
+  id serial PRIMARY KEY, etablissement_id int NOT NULL REFERENCES etablissements(id), resident_id int NOT NULL REFERENCES residents(id), contact_id int NOT NULL REFERENCES resident_contacts(id),
+  souhaitee_le timestamptz NOT NULL, statut text NOT NULL DEFAULT 'demandee' CHECK (statut IN ('demandee', 'acceptee', 'refusee', 'annulee')),
+  traite_par int REFERENCES utilisateurs(id), traite_le timestamptz, cree_le timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS activites_etab (
+  id serial PRIMARY KEY, etablissement_id int NOT NULL REFERENCES etablissements(id), titre text NOT NULL, description text, debut_le timestamptz NOT NULL,
+  publie_par int REFERENCES utilisateurs(id), actif boolean NOT NULL DEFAULT true, cree_le timestamptz NOT NULL DEFAULT now());
+-- Fonctions cliniques fictives : jamais actives d'office, activées établissement par établissement, en démo seulement
+ALTER TABLE etablissements ADD COLUMN IF NOT EXISTS clinique_fictive boolean NOT NULL DEFAULT false;

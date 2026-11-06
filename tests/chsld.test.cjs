@@ -1471,6 +1471,9 @@ test('évaluations fictives : démo seulement, droits, transmission à l’hôpi
   let co; let ev; let ch;
   try {
     // Droits et validation
+    await refuse('era', 'POST', '/evaluations-fictives', corps, 409, 'clinique_inactive');
+    await refuse('era_entretien', 'PUT', '/evaluations-fictives/activation', { etablissement_id: E, actif: true }, 403);
+    await api('era', 'PUT', '/evaluations-fictives/activation', { etablissement_id: E, actif: true });
     await refuse('era_entretien', 'POST', '/evaluations-fictives', corps, 403);
     await refuse('era_direction', 'POST', '/evaluations-fictives', corps, 403);
     await refuse('stl', 'POST', '/evaluations-fictives', corps, 403);
@@ -1529,6 +1532,54 @@ test('évaluations fictives : démo seulement, droits, transmission à l’hôpi
     // Fin du parcours pour ne pas gêner les tests suivants
     if (co) { const f = (await q('SELECT version FROM coordinations WHERE id = $1', [co.id]))[0]; let r = await api('b', 'POST', `/coordinations/${co.id}/retour`, { retour_prevu_le: new Date(Date.now() + 3600000).toISOString() }); void f; await reintegrerApres(r, x); }
   }
+});
+
+test('registre, import vérifié, tableau de bord, visites, activités, OG : droits, erreurs, isolation', { timeout: 120000 }, async () => {
+  const E = ids.era;
+  // Saisie structurée
+  await refuse('era', 'POST', '/evenements', { etablissement_id: E, type: 'x', contenu: 'a' }, 400, 'evenement_invalide');
+  await refuse('stl', 'POST', '/evenements', { etablissement_id: E, type: 'information', contenu: 'a' }, 403);
+  await refuse('era_entretien', 'GET', `/evenements?etablissement_id=${E}`, null, 403);
+  const ev = await api('era', 'POST', '/evenements', { etablissement_id: E, type: 'communication', reference: 'R-00001', contenu: 'Appel fictif reçu' });
+  await refuse('era', 'POST', `/evenements/${ev.id}/statut`, { statut: 'traite', version: 99 }, 409);
+  const ev2 = await api('era', 'POST', `/evenements/${ev.id}/statut`, { statut: 'traite', version: ev.version });
+  await refuse('era', 'POST', `/evenements/${ev.id}/statut`, { statut: 'annule', version: ev2.version }, 409, 'evenement_clos');
+  const lu = (await api('era', 'GET', `/evenements?etablissement_id=${E}`)).find((x) => x.id === ev.id);
+  assert.deepStrictEqual(lu.historique.map((h) => h.statut), ['ouvert', 'traite']); assert.ok(lu.auteur_nom);
+  // Import : documents erronés refusés, rien sans vérification ni confirmation
+  const combien = async () => (await api('era', 'GET', `/evenements?etablissement_id=${E}`)).length;
+  const avant = await combien();
+  await refuse('era', 'POST', '/evenements/import/verifier', { etablissement_id: E, contenu: '%PDF-1.7 fictif' }, 400, 'import_format');
+  await refuse('era', 'POST', '/evenements/import/verifier', { etablissement_id: E, contenu: 'a;b\n1;2' }, 400, 'import_entete');
+  await refuse('era', 'POST', '/evenements/import/verifier', { etablissement_id: E, contenu: '' }, 400, 'import_invalide');
+  const mauvais = 'type;reference;contenu\ninformation;R-1;Bon\nmauvais;R-2;Non\n';
+  const vm = await api('era', 'POST', '/evenements/import/verifier', { etablissement_id: E, contenu: mauvais });
+  assert.deepStrictEqual(vm.erreurs, [{ ligne: 3, code: 'ligne_invalide' }]);
+  await refuse('era', 'POST', '/evenements/import', { etablissement_id: E, contenu: mauvais, empreinte: vm.empreinte, confirme: true }, 409, 'import_erreurs');
+  const bon = 'type;reference;contenu\ninformation;R-1;<script>alert(1)</script>\nabsence;;Sortie fictive\n';
+  const vb = await api('era', 'POST', '/evenements/import/verifier', { etablissement_id: E, contenu: bon });
+  await refuse('era', 'POST', '/evenements/import', { etablissement_id: E, contenu: bon, empreinte: vb.empreinte }, 400, 'import_a_confirmer');
+  await refuse('era', 'POST', '/evenements/import', { etablissement_id: E, contenu: `${bon}information;;ajout\n`, empreinte: vb.empreinte, confirme: true }, 409, 'import_modifie');
+  assert.strictEqual(await combien(), avant, 'rien d’écrit avant la confirmation');
+  assert.strictEqual((await api('era', 'POST', '/evenements/import', { etablissement_id: E, contenu: bon, empreinte: vb.empreinte, confirme: true })).importes, 2);
+  assert.strictEqual(await combien(), avant + 2);
+  // Tableau de bord
+  const a = await api('era', 'GET', `/chsld/accueil?etablissement_id=${E}`);
+  assert.ok(Number.isInteger(a.entretien.a_nettoyer) && Number.isInteger(a.entretien.termines_jour) && Number.isInteger(a.familles.messages) && Number.isInteger(a.familles.visites) && Number.isInteger(a.places.libres));
+  // Activités et droits
+  await refuse('era_entretien', 'POST', '/chsld/activites', { etablissement_id: E, titre: 'x', debut_le: new Date().toISOString() }, 403);
+  await refuse('stl', 'GET', `/chsld/visites?etablissement_id=${E}`, null, 403);
+  const acti = await api('era', 'POST', '/chsld/activites', { etablissement_id: E, titre: 'Atelier fictif', debut_le: new Date(Date.now() + 86400000).toISOString() });
+  assert.ok(acti.id);
+  // OG : mêmes droits, aucune action sans confirmation
+  for (const q of ['Quels résidents sont actuellement hospitalisés ?', 'Quels retours attendent une confirmation ?', 'Quelles chambres doivent être nettoyées ?']) {
+    const r = await api('era', 'POST', '/copilote/question', { etablissement_id: E, question: q, langue: 'fr' });
+    assert.ok(r.reponse && !/Je ne (sais|comprends)/i.test(r.reponse), `${q} → ${r.reponse}`);
+  }
+  const transfert = (await poolPilote.query(`SELECT numero, origine_id, destination_id FROM coordinations WHERE type = 'transfert_hopital' AND statut = 'recue' ORDER BY id DESC LIMIT 1`)).rows[0];
+  assert.ok(transfert);
+  const qui = transfert.destination_id === L.A ? 'a' : transfert.destination_id === L.B ? 'b' : null;
+  if (qui) { const r = await api(qui, 'POST', '/copilote/question', { etablissement_id: transfert.destination_id, question: `Quel est le statut du transfert ${transfert.numero} ?`, langue: 'fr' }); assert.match(r.reponse, new RegExp(transfert.numero)); }
 });
 
 test('captures : formulaire SH (type puis modules), liste SH, écrans CHSLD réels', { timeout: 180000 }, async () => {

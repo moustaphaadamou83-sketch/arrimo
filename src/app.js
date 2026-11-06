@@ -306,6 +306,7 @@ function creerApp(pool, options = {}) {
   }));
   require('./nettoyage-securise').brancher(api, pool, route, entier);
   require('./evaluations-fictives').brancher(api, pool, route, entier);
+  require('./evenements').brancher(api, pool, route, entier);
   api.get('/nettoyage', route((req) => t.fileNettoyage(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   api.post('/nettoyage/:id/debut', route(async (req) => {
     const id = entier(req.params.id, 'id'); await s.litVisible(pool, req.utilisateur, id);
