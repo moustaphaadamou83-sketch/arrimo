@@ -68,10 +68,10 @@ Corrigé et déjà publié le 5 novembre (release `parcours-20261105t2253`) : le
 - **Limite de débit** : le limiteur a coupé la batterie à 120 requêtes anonymes par minute. Elle est relevée pour ce seul test.
 
 ## 5. Reste à faire
-- **Console SH** : balayage ajouté le 6 novembre : 199 routes sans session, 128 routes interdites au rôle support, toutes refusées. Les autres rôles et le contrôle fin des périmètres restent couverts par les suites SH existantes.
+- **Console SH** : balayage ajouté le 6 novembre : 199 routes sans session, 130 routes interdites au rôle support, toutes refusées. Les autres rôles et le contrôle fin des périmètres restent couverts par les suites SH existantes.
 - **Non couvert par la nouvelle batterie** : l'envoi de pièces jointes ; le vocal ; une revue ligne à ligne.
 - **Domaine 9, liaison site ↔ SH** : revue du plan quand il sera présenté. Elle n'est pas construite.
-- **Domaine 13 et préparation de la production** (Canada et Afrique) : modèle de serveur par pays, contrôles avant mise en ligne, surveillance, plans d'incident et de reprise, documents Loi 25, dossier du test d'intrusion, points à relire par vos développeurs. Plusieurs jours de travail.
+- **Préparation de la production** (Canada et Afrique) : voir § 7. Plusieurs jours de travail.
 
 ## 6. Recette des corrections (non publiées)
 Empreinte des sources `532aaa1fcf9f`, commit `de24161`, 250 tests, 0 échec au dernier passage de chaque suite :
@@ -82,3 +82,28 @@ Empreinte des sources `532aaa1fcf9f`, commit `de24161`, 250 tests, 0 échec au d
 - interface hospitalière 16 tests et OG suivi 21 tests, lancés seuls (`20261105235534_897b0e`).
 
 **Échec intermittent observé :** lors du premier passage, avec plusieurs recettes en parallèle, le « guide de démonstration » a échoué sur ordinateur et téléphone à l'attente de 30 s de l'écran de connexion après une remise à zéro de la démo. La suite complète passe seule, sans changement de code. La cause exacte n'est pas établie ; la charge de la machine est l'explication la plus probable. Un message `relation "lits" does not exist` apparaît dans ce journal pendant la remise à zéro : à examiner, car une tâche de fond peut lire la base pendant son remplacement.
+
+## 7. Domaine 13 : préparation multi-pays, état des lieux (lecture seule, 6 novembre)
+**Conclusion : Arrimo est conçu pour plusieurs pays, mais il n'est pas prêt à ouvrir un serveur par pays sans écrire de code.** Aucune correction n'est faite dans cette partie.
+
+| Sujet | Ce qui existe | Ce qui manque |
+|---|---|---|
+| Profil pays | Table `config_pays` : rayon, délais, format de référence, nom du transport, fuseau. Choix du profil contrôlé par SH | Seul le profil Québec est créé. Les formats réels des autres pays restent à obtenir |
+| Serveur par pays | SH pilote des environnements séparés, avec une clé par environnement, conservée dans son `.env` | Liste fixe d'environnements dans `src/sh/cibles.js`, avec une seule entrée « production » : ajouter un pays demande du code |
+| Sécurité du lien SH ↔ pays | Clé de service comparée en temps constant | **À corriger :** rien n'impose HTTPS vers un serveur distant ; une mauvaise adresse enverrait la clé en clair |
+| Installation | Script d'installation avec garde-fous, retour arrière applicatif | La production exige `CONFIRMER_HEBERGEMENT_CANADA` : le script bloque tout pays hors Canada |
+| Types d'établissements | Hôpital et CHSLD opérationnels ; autres types prévus mais refusés | Liste fixe dans le code et dans une contrainte de base : CHU, CSRéf ou clinique demandent du code |
+| Langues | Français et anglais | Toute autre langue |
+| Fuseau | Fuseau par profil | Fuseau `America/Toronto` encore écrit dans le code, à plusieurs endroits, à passer en revue |
+| Connexion difficile | — | Aucun mode hors ligne, aucun SMS ni WhatsApp |
+| Contrôle avant mise en ligne | Recette complète et publication avec sauvegarde, lancées à la main | Aucune chaîne automatique (pas de `.github/workflows`) |
+| Alertes et plans | Surveillance dans le journal système | Aucune alerte envoyée ; aucun plan d'incident ou de reprise écrit |
+| Documents | Pages légales à faire relire | Aucun registre, modèle d'évaluation Loi 25 ni dossier de test d'intrusion ; aucune analyse des lois africaines (à faire vérifier sur place) |
+
+**Ordre proposé, à valider :**
+1. HTTPS obligatoire vers les serveurs distants et liste d'environnements configurable.
+2. Script d'installation par pays, avec confirmation du pays d'hébergement.
+3. Plans d'incident et de reprise, alertes, chaîne de contrôle automatique.
+4. Documents Loi 25 et dossier du test d'intrusion.
+5. Types d'établissements configurables depuis SH.
+6. Mode hors ligne, SMS et WhatsApp : développements importants, à décider selon le premier pays visé.
