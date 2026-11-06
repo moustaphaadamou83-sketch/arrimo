@@ -112,6 +112,16 @@ Release `audit-20261106t0813` sur la démo et SH, commit `41bc4d1`, autorisée p
 
 Vérifié en ligne : connexions sans code, administration ouverte sans code dans un navigateur, activation refusée (403), aucun secret de double authentification dans la base de la démo. Parcours CHSLD ↔ hôpital : 17 sur 17 sur une copie à jour. La connexion complète à SH avec mot de passe et code reste à faire par Moustafa.
 
+## 6 quinquies. Préparation multi-pays, étapes 1 à 4 (6 novembre, NON publié)
+Ordre validé par Moustafa. Commit `53e9d04` : recette 253 tests, 0 échec, 0 ignoré (`20261106135008_3d5be6`, `20261106135010_693237`, `20261106135012_ed2da3`, `20261106141547_a8a569`), OG 600 sur 600, `npm test` 209 sur 209.
+
+1. **Une production par pays** : `SH_PRODUCTIONS`, adresse et clé propres, choix explicite au go-live, migration SH 39.
+2. **Installation par pays** : `deploy/hebergement.sh`, un pays ne vaut jamais pour un autre.
+3. **Alertes, contrôle automatique, plan d'incident** : alertes inactives tant que `ALERTE_WEBHOOK_URL` n'est pas réglée. Contrôle GitHub dans `.github/workflows/controle.yml`, dont le résultat n'a pas pu être lu d'ici. `docs/PLAN_INCIDENT_ET_REPRISE.md` reste à valider.
+4. **Documents** : `docs/LOI25_REGISTRE_ET_EFVP.md`, `docs/DOSSIER_TEST_INTRUSION.md`, projets à faire relire.
+
+**Défaut trouvé par `npm test`, présent sur la release `audit-20261106t0813` :** une question d'hôpital sur les demandes de transfert recevait une réponse de la Liaison CHSLD. Corrigé dans `53e9d04`. La recette ne lance pas `tests/finalisation.test.cjs` : `npm test` s'ajoute désormais à la recette avant chaque publication.
+
 ## 7. Domaine 13 : préparation multi-pays, état des lieux (lecture seule, 6 novembre)
 **Conclusion : Arrimo est conçu pour plusieurs pays, mais il n'est pas prêt à ouvrir un serveur par pays sans écrire de code.** Aucune correction n'est faite dans cette partie.
 
