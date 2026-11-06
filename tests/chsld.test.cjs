@@ -1416,6 +1416,34 @@ test('lien SH ↔ environnements : HTTPS obligatoire hors de la machine, clé ja
   } finally { piege.close(); relais.close(); }
 });
 
+test('surveillance : une seule alerte par panne, une au rétablissement, adresse jamais dans les arguments', async () => {
+  const http = require('node:http'); const { spawn } = require('node:child_process');
+  const racine = path.join(__dirname, '..');
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'arrimo-surveillance-'));
+  const messages = []; let sain = false;
+  const alerte = http.createServer((req, res) => { let c = ''; req.on('data', (d) => { c += d; }); req.on('end', () => { messages.push(JSON.parse(c).text); res.end('ok'); }); });
+  const sante = http.createServer((req, res) => { res.statusCode = sain ? 200 : 503; res.end(sain ? '{"etat":"ok"}' : '{"etat":"panne"}'); });
+  await Promise.all([alerte, sante].map((x) => new Promise((r) => x.listen(0, '127.0.0.1', r))));
+  const passer = (webhook) => new Promise((r) => {
+    const p = spawn('bash', [path.join(racine, 'deploy/surveillance.sh')], { env: { PATH: process.env.PATH, ARRIMO_URL_SANTE: `http://127.0.0.1:${sante.address().port}/api/sante`, SURVEILLANCE_NOM: 'essai-surveillance', SURVEILLANCE_ETAT_DIR: dossier, ALERTE_WEBHOOK_URL: webhook } });
+    p.on('close', r);
+  });
+  const url = `http://127.0.0.1:${alerte.address().port}/secret`;
+  try {
+    assert.strictEqual(await passer(url), 1); assert.strictEqual(await passer(url), 1); assert.strictEqual(await passer(url), 1);
+    assert.deepStrictEqual(messages, ['Arrimo essai-surveillance : panne détectée']);
+    sain = true;
+    assert.strictEqual(await passer(url), 0); assert.strictEqual(await passer(url), 0);
+    assert.deepStrictEqual(messages, ['Arrimo essai-surveillance : panne détectée', 'Arrimo essai-surveillance : rétabli']);
+    sain = false; messages.length = 0;
+    assert.strictEqual(await passer('http://alerte.example.invalid/x'), 1);   // en clair : rien n'est envoyé, la panne reste notée
+    assert.deepStrictEqual(messages, []);
+    assert.ok(fs.existsSync(path.join(dossier, 'essai-surveillance.echec')));
+    const script = fs.readFileSync(path.join(racine, 'deploy/surveillance.sh'), 'utf8');
+    assert.match(script, /curl -sS --max-time 10 -o \/dev\/null -K -/); assert.doesNotMatch(script, /curl[^\n]*"\$ALERTE_WEBHOOK_URL"/);
+  } finally { alerte.close(); sante.close(); fs.rmSync(dossier, { recursive: true, force: true }); }
+});
+
 test('démos sans double authentification : administration directe, activation refusée ; exigée ailleurs', async () => {
   const qui = 'era_direction'; assert.ok(sessions[qui]);
   const avant = { env: process.env.ARRIMO_ENV, demo: process.env.ARRIMO_DEMO, deuxfa: process.env.ARRIMO_2FA_ADMIN };

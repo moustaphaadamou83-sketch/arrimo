@@ -61,7 +61,7 @@ test('API SH : aucune donnée de parcours dans la lecture du référentiel', asy
   const avant = process.env.SH_API_KEY; process.env.SH_API_KEY = 'cle-fictive-de-test';
   try {
     const b = apiSimulee(); const r = await b.routes.get('get /sh/etablissements/:code/configuration-operationnelle')(b.req);
-    assert.deepEqual(Object.keys(r).sort(), ['catalogue', 'modules', 'referentiel_priorites', 'specialites', 'version', 'vocation']);
+    assert.deepEqual(Object.keys(r).sort(), ['catalogue', 'modules', 'modules_modifiables', 'referentiel_priorites', 'specialites', 'type_etablissement', 'version', 'vocation']);
     assert.equal(r.catalogue[0].code, 'PED'); assert.ok(!JSON.stringify(r).includes('patient'));
   } finally { if (avant === undefined) delete process.env.SH_API_KEY; else process.env.SH_API_KEY = avant; }
 });

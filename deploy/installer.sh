@@ -302,6 +302,8 @@ Description=Surveillance d'Arrimo $ARRIMO_ENV (/api/sante)
 Type=oneshot
 Environment=ARRIMO_URL_SANTE=https://$HOTE/api/sante
 Environment=SURVEILLANCE_NOM=$NOM-surveillance
+# Facultatif : ALERTE_WEBHOOK_URL=https://... dans ce fichier (root, 600), jamais dans le dépôt
+EnvironmentFile=-/etc/arrimo/alerte.env
 ExecStart=/usr/local/lib/arrimo/surveillance.sh
 UNIT
 cat > "/etc/systemd/system/$NOM-surveillance.timer" <<UNIT
