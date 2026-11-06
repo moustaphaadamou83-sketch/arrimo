@@ -1064,12 +1064,13 @@ test('audit de sécurité : attaques automatiques sur toutes les routes, isolati
   };
   const remplir = (c, id = 1) => `${c.replace(/:[a-zA-Z_]+/g, id)}${c.includes('?') ? '&' : '?'}etablissement_id=${ids.era}&depuis=${ids.era}`;
   // 1. Sans session : seule une liste fermée de routes répond sans authentification
-  const PUBLIQUES = /^(POST|GET) \/(public$|connexion|sante|mot-de-passe|invitations|proches\/(connexion|invitation|mot-de-passe)|langue|config-publique|connecteurs|sh\/|interop)/;
+  // Liste exacte : une route ajoutée sans authentification fait échouer ce test (un filtre par préfixe pourrait en masquer une)
+  const PUBLIQUES = new Set(['GET /public', 'GET /sante', 'POST /mot-de-passe/oubli']);
   const ouvertes = [];
   for (const rt of routes) {
     const [m, c] = rt.split(' ');
     const r = await brut(null, m, remplir(c), {});
-    if (r.statut < 400 && !PUBLIQUES.test(rt)) ouvertes.push(`${rt} → ${r.statut}`);
+    if (r.statut < 400 && !PUBLIQUES.has(rt)) ouvertes.push(`${rt} → ${r.statut}`);
     assert.ok(r.statut < 500 && r.statut !== 429, `${rt} sans session → ${r.statut} ${r.texte.slice(0, 120)}`);
   }
   assert.deepStrictEqual(ouvertes, [], 'routes ouvertes sans session');
@@ -1077,7 +1078,7 @@ test('audit de sécurité : attaques automatiques sur toutes les routes, isolati
   // 2. Rôle entretien : tout est refusé hors de sa liste fermée
   const ENTRETIEN = /^(GET \/(moi|nettoyage|meteo|og\/configuration|chsld\/taches|chsld\/places)|POST \/(deconnexion|nettoyage\/:|lits\/:|civieres\/:|chsld\/taches\/:)|(PUT|POST|GET|DELETE) \/moi\/)/;
   const fuites = [];
-  for (const rt of routes.filter((x) => !ENTRETIEN.test(x) && !/ \/(deconnexion|moi\b)/.test(x) && !PUBLIQUES.test(x))) {
+  for (const rt of routes.filter((x) => !ENTRETIEN.test(x) && !/ \/(deconnexion|moi\b)/.test(x) && !PUBLIQUES.has(x))) {
     const [m, c] = rt.split(' ');
     const r = await brut(sessions.era_entretien, m, remplir(c), {});
     if (r.statut < 400) fuites.push(`${rt} → ${r.statut}`);
@@ -1175,15 +1176,15 @@ test('audit de sécurité : attaques automatiques sur toutes les routes, isolati
     const routesSh = [...new Set([...srcSh.matchAll(/api\.(get|post|put|delete)\(\s*'([^']+)'/g)].map((m) => `${m[1].toUpperCase()} ${m[2]}`))];
     assert.ok(routesSh.length > 150, `${routesSh.length} routes SH`);
     const brutSh = async (jeton, m, c) => { const r = await fetch(`${baseSh}/api${c}`, { method: m, headers: { 'Content-Type': 'application/json', ...(jeton ? { Authorization: `Bearer ${jeton}` } : {}) }, body: m === 'GET' ? undefined : '{}' }); return { statut: r.status, texte: await r.text() }; };
-    const SH_PUBLIQUES = /^(GET|POST) \/(connexion|sante|invitations?|recuperation|mot-de-passe|public|config|references-publiques)/;
+    const SH_PUBLIQUES = new Set(['GET /sante', 'POST /connexion', 'POST /connexion/2fa', 'POST /invitations/consommer', 'GET /connexion/configuration', 'POST /mot-de-passe/demander', 'POST /mot-de-passe/reinitialiser']);
     const chemin = (c) => c.replace(/:[a-zA-Z_]+/g, '1');
     const ouvertesSh = [];
-    for (const rt of routesSh) { const [m, c] = rt.split(' '); const r = await brutSh(null, m, chemin(c)); assert.ok(r.statut < 500 && r.statut !== 429, `SH ${rt} → ${r.statut} ${r.texte.slice(0, 100)}`); if (r.statut < 400 && !SH_PUBLIQUES.test(rt)) ouvertesSh.push(`${rt} → ${r.statut}`); }
+    for (const rt of routesSh) { const [m, c] = rt.split(' '); const r = await brutSh(null, m, chemin(c)); assert.ok(r.statut < 500 && r.statut !== 429, `SH ${rt} → ${r.statut} ${r.texte.slice(0, 100)}`); if (r.statut < 400 && !SH_PUBLIQUES.has(rt)) ouvertesSh.push(`${rt} → ${r.statut}`); }
     assert.deepStrictEqual(ouvertesSh, [], 'routes SH ouvertes sans session');
     const jetonSupport = require('node:crypto').randomBytes(32).toString('hex');
     const us = (await pool.query(`INSERT INTO sh_utilisateurs (email, nom, role, mot_de_passe_hash, mdp_temporaire, totp_actif) VALUES ('audit.support@example.invalid', 'Audit support', 'support', 'fixture-sans-connexion', false, true) RETURNING id`)).rows[0];
     await pool.query(`INSERT INTO sh_sessions (token, token_hache, utilisateur_id, expire_le) VALUES ($1, true, $2, now() + interval '1 hour')`, [require('../src/sh/security').empreinte(jetonSupport), us.id]);
-    const interdites = routesSh.filter((rt) => { const [m, c] = rt.split(' '); return !SH_PUBLIQUES.test(rt) && !autoriser({ role: 'support' }, { method: m, path: chemin(c), body: {} }); });
+    const interdites = routesSh.filter((rt) => { const [m, c] = rt.split(' '); return !SH_PUBLIQUES.has(rt) && !autoriser({ role: 'support' }, { method: m, path: chemin(c), body: {} }); });
     assert.ok(interdites.length > 50, `${interdites.length} routes interdites au support`);
     const permissives = [];
     for (const rt of interdites) { const [m, c] = rt.split(' '); const r = await brutSh(jetonSupport, m, chemin(c)); if (r.statut !== 403) permissives.push(`${rt} → ${r.statut}`); }
