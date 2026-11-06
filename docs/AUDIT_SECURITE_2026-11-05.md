@@ -65,3 +65,13 @@ Corrigé et déjà publié le 5 novembre (release `parcours-20261105t2253`) : le
 - **Non couvert par la nouvelle batterie** : les routes de la console SH, couvertes seulement par les suites SH existantes ; l'envoi de pièces jointes ; le vocal ; une revue ligne à ligne.
 - **Domaine 9, liaison site ↔ SH** : revue du plan quand il sera présenté. Elle n'est pas construite.
 - **Domaine 13 et préparation de la production** (Canada et Afrique) : modèle de serveur par pays, contrôles avant mise en ligne, surveillance, plans d'incident et de reprise, documents Loi 25, dossier du test d'intrusion, points à relire par vos développeurs. Plusieurs jours de travail.
+
+## 6. Recette des corrections (non publiées)
+Empreinte des sources `532aaa1fcf9f`, commit `de24161`, 250 tests, 0 échec au dernier passage de chaque suite :
+- SH : 10 suites, 110 tests (`20261105232331_1dc6c9`) ;
+- scénarios A, B, C et OG de base : 9 tests (`20261105232333_594da5`) ;
+- CHSLD : 23 tests, dont les 600 cas d'OG (rapport `20261105232335_97ef89`, marqué en échec à cause de la suite suivante) ;
+- API : 71 tests, lancée seule (`20261105235217_2ce39d`) ;
+- interface hospitalière 16 tests et OG suivi 21 tests, lancés seuls (`20261105235534_897b0e`).
+
+**Échec intermittent observé :** lors du premier passage, avec plusieurs recettes en parallèle, le « guide de démonstration » a échoué sur ordinateur et téléphone à l'attente de 30 s de l'écran de connexion après une remise à zéro de la démo. La suite complète passe seule, sans changement de code. La cause exacte n'est pas établie ; la charge de la machine est l'explication la plus probable. Un message `relation "lits" does not exist` apparaît dans ce journal pendant la remise à zéro : à examiner, car une tâche de fond peut lire la base pendant son remplacement.
