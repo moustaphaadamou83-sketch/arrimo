@@ -107,6 +107,11 @@ L'échec intermittent du § 6 a été traité : les tâches de fond sont exclues
 - **SSH :** mot de passe refusé lors d'essais réels, une seule clé (`mac-moustapha`). Un fichier résiduel contient `PermitRootLogin yes`, mais `00-durcissement.conf` l'emporte. À nettoyer avec son accord.
 - **Hors Arrimo, à signaler :** les dumps PharmaQuick du bucket `medlink-backups-togo` s'arrêtent au 26 septembre alors que `pharmaquick-api` tourne toujours.
 
+## 6 quater. Publication du 6 novembre, 8 h 13 UTC
+Release `audit-20261106t0813` sur la démo et SH, commit `41bc4d1`, autorisée par Moustafa. Recette : 252 tests, 0 échec, 0 ignoré (`20261106021034_90f36e`, `20261106021036_acfcad`, `20261106021038_47db2d`, `20261106022814_ec2d6f`), OG 600 sur 600. Retour arrière : `audit-20261106t0139`. Rapport : `.local/audit-release-20261106t0813/rapport.json`.
+
+Vérifié en ligne : connexions sans code, administration ouverte sans code dans un navigateur, activation refusée (403), aucun secret de double authentification dans la base de la démo. Parcours CHSLD ↔ hôpital : 17 sur 17 sur une copie à jour. La connexion complète à SH avec mot de passe et code reste à faire par Moustafa.
+
 ## 7. Domaine 13 : préparation multi-pays, état des lieux (lecture seule, 6 novembre)
 **Conclusion : Arrimo est conçu pour plusieurs pays, mais il n'est pas prêt à ouvrir un serveur par pays sans écrire de code.** Aucune correction n'est faite dans cette partie.
 
