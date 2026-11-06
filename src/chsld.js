@@ -59,6 +59,7 @@ const versionAttendue = (obj, v) => { if (v != null && Number(v) !== obj.version
 async function mouvement(c, r, type, u, extra = {}) {
   await c.query(`INSERT INTO resident_mouvements (resident_id, etablissement_id, type, de_lit_id, vers_lit_id, autre_etablissement_id, coordination_id, detail, par)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, [r.id, extra.etablissementId || r.etablissement_id, type, extra.de || null, extra.vers || null, extra.autre || null, extra.coordination || null, extra.detail || null, u?.id || null]);
+  if (['depart_hopital', 'hospitalisation_confirmee', 'retour_prevu', 'retour', 'reintegration'].includes(type)) await require('./portail-notifications').signaler(c, r.id, 'mouvements');
 }
 const journalChsld = (c, etabId, u, action, detail) => journaliser(c, { etablissementId: etabId, utilisateurId: u?.id, action, detail });
 async function tache(c, etabId, u, t) {

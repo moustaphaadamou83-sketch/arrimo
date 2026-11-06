@@ -1021,6 +1021,82 @@ test('phase 2 — portail des proches : activé depuis SH, invitation, accès li
       await pg.fill('#vis', new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 16)); await pg.click('#vis-ok'); await pg.waitForFunction(() => document.querySelectorAll('#visites p').length > 1);
       assert.deepStrictEqual(err, []); await ctx.close();
     } } finally { await nav.close(); } }
+  // Parcours vu par le proche : mêmes événements, statuts et dates ; notifications sans contenu
+  {
+    const sit = async () => (await api('marie', 'GET', '/proches/moi')).situation;
+    const empr = async () => (await api('marie', 'GET', '/proches/etat')).empreinte;
+    const act = (qui, etab, id, corps) => api(qui, 'POST', `/coordinations/${id}/action`, { etablissement_id: etab, ...corps });
+    const notifs = require('../src/portail-notifications'); const http = require('node:http'); const crypto = require('node:crypto');
+    const recus = []; let codeFaux = 201;
+    const faux = http.createServer((q, r) => { let c = ''; q.on('data', (d) => { c += d; }); q.on('end', () => { recus.push({ corps: c, auth: q.headers.authorization, url: q.url }); r.writeHead(codeFaux); r.end(); }); });
+    await new Promise((r) => faux.listen(0, '127.0.0.1', r));
+    const paire = crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' }); const jwk = paire.privateKey.export({ format: 'jwk' });
+    const envPush = { ARRIMO_VAPID_PUBLIQUE: Buffer.concat([Buffer.from([4]), Buffer.from(jwk.x, 'base64url'), Buffer.from(jwk.y, 'base64url')]).toString('base64url'), ARRIMO_VAPID_PRIVEE: jwk.d, ARRIMO_VAPID_SUJET: 'mailto:test@exemple.invalid', ARRIMO_PUSH_HOTES: '127.0.0.1' };
+    const envAvant = {}; for (const [k, v] of Object.entries(envPush)) { envAvant[k] = process.env[k]; process.env[k] = v; }
+    const pousser = () => notifs.envoyer(poolPilote, process.env);
+    try {
+      await refuse('marie', 'POST', '/proches/notifications', { endpoint: 'https://mechant.exemple.invalid/x' }, 400, 'abonnement_invalide');
+      await refuse('marie', 'POST', '/proches/notifications', { endpoint: 'file:///etc/passwd' }, 400, 'abonnement_invalide');
+      const adresse = `http://127.0.0.1:${faux.address().port}/poussee/abc`;
+      assert.deepStrictEqual(await api('marie', 'POST', '/proches/notifications', { endpoint: adresse }), { abonne: true });
+      assert.strictEqual((await api('marie', 'GET', '/proches/notifications')).abonne, true);
+      assert.strictEqual((await sit()).statut, 'present');
+      const lit = (await api('era', 'GET', `/chsld/residents/${p.dupont}`)).resident;
+      let e0 = await empr();
+      let co = await api('era', 'POST', `/chsld/residents/${p.dupont}/hospitalisation`, { hopital_id: L.B, identite_verifiee: true, version: lit.version, motif_admin: 'Parcours fictif' });
+      let s = await sit();
+      assert.strictEqual(s.statut, 'transfert_preparation'); assert.ok(s.depuis); assert.ok(s.hopital); assert.ok(await empr() !== e0, 'l’empreinte change');
+      assert.strictEqual(s.parcours[0].fait, true); assert.strictEqual(s.parcours[1].fait, false);
+      // La poussée ne contient rien, et une seule part pour plusieurs événements
+      await pousser(); assert.strictEqual(recus.length, 1); assert.strictEqual(recus[0].corps, ''); assert.match(recus[0].auth, /^vapid t=/);
+      const [tete, corps, sig] = recus[0].auth.slice(8).split(',')[0].split('.');
+      assert.ok(crypto.verify('sha256', Buffer.from(`${tete}.${corps}`), { key: paire.publicKey, dsaEncoding: 'ieee-p1363' }, Buffer.from(sig, 'base64url')), 'jeton VAPID valide');
+      assert.ok(!JSON.stringify(recus[0]).match(/R-\d|Dupont|hospital/i));
+      co = await act('b', L.B, co.id, { action: 'accepter', version: co.version });
+      assert.strictEqual((await sit()).statut, 'transfert_preparation', 'une acceptation n’est pas un départ');
+      co = await act('era', ids.era, co.id, { action: 'confirmer_depart', version: co.version });
+      s = await sit(); assert.strictEqual(s.statut, 'hospitalise_depart_confirme'); assert.ok(s.depuis, 'date du départ');
+      co = await act('b', L.B, co.id, { action: 'confirmer_reception', version: co.version });
+      s = await sit(); assert.strictEqual(s.statut, 'hospitalise_confirme'); assert.ok(s.depuis, 'date d’arrivée : le défaut est corrigé'); assert.ok(s.parcours[2].fait);
+      await pousser(); assert.strictEqual(recus.length, 2);
+      // Transfert A → B vu par le proche
+      let t = await api('b', 'POST', `/coordinations/${co.id}/transfert-hopital`, { hopital_id: L.A });
+      assert.strictEqual((await sit()).statut, 'hospitalise_confirme', 'une demande de transfert ne change rien');
+      t = await act('a', L.A, t.id, { action: 'accepter', version: t.version }); t = await act('b', L.B, t.id, { action: 'confirmer_depart', version: t.version });
+      s = await sit(); assert.strictEqual(s.statut, 'transfert_entre_hopitaux'); assert.ok(s.depuis);
+      t = await act('a', L.A, t.id, { action: 'confirmer_arrivee', version: t.version });
+      s = await sit(); assert.strictEqual(s.statut, 'hospitalise_confirme'); assert.ok(s.depuis);
+      const h2 = (await api('a', 'GET', `/coordinations?etablissement_id=${L.A}`)).find((c) => c.type === 'hospitalisation' && c.liee_id === t.id);
+      // Retour
+      let r = await api('a', 'POST', `/coordinations/${h2.id}/retour`, { retour_prevu_le: new Date(Date.now() + 3600000).toISOString() });
+      assert.strictEqual((await sit()).retour_prevu_le, null, 'un retour proposé n’est pas annoncé');
+      r = await act('era', ids.era, r.id, { action: 'accepter', version: r.version });
+      s = await sit(); assert.ok(s.retour_prevu_le); assert.ok(s.parcours[3].fait);
+      for (const ta of (await api('era', 'GET', `/chsld/taches?etablissement_id=${ids.era}`)).filter((y) => y.lit_id === lit.lit_id)) await api('era', 'POST', `/chsld/taches/${ta.id}/statut`, { statut: 'faite', version: ta.version });
+      r = await act('era', ids.era, r.id, { action: 'verifier_chambre', version: r.version });
+      r = await act('a', L.A, r.id, { action: 'confirmer_depart', version: r.version });
+      s = await sit(); assert.strictEqual(s.statut, 'retour_en_route'); assert.ok(s.depuis);
+      r = await act('era', ids.era, r.id, { action: 'confirmer_arrivee', version: r.version });
+      s = await sit(); assert.strictEqual(s.statut, 'arrivee_confirmee', 'arrivée distincte de la réintégration'); assert.ok(s.depuis);
+      r = await act('era', ids.era, r.id, { action: 'reintegrer', identite_verifiee: true, conditions_accueil: true, version: r.version });
+      s = await sit(); assert.strictEqual(s.statut, 'reintegre'); assert.ok(s.depuis); assert.ok(s.parcours.every((x) => x.fait));
+      assert.ok(!/diagnostic|pathologie|symptome|chambre_id|lit_id|patient_ref/i.test(JSON.stringify(s)), 'aucun renseignement clinique ni emplacement');
+      // Autorisations : sans « mouvements », ni hôpital ni étapes
+      const aut = (await poolPilote.query('SELECT autorisations FROM resident_contacts WHERE id = $1', [fille.id])).rows[0].autorisations;
+      await poolPilote.query('UPDATE resident_contacts SET autorisations = $2 WHERE id = $1', [fille.id, aut.filter((x) => x !== 'mouvements')]);
+      const limite = await sit(); assert.strictEqual(limite.parcours, undefined); assert.strictEqual(limite.hopital, undefined);
+      await poolPilote.query('UPDATE resident_contacts SET autorisations = $2 WHERE id = $1', [fille.id, aut]);
+      // L'actualisation ne marque pas les messages comme lus
+      await api('era', 'POST', `/chsld/residents/${p.dupont}/messages`, { contact_id: fille.id, categorie: aut[0], texte: 'Message fictif' });
+      assert.ok((await api('marie', 'GET', '/proches/etat')).non_lus >= 1); assert.ok((await api('marie', 'GET', '/proches/etat')).non_lus >= 1);
+      // Adresse expirée retirée ; retrait à la demande
+      await pousser(); codeFaux = 410; await poolPilote.query('INSERT INTO proches_notifications_attente (acces_id) SELECT id FROM proches_acces WHERE contact_id = $1 ON CONFLICT DO NOTHING', [fille.id]); await pousser();
+      assert.strictEqual((await api('marie', 'GET', '/proches/notifications')).abonne, false);
+      await api('marie', 'POST', '/proches/notifications', { endpoint: adresse }); await api('marie', 'DELETE', '/proches/notifications');
+      assert.strictEqual((await api('marie', 'GET', '/proches/notifications')).abonne, false);
+    } finally { for (const [k, v] of Object.entries(envAvant)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } faux.close(); }
+    assert.strictEqual((await notifs.envoyer(poolPilote, process.env)).inactif, true, 'sans clés, aucune poussée');
+  }
   // Désactivation puis réactivation depuis SH (configuration opérationnelle publiée vers l'environnement)
   const cfg0 = await sh('GET', `/hopitaux/${era.hopital_id}/configuration-operationnelle`);
   assert.ok(cfg0.modules_modifiables.includes('portail_proches'));

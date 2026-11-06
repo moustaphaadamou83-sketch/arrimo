@@ -259,6 +259,8 @@ const MESSAGES = {
   type_unite_invalide: "Service invalide pour cet hôpital.",
   texte_trop_long: "Texte trop long.",
   utilisateur_introuvable: "Utilisateur introuvable.",
+  abonnement_invalide: "Adresse de notification refusée.",
+  notifications_indisponibles: "Les notifications ne sont pas encore disponibles.",
   transfert_hopital_ouvert: "Un transfert vers un autre hôpital est déjà ouvert pour ce résident ({numero}).",
   retour_deja_ouvert: "Un retour vers le CHSLD est déjà en préparation pour ce résident ({numero}).",
   cle_idempotence_invalide: "Identifiant d’envoi invalide.",

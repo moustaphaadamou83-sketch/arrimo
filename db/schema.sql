@@ -1135,3 +1135,9 @@ CREATE TABLE IF NOT EXISTS activites_etab (
   publie_par int REFERENCES utilisateurs(id), actif boolean NOT NULL DEFAULT true, cree_le timestamptz NOT NULL DEFAULT now());
 -- Fonctions cliniques fictives : jamais actives d'office, activées établissement par établissement, en démo seulement
 ALTER TABLE etablissements ADD COLUMN IF NOT EXISTS clinique_fictive boolean NOT NULL DEFAULT false;
+
+-- Notifications du portail : aucune donnée sur le parcours, seulement l'accès à prévenir et l'adresse de poussée de son téléphone
+CREATE TABLE IF NOT EXISTS proches_abonnements_push (
+  id serial PRIMARY KEY, acces_id int NOT NULL REFERENCES proches_acces(id) ON DELETE CASCADE, endpoint text NOT NULL UNIQUE, cree_le timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS proches_notifications_attente (
+  acces_id int PRIMARY KEY REFERENCES proches_acces(id) ON DELETE CASCADE, cree_le timestamptz NOT NULL DEFAULT now());

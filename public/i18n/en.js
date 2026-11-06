@@ -661,6 +661,8 @@ window.ARRIMO_I18N.en = {
     type_unite_invalide: "Invalid department for this hospital.",
     texte_trop_long: "Text too long.",
     utilisateur_introuvable: "User not found.",
+    abonnement_invalide: "Notification address refused.",
+    notifications_indisponibles: "Notifications are not available yet.",
     transfert_hopital_ouvert: "A transfer to another hospital is already open for this resident ({numero}).",
     retour_deja_ouvert: "A return to the CHSLD is already being prepared for this resident ({numero}).",
     cle_idempotence_invalide: "Invalid sending identifier.",

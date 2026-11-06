@@ -78,6 +78,7 @@ async function messagePersonnel(pool, u, residentId, b) {
     const m = (await c.query(`INSERT INTO messages_proches (resident_id, contact_id, sens, categorie, texte, par) VALUES ($1, $2, 'etablissement', $3, $4, $5) RETURNING *`, [r.id, k.id, b.categorie, texte, u.id])).rows[0];
     await c.query(`UPDATE messages_proches SET lu_le = now() WHERE resident_id = $1 AND contact_id = $2 AND sens = 'proche' AND lu_le IS NULL`, [r.id, k.id]);
     await journaliser(c, { etablissementId: r.etablissement_id, utilisateurId: u.id, action: 'Portail des proches', detail: `${r.reference} · message (${b.categorie})` });
+    await require('./portail-notifications').signaler(c, r.id, b.categorie, k.id);
     return m;
   });
 }
@@ -143,22 +144,55 @@ async function connexion(pool, b) {
  * - « mouvements » : hospitalisation (hôpital nommé avec la date de confirmation de réception, ou départ confirmé
  *   avec « arrivée non encore confirmée »), retour prévu. Jamais de position en temps réel.
  */
+/**
+ * Étape confirmée du parcours, lue dans les mêmes événements que les modules CHSLD et Hôpital. Jamais déduite, jamais de donnée clinique.
+ * Une date vient toujours de l'étape confirmée correspondante. `parcours` : les étapes du parcours en cours, avec leur date.
+ */
+const REINTEGRE_JOURS = 7;
 async function situation(pool, p) {
   const voitHebergement = p.autorisations.includes('hebergement'), voitMouvements = p.autorisations.includes('mouvements');
   if (!voitHebergement && !voitMouvements) return null;
   const r = (await pool.query('SELECT statut FROM residents WHERE id = $1', [p.resident_id])).rows[0];
   const maj = (await pool.query(`SELECT max(date) d FROM resident_mouvements WHERE resident_id = $1 AND type <> 'modification'`, [p.resident_id])).rows[0].d;
   const s = { mis_a_jour_le: maj };
+  const parcoursDe = async () => {
+    const cos = (await pool.query(`SELECT c.id, c.type, c.statut, c.cree_le, c.arrivee_le, c.retour_prevu_le, c.reintegree_le, c.cloturee_le, d.nom AS destination,
+        (SELECT max(x.date) FROM coordination_etapes x WHERE x.coordination_id = c.id AND x.statut = 'en_cours') AS depart_le
+      FROM coordinations c JOIN etablissements d ON d.id = c.destination_id WHERE c.resident_id = $1 AND c.type IN ('hospitalisation', 'transfert_hopital', 'retour') ORDER BY c.cree_le DESC, c.id DESC LIMIT 12`, [p.resident_id])).rows;
+    return { hosp: cos.find((c) => c.type === 'hospitalisation') || null, transfert: cos.find((c) => c.type === 'transfert_hopital') || null, retour: cos.find((c) => c.type === 'retour') || null };
+  };
+  const { hosp, transfert, retour } = voitMouvements ? await parcoursDe() : {};
+  const ouvert = (c) => c && ['envoyee', 'acceptee', 'en_cours'].includes(c.statut);
+  const etapes = (h, ret) => {
+    const pas = (code, date) => ({ code, date: date || null, fait: !!date });
+    const accepte = ret && ['acceptee', 'en_cours', 'recue'].includes(ret.statut);
+    return [pas('transfert_preparation', h?.cree_le), pas('depart_confirme', h?.depart_le), pas('hospitalisation_en_cours', h?.arrivee_le),
+      pas('retour_prevu', accepte ? ret.retour_prevu_le : null), pas('arrivee_confirmee', ret?.arrivee_le), pas('reintegre', ret?.reintegree_le)];
+  };
   if (r.statut === 'hospitalise') {
     if (!voitMouvements) return { ...s, statut: 'absent_etablissement' };
-    const h = (await pool.query(`SELECT c.statut, d.nom AS hopital, (SELECT max(date) FROM coordination_etapes x WHERE x.coordination_id = c.id AND x.statut = c.statut) AS depuis
-      FROM coordinations c JOIN etablissements d ON d.id = c.destination_id WHERE c.resident_id = $1 AND c.type = 'hospitalisation' AND c.statut IN ('en_cours', 'recue') ORDER BY c.cree_le DESC LIMIT 1`, [p.resident_id])).rows[0];
-    const ret = (await pool.query(`SELECT statut, retour_prevu_le FROM coordinations WHERE resident_id = $1 AND type = 'retour' AND statut IN ('acceptee', 'en_cours') ORDER BY cree_le DESC LIMIT 1`, [p.resident_id])).rows[0];
-    return { ...s, statut: h?.statut === 'recue' ? 'hospitalise_confirme' : 'hospitalise_depart_confirme', hopital: h?.hopital || null, depuis: h?.depuis || null,
-      retour_prevu_le: ret?.retour_prevu_le || null };
+    const retourActif = ouvert(retour) && ['acceptee', 'en_cours'].includes(retour.statut) ? retour : null;
+    const base = { ...s, hopital: hosp?.destination || null, retour_prevu_le: retourActif?.retour_prevu_le || null, parcours: etapes(hosp, retourActif) };
+    if (retourActif?.statut === 'en_cours') return { ...base, statut: 'retour_en_route', depuis: retourActif.depart_le };
+    if (transfert?.statut === 'en_cours') return { ...base, statut: 'transfert_entre_hopitaux', hopital: transfert.destination, depuis: transfert.depart_le };
+    if (hosp?.statut === 'recue') return { ...base, statut: 'hospitalise_confirme', depuis: hosp.arrivee_le };
+    return { ...base, statut: 'hospitalise_depart_confirme', depuis: hosp?.depart_le || null };
+  }
+  if (voitMouvements) {
+    if (r.statut === 'retour_a_reintegrer') return { ...s, statut: 'arrivee_confirmee', depuis: retour?.arrivee_le || null, parcours: etapes(hosp, retour) };
+    if (r.statut === 'present' && ouvert(hosp)) return { ...s, statut: 'transfert_preparation', hopital: hosp.destination, depuis: hosp.cree_le, parcours: etapes(hosp, null) };
+    if (r.statut === 'present' && retour?.reintegree_le && Date.now() - new Date(retour.reintegree_le).getTime() < REINTEGRE_JOURS * 86400000) return { ...s, statut: 'reintegre', depuis: retour.reintegree_le, parcours: etapes(hosp, retour) };
   }
   if (!voitHebergement) return null;
   return { ...s, statut: r.statut === 'absent' ? 'absence_temporaire' : ['present', 'retour_a_reintegrer'].includes(r.statut) ? 'present' : 'autre' };
+}
+/** Pour l'actualisation automatique : ne marque rien comme lu, ne renvoie qu'une empreinte et le nombre de messages non lus. */
+async function etat(pool, p) {
+  const sit = await situation(pool, p);
+  const m = (await pool.query(`SELECT count(*)::int n, max(cree_le) d, count(*) FILTER (WHERE sens = 'etablissement' AND lu_le IS NULL)::int non_lus FROM messages_proches WHERE resident_id = $1 AND contact_id = $2 AND categorie = ANY($3)`, [p.resident_id, p.contact_id, p.autorisations])).rows[0];
+  const v = (await pool.query('SELECT count(*)::int n, max(COALESCE(traite_le, cree_le)) d FROM demandes_visite WHERE resident_id = $1 AND contact_id = $2', [p.resident_id, p.contact_id])).rows[0];
+  const a = (await pool.query('SELECT count(*)::int n, max(cree_le) d FROM activites_etab WHERE etablissement_id = $1 AND actif', [p.etablissement_id])).rows[0];
+  return { empreinte: require('node:crypto').createHash('sha256').update(JSON.stringify([sit, m.n, m.d, v, a])).digest('hex').slice(0, 24), non_lus: m.non_lus };
 }
 async function moi(pool, p) {
   const nouveaux = (await pool.query(`SELECT count(*)::int n FROM messages_proches WHERE resident_id = $1 AND contact_id = $2 AND sens = 'etablissement' AND lu_le IS NULL AND categorie = ANY($3)`,
@@ -204,6 +238,8 @@ function brancherPublic(api, pool, route) {
   const s = sessionPortail(pool);
   api.get('/proches/moi', s, route((req) => moi(pool, req.proche)));
   api.post('/proches/messages', s, route((req) => messageProche(pool, req.proche, req.body)));
+  api.get('/proches/etat', s, route((req) => etat(pool, req.proche)));
+  require('./portail-notifications').brancherProche(api, pool, route, s);
   api.post('/proches/visites', s, route((req) => demanderVisite(pool, req.proche, req.body)));
   api.post('/proches/deconnexion', s, route((req) => deconnexion(pool, req.proche)));
 }
@@ -217,8 +253,10 @@ function brancherPersonnel(api, pool, route, entier) {
     if (!['acceptee', 'refusee', 'annulee'].includes(req.body?.statut)) throw new ErreurHttp(400, 'visite_invalide');
     const v = (await pool.query('SELECT etablissement_id FROM demandes_visite WHERE id = $1', [id])).rows[0]; if (!v) throw new ErreurHttp(404, 'visite_introuvable');
     await garde(req.utilisateur, v.etablissement_id);
-    const n = (await pool.query(`UPDATE demandes_visite SET statut = $2, traite_par = $3, traite_le = now() WHERE id = $1 AND statut = 'demandee' RETURNING id, statut`, [id, req.body.statut, req.utilisateur.id])).rows[0];
-    if (!n) throw new ErreurHttp(409, 'visite_deja_traitee'); return n; }));
+    const n = (await pool.query(`UPDATE demandes_visite SET statut = $2, traite_par = $3, traite_le = now() WHERE id = $1 AND statut = 'demandee' RETURNING id, statut, resident_id, contact_id`, [id, req.body.statut, req.utilisateur.id])).rows[0];
+    if (!n) throw new ErreurHttp(409, 'visite_deja_traitee');
+    await require('./portail-notifications').signaler(pool, n.resident_id, 'rendez_vous', n.contact_id);
+    return { id: n.id, statut: n.statut }; }));
   api.get('/chsld/activites', route(async (req) => { const e = entier(req.query.etablissement_id, 'etablissement_id'); await garde(req.utilisateur, e);
     return (await pool.query('SELECT id, titre, description, debut_le FROM activites_etab WHERE etablissement_id = $1 AND actif ORDER BY debut_le DESC LIMIT 100', [e])).rows; }));
   api.post('/chsld/activites', route(async (req) => { const b = req.body || {}; const e = entier(b.etablissement_id, 'etablissement_id'); await garde(req.utilisateur, e);
