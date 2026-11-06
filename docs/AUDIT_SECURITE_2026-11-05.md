@@ -13,7 +13,7 @@ Méthode : inspection du serveur sans modification et sans afficher aucun secret
 | Moyen | 6 | 4 |
 | Faible | 5 | 1 |
 
-## 2. Corrigé dans le code, prouvé par des tests, NON publié
+## 2. Corrigé dans le code, prouvé par des tests (publié le 6 novembre, voir § 6 bis)
 | Gravité | Domaine | Problème | Correction |
 |---|---|---|---|
 | Élevé | 3, 4 | Le rôle `gestionnaire` franchissait le contrôle d'établissement : le code lui ouvrait l'identité des résidents et les dossiers de tous les CHSLD | Accès réservé aux membres du CHSLD ; refus testé, y compris par OG |
@@ -73,7 +73,7 @@ Corrigé et déjà publié le 5 novembre (release `parcours-20261105t2253`) : le
 - **Domaine 9, liaison site ↔ SH** : revue du plan quand il sera présenté. Elle n'est pas construite.
 - **Préparation de la production** (Canada et Afrique) : voir § 7. Plusieurs jours de travail.
 
-## 6. Recette des corrections (non publiées)
+## 6. Première recette des corrections
 Empreinte des sources `532aaa1fcf9f`, commit `de24161`, 250 tests, 0 échec au dernier passage de chaque suite :
 - SH : 10 suites, 110 tests (`20261105232331_1dc6c9`) ;
 - scénarios A, B, C et OG de base : 9 tests (`20261105232333_594da5`) ;
@@ -82,6 +82,30 @@ Empreinte des sources `532aaa1fcf9f`, commit `de24161`, 250 tests, 0 échec au d
 - interface hospitalière 16 tests et OG suivi 21 tests, lancés seuls (`20261105235534_897b0e`).
 
 **Échec intermittent observé :** lors du premier passage, avec plusieurs recettes en parallèle, le « guide de démonstration » a échoué sur ordinateur et téléphone à l'attente de 30 s de l'écran de connexion après une remise à zéro de la démo. La suite complète passe seule, sans changement de code. La cause exacte n'est pas établie ; la charge de la machine est l'explication la plus probable. Un message `relation "lits" does not exist` apparaît dans ce journal pendant la remise à zéro : à examiner, car une tâche de fond peut lire la base pendant son remplacement.
+
+## 6 bis. Recette finale et publication (6 novembre 2026, 1 h 39 UTC)
+Autorisée par Moustafa, sous condition d'une recette entièrement verte.
+
+**Recette :** empreinte `66c996e6f0c6`, 250 tests, 0 échec, 0 ignoré (`20261106011140_897700`, `20261106011142_06fef0`, `20261106011144_ffb0d4`, `20261106013613_e9a294`). OG : 600 cas sur 600.
+
+L'échec intermittent du § 6 a été traité : les tâches de fond sont exclues pendant la remise à zéro de la démo et l'attente de vidage est bornée. La recette repasse sous la même charge. Le message `relation "lits" does not exist` apparaît encore une fois dans le journal de la suite hospitalière : **sa source n'est pas établie**.
+
+**Publication :** release `audit-20261106t0139` sur la démo et SH, avec sauvegarde préalable. Retour arrière prêt vers `parcours-20261105t2253`. Rapport : `.local/audit-release-20261106t0139/rapport.json`. Site public et DNS non touchés ; recette, validation et principal non mis à jour.
+
+**Vérifié après publication :**
+- Démo en ligne : santé, en-têtes, connexions A, B, C et réseau sans double authentification, deux CHSLD, Liaison, OG, refus au gestionnaire ; navigateur sans erreur ni refus CSP.
+- Parcours CHSLD ↔ hôpital : 17 contrôles sur 17, avec le code publié, sur une copie de la démo (`arrimo_publication_restore_demo_c636523c56`). La démo en ligne n'a reçu aucune donnée de ce test.
+- SH en ligne : page, santé, refus sans session (401), refus d'un code avec un jeton inventé (401). Le seul compte actif a la double authentification active.
+
+**Non vérifié en ligne :**
+- Connexion SH complète avec mot de passe et bon code : aucun accès SH n'est conservé pour ces contrôles. Moustafa doit la faire. La suite `acces` le prouve seulement sur une base de test.
+- Les boutons de l'entretien dans le parcours joué à l'écran ; la tablette.
+
+## 6 ter. Compléments
+- **Double authentification et démos :** décision de Moustafa, jamais sur les démos. S4 ne vise donc que la recette, la validation et la production. Reste à bloquer l'activation volontaire sur la démo (`src/admin.js`).
+- **S1, clé Backblaze : non résolu.** Le 6 novembre, la clé en service voyait encore 4 buckets et `rclone.conf` datait du 17 octobre : la nouvelle clé n'est pas enregistrée. Ne pas révoquer l'ancienne. Sauvegarde et restauration de test à faire après sa saisie.
+- **SSH :** mot de passe refusé lors d'essais réels, une seule clé (`mac-moustapha`). Un fichier résiduel contient `PermitRootLogin yes`, mais `00-durcissement.conf` l'emporte. À nettoyer avec son accord.
+- **Hors Arrimo, à signaler :** les dumps PharmaQuick du bucket `medlink-backups-togo` s'arrêtent au 26 septembre alors que `pharmaquick-api` tourne toujours.
 
 ## 7. Domaine 13 : préparation multi-pays, état des lieux (lecture seule, 6 novembre)
 **Conclusion : Arrimo est conçu pour plusieurs pays, mais il n'est pas prêt à ouvrir un serveur par pays sans écrire de code.** Aucune correction n'est faite dans cette partie.
