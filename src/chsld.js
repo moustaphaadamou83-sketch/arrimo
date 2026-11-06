@@ -938,7 +938,9 @@ async function listeTaches(pool, u, etabId, q = {}) {
     LEFT JOIN residents r ON r.id = t.resident_id LEFT JOIN utilisateurs cu ON cu.id = t.cree_par WHERE t.etablissement_id = $1${cond} ORDER BY t.echeance NULLS LAST, t.cree_le LIMIT 300`, p)).rows;
   // Entretien : la chambre suffit ; aucune référence de résident ni détail de dossier
   const NS = require('./nettoyage-securise');
-  for (const t of taches) if (t.lit_id && ['entretien', 'preparation_chambre'].includes(t.type)) t.consignes = await NS.consignes(pool, t.lit_id, u.id);
+  const dEntretien = taches.filter((t) => t.lit_id && ['entretien', 'preparation_chambre'].includes(t.type));
+  const consignesLits = await NS.consignesLot(pool, [...new Set(dEntretien.map((t) => t.lit_id))], u.id);
+  for (const t of dEntretien) t.consignes = consignesLits.get(t.lit_id);
   if (u.role !== 'entretien') return taches;
   return taches.map((t) => ({ ...t, resident_id: null, resident_ref: null, detail: null, titre: String(t.titre).replace(/\s*(de|of)?\s*R-\d{5}/g, '').trim() }));
 }

@@ -65,6 +65,16 @@ async function consignes(db, litId, agentId) {
     protocole: p && { nom: p.nom, type_intervention: p.type_intervention, epi: p.epi, instructions: p.instructions, controle_requis: p.controle_requis },
     intervention: i && { id: i.id, statut: i.statut, debut_le: i.debut_le, fin_le: i.fin_le, version_changee: i.precautions_version !== ch.precautions_version } };
 }
+/** Plusieurs lits d'un coup : seuls ceux sous précautions ou avec une intervention ouverte coûtent des requêtes. */
+async function consignesLot(db, litIds, agentId) {
+  const sans = { precautions: [], autorisee: true, blocages: [], protocole: null, intervention: null };
+  const res = new Map(litIds.map((id) => [id, sans]));
+  if (!litIds.length) return res;
+  const { rows } = await db.query(`SELECT l.id FROM lits l JOIN chambres ch ON ch.id = l.chambre_id WHERE l.id = ANY($1)
+    AND (cardinality(ch.precautions) > 0 OR EXISTS (SELECT 1 FROM nettoyage_interventions i WHERE i.lit_id = l.id AND i.statut = ANY($2)))`, [litIds, OUVERTES]);
+  for (const r of rows) res.set(r.id, await consignes(db, r.id, agentId));
+  return res;
+}
 /** Début d'intervention, dans la transaction de l'appelant. Sans précaution : rien (parcours habituel). */
 async function ouvrir(c, u, litId) {
   const ch = await lire(c, litId, true);
@@ -241,4 +251,4 @@ function brancher(api, pool, route, entier) {
     await journaliser(c, { litId: id, utilisateurId: req.utilisateur.id, action: 'Nettoyage à reprendre', detail: null });
     return n; }); }));
 }
-module.exports = { brancher, consignes, conditions, ouvrir, fin, garde, pourTache, signalerBlocage, avecBlocage, PRECAUTIONS, RESTREINTES, FORMATIONS, EPI };
+module.exports = { brancher, consignes, consignesLot, conditions, ouvrir, fin, garde, pourTache, signalerBlocage, avecBlocage, PRECAUTIONS, RESTREINTES, FORMATIONS, EPI };

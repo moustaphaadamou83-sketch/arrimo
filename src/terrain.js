@@ -118,9 +118,10 @@ async function fileNettoyage(pool, utilisateur, etabId) {
       WHERE l.etablissement_id = $1 AND l.etat = 'nettoyage'`, [etabId]);
   const L = utilisateur.langue;
   const nomType = await traducteurTypes(pool, L);
+  const consignesLits = await require('./nettoyage-securise').consignesLot(pool, rows.map((r) => r.id), utilisateur.id);
   for (const r of rows) {
     r.genre = 'lit';
-    Object.assign(r, await require('./nettoyage-securise').consignes(pool, r.id, utilisateur.id));
+    Object.assign(r, consignesLits.get(r.id));
     const manque = Math.max(0, r.en_attente - r.libres_unite);
     r.priorite_score = manque * 100 + Number(r.age_min);
     r.priorite = manque > 0 ? 'haute' : Number(r.age_min) > r.nettoyage_cible_min ? 'moyenne' : 'normale';
