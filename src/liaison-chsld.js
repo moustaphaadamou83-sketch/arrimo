@@ -92,11 +92,22 @@ async function emplacements(pool, u, etabId, coId, q = {}) {
   const un = (k) => q[k] === '1' || q[k] === 'true';
   const besoins = s.lireBesoins({ isolement: un('isolement'), pression_negative: un('pression_negative'), ventilation: un('ventilation'), telemetrie: un('telemetrie') });
   const groupe = await s.groupeAgeEffectif(pool, typeId, undefined);
-  const lits = (await pool.query(`SELECT l.id, l.code, l.version, ch.numero AS chambre, un.nom AS unite FROM lits l JOIN chambres ch ON ch.id = l.chambre_id JOIN unites un ON un.id = l.unite_id
+  const prescrites = await require('./evaluations-fictives').precautionsTransmises(pool, coId);
+  const lus = (await pool.query(`SELECT l.id, l.code, l.version, ch.numero AS chambre, ch.precautions, un.nom AS unite FROM lits l JOIN chambres ch ON ch.id = l.chambre_id JOIN unites un ON un.id = l.unite_id
     WHERE l.etablissement_id = $1 AND l.type_id = $2 AND l.actif AND l.etat = 'libre'${s.sqlBesoins(besoins)}${s.sqlAge('l', groupe)} ORDER BY un.nom, l.code LIMIT 200`, [e.id, typeId])).rows;
+  const { RESTREINTES } = require('./nettoyage-securise');
+  const statutLit = (l) => {
+    if (l.precautions.some((p) => RESTREINTES.includes(p))) return { compatibilite: 'indisponible', justification: 'acces_restreint' };
+    const manque = prescrites.filter((p) => !l.precautions.includes(p));
+    if (l.precautions.length || manque.length) return { compatibilite: 'a_verifier', justification: manque.length ? 'precautions_a_confirmer' : 'chambre_sous_precautions' };
+    return { compatibilite: 'compatible', justification: null };
+  };
+  const classes = lus.map((l) => ({ ...l, ...statutLit(l) }));
+  const lits = classes.filter((l) => l.compatibilite !== 'indisponible');
+  const indisponibles = classes.filter((l) => l.compatibilite === 'indisponible');
   const urgence = (etab.modules || {}).urgence !== false;
   const civieres = urgence ? (await pool.query(`SELECT id, code, version, categorie FROM civieres WHERE etablissement_id = $1 AND actif AND etat = 'libre' ORDER BY categorie DESC, code LIMIT 100`, [e.id])).rows : [];
-  return { services, type_id: typeId, service_souhaite_id: co.service_souhaite_id, lits, civieres, urgence_active: urgence, reference_exemple: etab.config.reference_exemple };
+  return { services, type_id: typeId, service_souhaite_id: co.service_souhaite_id, lits, indisponibles, civieres, urgence_active: urgence, reference_exemple: etab.config.reference_exemple };
 }
 
 module.exports = { vue, emplacements, etabHopital, derniereConfirmation, OUVERTS };

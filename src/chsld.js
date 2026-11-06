@@ -548,8 +548,10 @@ async function preparerHospitalisation(pool, u, residentId, b) {
     const ouverte = (await c.query(`SELECT numero FROM coordinations WHERE resident_id = $1 AND type = 'hospitalisation' AND statut IN ('preparee', 'envoyee', 'acceptee', 'en_cours')`, [r.id])).rows[0];
     if (ouverte) throw new ErreurHttp(409, 'hospitalisation_deja_ouverte', { numero: ouverte.numero });
     if (!['present', 'absent'].includes(r.statut)) throw new ErreurHttp(409, 'resident_statut_incompatible');
+    const evaluation = await require('./evaluations-fictives').aTransmettre(c, b.evaluation_id, e.id, r.reference);
     const co = (await c.query(`INSERT INTO coordinations (numero, type, resident_id, resident_ref, origine_id, destination_id, statut, motif_admin, lit_id, cree_par, cle_idempotence, urgence_declaree, service_souhaite_id, infos_operationnelles)
       VALUES ($1, 'hospitalisation', $2, $3, $4, $5, 'envoyee', $6, $7, $8, $9, $10, $11, $12) RETURNING *`, [await numeroCoordination(c), r.id, r.reference, e.id, h.id, texte(b.motif_admin, 200), r.lit_id, u.id, cle, urgence, service, JSON.stringify(infos)])).rows[0];
+    if (evaluation) { await c.query('UPDATE coordinations SET evaluation_transmise_id = $2 WHERE id = $1', [co.id, evaluation]); co.evaluation_transmise_id = evaluation; }
     await etape(c, co, 'envoyee', e.id, u, `Demande transmise à ${h.nom} ; identité vérifiée`);
     await mouvement(c, r, 'depart_hopital', u, { autre: h.id, coordination: co.id, detail: `Demande transmise (${co.numero}) ; départ à confirmer` });
     await journalChsld(c, e.id, u, 'Hospitalisation préparée', `${r.reference} · ${co.numero}`);
@@ -778,6 +780,7 @@ async function actionCoordination(pool, u, id, b) {
       const suite = (await c.query(`INSERT INTO coordinations (numero, type, resident_id, resident_ref, origine_id, destination_id, statut, motif_admin, lit_id, liee_id, cree_par, service_souhaite_id, recue_hopital_le, acceptee_le, arrivee_le)
         VALUES ($1, 'hospitalisation', $2, $3, $4, $5, 'recue', $6, $7, $8, $9, $10, now(), now(), now()) RETURNING *`,
       [await numeroCoordination(c), r.id, r.reference, h.origine_id, co.destination_id, co.motif_admin, h.lit_id, co.id, u.id, co.service_souhaite_id])).rows[0];
+      if (h.evaluation_transmise_id) await c.query('UPDATE coordinations SET evaluation_transmise_id = $2 WHERE id = $1', [suite.id, h.evaluation_transmise_id]);
       await etape(c, suite, 'arrivee', etabId, u, `Arrivée depuis un autre hôpital (${co.numero})`);
       await mouvement(c, r, 'hospitalisation_confirmee', u, { etablissementId: r.etablissement_id, autre: co.destination_id, coordination: suite.id, detail: `Transfert ${co.numero} : arrivée confirmée ; place conservée` });
       await notifierCo(c, h.origine_id, 'chsld_arrivee', suite);
@@ -850,6 +853,7 @@ async function preparerTransfertHopital(pool, u, hospitalisationId, b) {
     if (ouvert) throw new ErreurHttp(409, 'transfert_hopital_ouvert', { numero: ouvert.numero });
     const co = (await c.query(`INSERT INTO coordinations (numero, type, resident_id, resident_ref, origine_id, destination_id, statut, motif_admin, liee_id, cree_par, service_souhaite_id)
       VALUES ($1, 'transfert_hopital', $2, $3, $4, $5, 'envoyee', $6, $7, $8, $9) RETURNING *`, [await numeroCoordination(c), r.id, r.reference, h.destination_id, d.id, texte(b.motif_admin, 200), h.id, u.id, service])).rows[0];
+    if (h.evaluation_transmise_id) await c.query('UPDATE coordinations SET evaluation_transmise_id = $2 WHERE id = $1', [co.id, h.evaluation_transmise_id]);
     await etape(c, co, 'envoyee', h.destination_id, u, `Demande transmise à ${d.nom}`);
     await mouvement(c, r, 'modification', u, { etablissementId: r.etablissement_id, autre: d.id, coordination: co.id, detail: `Transfert vers un autre hôpital demandé (${co.numero}) ; place conservée` });
     await journalChsld(c, h.destination_id, u, 'Transfert vers un autre hôpital demandé', `${r.reference} · ${co.numero}`);
@@ -895,7 +899,7 @@ async function listeCoordinationsBrute(pool, u, etabId, q = {}) {
   await expirerCoordinations(pool);
   return (await pool.query(`SELECT c.id, c.numero, c.type, c.statut, c.resident_ref, c.retour_prevu_le, c.incident, c.version, c.cree_le, c.modifie_le, c.liee_id,
       c.recue_hopital_le, c.acceptee_le, c.arrivee_le, c.orientation, c.orientation_le, c.cloturee_le, c.motif_admin, c.urgence_declaree, c.infos_operationnelles,
-      c.chambre_verifiee_le, c.transport_le, c.reintegree_le, c.service_souhaite_id, ss.nom AS service_souhaite, ss.nom_en AS service_souhaite_en, sr.nom AS service_retenu, sr.nom_en AS service_retenu_en,
+      (c.evaluation_transmise_id IS NOT NULL) AS evaluation_transmise, c.chambre_verifiee_le, c.transport_le, c.reintegree_le, c.service_souhaite_id, ss.nom AS service_souhaite, ss.nom_en AS service_souhaite_en, sr.nom AS service_retenu, sr.nom_en AS service_retenu_en,
       (SELECT count(*)::int FROM taches_etab tp WHERE c.type = 'retour' AND tp.lit_id = c.lit_id AND tp.type IN ('entretien', 'preparation_chambre') AND tp.statut IN ('a_faire', 'en_cours')) AS preparation_ouvertes,
       (SELECT max(tp.fait_le) FROM taches_etab tp WHERE c.type = 'retour' AND tp.lit_id = c.lit_id AND tp.type IN ('entretien', 'preparation_chambre') AND tp.cree_le >= c.cree_le) AS preparation_le,
       CASE WHEN c.destination_id = $1 THEN (SELECT json_build_object('demande_id', da.id, 'statut', da.statut, 'lit', dl.code) FROM demandes_admission da LEFT JOIN lits dl ON dl.id = da.lit_id WHERE da.id = c.demande_admission_id) END AS admission,

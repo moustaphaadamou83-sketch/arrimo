@@ -1329,6 +1329,17 @@ test('transferts multiples : CHSLD → A → B → C → CHSLD, puis 2e et 3e ho
   assert.ok(!vueB.includes(r1.nom), 'aucun nom à l’hôpital');
 });
 
+async function reintegrerApres(r, x) {
+  const act = (qui, etab, id, corps) => api(qui, 'POST', `/coordinations/${id}/action`, { etablissement_id: etab, ...corps });
+  r = await act('era', ids.era, r.id, { action: 'accepter', version: r.version });
+  const lit = (await api('era', 'GET', `/chsld/residents/${x.id}`)).resident.lit_id;
+  for (const ta of (await api('era', 'GET', `/chsld/taches?etablissement_id=${ids.era}`)).filter((y) => y.lit_id === lit)) await api('era', 'POST', `/chsld/taches/${ta.id}/statut`, { statut: 'faite', version: ta.version });
+  r = await act('era', ids.era, r.id, { action: 'verifier_chambre', version: r.version });
+  r = await act('b', L.B, r.id, { action: 'confirmer_depart', version: r.version });
+  r = await act('era', ids.era, r.id, { action: 'confirmer_arrivee', version: r.version });
+  return act('era', ids.era, r.id, { action: 'reintegrer', identite_verifiee: true, conditions_accueil: true, version: r.version });
+}
+
 test('nettoyage intelligent : précautions, protocole, habilitations, équipements, contrôle ; rien de changé sans précaution ; aucun patient visible', { timeout: 120000 }, async () => {
   const A = 'era_entretien'; const S = 'era'; const E = ids.era;
   const q = (sql, v) => poolPilote.query(sql, v).then((r) => r.rows);
@@ -1430,6 +1441,7 @@ test('nettoyage intelligent : précautions, protocole, habilitations, équipemen
 
   // 10. Place conservée : la tâche d'entretien passe par les mêmes contrôles et la place reste à son résident
   const [occ] = await q(`SELECT l.id, l.chambre_id, l.etat FROM lits l JOIN residents r ON r.lit_id = l.id WHERE r.etablissement_id = $1 AND r.statut = 'present' AND l.etat = 'occupe' ORDER BY l.id LIMIT 1`, [E]);
+  for (const ta of (await api(S, 'GET', `/chsld/taches?etablissement_id=${E}`)).filter((y) => y.lit_id === occ.id)) await api(S, 'POST', `/chsld/taches/${ta.id}/statut`, { statut: 'faite', version: ta.version });
   await poser(occ.chambre_id, ['contact']);
   const tache = await api(S, 'POST', '/chsld/taches', { etablissement_id: E, type: 'entretien', titre: 'Entretien fictif', lit_id: occ.id, assigne_role: 'entretien' });
   const vueAgent = (await api(A, 'GET', `/chsld/taches?etablissement_id=${E}`)).find((x) => x.id === tache.id);
@@ -1442,6 +1454,81 @@ test('nettoyage intelligent : précautions, protocole, habilitations, équipemen
   const finie = (await q('SELECT etat, entretien_statut FROM lits WHERE id = $1', [occ.id]))[0];
   assert.deepStrictEqual([finie.etat, finie.entretien_statut], ['occupe', 'propre'], 'propre sans changer l’occupation');
   await poser(occ.chambre_id, []);
+});
+
+test('évaluations fictives : démo seulement, droits, transmission à l’hôpital, chambres compatibles, entretien et OG sans accès', { timeout: 120000 }, async () => {
+  const avant = process.env.ARRIMO_ENV; const E = ids.era; const SECRET = 'Pathologie fictive XQZ'; const SYM = 'Symptome fictif XQZ';
+  const q = (sql, v) => poolPilote.query(sql, v).then((r) => r.rows);
+  const x = await residentPresent('era', E, [p.dupont]);
+  const corps = { etablissement_id: E, reference: x.reference, pathologies: SECRET, symptomes: SYM, precautions: ['contact'], besoins: 'Accompagnement fictif' };
+  // Refusé hors démonstration, à chaque point d'entrée
+  for (const e of ['pilote', 'recette', 'validation', 'production']) {
+    process.env.ARRIMO_ENV = e;
+    await refuse('era', 'POST', '/evaluations-fictives', corps, 403, 'clinique_demo_seulement');
+    await refuse('era', 'GET', `/evaluations-fictives?etablissement_id=${E}&reference=${x.reference}`, null, 403, 'clinique_demo_seulement');
+  }
+  process.env.ARRIMO_ENV = 'demo';
+  let co; let ev; let ch;
+  try {
+    // Droits et validation
+    await refuse('era_entretien', 'POST', '/evaluations-fictives', corps, 403);
+    await refuse('era_direction', 'POST', '/evaluations-fictives', corps, 403);
+    await refuse('stl', 'POST', '/evaluations-fictives', corps, 403);
+    await refuse('era', 'POST', '/evaluations-fictives', { etablissement_id: E, reference: 'R-99999', pathologies: 'x' }, 404, 'reference_introuvable');
+    await refuse('era', 'POST', '/evaluations-fictives', { etablissement_id: E, reference: x.reference }, 400, 'evaluation_invalide');
+    await refuse('era', 'POST', '/evaluations-fictives', { ...corps, precautions: ['grippe'] }, 400, 'evaluation_invalide');
+    ev = await api('era', 'POST', '/evaluations-fictives', corps);
+    assert.strictEqual(ev.statut, 'a_valider'); assert.ok(ev.pathologies !== ev.symptomes, 'diagnostics et symptômes distincts');
+    const version = async () => (await api('era', 'GET', `/chsld/residents/${x.id}`)).resident.version;
+    await refuse('era', 'POST', `/chsld/residents/${x.id}/hospitalisation`, { hopital_id: L.B, identite_verifiee: true, version: await version(), evaluation_id: ev.id }, 409, 'evaluation_non_transmissible');
+    await api('era', 'POST', `/evaluations-fictives/${ev.id}/valider`);
+    await refuse('era', 'POST', `/evaluations-fictives/${ev.id}/valider`, null, 409, 'evaluation_deja_validee');
+    // Transmission : ni ressaisie, ni fuite dans les listes, les notifications ou le journal
+    co = await api('era', 'POST', `/chsld/residents/${x.id}/hospitalisation`, { hopital_id: L.B, identite_verifiee: true, version: await version(), evaluation_id: ev.id });
+    await refuse('a', 'GET', `/coordinations/${co.id}/evaluation?etablissement_id=${L.A}`, null, 404);
+    const lue = await api('b', 'GET', `/coordinations/${co.id}/evaluation?etablissement_id=${L.B}`);
+    assert.strictEqual(lue.pathologies, SECRET); assert.strictEqual(lue.symptomes, SYM);
+    assert.ok((await q(`SELECT 1 FROM evaluations_fictives_acces WHERE evaluation_id = $1 AND action LIKE 'consultation_transmise%'`, [ev.id])).length, 'consultation tracée');
+    assert.ok((await api('b', 'GET', `/coordinations?etablissement_id=${L.B}`)).find((c) => c.id === co.id).evaluation_transmise);
+    const fuites = JSON.stringify([await api('b', 'GET', `/liaison-chsld?etablissement_id=${L.B}`), await q(`SELECT message, vars FROM notifications ORDER BY id DESC LIMIT 200`), await q(`SELECT action, detail FROM journal ORDER BY id DESC LIMIT 200`), await q(`SELECT action, cible, detail FROM journal_admin ORDER BY id DESC LIMIT 200`), await api('era_entretien', 'GET', `/chsld/taches?etablissement_id=${E}`), await api('era_entretien', 'GET', `/nettoyage?etablissement_id=${E}`)]);
+    assert.ok(!fuites.includes('XQZ'), 'aucun texte clinique ailleurs');
+    // OG n'y a pas accès et ne pose aucun diagnostic
+    for (const [qui, etab] of [['era', E], ['b', L.B]]) for (const question of [`Quel est le diagnostic de ${x.reference} ?`, `Quelle chambre pour ${x.reference} selon sa pathologie ?`]) {
+      const r = await api(qui, 'POST', '/copilote/question', { etablissement_id: etab, question, langue: 'fr' });
+      assert.ok(!JSON.stringify(r).includes('XQZ'), question);
+    }
+    // Arrivée puis chambres : le tri informe, il ne choisit pas
+    let c2 = await api('b', 'POST', `/coordinations/${co.id}/action`, { etablissement_id: L.B, action: 'accepter', version: co.version });
+    c2 = await api('era', 'POST', `/coordinations/${co.id}/action`, { etablissement_id: E, action: 'confirmer_depart', version: c2.version });
+    c2 = await api('b', 'POST', `/coordinations/${co.id}/action`, { etablissement_id: L.B, action: 'confirmer_reception', version: c2.version });
+    const servi = async () => { const h = await api('b', 'GET', `/liaison-chsld/${co.id}/emplacements?etablissement_id=${L.B}`); for (const s of h.services) { const e = await api('b', 'GET', `/liaison-chsld/${co.id}/emplacements?etablissement_id=${L.B}&type_id=${s.id}`); if (e.lits.length > 1) return e; } return h; };
+    let em = await servi();
+    assert.ok(em.lits.length > 1); assert.ok(em.lits.every((l) => l.compatibilite === 'a_verifier' && l.justification === 'precautions_a_confirmer'), 'prescrites mais chambre non confirmée : à vérifier');
+    const [l1, l2] = em.lits;
+    const chs = await api('b', 'GET', `/chambres/precautions?etablissement_id=${L.B}`);
+    ch = chs.find((c) => c.numero === l1.chambre && c.unite === l1.unite);
+    await api('b', 'PUT', `/chambres/${ch.id}/precautions`, { precautions: ['contact'], version: ch.version });
+    em = await api('b', 'GET', `/liaison-chsld/${co.id}/emplacements?etablissement_id=${L.B}&type_id=${em.type_id}`);
+    assert.strictEqual(em.lits.find((l) => l.id === l1.id).justification, 'chambre_sous_precautions');
+    const v2 = (await api('b', 'GET', `/chambres/precautions?etablissement_id=${L.B}`)).find((c) => c.id === ch.id).version;
+    await api('b', 'PUT', `/chambres/${ch.id}/precautions`, { precautions: ['acces_interdit'], version: v2 });
+    em = await api('b', 'GET', `/liaison-chsld/${co.id}/emplacements?etablissement_id=${L.B}&type_id=${em.type_id}`);
+    assert.ok(!em.lits.some((l) => l.id === l1.id)); assert.strictEqual(em.indisponibles.find((l) => l.id === l1.id).justification, 'acces_restreint');
+    await refuse('b', 'POST', `/coordinations/${co.id}/action`, { etablissement_id: L.B, action: 'orienter', orientation: 'admission', patient_ref: 'P-71301', type_id: em.type_id, lit_id: l1.id, version_lit: l1.version, version: c2.version }, 409, 'chambre_acces_restreint');
+    assert.strictEqual((await q('SELECT orientation FROM coordinations WHERE id = $1', [co.id]))[0].orientation, null, 'aucune décision automatique');
+    const v3 = (await api('b', 'GET', `/chambres/precautions?etablissement_id=${L.B}`)).find((c) => c.id === ch.id).version;
+    await api('b', 'PUT', `/chambres/${ch.id}/precautions`, { precautions: [], version: v3 });
+    // Hors démo : la transmission reste illisible et les précautions fictives ne servent plus au tri
+    process.env.ARRIMO_ENV = 'pilote';
+    await refuse('b', 'GET', `/coordinations/${co.id}/evaluation?etablissement_id=${L.B}`, null, 403, 'clinique_demo_seulement');
+    assert.ok((await api('b', 'GET', `/liaison-chsld/${co.id}/emplacements?etablissement_id=${L.B}&type_id=${em.type_id}`)).lits.every((l) => l.compatibilite === 'compatible' || l.justification === 'chambre_sous_precautions'));
+    await refuse('era', 'POST', `/chsld/residents/${x.id}/hospitalisation`, { hopital_id: L.A, identite_verifiee: true, version: 1, evaluation_id: ev.id }, 409);
+    void l2;
+  } finally {
+    process.env.ARRIMO_ENV = avant;
+    // Fin du parcours pour ne pas gêner les tests suivants
+    if (co) { const f = (await q('SELECT version FROM coordinations WHERE id = $1', [co.id]))[0]; let r = await api('b', 'POST', `/coordinations/${co.id}/retour`, { retour_prevu_le: new Date(Date.now() + 3600000).toISOString() }); void f; await reintegrerApres(r, x); }
+  }
 });
 
 test('captures : formulaire SH (type puis modules), liste SH, écrans CHSLD réels', { timeout: 180000 }, async () => {

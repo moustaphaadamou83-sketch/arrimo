@@ -115,6 +115,21 @@
   }
   window.ArrimoChsldNouveauResident = formulaireNouveauResident;
 
+  /* Évaluations FICTIVES : démonstration seulement, personnel de soins et coordination. */
+  const peutEvaluer = () => etat.moi.demo && ['equipe_soins', 'coordonnateur'].includes(role());
+  const evalHTML = (e) => `<dl class="ch-eval">${[['pathologies', e.pathologies], ['symptomes', e.symptomes], ['besoins', e.besoins], ['contraintes', e.contraintes_hebergement], ['equipements', e.equipements]].filter(([, x]) => x).map(([k, x]) => `<dt>${C(`evaluation.${k}`)}</dt><dd>${esc(x)}</dd>`).join('')}${e.precautions?.length ? `<dt>${C('evaluation.precautions')}</dt><dd>${e.precautions.map((x) => esc(t(`nettoyage.p_${x}`))).join(', ')}</dd>` : ''}</dl>`;
+  async function panneauEvaluations(v, r) {
+    if (!peutEvaluer()) return;
+    const liste = await api('GET', `/evaluations-fictives?etablissement_id=${ctx()}&reference=${encodeURIComponent(r.reference)}`).catch(() => []);
+    v.insertAdjacentHTML('beforeend', `<section class="panneau-c" id="evaluations-fictives"><h3>${C('evaluation.titre')}</h3><p class="note">${C('evaluation.aide')}</p>
+      <div class="liste">${liste.map((e) => `<div class="item"><div>${pastille(e.statut === 'validee' ? 'recue' : 'envoyee', C(`evaluation.st_${e.statut}`))} <span class="note">${esc(dateHeure(e.cree_le))} · ${esc(e.auteur_nom || '')}</span>${evalHTML(e)}</div>${e.statut === 'a_valider' ? `<button class="btn" data-eval-valider="${e.id}">${C('evaluation.valider')}</button>` : ''}</div>`).join('') || `<p class="note">${C('evaluation.aucune')}</p>`}</div>
+      <form id="eval-form"><div class="champ"><label class="lbl" for="ev-pat">${C('evaluation.pathologies')}</label><textarea id="ev-pat" maxlength="1000"></textarea></div><div class="champ"><label class="lbl" for="ev-sym">${C('evaluation.symptomes')}</label><textarea id="ev-sym" maxlength="1000"></textarea></div>
+      <div class="champ"><label class="lbl" for="ev-bes">${C('evaluation.besoins')}</label><input id="ev-bes" maxlength="500"></div><div class="champ"><label class="lbl" for="ev-con">${C('evaluation.contraintes')}</label><input id="ev-con" maxlength="500"></div><div class="champ"><label class="lbl" for="ev-equ">${C('evaluation.equipements')}</label><input id="ev-equ" maxlength="500"></div>
+      <fieldset><legend class="lbl">${C('evaluation.precautions')}</legend>${['contact', 'gouttelettes', 'aerien'].map((x) => `<label class="case"><input type="checkbox" data-ev-prec="${x}"> ${esc(t(`nettoyage.p_${x}`))}</label>`).join(' ')}</fieldset>
+      <button class="btn pri" type="submit">${C('evaluation.ajouter')}</button></form></section>`);
+    $('#eval-form').onsubmit = (e) => { e.preventDefault(); agir(e.submitter, () => api('POST', '/evaluations-fictives', { etablissement_id: ctx(), reference: r.reference, pathologies: $('#ev-pat').value, symptomes: $('#ev-sym').value, besoins: $('#ev-bes').value, contraintes_hebergement: $('#ev-con').value, equipements: $('#ev-equ').value, precautions: [...document.querySelectorAll('[data-ev-prec]:checked')].map((x) => x.dataset.evPrec) }), t('chsld.actions.ok')); };
+    v.querySelectorAll('[data-eval-valider]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/evaluations-fictives/${b.dataset.evalValider}/valider`), t('chsld.actions.ok')); });
+  }
   async function ficheResident(id) {
     const v = $('#v-c-residents');
     let f; try { f = await api('GET', `/chsld/residents/${id}`); } catch (e) { etat.chResident = null; throw e; }
@@ -157,6 +172,7 @@
         <div class="panneau-c"><h3>${C('fiche.taches')}</h3>${f.taches.length ? `<ul class="liste-simple">${f.taches.map((x) => `<li>${C(`tache_type.${x.type}`)} · ${esc(x.titre)} · ${esc(t(`chsld.tache_statut.${x.statut}`))}</li>`).join('')}</ul>` : `<p class="note">${C('fiche.aucun')}</p>`}</div>
         <div class="panneau-c"><h3>${C('fiche.mouvements')}</h3>${f.mouvements.length ? `<ol class="ch-historique">${f.mouvements.map((m) => `<li><span class="note num">${esc(dateHeure(m.date))}</span> <b>${C(`mvt.${m.type}`)}</b>${m.de_lit || m.vers_lit ? ` · ${esc([m.de_lit, m.vers_lit].filter(Boolean).join(' → '))}` : ''}${m.autre_etablissement ? ` · ${esc(m.autre_etablissement)}` : ''}${m.detail ? `<div class="note">${esc(m.detail)}</div>` : ''}</li>`).join('')}</ol>` : `<p class="note">${C('fiche.aucun')}</p>`}</div>
       </div></div>`;
+    panneauEvaluations(v, r);
     $('#ch-retour').onclick = () => { etat.chResident = null; rafraichir(); };
     v.querySelectorAll('[data-ch-action]').forEach((b) => { b.onclick = () => actionResident(b.dataset.chAction, r, f); });
     if ($('#ch-modifier')) $('#ch-modifier').onclick = () => modifierIdentite(r);
@@ -247,10 +263,12 @@
         <fieldset class="ch-cases"><legend class="lbl">${C('depart.accessibilite')}</legend>${['fauteuil', 'deambulateur', 'leve_personne', 'lit_electrique', 'malentendant', 'malvoyant'].map((x) => `<label class="case"><input type="checkbox" data-co-acc="${x}"${(r.accessibilite || []).includes(x) ? ' checked' : ''}> ${esc(t(`chsld.acces.${x}`))}</label>`).join('')}</fieldset>
         <label class="case"><input type="checkbox" id="co-accompagnateur"> ${C('depart.accompagnateur')}</label>
         <p class="note">${C('depart.motif_note')}</p>` : '';
+      const evaluationsValidees = hosp && peutEvaluer() ? (await api('GET', `/evaluations-fictives?etablissement_id=${ctx()}&reference=${encodeURIComponent(r.reference)}`).catch(() => [])).filter((e) => e.statut === 'validee') : [];
       const ouvrirForm = modale(t(hosp ? 'chsld.actions.hospitalisation' : 'chsld.actions.transfert'), `${sel('co-dest', C(hosp ? 'actions.hopital' : 'actions.destination'), choix)}${champ('co-motif', C('actions.motif_admin'), '', 'maxlength="200"')}${formDepart}
+        ${hosp && evaluationsValidees.length ? `<label class="case"><input type="checkbox" id="co-eval" value="${evaluationsValidees[0].id}"> ${C('evaluation.transmettre')}</label>` : ''}
         ${hosp ? `<label class="case"><input type="checkbox" id="co-id"> ${C('actions.identite_verifiee')}</label>` : `<p class="note">${C('actions.non_garantie')}</p>`}`,
       [{ label: t('general.annuler') }, { label: t('general.confirmer'), pri: true, run: async () => (await agir(null, () => api('POST', `/chsld/residents/${r.id}/${a}`, hosp
-        ? { hopital_id: Number($('#co-dest').value), motif_admin: $('#co-motif').value, identite_verifiee: $('#co-id').checked, version: r.version, cle, urgence_declaree: $('#co-urgence').value, service_souhaite_id: Number($('#co-service').value) || null,
+        ? { ...($('#co-eval')?.checked ? { evaluation_id: Number($('#co-eval').value) } : {}), hopital_id: Number($('#co-dest').value), motif_admin: $('#co-motif').value, identite_verifiee: $('#co-id').checked, version: r.version, cle, urgence_declaree: $('#co-urgence').value, service_souhaite_id: Number($('#co-service').value) || null,
             infos_operationnelles: { accessibilite: [...document.querySelectorAll('[data-co-acc]:checked')].map((x) => x.dataset.coAcc), transport: $('#co-transport').value || null, accompagnateur: $('#co-accompagnateur').checked, langue: r.langue } }
         : { destination_id: Number($('#co-dest').value), motif_admin: $('#co-motif').value, version: r.version }), ok)) !== null || false }]);
       if (hosp) $('#co-dest').onchange = () => { $('#co-service-zone').innerHTML = sel('co-service', C('depart.service'), [['', C('depart.sans_preference')], ...servicesDe($('#co-dest').value)]); };
@@ -429,6 +447,7 @@
       <div class="note">${L('transmise_le', { date: dateHeure(c.cree_le) })} · ${L('derniere', { etape: libelleEtape(d.statut), date: dateHeure(d.date) })}</div>
       ${c.motif_admin ? `<div class="note">${L('motif')} : ${esc(c.motif_admin)}</div>` : ''}
       ${transmis(c)}
+      ${c.evaluation_transmise && peutEvaluer() ? `<div><button class="btn" type="button" data-li-eval="${c.id}">${C('evaluation.voir')}</button></div>` : ''}
       ${c.orientation ? `<div class="note">${L(`affiche_${c.orientation}`)}${c.service_retenu ? ` · ${esc(locale().startsWith('en') ? c.service_retenu_en || c.service_retenu : c.service_retenu)}` : ''}${c.admission?.lit ? ` · ${L('lit')} <b class="num">${esc(c.admission.lit)}</b>` : ''}${c.civiere ? ` · ${L('civiere')} <b class="num">${esc(c.civiere)}</b>` : ''}${c.admission ? ` · ${esc(t(`chsld.liaison.admission_${c.admission.statut}`))}` : ''}</div>` : ''}
       ${r ? chronoHTML(r.chronologie) : chronoHTML(c.chronologie)}
       ${r ? `<div class="note li-retour">${L('retour_vers', { chsld: esc(c.origine) })} · <b>${esc(t(`chsld.liaison.etape_${r.etape}`))}</b>${r.retour_prevu_le ? ` · ${C('coord.retour_le', { date: dateHeure(r.retour_prevu_le) })}` : ''} <span class="num">${esc(r.numero)}</span></div>` : ''}
@@ -452,6 +471,7 @@
   }
   function brancherLiaison(v) {
     const ok = t('chsld.actions.ok');
+    v.querySelectorAll('[data-li-eval]').forEach((b) => { b.onclick = () => agir(null, async () => { const e = await api('GET', `/coordinations/${b.dataset.liEval}/evaluation?etablissement_id=${ctx()}`); modale(C('evaluation.titre'), `<p class="note">${C('evaluation.aide')}</p>${evalHTML(e)}`, [{ label: t('general.fermer') }]); }); });
     v.querySelectorAll('[data-li]').forEach((b) => { b.onclick = async () => {
       const id = b.dataset.id, version = Number(b.dataset.version), a = b.dataset.li, numero = b.dataset.num;
       const action = (corps) => api('POST', `/coordinations/${id}/action`, { etablissement_id: ctx(), version, action: a, ...corps });
@@ -472,7 +492,7 @@
         const fiche = etat.liaisonFiches?.[id];
         const dejaCiviere = fiche?.orientation === 'urgence';
         const BES = ['isolement', 'pression_negative', 'ventilation', 'telemetrie'];
-        const optionsLit = () => [['', L('sans_lit')], ...em.lits.map((x) => [x.id, `${x.unite} · ${x.code} · ${C('residents.chambre')} ${x.chambre}`])];
+        const optionsLit = () => [['', L('sans_lit')], ...em.lits.map((x) => [x.id, `${x.unite} · ${x.code} · ${C('residents.chambre')} ${x.chambre}${x.compatibilite === 'a_verifier' ? ` · ${L(`justif_${x.justification}`)}` : ''}`])];
         modale(L('action_orienter'), `<p class="note">${L('orienter_aide')}</p>${transmis(fiche || {})}
           ${sel('li-orientation', L('orientation'), [['admission', L('orientation_admission')], ...(em.urgence_active && !dejaCiviere ? [['urgence', L('orientation_urgence')]] : [])])}
           ${dejaCiviere ? `<p class="note">${L('episode')} <span class="num">${esc(fiche.patient_ref_hopital)}</span></p>` : champ('li-ref', L('reference_hopital', { exemple: em.reference_exemple }), '', `maxlength="40" autocomplete="off" placeholder="${esc(em.reference_exemple)}"`)}

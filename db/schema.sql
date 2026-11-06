@@ -1105,3 +1105,14 @@ CREATE TABLE IF NOT EXISTS nettoyage_interventions (
   statut text NOT NULL CHECK (statut IN ('en_cours', 'controle_requis', 'validee', 'annulee')), agent_id int NOT NULL REFERENCES utilisateurs(id),
   debut_le timestamptz NOT NULL DEFAULT now(), fin_le timestamptz, controle_par int REFERENCES utilisateurs(id), controle_le timestamptz, version int NOT NULL DEFAULT 1);
 CREATE UNIQUE INDEX IF NOT EXISTS nettoyage_intervention_ouverte ON nettoyage_interventions (lit_id) WHERE statut IN ('en_cours', 'controle_requis');
+
+-- Pathologies et symptômes FICTIFS, en démonstration seulement (décision du 6 nov. 2026) : refus du serveur ailleurs.
+CREATE TABLE IF NOT EXISTS evaluations_fictives (
+  id serial PRIMARY KEY, etablissement_id int NOT NULL REFERENCES etablissements(id), reference text NOT NULL,
+  pathologies text, symptomes text, besoins text, precautions text[] NOT NULL DEFAULT '{}', contraintes_hebergement text, equipements text,
+  statut text NOT NULL DEFAULT 'a_valider' CHECK (statut IN ('a_valider', 'validee')), auteur int REFERENCES utilisateurs(id), cree_le timestamptz NOT NULL DEFAULT now(),
+  valide_par int REFERENCES utilisateurs(id), valide_le timestamptz);
+CREATE INDEX IF NOT EXISTS evaluations_fictives_ref ON evaluations_fictives (etablissement_id, reference);
+CREATE TABLE IF NOT EXISTS evaluations_fictives_acces (
+  id serial PRIMARY KEY, evaluation_id int NOT NULL REFERENCES evaluations_fictives(id), utilisateur_id int REFERENCES utilisateurs(id), action text NOT NULL, le timestamptz NOT NULL DEFAULT now());
+ALTER TABLE coordinations ADD COLUMN IF NOT EXISTS evaluation_transmise_id int REFERENCES evaluations_fictives(id);
