@@ -997,6 +997,30 @@ test('phase 2 — portail des proches : activé depuis SH, invitation, accès li
   sessions.marie = (await api(null, 'POST', '/proches/connexion', { courriel: 'marie.dupont@example.invalid', mot_de_passe: MDP })).token;
   const vue = await api('marie', 'GET', '/proches/moi');
   assert.strictEqual(vue.situation.statut, 'present'); assert.ok(vue.situation.mis_a_jour_le); assert.ok(vue.nouveaux_messages >= 1);
+  // Visites et activités côté proche ; PWA à trois formats d'écran
+  await poolPilote.query(`UPDATE resident_contacts SET autorisations = (SELECT to_jsonb(array_agg(DISTINCT x)) FROM jsonb_array_elements_text(to_jsonb(autorisations) || '["rendez_vous"]') x) WHERE id = $1`, [fille.id]).catch(async () => { await poolPilote.query(`UPDATE resident_contacts SET autorisations = array_append(array_remove(autorisations, 'rendez_vous'), 'rendez_vous') WHERE id = $1`, [fille.id]); });
+  await refuse('marie', 'POST', '/proches/visites', { souhaitee_le: '2000-01-01T00:00:00Z' }, 400, 'date_invalide');
+  const visite = await api('marie', 'POST', '/proches/visites', { souhaitee_le: new Date(Date.now() + 86400000).toISOString() });
+  assert.strictEqual(visite.statut, 'demandee');
+  await api('era', 'POST', '/chsld/activites', { etablissement_id: ids.era, titre: 'Atelier du portail', debut_le: new Date(Date.now() + 172800000).toISOString() });
+  await refuse('stl', 'POST', `/chsld/visites/${visite.id}/reponse`, { statut: 'acceptee' }, 403);
+  assert.strictEqual((await api('era', 'POST', `/chsld/visites/${visite.id}/reponse`, { statut: 'acceptee' })).statut, 'acceptee');
+  await refuse('era', 'POST', `/chsld/visites/${visite.id}/reponse`, { statut: 'refusee' }, 409, 'visite_deja_traitee');
+  const vue2 = await api('marie', 'GET', '/proches/moi');
+  assert.strictEqual(vue2.visites.find((x) => x.id === visite.id).statut, 'acceptee'); assert.ok(vue2.activites.some((x) => x.titre === 'Atelier du portail'));
+  assert.ok(!/diagnostic|pathologie|symptome|\blit\b|chambre/i.test(JSON.stringify(vue2.situation || {})), 'aucun renseignement clinique ni chambre');
+  const mani = await fetch(`${basePilote}/proches.webmanifest`); assert.strictEqual(mani.status, 200); const manifeste = await mani.json();
+  assert.strictEqual(manifeste.start_url, '/proches'); for (const ic of manifeste.icons) assert.strictEqual((await fetch(basePilote + ic.src)).status, 200);
+  { const { chromium } = require('playwright'); const nav = await chromium.launch();
+    try { for (const [w, h] of [[1280, 800], [820, 1180], [390, 844]]) {
+      const ctx = await nav.newContext({ viewport: { width: w, height: h } }); const pg = await ctx.newPage(); const err = []; pg.on('pageerror', (e) => err.push(String(e))); pg.on('console', (m) => { if (m.type() === 'error') err.push(m.text()); });
+      await pg.addInitScript((j) => { sessionStorage.setItem('arrimo-proche', j); }, sessions.marie);
+      await pg.goto(`${basePilote}/proches`); await pg.waitForSelector('#visites'); await pg.waitForSelector('#activites');
+      assert.ok(await pg.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `portail ${w} sans défilement horizontal`);
+      const portee = await pg.evaluate(async () => (await navigator.serviceWorker.ready).scope); assert.ok(portee.endsWith('/proches'), portee);
+      await pg.fill('#vis', new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 16)); await pg.click('#vis-ok'); await pg.waitForFunction(() => document.querySelectorAll('#visites p').length > 1);
+      assert.deepStrictEqual(err, []); await ctx.close();
+    } } finally { await nav.close(); } }
   // Désactivation puis réactivation depuis SH (configuration opérationnelle publiée vers l'environnement)
   const cfg0 = await sh('GET', `/hopitaux/${era.hopital_id}/configuration-operationnelle`);
   assert.ok(cfg0.modules_modifiables.includes('portail_proches'));
@@ -1532,6 +1556,50 @@ test('évaluations fictives : démo seulement, droits, transmission à l’hôpi
     // Fin du parcours pour ne pas gêner les tests suivants
     if (co) { const f = (await q('SELECT version FROM coordinations WHERE id = $1', [co.id]))[0]; let r = await api('b', 'POST', `/coordinations/${co.id}/retour`, { retour_prevu_le: new Date(Date.now() + 3600000).toISOString() }); void f; await reintegrerApres(r, x); }
   }
+});
+
+test('écrans : transfert d’hôpital au bouton, nettoyage sous précautions, registre, évaluation fictive, trois formats', { timeout: 240000 }, async () => {
+  const { chromium } = require('playwright'); const nav = await chromium.launch(); const E = ids.era; const err = [];
+  const avant = process.env.ARRIMO_ENV; process.env.ARRIMO_ENV = 'demo';
+  const ouvrir = async (qui, etab, vp) => {
+    const ctx = await nav.newContext({ viewport: vp }); const pg = await ctx.newPage(); pg.on('pageerror', (e) => err.push(`${qui} ${e}`));
+    await pg.addInitScript(({ jeton, id }) => { localStorage.setItem('arrimo-token', jeton); localStorage.setItem('arrimo-ctx', String(id)); localStorage.setItem('arrimo-langue', 'fr'); }, { jeton: sessions[qui], id: etab });
+    await pg.goto(basePilote); await pg.waitForSelector('body[data-pret="1"]');
+    if (await pg.locator('#b-premiers-pas-ok').isVisible().catch(() => false)) await pg.click('#b-premiers-pas-ok');
+    return pg;
+  };
+  const sansDebord = (pg, nom) => pg.evaluate(() => document.documentElement.scrollWidth - innerWidth).then((d) => assert.ok(d <= 1, `${nom} : ${d}px de trop`));
+  const aller = async (pg, v, sel) => { await pg.evaluate((x) => document.querySelector(`#onglets button[data-v="${x}"]`).click(), v); await pg.waitForSelector(sel); };
+  try {
+    for (const [nom, vp] of [['ordinateur', { width: 1366, height: 900 }], ['tablette', { width: 820, height: 1180 }], ['telephone', { width: 390, height: 844 }]]) {
+      const era = await ouvrir('era', E, vp); await aller(era, 'c-taches', '#registre'); await era.waitForSelector('#visites'); await era.waitForSelector('#activites'); await sansDebord(era, `${nom} registre`);
+      await aller(era, 'c-accueil', '#ch-accueil-sup'); await sansDebord(era, `${nom} accueil`);
+      const b = await ouvrir('b', L.B, vp); await aller(b, 'nettoyage', '#net-config'); await b.evaluate(() => { document.querySelector('#net-config').open = true; }); await b.waitForSelector('#net-proto'); await sansDebord(b, `${nom} nettoyage`);
+      await aller(b, 'liaison', '.li-onglets'); await sansDebord(b, `${nom} liaison`);
+      await era.context().close(); await b.context().close();
+    }
+    // Évaluation fictive à l'écran (coordination du CHSLD, démo)
+    const x = await residentPresent('era', E, [p.dupont]);
+    const pg = await ouvrir('era', E, { width: 1366, height: 900 }); await aller(pg, 'c-residents', '#v-c-residents table');
+    await pg.click(`[data-res="${x.id}"]`); await pg.waitForSelector('#evaluations-fictives');
+    await pg.fill('#ev-pat', 'Pathologie fictive écran'); await pg.fill('#ev-sym', 'Symptome fictif écran'); await pg.click('#eval-form button[type="submit"]');
+    await pg.waitForSelector('[data-eval-valider]'); assert.match(await pg.textContent('#evaluations-fictives'), /Pathologie fictive écran/);
+    await pg.click('[data-eval-valider]'); await pg.waitForFunction(() => !document.querySelector('[data-eval-valider]'));
+    // Transfert au bouton : hospitalisation puis clic à l'hôpital
+    const act = (qui, etab, id, corps) => api(qui, 'POST', `/coordinations/${id}/action`, { etablissement_id: etab, ...corps });
+    const version = (await api('era', 'GET', `/chsld/residents/${x.id}`)).resident.version;
+    let co = await api('era', 'POST', `/chsld/residents/${x.id}/hospitalisation`, { hopital_id: L.B, identite_verifiee: true, version });
+    co = await act('b', L.B, co.id, { action: 'accepter', version: co.version }); co = await act('era', E, co.id, { action: 'confirmer_depart', version: co.version }); co = await act('b', L.B, co.id, { action: 'confirmer_reception', version: co.version });
+    const hb = await ouvrir('b', L.B, { width: 1366, height: 900 }); await aller(hb, 'liaison', '.li-onglets'); await hb.click('[data-li-onglet="a_accueillir"]');
+    await hb.click(`[data-coordination="${co.id}"] [data-li="transferer"]`); await hb.waitForSelector('#li-hopital');
+    await hb.selectOption('#li-hopital', String(L.A)); await hb.fill('#li-motif', 'Service non offert (fictif)'); await hb.click('#modale button.pri');
+    await hb.click('[data-li-onglet="transferts"]'); await hb.waitForSelector('[data-li="annuler"]');
+    const t = (await poolPilote.query(`SELECT id, version, destination_id FROM coordinations WHERE liee_id = $1 AND type = 'transfert_hopital'`, [co.id])).rows[0];
+    assert.strictEqual(t.destination_id, L.A);
+    await hb.click(`[data-coordination="${t.id}"] [data-li="annuler"]`); await hb.waitForFunction((id) => !document.querySelector(`[data-coordination="${id}"]`), t.id);
+    const r = await api('b', 'POST', `/coordinations/${co.id}/retour`, { retour_prevu_le: new Date(Date.now() + 3600000).toISOString() }); await reintegrerApres(r, x);
+    assert.deepStrictEqual(err, []);
+  } finally { process.env.ARRIMO_ENV = avant; await nav.close(); }
 });
 
 test('registre, import vérifié, tableau de bord, visites, activités, OG : droits, erreurs, isolation', { timeout: 120000 }, async () => {
