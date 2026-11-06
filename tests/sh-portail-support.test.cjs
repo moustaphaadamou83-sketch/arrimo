@@ -14,7 +14,7 @@ test('portail client : serveurs hospitalier et SH, isolation, messages publics e
   await pool.query(fs.readFileSync(require.resolve('../db/sh-schema.sql'),'utf8'));
   const cle=crypto.randomBytes(32).toString('hex'),env={SH_SUPPORT_PILOTE_CLE:cle,SH_MFA_ENCRYPTION_KEY:Buffer.alloc(32,6).toString('base64'),SH_DOCUMENTS_DIR:require('node:os').tmpdir()+'/arrimo-pj-'+crypto.randomUUID()};
   t.after(()=>fs.promises.rm(env.SH_DOCUMENTS_DIR,{recursive:true,force:true}));
-  assert.equal((await require('../src/sh/migrations').migrerSh(pool,env)).version,38);
+  assert.equal((await require('../src/sh/migrations').migrerSh(pool,env)).version,39);
   const us=(await pool.query("INSERT INTO sh_utilisateurs(email,nom,role,mot_de_passe_hash,mdp_temporaire,totp_actif) VALUES('support.admin@example.invalid','Support Test','administration','sans-connexion',false,true) RETURNING id")).rows[0];
   const jetonSH=crypto.randomBytes(32).toString('hex');await pool.query("INSERT INTO sh_sessions(token,token_hache,utilisateur_id,expire_le) VALUES($1,true,$2,now()+interval '1 hour')",[empreinte(jetonSH),us.id]);
   const sh=await demarrerServeur(require('../src/sh/app').creerAppSh(pool,{env}));t.after(()=>new Promise(r=>sh.close(r)));

@@ -213,6 +213,7 @@ function majBoutonTheme(m){const b=$('#b-theme');if(!b)return;const l=`${traduir
 function ouvrir(token) { etat.token = token; ecrire('sh-token', token); demarrer(); }
 async function demarrer() {
   try { etat.moi = await api('GET', '/moi'); } catch { deconnecter(); return; }
+  for (const e of etat.moi.environnements || []) ENVS[e.code] = e.nom;
   const u = etat.moi.utilisateur;
   appliquerLangue(u.langue || langueUI);
   window.ArrimoApparence?.definir(u.apparence || 'automatique'); majBoutonTheme(u.apparence || 'automatique');
@@ -536,12 +537,18 @@ async function vueHopital(v) {
     gl.onclick = async () => {
       gl.disabled=true;
       try{
-      const profil=await choixProfilProduction(h);
+      const productions=h.golive.productions||[];
+      let cibleProd=productions[0]?.code;
+      if(productions.length>1){
+        cibleProd=await choisirProduction(productions);
+        if(!cibleProd)return;
+      }
+      const profil=await choixProfilProduction(h,cibleProd);
       modale(`Go-live de ${h.nom}`, `<p>La structure est prévalidée avant le transfert. Les comptes reçoivent des invitations individuelles à usage unique.</p>
       <p>Aucune donnée de test ne passe en production : ni patients, ni mouvements, ni journal. L’établissement de production est créé inactif ; vous l’activerez ensuite.</p>${profil.html}`,
     [{ label: 'Annuler' }, { label: 'Passer en production', pri: true, run: async () => {
       try {
-        const choix=profil.lire();
+        const choix={...profil.lire(),cible:cibleProd};
         const controle = await api('POST', `/hopitaux/${h.id}/golive/preflight`,choix);
         if (!controle.possible) { toast(`Go-live bloqué : ${controle.bloqueurs.join(', ')}`, true); return false; }
         await api('POST', `/hopitaux/${h.id}/golive`,choix);
@@ -558,7 +565,7 @@ async function vueHopital(v) {
 
 function blocGolive(h) {
   if (h.golive_le) return `<p>Passé en production le ${esc(quand(h.golive_le))} par ${esc(h.golive_par)}.</p><p class="note">Structure importée depuis la recette et comptes invités par lien individuel. Les données de test sont restées en recette.</p>`;
-  const raison = !h.golive.production_reliee ? 'La production n’est pas encore reliée à la console (serveur au Canada à installer).'
+  const raison = !h.golive.production_reliee ? 'La production n’est pas encore reliée à la console.'
     : !h.relie ? 'Créez d’abord l’établissement dans la recette.' : h.manquants.length ? 'Toutes les étapes avant le go-live doivent être cochées.' : '';
   return `<p>Prévalide puis importe en production la structure et les comptes validés en recette. Les comptes reçoivent un lien individuel à usage unique. Aucune donnée de test ne passe.</p>
     ${raison ? `<p class="note">${esc(raison)}</p>` : ''}

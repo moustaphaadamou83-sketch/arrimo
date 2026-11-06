@@ -735,7 +735,8 @@ test('console SH : première connexion, hôpital, implantation, formation, go-li
   const poolProd = new Pool({ connectionString: URL_TEST, options: '-c search_path=prod_ui' });
   const serveurProd = await demarrerServeur(creerApp(poolProd));
   const env = (e) => { process.env.ARRIMO_ENV = e; };   // les deux instances partagent ce processus de test
-  const serveurSh = await demarrerServeur(creerAppSh(pool, { env: {
+  let envSh;
+  const serveurSh = await demarrerServeur(creerAppSh(pool, { env: envSh = {
     SH_PUBLIC_URL: process.env.SH_PUBLIC_URL, SH_MFA_ENCRYPTION_KEY: process.env.SH_MFA_ENCRYPTION_KEY,
     SH_ENV_RECETTE_URL: base, SH_ENV_RECETTE_CLE: process.env.SH_API_KEY, SH_ENV_RECETTE_PUBLIC: 'https://recette.arrimo.exemple',
     SH_ENV_PRODUCTION_URL: `http://127.0.0.1:${serveurProd.address().port}`, SH_ENV_PRODUCTION_CLE: process.env.SH_API_KEY, SH_ENV_PRODUCTION_PUBLIC: 'https://arrimo.exemple',
@@ -869,6 +870,7 @@ test('console SH : première connexion, hôpital, implantation, formation, go-li
       await page.locator('#formation').scrollIntoViewIfNeeded();
       await verifier(page, L, 'sh-06-formation');
 
+      Object.assign(envSh, { SH_PRODUCTIONS: 'production_xx:Production fictive', SH_ENV_PRODUCTION_XX_URL: 'https://xx.example.invalid', SH_ENV_PRODUCTION_XX_CLE: 'cle-production-xx' });
       // Liste de vérification : le reste des étapes avant le go-live
       for (let rang = 1; rang <= 5; rang += 1) {
         for (;;) {
@@ -885,10 +887,17 @@ test('console SH : première connexion, hôpital, implantation, formation, go-li
       env('production');
       await page.waitForSelector('#b-golive:not([disabled])');
       await page.click('#b-golive');
-      await page.waitForSelector('#modale:not([hidden])');
+      await page.waitForSelector('#production-visee');   // deux productions reliées : aucun choix implicite
+      assert.deepStrictEqual(await page.locator('#production-visee option').allTextContents(), ['Choisir', 'Production', 'Production fictive']);
+      await page.click('#modale .btn.pri');
+      await page.waitForSelector('#production-visee');   // refusé tant que rien n'est choisi
+      await page.selectOption('#production-visee', 'production');
+      await page.click('#modale .btn.pri');
+      await page.waitForSelector('#profil-production');
       if (i === 0) await verifier(page, L, 'sh-07-golive-confirmer');
       await rendu(() => page.click('#modale .btn.pri'));
       await toast(page, 'Go-live fait').catch(async (e) => { throw new Error(`Go-live: ${await page.locator('#toasts').allTextContents().catch(()=>[])} · ${e.message}`); });
+      for (const k of ['SH_PRODUCTIONS', 'SH_ENV_PRODUCTION_XX_URL', 'SH_ENV_PRODUCTION_XX_CLE']) delete envSh[k];
       const prod = (await poolProd.query(`SELECT e.module_actif, count(l.*)::int AS lits, count(l.*) FILTER (WHERE l.patient_ref IS NOT NULL)::int AS occupes
         FROM etablissements e LEFT JOIN lits l ON l.etablissement_id = e.id WHERE e.code = 'HOP-A' GROUP BY e.id`)).rows[0];
       assert.deepStrictEqual(prod, { module_actif: false, lits: 4, occupes: 0 }, 'production : structure seulement, inactive');

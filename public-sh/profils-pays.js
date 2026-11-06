@@ -1,5 +1,5 @@
-async function choixProfilProduction(h){
-  const profils=await api('GET',`/hopitaux/${h.id}/golive/profils-pays`);
+async function choixProfilProduction(h,cible){
+  const profils=await api('GET',`/hopitaux/${h.id}/golive/profils-pays${cible?`?cible=${encodeURIComponent(cible)}`:''}`);
   if(!profils.length)throw new Error('Aucun profil hospitalier compatible avec ce pays n’est configuré.');
   return {
     html:`<label for="profil-production">Profil hospitalier de production</label><select id="profil-production">${profils.length>1?'<option value="">Choisir</option>':''}${profils.map(p=>`<option value="${esc(p.id)}">${esc(p.nom)} (${esc(p.code)})</option>`).join('')}</select>`,
@@ -9,6 +9,14 @@ async function choixProfilProduction(h){
       return {config_id:id};
     }
   };
+}
+
+/** Plusieurs productions reliées : le choix du pays est toujours explicite. */
+function choisirProduction(productions){
+  return new Promise((resoudre)=>{
+    modale('Production visée',`<label for="production-visee">Dans quelle production passer cet établissement ?</label><select id="production-visee"><option value="">Choisir</option>${productions.map(p=>`<option value="${esc(p.code)}">${esc(p.nom)}</option>`).join('')}</select>`,
+      [{label:'Annuler',run:()=>{resoudre(null);return true;}},{label:'Continuer',pri:true,run:()=>{const v=$('#production-visee').value;if(!v){toast('Choisissez la production.',true);return false;}resoudre(v);return true;}}]);
+  });
 }
 
 async function relierHopitalAvecProfil(h,bouton){

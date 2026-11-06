@@ -1394,6 +1394,16 @@ test('lien SH ↔ environnements : HTTPS obligatoire hors de la machine, clé ja
     assert.throws(() => avec(u), (e) => e.code === 'cible_non_https', u);
   }
   for (const u of ['https://arrimo.example.invalid', 'http://127.0.0.1:3010', 'http://localhost:3010', 'http://[::1]:3010']) assert.strictEqual(avec(u).length, 1, u);
+  // Productions par pays : déclarées par réglage, isolées, écriture contrôlée
+  const { nomsEnvironnements } = require('../src/sh/cibles');
+  const x = { SH_PRODUCTIONS: 'production_xx:Pays X', SH_ENV_PRODUCTION_XX_URL: 'https://x.example.invalid', SH_ENV_PRODUCTION_XX_CLE: 'cle-x', SH_ENV_DEMO_URL: 'http://127.0.0.1:3010', SH_ENV_DEMO_CLE: 'cle-d' };
+  assert.deepStrictEqual(cibles(x).map((c) => [c.code, c.nom]), [['demo', 'Démonstration'], ['production_xx', 'Pays X']]);
+  for (const v of ['production_xxx:N', 'autre:N', 'production_xx', 'production:N', 'production_XX:N', 'production_xx:N,production_xx:M']) {
+    assert.throws(() => nomsEnvironnements({ SH_PRODUCTIONS: v }), (e) => e.code === 'productions_invalides', v);
+  }
+  assert.throws(() => cibles({ ...x, SH_ENV_PRODUCTION_XX_CLE: 'cle-d' }), (e) => e.code === 'production_non_isolee');
+  assert.throws(() => cibles({ ...x, SH_ENV_PRODUCTION_XX_URL: 'http://127.0.0.1:3010', SH_ENV_PRODUCTION_XX_CLE: 'cle-x' }), (e) => e.code === 'production_non_isolee');
+  assert.throws(() => cibles({ ...x, SH_ENV_PRODUCTION_XX_URL: 'http://x.example.invalid' }), (e) => e.code === 'cible_non_https');
   const http = require('node:http');
   const recues = [];
   const piege = http.createServer((req, res) => { recues.push(req.headers['x-sh-key']); res.end('{}'); });

@@ -35,6 +35,7 @@ let pool; let poolProd; let poolPilote; let serveur; let serveurProd; let serveu
 const courriels = [];
 const jetons = {};
 
+let envSh;
 const enEnv = (e) => { process.env.ARRIMO_ENV = e; };
 async function appel(jeton, methode, chemin, corps, { brut = false } = {}) {
   const r = await fetch(`${baseSh}/api${chemin}`, { method: methode,
@@ -95,7 +96,7 @@ test.before(async () => {
   await viderBaseSh(pool);
   await premierCompteSh(pool, 'admin.erp@sh.exemple', 'Administration fictive');
   await invitations.consommer(pool, { jeton: dernierJeton(), nouveau: MDP }, process.env);
-  serveurSh = await demarrerServeur(creerAppSh(pool, { env: {
+  serveurSh = await demarrerServeur(creerAppSh(pool, { env: envSh = {
     SH_PUBLIC_URL: 'https://sh.test.invalid', SH_MFA_ENCRYPTION_KEY: CLE_MFA, SH_DOCUMENTS_DIR: dossierDocs,
     SH_ENV_RECETTE_URL: base, SH_ENV_RECETTE_CLE: process.env.SH_API_KEY, SH_ENV_RECETTE_PUBLIC: 'https://recette.arrimo.exemple',
     SH_ENV_PRODUCTION_URL: baseProd, SH_ENV_PRODUCTION_CLE: process.env.SH_API_KEY, SH_ENV_PRODUCTION_PUBLIC: 'https://arrimo.exemple',
@@ -744,7 +745,24 @@ test('Pilote Hôpital Test : client, équipe, structure, invitations, formation,
     await page.click('#og-envoyer');assert.ok((await(await reponse).json()).reponse);
     await page.waitForFunction(()=>window.__paroles.length>0);
   }finally{await navigateur.close();}
-  const pre=await ok('admin','POST',`/hopitaux/${h.id}/golive/preflight`);assert.strictEqual(pre.possible,true,JSON.stringify(pre.bloqueurs));
+  // Deuxième production déclarée par simple réglage : le choix est explicite et la clé de ce pays part vers son adresse.
+  const CIBLE={cible:'production_xx'},urlXx=baseProd.replace('127.0.0.1','localhost'),clesXx=[],appelsProdH=[];
+  Object.assign(envSh,{SH_PRODUCTIONS:'production_xx:Production fictive',SH_ENV_PRODUCTION_XX_URL:urlXx,SH_ENV_PRODUCTION_XX_CLE:'cle-production-xx',SH_ENV_PRODUCTION_XX_PUBLIC:'https://xx.exemple'});
+  const fetchReel=global.fetch;
+  global.fetch=async(url,options)=>{
+    const u=String(url);
+    if(u.startsWith(urlXx)){clesXx.push(options?.headers?.['X-SH-Key']);return fetchReel(u.replace(urlXx,baseProd),{...options,headers:{...options.headers,'X-SH-Key':process.env.SH_API_KEY}});}
+    if(u.startsWith(baseProd)&&options?.headers?.['X-SH-Key'])appelsProdH.push(u);
+    return fetchReel(url,options);
+  };
+  t.after(()=>{global.fetch=fetchReel;for(const k of ['SH_PRODUCTIONS','SH_ENV_PRODUCTION_XX_URL','SH_ENV_PRODUCTION_XX_CLE','SH_ENV_PRODUCTION_XX_PUBLIC'])delete envSh[k];});
+  assert.deepStrictEqual((await ok('admin','GET',`/hopitaux/${h.id}`)).golive.productions.map(x=>x.code),['production','production_xx']);
+  const sansChoix=await ok('admin','POST',`/hopitaux/${h.id}/golive/preflight`);
+  assert.ok(sansChoix.bloqueurs.includes('production_a_choisir'),JSON.stringify(sansChoix.bloqueurs));
+  assert.strictEqual(await statut('admin','POST',`/hopitaux/${h.id}/golive`),409);
+  assert.strictEqual(await statut('admin','POST',`/hopitaux/${h.id}/golive/preflight`,{cible:'production_zz'}),400);
+  assert.strictEqual(await statut('admin','POST',`/hopitaux/${h.id}/golive`,{cible:'recette'}),400);
+  const pre=await ok('admin','POST',`/hopitaux/${h.id}/golive/preflight`,CIBLE);assert.strictEqual(pre.possible,true,JSON.stringify(pre.bloqueurs));
   enEnv('production');
   // Bloquer le premier transfert après sa prise d'opération, puis changer l'empreinte
   // source : le second doit être refusé même avec une autre configuration.
@@ -752,16 +770,16 @@ test('Pilote Hôpital Test : client, équipe, structure, invitations, formation,
   let liberer,signaler;
   const barriere=new Promise(r=>{liberer=r;}),entree=new Promise(r=>{signaler=r;});
   global.fetch=async(url,options)=>{
-    if(String(url)===baseProd+'/api/sh/etablissements'&&options?.method==='POST'&&JSON.parse(options.body).code==='PILOTE-TEST'){
+    if(String(url)===urlXx+'/api/sh/etablissements'&&options?.method==='POST'&&JSON.parse(options.body).code==='PILOTE-TEST'){
       signaler();await barriere;
     }
     return fetchAvant(url,options);
   };
-  const premier=appel(jetons.admin,'POST',`/hopitaux/${h.id}/golive`);
+  const premier=appel(jetons.admin,'POST',`/hopitaux/${h.id}/golive`,CIBLE);
   try{
     await Promise.race([entree,new Promise((_,rej)=>{const timer=setTimeout(()=>rej(new Error('Go Live non démarré')),10000);timer.unref();})]);
     await poolPilote.query("UPDATE etablissements SET modules=jsonb_set(modules,'{nsa}','true') WHERE id=$1",[etab.id]);
-    const second=await appel(jetons.admin,'POST',`/hopitaux/${h.id}/golive`);
+    const second=await appel(jetons.admin,'POST',`/hopitaux/${h.id}/golive`,CIBLE);
     assert.strictEqual(second.statut,409,JSON.stringify(second.corps));
     assert.strictEqual((await pool.query("SELECT count(*)::int n FROM sh_golive_operations WHERE hopital_id=$1 AND statut='en_cours'",[h.id])).rows[0].n,1);
   }finally{
@@ -769,9 +787,15 @@ test('Pilote Hôpital Test : client, équipe, structure, invitations, formation,
     liberer();global.fetch=fetchAvant;
   }
   const termine=await premier;assert.strictEqual(termine.statut,200,JSON.stringify(termine.corps));
+  assert.strictEqual((await pool.query('SELECT environnement FROM hopitaux WHERE id=$1',[h.id])).rows[0].environnement,'production_xx');
+  assert.deepStrictEqual((await pool.query('SELECT cible FROM sh_golive_operations WHERE hopital_id=$1',[h.id])).rows.map(o=>o.cible),['production_xx']);
+  assert.ok(clesXx.length>3&&clesXx.every(c=>c==='cle-production-xx'),'Seule la clé de ce pays part vers sa production.');
+  assert.deepStrictEqual(appelsProdH.filter(u=>u.includes('PILOTE-TEST')),[],'L’autre production ne reçoit rien.');
+  await assert.rejects(pool.query("UPDATE hopitaux SET environnement='production_xxx' WHERE id=$1",[h.id]),/hopitaux_environnement_check/);
+  await assert.rejects(pool.query("UPDATE hopitaux SET environnement='autre' WHERE id=$1",[h.id]),/hopitaux_environnement_check/);
   await pool.query("UPDATE hopitaux SET environnement='pilote' WHERE id=$1",[h.id]);
   try{
-    assert.strictEqual(await statut('admin','POST',`/hopitaux/${h.id}/golive`),409,'Une opération achevée ne doit pas être réouverte sur une ancienne source.');
+    assert.strictEqual(await statut('admin','POST',`/hopitaux/${h.id}/golive`,CIBLE),409,'Une opération achevée ne doit pas être réouverte sur une ancienne source.');
     assert.deepStrictEqual((await pool.query('SELECT statut FROM sh_golive_operations WHERE hopital_id=$1',[h.id])).rows.map(o=>o.statut),['termine']);
   }finally{await pool.query("UPDATE hopitaux SET environnement='production' WHERE id=$1",[h.id]);}
   const prod=(await poolProd.query("SELECT id,module_actif,modules FROM etablissements WHERE code='PILOTE-TEST'")).rows[0];

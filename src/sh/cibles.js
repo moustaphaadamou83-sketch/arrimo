@@ -4,11 +4,29 @@
  *   SH_ENV_DEMO_URL=http://127.0.0.1:3010        SH_ENV_DEMO_CLE=...        SH_ENV_DEMO_PUBLIC=https://arrimo.senseafri.com
  *   SH_ENV_RECETTE_URL=http://127.0.0.1:3011     SH_ENV_RECETTE_CLE=...     SH_ENV_RECETTE_PUBLIC=https://recette.arrimo.senseafri.com
  *   SH_ENV_PRODUCTION_URL=https://...             SH_ENV_PRODUCTION_CLE=...  SH_ENV_PRODUCTION_PUBLIC=https://arrimo.ca
+ * Une production par pays, sans écrire de code (chacune a son URL et sa clé, propres) :
+ *   SH_PRODUCTIONS=production_xx:Production Pays X,production_yy:Production Pays Y
+ *   SH_ENV_PRODUCTION_XX_URL=https://...          SH_ENV_PRODUCTION_XX_CLE=...  SH_ENV_PRODUCTION_XX_PUBLIC=https://...
  */
 const NOMS = { demo: 'Démonstration', demo_abc:'Démonstration ABC', recette: 'Recette', pilote:'Pilote', production: 'Production' };
 
 class ErreurCible extends Error {
   constructor(statut, message, code) { super(message); this.statut = statut; this.code = code; }
+}
+
+const estCodeProduction = (code) => typeof code === 'string' && /^production(_[a-z]{2})?$/.test(code);
+
+/** Tous les environnements connus : la liste de base et les productions déclarées dans SH_PRODUCTIONS. */
+function nomsEnvironnements(env = process.env) {
+  const noms = { ...NOMS };
+  for (const entree of String(env.SH_PRODUCTIONS || '').split(',').map((x) => x.trim()).filter(Boolean)) {
+    const i = entree.indexOf(':'); const code = i < 0 ? entree : entree.slice(0, i).trim(); const nom = i < 0 ? '' : entree.slice(i + 1).trim();
+    if (!/^production_[a-z]{2}$/.test(code) || !nom || nom.length > 60 || Object.hasOwn(noms, code)) {
+      throw new ErreurCible(503, `SH_PRODUCTIONS : entrée invalide « ${entree.slice(0, 40)} ». Format : production_xx:Nom.`, 'productions_invalides');
+    }
+    noms[code] = nom;
+  }
+  return noms;
 }
 
 /** La clé de service ne circule qu'en HTTPS ; HTTP est toléré uniquement vers la machine elle-même. */
@@ -17,16 +35,23 @@ function exigerAdresseSure(code, adresse) {
   try { u = new URL(adresse); } catch { /* adresse illisible : refusée ci-dessous */ }
   const locale = u && ['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname);
   if (!u || !(u.protocol === 'https:' || (u.protocol === 'http:' && locale))) {
-    throw new ErreurCible(503, `L’adresse de l’environnement ${NOMS[code]} doit être en HTTPS.`, 'cible_non_https');
+    throw new ErreurCible(503, `L’adresse de l’environnement ${code} doit être en HTTPS.`, 'cible_non_https');
   }
 }
 
 function cibles(env = process.env) {
-  const configurees=Object.keys(NOMS).map((code) => {
+  const noms = nomsEnvironnements(env);
+  const configurees=Object.keys(noms).map((code) => {
     const p = `SH_ENV_${code.toUpperCase()}_`;
-    return { code, nom: NOMS[code], url: (env[`${p}URL`] || '').replace(/\/$/, ''), cle: env[`${p}CLE`] || '', public: (env[`${p}PUBLIC`] || '').replace(/\/$/, '') };
+    return { code, nom: noms[code], url: (env[`${p}URL`] || '').replace(/\/$/, ''), cle: env[`${p}CLE`] || '', public: (env[`${p}PUBLIC`] || '').replace(/\/$/, '') };
   }).filter((c) => c.url && c.cle);
   configurees.forEach((c) => exigerAdresseSure(c.code, c.url));
+  // Une production compromise ne doit jamais ouvrir un autre environnement : ni adresse ni clé partagée.
+  for (const c of configurees.filter((x) => /^production_/.test(x.code))) {
+    if (configurees.some((x) => x !== c && (x.url === c.url || x.cle === c.cle))) {
+      throw new ErreurCible(503, `La production ${c.code} doit avoir une adresse et une clé propres.`, 'production_non_isolee');
+    }
+  }
   const abc=configurees.find(c=>c.code==='demo_abc');
   if(abc&&configurees.some(c=>c.code==='demo'&&c.url===abc.url))throw new ErreurCible(503,'La Démo ABC doit utiliser une API distincte de la démonstration principale.','demo_abc_non_isolee');
   const pilote=configurees.find(c=>c.code==='pilote');
@@ -62,4 +87,4 @@ function lienAcces(cible, sousDomaine) {
   return `${u.protocol}//${sousDomaine}.${u.host}`;
 }
 
-module.exports = { NOMS, cibles, appeler, lienAcces, ErreurCible };
+module.exports = { NOMS, nomsEnvironnements, estCodeProduction, cibles, appeler, lienAcces, ErreurCible };

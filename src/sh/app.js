@@ -14,7 +14,7 @@ const { limiteur } = require('../limites');
 const { version } = require('../../package.json');
 const { ETAPES, RANG_GOLIVE, ELEMENT_IMPORT, FORMATION, ELEMENTS_AUTOMATIQUES, creerEtapes } = require('./etapes');
 const { rapportGolive } = require('./rapport');
-const { NOMS, cibles, appeler, lienAcces, ErreurCible } = require('./cibles');
+const { nomsEnvironnements, estCodeProduction, cibles, appeler, lienAcces, ErreurCible } = require('./cibles');
 const { empreinte, chiffrerSecret, dechiffrerSecret } = require('./security');
 const { autoriser, ROLES_SH, JOURNAL_OPERATIONNEL } = require('./permissions');
 const invitations = require('./invitations');
@@ -289,7 +289,7 @@ function creerAppSh(pool, { env = process.env } = {}) {
     const vals = []; const conds = [];
     if (req.query.q) { vals.push(`%${String(req.query.q).trim().toLowerCase()}%`); conds.push(`(lower(h.nom) LIKE $${vals.length} OR lower(coalesce(h.ville, '')) LIKE $${vals.length} OR lower(h.code_etab) LIKE $${vals.length})`); }
     if (STATUTS.includes(req.query.statut)) { vals.push(req.query.statut); conds.push(`h.statut = $${vals.length}`); }
-    if (Object.hasOwn(NOMS,req.query.environnement)) { vals.push(req.query.environnement); conds.push(`h.environnement = $${vals.length}`); }
+    if (typeof req.query.environnement === 'string' && Object.hasOwn(nomsEnvironnements(env),req.query.environnement)) { vals.push(req.query.environnement); conds.push(`h.environnement = $${vals.length}`); }
     const rows = (await pool.query(`${SELECT_HOPITAL} ${conds.length ? `WHERE ${conds.join(' AND ')}` : ''} ORDER BY h.nom`, vals)).rows;
     const dist = await etablissementsDistants([...new Set(rows.map((h) => h.environnement))]);
     return rows.map((h) => presenter(h, dist));
@@ -395,7 +395,7 @@ function creerAppSh(pool, { env = process.env } = {}) {
     if (existant.type_etablissement !== v.type_etablissement && TE.TYPES[v.type_etablissement].statut !== 'operationnel') throw new ErreurSh(409, `Le type « ${TE.TYPES[v.type_etablissement].nom} » est prévu mais pas encore opérationnel : ses parcours ne sont pas développés.`);
     if (existant.id && existant.relie && existant.type_etablissement !== v.type_etablissement) throw new ErreurSh(409, 'Le type ne change plus une fois l’établissement créé dans son environnement.');
     if (!v.nom) throw new ErreurSh(400, 'Le nom de l’établissement est requis.');
-    if (!Object.hasOwn(NOMS,v.environnement)) throw new ErreurSh(400, 'Choisissez l’environnement : démonstration principale, Démo ABC, recette, pilote ou production.');
+    if (!Object.hasOwn(nomsEnvironnements(env),v.environnement)) throw new ErreurSh(400, 'Choisissez l’environnement : démonstration principale, Démo ABC, recette, pilote ou production.');
     if (!CODE_ETAB.test(v.code_etab)) throw new ErreurSh(400, 'Code d’établissement invalide : 2 à 12 lettres majuscules, chiffres ou tirets (ex. HOP-A).');
     if (!/^[A-Z]{2}$/.test(v.pays_code) || !Number.isInteger(v.utilisateurs_prevus) || v.utilisateurs_prevus < 0 ||
         !Number.isInteger(v.utilisateurs_autorises) || v.utilisateurs_autorises < 0 || v.utilisateurs_autorises < v.utilisateurs_prevus ||
@@ -503,7 +503,8 @@ function creerAppSh(pool, { env = process.env } = {}) {
     const elements = (await pool.query('SELECT * FROM formation_elements WHERE hopital_id = $1 ORDER BY rang', [h.id])).rows;
     for (const r of roles) r.seance_le = jourIso(r.seance_le);
     const formation = FORMATION.map((f) => ({ ...roles.find((r) => r.role === f.role), role: f.role, nom: f.nom, elements: elements.filter((e) => e.role === f.role) }));
-    const production = ciblesSh().some((c) => c.code === 'production');
+    const productions = ciblesSh().filter((c) => estCodeProduction(c.code)).map((c) => ({ code: c.code, nom: c.nom }));
+    const production = productions.length > 0;
     return { ...presenter(h, await etablissementsDistants([h.environnement])), etapes, imports, activations, formation, sites, contacts, modules, comptes,
       assistant_etapes: [
         { rang: 1, code: 'identite', nom: 'Identité', etapes: ['contrat','configuration'] },
@@ -514,7 +515,7 @@ function creerAppSh(pool, { env = process.env } = {}) {
         { rang: 6, code: 'activation', nom: 'Activation et suivi', etapes: ['golive','production'] },
       ], manquants,
       peut_activer: h.relie && !manquants.length,
-      golive: { possible: ['recette','pilote'].includes(h.environnement) && h.relie && !manquants.length && production, production_reliee: production } };
+      golive: { possible: ['recette','pilote'].includes(h.environnement) && h.relie && !manquants.length && production, production_reliee: production, productions } };
   }
   api.get('/hopitaux/:id', route((req) => fiche(entier(req.params.id))));
   api.get('/hopitaux/:id/structure', route(async (req) => {
@@ -882,8 +883,19 @@ function creerAppSh(pool, { env = process.env } = {}) {
   }));
 
   /* ---------------------------------------------------------------- C4 : go-live (recette → production) */
+  /** Production visée : celle choisie, ou la seule reliée. Rien n'est deviné s'il y en a plusieurs. */
+  function productionVisee(demandee) {
+    const productions = ciblesSh().filter((c) => estCodeProduction(c.code));
+    if (demandee !== undefined && demandee !== null && demandee !== '') {
+      const c = productions.find((x) => x.code === demandee);
+      if (!c) throw new ErreurSh(400, 'Cette production n’est pas reliée à la console.');
+      return { prod: c };
+    }
+    if (productions.length > 1) return { prod: null, a_choisir: true };
+    return { prod: productions[0] || null };
+  }
   /** Préflight sans écriture : toute la structure est vérifiée avant de commencer le transfert. */
-  async function preflightGolive(h, acteur, configId) {
+  async function preflightGolive(h, acteur, configId, cibleDemandee) {
     const bloqueurs = [];
     const critiques=(await pool.query(`SELECT count(*)::int n FROM sh_taches t JOIN sh_projets p ON p.id=t.projet_id
       WHERE p.hopital_id=$1 AND p.statut NOT IN ('termine','annule') AND t.critique_golive AND t.statut<>'terminee'`,[h.id])).rows[0].n;
@@ -891,13 +903,14 @@ function creerAppSh(pool, { env = process.env } = {}) {
     if (!['recette','pilote'].includes(h.environnement)) bloqueurs.push('source_hors_recette');
     if (!h.relie) bloqueurs.push('etablissement_recette_non_relie');
     if (h.latitude == null || h.longitude == null) bloqueurs.push('coordonnees_manquantes');
-    const prod = ciblesSh().find((c) => c.code === 'production');
-    if (!prod) bloqueurs.push('production_non_configuree');
+    const { prod, a_choisir: aChoisir } = productionVisee(cibleDemandee);
+    if (aChoisir) bloqueurs.push('production_a_choisir');
+    else if (!prod) bloqueurs.push('production_non_configuree');
     const manque = Number((await pool.query(`SELECT count(*)::int AS n FROM verifications v JOIN etapes e ON e.id = v.etape_id
       WHERE e.hopital_id = $1 AND e.rang < $2 AND NOT v.faite`, [h.id, RANG_GOLIVE])).rows[0].n);
     if (manque) bloqueurs.push(`prerequis_non_valides:${manque}`);
-    const collision = (await pool.query(`SELECT 1 FROM hopitaux WHERE environnement = 'production' AND id <> $1
-      AND (code_etab = $2 OR (sous_domaine IS NOT NULL AND sous_domaine = $3))`, [h.id, h.code_etab, h.sous_domaine])).rowCount;
+    const collision = prod && (await pool.query(`SELECT 1 FROM hopitaux WHERE environnement = $4 AND id <> $1
+      AND (code_etab = $2 OR (sous_domaine IS NOT NULL AND sous_domaine = $3))`, [h.id, h.code_etab, h.sous_domaine, prod.code])).rowCount;
     if (collision) bloqueurs.push('code_ou_domaine_deja_utilise');
     if (!prod || bloqueurs.length) return { possible: false, bloqueurs, fichiers: [] };
     try{
@@ -953,12 +966,14 @@ function creerAppSh(pool, { env = process.env } = {}) {
   api.get('/hopitaux/:id/golive/profils-pays',route(async req=>{
     const h=await hopital(entier(req.params.id));
     if(!['recette','pilote'].includes(h.environnement))throw new ErreurSh(409,'Le go-live part d’un hôpital en recette ou en pilote.');
-    const prod=cible('production');
+    const {prod,a_choisir:aChoisir}=productionVisee(req.query.cible);
+    if(aChoisir)throw new ErreurSh(409,'Choisissez la production visée.');
+    if(!prod)throw new ErreurSh(409,'La production n’est pas encore reliée à la console.');
     const profils=await profilsPays.lireProfilsCibles(appeler,prod,h);
     const existant=(await appeler(prod,'GET','/sh/etablissements')).find(e=>e.code===h.code_etab);
     return existant?[profilsPays.choisirProfilProduction(profils,h,existant)]:profils;
   }));
-  api.post('/hopitaux/:id/golive/preflight', route(async (req) => preflightGolive(await hopital(entier(req.params.id)), req.u,req.body?.config_id)));
+  api.post('/hopitaux/:id/golive/preflight', route(async (req) => preflightGolive(await hopital(entier(req.params.id)), req.u,req.body?.config_id,req.body?.cible)));
 
   /**
    * La structure validée en recette est importée après préflight sans écriture.
@@ -972,23 +987,24 @@ function creerAppSh(pool, { env = process.env } = {}) {
     const manque = (await pool.query(`SELECT count(*)::int AS n FROM verifications v JOIN etapes e ON e.id = v.etape_id
       WHERE e.hopital_id = $1 AND e.rang < $2 AND NOT v.faite`, [h.id, RANG_GOLIVE])).rows[0].n;
     if (manque) throw new ErreurSh(409, `Go-live impossible : ${manque} élément${manque > 1 ? 's' : ''} à cocher avant le go-live.`);
-    const prod = ciblesSh().find((c) => c.code === 'production');
-    if (!prod) throw new ErreurSh(409, 'La production n’est pas encore reliée à la console (serveur au Canada à installer).');
-    const controle = await preflightGolive(h, req.u,req.body?.config_id);
+    const { prod, a_choisir: aChoisir } = productionVisee(req.body?.cible);
+    if (aChoisir) throw new ErreurSh(409, 'Choisissez la production visée.');
+    if (!prod) throw new ErreurSh(409, 'La production n’est pas encore reliée à la console.');
+    const controle = await preflightGolive(h, req.u,req.body?.config_id,prod.code);
     if (!controle.possible) throw new ErreurSh(409, `Go-live bloqué par le préflight : ${controle.bloqueurs.join(', ')}.`);
     if (h.latitude == null || h.longitude == null) throw new ErreurSh(400, 'Indiquez la position de l’hôpital avant le go-live.');
-    if ((await pool.query(`SELECT 1 FROM hopitaux WHERE environnement = 'production' AND id <> $1 AND (code_etab = $2 OR (sous_domaine IS NOT NULL AND sous_domaine = $3))`,
-      [h.id, h.code_etab, h.sous_domaine])).rows[0]) throw new ErreurSh(409, 'Un autre hôpital de production a déjà ce code ou ce lien.');
+    if ((await pool.query(`SELECT 1 FROM hopitaux WHERE environnement = $4 AND id <> $1 AND (code_etab = $2 OR (sous_domaine IS NOT NULL AND sous_domaine = $3))`,
+      [h.id, h.code_etab, h.sous_domaine, prod.code])).rows[0]) throw new ErreurSh(409, 'Un autre hôpital de production a déjà ce code ou ce lien.');
     const structure = await appeler(cible(h.environnement), 'GET', `/sh/etablissements/${h.code_etab}/structure`);
     const configuration = await require('./promotion-configuration').lireConfiguration(appeler,cible(h.environnement),h.code_etab);
     const cibleAvant=(await appeler(prod,'GET','/sh/etablissements')).find(e=>e.code===h.code_etab);
     const profilChoisi=profilsPays.choisirProfilProduction(await profilsPays.lireProfilsCibles(appeler,prod,h),h,cibleAvant,req.body?.config_id);
     const empreinteGolive = empreinte(JSON.stringify({ code: h.code_etab, structure,configuration,config_id:profilChoisi.id }));
     const operation = (await pool.query(`INSERT INTO sh_golive_operations (hopital_id,cible,empreinte,statut,phase,lance_par)
-      VALUES ($1,'production',$2,'en_cours','preparation',$3)
+      VALUES ($1,$4,$2,'en_cours','preparation',$3)
       ON CONFLICT (hopital_id,cible,empreinte) DO UPDATE SET statut='en_cours',phase='reprise',code_erreur=NULL,modifie_le=now(),lance_par=EXCLUDED.lance_par
       WHERE sh_golive_operations.statut = 'interrompu'
-      RETURNING id`, [h.id, empreinteGolive, req.u.email]).catch(e=>{
+      RETURNING id`, [h.id, empreinteGolive, req.u.email, prod.code]).catch(e=>{
         if(e.code==='23505')throw new ErreurSh(409,'Un Go Live est déjà en cours pour cet établissement.');
         throw e;
       })).rows[0];
@@ -1020,14 +1036,14 @@ function creerAppSh(pool, { env = process.env } = {}) {
       }
       const r = await appeler(prod, 'POST', '/sh/import/importer', { code: h.code_etab, type, contenu, empreinte: v.empreinte,
         par: req.u.email, ...(type === 'utilisateurs' ? { invitations: true } : {}) });
-      await transaction(pool, (c) => enregistrerImport(c, { hopitalId: h.id, type, empreinte: v.empreinte, lignes: r.lignes, resume: r.resume, auteur: req.u.email, environnement: 'production' }));
+      await transaction(pool, (c) => enregistrerImport(c, { hopitalId: h.id, type, empreinte: v.empreinte, lignes: r.lignes, resume: r.resume, auteur: req.u.email, environnement: prod.code }));
       resultats.push({ type, lignes: r.lignes, resume: r.resume });
       invitationsEnvoyees += Number(r.invitations_envoyees || 0);
       await pool.query(`UPDATE sh_golive_operations SET resultats=jsonb_set(resultats,ARRAY[$2],$3::jsonb,true),modifie_le=now() WHERE id=$1`,
         [operation.id, type, JSON.stringify({ lignes: r.lignes, resume: r.resume, invitations_envoyees: r.invitations_envoyees || 0 })]);
     }
     await transaction(pool, async (c) => {
-      await c.query(`UPDATE hopitaux SET environnement = 'production', statut='implantation', relie = true, golive_le = now(), golive_par = $2 WHERE id = $1`, [h.id, req.u.email]).catch(unique);
+      await c.query(`UPDATE hopitaux SET environnement = $3, statut='implantation', relie = true, golive_le = now(), golive_par = $2 WHERE id = $1`, [h.id, req.u.email, prod.code]).catch(unique);
       await cocher(c, h.id, 'production_importee', req.u);
       await terminerTacheAuto(c, h.id, 'golive', req.u);
       await cocher(c, h.id, 'module_active', req.u, false);   // en production, le module reste à activer

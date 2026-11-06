@@ -41,5 +41,16 @@ async function migrerLiaisonChsld(c) {
   await c.query('INSERT INTO sh_migrations(version) VALUES($1)', [LIAISON_CHSLD_VERSION]);
   return true;
 }
-const VERSION_SH = LIAISON_CHSLD_VERSION;
-module.exports = { TYPES_ETABLISSEMENT_VERSION, LIAISON_CHSLD_VERSION, VERSION_SH, migrerTypesEtablissement, migrerLiaisonChsld };
+/* Migration 39 : une production par pays (production ou production_xx). Élargit deux contraintes, ne modifie aucune ligne. */
+const PRODUCTIONS_VERSION = 39;
+async function migrerProductions(c) {
+  if ((await c.query('SELECT 1 FROM sh_migrations WHERE version=$1', [PRODUCTIONS_VERSION])).rowCount) return false;
+  await c.query(`ALTER TABLE hopitaux DROP CONSTRAINT IF EXISTS hopitaux_environnement_check;
+    ALTER TABLE hopitaux ADD CONSTRAINT hopitaux_environnement_check CHECK (environnement IN ('demo','demo_abc','recette','pilote') OR environnement ~ '^production(_[a-z]{2})?$');
+    ALTER TABLE sh_golive_operations DROP CONSTRAINT IF EXISTS sh_golive_operations_cible_check;
+    ALTER TABLE sh_golive_operations ADD CONSTRAINT sh_golive_operations_cible_check CHECK (cible = 'recette' OR cible ~ '^production(_[a-z]{2})?$');`);
+  await c.query('INSERT INTO sh_migrations(version) VALUES($1)', [PRODUCTIONS_VERSION]);
+  return true;
+}
+const VERSION_SH = PRODUCTIONS_VERSION;
+module.exports = { TYPES_ETABLISSEMENT_VERSION, LIAISON_CHSLD_VERSION, PRODUCTIONS_VERSION, VERSION_SH, migrerTypesEtablissement, migrerLiaisonChsld, migrerProductions };

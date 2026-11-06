@@ -2,7 +2,7 @@
 const express=require('express'),crypto=require('node:crypto');
 const {ErreurHttp,transaction}=require('../db');
 const {notifier}=require('./automatisations');
-const {NOMS}=require('./cibles');
+const {nomsEnvironnements}=require('./cibles');
 const documents=require('./documents');
 const PRIORITES={basse:168,normale:72,haute:24,urgente:4};
 const CATEGORIES=['bug','amelioration','assistance','formation','acces','autre'];
@@ -15,9 +15,9 @@ function texte(v,max,nom,{requis=false}={}){
 function brancher(api,pool,env){
   const router=express.Router();
   const route=fn=>(req,res,next)=>Promise.resolve().then(async()=>{
-    if(!Object.hasOwn(NOMS,req.params.environnement))throw new ErreurHttp(401,'cle_sh_invalide');
+    if(!Object.hasOwn(nomsEnvironnements(env),req.params.environnement))throw new ErreurHttp(401,'cle_sh_invalide');
     const cle=env[`SH_SUPPORT_${req.params.environnement.toUpperCase()}_CLE`];
-    if(typeof cle==='string'&&Object.entries(env).some(([nom,valeur])=>/^SH_SUPPORT_(DEMO|DEMO_ABC|RECETTE|PILOTE|PRODUCTION)_CLE$/.test(nom)&&nom!==`SH_SUPPORT_${req.params.environnement.toUpperCase()}_CLE`&&valeur===cle))throw new ErreurHttp(401,'cle_sh_invalide');
+    if(typeof cle==='string'&&Object.entries(env).some(([nom,valeur])=>/^SH_SUPPORT_(DEMO|DEMO_ABC|RECETTE|PILOTE|PRODUCTION(_[A-Z]{2})?)_CLE$/.test(nom)&&nom!==`SH_SUPPORT_${req.params.environnement.toUpperCase()}_CLE`&&valeur===cle))throw new ErreurHttp(401,'cle_sh_invalide');
     const fournie=req.get('x-support-key')||'';
     if(typeof cle!=='string'||cle.length<32||Buffer.byteLength(cle)!==Buffer.byteLength(fournie)||!crypto.timingSafeEqual(Buffer.from(cle),Buffer.from(fournie)))throw new ErreurHttp(401,'cle_sh_invalide');
     const code=String(req.params.code||'');if(!/^[A-Z0-9-]{2,12}$/.test(code))throw invalide('code');

@@ -35,7 +35,7 @@ function brancher(api,pool,route,journal,env){
     const motif=String(req.body.motif||'').trim();
     if(motif.length<10||motif.length>2000)throw erreur(400,'Décrivez le motif de suppression (10 à 2000 caractères).');
     const h=(await c.query('SELECT environnement FROM hopitaux WHERE id=$1 FOR UPDATE',[p.hopital_id])).rows[0];
-    if(h?.environnement==='production')throw erreur(409,'La suppression d’un projet de production exige une procédure de conservation et de restitution dédiée.');
+    if(/^production(_|$)/.test(h?.environnement||''))throw erreur(409,'La suppression d’un projet de production exige une procédure de conservation et de restitution dédiée.');
     await c.query('SELECT id FROM sh_taches WHERE projet_id=$1 FOR UPDATE',[p.id]);
     const contenu=(await c.query(`SELECT (SELECT count(*) FROM sh_taches WHERE projet_id=$1)::int taches,(SELECT count(*) FROM sh_jalons WHERE projet_id=$1)::int jalons,
       (SELECT count(*) FROM sh_projet_finances WHERE projet_id=$1)::int finances,(SELECT count(*) FROM sh_projet_registre WHERE projet_id=$1)::int registre,
@@ -59,7 +59,7 @@ function brancher(api,pool,route,journal,env){
     if(!/^\d{1,5}$/.test(jours))throw erreur(409,'La politique de conservation des projets doit être configurée avant suppression.');
     if(Date.now()<new Date(p.archive_le).getTime()+Number(jours)*86400000)throw erreur(409,'Le délai de conservation du projet n’est pas écoulé.');
     const h=(await c.query('SELECT environnement,statut FROM hopitaux WHERE id=$1 FOR UPDATE',[p.hopital_id])).rows[0];
-    if(h?.environnement==='production')throw erreur(409,'La suppression d’un projet de production exige une procédure de conservation et de restitution dédiée.');
+    if(/^production(_|$)/.test(h?.environnement||''))throw erreur(409,'La suppression d’un projet de production exige une procédure de conservation et de restitution dédiée.');
     if(p.contrat_id||(await c.query('SELECT 1 FROM sh_documents WHERE projet_id=$1 LIMIT 1',[p.id])).rowCount)throw erreur(409,'Des contrats ou documents liés empêchent la suppression du projet.');
     if((await c.query('SELECT 1 FROM sh_support_tickets WHERE projet_id=$1 LIMIT 1',[p.id])).rowCount)throw erreur(409,'Des tickets liés empêchent la suppression du projet.');
     // Les clés étrangères des dépendances prennent KEY SHARE sur les tâches.
