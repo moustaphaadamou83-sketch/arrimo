@@ -39,7 +39,8 @@ const ligne = (L, c) => `• ${c.resident_ref} · ${c.origine} · ${etapeTxt(L, 
 
 /** Question qui relève de la Liaison CHSLD ? (mentions CHSLD, résident, référence R-00000, retour vers un CHSLD) */
 function concerne(qn, q) {
-  if (/(demande|request)s?\b.*(reponse|response|repondre|respond)/.test(qn)) return true;
+  // « Demandes de transfert » sans mention d'un CHSLD : ce sont les transferts de l'hôpital, pas la Liaison
+  if (/(demande|request)s?\b.*(reponse|response|repondre|respond)/.test(qn) && !/transfert|transfer/.test(qn)) return true;
   if (/\bchslds?\b|residents?\b|residente?s?\b|liaison/.test(qn) || /\b(?:R|RES)[\s-]?\d{1,5}\b/i.test(q) || /\bCO[\s-]?\d{1,5}\b/i.test(q)) return true;
   // « Où en est le transfert de Jean Dupont ? » : sans référence hospitalière (P-, TR-), la question peut viser un résident de CHSLD
   return /(ou en est|where is|status of).*(transfert|transfer) (de|of) [a-z]/.test(qn) && !/\b(?:P|TR)-\d/i.test(q);
