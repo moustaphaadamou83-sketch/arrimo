@@ -114,7 +114,7 @@ L'échec intermittent du § 6 a été traité : les tâches de fond sont exclues
 |---|---|---|
 | Profil pays | Table `config_pays` : rayon, délais, format de référence, nom du transport, fuseau. Choix du profil contrôlé par SH | Seul le profil Québec est créé. Les formats réels des autres pays restent à obtenir |
 | Serveur par pays | SH pilote des environnements séparés, avec une clé par environnement, conservée dans son `.env` | Liste fixe d'environnements dans `src/sh/cibles.js`, avec une seule entrée « production » : ajouter un pays demande du code |
-| Sécurité du lien SH ↔ pays | Clé de service comparée en temps constant | **À corriger :** rien n'impose HTTPS vers un serveur distant ; une mauvaise adresse enverrait la clé en clair |
+| Sécurité du lien SH ↔ pays | Clé de service comparée en temps constant. **Corrigé le 6 nov. (non publié) :** HTTPS obligatoire hors de la machine et clé jamais suivie sur une redirection, prouvés par test | — |
 | Installation | Script d'installation avec garde-fous, retour arrière applicatif | La production exige `CONFIRMER_HEBERGEMENT_CANADA` : le script bloque tout pays hors Canada |
 | Types d'établissements | Hôpital et CHSLD opérationnels ; autres types prévus mais refusés | Liste fixe dans le code et dans une contrainte de base : CHU, CSRéf ou clinique demandent du code |
 | Langues | Français et anglais | Toute autre langue |
@@ -125,7 +125,7 @@ L'échec intermittent du § 6 a été traité : les tâches de fond sont exclues
 | Documents | Pages légales à faire relire | Aucun registre, modèle d'évaluation Loi 25 ni dossier de test d'intrusion ; aucune analyse des lois africaines (à faire vérifier sur place) |
 
 **Ordre proposé, à valider :**
-1. HTTPS obligatoire vers les serveurs distants et liste d'environnements configurable.
+1. Liste d'environnements configurable (HTTPS obligatoire : fait).
 2. Script d'installation par pays, avec confirmation du pays d'hébergement.
 3. Plans d'incident et de reprise, alertes, chaîne de contrôle automatique.
 4. Documents Loi 25 et dossier du test d'intrusion.

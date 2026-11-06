@@ -1387,6 +1387,25 @@ test('interface réelle : parcours CHSLD A → Hôpital B → CHSLD A dans le na
   assert.deepStrictEqual(erreurs, [], 'aucune erreur JavaScript dans les pages');
 });
 
+test('lien SH ↔ environnements : HTTPS obligatoire hors de la machine, clé jamais suivie sur une redirection', async () => {
+  const { cibles, appeler } = require('../src/sh/cibles');
+  const avec = (url) => cibles({ SH_ENV_PRODUCTION_URL: url, SH_ENV_PRODUCTION_CLE: 'cle-fictive' });
+  for (const u of ['http://arrimo.example.invalid', 'http://127.0.0.1.example.invalid', 'http://localhost@example.invalid', 'ftp://example.invalid', 'pas-une-adresse']) {
+    assert.throws(() => avec(u), (e) => e.code === 'cible_non_https', u);
+  }
+  for (const u of ['https://arrimo.example.invalid', 'http://127.0.0.1:3010', 'http://localhost:3010', 'http://[::1]:3010']) assert.strictEqual(avec(u).length, 1, u);
+  const http = require('node:http');
+  const recues = [];
+  const piege = http.createServer((req, res) => { recues.push(req.headers['x-sh-key']); res.end('{}'); });
+  await new Promise((r) => piege.listen(0, '127.0.0.1', r));
+  const relais = http.createServer((req, res) => { res.writeHead(307, { Location: `http://127.0.0.1:${piege.address().port}/api/vole` }); res.end(); });
+  await new Promise((r) => relais.listen(0, '127.0.0.1', r));
+  try {
+    await assert.rejects(appeler({ nom: 'Essai', url: `http://127.0.0.1:${relais.address().port}`, cle: 'cle-fictive' }, 'GET', '/sante'), (e) => e.code === 'injoignable');
+    assert.deepStrictEqual(recues, []);
+  } finally { piege.close(); relais.close(); }
+});
+
 test('démos sans double authentification : administration directe, activation refusée ; exigée ailleurs', async () => {
   const qui = 'era_direction'; assert.ok(sessions[qui]);
   const avant = { env: process.env.ARRIMO_ENV, demo: process.env.ARRIMO_DEMO, deuxfa: process.env.ARRIMO_2FA_ADMIN };

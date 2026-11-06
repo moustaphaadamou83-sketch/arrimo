@@ -11,11 +11,22 @@ class ErreurCible extends Error {
   constructor(statut, message, code) { super(message); this.statut = statut; this.code = code; }
 }
 
+/** La clé de service ne circule qu'en HTTPS ; HTTP est toléré uniquement vers la machine elle-même. */
+function exigerAdresseSure(code, adresse) {
+  let u = null;
+  try { u = new URL(adresse); } catch { /* adresse illisible : refusée ci-dessous */ }
+  const locale = u && ['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname);
+  if (!u || !(u.protocol === 'https:' || (u.protocol === 'http:' && locale))) {
+    throw new ErreurCible(503, `L’adresse de l’environnement ${NOMS[code]} doit être en HTTPS.`, 'cible_non_https');
+  }
+}
+
 function cibles(env = process.env) {
   const configurees=Object.keys(NOMS).map((code) => {
     const p = `SH_ENV_${code.toUpperCase()}_`;
     return { code, nom: NOMS[code], url: (env[`${p}URL`] || '').replace(/\/$/, ''), cle: env[`${p}CLE`] || '', public: (env[`${p}PUBLIC`] || '').replace(/\/$/, '') };
   }).filter((c) => c.url && c.cle);
+  configurees.forEach((c) => exigerAdresseSure(c.code, c.url));
   const abc=configurees.find(c=>c.code==='demo_abc');
   if(abc&&configurees.some(c=>c.code==='demo'&&c.url===abc.url))throw new ErreurCible(503,'La Démo ABC doit utiliser une API distincte de la démonstration principale.','demo_abc_non_isolee');
   const pilote=configurees.find(c=>c.code==='pilote');
@@ -31,6 +42,7 @@ async function appeler(cible, methode, chemin, corps, { brut = false, delaiMs = 
       method: methode,
       headers: { 'Content-Type': 'application/json', 'X-SH-Key': cible.cle },
       body: corps ? JSON.stringify(corps) : undefined,
+      redirect: 'error', // une redirection emporterait la clé de service vers une autre adresse
       signal: AbortSignal.timeout(delaiMs || Number(process.env.SH_DELAI_MS || 15000)),
     });
   } catch {
