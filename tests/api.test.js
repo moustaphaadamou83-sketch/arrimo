@@ -1858,7 +1858,21 @@ test('installateur : noms propres à chaque environnement, domaine changeable ; 
   // Garde-fous de l'installateur, vérifiés dans le texte (il n'est jamais lancé par les tests : il installerait des paquets)
   const inst = require('fs').readFileSync(require('path').join(racine, 'deploy', 'installer.sh'), 'utf8');
   const avantPaquets = inst.slice(0, inst.indexOf('apt-get update'));
-  assert.match(avantPaquets, /CONFIRMER_HEBERGEMENT_CANADA:-\}" = oui/, 'production : confirmation d’hébergement au Canada avant toute installation');
+  assert.match(avantPaquets, /verifier_hebergement \|\| exit 1/, 'production : pays d’hébergement confirmé avant toute installation');
+  // Pays d'hébergement : confirmation explicite, un pays ne vaut jamais pour un autre
+  const hebergement = (variables) => require('child_process').spawnSync('bash', ['-c', '. deploy/hebergement.sh; verifier_hebergement && printf "%s" "$PAYS_HEBERGEMENT"'],
+    { cwd: racine, encoding: 'utf8', env: { PATH: process.env.PATH, ...variables } });
+  for (const [variables, attendu] of [
+    [{}, null], [{ PAYS_HEBERGEMENT: 'CA' }, null], [{ PAYS_HEBERGEMENT: 'XX' }, null], [{ PAYS_HEBERGEMENT: 'canada', CONFIRMER_HEBERGEMENT_CANADA: 'oui' }, null],
+    [{ PAYS_HEBERGEMENT: 'CA', CONFIRMER_HEBERGEMENT: 'oui', CONFIRMER_CADRE_LEGAL: 'oui' }, null],
+    [{ PAYS_HEBERGEMENT: 'XX', CONFIRMER_HEBERGEMENT_CANADA: 'oui' }, null], [{ PAYS_HEBERGEMENT: 'XX', CONFIRMER_HEBERGEMENT: 'oui' }, null], [{ PAYS_HEBERGEMENT: 'XX', CONFIRMER_CADRE_LEGAL: 'oui' }, null],
+    [{ CONFIRMER_HEBERGEMENT_CANADA: 'oui' }, 'CA'], [{ PAYS_HEBERGEMENT: 'CA', CONFIRMER_HEBERGEMENT_CANADA: 'oui' }, 'CA'],
+    [{ PAYS_HEBERGEMENT: 'XX', CONFIRMER_HEBERGEMENT: 'oui', CONFIRMER_CADRE_LEGAL: 'oui' }, 'XX'],
+  ]) {
+    const r = hebergement(variables);
+    if (attendu) assert.deepStrictEqual([r.status, r.stdout], [0, attendu], JSON.stringify(variables));
+    else { assert.strictEqual(r.status, 1, JSON.stringify(variables)); assert.match(r.stdout, /Production refusée/); }
+  }
   assert.match(avantPaquets, /contient un autre environnement/, 'jamais un environnement par-dessus un autre');
   assert.match(avantPaquets, /ARRIMO_DEPLOY_PREFLIGHT_FILE/, 'aucune mise à jour sans sauvegarde, restauration, compatibilité et rollback attestés avant toute installation système');
   assert.match(inst, /NOUVELLE_INSTALLATION:-0\}" = 1 \] && \[ "\$ARRIMO_ENV" = demo \]/, 'données de démonstration en démo seulement');

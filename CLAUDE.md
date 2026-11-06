@@ -55,7 +55,7 @@ Tout changement : ajouter ou adapter un test dans `tests/api.test.js`, puis `npm
   Le script rejoue `db/schema.sql` (sans effacer les données) et redémarre le service.
 - **Recette** (même serveur, données de test) : `/opt/arrimo-recette`, service `arrimo-recette`, base `arrimo_recette`, https://recette.arrimo.senseafri.com · installer avec `ARRIMO_ENV=recette bash installer.sh arrimo.senseafri.com`.
 - **Console SH** : `/opt/arrimo-sh`, service `arrimo-sh`, base `arrimo_sh`, https://sh.arrimo.senseafri.com · installer avec `ARRIMO_ENV=sh bash installer.sh arrimo.senseafri.com`.
-- **Production** : jamais sur ce serveur ; hébergement au Canada (l'installateur exige `CONFIRMER_HEBERGEMENT_CANADA=oui`).
+- **Production** : jamais sur ce serveur ; hébergement au Canada (l'installateur exige `CONFIRMER_HEBERGEMENT_CANADA=oui`). Hors Canada : `PAYS_HEBERGEMENT=XX CONFIRMER_HEBERGEMENT=oui CONFIRMER_CADRE_LEGAL=oui` (`deploy/hebergement.sh`). Une production par pays se relie à SH avec `SH_PRODUCTIONS`.
 - **Remettre la démo à zéro** : `sudo -u arrimo bash -c 'set -a; . /opt/arrimo/.env; set +a; cd /opt/arrimo && npm run -s demo:reset' > /opt/arrimo/acces-demo.txt`
 
 ## Tâches, par ordre de priorité

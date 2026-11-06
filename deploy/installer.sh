@@ -6,6 +6,7 @@
 #   ARRIMO_ENV=recette bash installer.sh arrimo.senseafri.com       recette, sur recette.arrimo.senseafri.com (données de test)
 #   ARRIMO_ENV=production CONFIRMER_HEBERGEMENT_CANADA=oui \
 #     PREMIER_COMPTE=courriel@exemple.ca PREMIER_NOM="Nom" bash installer.sh arrimo.ca     production (serveur hébergé au Canada)
+#   Autre pays : PAYS_HEBERGEMENT=XX CONFIRMER_HEBERGEMENT=oui CONFIRMER_CADRE_LEGAL=oui à la place de CONFIRMER_HEBERGEMENT_CANADA
 #   ARRIMO_ENV=sh PREMIER_COMPTE=courriel PREMIER_NOM="Nom" bash installer.sh arrimo.senseafri.com
 #                                                                   console SH, sur sh.arrimo.senseafri.com (reliée aux environnements de ce serveur)
 # L'argument est le domaine d'Arrimo, le seul réglage de domaine : il est gardé dans .env (ARRIMO_DOMAINE).
@@ -25,9 +26,10 @@ ICI="$(cd "$(dirname "$0")" && pwd)"
 # Noms de l'environnement : dossier, service, utilisateur, base, port, hôte (deploy/noms.sh, aussi dans l'archive)
 if [ -f "$ICI/noms.sh" ]; then . "$ICI/noms.sh"; else TMPN=$(mktemp -d); unzip -q -o "$ARCHIVE" 'arrimo/deploy/noms.sh' -d "$TMPN"; . "$TMPN/arrimo/deploy/noms.sh"; rm -rf "$TMPN"; fi
 
-# Garde-fous
+# Garde-fous : pays d'hébergement confirmé avant toute installation (deploy/hebergement.sh, aussi dans l'archive)
 if [ "$ARRIMO_ENV" = production ]; then
-  [ "${CONFIRMER_HEBERGEMENT_CANADA:-}" = oui ] || { echo "Production refusée : confirmez que ce serveur est hébergé au Canada (CONFIRMER_HEBERGEMENT_CANADA=oui) et que l'évaluation Loi 25 est faite."; exit 1; }
+  if [ -f "$ICI/hebergement.sh" ]; then . "$ICI/hebergement.sh"; else TMPH=$(mktemp -d); unzip -q -o "$ARCHIVE" 'arrimo/deploy/hebergement.sh' -d "$TMPH"; . "$TMPH/arrimo/deploy/hebergement.sh"; rm -rf "$TMPH"; fi
+  verifier_hebergement || exit 1
 fi
 ROOT_DOSSIER="$DOSSIER"
 ENV_SOURCE="$ROOT_DOSSIER/shared/.env"
@@ -152,6 +154,7 @@ fi
 # Environnement et domaine : les deux réglages qui décident de tout le reste
 regler ARRIMO_ENV "$ARRIMO_ENV"
 regler ARRIMO_DOMAINE "$DOMAINE"
+[ "$ARRIMO_ENV" != production ] || regler ARRIMO_PAYS_HEBERGEMENT "$PAYS_HEBERGEMENT"
 # Console SH : reliée aux environnements installés sur ce serveur (adresse locale, clé de service, adresse publique)
 if [ "$ARRIMO_ENV" = sh ]; then
   valeur() { grep "^$2=" "$1" | head -1 | cut -d= -f2-; }
