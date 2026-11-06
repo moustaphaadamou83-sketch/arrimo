@@ -18,6 +18,8 @@ function environnement() {
 /** Démonstration : remise à zéro, recalage des horloges, simulation, données fictives. */
 const estDemo = () => environnement() === 'demo';
 const estProduction = () => environnement() === 'production';
+/** Administration : double authentification exigée partout, sauf sur les démos (décision de Moustafa, 6 nov. 2026) et ARRIMO_2FA_ADMIN=0 (tests). */
+const exige2faAdmin = () => !estDemo() && process.env.ARRIMO_2FA_ADMIN !== '0';
 /** Essais vocaux : uniquement sur une cible déclarée fictive, jamais en production. */
 const vocalFictifAutorise=()=>estDemo()||(['recette','pilote'].includes(environnement())&&process.env.ARRIMO_OG_VOCAL_FICTIF==='1'&&process.env.ARRIMO_PATIENTS_FICTIFS==='1');
 
@@ -47,4 +49,4 @@ function problemesProduction(env = process.env) {
   if (env.SH_API_KEY && String(env.SH_API_KEY).length < 32) p.push('SH_API_KEY trop courte (32 caractères au moins)');
   return p;
 }
-module.exports = { problemesProduction, ENVIRONNEMENTS, environnement, estDemo, estProduction, vocalFictifAutorise, hote, urlPublique };
+module.exports = { problemesProduction, ENVIRONNEMENTS, environnement, estDemo, estProduction, exige2faAdmin, vocalFictifAutorise, hote, urlPublique };

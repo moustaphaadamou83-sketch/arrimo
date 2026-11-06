@@ -12,6 +12,7 @@ const totp = require('./totp');
 const { journaliser } = require('./regles');
 const cx = require('./connecteurs');
 const demo = require('./demo');
+const env = require('./environnement');
 const s = require('./services');
 
 const ROLES = ['coordonnateur', 'entretien', 'admin_etab', 'gestionnaire', 'equipe_soins'];
@@ -84,7 +85,10 @@ function brancher(api, pool, route, entier, options = {}) {
     await pool.query('UPDATE utilisateurs SET premiers_pas_vus = true WHERE id = $1', [req.utilisateur.id]);
   }));
 
+  // Démos : comptes partagés, jamais de double authentification. Un seul visiteur bloquerait le compte pour tous.
+  const refuser2faDemo = () => { if (env.estDemo()) throw new ErreurHttp(403, 'double_auth_indisponible_demo'); };
   api.post('/moi/2fa/preparer', route(async (req) => {
+    refuser2faDemo();
     if (req.utilisateur.totp_actif) throw new ErreurHttp(409, 'deja_2fa');
     const secret = totp.nouveauSecret();
     await pool.query('UPDATE utilisateurs SET totp_secret = $2, totp_dernier_pas = 0 WHERE id = $1', [req.utilisateur.id, chiffrerSecretMfa(secret)]);
@@ -93,6 +97,7 @@ function brancher(api, pool, route, entier, options = {}) {
   }));
 
   api.post('/moi/2fa/activer', route(async (req) => {
+    refuser2faDemo();
     const u = (await pool.query('SELECT totp_secret, totp_actif FROM utilisateurs WHERE id = $1', [req.utilisateur.id])).rows[0];
     if (u.totp_actif) throw new ErreurHttp(409, 'deja_2fa');
     if (!u.totp_secret) throw new ErreurHttp(400, 'qr_dabord');
@@ -114,7 +119,7 @@ function brancher(api, pool, route, entier, options = {}) {
   const exigerAdmin = (req) => {
     const u = req.utilisateur;
     if (!u.admin) throw new ErreurHttp(403, 'reserve_admin');
-    if (process.env.ARRIMO_2FA_ADMIN !== '0' && !u.totp_actif) {
+    if (env.exige2faAdmin() && !u.totp_actif) {
       throw new ErreurHttp(403, 'admin_exige_2fa');
     }
   };

@@ -410,6 +410,7 @@ window.ARRIMO_I18N.fr = {
     confirmer: 'Confirmer', mdp_aide: 'Au moins 12 caractères, avec des lettres et des chiffres. Vos autres sessions seront fermées.', mdp_ok: 'Mot de passe changé.',
     deux_fa: 'Double authentification', active: 'Activée', active_aide: 'Un code de votre application est demandé à chaque connexion.',
     code_desactiver: 'Code actuel pour désactiver', desactiver: 'Désactiver',
+    sans_2fa_demo: 'Non utilisée sur la démonstration : les comptes y sont partagés.',
     inactive_aide: 'Protège votre compte même si votre mot de passe est découvert. <b>Obligatoire pour l’administration.</b>', activer: 'Activer',
     etape1: 'Installez une application d’authentification (Microsoft Authenticator, Google Authenticator…).', etape2: 'Scannez ce code QR, ou entrez la clé à la main.',
     etape3: 'Entrez le code à 6 chiffres affiché.', cle: 'Clé :', code6: 'Code à 6 chiffres', active_ok: 'Double authentification activée.',

@@ -390,17 +390,11 @@ for (const L of LARGEURS) {
     await verifier(r, L, '17-copilote-reseau');
     await verifierAide(r, L, '17b-aide-administration', 'gestionnaire');
 
-    // 7. La sécurité : double authentification exigée, puis création d'un compte
-    await onglet(r, 'admin');
-    assert.match(await r.textContent('#v-admin'), /double authentification/i);
-    await r.click('#b-vers-compte');
-    await r.click('#b-2fa-prep');
-    await r.waitForSelector('#a-code');
-    await verifier(r, L, '18-activation-2fa');
-    const secret = (await r.textContent('#zone-2fa .num')).trim();
-    await r.fill('#a-code', totp.codePourPas(secret, totp.pasActuel()));
-    await r.click('#b-2fa-ok');
-    await toast(r, 'activée');
+    // 7. Démo : jamais de double authentification ; administration directe, puis création d'un compte
+    await menu(r, '#b-compte');
+    await r.waitForSelector('#sans-2fa-demo');
+    assert.strictEqual(await r.locator('#b-2fa-prep').count(), 0);
+    await verifier(r, L, '18-demo-sans-2fa');
     await onglet(r, 'admin');
     await r.waitForSelector('#b-creer-compte');
     await verifier(r, L, '19-administration');
@@ -591,16 +585,8 @@ test('interface en anglais : aucun texte français restant (noms propres except�
   await r.waitForSelector('#v-copilote .niveau');
   await ecran(r, '12-copilot-network');
   await onglet(r, 'admin');
-  await ecran(r, '13-admin-2fa');
-  await r.click('#b-vers-compte');
-  await r.click('#b-2fa-prep');
-  await r.waitForSelector('#a-code');
-  await ecran(r, '14-2fa');
-  const secret = (await r.textContent('#zone-2fa .num')).trim();
-  await r.fill('#a-code', totp.codePourPas(secret, totp.pasActuel()));
-  await r.click('#b-2fa-ok');
-  await toast(r, 'enabled');
-  await onglet(r, 'admin');
+  await r.waitForSelector('#b-creer-compte');
+  await ecran(r, '13-admin-demo');
   for (const sous of ['utilisateurs', 'structure', 'import', 'config', 'connecteurs', 'journal']) {
     await r.click(`[data-ao="${sous}"]`);
     await r.waitForFunction((s) => document.querySelector(`[data-ao="${s}"]`)?.getAttribute('aria-pressed') === 'true' && document.querySelector('#admin-corps').children.length > 0, sous);

@@ -11,6 +11,7 @@ Propriétaire : Moustafa Adamou. Langue de travail et de l’interface : **fran�
 - **Charte visuelle** (`public/style.css`, identique pour tous les établissements et rôles) : principal `#0E5E6F`, secondaire `#159895`, accent `#57C5B6`, fond `#F5F8FA`, texte `#1F2937` / `#64748B`, bordures `#E2E8F0`. Rouge `#DC2626`, orange `#F59E0B`, vert `#16A34A`, bleu `#2563EB`, gris `#94A3B8` : **statuts seulement**, jamais comme couleur d’identité. Décision de Moustafa (1er nov. 2026, cahier « refonte visuelle CHSLD ») : les CHSLD ont un thème propre (`public/chsld.css`, appliqué par le type d’établissement : sauge `#3E8B77`, forêt `#18594D`, pétrole `#164B61`, turquoise `#DDF4EF`, fond `#F6FAF8`, ambre `#E6A23C`, indicateurs teintés) ; les hôpitaux gardent la charte ci-dessus.
 - **Le Copilote propose, un humain décide** : aucune action automatique ; chaque action passe par les mêmes règles que l’interface.
 - **Proximité d’abord** : l’hôpital le plus proche qui a un lit adapté, sauf s’il est lui-même débordé.
+- **Jamais de double authentification sur les démos** (décision de Moustafa, 6 nov. 2026) : comptes partagés ; administration sans code et activation refusée en environnement démo. Elle reste exigée en recette, validation et production.
 - Ne jamais afficher de mot de passe, de clé ou de secret dans les réponses.
 - Demander l’accord de Moustafa avant toute action sur le serveur ou sur la base de production.
 

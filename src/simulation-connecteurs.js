@@ -62,7 +62,7 @@ function exigerSimulation(u, con) {
 }
 function exigerAdmin(u) {
   if (!u.admin || !['admin_etab', 'gestionnaire'].includes(u.role)) throw new ErreurHttp(403, 'reserve_admin');
-  if (process.env.ARRIMO_2FA_ADMIN !== '0' && !u.totp_actif) throw new ErreurHttp(403, 'admin_exige_2fa');
+  if (env.exige2faAdmin() && !u.totp_actif) throw new ErreurHttp(403, 'admin_exige_2fa');
 }
 async function configurer(pool, u, id, b) {
   exigerAdmin(u);

@@ -499,7 +499,7 @@ async function demarrer() {
     $('#ecran-app').hidden = false;
     document.querySelectorAll('#onglets button').forEach((b) => { b.hidden = b.dataset.v !== 'admin'; });
     $('#b-notif').hidden = true;
-    allerA(etat.moi.utilisateur.totp_actif ? 'admin' : 'compte');
+    allerA(etat.moi.utilisateur.totp_actif || etat.moi.demo ? 'admin' : 'compte');
     document.body.dataset.pret = '1';
     return;
   }
@@ -2164,7 +2164,7 @@ async function vueCompte() {
         ${u.totp_actif
     ? `<p><span class="badge fort">${K('active')}</span> ${K('active_aide')}</p>
            <div class="ligne"><div class="champ"><label class="lbl" for="d-code">${K('code_desactiver')}</label><input id="d-code" inputmode="numeric" maxlength="7"></div><button class="btn dan" id="b-2fa-off">${K('desactiver')}</button></div>`
-    : `<p>${t('compte.inactive_aide')}</p>
+    : etat.moi.demo ? `<p class="note" id="sans-2fa-demo">${K('sans_2fa_demo')}</p>` : `<p>${t('compte.inactive_aide')}</p>
            <div id="zone-2fa"><button class="btn pri" id="b-2fa-prep">${K('activer')}</button></div>`}
       </div>
       <div class="panneau-c"><h3>${K('langue')}</h3><select id="langue-compte" aria-label="${K('langue')}">${LANGUES.map((l) => `<option value="${l}"${l === langue ? ' selected' : ''}>${esc(dicoDe(l).langue.nom)}</option>`).join('')}</select></div></div>`;
@@ -2256,7 +2256,7 @@ async function vueAdmin() {
   const v = $('#v-admin');
   const u = etat.moi.utilisateur;
   const D = (k, vars) => esc(t(`admin.${k}`, vars));
-  if (!u.totp_actif) {
+  if (!u.totp_actif && !etat.moi.demo) {
     v.innerHTML = `<div class="entete"><div><h2>${D('titre')}</h2></div></div><div class="panneau-c"><h3>${D('exige_2fa_titre')}</h3>
       <p>${D('exige_2fa')}</p><button class="btn pri" id="b-vers-compte">${D('vers_compte')}</button></div>`;
     $('#b-vers-compte').onclick = () => allerA('compte');

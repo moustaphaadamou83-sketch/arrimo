@@ -42,6 +42,7 @@ const MESSAGES = {
   etab_interdit: "Vous n'avez pas accès à cet établissement.",
   role_entretien: 'Votre rôle donne accès à l’écran Nettoyage seulement.',
   reserve_admin: 'Réservé aux administrateurs.',
+  double_auth_indisponible_demo: 'La double authentification n’est pas utilisée sur la démonstration.',
   admin_exige_2fa: 'Activez la double authentification (Mon compte) pour accéder à l’administration.',
   reserve_gestionnaire: 'Réservé au gestionnaire réseau.',
   module_inactif: "Le module n'est pas activé pour {etab}. L'activation se fait depuis SH.",

@@ -82,7 +82,7 @@ async function configuration(pool, u, etab) { exigerEtablissement(u, etab); retu
 async function configurer(pool, u, etab, b) {
   exigerEtablissement(u, etab);
   if (!peutConfigurer(u)) throw new ErreurHttp(403, 'reserve_admin');
-  if (!require('./environnement').estDemo() && process.env.ARRIMO_2FA_ADMIN !== '0' && !u.totp_actif) throw new ErreurHttp(403, 'admin_exige_2fa');
+  if (require('./environnement').exige2faAdmin() && !u.totp_actif) throw new ErreurHttp(403, 'admin_exige_2fa');
   return transaction(pool, async (c) => {
     await c.query('INSERT INTO og_configurations (etablissement_id) VALUES ($1) ON CONFLICT DO NOTHING', [etab]);
     const ligne = (await c.query('SELECT * FROM og_configurations WHERE etablissement_id=$1 FOR UPDATE', [etab])).rows[0];

@@ -1387,6 +1387,28 @@ test('interface réelle : parcours CHSLD A → Hôpital B → CHSLD A dans le na
   assert.deepStrictEqual(erreurs, [], 'aucune erreur JavaScript dans les pages');
 });
 
+test('démos sans double authentification : administration directe, activation refusée ; exigée ailleurs', async () => {
+  const qui = 'era_direction'; assert.ok(sessions[qui]);
+  const avant = { env: process.env.ARRIMO_ENV, demo: process.env.ARRIMO_DEMO, deuxfa: process.env.ARRIMO_2FA_ADMIN };
+  const remettre = (k, v) => { if (v === undefined) delete process.env[k]; else process.env[k] = v; };
+  const actif = async () => (await poolPilote.query("SELECT totp_actif, totp_secret FROM utilisateurs WHERE id = (SELECT id FROM utilisateurs WHERE email = $1)", [(await api(qui, 'GET', '/moi')).utilisateur.email])).rows[0];
+  try {
+    delete process.env.ARRIMO_2FA_ADMIN;
+    process.env.ARRIMO_ENV = 'demo';
+    assert.strictEqual((await api(qui, 'GET', '/moi')).demo, true);
+    await api(qui, 'GET', '/admin/utilisateurs');
+    await refuse(qui, 'POST', '/moi/2fa/preparer', {}, 403, 'double_auth_indisponible_demo');
+    await refuse(qui, 'POST', '/moi/2fa/activer', { code: '000000' }, 403, 'double_auth_indisponible_demo');
+    const d = await actif(); assert.strictEqual(d.totp_actif, false); assert.strictEqual(d.totp_secret, null);
+    for (const e of ['recette', 'pilote']) {
+      process.env.ARRIMO_ENV = e;
+      await refuse(qui, 'GET', '/admin/utilisateurs', undefined, 403, 'admin_exige_2fa');
+      assert.strictEqual((await appel(qui, 'POST', '/moi/2fa/preparer', {})).statut, 200);
+    }
+    await poolPilote.query("UPDATE utilisateurs SET totp_secret = NULL WHERE email = $1", [(await api(qui, 'GET', '/moi')).utilisateur.email]);
+  } finally { remettre('ARRIMO_ENV', avant.env); remettre('ARRIMO_DEMO', avant.demo); remettre('ARRIMO_2FA_ADMIN', avant.deuxfa); }
+});
+
 test('démonstration : un seul compte par CHSLD (administrateur), six comptes désactivés sans perte ; thème CHSLD clair et sombre, trois largeurs', { timeout: 240000 }, async () => {
   const { simplifierComptesDemo } = require('../src/demo-chsld');
   const { ROLES, courrielDe } = require('../db/provisionner-chsld');

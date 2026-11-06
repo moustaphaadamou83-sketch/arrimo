@@ -183,7 +183,7 @@ function creerApp(pool, options = {}) {
   // (comme l'administration). Exceptions : serveur de démonstration (compte réseau public) et ARRIMO_2FA_ADMIN=0 (tests).
   api.use((req, res, next) => {
     const u = req.utilisateur;
-    if (!u.gestionnaire || u.totp_actif || env.estDemo() || process.env.ARRIMO_2FA_ADMIN === '0') return next();
+    if (!u.gestionnaire || u.totp_actif || !env.exige2faAdmin()) return next();
     const ok = (req.method === 'GET' && req.path === '/moi') || req.path.startsWith('/moi/2fa/') || (req.method === 'PUT' && req.path === '/moi/mot-de-passe')
       || (req.method === 'POST' && req.path === '/deconnexion');
     return ok ? next() : next(new ErreurHttp(403, 'admin_exige_2fa'));

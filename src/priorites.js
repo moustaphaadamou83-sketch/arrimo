@@ -69,7 +69,7 @@ async function configurer(pool, u, etab, b) {
 function exigerAdministration(u, etab) {
   exigerEtablissement(u, etab);
   if (!u.admin || !['gestionnaire', 'admin_etab'].includes(u.role)) throw new ErreurHttp(403, 'reserve_admin');
-  if (process.env.ARRIMO_2FA_ADMIN !== '0' && !u.totp_actif) throw new ErreurHttp(403, 'admin_exige_2fa');
+  if (require('./environnement').exige2faAdmin() && !u.totp_actif) throw new ErreurHttp(403, 'admin_exige_2fa');
 }
 async function habiliter(pool, u, etab, utilisateurId, b) {
   exigerAdministration(u, etab);
