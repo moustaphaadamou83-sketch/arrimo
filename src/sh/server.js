@@ -25,6 +25,8 @@ pool.query(fs.readFileSync(path.join(__dirname, '..', '..', 'db', 'sh-schema.sql
       const verifierSla=()=>require('./support-sla').executerEscalades(pool).catch(e=>console.error('SLA :',e.code||e.name));
       verifierSla();setInterval(verifierSla,Math.max(1,slaMinutes)*60000).unref();
     }
+    const demandes=()=>require('./demandes-site').entretien(pool,process.env).catch(e=>console.error('Demandes du site :',e.code||e.name));
+    demandes();setInterval(demandes,300000).unref();
     const courrielsMinutes=Number(process.env.SH_SUPPORT_COURRIELS_MINUTES??1);
     if(Number.isFinite(courrielsMinutes)&&courrielsMinutes>0){
       const envoyerCourriels=()=>require('./support-courriels').executer(pool,{env:process.env}).catch(e=>console.error('Courriels support :',e.code||e.name));

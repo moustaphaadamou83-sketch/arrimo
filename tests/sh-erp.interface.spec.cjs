@@ -365,6 +365,12 @@ test('ERP SH dans le navigateur : parcours complet par les écrans, 3 largeurs',
       await page.fill('#h-pays','FR');await page.dispatchEvent('#h-pays','change');
       await page.waitForFunction((n)=>[...document.querySelectorAll('#h-type-local option')].some(o=>o.textContent===n),nomType);
       await page.keyboard.press('Escape');await page.goto(page.url());await page.waitForSelector('#onglets');
+      // Demande du site : affichée en texte, statut modifiable.
+      await pool.query(`INSERT INTO sh_demandes_site(depot_id,type,pays,langue,nom,organisation,courriel,message) VALUES('00000000-0000-4000-8000-000000000001','demo','canada','fr','Personne fictive','Organisation fictive','p@exemple.invalid','<img src=x id=piege-xss> Message fictif') ON CONFLICT DO NOTHING`);
+      await page.vue('demandes');await page.waitForSelector('[data-demande]');
+      assert.match(await page.textContent('[data-demande] .demande-message'),/<img src=x id=piege-xss> Message fictif/);
+      assert.equal(await page.locator('#piege-xss').count(),0,'le message reste du texte');
+      await verifier(page,L,'sh-demandes');
       await page.vue('compte');}
     assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'clair','automatique suit le système (clair dans ce navigateur)');
     await page.fill('#m-fuseau','Africa/Lome');

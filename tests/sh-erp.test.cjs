@@ -1111,3 +1111,52 @@ test('types locaux par pays : administration seule, pays et modèle vérifiés, 
     body: JSON.stringify({ code: 'XY-LIB', nom: 'Libellé trop court', latitude: 46, longitude: -71, type_libelle: 'x' }) });
   assert.strictEqual(brut.status, 400, 'libellé invalide refusé par l’environnement');
 });
+
+test('demandes du site : dépôt réservé au serveur du site, écran limité aux rôles, alerte sans renseignement personnel, 24 mois', async () => {
+  const crypto = require('node:crypto'); const courriel = require('../src/courriel'); const site = require('../src/sh/demandes-site');
+  const envoi = (corps, entetes = {}) => fetch(`${baseSh}/api/depot-site/demandes`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...entetes }, body: JSON.stringify(corps) });
+  const demande = { depot_id: crypto.randomUUID(), type: 'demo', pays: 'canada', langue: 'fr', consentement: true, nom: 'Personne fictive', organisation: 'Organisation fictive', courriel: 'personne@exemple.invalid', message: '<img src=x onerror=alert(1)> Message fictif' };
+  assert.strictEqual((await envoi(demande, { 'X-Depot-Cle': 'x' })).status, 404, 'route fermée tant qu’aucune clé n’est configurée');
+  envSh.SH_DEPOT_SITE_CLE_SHA256 = crypto.createHash('sha256').update('cle-depot-fictive').digest('hex');
+  envSh.SH_DEPOT_SITE_ALERTE = 'alerte@exemple.invalid';
+  {
+    assert.strictEqual((await envoi(demande)).status, 401, 'sans clé');
+    assert.strictEqual((await envoi(demande, { 'X-Depot-Cle': 'mauvaise' })).status, 401);
+    const cle = { 'X-Depot-Cle': 'cle-depot-fictive' };
+    assert.strictEqual((await envoi(demande, { ...cle, 'X-Forwarded-For': '203.0.113.7' })).status, 404, 'un appel venu d’Internet par Nginx est refusé, même avec la clé');
+    for (const mauvais of [{ consentement: false }, { type: 'autre' }, { courriel: 'pas-un-courriel' }, { nom: '' }, { message: 'x'.repeat(4001) }, { depot_id: 'x' }, { nom: { a: 1 } }]) {
+      assert.strictEqual((await envoi({ ...demande, ...mauvais }, cle)).status, 400, JSON.stringify(mauvais).slice(0, 40));
+    }
+    const envoyes = []; courriel.definirTransport(async (m) => { envoyes.push(m); });
+    try {
+      assert.deepStrictEqual(await (await envoi(demande, cle)).json(), { ok: true, nouvelle: true });
+      assert.deepStrictEqual(await (await envoi(demande, cle)).json(), { ok: true, nouvelle: false }, 'un renvoi ne crée pas de doublon');
+      assert.strictEqual((await pool.query('SELECT count(*)::int n FROM sh_demandes_site')).rows[0].n, 1);
+      await Promise.all([site.entretien(pool, envSh), site.entretien(pool, envSh), site.entretien(pool, envSh)]);
+      for (let i = 0; i < 50 && !envoyes.length; i++) await new Promise((r) => setTimeout(r, 20));
+      assert.strictEqual(envoyes.length, 1, 'une seule alerte par demande');
+      const brut = JSON.stringify(envoyes[0]);
+      for (const prive of ['Personne fictive', 'personne@exemple.invalid', 'Organisation fictive', 'Message fictif']) assert.ok(!brut.includes(prive), `alerte sans ${prive}`);
+    } finally { courriel.definirTransport(null); }
+    assert.strictEqual((await fetch(`${baseSh}/api/depot-site/demandes`, { headers: cle })).status, 401, 'la clé du site ne permet aucune lecture');
+    for (const role of ['finance', 'implantation', 'formation', 'support']) assert.strictEqual(await statut(role, 'GET', '/demandes-site'), 403, role);
+    assert.strictEqual(await statut(null, 'GET', '/demandes-site'), 401);
+    const [d] = await ok('commercial', 'GET', '/demandes-site');
+    assert.strictEqual(d.nom, 'Personne fictive');
+    assert.strictEqual((await ok('commercial', 'PUT', `/demandes-site/${d.id}`, { statut: 'en_cours' })).statut, 'en_cours');
+    assert.strictEqual(await statut('commercial', 'PUT', `/demandes-site/${d.id}`, { statut: 'x' }), 400);
+    assert.strictEqual(await statut('commercial', 'DELETE', `/demandes-site/${d.id}`), 403, 'suppression réservée à l’administration');
+    const journal = (await pool.query("SELECT coalesce(string_agg(action||cible||coalesce(detail,''),' '),'') j FROM sh_journal WHERE action LIKE 'Demande%'")).rows[0].j;
+    assert.ok(journal.includes(`Demande ${d.id}`) && !journal.includes('Personne fictive'), 'journal sans nom');
+    await ok('admin', 'DELETE', `/demandes-site/${d.id}`);
+    assert.strictEqual((await pool.query('SELECT count(*)::int n FROM sh_demandes_site')).rows[0].n, 0);
+    const vieille = { ...demande, depot_id: crypto.randomUUID() }; const recente = { ...demande, depot_id: crypto.randomUUID() };
+    await envoi(vieille, cle); await envoi(recente, cle);
+    await pool.query("UPDATE sh_demandes_site SET recu_le = now() - interval '24 months 1 day', alerte_le = now() WHERE depot_id = $1", [vieille.depot_id]);
+    await pool.query('UPDATE sh_demandes_site SET alerte_le = now() WHERE depot_id = $1', [recente.depot_id]);
+    assert.strictEqual((await site.entretien(pool, envSh)).supprimees, 1);
+    assert.deepStrictEqual((await pool.query('SELECT depot_id FROM sh_demandes_site')).rows.map((x) => x.depot_id), [recente.depot_id]);
+  }
+  delete envSh.SH_DEPOT_SITE_CLE_SHA256; delete envSh.SH_DEPOT_SITE_ALERTE;
+  assert.strictEqual((await envoi(demande, { 'X-Depot-Cle': 'cle-depot-fictive' })).status, 404);
+});

@@ -70,12 +70,12 @@ const membresProjetSelectionnes=selecteur=>[...$(selecteur).querySelectorAll('in
 /* ---------------- onglets et notifications ---------------- */
 const ONGLETS_ROLES = {
   accueil: null, hopitaux: null, taches: null, calendrier: null, documents: null, rapports: null, compte: null,
-  crm: ['commercial', 'finance'], contrats: ['commercial', 'finance'], facturation: ['finance'],
+  crm: ['commercial', 'finance'], demandes: ['commercial'], contrats: ['commercial', 'finance'], facturation: ['finance'],
   projets: ['implantation', 'support', 'formation'], support: ['support', 'implantation'], hebergement: ['implantation', 'support'],
   journal: ['implantation', 'support'], equipe: [], parametres: [],
 };
 function reglerOnglets() {
-  const routes={accueil:'GET /rapports/indicateurs',hopitaux:'GET /hopitaux',taches:'GET /taches',calendrier:'GET /calendrier',documents:'GET /documents',rapports:'GET /rapports/indicateurs',crm:'GET /crm/organisations',contrats:'GET /crm/contrats',facturation:'GET /facturation/factures',projets:'GET /projets',support:'GET /support/tickets',hebergement:'GET /hebergement',journal:'GET /journal',equipe:'GET /equipe',parametres:'GET /parametres'};
+  const routes={accueil:'GET /rapports/indicateurs',hopitaux:'GET /hopitaux',taches:'GET /taches',calendrier:'GET /calendrier',documents:'GET /documents',rapports:'GET /rapports/indicateurs',crm:'GET /crm/organisations',demandes:'GET /demandes-site',contrats:'GET /crm/contrats',facturation:'GET /facturation/factures',projets:'GET /projets',support:'GET /support/tickets',hebergement:'GET /hebergement',journal:'GET /journal',equipe:'GET /equipe',parametres:'GET /parametres'};
   const u=etat.moi.utilisateur;
   for (const [vue, roles] of Object.entries(ONGLETS_ROLES)) {
     const b = $(`#onglets [data-v="${vue}"]`);

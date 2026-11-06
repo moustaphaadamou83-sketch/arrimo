@@ -242,6 +242,7 @@ async function afficherVue() {
   try {
     if (etat.vue === 'accueil') await vueAccueil(v);
     else if (etat.vue === 'crm') await vueCRM(v);
+    else if (etat.vue === 'demandes') await vueDemandes(v);
     else if (etat.vue === 'contrats') await vueContrats(v);
     else if (etat.vue === 'projets') await vueProjets(v);
     else if (etat.vue === 'taches') await vueTaches(v);

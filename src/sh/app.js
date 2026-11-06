@@ -94,6 +94,7 @@ function creerAppSh(pool, { env = process.env } = {}) {
     return c;
   };
 
+  require('./demandes-site').brancherDepot(app, poolService, env);
   const api = express.Router();
   const route = (fn) => (req, res, next) => Promise.resolve(fn(req, res)).then((r) => res.json(r ?? { ok: true })).catch(async (e) => {
     if (req.goliveOperationId) {
@@ -304,6 +305,7 @@ function creerAppSh(pool, { env = process.env } = {}) {
     if (!Object.hasOwn(TE.TYPES, type)) throw new ErreurSh(400, 'Type d’établissement invalide.');
     return { types: Object.entries(TE.TYPES).map(([code, t]) => ({ code, ...t })), type, modules: await catalogueType(pool, type) };
   }));
+  require('./demandes-site').brancherEcran(api, pool, route, entier, journal, ErreurSh);
   /* Types propres à un pays : un nom affiché et un modèle opérationnel. Le modèle fixe le comportement, il ne change plus une fois le type utilisé. */
   const champsTypeLocal = (b) => {
     const nom = String(b.nom ?? '').trim(); const brut = b.nom_en == null ? '' : String(b.nom_en).trim();

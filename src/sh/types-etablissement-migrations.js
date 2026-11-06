@@ -75,5 +75,28 @@ async function migrerTypesLocaux(c) {
   await c.query('INSERT INTO sh_migrations(version) VALUES($1)', [TYPES_LOCAUX_VERSION]);
   return true;
 }
-const VERSION_SH = TYPES_LOCAUX_VERSION;
-module.exports = { TYPES_ETABLISSEMENT_VERSION, LIAISON_CHSLD_VERSION, PRODUCTIONS_VERSION, TYPES_LOCAUX_VERSION, VERSION_SH, migrerTypesEtablissement, migrerLiaisonChsld, migrerProductions, migrerTypesLocaux };
+/* Migration 41 : demandes du formulaire du site public. Table neuve ; aucune ligne existante n'est modifiée. */
+const DEMANDES_SITE_VERSION = 41;
+async function migrerDemandesSite(c) {
+  if ((await c.query('SELECT 1 FROM sh_migrations WHERE version=$1', [DEMANDES_SITE_VERSION])).rowCount) return false;
+  await c.query(`CREATE TABLE IF NOT EXISTS sh_demandes_site(
+    id serial PRIMARY KEY,
+    depot_id uuid NOT NULL UNIQUE,
+    type text NOT NULL CHECK (type IN ('demo','devis','contact')),
+    pays text NOT NULL CHECK (pays IN ('canada','europe','afrique','autre')),
+    langue text NOT NULL CHECK (langue IN ('fr','en')),
+    nom text NOT NULL, fonction text, organisation text NOT NULL, courriel text NOT NULL, telephone text,
+    type_organisation text, format text, nb_etablissements text, offre text, sujet text, message text NOT NULL,
+    statut text NOT NULL DEFAULT 'nouvelle' CHECK (statut IN ('nouvelle','en_cours','traitee','rejetee')),
+    traite_par int REFERENCES sh_utilisateurs(id) ON DELETE SET NULL, traite_le timestamptz, alerte_le timestamptz,
+    recu_le timestamptz NOT NULL DEFAULT now())`);
+  await c.query('CREATE INDEX IF NOT EXISTS sh_demandes_site_recu ON sh_demandes_site (recu_le)');
+  const owner = (await c.query('SELECT current_user owner')).rows[0].owner; const role = `${owner}_scope`;
+  if (!/^[a-z][a-z0-9_]{0,50}$/.test(role)) throw new Error('Rôle SH invalide.');
+  await c.query(`GRANT SELECT,INSERT,UPDATE,DELETE ON sh_demandes_site TO "${role}"`);
+  await c.query(`GRANT USAGE,SELECT ON SEQUENCE sh_demandes_site_id_seq TO "${role}"`);
+  await c.query('INSERT INTO sh_migrations(version) VALUES($1)', [DEMANDES_SITE_VERSION]);
+  return true;
+}
+const VERSION_SH = DEMANDES_SITE_VERSION;
+module.exports = { TYPES_ETABLISSEMENT_VERSION, LIAISON_CHSLD_VERSION, PRODUCTIONS_VERSION, TYPES_LOCAUX_VERSION, DEMANDES_SITE_VERSION, VERSION_SH, migrerTypesEtablissement, migrerLiaisonChsld, migrerProductions, migrerTypesLocaux, migrerDemandesSite };
