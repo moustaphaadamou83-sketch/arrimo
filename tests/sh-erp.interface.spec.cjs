@@ -353,6 +353,18 @@ test('ERP SH dans le navigateur : parcours complet par les écrans, 3 largeurs',
       await page.waitForFunction(()=>document.documentElement.dataset.theme==='sombre');
       const rr=page.waitForResponse(r=>r.url().includes('/api/moi/apparence')&&r.request().method()==='PUT');
       await page.check('input[name="pa-apparence"][value="automatique"]');assert.equal((await rr).status(),200);
+      // Type propre à un pays : ajouté dans Paramètres, proposé sur la fiche du même pays seulement.
+      const suffixe=String(typeof L==="object"?(L.width??L.largeur??L.nom):L).toLowerCase().replace(/[^a-z0-9]/g,"_"),codeType=`type_ui_${suffixe}`,nomType=`Type fictif ${suffixe}`;
+      await page.fill('#tl-pays','FR');await page.fill('#tl-code',codeType);await page.fill('#tl-nom',nomType);
+      const repType=page.waitForResponse(r=>r.url().includes('/api/types-locaux')&&r.request().method()==='POST',{timeout:8000}).catch(()=>null);
+      await page.click('#f-type-local button[type="submit"]');
+      const rType=await repType;assert.equal(rType?.status(),200,`Ajout du type : ${rType?rType.status()+' '+await rType.text():'aucune requête'} ; toasts=${await page.locator('#toasts').textContent().catch(()=>'')}`);
+      await page.waitForFunction((n)=>document.querySelector('#types-locaux')?.textContent.includes(n),nomType);
+      await page.vue('hopitaux');await page.click('#b-nouveau');
+      assert.equal(await page.locator('#h-type-local option',{hasText:nomType}).count(),0,'pas proposé pour un autre pays');
+      await page.fill('#h-pays','FR');await page.dispatchEvent('#h-pays','change');
+      await page.waitForFunction((n)=>[...document.querySelectorAll('#h-type-local option')].some(o=>o.textContent===n),nomType);
+      await page.keyboard.press('Escape');await page.goto(page.url());await page.waitForSelector('#onglets');
       await page.vue('compte');}
     assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'clair','automatique suit le système (clair dans ce navigateur)');
     await page.fill('#m-fuseau','Africa/Lome');

@@ -26,7 +26,7 @@ test('sauvegarde et restauration PostgreSQL de la candidate SH dans une base fic
   // --clean porte exclusivement sur la base fictive neuve identifiée et vérifiée ci-dessus.
   commande('/usr/lib/postgresql/16/bin/pg_restore',['--dbname',url.href,'--clean','--if-exists','--exit-on-error','--single-transaction',archive]);
   assert.deepEqual({versions:(await pool.query('SELECT version FROM sh_migrations ORDER BY version')).rows,projets:(await pool.query('SELECT * FROM sh_projets ORDER BY id')).rows,taches:(await pool.query('SELECT * FROM sh_taches ORDER BY id')).rows,journal:(await pool.query('SELECT * FROM sh_journal ORDER BY id')).rows},avant);
-  assert.deepEqual(await migrerSh(pool,env),{version:39,appliquee:false});
+  assert.deepEqual(await migrerSh(pool,env),{version:40,appliquee:false});
   await assert.rejects(pool.query("UPDATE sh_journal SET action='Modification interdite'"));
   await transaction(pool,async c=>{
     await c.query('SET LOCAL ROLE arrimo_sh_scope');

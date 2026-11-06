@@ -110,6 +110,14 @@ async function configChsld(c, profilId) {
   }
   return id;
 }
+/** Nom local d'un type (affichage seulement) : vide ou absent = aucun nom local. */
+function libelleType(valeur) {
+  const { ErreurHttp } = require('./db');
+  if (valeur === undefined || valeur === null || valeur === '') return null;
+  const s = String(valeur).trim();
+  if (s.length < 2 || s.length > 80 || /[\u0000-\u001f\u007f]/.test(s)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'type_libelle' });
+  return s;
+}
 /** Drapeaux des modules optionnels (désactivés par défaut). */
 const drapeauxOptionnels = (type) => [...new Set(MODULES.filter((m) => m.types.includes(type) && m.categorie === 'optionnel' && m.statut === 'disponible' && m.drapeau).map((m) => m.drapeau))];
-module.exports = { drapeauxOptionnels, TYPES, TYPES_OPERATIONNELS, MODULES, catalogue, drapeaux, exigerTypeOperationnel, drapeauxDepuisChoix, moduleActif, configChsld, UNITES_CHSLD };
+module.exports = { libelleType, drapeauxOptionnels, TYPES, TYPES_OPERATIONNELS, MODULES, catalogue, drapeaux, exigerTypeOperationnel, drapeauxDepuisChoix, moduleActif, configChsld, UNITES_CHSLD };

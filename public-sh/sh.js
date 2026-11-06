@@ -295,12 +295,22 @@ async function afficherModulesType(type, zone) {
         <span>${esc(m.nom)} <span class="badge">${esc(STATUT_MODULE[m.statut])}</span>${m.dependances?.length ? ` <span class="note">requiert : ${esc(m.dependances.join(', '))}</span>` : ''}${m.note ? ` <span class="note">· ${esc(m.note)}</span>` : ''}</span></label>`).join('')}</fieldset>`; }).join('');
   } catch (e) { zone.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; }
 }
+/* Types locaux du pays saisi, limités au type choisi sur la fiche. */
+async function afficherTypesLocaux() {
+  const zone = $('#h-type-local'); if (!zone) return;
+  const pays = $('#h-pays').value.trim().toUpperCase(); const actuel = zone.value || zone.dataset.actuel;
+  const types = /^[A-Z]{2}$/.test(pays) ? await api('GET', `/types-locaux?pays=${encodeURIComponent(pays)}`).catch(() => []) : [];
+  const proposes = types.filter((t) => t.modele === $('#h-type').value && (t.actif || String(t.id) === actuel));
+  zone.innerHTML = `<option value="">Aucun</option>${proposes.map((t) => `<option value="${t.id}">${esc(t.nom)}</option>`).join('')}`;
+  zone.value = proposes.some((t) => String(t.id) === actuel) ? actuel : '';
+}
 const lireModulesType = () => Object.fromEntries([...document.querySelectorAll('#h-modules [data-module]:not(:disabled)')].map((c) => [c.dataset.module, c.checked]));
 function formHopital(h = {}) {
   const verrou = !!h.relie;
   const type = h.type_etablissement || 'hopital';
   return `<fieldset class="type-etab"><legend>1. Type d’établissement</legend><div class="ligne"><div class="champ"><label class="lbl" for="h-type">Type d’établissement</label>
-      <select id="h-type"${verrou ? ' disabled' : ''}>${TYPES_ETAB.map(([c, n, ok]) => `<option value="${c}"${c === type ? ' selected' : ''}${ok ? '' : ' disabled'}>${esc(n)}${ok ? '' : ' (à venir)'}</option>`).join('')}</select></div></div>
+      <select id="h-type"${verrou ? ' disabled' : ''}>${TYPES_ETAB.map(([c, n, ok]) => `<option value="${c}"${c === type ? ' selected' : ''}${ok ? '' : ' disabled'}>${esc(n)}${ok ? '' : ' (à venir)'}</option>`).join('')}</select></div>
+      <div class="champ"><label class="lbl" for="h-type-local">Nom du type dans ce pays (facultatif)</label><select id="h-type-local" data-actuel="${esc(h.type_local_id ?? '')}"><option value="">Aucun</option></select></div></div>
       <p class="note">Hôpital et CHSLD sont opérationnels. Maison des aînés, RPA et Ressource intermédiaire sont prévus : ils seront activables après le développement et les tests de leurs parcours.</p>
       ${h.id ? '' : '<div id="h-modules" class="modules-proposes"></div>'}</fieldset>
     <fieldset><legend>2. Identité et environnement</legend>
@@ -314,6 +324,7 @@ function formHopital(h = {}) {
     </fieldset><div class="ligne">${champ('h-cnom', 'Contact : nom', h.contact_nom)}${champ('h-ccourriel', 'Contact : courriel', h.contact_courriel, 'type="email"')}${champ('h-ctel', 'Contact : téléphone', h.contact_telephone, 'type="tel"')}</div>`;
 }
 const lireFormHopital = () => ({
+  ...($('#h-type-local') ? { type_local_id: $('#h-type-local').value ? Number($('#h-type-local').value) : null } : {}),
   type_etablissement: $('#h-type').value, ...($('#h-modules') ? { modules: lireModulesType() } : {}),
   nom: $('#h-nom').value, code_etab: $('#h-code').value, environnement: $('#h-env').value, adresse: $('#h-adresse').value, ville: $('#h-ville').value,
   raison_sociale: $('#h-raison').value, identifiant_legal: $('#h-legal').value, pays_code: $('#h-pays').value, region: $('#h-region').value,
@@ -424,7 +435,8 @@ async function vueHopitaux(v) {
       } }]);
     $('#modale .boite').classList.add('large');
     afficherModulesType($('#h-type').value, $('#h-modules'));
-    $('#h-type').onchange = (e) => afficherModulesType(e.target.value, $('#h-modules'));
+    $('#h-type').onchange = (e) => { afficherModulesType(e.target.value, $('#h-modules')); afficherTypesLocaux(); };
+    $('#h-pays').onchange = afficherTypesLocaux; afficherTypesLocaux();
   };
   if ($('#b-demo-chsld')) $('#b-demo-chsld').onclick = () => modale('Créer les CHSLD de démonstration',
     `<p>Crée <b>CHSLD 1 — des Érables</b> (60 lits) et <b>CHSLD 2 — du Saint-Laurent</b> (90 lits) par le parcours SH habituel : type CHSLD et modules, création dans l’environnement, import de la structure et des comptes, liste de contrôle, activation ; puis les scénarios fictifs (résidents, proches, hospitalisation à l’Hôpital B, transfert inter-CHSLD).</p>

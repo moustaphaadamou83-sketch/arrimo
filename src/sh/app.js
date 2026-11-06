@@ -304,6 +304,69 @@ function creerAppSh(pool, { env = process.env } = {}) {
     if (!Object.hasOwn(TE.TYPES, type)) throw new ErreurSh(400, 'Type d’établissement invalide.');
     return { types: Object.entries(TE.TYPES).map(([code, t]) => ({ code, ...t })), type, modules: await catalogueType(pool, type) };
   }));
+  /* Types propres à un pays : un nom affiché et un modèle opérationnel. Le modèle fixe le comportement, il ne change plus une fois le type utilisé. */
+  const champsTypeLocal = (b) => {
+    const nom = String(b.nom ?? '').trim(); const brut = b.nom_en == null ? '' : String(b.nom_en).trim();
+    if (nom.length < 2 || nom.length > 80) throw new ErreurSh(400, 'Le nom du type doit compter de 2 à 80 caractères.');
+    if (brut && (brut.length < 2 || brut.length > 80)) throw new ErreurSh(400, 'Le nom anglais du type doit compter de 2 à 80 caractères.');
+    const TE = require('../types-etablissement');
+    if (!TE.TYPES_OPERATIONNELS.includes(b.modele)) throw new ErreurSh(400, 'Le modèle doit être un type opérationnel : Hôpital ou CHSLD.');
+    return { nom, nom_en: brut || null, modele: b.modele };
+  };
+  api.get('/types-locaux', route(async (req) => {
+    const pays = req.query.pays === undefined ? null : require('./international').normaliserPays(req.query.pays);
+    return (await pool.query(`SELECT t.*, (SELECT count(*)::int FROM hopitaux h WHERE h.type_local_id = t.id) AS utilisations FROM sh_types_locaux t
+      WHERE ($1::text IS NULL OR t.pays_code = $1) ORDER BY t.pays_code, t.nom`, [pays])).rows;
+  }));
+  api.post('/types-locaux', route(async (req) => {
+    const v = champsTypeLocal(req.body || {});
+    const pays = require('./international').normaliserPays(req.body?.pays_code);
+    const code = String(req.body?.code ?? '').trim();
+    if (!/^[A-Z]{2}$/.test(pays)) throw new ErreurSh(400, 'Indiquez le pays (code ISO à 2 lettres).');
+    if (!/^[a-z][a-z0-9_]{1,39}$/.test(code)) throw new ErreurSh(400, 'Code invalide : minuscules, chiffres et tirets bas, 2 à 40 caractères.');
+    return transaction(pool, async (c) => {
+      const t = (await c.query(`INSERT INTO sh_types_locaux (pays_code, code, nom, nom_en, modele) VALUES ($1,$2,$3,$4,$5)
+        ON CONFLICT (pays_code, code) DO NOTHING RETURNING *`, [pays, code, v.nom, v.nom_en, v.modele])).rows[0];
+      if (!t) throw new ErreurSh(409, 'Ce code existe déjà pour ce pays.');
+      await journal(c, req.u, 'Type local créé', `${pays} · ${code}`, `${v.nom} · modèle ${v.modele}`);
+      return t;
+    });
+  }));
+  api.put('/types-locaux/:id', route(async (req) => {
+    const id = entier(req.params.id);
+    return transaction(pool, async (c) => {
+      const avant = (await c.query('SELECT * FROM sh_types_locaux WHERE id = $1 FOR UPDATE', [id])).rows[0];
+      if (!avant) throw new ErreurSh(404, 'Type local introuvable.');
+      const v = champsTypeLocal({ nom: avant.nom, nom_en: avant.nom_en, modele: avant.modele, ...req.body });
+      const actif = req.body?.actif === undefined ? avant.actif : req.body.actif;
+      if (typeof actif !== 'boolean') throw new ErreurSh(400, 'État du type invalide.');
+      if (v.modele !== avant.modele && (await c.query('SELECT 1 FROM hopitaux WHERE type_local_id = $1 LIMIT 1 FOR SHARE', [id])).rowCount) {
+        throw new ErreurSh(409, 'Le modèle ne change plus : ce type est déjà utilisé par un établissement.');
+      }
+      const t = (await c.query('UPDATE sh_types_locaux SET nom=$2, nom_en=$3, modele=$4, actif=$5 WHERE id=$1 RETURNING *', [id, v.nom, v.nom_en, v.modele, actif])).rows[0];
+      await journal(c, req.u, 'Type local modifié', `${avant.pays_code} · ${avant.code}`, `${v.nom} · modèle ${v.modele} · ${actif ? 'actif' : 'désactivé'}`);
+      return t;
+    });
+  }));
+  /* Type local choisi sur une fiche : même pays, même modèle que le type de la fiche, actif (sauf s'il était déjà celui de la fiche). */
+  const resoudreTypeLocal = async (db, b, v, existant = {}) => {
+    const brut = b.type_local_id === undefined ? existant.type_local_id : b.type_local_id;
+    if (brut === null || brut === undefined || brut === '') return null;
+    const id = Number(brut);
+    if (!Number.isInteger(id) || id <= 0) throw new ErreurSh(400, 'Type local invalide.');
+    const t = (await db.query('SELECT * FROM sh_types_locaux WHERE id = $1', [id])).rows[0];
+    if (!t) throw new ErreurSh(400, 'Type local invalide.');
+    if (t.pays_code !== v.pays_code) throw new ErreurSh(409, 'Ce type local appartient à un autre pays.');
+    if (t.modele !== v.type_etablissement) throw new ErreurSh(409, 'Ce type local ne correspond pas au type de l’établissement.');
+    if (!t.actif && t.id !== existant.type_local_id) throw new ErreurSh(409, 'Ce type local est désactivé.');
+    return t.id;
+  };
+  /* Libellé transmis à l'environnement : un instantané, resynchronisé à chaque « relier ». */
+  const libelleTypeLocal = async (db, h) => {
+    if (!h.type_local_id) return { type_libelle: null, type_libelle_en: null };
+    const t = (await db.query('SELECT nom, nom_en FROM sh_types_locaux WHERE id = $1', [h.type_local_id])).rows[0];
+    return { type_libelle: t?.nom ?? null, type_libelle_en: t?.nom_en ?? null };
+  };
   /**
    * Démonstration CHSLD : l'administration crée les deux CHSLD fictifs dans un environnement fictif, par le parcours SH
    * habituel (type CHSLD et modules, relier, import de la structure et des comptes, liste de contrôle, activation), exécuté
@@ -432,12 +495,13 @@ function creerAppSh(pool, { env = process.env } = {}) {
 
   api.post('/hopitaux', route(async (req) => {
     const v = champsHopital(req.body);
+    v.type_local_id = await resoudreTypeLocal(pool, req.body, v);
     const id = await transaction(pool, async (c) => {
       const h = (await c.query(`INSERT INTO hopitaux (nom, adresse, ville, contact_nom, contact_courriel, contact_telephone, environnement, code_etab, sous_domaine, latitude, longitude,
-        raison_sociale,identifiant_legal,pays_code,region,fuseau_horaire,utilisateurs_prevus,utilisateurs_autorises,type_etablissement)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING id`,
+        raison_sociale,identifiant_legal,pays_code,region,fuseau_horaire,utilisateurs_prevus,utilisateurs_autorises,type_etablissement,type_local_id)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING id`,
       [v.nom, v.adresse, v.ville, v.contact_nom, v.contact_courriel, v.contact_telephone, v.environnement, v.code_etab, v.sous_domaine, v.latitude, v.longitude,
-        v.raison_sociale,v.identifiant_legal,v.pays_code,v.region,v.fuseau_horaire,v.utilisateurs_prevus,v.utilisateurs_autorises,v.type_etablissement]).catch(unique)).rows[0].id;
+        v.raison_sociale,v.identifiant_legal,v.pays_code,v.region,v.fuseau_horaire,v.utilisateurs_prevus,v.utilisateurs_autorises,v.type_etablissement,v.type_local_id]).catch(unique)).rows[0].id;
       await creerEtapes(c, h);
       await licencesInitiales(c, h, v.type_etablissement, req.body.modules, req.u);
       await journal(c, req.u, 'Hôpital créé', `${v.code_etab} · ${v.nom}`, `environnement ${v.environnement}`, h);
@@ -529,6 +593,7 @@ function creerAppSh(pool, { env = process.env } = {}) {
     const avant = await hopital(entier(req.params.id));
     const v = champsHopital(req.body, avant);
     profilsPays.verifierChangementPays(avant,v);
+    v.type_local_id = await resoudreTypeLocal(pool, req.body, v, avant);
     if (avant.relie && (v.environnement !== avant.environnement || v.code_etab !== avant.code_etab)) {
       throw new ErreurSh(409, 'L’hôpital est déjà relié à son établissement : l’environnement et le code ne peuvent plus changer.');
     }
@@ -547,9 +612,9 @@ function creerAppSh(pool, { env = process.env } = {}) {
     await transaction(pool, async (c) => {
       await c.query(`UPDATE hopitaux SET nom = $2, adresse = $3, ville = $4, contact_nom = $5, contact_courriel = $6, contact_telephone = $7,
         environnement = $8, code_etab = $9, sous_domaine = $10, latitude = $11, longitude = $12, statut = $13,
-        raison_sociale=$14,identifiant_legal=$15,pays_code=$16,region=$17,fuseau_horaire=$18,utilisateurs_prevus=$19,utilisateurs_autorises=$20,type_etablissement=$21 WHERE id = $1`,
+        raison_sociale=$14,identifiant_legal=$15,pays_code=$16,region=$17,fuseau_horaire=$18,utilisateurs_prevus=$19,utilisateurs_autorises=$20,type_etablissement=$21,type_local_id=$22 WHERE id = $1`,
       [avant.id, v.nom, v.adresse, v.ville, v.contact_nom, v.contact_courriel, v.contact_telephone, v.environnement, v.code_etab, v.sous_domaine,
-        v.latitude, v.longitude, statut, v.raison_sociale, v.identifiant_legal, v.pays_code, v.region, v.fuseau_horaire, v.utilisateurs_prevus, v.utilisateurs_autorises, v.type_etablissement]).catch(unique);
+        v.latitude, v.longitude, statut, v.raison_sociale, v.identifiant_legal, v.pays_code, v.region, v.fuseau_horaire, v.utilisateurs_prevus, v.utilisateurs_autorises, v.type_etablissement, v.type_local_id]).catch(unique);
       // Changement de type avant la création dans l'environnement : les licences repartent des modules du nouveau type.
       if (v.type_etablissement !== (avant.type_etablissement || 'hopital')) {
         await c.query(`DELETE FROM sh_hopital_modules WHERE hopital_id = $1`, [avant.id]);
@@ -695,9 +760,9 @@ function creerAppSh(pool, { env = process.env } = {}) {
     if (!existant) {
       if (h.latitude == null || h.longitude == null) throw new ErreurSh(400, 'Indiquez la position de l’hôpital (latitude et longitude) avant de créer son établissement.');
       actif = (await appeler(c, 'POST', '/sh/etablissements', { code: h.code_etab, nom: h.nom,pays_code:h.pays_code,config_id:profil.id, ville: h.ville, adresse: h.adresse, latitude: h.latitude, longitude: h.longitude, par: req.u.email,
-        type_etablissement: h.type_etablissement || 'hopital', modules: await choixModulesEnvironnement(pool, h) })).module_actif;
+        type_etablissement: h.type_etablissement || 'hopital', ...(await libelleTypeLocal(pool, h)), modules: await choixModulesEnvironnement(pool, h) })).module_actif;
       cree = true;
-    }
+    } else if (h.type_local_id || existant.type_libelle) await appeler(c, 'PUT', `/sh/etablissements/${h.code_etab}`, { ...(await libelleTypeLocal(pool, h)), par: req.u.email });
     if (h.sous_domaine) await appeler(c, 'PUT', `/sh/etablissements/${h.code_etab}`, { sous_domaine: h.sous_domaine, par: req.u.email });
     // Provisionnement d'OG : paramètres initiaux selon la licence souscrite dans SH.
     const og_licence = await require('./og-licence').transmettre(pool, appeler, c, h, req.u.email);

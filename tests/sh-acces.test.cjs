@@ -48,7 +48,7 @@ test('SH lot accès : PostgreSQL isolé, API et navigateur', {timeout:180000},as
   async function attendreMail(n){for(let i=0;i<100&&mails.length<n;i++)await new Promise(r=>setTimeout(r,5));assert.equal(mails.length,n);}
 
   await t.test('migrations additives rejouables, versions 7 à 23 et données préservées',async()=>{
-    assert.deepEqual(await migrerSh(pool,env),{version:39,appliquee:false});
+    assert.deepEqual(await migrerSh(pool,env),{version:40,appliquee:false});
     assert.equal((await pool.query('SELECT count(*)::int n FROM sh_utilisateurs')).rows[0].n,4);
   });
   await t.test('rôle créé désactivé et entrées de périmètre invalides refusées',async()=>{
@@ -281,7 +281,7 @@ test('SH lot accès : PostgreSQL isolé, API et navigateur', {timeout:180000},as
     // Simuler les données de la version 13 : le client CRM existe, le lien inverse manque.
     await pool.query('UPDATE hopitaux SET organisation_id=NULL WHERE id=$1',[hs[0].id]);
     await pool.query('DELETE FROM sh_migrations WHERE version=14');
-    assert.deepEqual(await migrerSh(pool,env),{version:39,appliquee:true});
+    assert.deepEqual(await migrerSh(pool,env),{version:40,appliquee:true});
     assert.equal((await pool.query('SELECT organisation_id FROM hopitaux WHERE id=$1',[hs[0].id])).rows[0].organisation_id,orgs[0].id);
     await pool.query('UPDATE hopitaux SET organisation_id=$2 WHERE id=$1',[hs[1].id,orgs[0].id]);
     await pool.query('DELETE FROM sh_migrations WHERE version=14');
@@ -347,7 +347,7 @@ test('SH lot accès : PostgreSQL isolé, API et navigateur', {timeout:180000},as
     for(let n=0;n<3;n++){
       await require('../db/sh-vider').viderBaseSh(pool);
       await pool.query(fs.readFileSync(require.resolve('../db/sh-schema.sql'),'utf8'));
-      assert.equal((await migrerSh(pool,env)).version,39);
+      assert.equal((await migrerSh(pool,env)).version,40);
       assert.equal((await migrerSh(pool,env)).appliquee,false);
     }
   });

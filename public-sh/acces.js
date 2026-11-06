@@ -55,6 +55,7 @@ async function aiderConnexion(m,invitations){
 }
 async function vueParametres(v){
   const p=await api('GET','/parametres');
+  const types=await api('GET','/types-locaux');
   const oui=x=>x?'Configuré':'Non configuré';
   v.innerHTML=`<div class="entete"><div><h2>Paramètres</h2><p>Configuration effective de la console SH</p></div></div>
     <form class="panneau-c" id="f-parametres"><h3>Général, sécurité et conservation</h3><p class="note">La valeur enregistrée ici remplace celle de la configuration du déploiement. Chaque modification est validée et journalisée.</p>
@@ -64,9 +65,14 @@ async function vueParametres(v){
     <section class="panneau-c"><h3>Sécurité et courriels</h3><p>Double authentification obligatoire · Session : ${esc(p.securite.session_heures)} heures · Lien : ${esc(p.securite.recuperation_minutes)} minutes</p>
     <p><span>Transport courriel</span> : <span>${oui(p.courriels.transport_configure)}</span> · <span>Récupération</span> : <span>${p.courriels.recuperation_disponible?'Disponible':'Indisponible'}</span></p><p>Documents : <span>${oui(p.documents.stockage_configure)}</span></p></section>
     <section class="panneau-c"><h3>Apparence</h3><p class="note">Appliquée tout de suite et enregistrée sur votre compte.</p><fieldset class="choix-apparence"><legend class="lbl">Mode d’affichage</legend>${[['clair','Clair'],['sombre','Sombre'],['automatique','Automatique (système)'],['soleil','Selon le soleil']].map(([c,l])=>`<label class="case"><input type="radio" name="pa-apparence" value="${c}"${(etat.moi.utilisateur.apparence||'automatique')===c?' checked':''}> ${l}</label>`).join('')}</fieldset></section>
+    <section class="panneau-c" id="types-locaux"><h3>Types d’établissement par pays</h3><p class="note">Le nom s’affiche pour le pays choisi. Le comportement et les modules restent ceux du modèle : Hôpital ou CHSLD.</p>
+      <div class="tableau"><table><thead><tr><th>Pays</th><th>Code</th><th>Nom</th><th>Nom anglais</th><th>Modèle</th><th>Établissements</th><th>État</th><th></th></tr></thead><tbody>${types.map(t=>`<tr><td>${esc(t.pays_code)}</td><td><code class="donnee">${esc(t.code)}</code></td><td>${esc(t.nom)}</td><td>${esc(t.nom_en||'')}</td><td>${t.modele==='chsld'?'CHSLD':'Hôpital'}</td><td>${esc(t.utilisations)}</td><td>${t.actif?'Actif':'Désactivé'}</td><td><button class="btn" type="button" data-type-local="${esc(t.id)}" data-actif="${t.actif?'0':'1'}">${t.actif?'Désactiver':'Réactiver'}</button></td></tr>`).join('')||'<tr><td colspan="8">Aucun type propre à un pays.</td></tr>'}</tbody></table></div>
+      <form id="f-type-local"><div class="ligne"><div class="champ"><label class="lbl" for="tl-pays">Pays (ISO)</label><input id="tl-pays" maxlength="2" required></div><div class="champ"><label class="lbl" for="tl-code">Code</label><input id="tl-code" required pattern="[a-z][a-z0-9_]{1,39}" placeholder="clinique_district"></div><div class="champ"><label class="lbl" for="tl-nom">Nom</label><input id="tl-nom" required minlength="2" maxlength="80"></div><div class="champ"><label class="lbl" for="tl-nom-en">Nom anglais</label><input id="tl-nom-en" maxlength="80"></div><div class="champ"><label class="lbl" for="tl-modele">Modèle</label><select id="tl-modele"><option value="hopital">Hôpital</option><option value="chsld">CHSLD</option></select></div></div><button class="btn pri" type="submit">Ajouter ce type</button></form></section>
     <section class="panneau-c"><h3>Utilisateurs et accès</h3><button class="btn" id="param-utilisateurs">Gérer les utilisateurs et leurs sessions</button></section>
     <section class="panneau-c"><h3>Rôles personnalisés</h3><button class="btn" id="param-roles">Configurer les permissions</button></section>
     <p class="note">${esc(p.gestion)}</p>`;
+  $('#f-type-local').onsubmit=e=>{e.preventDefault();agir(e.submitter,()=>api('POST','/types-locaux',{pays_code:$('#tl-pays').value,code:$('#tl-code').value,nom:$('#tl-nom').value,nom_en:$('#tl-nom-en').value,modele:$('#tl-modele').value}),'Type ajouté.');};
+  v.querySelectorAll('[data-type-local]').forEach(b=>{b.onclick=()=>agir(b,()=>api('PUT',`/types-locaux/${b.dataset.typeLocal}`,{actif:b.dataset.actif==='1'}),'Type mis à jour.');});
   $('#f-parametres').onsubmit=async e=>{e.preventDefault();const b=e.submitter;b.disabled=true;
     try{let n=0;for(const inp of v.querySelectorAll('[data-parametre]')){const x=p.modifiables[inp.dataset.parametre];if(String(x.valeur??'')===inp.value.trim())continue;
       await api('PUT',`/parametres/${inp.dataset.parametre}`,{valeur:inp.value.trim()});n+=1;}

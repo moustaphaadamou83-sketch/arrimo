@@ -52,5 +52,28 @@ async function migrerProductions(c) {
   await c.query('INSERT INTO sh_migrations(version) VALUES($1)', [PRODUCTIONS_VERSION]);
   return true;
 }
-const VERSION_SH = PRODUCTIONS_VERSION;
-module.exports = { TYPES_ETABLISSEMENT_VERSION, LIAISON_CHSLD_VERSION, PRODUCTIONS_VERSION, VERSION_SH, migrerTypesEtablissement, migrerLiaisonChsld, migrerProductions };
+/* Migration 40 : types d'établissement propres à un pays. Un type local est un nom ; son comportement vient de son modèle,
+   un type opérationnel déjà développé et testé (hôpital ou CHSLD). Aucune ligne existante n'est modifiée. */
+const TYPES_LOCAUX_VERSION = 40;
+async function migrerTypesLocaux(c) {
+  if ((await c.query('SELECT 1 FROM sh_migrations WHERE version=$1', [TYPES_LOCAUX_VERSION])).rowCount) return false;
+  await c.query(`CREATE TABLE IF NOT EXISTS sh_types_locaux(
+    id serial PRIMARY KEY,
+    pays_code text NOT NULL CHECK (pays_code ~ '^[A-Z]{2}$'),
+    code text NOT NULL CHECK (code ~ '^[a-z][a-z0-9_]{1,39}$'),
+    nom text NOT NULL CHECK (char_length(nom) BETWEEN 2 AND 80),
+    nom_en text CHECK (nom_en IS NULL OR char_length(nom_en) BETWEEN 2 AND 80),
+    modele text NOT NULL CHECK (modele IN ('hopital','chsld')),
+    actif boolean NOT NULL DEFAULT true,
+    cree_le timestamptz NOT NULL DEFAULT now(),
+    UNIQUE(pays_code, code))`);
+  await c.query('ALTER TABLE hopitaux ADD COLUMN IF NOT EXISTS type_local_id int REFERENCES sh_types_locaux(id)');
+  const owner = (await c.query('SELECT current_user owner')).rows[0].owner; const role = `${owner}_scope`;
+  if (!/^[a-z][a-z0-9_]{0,50}$/.test(role)) throw new Error('Rôle SH invalide.');
+  await c.query(`GRANT SELECT,INSERT,UPDATE ON sh_types_locaux TO "${role}"`);
+  await c.query(`GRANT USAGE,SELECT ON SEQUENCE sh_types_locaux_id_seq TO "${role}"`);
+  await c.query('INSERT INTO sh_migrations(version) VALUES($1)', [TYPES_LOCAUX_VERSION]);
+  return true;
+}
+const VERSION_SH = TYPES_LOCAUX_VERSION;
+module.exports = { TYPES_ETABLISSEMENT_VERSION, LIAISON_CHSLD_VERSION, PRODUCTIONS_VERSION, TYPES_LOCAUX_VERSION, VERSION_SH, migrerTypesEtablissement, migrerLiaisonChsld, migrerProductions, migrerTypesLocaux };

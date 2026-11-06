@@ -80,7 +80,8 @@ async function migrerSh(pool, env = process.env) {
     const typesEtablissement=await require('./types-etablissement-migrations').migrerTypesEtablissement(c);
     const liaisonChsld=await require('./types-etablissement-migrations').migrerLiaisonChsld(c);
     const productions=await require('./types-etablissement-migrations').migrerProductions(c);
-    return { version: require('./types-etablissement-migrations').VERSION_SH, appliquee: productions || liaisonChsld || socle || erp || acces || projets || presence || perimetre || cycle || pilote || concurrence || liens || support || supportDroits || notificationsFinances || supportPagination || notificationsPerimetres || raccordementSupport || supportSla || supportPj || supportCourriels || supportCalendrier || preferences || fiscalite || change || apparence || parametres || financesProjets || tachesSuivi || projetsPilotage || competences || recherche || deploiement || collaborateurs || typesEtablissement };
+    const typesLocaux=await require('./types-etablissement-migrations').migrerTypesLocaux(c);
+    return { version: require('./types-etablissement-migrations').VERSION_SH, appliquee: typesLocaux || productions || liaisonChsld || socle || erp || acces || projets || presence || perimetre || cycle || pilote || concurrence || liens || support || supportDroits || notificationsFinances || supportPagination || notificationsPerimetres || raccordementSupport || supportSla || supportPj || supportCourriels || supportCalendrier || preferences || fiscalite || change || apparence || parametres || financesProjets || tachesSuivi || projetsPilotage || competences || recherche || deploiement || collaborateurs || typesEtablissement };
   });
 }
 

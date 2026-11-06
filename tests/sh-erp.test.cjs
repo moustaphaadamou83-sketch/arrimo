@@ -1067,3 +1067,47 @@ test('tâches : collaborateurs multiples notifiés, qui voient et font avancer l
   await ok('implantation', 'PUT', `/taches/${t.id}/collaborateurs`, { utilisateurs: [] });
   assert.strictEqual(await statut('formation', 'PUT', `/taches/${t.id}`, { statut: 'a_faire' }), 403, 'retiré : plus de droit');
 });
+
+test('types locaux par pays : administration seule, pays et modèle vérifiés, libellé transmis, comportement inchangé', async () => {
+  enEnv('recette');
+  const corps = { pays_code: 'FR', code: 'clinique_district', nom: 'Clinique de district fictive', nom_en: 'Fictional district clinic', modele: 'hopital' };
+  assert.strictEqual(await statut('implantation', 'POST', '/types-locaux', corps), 403, 'réservé à l’administration');
+  assert.strictEqual(await statut('admin', 'POST', '/types-locaux', { ...corps, modele: 'rpa' }), 400, 'un modèle non opérationnel est refusé');
+  assert.strictEqual(await statut('admin', 'POST', '/types-locaux', { ...corps, code: 'Pas Valide' }), 400);
+  const t = await ok('admin', 'POST', '/types-locaux', corps);
+  assert.strictEqual(await statut('admin', 'POST', '/types-locaux', corps), 409, 'même code, même pays');
+  const ca = await ok('admin', 'POST', '/types-locaux', { ...corps, pays_code: 'CA', nom: 'Type canadien fictif' });
+  const chsldXy = await ok('admin', 'POST', '/types-locaux', { ...corps, code: 'maison_soins', nom: 'Maison de soins fictive', modele: 'chsld' });
+  assert.deepStrictEqual((await ok('implantation', 'GET', '/types-locaux?pays=FR')).map((x) => x.code).sort(), ['clinique_district', 'maison_soins']);
+
+  const fiche = { nom: 'Clinique fictive XY', code_etab: 'XY-CLI', environnement: 'recette', pays_code: 'FR', type_etablissement: 'hopital', latitude: 46.1, longitude: -71.2, fuseau_horaire: 'America/Toronto' };
+  assert.strictEqual(await statut('admin', 'POST', '/hopitaux', { ...fiche, type_local_id: ca.id }), 409, 'type d’un autre pays');
+  assert.strictEqual(await statut('admin', 'POST', '/hopitaux', { ...fiche, type_local_id: chsldXy.id }), 409, 'modèle différent du type de la fiche');
+  assert.strictEqual(await statut('admin', 'POST', '/hopitaux', { ...fiche, type_local_id: 'abc' }), 400);
+  const h = await ok('admin', 'POST', '/hopitaux', { ...fiche, type_local_id: t.id });
+  assert.strictEqual(h.type_etablissement, 'hopital', 'le comportement reste celui du modèle');
+  assert.strictEqual(h.type_local_id, t.id);
+
+  const utilise = await appel(jetons.admin, 'PUT', `/types-locaux/${t.id}`, { modele: 'chsld' });
+  assert.strictEqual(utilise.statut, 409, 'le modèle ne change plus une fois utilisé');
+  assert.strictEqual((await ok('admin', 'PUT', `/types-locaux/${t.id}`, { actif: false })).actif, false);
+  assert.strictEqual(await statut('admin', 'POST', '/hopitaux', { ...fiche, code_etab: 'XY-CL2', type_local_id: t.id }), 409, 'type désactivé refusé sur une nouvelle fiche');
+  await ok('admin', 'PUT', `/hopitaux/${h.id}`, { ...fiche });   // la fiche garde son type, même désactivé
+  assert.strictEqual((await ok('admin', 'GET', `/hopitaux/${h.id}`)).type_local_id, t.id);
+  await ok('admin', 'PUT', `/types-locaux/${t.id}`, { actif: true });
+  const journal = (await pool.query("SELECT action FROM sh_journal WHERE action LIKE 'Type local%'")).rows.map((x) => x.action);
+  assert.ok(journal.includes('Type local créé') && journal.includes('Type local modifié'));
+
+  // Relier : l'environnement reçoit le nom du type ; le comportement reste celui du modèle ; un nouveau « relier » resynchronise.
+  const relie = await ok('admin', 'POST', '/hopitaux', { ...fiche, code_etab: 'CA-CLI', pays_code: 'CA', type_local_id: ca.id });
+  await ok('admin', 'POST', `/hopitaux/${relie.id}/relier`);
+  const lireEnv = async () => (await (await fetch(`${base}/api/sh/etablissements`, { headers: { 'X-SH-Key': process.env.SH_API_KEY } })).json()).find((x) => x.code === 'CA-CLI');
+  assert.strictEqual((await lireEnv()).type_libelle, 'Type canadien fictif');
+  assert.strictEqual((await lireEnv()).type_etablissement, 'hopital');
+  await ok('admin', 'PUT', `/types-locaux/${ca.id}`, { nom: 'Type canadien renommé' });
+  await ok('admin', 'POST', `/hopitaux/${relie.id}/relier`);
+  assert.strictEqual((await lireEnv()).type_libelle, 'Type canadien renommé');
+  const brut = await fetch(`${base}/api/sh/etablissements`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-SH-Key': process.env.SH_API_KEY },
+    body: JSON.stringify({ code: 'XY-LIB', nom: 'Libellé trop court', latitude: 46, longitude: -71, type_libelle: 'x' }) });
+  assert.strictEqual(brut.status, 400, 'libellé invalide refusé par l’environnement');
+});

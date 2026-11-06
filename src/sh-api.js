@@ -80,7 +80,7 @@ function brancherSh(api, pool, route) {
   api.get('/sh/etablissements', sh(async () => {
     const rows=(await pool.query(
     `SELECT e.id, e.code, e.nom, e.ville, e.adresse, e.partage, e.module_actif, e.sous_domaine,COALESCE(e.profil_config_id,e.config_id) config_id,profil.code configuration_code,
-            e.type_etablissement, e.modules,
+            e.type_etablissement, e.type_libelle, e.modules,
             (SELECT count(*)::int FROM unites u WHERE u.etablissement_id = e.id) AS unites,
             (SELECT count(*)::int FROM chambres ch JOIN unites u ON u.id = ch.unite_id WHERE u.etablissement_id = e.id) AS chambres,
             (SELECT count(*)::int FROM lits l WHERE l.etablissement_id = e.id) AS lits,
@@ -158,6 +158,12 @@ function brancherSh(api, pool, route) {
       const m = {};
       for (const k of require('./configuration-operationnelle').MODULES) if (b.modules && b.modules[k] === false) m[k] = false;
       vals.push(m); sets.push(`modules = $${vals.length}::jsonb`); detail.push(`modules désactivés : ${Object.keys(m).join(', ') || 'aucun'}`);
+    }
+    if (b.type_libelle !== undefined || b.type_libelle_en !== undefined) {
+      const TE = require('./types-etablissement');
+      vals.push(TE.libelleType(b.type_libelle)); sets.push(`type_libelle = $${vals.length}`);
+      vals.push(TE.libelleType(b.type_libelle_en)); sets.push(`type_libelle_en = $${vals.length}`);
+      detail.push(`type local : ${b.type_libelle || 'aucun'}`);
     }
     if (b.vocation !== undefined) {
       if (!['general', 'pediatrique', 'specialise'].includes(b.vocation)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'vocation' });
