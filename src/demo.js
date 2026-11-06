@@ -11,11 +11,33 @@ const { viderCacheTypes } = require('./langue');
 
 const { estDemo } = require('./environnement');
 
+// Tâches de fond (recalage, blocages, simulation) : aucune ne touche la base pendant son remplacement.
+let remiseEnCours = false;
+const tachesFond = new Set();
+function tacheDeFond(fn) {
+  if (remiseEnCours) return Promise.resolve(null);
+  const p = Promise.resolve().then(fn);
+  tachesFond.add(p);
+  const fin = () => tachesFond.delete(p);
+  p.then(fin, fin);
+  return p;
+}
+async function exclureTachesFond(operation, delaiMs = 20000) {
+  remiseEnCours = true;
+  try {
+    let minuteur;
+    await Promise.race([Promise.allSettled([...tachesFond]), new Promise((r) => { minuteur = setTimeout(r, delaiMs); })]);
+    clearTimeout(minuteur);
+    return await operation();
+  } finally { remiseEnCours = false; }
+}
 async function reinitialiser(pool) {
   const { demoReseau } = require('../db/demo-reseau');
-  await viderBase(pool);
-  await demoReseau(pool, { silencieux: true });
-  viderCacheTypes();
+  return exclureTachesFond(async () => {
+    await viderBase(pool);
+    await demoReseau(pool, { silencieux: true });
+    viderCacheTypes();
+  });
 }
 
 // Colonnes d'horloge de la démo (le journal n'en fait pas partie : il est immuable)
@@ -51,4 +73,4 @@ async function recaler(pool, { calmeMin = 30, maintenant = null } = {}) {
   });
 }
 
-module.exports = { estDemo, reinitialiser, recaler };
+module.exports = { estDemo, reinitialiser, recaler, tacheDeFond, exclureTachesFond };

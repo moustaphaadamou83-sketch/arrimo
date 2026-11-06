@@ -56,7 +56,11 @@ function creerApp(pool, options = {}) {
   // La remise à zéro de démo remplace le schéma de démonstration. Drainer les requêtes
   // déjà engagées et refuser temporairement les nouvelles évite les lectures entre DROP/CREATE.
   let maintenanceDemo = false; let requetesApiActives = 0; const attentesDrain = [];
-  const attendreDrain = () => requetesApiActives === 0 ? Promise.resolve() : new Promise((resolve) => attentesDrain.push(resolve));
+  // Attente bornée : une requête bloquée ne fige jamais la remise à zéro ni l'application, restée en maintenance
+  const attendreDrain = () => requetesApiActives === 0 ? Promise.resolve() : new Promise((resolve) => {
+    const minuteur = setTimeout(resolve, 20000);
+    attentesDrain.push(() => { clearTimeout(minuteur); resolve(); });
+  });
   api.use((req, res, next) => {
     const reset = req.method === 'POST' && req.path === '/admin/demo/reinitialiser';
     if (reset) {

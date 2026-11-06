@@ -1156,6 +1156,41 @@ test('audit de sécurité : attaques automatiques sur toutes les routes, isolati
   const { problemesProduction } = require('../src/environnement');
   assert.ok(problemesProduction({}).length === 1 && problemesProduction({ ARRIMO_PATIENTS_FICTIFS: '1', DEMO_MOT_DE_PASSE: 'x', SH_API_KEY: 'court' }).length === 4);
   assert.deepStrictEqual(problemesProduction({ ARRIMO_MFA_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'), SH_API_KEY: 'c'.repeat(40) }), []);
+  // Remise à zéro : aucune tâche de fond ne touche la base pendant le remplacement, et celle en cours est attendue d'abord
+  {
+    const { tacheDeFond, exclureTachesFond } = require('../src/demo'); const ordre = [];
+    let finir; const enCours = tacheDeFond(() => new Promise((r) => { finir = () => { ordre.push('tache'); r(); }; }));
+    await new Promise((r) => setImmediate(r));
+    const remise = exclureTachesFond(async () => { ordre.push('remise'); let lancee = false; await tacheDeFond(() => { lancee = true; }); assert.strictEqual(lancee, false, 'tâche refusée pendant la remise'); });
+    finir(); await enCours; await remise;
+    assert.deepStrictEqual(ordre, ['tache', 'remise']);
+    let apres = false; await tacheDeFond(() => { apres = true; }); assert.strictEqual(apres, true, 'tâches rétablies');
+    const bloquee = tacheDeFond(() => new Promise(() => {})); let passee = false;
+    await exclureTachesFond(async () => { passee = true; }, 20); assert.strictEqual(passee, true, 'tâche bloquée : délai borné'); void bloquee;
+  }
+  // Console SH : routes sans session, puis rôle limité sur toutes les routes qui lui sont interdites
+  {
+    const { autoriser, PERMISSIONS } = require('../src/sh/permissions');
+    let srcSh = ''; for (const f of fs.readdirSync(path.join(__dirname, '..', 'src', 'sh')).filter((x) => x.endsWith('.js'))) srcSh += fs.readFileSync(path.join(__dirname, '..', 'src', 'sh', f), 'utf8');
+    const routesSh = [...new Set([...srcSh.matchAll(/api\.(get|post|put|delete)\(\s*'([^']+)'/g)].map((m) => `${m[1].toUpperCase()} ${m[2]}`))];
+    assert.ok(routesSh.length > 150, `${routesSh.length} routes SH`);
+    const brutSh = async (jeton, m, c) => { const r = await fetch(`${baseSh}/api${c}`, { method: m, headers: { 'Content-Type': 'application/json', ...(jeton ? { Authorization: `Bearer ${jeton}` } : {}) }, body: m === 'GET' ? undefined : '{}' }); return { statut: r.status, texte: await r.text() }; };
+    const SH_PUBLIQUES = /^(GET|POST) \/(connexion|sante|invitations?|recuperation|mot-de-passe|public|config|references-publiques)/;
+    const chemin = (c) => c.replace(/:[a-zA-Z_]+/g, '1');
+    const ouvertesSh = [];
+    for (const rt of routesSh) { const [m, c] = rt.split(' '); const r = await brutSh(null, m, chemin(c)); assert.ok(r.statut < 500 && r.statut !== 429, `SH ${rt} → ${r.statut} ${r.texte.slice(0, 100)}`); if (r.statut < 400 && !SH_PUBLIQUES.test(rt)) ouvertesSh.push(`${rt} → ${r.statut}`); }
+    assert.deepStrictEqual(ouvertesSh, [], 'routes SH ouvertes sans session');
+    const jetonSupport = require('node:crypto').randomBytes(32).toString('hex');
+    const us = (await pool.query(`INSERT INTO sh_utilisateurs (email, nom, role, mot_de_passe_hash, mdp_temporaire, totp_actif) VALUES ('audit.support@example.invalid', 'Audit support', 'support', 'fixture-sans-connexion', false, true) RETURNING id`)).rows[0];
+    await pool.query(`INSERT INTO sh_sessions (token, token_hache, utilisateur_id, expire_le) VALUES ($1, true, $2, now() + interval '1 hour')`, [require('../src/sh/security').empreinte(jetonSupport), us.id]);
+    const interdites = routesSh.filter((rt) => { const [m, c] = rt.split(' '); return !SH_PUBLIQUES.test(rt) && !autoriser({ role: 'support' }, { method: m, path: chemin(c), body: {} }); });
+    assert.ok(interdites.length > 50, `${interdites.length} routes interdites au support`);
+    const permissives = [];
+    for (const rt of interdites) { const [m, c] = rt.split(' '); const r = await brutSh(jetonSupport, m, chemin(c)); if (r.statut !== 403) permissives.push(`${rt} → ${r.statut}`); }
+    assert.deepStrictEqual(permissives, [], 'routes SH non refusées au rôle support');
+    RESULTATS.audit_sh = { routes: routesSh.length, interdites_support: interdites.length, permissions: Object.keys(PERMISSIONS).length };
+    fs.writeFileSync(path.resolve('.local/audit-sh-balayage.json'), JSON.stringify(RESULTATS.audit_sh));
+  }
   // 13. XSS stockée : les textes saisis ne deviennent jamais du code, dans le CHSLD ni à l'hôpital
   const CHARGE = '<img src=x onerror="window.__xss=1"><svg/onload=window.__xss=2>';
   const victime = await api('era', 'POST', '/chsld/residents', { etablissement_id: ids.era, prenom: CHARGE, nom: 'Essai<script>window.__xss=3</script>', date_naissance: '1939-03-03', confirmer_doublon: true });

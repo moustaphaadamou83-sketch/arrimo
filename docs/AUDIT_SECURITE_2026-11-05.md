@@ -10,7 +10,7 @@ Méthode : inspection du serveur sans modification et sans afficher aucun secret
 | Gravité | À corriger sur le serveur ou dans vos comptes | Corrigé dans le code |
 |---|---:|---:|
 | Élevé | 2 | 1 |
-| Moyen | 6 | 3 |
+| Moyen | 6 | 4 |
 | Faible | 5 | 1 |
 
 ## 2. Corrigé dans le code, prouvé par des tests, NON publié
@@ -20,6 +20,7 @@ Méthode : inspection du serveur sans modification et sans afficher aucun secret
 | Moyen | 7 | `script-src 'unsafe-inline'` dans la CSP d'Arrimo : une faille XSS aurait pu lire le jeton de session | Retiré ; script de la page légale déplacé dans un fichier ; `base-uri`, `form-action`, `object-src` ajoutés |
 | Moyen | 4 | Réponses de l'API sans `Cache-Control: no-store` | Ajouté, ainsi qu'une `Permissions-Policy` |
 | Moyen | 1, 13 | Un serveur de production pouvait démarrer avec les secrets 2FA en clair | Démarrage refusé en production si la clé manque, si des identités fictives ou un mot de passe de démo sont actifs, ou si la clé SH est trop courte |
+| Moyen | 8 | Remise à zéro de la démo : détection des blocages et simulation continuaient pendant le remplacement de la base ; attente de vidage sans limite, une requête bloquée pouvant figer l'application en maintenance | Tâches de fond exclues pendant la remise, avec un test ; attente limitée à 20 s (ce délai n'est pas testé directement sur une requête bloquée) |
 | Faible | 6, 8 | OG (ajouté le 1er nov.) : fuseau partagé entre requêtes simultanées, mémoire de conversation non bornée | Fuseau propre à chaque requête ; mémoire limitée à 30 min et 2000 conversations |
 
 Corrigé et déjà publié le 5 novembre (release `parcours-20261105t2253`) : le rôle entretien pouvait lire le tableau de bord général `/chsld/accueil` et voyait les références des résidents.
@@ -41,7 +42,12 @@ Corrigé et déjà publié le 5 novembre (release `parcours-20261105t2253`) : le
 | S12 | Faible | 1 | Le blocage après 8 échecs dépend de la seule adresse courriel : un tiers peut bloquer un compte pendant 15 minutes | À arbitrer : le compteur protège aussi contre les essais distribués |
 | S13 | Faible | 7 | Jeton de session dans `localStorage`, atténué par la nouvelle CSP | À réévaluer avant le pilote |
 
-**À confirmer par vous :** des sessions root sont venues de `67.69.76.1` le 4 novembre, et de `70.27.239.x` le 5 novembre. Si l'une n'est pas de vous, dites-le tout de suite : ce serait prioritaire sur tout le reste.
+**Connexions SSH, vérifiées le 6 novembre (lecture seule) :**
+- Une seule clé autorisée pour root (`mac-moustapha`, `SHA256:EbqFnkp4…oW00`). Le fichier du compte `ubuntu` est vide et ce compte est verrouillé. Aucune option de clé cachée, aucune autorité de certificats.
+- Toutes les connexions par clé utilisent cette clé : `70.27.239.207`, `67.69.76.183` (4 nov.), `67.69.76.110` (2 nov.).
+- Connexions par mot de passe : aucune depuis le durcissement du 16 octobre. Avant, elles venaient de `70.27.239.207`, `67.69.76.11` et du serveur lui-même.
+- Moustafa a confirmé `70.27.239.207` et son partage de connexion en `67.69.76.x`. Le rapport initial affichait `67.69.76.1` par erreur : l'adresse était tronquée.
+- Le compte root garde un mot de passe, inutilisable par SSH. À envisager : le changer, car il a servi avant le durcissement.
 
 ## 4. Ce qui a été vérifié et tient
 - **Serveur** : pare-feu limité à 22, 80 et 443 ; applications et PostgreSQL en local ; SSH par clé seulement ; fail2ban actif (194 bannissements) ; TLS 1.2 et plus ; services non root avec `NoNewPrivileges`.
@@ -62,7 +68,8 @@ Corrigé et déjà publié le 5 novembre (release `parcours-20261105t2253`) : le
 - **Limite de débit** : le limiteur a coupé la batterie à 120 requêtes anonymes par minute. Elle est relevée pour ce seul test.
 
 ## 5. Reste à faire
-- **Non couvert par la nouvelle batterie** : les routes de la console SH, couvertes seulement par les suites SH existantes ; l'envoi de pièces jointes ; le vocal ; une revue ligne à ligne.
+- **Console SH** : balayage ajouté le 6 novembre : 199 routes sans session, 128 routes interdites au rôle support, toutes refusées. Les autres rôles et le contrôle fin des périmètres restent couverts par les suites SH existantes.
+- **Non couvert par la nouvelle batterie** : l'envoi de pièces jointes ; le vocal ; une revue ligne à ligne.
 - **Domaine 9, liaison site ↔ SH** : revue du plan quand il sera présenté. Elle n'est pas construite.
 - **Domaine 13 et préparation de la production** (Canada et Afrique) : modèle de serveur par pays, contrôles avant mise en ligne, surveillance, plans d'incident et de reprise, documents Loi 25, dossier du test d'intrusion, points à relire par vos développeurs. Plusieurs jours de travail.
 
