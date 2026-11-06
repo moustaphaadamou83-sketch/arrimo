@@ -37,6 +37,11 @@ function actionsHopital(c, u, retour) {
   if (!GERER.includes(u.role) && u.role !== 'equipe_soins') return [];
   const gerer = GERER.includes(u.role);
   if (c.type === 'retour') return c.statut === 'acceptee' ? ['confirmer_depart', ...(gerer ? ['annuler'] : [])] : c.statut === 'envoyee' ? ['incident', ...(gerer ? ['annuler'] : [])] : c.statut === 'en_cours' && !c.transport_le ? ['transport'] : [];
+  if (c.type === 'transfert_hopital') {
+    if (c.cloturee_le) return [];
+    if (c.entrante) return c.statut === 'envoyee' || c.statut === 'acceptee' ? (gerer ? [...(c.statut === 'envoyee' ? ['accepter'] : []), 'refuser'] : []) : c.statut === 'en_cours' ? ['confirmer_arrivee'] : [];
+    return !gerer ? [] : c.statut === 'envoyee' ? ['annuler'] : c.statut === 'acceptee' ? ['confirmer_depart', 'annuler'] : [];
+  }
   if (c.cloturee_le) return [];
   const a = [];
   if (c.statut === 'envoyee') { if (!c.recue_hopital_le) a.push('accuser_reception'); if (gerer) a.push('accepter', 'refuser'); a.push('incident'); }
@@ -45,7 +50,7 @@ function actionsHopital(c, u, retour) {
   if (c.statut === 'recue') {
     // De la civière vers un lit : la même action reste proposée tant qu'aucune demande d'admission n'existe
     if (gerer && (!c.orientation || (c.orientation === 'urgence' && !c.admission))) a.push('orienter');
-    if (gerer && !(retour && OUVERTS.includes(retour.statut))) a.push('retour');
+    if (gerer && !(retour && OUVERTS.includes(retour.statut)) && !c.transfert_ouvert) a.push('retour', 'transferer');
     a.push('incident');
   }
   return a;
@@ -57,6 +62,8 @@ async function vue(pool, u, etabId) {
   const toutes = await ch.listeCoordinations(pool, u, etabId, { toutes: true });
   const hosp = toutes.filter((c) => c.type === 'hospitalisation' && c.entrante);
   const retours = toutes.filter((c) => c.type === 'retour' && !c.entrante);
+  const transferts = toutes.filter((c) => c.type === 'transfert_hopital');
+  for (const h of hosp) h.transfert_ouvert = transferts.some((x) => x.liee_id === h.id && OUVERTS.includes(x.statut));
   const retourDe = (h) => retours.filter((r) => r.liee_id === h.id).sort((x, y) => new Date(y.cree_le) - new Date(x.cree_le))[0] || null;
   const retourActif = (r) => !!r && (OUVERTS.includes(r.statut) || r.a_reintegrer);
   const fiche = (c, r = null) => ({ ...c, derniere: derniereConfirmation(c), actions: actionsHopital(c, u, r),
@@ -66,8 +73,9 @@ async function vue(pool, u, etabId) {
   const aAccueillir = hosp.filter((c) => c.statut === 'en_cours' || (ouverte(c) && !c.orientation && !retourActif(retourDe(c)))).map((c) => fiche(c, retourDe(c)));
   const enCours = hosp.filter((c) => ouverte(c) && c.orientation && !retourActif(retourDe(c))).map((c) => fiche(c, retourDe(c)));
   const retoursEnCours = hosp.filter((c) => ouverte(c) && retourActif(retourDe(c))).map((c) => fiche(c, retourDe(c)));
-  const historique = hosp.filter((c) => ['refusee', 'annulee', 'expiree'].includes(c.statut) || c.cloturee_le).map((c) => fiche(c, retourDe(c)));
-  return { arrivees, a_accueillir: aAccueillir, hospitalisations: enCours, retours_en_cours: retoursEnCours, historique,
+  const historique = hosp.concat(transferts).filter((c) => ['refusee', 'annulee', 'expiree'].includes(c.statut) || c.cloturee_le).map((c) => fiche(c, retourDe(c)));
+  const transfertsEnCours = transferts.filter((c) => OUVERTS.includes(c.statut)).map((c) => fiche(c));
+  return { transferts: transfertsEnCours, arrivees, a_accueillir: aAccueillir, hospitalisations: enCours, retours_en_cours: retoursEnCours, historique,
     compteurs: { arrivees: arrivees.length, a_accueillir: aAccueillir.length, hospitalisations: enCours.length, retours: retoursEnCours.length } };
 }
 /** Lits libres et compatibles (service, besoins, groupe d'âge) et civières libres : relus par le serveur à l'attribution. */

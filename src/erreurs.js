@@ -224,6 +224,7 @@ const MESSAGES = {
   coordination_introuvable: "Coordination introuvable.",
   liaison_chsld_inactive: "Cet hôpital n’a pas activé la Liaison CHSLD : la demande ne peut pas lui être transmise.",
   hospitalisation_deja_ouverte: "Une demande vers l’hôpital est déjà ouverte pour ce résident ({numero}).",
+  transfert_hopital_ouvert: "Un transfert vers un autre hôpital est déjà ouvert pour ce résident ({numero}).",
   retour_deja_ouvert: "Un retour vers le CHSLD est déjà en préparation pour ce résident ({numero}).",
   cle_idempotence_invalide: "Identifiant d’envoi invalide.",
   cle_idempotence_conflit: "Cet identifiant d’envoi a déjà servi pour un autre résident.",

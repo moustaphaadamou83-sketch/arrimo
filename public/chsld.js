@@ -404,7 +404,7 @@
   /* ------------------------------------------------------------------ Hôpital : module Liaison CHSLD */
   /* Un seul module commun à tous les hôpitaux. Les arrivées depuis les CHSLD ne sont jamais mêlées aux transferts
      interhospitaliers. L'hôpital ne voit que la référence du résident ; chaque étape est confirmée par une personne. */
-  const ONGLETS_LIAISON = ['arrivees', 'a_accueillir', 'hospitalisations', 'retours_en_cours', 'historique'];
+  const ONGLETS_LIAISON = ['arrivees', 'a_accueillir', 'hospitalisations', 'transferts', 'retours_en_cours', 'historique'];
   const L = (k, v) => C(`liaison.${k}`, v);
   /** Renseignements transmis par le CHSLD, sans nouvelle saisie. */
   const transmis = (c) => { const i = c.infos_operationnelles || {}; const x = [
@@ -416,7 +416,7 @@
   return x.length ? `<div class="note li-transmis">${x.join(' · ')}</div>` : ''; };
   function carteLiaison(c) {
     const act = (a, id = c.id, version = c.version, type = c.type) => `<button class="btn${['accepter', 'confirmer_reception', 'orienter', 'confirmer_depart', 'transport'].includes(a) ? ' pri' : a === 'refuser' ? ' dan' : ''}"
-      data-li="${a}" data-id="${id}" data-version="${version}" data-type="${type}" data-num="${esc(c.numero)}">${L(`action_${a}`)}</button>`;
+      data-li="${a}" data-id="${id}" data-version="${version}" data-type="${type}" data-num="${esc(c.numero)}">${L(`action_${type === 'transfert_hopital' && ['annuler', 'confirmer_depart'].includes(a) ? `${a}_transfert` : a}`)}</button>`;
     const d = c.derniere;
     const r = c.retour;
     return `<article class="item li-carte" data-coordination="${c.id}"><div>
@@ -453,6 +453,11 @@
       const action = (corps) => api('POST', `/coordinations/${id}/action`, { etablissement_id: ctx(), version, action: a, ...corps });
       if (a === 'retour') return modale(L('action_retour'), `<p class="note">${L('retour_aide')}</p>${champ('li-date', C('actions.retour_prevu'), '', 'type="datetime-local"')}${champ('li-motif', C('actions.motif_admin'), '', 'maxlength="200"')}`,
         [{ label: t('general.annuler') }, { label: t('general.confirmer'), pri: true, run: async () => (await agir(null, () => api('POST', `/coordinations/${id}/retour`, { retour_prevu_le: $('#li-date').value, motif_admin: $('#li-motif').value }), ok)) !== null || false }]);
+      if (a === 'transferer') {
+        const hopitaux = (await api('GET', `/liaison-chsld/hopitaux?etablissement_id=${ctx()}`)).filter((h) => h.id !== ctx());
+        return modale(L('action_transferer'), `<p class="note">${L('transferer_aide')}</p>${sel('li-hopital', L('transferer_vers'), hopitaux.map((h) => [h.id, h.nom]))}${champ('li-motif', C('actions.motif'), '', 'maxlength="200"')}`,
+          [{ label: t('general.annuler') }, { label: t('general.confirmer'), pri: true, run: async () => (await agir(null, () => api('POST', `/coordinations/${id}/transfert-hopital`, { hopital_id: Number($('#li-hopital').value), motif_admin: $('#li-motif').value }), ok)) !== null || false }]);
+      }
       if (a === 'refuser') return modale(L('action_refuser'), `<p>${esc(numero)}</p>${champ('li-motif', L('motif_refus'), '', 'maxlength="200"')}`,
         [{ label: t('general.annuler') }, { label: L('action_refuser'), pri: true, run: async () => (await agir(null, () => action({ motif: $('#li-motif').value }), ok)) !== null || false }]);
       if (a === 'incident') return modale(t('chsld.coord.incident'), `${sel('li-inc', C('coord.incident'), ['arrivee_retardee', 'arrivee_anticipee', 'informations_manquantes', 'hospitalisation_prolongee', 'retour_retarde'].map((x) => [x, t(`chsld.coord.incident_${x}`)]))}${champ('li-date', C('actions.retour_prevu'), '', 'type="datetime-local"')}`,

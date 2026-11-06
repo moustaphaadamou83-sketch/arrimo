@@ -564,7 +564,7 @@ async function actionCoordination(pool, u, id, b) {
   const etabId = Number(b.etablissement_id);
   if (![co0.origine_id, co0.destination_id].includes(etabId)) throw new ErreurHttp(403, 'etab_interdit');
   exigerEtablissement(u, etabId);
-  if (!['coordonnateur', 'admin_etab', 'gestionnaire', ...(co0.type === 'hospitalisation' ? ['equipe_soins'] : [])].includes(u.role)) throw new ErreurHttp(403, 'role_insuffisant');
+  if (!['coordonnateur', 'admin_etab', 'gestionnaire', ...(['hospitalisation', 'transfert_hopital'].includes(co0.type) ? ['equipe_soins'] : [])].includes(u.role)) throw new ErreurHttp(403, 'role_insuffisant');
   const cote = etabId === co0.origine_id ? 'origine' : 'destination';
   const a = String(b.action || '');
   return transaction(pool, async (c) => {
@@ -745,6 +745,43 @@ async function actionCoordination(pool, u, id, b) {
       if (co.lit_id && co.statut === 'acceptee') await changerEtat(c, pool, u.id, co.lit_id, 'libre', { detail: `${co.numero} annulé` });
       n = await maj('annulee');
       await c.query(`UPDATE residents SET statut = 'present', version = version + 1 WHERE id = $1 AND statut = 'transfert_en_cours'`, [r.id]);
+    // -------- transfert hôpital A → hôpital B : A garde le résident jusqu'au départ confirmé, B l'accueille à l'arrivée confirmée
+    } else if (t === 'transfert_hopital' && cote === 'destination' && a === 'accepter') {
+      if (co.statut !== 'envoyee') throw new ErreurHttp(409, 'coordination_statut_incompatible');
+      if (!GERER.includes(u.role)) throw new ErreurHttp(403, 'role_insuffisant');
+      n = (await c.query(`UPDATE coordinations SET statut = 'acceptee', recue_hopital_le = COALESCE(recue_hopital_le, now()), acceptee_le = now(), version = version + 1, modifie_le = now() WHERE id = $1 RETURNING *`, [co.id])).rows[0];
+      await notifierCo(c, co.origine_id, 'chsld_acceptee', co);
+    } else if (t === 'transfert_hopital' && cote === 'destination' && a === 'refuser') {
+      if (!['envoyee', 'acceptee'].includes(co.statut)) throw new ErreurHttp(409, 'coordination_statut_incompatible');
+      if (!GERER.includes(u.role)) throw new ErreurHttp(403, 'role_insuffisant');
+      n = await maj('refusee');
+      await mouvement(c, r, 'annulation', u, { autre: co.destination_id, coordination: co.id, detail: `Transfert ${co.numero} refusé ; le résident reste à ${await nomEtab(c, co.origine_id)}` });
+      await notifierCo(c, co.origine_id, 'chsld_refusee', co);
+    } else if (t === 'transfert_hopital' && cote === 'origine' && a === 'annuler') {
+      if (!['envoyee', 'acceptee'].includes(co.statut)) throw new ErreurHttp(409, 'coordination_statut_incompatible');
+      if (!GERER.includes(u.role)) throw new ErreurHttp(403, 'role_insuffisant');
+      n = await maj('annulee');
+      await mouvement(c, r, 'annulation', u, { autre: co.destination_id, coordination: co.id, detail: `Transfert ${co.numero} annulé` });
+      await notifierCo(c, co.destination_id, 'chsld_annulee', co);
+    } else if (t === 'transfert_hopital' && cote === 'origine' && a === 'confirmer_depart') {
+      if (co.statut !== 'acceptee') throw new ErreurHttp(409, 'coordination_statut_incompatible');
+      n = await maj('en_cours');
+      await libererPlacementHopital(c, pool, u, co);
+      await notifierCo(c, co.destination_id, 'chsld_depart', co);
+    } else if (t === 'transfert_hopital' && cote === 'destination' && a === 'confirmer_arrivee') {
+      if (co.statut !== 'en_cours') throw new ErreurHttp(409, 'coordination_statut_incompatible');
+      await maj('recue');
+      n = (await c.query('UPDATE coordinations SET arrivee_le = now(), cloturee_le = now() WHERE id = $1 RETURNING *', [co.id])).rows[0];
+      const h = (await c.query('SELECT * FROM coordinations WHERE id = $1 FOR UPDATE', [co.liee_id])).rows[0];
+      await c.query('UPDATE coordinations SET cloturee_le = now(), version = version + 1, modifie_le = now() WHERE id = $1', [h.id]);
+      await etape(c, h, 'cloturee', etabId, u, `Transféré à un autre hôpital (${co.numero})`);
+      const suite = (await c.query(`INSERT INTO coordinations (numero, type, resident_id, resident_ref, origine_id, destination_id, statut, motif_admin, lit_id, liee_id, cree_par, service_souhaite_id, recue_hopital_le, acceptee_le, arrivee_le)
+        VALUES ($1, 'hospitalisation', $2, $3, $4, $5, 'recue', $6, $7, $8, $9, $10, now(), now(), now()) RETURNING *`,
+      [await numeroCoordination(c), r.id, r.reference, h.origine_id, co.destination_id, co.motif_admin, h.lit_id, co.id, u.id, co.service_souhaite_id])).rows[0];
+      await etape(c, suite, 'arrivee', etabId, u, `Arrivée depuis un autre hôpital (${co.numero})`);
+      await mouvement(c, r, 'hospitalisation_confirmee', u, { etablissementId: r.etablissement_id, autre: co.destination_id, coordination: suite.id, detail: `Transfert ${co.numero} : arrivée confirmée ; place conservée` });
+      await notifierCo(c, h.origine_id, 'chsld_arrivee', suite);
+      await notifierCo(c, co.origine_id, 'chsld_arrivee', co);
     // -------- incidents (retard, prolongation, informations manquantes), signalés par l'un ou l'autre
     } else if (a === 'incident') {
       const inc = String(b.incident || '');
@@ -776,6 +813,8 @@ async function preparerRetour(pool, u, hospitalisationId, b) {
     if (!['en_cours', 'recue'].includes(h.statut) || h.cloturee_le) throw new ErreurHttp(409, 'coordination_statut_incompatible');
     const ouvert = (await c.query(`SELECT numero FROM coordinations WHERE resident_id = $1 AND type = 'retour' AND (statut IN ('preparee', 'envoyee', 'acceptee', 'en_cours') OR (statut = 'recue' AND arrivee_le IS NOT NULL AND cloturee_le IS NULL))`, [h.resident_id])).rows[0];
     if (ouvert) throw new ErreurHttp(409, 'retour_deja_ouvert', { numero: ouvert.numero });
+    const transfert = (await c.query(`SELECT numero FROM coordinations WHERE liee_id = $1 AND type = 'transfert_hopital' AND statut IN ('preparee', 'envoyee', 'acceptee', 'en_cours')`, [h.id])).rows[0];
+    if (transfert) throw new ErreurHttp(409, 'transfert_hopital_ouvert', { numero: transfert.numero });
     const co = (await c.query(`INSERT INTO coordinations (numero, type, resident_id, resident_ref, origine_id, destination_id, statut, retour_prevu_le, liee_id, expire_le, cree_par, motif_admin)
       VALUES ($1, 'retour', $2, $3, $4, $5, 'envoyee', $6, $7, $6::timestamptz + interval '2 days', $8, $9) RETURNING *`,
     [await numeroCoordination(c), h.resident_id, h.resident_ref, h.destination_id, h.origine_id, retour, h.id, u.id, texte(b.motif_admin, 200)])).rows[0];
@@ -784,6 +823,37 @@ async function preparerRetour(pool, u, hospitalisationId, b) {
     await mouvement(c, r, 'retour_prevu', u, { autre: h.destination_id, coordination: co.id, detail: `Retour proposé par l’hôpital pour le ${retour.toISOString().slice(0, 10)}` });
     await journalChsld(c, h.destination_id, u, 'Retour vers CHSLD préparé', `${h.resident_ref} · ${co.numero}`);
     await notifierCo(c, h.origine_id, 'chsld_retour_propose', co);
+    return co;
+  });
+}
+/** Hôpital qui garde un résident hospitalisé : demande de transfert vers un autre hôpital. Aucun changement avant le départ confirmé. */
+async function preparerTransfertHopital(pool, u, hospitalisationId, b) {
+  const h0 = (await pool.query('SELECT * FROM coordinations WHERE id = $1', [hospitalisationId])).rows[0];
+  if (!h0 || h0.type !== 'hospitalisation') throw new ErreurHttp(404, 'coordination_introuvable');
+  exigerEtablissement(u, h0.destination_id);
+  if (!GERER.includes(u.role)) throw new ErreurHttp(403, 'role_insuffisant');
+  const destination = Number(b.hopital_id);
+  if (destination === h0.destination_id || destination === h0.origine_id) throw new ErreurHttp(404, 'hopital_introuvable');
+  const d0 = (await pool.query(`SELECT id FROM etablissements WHERE id = $1 AND type_etablissement = 'hopital' AND actif`, [destination])).rows[0];
+  if (!d0) throw new ErreurHttp(404, 'hopital_introuvable');
+  const d = (await hopitauxLiaison(pool, { id: d0.id }))[0];
+  if (!d) throw new ErreurHttp(409, 'liaison_chsld_inactive');
+  const service = b.service_souhaite_id ? Number(b.service_souhaite_id) : null;
+  if (service && !(await pool.query('SELECT 1 FROM types_unite t JOIN etablissements e ON e.config_id = t.config_id WHERE e.id = $1 AND t.id = $2', [d.id, service])).rowCount) throw new ErreurHttp(400, 'type_unite_invalide');
+  return transaction(pool, async (c) => {
+    const h = (await c.query('SELECT * FROM coordinations WHERE id = $1 FOR UPDATE', [hospitalisationId])).rows[0];
+    if (h.statut !== 'recue' || h.cloturee_le) throw new ErreurHttp(409, 'coordination_statut_incompatible');
+    const r = await verrouResident(c, h.resident_id);
+    const retour = (await c.query(`SELECT numero FROM coordinations WHERE resident_id = $1 AND type = 'retour' AND (statut IN ('preparee', 'envoyee', 'acceptee', 'en_cours') OR (statut = 'recue' AND arrivee_le IS NOT NULL AND cloturee_le IS NULL))`, [r.id])).rows[0];
+    if (retour) throw new ErreurHttp(409, 'retour_deja_ouvert', { numero: retour.numero });
+    const ouvert = (await c.query(`SELECT numero FROM coordinations WHERE resident_id = $1 AND type = 'transfert_hopital' AND statut IN ('preparee', 'envoyee', 'acceptee', 'en_cours')`, [r.id])).rows[0];
+    if (ouvert) throw new ErreurHttp(409, 'transfert_hopital_ouvert', { numero: ouvert.numero });
+    const co = (await c.query(`INSERT INTO coordinations (numero, type, resident_id, resident_ref, origine_id, destination_id, statut, motif_admin, liee_id, cree_par, service_souhaite_id)
+      VALUES ($1, 'transfert_hopital', $2, $3, $4, $5, 'envoyee', $6, $7, $8, $9) RETURNING *`, [await numeroCoordination(c), r.id, r.reference, h.destination_id, d.id, texte(b.motif_admin, 200), h.id, u.id, service])).rows[0];
+    await etape(c, co, 'envoyee', h.destination_id, u, `Demande transmise à ${d.nom}`);
+    await mouvement(c, r, 'modification', u, { etablissementId: r.etablissement_id, autre: d.id, coordination: co.id, detail: `Transfert vers un autre hôpital demandé (${co.numero}) ; place conservée` });
+    await journalChsld(c, h.destination_id, u, 'Transfert vers un autre hôpital demandé', `${r.reference} · ${co.numero}`);
+    await notifierCo(c, d.id, 'chsld_demande', co);
     return co;
   });
 }
@@ -974,6 +1044,7 @@ function etapeParcours(c, retour = null) {
     if (c.statut === 'recue') return c.reintegree_le ? 'retour_reintegre' : c.arrivee_le ? 'retour_arrive' : 'retour_recu';
     return c.statut;
   }
+  if (c.type === 'transfert_hopital') return { envoyee: 'transfert_propose', acceptee: 'transfert_accepte', en_cours: 'transfert_en_route', recue: 'transfert_arrive' }[c.statut] || c.statut;
   if (c.type !== 'hospitalisation') return c.statut;
   if (c.cloturee_le) return 'cloturee';
   if (c.statut === 'envoyee') return c.recue_hopital_le ? 'recue_hopital' : 'transmise';
@@ -994,6 +1065,7 @@ function chronologie(c, retour = null) {
     return [pas('demande', c.cree_le), pas('acceptation', date('acceptee')), pas('preparation', c.preparation_le, passee && !c.preparation_ouvertes), pas('chambre_verifiee', c.chambre_verifiee_le),
       pas('depart', date('en_cours')), pas('transport', c.transport_le), pas('arrivee', c.arrivee_le), pas('reintegration', c.reintegree_le), pas('cloture', c.cloturee_le)];
   }
+  if (c.type === 'transfert_hopital') return [pas('demande', c.cree_le), pas('acceptation', c.acceptee_le), pas('depart', date('en_cours')), pas('arrivee', c.arrivee_le), pas('cloture', c.cloturee_le)];
   if (c.type !== 'hospitalisation') return [];
   return [pas('demande', c.cree_le), pas('reception', c.recue_hopital_le), pas('acceptation', c.acceptee_le), pas('depart', date('en_cours')), pas('arrivee', c.arrivee_le),
     pas('orientation', c.orientation_le), pas('retour', retour?.cree_le), pas('cloture', c.cloturee_le)];
@@ -1075,5 +1147,5 @@ async function libererPlacementHopital(c, pool, u, retour) {
 
 module.exports = { etapeParcours, chronologie, etatReintegration, libererPlace, OCCUPATION_SQL, hopitauxLiaison, listeHopitauxLiaison, accueil, listeResidents, ficheResident, creerResident, modifierResident, ajouterContact, modifierContact, verifierRepresentant,
   reserverPlace, confirmerArrivee, changerChambre, sortie, absence, listeDemandes, creerDemande, actionDemande, preparerHospitalisation, actionCoordination,
-  preparerRetour, preparerTransfertChsld, listeCoordinations, reseau, listeTaches, creerTache, statutTache, creerCommunication, statutCommunication,
+  preparerRetour, preparerTransfertChsld, preparerTransfertHopital, listeCoordinations, reseau, listeTaches, creerTache, statutTache, creerCommunication, statutCommunication,
   places, indicateurs, etabChsld, CATEGORIES, RELATIONS, DOCUMENTS, ACCESSIBILITE, exigerFictifs };

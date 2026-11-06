@@ -625,6 +625,7 @@ window.ARRIMO_I18N.en = {
     hopital_introuvable: "Hospital not found.",
     liaison_chsld_inactive: "This hospital has not enabled CHSLD liaison: the request cannot be sent to it.",
     hospitalisation_deja_ouverte: "A hospital request is already open for this resident ({numero}).",
+    transfert_hopital_ouvert: "A transfer to another hospital is already open for this resident ({numero}).",
     retour_deja_ouvert: "A return to the CHSLD is already being prepared for this resident ({numero}).",
     cle_idempotence_invalide: "Invalid sending identifier.",
     cle_idempotence_conflit: "This sending identifier was already used for another resident.",

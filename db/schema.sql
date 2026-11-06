@@ -1074,3 +1074,8 @@ ALTER TABLE resident_mouvements DROP CONSTRAINT IF EXISTS resident_mouvements_ty
 ALTER TABLE resident_mouvements ADD CONSTRAINT resident_mouvements_type_check
   CHECK (type IN ('preadmission', 'admission', 'changement_chambre', 'depart_hopital', 'hospitalisation_confirmee',
     'retour_prevu', 'retour', 'reintegration', 'transfert_prepare', 'transfert_sortant', 'transfert_entrant', 'absence', 'fin_absence', 'sortie', 'annulation', 'modification'));
+
+-- Transfert d'un résident hospitalisé vers un autre hôpital (cahier du 6 nov. 2026) : identifiant et historique propres.
+-- À l'arrivée, l'hospitalisation d'origine est close sans être écrasée, et une nouvelle s'ouvre dans l'hôpital d'accueil.
+ALTER TABLE coordinations DROP CONSTRAINT IF EXISTS coordinations_type_check;
+ALTER TABLE coordinations ADD CONSTRAINT coordinations_type_check CHECK (type IN ('hospitalisation', 'retour', 'transfert_chsld', 'transfert_hopital'));

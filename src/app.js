@@ -393,6 +393,8 @@ function creerApp(pool, options = {}) {
   // Coordinations entre établissements (hôpitaux et CHSLD) : chacun ne voit et n'agit que de son côté
   api.get('/coordinations', route((req) => ch.listeCoordinations(pool, req.utilisateur, E(req), { toutes: req.query.toutes === '1' })));
   api.post('/coordinations/:id/action', route((req) => ch.actionCoordination(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
+  api.get('/liaison-chsld/hopitaux', route(async (req) => { await require('./liaison-chsld').etabHopital(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id')); return (await ch.hopitauxLiaison(pool)).map((h) => ({ id: h.id, nom: h.nom })); }));
+  api.post('/coordinations/:id/transfert-hopital', route((req) => ch.preparerTransfertHopital(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   api.post('/coordinations/:id/retour', route((req) => ch.preparerRetour(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   api.get('/admissions/alternatives', route((req) => t.alternativesAdmission(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   api.post('/admissions', route((req) => t.creerDemande(pool, req.utilisateur, req.body)));
