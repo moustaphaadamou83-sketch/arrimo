@@ -1831,6 +1831,40 @@ test('Coordination Famille : demandes en tâches, confirmations, créneaux, plus
   assert.match((await api('lise1', 'POST', '/proches/og', { question: 'Est-ce que ma demande concernant les vêtements a été traitée ?' })).reponse, new RegExp(`n° ${d.id} · vetements · resolue`));
   assert.match((await api('lise1', 'POST', '/proches/og', { question: 'Quel est son diagnostic ?' })).reponse, /aucune information de santé/);
   assert.ok(!(await api('lise2', 'POST', '/proches/og', { question: 'Où en est ma demande ?' })).reponse.includes(`n° ${d.id}`), 'aucune donnée d’un autre profil');
+  // OG Famille : batterie de questions réelles de proches (FR et EN) ; chaque question reçoit une réponse du bon sujet, jamais d'invention
+  const og = async (question, langue = 'fr') => api('lise1', 'POST', '/proches/og', { question, langue });
+  const attendu = {
+    situation: ['Où est ma mère ?', 'Il est où mon grand-père ?', 'Est-ce qu’il est toujours au CHSLD ?', 'Est-il hospitalisé ?', 'Dans quel hôpital est-il ?', 'Quand revient-il ?', 'Est-il rentré de l’hôpital ?', 'Avez-vous des nouvelles de mon père ?', 'Quel est son statut ?', 'Where is my mother?', 'Is he back from the hospital?', 'When will she come back?', 'Is she still there?', 'Est-ce qu’il a été transféré ?'],
+    chambre: ['Quel est son numéro de chambre ?'],
+    sante: ['Comment va-t-il ?', 'Est-ce qu’il mange bien ?', 'Quel est son diagnostic ?', 'A-t-il de la fièvre ?', 'Prend-il ses médicaments ?', 'Il a mal ?', 'How is my dad doing?', 'Is she in pain?', 'Est-ce qu’il dort bien ?', 'Quel est son plan de soins ?', 'Puis-je parler au médecin ?'],
+    urgence: ['C’est urgent, il est tombé', 'Emergency!'],
+    visites: ['Quand puis-je venir le voir ?', 'Quelle est ma prochaine visite ?', 'Quels sont les horaires de visite ?', 'Je veux annuler ma visite', 'Can I visit tomorrow?', 'Y a-t-il des créneaux disponibles ?'],
+    demandes: ['Où en est ma demande ?', 'Ma demande pour les vêtements a-t-elle été traitée ?', 'Comment signaler un besoin ?', 'Puis-je apporter des vêtements ?', 'Il a oublié ses lunettes', 'What is the status of my request?'],
+    messages: ['Ai-je des nouveaux messages ?', 'L’établissement m’a-t-il répondu ?', 'Did they answer my message?'],
+    contact: ['Comment joindre le CHSLD ?', 'Quel est le numéro de téléphone ?', 'Je voudrais qu’on me rappelle', 'Who should I talk to?'],
+    confirmations: ['Est-ce qu’on attend quelque chose de moi ?', 'Y a-t-il une confirmation à donner ?', 'Is there anything for me to do?'],
+    activites: ['Quelles sont les activités cette semaine ?', 'Que fait-il pendant la journée ?', 'Any events coming up?'],
+    notifications: ['Comment activer les notifications ?'], application: ['Comment installer l’application sur mon iPhone ?'], compte: ['J’ai oublié mon mot de passe'],
+    parametres: ['Comment passer en anglais ?', 'Mettre le mode sombre'], confidentialite: ['Qui peut voir mes données ?'], accueil: ['Bonjour', 'Merci'], aide: ['Que peux-tu faire ?'], inconnu: ['Quel temps fait-il ?'],
+  };
+  const ecarts = [];
+  for (const [sujet, questions] of Object.entries(attendu)) for (const question of questions) {
+    const r = await og(question, /^[A-Z][a-z]+ (is|did|can|what|where|when|how|who|any)|^(Where|Is|When|How|Can|What|Did|Who|Any|Emergency)/.test(question) ? 'en' : 'fr');
+    if (r.sujet !== sujet) ecarts.push(`${question} → ${r.sujet}`);
+    assert.ok(r.reponse && r.reponse.length > 10, question);
+    assert.doesNotMatch(r.reponse, /diagnostic :|R-\d{5}|lit_id|patient_ref/, question);
+  }
+  assert.deepStrictEqual(ecarts, [], 'chaque question reçoit une réponse du bon sujet');
+  assert.ok((await og('Quel temps fait-il ?')).proposer_message, 'question inconnue : proposition d’écrire à l’établissement');
+  assert.match((await og('Comment va-t-il ?')).reponse, /aucune information de santé/);
+  assert.match((await og('C’est urgent, il est tombé')).reponse, /911/);
+  // Droits respectés : sans autorisation, OG le dit au lieu de répondre
+  assert.strictEqual((await api('lise2', 'POST', '/proches/og', { question: 'Quelle est ma prochaine visite ?' })).sujet, 'autorisation');
+  assert.strictEqual((await api('paul', 'POST', '/proches/og', { question: 'Où est ma mère ?' })).sujet, 'autorisation');
+  // OG du personnel : la coordination famille en une question
+  const rs = await api('era', 'POST', '/copilote/question', { etablissement_id: E, question: 'Quelles demandes des familles sont en attente ?', langue: 'fr' });
+  assert.match(rs.reponse, /Messages de familles non lus/); assert.match(rs.reponse, /Demandes ouvertes/);
+  assert.match((await api('era', 'POST', '/copilote/question', { etablissement_id: E, question: 'Any messages from families?', langue: 'en' })).reponse, /Unread family messages/);
   // Tableau de bord : chiffres tirés des données
   const tb = await api('era', 'GET', `/famille/tableau?etablissement_id=${E}`);
   assert.ok(tb.demandes.ouvertes >= 1 && tb.demandes.en_retard >= 1 && tb.confirmations.en_attente >= 0 && tb.demandes.resolution_mediane_min !== null); assert.match(tb.mesure, /Aucun nombre d’appels évités/);

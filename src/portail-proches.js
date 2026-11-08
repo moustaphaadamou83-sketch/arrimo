@@ -288,4 +288,4 @@ function brancherPersonnel(api, pool, route, entier) {
   api.get('/chsld/residents/:id/portail', route((req) => accesResident(pool, req.utilisateur, entier(req.params.id, 'id'))));
   api.post('/chsld/residents/:id/messages', route((req) => messagePersonnel(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
 }
-module.exports = { brancherPublic, brancherPersonnel, inviter, revoquer, connexion, accepterInvitation };
+module.exports = { brancherPublic, brancherPersonnel, inviter, revoquer, connexion, accepterInvitation, situation };

@@ -99,24 +99,108 @@ async function journalVieProche(pool, p) {
   if (!(await reglages(pool, p.etablissement_id)).journal_vie || !p.autorisations.includes('hebergement')) return { actif: false, publications: [] };
   return { actif: true, publications: (await pool.query(`SELECT id, titre, texte, publie_le FROM journal_vie WHERE etablissement_id = $1 AND statut = 'publie' AND (resident_id IS NULL OR resident_id = $2) ORDER BY publie_le DESC LIMIT 30`, [p.etablissement_id, p.resident_id])).rows };
 }
-/** OG Famille : règles locales sur les seules données du proche. Aucune donnée inventée, aucune action sans confirmation. */
+/**
+ * OG Famille : répond à toute question d'un proche, à partir des seules données de ce proche et dans ses autorisations.
+ * Jamais de santé, jamais d'information inventée, jamais d'action sans confirmation ; sinon il propose d'écrire à l'établissement.
+ */
+const NORM = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[’'`]/g, ' ').replace(/\s+/g, ' ').trim();
 async function og(pool, p, b) {
-  const q = String(b?.question || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().slice(0, 500);
+  const q = NORM(b?.question).slice(0, 500);
+  if (!q) throw new ErreurHttp(400, 'question_invalide');
   const en = b?.langue === 'en'; const T = (fr, an) => (en ? an : fr);
-  if (!q.trim()) throw new ErreurHttp(400, 'question_invalide');
-  if (/(diagnostic|maladie|medicament|traitement|symptome|douleur|sante|health|medic|diagnos|symptom|pain)/.test(q)) {
-    return { reponse: T('Je ne donne aucune information de santé. Pour l’état de santé, adressez-vous à l’équipe de soins. En cas d’urgence, appelez le 911.', 'I give no health information. For health status, contact the care team. In an emergency, call 911.') };
+  const dt = (d) => (d ? new Date(d).toLocaleString(en ? 'en-CA' : 'fr-CA', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Toronto' }) : '');
+  const has = (re) => re.test(q); const cats = p.autorisations; const peut = (c) => cats.includes(c);
+  const rep = (reponse, sujet, extra = {}) => ({ reponse, sujet, ...extra });
+  const nom = p.r_prenom; const etab = p.etab_nom;
+  const pasAutorise = (c) => rep(T(`Votre accès ne comprend pas cette information (« ${c} »). L’établissement peut élargir vos autorisations : écrivez-lui dans « Messages ».`, `Your access does not include this information (“${c}”). The facility can extend your permissions: write to it in “Messages”.`), 'autorisation');
+  // Urgence : jamais par le portail
+  if (has(/\b(urgen\w*|emergency|911|ambulance|chute|tombe|fell|ne respire|malaise|inconscient|unconscious|suicid)/)) {
+    return rep(T('En cas d’urgence, appelez immédiatement le 911. Le portail n’est pas surveillé en continu et ne sert pas aux urgences.', 'In an emergency, call 911 right away. The portal is not monitored around the clock and is not for emergencies.'), 'urgence');
   }
-  if (/(demande|request|vetement|clothes|besoin|need)/.test(q)) {
+  // Santé : jamais d'information clinique ; orienter vers l'équipe de soins
+  if (has(/(diagnostic|diagnos|maladie|malade|sante|health|medic|traitement|treatment|symptom|douleur|pain|\ba mal\b|souffre|fievre|fever|covid|grippe|infection|operation|chirurg|surgery|analyse|test sanguin|blood|pression|tension|mange|manger|eat|dort|sleep|comment va|comment il va|comment elle va|how is (he|she|my)|etat de sante|moral|humeur|soins|care plan|plan de soins|docteur|medecin|doctor|nurse|infirmi)/)) {
+    return rep(T(`Je ne donne aucune information de santé. Pour l’état de santé de ${nom}, adressez-vous à l’équipe de soins : écrivez dans « Messages » ou demandez un rappel. En cas d’urgence, appelez le 911.`,
+      `I give no health information. For ${nom}’s health, contact the care team: write in “Messages” or ask for a call back. In an emergency, call 911.`), 'sante', { proposer_message: true });
+  }
+  // Notifications, application, compte, langue, confidentialité
+  if (has(/(notif|alerte|prevenir|notify|push)/)) return rep(T('Onglet « Plus » → « Activer les notifications ». Elles sont discrètes : ni nom ni détail. Sur iPhone, ajoutez d’abord le portail à l’écran d’accueil.', '“More” tab → “Turn on notifications”. They are discreet: no name or detail. On iPhone, first add the portal to the home screen.'), 'notifications');
+  if (has(/(install|application|appli|app\b|ecran d accueil|home screen|telecharg|download)/)) return rep(T('Sur iPhone : Safari → Partager → « Sur l’écran d’accueil ». Sur Android : Chrome → menu ⋮ → « Installer l’application ».', 'On iPhone: Safari → Share → “Add to Home Screen”. On Android: Chrome → ⋮ menu → “Install app”.'), 'application');
+  if (has(/(mot de passe|password|connexion|login|compte|account|deconnect|log out|sign out)/)) return rep(T('Pour un mot de passe oublié ou un accès à modifier, demandez à l’établissement : il peut vous renvoyer une invitation. Pour vous déconnecter : onglet « Plus ».', 'For a forgotten password or access change, ask the facility: it can send you a new invitation. To sign out: the “More” tab.'), 'compte');
+  if (has(/(anglais|english|francais|french|langue|language|sombre|dark|clair|light|theme)/)) return rep(T('Langue : boutons FR / EN en haut. Apparence claire ou sombre : onglet « Plus » → Paramètres.', 'Language: FR / EN buttons at the top. Light or dark: the “More” tab → Settings.'), 'parametres');
+  if (has(/(confidential|vie privee|privacy|donnees|data|qui voit|who sees|securi)/)) return rep(T('Vous ne voyez que ce que l’établissement vous a autorisé à voir. Le portail n’affiche jamais de renseignement médical, de chambre ni de position en temps réel. L’établissement peut retirer votre accès à tout moment.', 'You only see what the facility has authorized. The portal never shows medical information, the room or a real-time location. The facility can remove your access at any time.'), 'confidentialite');
+  // Demandes et besoins pratiques
+  if (has(/(demande|request|vetement|clothes|habit|lunette|glasses|effets|affaires|belongings|objet|oubli|forgot|besoin|need|apporter|bring|linge|laundry)/)) {
     const d = await demandesProche(pool, p);
-    if (!d.length) return { reponse: T('Vous n’avez aucune demande en cours. Pour en créer une : onglet « Demandes ».', 'You have no request. To create one: the “Requests” tab.') };
-    return { reponse: d.slice(0, 5).map((x) => `n° ${x.id} · ${x.categorie} · ${x.statut}${x.reponse ? ` · ${x.reponse}` : ''}`).join('\n'), source: 'demandes' };
+    const ouvertes = d.filter((x) => !FINAUX.includes(x.statut));
+    if (has(/(comment|how|ou |where|puis je|can i|faire une|signaler|report)/) && !has(/(ou en est|statut|status|traite|handled|reponse|answer)/)) {
+      return rep(peut('administratif') ? T('Ouvrez l’onglet « Demandes », choisissez la catégorie (vêtements, lunettes, effets personnels…), décrivez le besoin et envoyez : l’établissement reçoit une tâche suivie et vous voyez son statut.', 'Open the “Requests” tab, choose the category (clothing, glasses, belongings…), describe the need and send it: the facility gets a tracked task and you see its status.') : T('Votre accès ne permet pas de créer une demande. Écrivez à l’établissement dans « Messages ».', 'Your access does not allow requests. Write to the facility in “Messages”.'), 'demandes');
+    }
+    if (!d.length) return rep(T('Vous n’avez aucune demande. Pour en créer une : onglet « Demandes ».', 'You have no request. To create one: the “Requests” tab.'), 'demandes');
+    const st = { nouvelle: T('nouvelle', 'new'), recue: T('reçue', 'received'), attribuee: T('attribuée', 'assigned'), en_cours: T('en cours', 'in progress'), attente_information: T('en attente d’information', 'waiting for information'), attente_proche: T('en attente de votre réponse', 'waiting for you'), resolue: T('résolue', 'resolved'), refusee: T('refusée', 'refused'), annulee: T('annulée', 'cancelled'), cloturee: T('clôturée', 'closed') };
+    const liste = (has(/(vetement|clothes|habit)/) ? d.filter((x) => x.categorie === 'vetements') : ouvertes.length ? ouvertes : d).slice(0, 5);
+    return rep((liste.length ? liste : d.slice(0, 3)).map((x) => `n° ${x.id} · ${x.categorie} · ${x.statut}${x.reponse ? ` · ${x.reponse}` : ''} (${st[x.statut] || x.statut})`).join('\n'), 'demandes');
   }
-  if (/(visite|visit)/.test(q)) {
-    const v = (await pool.query(`SELECT souhaitee_le, statut FROM demandes_visite WHERE resident_id = $1 AND contact_id = $2 AND statut IN ('demandee', 'acceptee') AND souhaitee_le > now() ORDER BY souhaitee_le LIMIT 1`, [p.resident_id, p.contact_id])).rows[0];
-    return { reponse: v ? T(`Prochaine visite : ${v.souhaitee_le.toISOString()} (${v.statut === 'acceptee' ? 'confirmée' : 'en attente de confirmation'}).`, `Next visit: ${v.souhaitee_le.toISOString()} (${v.statut === 'acceptee' ? 'confirmed' : 'awaiting confirmation'}).`) : T('Aucune visite prévue. Onglet « Visites » pour en demander une.', 'No visit planned. Use the “Visits” tab to request one.'), source: 'visites' };
+  // Où est mon proche, statut, hôpital, transfert, retour
+  if (has(/(ou est|ou se trouve|il est ou|elle est ou|ou il est|ou elle est|where is|where s|situation|statut|status|hopital|hospital|hospitalis|transfer|transfert|retour|return|revient|revenu|reviendr|rentr|come back|coming back|arrive|parti|depart|left|chambre|room|present|absent|nouvelles de|news about|suivi|update|des nouvelles|toujours la|still there|encore la)/)) {
+    if (!peut('hebergement') && !peut('mouvements')) return pasAutorise(T('situation et déplacements', 'situation and movements'));
+    const s = await require('./portail-proches').situation(pool, p);
+    if (!s) return pasAutorise(T('situation', 'situation'));
+    if (has(/(chambre|room|numero de chambre)/) && !has(/(retour|return|rentre)/)) return rep(T('Le portail n’indique jamais le numéro de chambre. L’établissement vous le donnera lors de votre visite.', 'The portal never shows the room number. The facility will give it to you during your visit.'), 'chambre');
+    const libelles = {
+      present: T(`${nom} est présent(e) à ${etab}.`, `${nom} is at ${etab}.`),
+      absence_temporaire: T(`${nom} est en absence temporaire.`, `${nom} is temporarily away.`),
+      absent_etablissement: T(`${nom} est absent(e) de l’établissement pour le moment.`, `${nom} is away from the facility for now.`),
+      transfert_preparation: T(`Un transfert de ${nom} vers ${s.hopital} est en préparation (demande du ${dt(s.depuis)}). Le départ n’est pas encore confirmé.`, `A transfer of ${nom} to ${s.hopital} is being prepared (requested on ${dt(s.depuis)}). Departure is not confirmed yet.`),
+      hospitalise_depart_confirme: T(`${nom} est parti(e) vers ${s.hopital} le ${dt(s.depuis)}. L’arrivée n’est pas encore confirmée par l’hôpital.`, `${nom} left for ${s.hopital} on ${dt(s.depuis)}. Arrival is not yet confirmed by the hospital.`),
+      hospitalise_confirme: T(`${nom} est hospitalisé(e) à ${s.hopital} ; arrivée confirmée le ${dt(s.depuis)}.`, `${nom} is in hospital at ${s.hopital}; arrival confirmed on ${dt(s.depuis)}.`),
+      transfert_entre_hopitaux: T(`${nom} est en transfert vers ${s.hopital} ; départ confirmé le ${dt(s.depuis)}.`, `${nom} is being transferred to ${s.hopital}; departure confirmed on ${dt(s.depuis)}.`),
+      retour_en_route: T(`${nom} est en route vers ${etab} ; départ de l’hôpital confirmé le ${dt(s.depuis)}.`, `${nom} is on the way to ${etab}; hospital departure confirmed on ${dt(s.depuis)}.`),
+      arrivee_confirmee: T(`${nom} est arrivé(e) à ${etab} le ${dt(s.depuis)} ; le retour dans sa chambre reste à confirmer.`, `${nom} arrived at ${etab} on ${dt(s.depuis)}; return to the room is still to be confirmed.`),
+      reintegre: T(`${nom} est de retour dans sa chambre depuis le ${dt(s.depuis)}.`, `${nom} has been back in their room since ${dt(s.depuis)}.`),
+      autre: T('La situation est en cours de mise à jour par l’établissement.', 'The facility is updating the situation.'),
+    };
+    let r = libelles[s.statut] || libelles.autre;
+    if (s.retour_prevu_le) r += T(` Retour prévu le ${dt(s.retour_prevu_le)} (prévision, pas une confirmation).`, ` Return planned on ${dt(s.retour_prevu_le)} (a plan, not a confirmation).`);
+    else if (has(/(retour|return|revient|rentre|come back)/) && ['hospitalise_confirme', 'hospitalise_depart_confirme', 'transfert_entre_hopitaux'].includes(s.statut)) r += T(' Aucune date de retour n’est encore confirmée.', ' No return date is confirmed yet.');
+    return rep(`${r}\n${T('Seules les étapes confirmées sont affichées ; ce n’est pas une position en temps réel.', 'Only confirmed steps are shown; this is not a real-time location.')}`, 'situation');
   }
-  return { reponse: T('Je peux vous dire où en sont vos demandes et votre prochaine visite. Pour le reste, écrivez à l’établissement dans « Messages ».', 'I can tell you the status of your requests and your next visit. For anything else, write to the facility in “Messages”.') };
+  // Visites
+  if (has(/(visit|venir voir|venir le voir|venir la voir|venir les voir|rendre visite|voir mon|voir ma|creneau|slot|horaire|heures de visite|visiting hours|rendez vous|appointment|passer le voir|passer la voir)/)) {
+    if (!peut('rendez_vous')) return pasAutorise(T('visites', 'visits'));
+    const prochaine = (await pool.query(`SELECT souhaitee_le, statut FROM demandes_visite WHERE resident_id = $1 AND contact_id = $2 AND statut IN ('demandee', 'acceptee') AND souhaitee_le > now() ORDER BY souhaitee_le LIMIT 1`, [p.resident_id, p.contact_id])).rows[0];
+    const creneaux = await creneauxProche(pool, p); const libres = creneaux.filter((c) => c.places > 0);
+    if (has(/(annul|cancel)/)) return rep(prochaine ? T(`Votre visite du ${dt(prochaine.souhaitee_le)} peut être annulée dans l’onglet « Visites », bouton « Annuler ».`, `Your visit on ${dt(prochaine.souhaitee_le)} can be cancelled in the “Visits” tab with “Cancel”.`) : T('Vous n’avez aucune visite à venir.', 'You have no upcoming visit.'), 'visites');
+    let r = prochaine ? T(`Prochaine visite : ${dt(prochaine.souhaitee_le)} (${prochaine.statut === 'acceptee' ? 'confirmée' : 'en attente de confirmation'}).`, `Next visit: ${dt(prochaine.souhaitee_le)} (${prochaine.statut === 'acceptee' ? 'confirmed' : 'awaiting confirmation'}).`) : T('Aucune visite prévue pour l’instant.', 'No visit planned yet.');
+    r += libres.length ? T(`\nCréneaux disponibles : ${libres.slice(0, 3).map((c) => dt(c.debut)).join(' ; ')}. Réservez dans l’onglet « Visites ».`, `\nAvailable slots: ${libres.slice(0, 3).map((c) => dt(c.debut)).join('; ')}. Book in the “Visits” tab.`)
+      : T('\nAucun créneau n’est proposé : demandez une date dans l’onglet « Visites », l’établissement vous répondra.', '\nNo slot is offered: request a date in the “Visits” tab and the facility will reply.');
+    return rep(r, 'visites');
+  }
+  // Messages
+  if (has(/(message|repondu|reponse|answer|replied|ecrit|written|nouvelles du chsld|new messages|courriel|email|contacter|contact|joindre|reach|appeler|call|telephone|phone|rappel|call back|parler a|talk to|qui dois je|who should)/)) {
+    const m = (await pool.query(`SELECT texte, cree_le FROM messages_proches WHERE resident_id = $1 AND contact_id = $2 AND sens = 'etablissement' AND categorie = ANY($3) ORDER BY cree_le DESC LIMIT 1`, [p.resident_id, p.contact_id, cats])).rows[0];
+    const nl = (await pool.query(`SELECT count(*)::int n FROM messages_proches WHERE resident_id = $1 AND contact_id = $2 AND sens = 'etablissement' AND lu_le IS NULL AND categorie = ANY($3)`, [p.resident_id, p.contact_id, cats])).rows[0].n;
+    if (has(/(contacter|contact|joindre|reach|appeler|call|telephone|phone|rappel|call back|parler a|talk to|qui dois je|who should)/)) {
+      return rep(T(`Pour joindre ${etab} : onglet « Messages », écrivez votre question, ou touchez « Demander un rappel » pour qu’on vous rappelle. Le portail n’affiche pas de numéro de téléphone. En cas d’urgence, appelez le 911.`, `To reach ${etab}: the “Messages” tab, write your question, or tap “Ask for a call back”. The portal does not show a phone number. In an emergency, call 911.`), 'contact', { proposer_message: true });
+    }
+    return rep(m ? T(`${nl ? `${nl} nouveau(x) message(s). ` : ''}Dernier message de l’établissement (${dt(m.cree_le)}) : « ${m.texte} »`, `${nl ? `${nl} new message(s). ` : ''}Latest message from the facility (${dt(m.cree_le)}): “${m.texte}”`) : T('Vous n’avez pas encore de message de l’établissement.', 'You have no message from the facility yet.'), 'messages');
+  }
+  // Confirmations demandées
+  if (has(/(confirm|repondre a|attend|waiting for me|ai je quelque chose|anything for me|action|a faire|to do|disponib|available|accompagn)/)) {
+    const c = (await pool.query(`SELECT sujet, echeance FROM confirmations_famille WHERE resident_id = $1 AND contact_id = $2 AND statut = 'en_attente' AND (echeance IS NULL OR echeance > now()) ORDER BY cree_le`, [p.resident_id, p.contact_id])).rows;
+    return rep(c.length ? T(`L’établissement attend votre réponse à : ${c.map((x) => `« ${x.sujet} »${x.echeance ? ` (avant le ${dt(x.echeance)})` : ''}`).join(' ; ')}. Répondez dans l’onglet « Demandes ».`, `The facility is waiting for your answer to: ${c.map((x) => `“${x.sujet}”${x.echeance ? ` (by ${dt(x.echeance)})` : ''}`).join('; ')}. Answer in the “Requests” tab.`) : T('Rien ne vous est demandé pour l’instant.', 'Nothing is asked of you right now.'), 'confirmations');
+  }
+  // Activités et vie quotidienne (non médical)
+  if (has(/(activit|atelier|animation|sortie|fete|party|event|evenement|journal|vie quotidienne|daily life|que fait|what does|occupe|loisir)/)) {
+    const a = (await pool.query(`SELECT titre, debut_le FROM activites_etab WHERE etablissement_id = $1 AND actif AND debut_le >= now() - interval '1 day' ORDER BY debut_le LIMIT 3`, [p.etablissement_id])).rows;
+    const j = await journalVieProche(pool, p);
+    let r = a.length ? T(`Activités à venir : ${a.map((x) => `${x.titre} (${dt(x.debut_le)})`).join(' ; ')}.`, `Upcoming activities: ${a.map((x) => `${x.titre} (${dt(x.debut_le)})`).join('; ')}.`) : T('Aucune activité annoncée pour l’instant.', 'No activity announced yet.');
+    if (j.actif && j.publications.length) r += T(` Dernière nouvelle du journal de vie : « ${j.publications[0].titre} ».`, ` Latest life-journal news: “${j.publications[0].titre}”.`);
+    return rep(r, 'activites');
+  }
+  if (has(/^(merci|thanks|thank you|bonjour|bonsoir|salut|hello|hi|allo)\b/)) return rep(T(`Bonjour ! Je peux vous dire où en est ${nom}, vos visites, vos demandes et vos messages. Que voulez-vous savoir ?`, `Hello! I can tell you how things stand for ${nom}, your visits, your requests and your messages. What would you like to know?`), 'accueil');
+  if (has(/(que peux tu|que sais tu|aide|help|what can you|comment ca marche|how does)/)) return rep(T('Je réponds sur : la situation et les étapes confirmées, les visites, vos demandes, vos messages, les confirmations attendues, les activités, les notifications et l’application. Je ne donne aucune information de santé.', 'I answer about: situation and confirmed steps, visits, your requests, your messages, pending confirmations, activities, notifications and the app. I give no health information.'), 'aide');
+  // Rien de reconnu : jamais d'invention ; proposition d'envoyer la question à l'établissement
+  return rep(T(`Je n’ai pas cette information. Je peux envoyer votre question à ${etab} : l’équipe vous répondra dans « Messages ».`, `I do not have this information. I can send your question to ${etab}: the team will reply in “Messages”.`), 'inconnu', { proposer_message: true });
 }
 
 /* ---------------------------------------------------------------- côté personnel */

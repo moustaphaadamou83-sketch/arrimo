@@ -477,6 +477,26 @@ async function repondre(pool, u, etabId, q, L) {
     return local(T(L, 'Je peux consulter et expliquer : un résident (nom, référence R-00001, lit ERA-117A, demande DH-…, coordination CO-…), sa chambre, sa place conservée, ses mouvements, ses hospitalisations et retours ; les places libres, bloquées, conservées, en nettoyage ; les demandes d’hébergement, les accueils prévus, les tâches, les contacts et autorisations. Je prépare une tâche, une demande de rappel à un proche autorisé ou l’acceptation d’un retour : rien n’est enregistré sans votre confirmation.',
       'I can look up and explain: a resident (name, reference R-00001, bed ERA-117A, request DH-…, coordination CO-…), their room, held place, movements, hospital stays and returns; available, blocked, held and cleaning places; placement requests, planned admissions, tasks, contacts and permissions. I prepare a task, a callback request to an authorized family member or the acceptance of a return: nothing is recorded without your confirmation.'), { intentions: ['aide'] });
   }
+  // Coordination Famille : messages, demandes, confirmations, visites des proches (chiffres et listes réels, mêmes droits que l'écran)
+  if (/(famille|familles|proche|proches|family|families|relative|parent du resident|enfants? du resident)/.test(qn) && !/(contact d urgence|emergency contact)/.test(qn)) {
+    if (u.role === 'entretien') return local(T(L, 'La coordination avec les familles ne fait pas partie de votre rôle.', 'Family coordination is not part of your role.'), { intentions: ['famille'] });
+    const q1 = (sql) => pool.query(sql, [etabId]).then((r) => r.rows);
+    const [msgs, dem, conf, vis] = await Promise.all([
+      q1(`SELECT k.prenom, k.nom, r.reference, m.texte FROM messages_proches m JOIN residents r ON r.id = m.resident_id JOIN resident_contacts k ON k.id = m.contact_id WHERE r.etablissement_id = $1 AND m.sens = 'proche' AND m.lu_le IS NULL ORDER BY m.cree_le LIMIT 10`),
+      q1(`SELECT d.id, d.categorie, d.statut, r.reference, (d.echeance < now()) AS retard FROM demandes_famille d JOIN residents r ON r.id = d.resident_id WHERE d.etablissement_id = $1 AND d.statut NOT IN ('resolue', 'refusee', 'annulee', 'cloturee') ORDER BY d.echeance LIMIT 10`),
+      q1(`SELECT c.sujet, c.statut, r.reference FROM confirmations_famille c JOIN residents r ON r.id = c.resident_id WHERE c.etablissement_id = $1 AND (c.statut = 'en_attente' OR c.repondu_le > now() - interval '2 days') ORDER BY c.cree_le DESC LIMIT 10`),
+      q1(`SELECT v.souhaitee_le, v.statut, r.reference FROM demandes_visite v JOIN residents r ON r.id = v.resident_id WHERE v.etablissement_id = $1 AND (v.statut = 'demandee' OR (v.statut = 'acceptee' AND v.souhaitee_le::date = now()::date)) ORDER BY v.souhaitee_le LIMIT 10`)]);
+    const ligne = (x) => `• ${x}`;
+    const fr = [`Messages de familles non lus : ${msgs.length}${msgs.length ? `\n${msgs.map((m) => ligne(`${m.prenom} ${m.nom} (${m.reference}) : « ${String(m.texte).slice(0, 80)} »`)).join('\n')}` : ''}`,
+      `Demandes ouvertes : ${dem.length}${dem.filter((d) => d.retard).length ? `, dont ${dem.filter((d) => d.retard).length} en retard` : ''}${dem.length ? `\n${dem.map((d) => ligne(`n° ${d.id} · ${d.categorie} · ${d.statut} (${d.reference})${d.retard ? ' · en retard' : ''}`)).join('\n')}` : ''}`,
+      `Confirmations : ${conf.filter((c) => c.statut === 'en_attente').length} en attente${conf.filter((c) => c.statut !== 'en_attente').length ? `, ${conf.filter((c) => c.statut !== 'en_attente').length} réponse(s) récente(s)` : ''}`,
+      `Visites à traiter ou du jour : ${vis.length}`].join('\n\n');
+    const en = [`Unread family messages: ${msgs.length}${msgs.length ? `\n${msgs.map((m) => ligne(`${m.prenom} ${m.nom} (${m.reference}): “${String(m.texte).slice(0, 80)}”`)).join('\n')}` : ''}`,
+      `Open requests: ${dem.length}${dem.filter((d) => d.retard).length ? `, ${dem.filter((d) => d.retard).length} overdue` : ''}${dem.length ? `\n${dem.map((d) => ligne(`#${d.id} · ${d.categorie} · ${d.statut} (${d.reference})${d.retard ? ' · overdue' : ''}`)).join('\n')}` : ''}`,
+      `Confirmations: ${conf.filter((c) => c.statut === 'en_attente').length} pending${conf.filter((c) => c.statut !== 'en_attente').length ? `, ${conf.filter((c) => c.statut !== 'en_attente').length} recent answer(s)` : ''}`,
+      `Visits to handle or today: ${vis.length}`].join('\n\n');
+    return local(T(L, fr, en), { intentions: ['famille'], ouvrir: 'c-accueil' });
+  }
   // Décisions qui ne relèvent pas d'OG
   if (/(admissib|eligib|priorit\w* clinique|clinical priority|decide|decider|choisis qui|who should get|attribue definitivement|assign permanently|transfert medical|medical transfer|medicament|medication|dosage|diagnostic|diagnos)/.test(qn)) {
     return local(T(L, 'Je ne décide pas de l’admissibilité, d’une priorité clinique, d’un transfert médical, d’une médication ni de l’attribution définitive d’une place : ces décisions reviennent aux personnes et aux mécanismes habilités. Je peux afficher les informations enregistrées et préparer une étape à confirmer.',
