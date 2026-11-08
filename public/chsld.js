@@ -27,7 +27,7 @@
         <div class="actions"><button class="btn pri" type="button" data-mf-rep="${m.id}">${M('repondre')}</button>${m.non_lu ? `<button class="btn" type="button" data-mf-lu="${m.id}">${M('marquer_lu')}</button>` : ''}<button class="btn" type="button" data-res="${m.resident_id}">${M('fiche')}</button></div></div>`).join('') || `<p class="note">${M('aucun')}</p>`}</div></section>`);
     v.querySelectorAll('[data-mf-lu]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/famille/messages/${b.dataset.mfLu}/lu`), t('chsld.actions.ok')); });
     v.querySelectorAll('#messages-familles [data-res]').forEach((b) => { b.onclick = () => { etat.chResident = Number(b.dataset.res); allerA('c-residents'); }; });
-    v.querySelectorAll('[data-mf-rep]').forEach((b) => { b.onclick = () => { const m = liste.find((x) => x.id === Number(b.dataset.mfRep));
+    v.querySelectorAll('[data-mf-rep]').forEach((b) => { b.onclick = () => { const m = liste.find((x) => String(x.id) === b.dataset.mfRep); if (!m) return;
       modale(M('repondre_a', { nom: `${m.prenom} ${m.nom}` }), `<p class="note">${esc(m.texte)}</p><div class="champ"><label class="lbl" for="mf-txt">${M('reponse')}</label><textarea id="mf-txt" maxlength="2000"></textarea></div>`,
         [{ label: t('general.annuler') }, { label: M('envoyer'), pri: true, run: async () => (await agir(null, () => api('POST', `/chsld/residents/${m.resident_id}/messages`, { contact_id: m.contact_id, categorie: m.categorie, texte: $('#mf-txt').value }), t('chsld.actions.ok'))) !== null }]); }; });
   }

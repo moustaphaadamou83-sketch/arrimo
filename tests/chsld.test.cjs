@@ -1660,6 +1660,22 @@ test('écrans : transfert d’hôpital au bouton, nettoyage sous précautions, r
     for (const [nom, vp] of [['ordinateur', { width: 1366, height: 900 }], ['tablette', { width: 820, height: 1180 }], ['telephone', { width: 390, height: 844 }]]) {
       const era = await ouvrir('era', E, vp); await aller(era, 'c-taches', '#registre'); await era.waitForSelector('#famille'); await era.waitForSelector('#visites'); await era.waitForSelector('#activites'); await sansDebord(era, `${nom} registre`);
       await aller(era, 'c-accueil', '#ch-accueil-sup'); await era.waitForSelector('#messages-familles'); await sansDebord(era, `${nom} accueil`);
+      // Répondre à un message de famille depuis l'accueil, réellement, au clic
+      if (nom === 'ordinateur') {
+        const k = (await poolPilote.query(`SELECT a.contact_id, a.resident_id FROM proches_acces a WHERE a.revoque_le IS NULL AND a.etablissement_id = $1 LIMIT 1`, [E])).rows[0];
+        if (k) {
+          const cat = (await poolPilote.query('SELECT autorisations[1] AS c FROM resident_contacts WHERE id = $1', [k.contact_id])).rows[0].c;
+          await poolPilote.query(`INSERT INTO messages_proches (resident_id, contact_id, sens, categorie, texte) VALUES ($1, $2, 'proche', $3, 'Question fictive à l’écran')`, [k.resident_id, k.contact_id, cat]);
+          await aller(era, 'c-residents', '#v-c-residents'); await aller(era, 'c-accueil', '#messages-familles');
+          const id = (await poolPilote.query(`SELECT max(id)::text AS id FROM messages_proches WHERE texte = 'Question fictive à l’écran'`)).rows[0].id;
+          await era.click(`[data-mf-rep="${id}"]`); await era.waitForSelector('#mf-txt');
+          await era.fill('#mf-txt', 'Réponse fictive à l’écran'); await era.click('#modale button.pri');
+          await era.waitForFunction(() => !document.querySelector('#mf-txt'));
+          for (let i = 0; i < 40 && !(await poolPilote.query(`SELECT 1 FROM messages_proches WHERE texte = 'Réponse fictive à l’écran'`)).rowCount; i++) await new Promise((r) => setTimeout(r, 100));
+          assert.ok((await poolPilote.query(`SELECT 1 FROM messages_proches WHERE texte = 'Réponse fictive à l’écran' AND sens = 'etablissement'`)).rowCount, 'réponse envoyée depuis l’accueil');
+          assert.ok((await poolPilote.query('SELECT lu_le FROM messages_proches WHERE id = $1', [id])).rows[0].lu_le, 'message marqué lu');
+        }
+      }
       const b = await ouvrir('b', L.B, vp); await aller(b, 'nettoyage', '#net-config'); await b.evaluate(() => { document.querySelector('#net-config').open = true; }); await b.waitForSelector('#net-proto'); await sansDebord(b, `${nom} nettoyage`);
       await aller(b, 'liaison', '.li-onglets'); await sansDebord(b, `${nom} liaison`);
       await era.context().close(); await b.context().close();
