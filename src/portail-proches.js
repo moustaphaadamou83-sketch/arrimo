@@ -124,19 +124,26 @@ async function accepterInvitation(pool, b) {
 async function connexion(pool, b) {
   ch.exigerFictifs();
   const courriel = String(b.courriel || '').trim().toLowerCase();
-  const a = (await pool.query('SELECT * FROM proches_acces WHERE lower(courriel) = $1 AND revoque_le IS NULL AND actif', [courriel])).rows[0];
-  // Même message et même coût pour un courriel inconnu, un mot de passe faux ou un accès bloqué
-  const ok = a && !(a.bloque_jusqu_au && a.bloque_jusqu_au > new Date()) && await verifierAsync(String(b.mot_de_passe || ''), a.mot_de_passe_hash || 'x:00');
-  if (!ok) {
-    if (a) await pool.query(`UPDATE proches_acces SET echecs = echecs + 1,
+  // Un même courriel peut être lié à plusieurs résidents, chacun avec son accès et ses droits : une session étanche par accès valide
+  const tous = (await pool.query('SELECT * FROM proches_acces WHERE lower(courriel) = $1 AND revoque_le IS NULL AND actif AND mot_de_passe_hash IS NOT NULL ORDER BY id', [courriel])).rows;
+  const ok = [];
+  for (const a of tous.length ? tous : [null]) {
+    // Même message et même coût pour un courriel inconnu, un mot de passe faux ou un accès bloqué
+    const bon = await verifierAsync(String(b.mot_de_passe || ''), a?.mot_de_passe_hash || 'x:00');
+    if (a && bon && !(a.bloque_jusqu_au && a.bloque_jusqu_au > new Date())) { try { await accesValide(pool, a.id); ok.push(a); } catch { /* accès devenu invalide : ignoré */ } }
+    else if (a && !bon) await pool.query(`UPDATE proches_acces SET echecs = echecs + 1,
       bloque_jusqu_au = CASE WHEN echecs + 1 >= $2 THEN now() + make_interval(mins => $3) ELSE bloque_jusqu_au END WHERE id = $1`, [a.id, ECHECS_MAX, BLOCAGE_MIN]);
-    throw new ErreurHttp(401, 'identifiants_incorrects');
   }
-  await accesValide(pool, a.id);
-  const jeton = crypto.randomBytes(32).toString('hex');
-  await pool.query(`INSERT INTO proches_sessions (jeton_hash, acces_id, expire_le) VALUES ($1, $2, now() + make_interval(hours => $3))`, [empreinte(jeton), a.id, DUREE_SESSION_H]);
-  await pool.query('UPDATE proches_acces SET echecs = 0, bloque_jusqu_au = NULL, derniere_connexion = now() WHERE id = $1', [a.id]);
-  return { token: `P.${jeton}` };
+  if (!ok.length) throw new ErreurHttp(401, 'identifiants_incorrects');
+  const profils = [];
+  for (const a of ok) {
+    const jeton = crypto.randomBytes(32).toString('hex');
+    await pool.query(`INSERT INTO proches_sessions (jeton_hash, acces_id, expire_le) VALUES ($1, $2, now() + make_interval(hours => $3))`, [empreinte(jeton), a.id, DUREE_SESSION_H]);
+    await pool.query('UPDATE proches_acces SET echecs = 0, bloque_jusqu_au = NULL, derniere_connexion = now() WHERE id = $1', [a.id]);
+    const v = await accesValide(pool, a.id);
+    profils.push({ token: `P.${jeton}`, resident: `${v.r_prenom} ${String(v.r_nom).slice(0, 1)}.`, etablissement: v.etab_nom });
+  }
+  return { token: profils[0].token, profils };
 }
 /**
  * Situation du résident, seulement dans les catégories autorisées, à partir des faits enregistrés :
@@ -156,14 +163,19 @@ async function situation(pool, p) {
   const maj = (await pool.query(`SELECT max(date) d FROM resident_mouvements WHERE resident_id = $1 AND type <> 'modification'`, [p.resident_id])).rows[0].d;
   const s = { mis_a_jour_le: maj };
   const parcoursDe = async () => {
-    const cos = (await pool.query(`SELECT c.id, c.type, c.statut, c.cree_le, c.arrivee_le, c.retour_prevu_le, c.reintegree_le, c.cloturee_le, d.nom AS destination,
+    const cos = (await pool.query(`SELECT c.id, c.liee_id, c.type, c.statut, c.cree_le, c.arrivee_le, c.retour_prevu_le, c.reintegree_le, c.cloturee_le, d.nom AS destination,
         (SELECT max(x.date) FROM coordination_etapes x WHERE x.coordination_id = c.id AND x.statut = 'en_cours') AS depart_le
       FROM coordinations c JOIN etablissements d ON d.id = c.destination_id WHERE c.resident_id = $1 AND c.type IN ('hospitalisation', 'transfert_hopital', 'retour') ORDER BY c.cree_le DESC, c.id DESC LIMIT 12`, [p.resident_id])).rows;
-    return { hosp: cos.find((c) => c.type === 'hospitalisation') || null, transfert: cos.find((c) => c.type === 'transfert_hopital') || null, retour: cos.find((c) => c.type === 'retour') || null };
+    const hosp = cos.find((c) => c.type === 'hospitalisation') || null;
+    // Séjour arrivé par transfert d'un autre hôpital : le parcours commence à la première hospitalisation de la chaîne
+    let debut = hosp;
+    for (let i = 0; debut?.liee_id && i < 5; i++) { const t = cos.find((c) => c.id === debut.liee_id && c.type === 'transfert_hopital'); const h = t && cos.find((c) => c.id === t.liee_id); if (!h) break; debut = h; }
+    return { hosp, debut, transfert: cos.find((c) => c.type === 'transfert_hopital') || null, retour: cos.find((c) => c.type === 'retour') || null };
   };
-  const { hosp, transfert, retour } = voitMouvements ? await parcoursDe() : {};
+  const { hosp, debut, transfert, retour } = voitMouvements ? await parcoursDe() : {};
   const ouvert = (c) => c && ['envoyee', 'acceptee', 'en_cours'].includes(c.statut);
-  const etapes = (h, ret) => {
+  const etapes = (h0, ret) => {
+    const h = h0 && debut && h0.id === hosp?.id ? debut : h0;
     const pas = (code, date) => ({ code, date: date || null, fait: !!date });
     const accepte = ret && ['acceptee', 'en_cours', 'recue'].includes(ret.statut);
     return [pas('transfert_preparation', h?.cree_le), pas('depart_confirme', h?.depart_le), pas('hospitalisation_en_cours', h?.arrivee_le),
@@ -239,12 +251,14 @@ function brancherPublic(api, pool, route) {
   api.get('/proches/moi', s, route((req) => moi(pool, req.proche)));
   api.post('/proches/messages', s, route((req) => messageProche(pool, req.proche, req.body)));
   api.get('/proches/etat', s, route((req) => etat(pool, req.proche)));
+  require('./famille').brancherProche(api, pool, route, s);
   require('./portail-notifications').brancherProche(api, pool, route, s);
   api.post('/proches/visites', s, route((req) => demanderVisite(pool, req.proche, req.body)));
   api.post('/proches/deconnexion', s, route((req) => deconnexion(pool, req.proche)));
 }
 /** Routes du personnel (avec session). */
 function brancherPersonnel(api, pool, route, entier) {
+  require('./famille').brancherPersonnel(api, pool, route, entier);
   const GESTION = ['coordonnateur', 'admin_etab', 'gestionnaire', 'equipe_soins'];
   const garde = async (u, id) => { await ch.etabChsld(pool, u, id, { roles: GESTION }); };
   api.get('/chsld/visites', route(async (req) => { const e = entier(req.query.etablissement_id, 'etablissement_id'); await garde(req.utilisateur, e);

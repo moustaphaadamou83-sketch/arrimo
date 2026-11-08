@@ -1141,3 +1141,32 @@ CREATE TABLE IF NOT EXISTS proches_abonnements_push (
   id serial PRIMARY KEY, acces_id int NOT NULL REFERENCES proches_acces(id) ON DELETE CASCADE, endpoint text NOT NULL UNIQUE, cree_le timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS proches_notifications_attente (
   acces_id int PRIMARY KEY REFERENCES proches_acces(id) ON DELETE CASCADE, cree_le timestamptz NOT NULL DEFAULT now());
+
+-- Coordination Famille (cahier du 8 nov. 2026) : demandes en tâches, confirmations, créneaux de visite, journal de vie, réglages
+ALTER TABLE etablissements ADD COLUMN IF NOT EXISTS famille_config jsonb NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE taches_etab DROP CONSTRAINT IF EXISTS taches_etab_type_check;
+ALTER TABLE taches_etab ADD CONSTRAINT taches_etab_type_check CHECK (type IN ('entretien', 'preparation_chambre', 'administratif', 'transmission', 'relance', 'demande_famille'));
+CREATE TABLE IF NOT EXISTS demandes_famille (
+  id serial PRIMARY KEY, etablissement_id int NOT NULL REFERENCES etablissements(id), resident_id int NOT NULL REFERENCES residents(id), contact_id int NOT NULL REFERENCES resident_contacts(id),
+  categorie text NOT NULL CHECK (categorie IN ('vetements', 'lunettes', 'effets_personnels', 'objet_oublie', 'rencontre', 'administratif', 'autre')), texte text NOT NULL,
+  statut text NOT NULL CHECK (statut IN ('nouvelle', 'recue', 'attribuee', 'en_cours', 'attente_information', 'attente_proche', 'resolue', 'refusee', 'annulee', 'cloturee')),
+  reponse text, note_interne text, tache_id int REFERENCES taches_etab(id), echeance timestamptz, relances int NOT NULL DEFAULT 0, derniere_relance_le timestamptz,
+  cree_le timestamptz NOT NULL DEFAULT now(), modifie_le timestamptz NOT NULL DEFAULT now(), resolue_le timestamptz, version int NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS demandes_famille_historique (
+  id serial PRIMARY KEY, demande_id int NOT NULL REFERENCES demandes_famille(id), statut text NOT NULL, par_utilisateur int REFERENCES utilisateurs(id), note text, le timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS confirmations_famille (
+  id serial PRIMARY KEY, etablissement_id int NOT NULL REFERENCES etablissements(id), resident_id int NOT NULL REFERENCES residents(id), contact_id int NOT NULL REFERENCES resident_contacts(id),
+  sujet text NOT NULL, explication text, echeance timestamptz, statut text NOT NULL DEFAULT 'en_attente' CHECK (statut IN ('en_attente', 'confirmee', 'indisponible', 'precisions')),
+  reponse text, vue_le timestamptz, repondu_le timestamptz, cree_par int REFERENCES utilisateurs(id), cree_le timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS visites_creneaux (
+  id serial PRIMARY KEY, etablissement_id int NOT NULL REFERENCES etablissements(id), debut timestamptz NOT NULL, fin timestamptz NOT NULL, capacite int NOT NULL CHECK (capacite BETWEEN 1 AND 50),
+  actif boolean NOT NULL DEFAULT true, cree_par int REFERENCES utilisateurs(id), cree_le timestamptz NOT NULL DEFAULT now());
+ALTER TABLE demandes_visite ADD COLUMN IF NOT EXISTS creneau_id int REFERENCES visites_creneaux(id);
+ALTER TABLE demandes_visite ADD COLUMN IF NOT EXISTS participants int NOT NULL DEFAULT 1;
+CREATE TABLE IF NOT EXISTS journal_vie (
+  id serial PRIMARY KEY, etablissement_id int NOT NULL REFERENCES etablissements(id), resident_id int REFERENCES residents(id), titre text NOT NULL, texte text NOT NULL,
+  statut text NOT NULL DEFAULT 'brouillon' CHECK (statut IN ('brouillon', 'publie', 'retire')), auteur int REFERENCES utilisateurs(id), valide_par int REFERENCES utilisateurs(id),
+  publie_le timestamptz, cree_le timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS proches_notifications_journal (
+  id serial PRIMARY KEY, acces_id int NOT NULL REFERENCES proches_acces(id) ON DELETE CASCADE, statut text NOT NULL CHECK (statut IN ('envoyee', 'echec', 'adresse_retiree')), code int, le timestamptz NOT NULL DEFAULT now());
+ALTER TABLE proches_acces ADD COLUMN IF NOT EXISTS notif_preferences jsonb NOT NULL DEFAULT '{}'::jsonb;

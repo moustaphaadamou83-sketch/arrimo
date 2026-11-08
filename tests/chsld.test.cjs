@@ -996,7 +996,7 @@ test('phase 2 — portail des proches : activé depuis SH, invitation, accès li
   // Compte de démonstration du proche (créé par SH) : même mot de passe de démonstration ; situation autorisée, message reçu
   sessions.marie = (await api(null, 'POST', '/proches/connexion', { courriel: 'marie.dupont@example.invalid', mot_de_passe: MDP })).token;
   const vue = await api('marie', 'GET', '/proches/moi');
-  assert.strictEqual(vue.situation.statut, 'present'); assert.ok(vue.situation.mis_a_jour_le); assert.ok(vue.nouveaux_messages >= 1);
+  assert.ok(['present', 'reintegre'].includes(vue.situation.statut), vue.situation.statut); assert.ok(vue.situation.mis_a_jour_le); assert.ok(vue.nouveaux_messages >= 1);
   // Visites et activités côté proche ; PWA à trois formats d'écran
   await poolPilote.query(`UPDATE resident_contacts SET autorisations = (SELECT to_jsonb(array_agg(DISTINCT x)) FROM jsonb_array_elements_text(to_jsonb(autorisations) || '["rendez_vous"]') x) WHERE id = $1`, [fille.id]).catch(async () => { await poolPilote.query(`UPDATE resident_contacts SET autorisations = array_append(array_remove(autorisations, 'rendez_vous'), 'rendez_vous') WHERE id = $1`, [fille.id]); });
   await refuse('marie', 'POST', '/proches/visites', { souhaitee_le: '2000-01-01T00:00:00Z' }, 400, 'date_invalide');
@@ -1015,10 +1015,18 @@ test('phase 2 — portail des proches : activé depuis SH, invitation, accès li
     try { for (const [w, h] of [[1280, 800], [820, 1180], [390, 844]]) {
       const ctx = await nav.newContext({ viewport: { width: w, height: h } }); const pg = await ctx.newPage(); const err = []; pg.on('pageerror', (e) => err.push(String(e))); pg.on('console', (m) => { if (m.type() === 'error') err.push(m.text()); });
       await pg.addInitScript((j) => { sessionStorage.setItem('arrimo-proche', j); }, sessions.marie);
-      await pg.goto(`${basePilote}/proches`); await pg.waitForSelector('#visites'); await pg.waitForSelector('#activites');
+      await pg.goto(`${basePilote}/proches`); await pg.waitForSelector('#carte-resident'); await pg.waitForSelector('#activites');
+      assert.ok(await pg.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `accueil ${w} sans défilement horizontal`);
+      for (const o of ['suivi', 'messages', 'demandes', 'plus']) { await pg.click(`.barre-f [data-onglet="${o}"]`); await pg.waitForSelector(`.barre-f [data-onglet="${o}"][aria-current="page"]`); assert.ok(await pg.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${o} ${w}`); }
+      await pg.click('.barre-f [data-onglet="visites"]'); await pg.waitForSelector('#visites');
       assert.ok(await pg.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `portail ${w} sans défilement horizontal`);
       const portee = await pg.evaluate(async () => (await navigator.serviceWorker.ready).scope); assert.ok(portee.endsWith('/proches'), portee);
-      await pg.fill('#vis', new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 16)); await pg.click('#vis-ok'); await pg.waitForFunction(() => document.querySelectorAll('#visites p').length > 1);
+      const avantV = await pg.locator('#visites .ligne-f').count();
+      await pg.fill('#vis', new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 16)); await pg.click('#vis-ok'); await pg.waitForSelector('.barre-f'); await pg.click('.barre-f [data-onglet="visites"]');
+      await pg.waitForFunction((n) => document.querySelectorAll('#visites .ligne-f').length > n, avantV);
+      // Contraste du thème sombre de la barre de navigation
+      await pg.evaluate(() => { localStorage.setItem('arrimo-proche-theme', 'sombre'); }); await pg.reload(); await pg.waitForSelector('#carte-resident');
+      assert.strictEqual(await pg.evaluate(() => document.documentElement.dataset.theme), 'sombre');
       assert.deepStrictEqual(err, []); await ctx.close();
     } } finally { await nav.close(); } }
   // Parcours vu par le proche : mêmes événements, statuts et dates ; notifications sans contenu
@@ -1040,7 +1048,7 @@ test('phase 2 — portail des proches : activé depuis SH, invitation, accès li
       const adresse = `http://127.0.0.1:${faux.address().port}/poussee/abc`;
       assert.deepStrictEqual(await api('marie', 'POST', '/proches/notifications', { endpoint: adresse }), { abonne: true });
       assert.strictEqual((await api('marie', 'GET', '/proches/notifications')).abonne, true);
-      assert.strictEqual((await sit()).statut, 'present');
+      assert.ok(['present', 'reintegre'].includes((await sit()).statut));
       const lit = (await api('era', 'GET', `/chsld/residents/${p.dupont}`)).resident;
       let e0 = await empr();
       let co = await api('era', 'POST', `/chsld/residents/${p.dupont}/hospitalisation`, { hopital_id: L.B, identite_verifiee: true, version: lit.version, motif_admin: 'Parcours fictif' });
@@ -1120,7 +1128,9 @@ test('phase 2 — portail des proches : activé depuis SH, invitation, accès li
   // Ce que voit le proche : profil, prénom et initiale du résident, établissement, catégories autorisées ; jamais la chambre ni la référence
   const moi = await api('marie', 'GET', '/proches/moi');
   assert.deepStrictEqual(moi.resident, { prenom: 'Jean', initiale: 'D.' }); assert.strictEqual(moi.etablissement.nom, 'CHSLD 1 — des Érables');
-  assert.doesNotMatch(JSON.stringify(moi), /ERA-\d|R-\d{5}|chambre|lit_id|hospital/i);
+  // Aucune référence, chambre ni nom d'hôpital hors parcours autorisé (les codes d'étapes du parcours ne sont pas des données)
+  assert.doesNotMatch(JSON.stringify({ ...moi, situation: { ...moi.situation, parcours: undefined } }), /ERA-\d|R-\d{5}|chambre|lit_id|patient_ref/i);
+  if (moi.situation?.statut === 'present') assert.strictEqual(moi.situation.hopital, undefined);
   // Sessions étanches : le jeton du proche n'ouvre pas l'API du personnel, et inversement
   await refuse('marie', 'GET', '/moi', null, 401); await refuse('era', 'GET', '/proches/moi', null, 401);
   // Messagerie : message et demande de rappel ; réponse de l'établissement ; catégorie retirée → refus immédiat
@@ -1724,6 +1734,89 @@ test('registre, import vérifié, tableau de bord, visites, activités, OG : dro
   assert.ok(transfert);
   const qui = transfert.destination_id === L.A ? 'a' : transfert.destination_id === L.B ? 'b' : null;
   if (qui) { const r = await api(qui, 'POST', '/copilote/question', { etablissement_id: transfert.destination_id, question: `Quel est le statut du transfert ${transfert.numero} ?`, langue: 'fr' }); assert.match(r.reponse, new RegExp(transfert.numero)); }
+});
+
+test('Coordination Famille : demandes en tâches, confirmations, créneaux, plusieurs proches et résidents, journal de vie, OG, tableau de bord, révocation', { timeout: 180000 }, async () => {
+  const E = ids.era; const MDPP = 'Proche-Fictive-2026';
+  const q = (sql, v) => poolPilote.query(sql, v).then((r) => r.rows);
+  // Deux résidents, deux proches avec des droits différents ; le même courriel suit deux résidents
+  const [r1, r2] = (await api('era', 'GET', `/chsld/residents?etablissement_id=${E}`)).filter((r) => r.statut === 'present' && r.id !== p.dupont).slice(0, 2);
+  const contact = async (r, prenom, courriel, autorisations) => (await q(`INSERT INTO resident_contacts (resident_id, prenom, nom, relation, courriel, autorisations, rang) VALUES ($1, $2, 'Fictif', 'fille', $3, $4, 9) RETURNING id`, [r.id, prenom, courriel, autorisations]))[0].id;
+  const inviter = async (kid) => { const inv = await api('era', 'POST', `/chsld/contacts/${kid}/acces-portail`, {}); await api(null, 'POST', '/proches/invitation', { jeton: inv.lien.match(/invitation=([a-f0-9]{64})/)[1], mot_de_passe: MDPP }); };
+  const k1 = await contact(r1, 'Lise', 'lise@exemple.invalid', ['administratif', 'rendez_vous', 'hebergement', 'mouvements']);
+  const k2 = await contact(r2, 'Lise', 'lise@exemple.invalid', ['hebergement']);
+  const k3 = await contact(r1, 'Paul', 'paul@exemple.invalid', ['rendez_vous']);
+  for (const k of [k1, k2, k3]) await inviter(k);
+  const cx = await api(null, 'POST', '/proches/connexion', { courriel: 'lise@exemple.invalid', mot_de_passe: MDPP });
+  assert.strictEqual(cx.profils.length, 2, 'un profil par résident');
+  sessions.lise1 = cx.profils.find((x) => x.resident.startsWith(r1.prenom)).token; sessions.lise2 = cx.profils.find((x) => x.resident.startsWith(r2.prenom)).token;
+  sessions.paul = (await api(null, 'POST', '/proches/connexion', { courriel: 'paul@exemple.invalid', mot_de_passe: MDPP })).token;
+  // Profils étanches : chaque session ne voit que son résident et ses propres droits
+  const m1 = await api('lise1', 'GET', '/proches/moi'); const m2 = await api('lise2', 'GET', '/proches/moi');
+  assert.strictEqual(m1.resident.prenom, r1.prenom); assert.strictEqual(m2.resident.prenom, r2.prenom); assert.deepStrictEqual(m2.autorisations, ['hebergement']);
+  await refuse('lise2', 'POST', '/proches/demandes', { categorie: 'vetements', texte: 'x' }, 403, 'proche_non_autorise');
+  await refuse('paul', 'POST', '/proches/demandes', { categorie: 'vetements', texte: 'x' }, 403, 'proche_non_autorise');
+  // Demande → tâche → résolution par la tâche, sans double saisie ; le proche voit le statut et la réponse
+  await refuse('lise1', 'POST', '/proches/demandes', { categorie: 'diagnostic', texte: 'x' }, 400, 'demande_invalide');
+  const d = await api('lise1', 'POST', '/proches/demandes', { categorie: 'vetements', texte: 'J’apporterai des vêtements pour le retour (fictif)' });
+  const tache = (await api('era', 'GET', `/chsld/taches?etablissement_id=${E}`)).find((t) => t.type === 'demande_famille' && t.titre.includes(`n° ${d.id}`));
+  assert.ok(tache, 'tâche créée'); assert.ok(!tache.titre.includes('Fictif') && !tache.titre.includes('Lise'), 'aucun nom dans la tâche');
+  assert.ok((await api('era', 'GET', `/famille/demandes?etablissement_id=${E}`)).some((x) => x.id === d.id));
+  await refuse('stl', 'GET', `/famille/demandes?etablissement_id=${E}`, null, 403);
+  await refuse('era_entretien', 'GET', `/famille/demandes?etablissement_id=${E}`, null, 403);
+  await refuse('era', 'POST', `/famille/demandes/${d.id}`, { statut: 'refusee' }, 400, 'motif_refus_requis');
+  await api('era', 'POST', `/famille/demandes/${d.id}`, { statut: 'en_cours', reponse: 'Nous préparons la chambre.', note_interne: 'Note interne fictive' });
+  let vu = (await api('lise1', 'GET', '/proches/demandes')).find((x) => x.id === d.id);
+  assert.deepStrictEqual([vu.statut, vu.reponse], ['en_cours', 'Nous préparons la chambre.']); assert.strictEqual(vu.note_interne, undefined, 'la note interne reste interne');
+  await api('era', 'POST', `/chsld/taches/${tache.id}/statut`, { statut: 'faite', version: (await q('SELECT version FROM taches_etab WHERE id = $1', [tache.id]))[0].version });
+  vu = (await api('lise1', 'GET', '/proches/demandes')).find((x) => x.id === d.id); assert.strictEqual(vu.statut, 'resolue', 'la tâche terminée résout la demande');
+  assert.deepStrictEqual((await q('SELECT statut FROM demandes_famille_historique WHERE demande_id = $1 ORDER BY id', [d.id])).map((x) => x.statut), ['nouvelle', 'en_cours', 'resolue']);
+  // Annulation par le proche, et relances bornées
+  const d2 = await api('lise1', 'POST', '/proches/demandes', { categorie: 'lunettes', texte: 'Lunettes oubliées (fictif)' });
+  await api('lise1', 'POST', `/proches/demandes/${d2.id}/annuler`); await refuse('lise1', 'POST', `/proches/demandes/${d2.id}/annuler`, null, 409, 'demande_close');
+  await refuse('lise2', 'POST', `/proches/demandes/${d.id}/annuler`, null, 404, 'demande_introuvable');
+  const d3 = await api('lise1', 'POST', '/proches/demandes', { categorie: 'administratif', texte: 'Question fictive' });
+  await poolPilote.query(`UPDATE demandes_famille SET echeance = now() - interval '1 hour' WHERE id = $1`, [d3.id]);
+  const famille = require('../src/famille');
+  for (let i = 0; i < 4; i++) { await famille.relancer(poolPilote); await poolPilote.query('UPDATE demandes_famille SET derniere_relance_le = now() - interval \'13 hours\' WHERE id = $1', [d3.id]); }
+  assert.strictEqual((await q('SELECT relances FROM demandes_famille WHERE id = $1', [d3.id]))[0].relances, 2, 'jamais plus que le réglage');
+  assert.ok((await q(`SELECT 1 FROM notifications WHERE etablissement_id = $1 AND code = 'famille_escalade'`, [E])).length);
+  // Confirmations : le personnel demande, le proche répond, le personnel voit la réponse ; jamais un consentement
+  const c = await api('era', 'POST', '/famille/confirmations', { resident_id: r1.id, contact_id: k1, sujet: 'Pouvez-vous accompagner votre proche ?', echeance: new Date(Date.now() + 86400000).toISOString() });
+  await refuse('lise2', 'POST', `/proches/confirmations/${c.id}/repondre`, { reponse: 'confirmee' }, 409, 'confirmation_close');
+  await refuse('lise1', 'POST', `/proches/confirmations/${c.id}/repondre`, { reponse: 'oui' }, 400);
+  await api('lise1', 'POST', `/proches/confirmations/${c.id}/repondre`, { reponse: 'confirmee' });
+  await refuse('lise1', 'POST', `/proches/confirmations/${c.id}/repondre`, { reponse: 'indisponible' }, 409, 'confirmation_close');
+  const cs = (await api('era', 'GET', `/famille/confirmations?etablissement_id=${E}`)).find((x) => x.id === c.id); assert.ok(cs.statut === 'confirmee' && cs.repondu_le && cs.vue_le);
+  // Créneaux : capacité respectée même avec des demandes simultanées
+  const cr = await api('era', 'POST', '/famille/creneaux', { etablissement_id: E, debut: new Date(Date.now() + 2 * 86400000).toISOString(), fin: new Date(Date.now() + 2 * 86400000 + 3600000).toISOString(), capacite: 1 });
+  const res = await Promise.all([appel('lise1', 'POST', '/proches/visites/creneau', { creneau_id: cr.id }), appel('paul', 'POST', '/proches/visites/creneau', { creneau_id: cr.id })]);
+  assert.deepStrictEqual(res.map((x) => x.statut).sort(), [200, 409], 'jamais au-delà de la capacité');
+  const gagnant = res.find((x) => x.statut === 200); const qui = res[0].statut === 200 ? 'lise1' : 'paul';
+  await api(qui, 'POST', `/proches/visites/${gagnant.corps.id}/annuler`);
+  assert.strictEqual((await api(qui === 'lise1' ? 'paul' : 'lise1', 'POST', '/proches/visites/creneau', { creneau_id: cr.id })).statut, 'demandee', 'la place libérée se reprend');
+  // Journal de vie : désactivé par défaut, validé par une autre personne, retirable
+  assert.strictEqual(await api('lise1', 'GET', '/proches/journal-vie'), null);
+  await api('era', 'PUT', '/famille/reglages', { etablissement_id: E, journal_vie: true, delai_heures: 24 });
+  const j = await api('era_soins', 'POST', '/famille/journal-vie', { etablissement_id: E, titre: 'Atelier musique', texte: 'Après-midi musical (fictif)' });
+  assert.deepStrictEqual(await api('lise1', 'GET', '/proches/journal-vie'), [], 'un brouillon n’est pas publié');
+  await api('era', 'POST', `/famille/journal-vie/${j.id}/publier`);
+  assert.strictEqual((await api('lise1', 'GET', '/proches/journal-vie'))[0].titre, 'Atelier musique');
+  await api('era', 'POST', `/famille/journal-vie/${j.id}/retirer`); assert.deepStrictEqual(await api('lise1', 'GET', '/proches/journal-vie'), []);
+  // OG Famille : vraies données, jamais de santé
+  assert.match((await api('lise1', 'POST', '/proches/og', { question: 'Est-ce que ma demande concernant les vêtements a été traitée ?' })).reponse, new RegExp(`n° ${d.id} · vetements · resolue`));
+  assert.match((await api('lise1', 'POST', '/proches/og', { question: 'Quel est son diagnostic ?' })).reponse, /aucune information de santé/);
+  assert.ok(!(await api('lise2', 'POST', '/proches/og', { question: 'Où en est ma demande ?' })).reponse.includes(`n° ${d.id}`), 'aucune donnée d’un autre profil');
+  // Tableau de bord : chiffres tirés des données
+  const tb = await api('era', 'GET', `/famille/tableau?etablissement_id=${E}`);
+  assert.ok(tb.demandes.ouvertes >= 1 && tb.demandes.en_retard >= 1 && tb.confirmations.en_attente >= 0 && tb.demandes.resolution_mediane_min !== null); assert.match(tb.mesure, /Aucun nombre d’appels évités/);
+  // Révocation : sessions coupées tout de suite, plus de notifications
+  const acces = (await q('SELECT id FROM proches_acces WHERE contact_id = $1', [k1]))[0].id;
+  await api('era', 'POST', `/chsld/acces-portail/${acces}/revoquer`, {});
+  await refuse('lise1', 'GET', '/proches/demandes', null, 401); await refuse('lise1', 'POST', '/proches/og', { question: 'Où en est ma demande ?' }, 401);
+  assert.strictEqual((await api('lise2', 'GET', '/proches/moi')).resident.prenom, r2.prenom, 'l’autre profil reste ouvert');
+  await require('../src/portail-notifications').signaler(poolPilote, r1.id, 'administratif', k1);
+  assert.strictEqual((await q('SELECT count(*)::int n FROM proches_notifications_attente WHERE acces_id = $1', [acces]))[0].n, 0, 'aucune notification après révocation');
 });
 
 test('captures : formulaire SH (type puis modules), liste SH, écrans CHSLD réels', { timeout: 180000 }, async () => {

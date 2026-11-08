@@ -50,7 +50,7 @@
     admissions: { titre: 'Admissions and discharges', intro: 'Planned arrivals, arrivals, room changes and ends of stay.', prevus: 'Planned arrivals', presents: 'Residents present', aucun: 'No planned arrival.' },
     taches: { titre: 'Staff and tasks', intro: 'Housekeeping, room preparation, handovers and reminders.', nouvelle: 'New task', type: 'Type', titre_champ: 'Task', detail: 'Detail',
       assigne: 'For', echeance: 'Due', aucune: 'No open task.', commencer: 'Start', faite: 'Done', annuler: 'Cancel', creee: 'Task created.', en_retard: 'overdue' },
-    tache_type: { entretien: 'Housekeeping', preparation_chambre: 'Room preparation', administratif: 'Administrative', transmission: 'Handover', relance: 'Reminder' },
+    tache_type: { demande_famille: 'Family request', entretien: 'Housekeeping', preparation_chambre: 'Room preparation', administratif: 'Administrative', transmission: 'Handover', relance: 'Reminder' },
     tache_statut: { a_faire: 'To do', en_cours: 'In progress', faite: 'Done', annulee: 'Cancelled' },
     reseau: { titre: 'CHSLD network', intro: 'Capacity shared by authorized CHSLDs, and ongoing exchanges.', capacites: 'Shared capacity', libres: '{n|no available place|# available place|# available places}',
       confirmees: '{n|none confirmed|# confirmed|# confirmed} in the last 24 h', aucun: 'No other CHSLD shares its capacity.', non_garantie: 'An available place never guarantees admission.' },

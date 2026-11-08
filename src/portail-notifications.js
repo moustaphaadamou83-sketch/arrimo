@@ -31,7 +31,7 @@ function jetonVapid(aud, env = process.env) {
 /** Marque les accès à prévenir, selon leur catégorie autorisée. Ne contient rien sur le parcours. */
 async function signaler(db, residentId, categorie, contactId = null) {
   await db.query(`INSERT INTO proches_notifications_attente (acces_id) SELECT a.id FROM proches_acces a JOIN resident_contacts k ON k.id = a.contact_id
-    WHERE a.resident_id = $1 AND a.actif AND a.revoque_le IS NULL AND ($3::int IS NULL OR a.contact_id = $3) AND $2 = ANY(k.autorisations)
+    WHERE a.resident_id = $1 AND a.actif AND a.revoque_le IS NULL AND ($3::int IS NULL OR a.contact_id = $3) AND $2 = ANY(k.autorisations) AND COALESCE((a.notif_preferences->>$2)::boolean, true)
     ON CONFLICT (acces_id) DO NOTHING`, [residentId, categorie, contactId]);
 }
 /** Envoi groupé. Une adresse refusée (404, 410) est retirée. Un accès révoqué entre-temps ne reçoit rien. */
@@ -47,18 +47,23 @@ async function envoyer(pool, env = process.env, envoi = fetch) {
         const r = await envoi(ab.endpoint, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(10000), headers: { TTL: '86400', Urgency: 'normal', 'Content-Length': '0', Authorization: `vapid t=${jetonVapid(u.origin, env)}, k=${env.ARRIMO_VAPID_PUBLIQUE}` } });
         if ([404, 410].includes(r.status)) await pool.query('DELETE FROM proches_abonnements_push WHERE id = $1', [ab.id]);
         else if (r.ok) envoyees++;
-      } catch (e) { console.error('Poussée portail :', e.code || e.name); }
+        await pool.query('INSERT INTO proches_notifications_journal (acces_id, statut, code) VALUES ($1, $2, $3)', [x.acces_id, [404, 410].includes(r.status) ? 'adresse_retiree' : r.ok ? 'envoyee' : 'echec', r.status]);
+      } catch (e) { console.error('Poussée portail :', e.code || e.name); await pool.query(`INSERT INTO proches_notifications_journal (acces_id, statut) VALUES ($1, 'echec')`, [x.acces_id]).catch(() => {}); }
     }
   }
   return { envoyees };
 }
 function brancherProche(api, pool, route, session) {
-  api.get('/proches/notifications', session, route((req) => pool.query('SELECT count(*)::int n FROM proches_abonnements_push WHERE acces_id = $1', [req.proche.id]).then((r) => ({ disponible: actif(), cle: actif() ? process.env.ARRIMO_VAPID_PUBLIQUE : null, abonne: r.rows[0].n > 0 }))));
+  api.get('/proches/notifications', session, route((req) => pool.query('SELECT count(*)::int n FROM proches_abonnements_push WHERE acces_id = $1', [req.proche.id]).then((r) => ({ disponible: actif(), cle: actif() ? process.env.ARRIMO_VAPID_PUBLIQUE : null, abonne: r.rows[0].n > 0, preferences: req.proche.notif_preferences || {} }))));
   api.post('/proches/notifications', session, route(async (req) => {
     if (!actif()) throw new ErreurHttp(409, 'notifications_indisponibles');
     const u = validerAdresse(req.body?.endpoint);
     await pool.query(`INSERT INTO proches_abonnements_push (acces_id, endpoint) VALUES ($1, $2) ON CONFLICT (endpoint) DO UPDATE SET acces_id = $1`, [req.proche.id, u.href]);
     return { abonne: true };
+  }));
+  api.put('/proches/notifications/preferences', session, route(async (req) => {
+    const v = {}; for (const k of ['administratif', 'hebergement', 'rendez_vous', 'mouvements']) if (req.body?.[k] !== undefined) { if (typeof req.body[k] !== 'boolean') throw new ErreurHttp(400, 'preference_invalide'); v[k] = req.body[k]; }
+    return (await pool.query('UPDATE proches_acces SET notif_preferences = notif_preferences || $2::jsonb WHERE id = $1 RETURNING notif_preferences', [req.proche.id, v])).rows[0].notif_preferences;
   }));
   api.delete('/proches/notifications', session, route(async (req) => { await pool.query('DELETE FROM proches_abonnements_push WHERE acces_id = $1', [req.proche.id]); return { abonne: false }; }));
 }

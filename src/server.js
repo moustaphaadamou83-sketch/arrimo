@@ -39,6 +39,7 @@ const tourner = () => demo.tacheDeFond(() => demo.recaler(pool)
 tourner();
 setInterval(tourner, intervalle);
 
+setInterval(() => require('./famille').relancer(pool).catch((e) => console.error('Relances famille :', e.code || e.name)), 15 * 60000).unref();
 setInterval(() => require('./portail-notifications').envoyer(pool).catch((e) => console.error('Notifications du portail :', e.code || e.name)), 60000).unref();
 
 // Démonstration : la capacité des hôpitaux sans compte évolue doucement (toutes les 3 minutes par défaut)

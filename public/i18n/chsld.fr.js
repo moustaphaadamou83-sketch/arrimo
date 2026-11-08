@@ -50,7 +50,7 @@
     admissions: { titre: 'Admissions et sorties', intro: 'Accueils prévus, arrivées, changements de chambre et fins d’hébergement.', prevus: 'Accueils prévus', presents: 'Résidents présents', aucun: 'Aucun accueil prévu.' },
     taches: { titre: 'Personnel et tâches', intro: 'Tâches d’entretien, préparation des chambres, transmissions et relances.', nouvelle: 'Nouvelle tâche', type: 'Type', titre_champ: 'Tâche', detail: 'Détail',
       assigne: 'Pour', echeance: 'Échéance', aucune: 'Aucune tâche ouverte.', commencer: 'Commencer', faite: 'Fait', annuler: 'Annuler', creee: 'Tâche créée.', en_retard: 'en retard' },
-    tache_type: { entretien: 'Entretien', preparation_chambre: 'Préparation de chambre', administratif: 'Administratif', transmission: 'Transmission', relance: 'Relance' },
+    tache_type: { demande_famille: 'Demande de famille', entretien: 'Entretien', preparation_chambre: 'Préparation de chambre', administratif: 'Administratif', transmission: 'Transmission', relance: 'Relance' },
     tache_statut: { a_faire: 'À faire', en_cours: 'En cours', faite: 'Faite', annulee: 'Annulée' },
     reseau: { titre: 'Réseau CHSLD', intro: 'Capacités partagées par les CHSLD autorisés, et échanges en cours.', capacites: 'Capacités partagées', libres: '{n|aucune place libre|# place libre|# places libres}',
       confirmees: '{n|aucune confirmée|# confirmée|# confirmées} depuis 24 h', aucun: 'Aucun autre CHSLD ne partage ses capacités.', non_garantie: 'Une place disponible ne garantit jamais une admission.' },

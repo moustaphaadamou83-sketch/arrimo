@@ -981,6 +981,7 @@ async function statutTache(pool, u, id, b) {
       if (b.statut === 'en_cours') await majEntretien(c, t.lit_id, 'en_cours', u);
       else if (!ouvertes && !attenteControle) await majEntretien(c, t.lit_id, 'propre', u);
     }
+    if (b.statut === 'faite') await require('./famille').tacheTerminee(c, t, u);
     await journalChsld(c, e.id, u, 'Tâche', `${t.type} · n° ${t.id} · ${b.statut}`);
     return n;
   }));

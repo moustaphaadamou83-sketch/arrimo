@@ -28,6 +28,23 @@
   .portail .message.etablissement { border-left: 6px solid var(--principal); }
   .portail .fil { display: flex; flex-direction: column; gap: 10px; }
   .portail .note { font-size: 16px; }
+  .portail main { padding-bottom: 96px; }
+  .carte-f h2 { margin-top: 0; }
+  #carte-resident { border-left: 6px solid var(--principal); }
+  .statut-f { font-size: 20px; margin: 8px 0 4px; }
+  .actions-f { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .ligne-f { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--bordure); flex-wrap: wrap; }
+  .confirmation-f { padding: 10px 0; border-bottom: 1px solid var(--bordure); }
+  .frise { list-style: none; padding: 0; margin: 12px 0; }
+  .frise li { display: flex; gap: 12px; padding: 8px 0; position: relative; }
+  .frise .point { width: 16px; height: 16px; border-radius: 50%; border: 3px solid var(--texte-2, #64748B); flex: none; margin-top: 4px; }
+  .frise li.fait .point { background: var(--principal); border-color: var(--principal); }
+  .frise li.attente { opacity: .75; }
+  .barre-f { position: fixed; left: 0; right: 0; bottom: 0; display: flex; background: var(--carte); border-top: 1px solid var(--bordure); padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); z-index: 10; }
+  .barre-f button { flex: 1; min-height: 52px; background: none; border: 0; color: var(--texte); font-size: 14px; font-weight: 600; border-radius: 10px; }
+  .barre-f button[aria-current="page"] { background: var(--principal); color: #fff; }
+  .pastille-f { display: inline-block; min-width: 20px; padding: 0 6px; border-radius: 10px; background: var(--critique, #DC2626); color: #fff; font-size: 12px; }
+  .fraicheur { margin: 0; }
 </style>
 </head>
 <body class="portail">
