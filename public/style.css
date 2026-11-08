@@ -458,6 +458,7 @@ label.item { cursor: pointer; flex-wrap: nowrap; justify-content: flex-start; }
 label.item > div { flex: 1 1 auto; }
 label.item input[type=radio] { order: -1; width: 20px; height: 20px; flex: none; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+html.theme-bascule *, html.theme-bascule *::before, html.theme-bascule *::after { transition: none !important; }
 
 /* Transferts : heure d'arrivée prévue et compte à rebours (receveur) */
 .arrivee { display: flex; align-items: center; gap: var(--e2); font-size: var(--t-note); background: var(--doux); border-radius: var(--rayon); padding: var(--e2); }

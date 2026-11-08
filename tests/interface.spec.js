@@ -110,6 +110,8 @@ async function toast(page, texte) {
 
 /** Contrôles communs à chaque écran, puis capture. */
 async function verifier(page, L, nom) {
+  // Mesurer un état stable : attendre la fin des transitions en cours (couleurs, menu), jamais un fondu à mi-chemin
+  await page.evaluate(() => Promise.all(document.getAnimations().map((x) => x.finished.catch(() => null))));
   const mesures = await page.evaluate(() => {
     const vw = document.documentElement.clientWidth;
     const debordent = [];

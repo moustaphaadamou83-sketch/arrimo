@@ -47,6 +47,8 @@
   function appliquer() {
     const theme = resoudre(mode, { systemeSombre: !!media?.matches, lieu });
     const html = document.documentElement;
+    // Changement de thème : couleurs appliquées d'un coup, sans fondu (aucun état intermédiaire mal contrasté)
+    if (html.dataset.theme && html.dataset.theme !== theme) { html.classList.add('theme-bascule'); setTimeout(() => html.classList.remove('theme-bascule'), 300); }
     html.dataset.theme = theme; html.dataset.apparence = mode;
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.content = theme === 'sombre' ? '#0B1820' : '#0E5E6F';
