@@ -1670,7 +1670,7 @@ test('écrans : transfert d’hôpital au bouton, nettoyage sous précautions, r
           const id = (await poolPilote.query(`SELECT max(id)::text AS id FROM messages_proches WHERE texte = 'Question fictive à l’écran'`)).rows[0].id;
           await era.click(`[data-mf-rep="${id}"]`); await era.waitForSelector('#mf-txt');
           await era.fill('#mf-txt', 'Réponse fictive à l’écran'); await era.click('#modale button.pri');
-          await era.waitForFunction(() => !document.querySelector('#mf-txt'));
+          await era.waitForFunction(() => document.querySelector('#modale')?.hidden === true);
           for (let i = 0; i < 40 && !(await poolPilote.query(`SELECT 1 FROM messages_proches WHERE texte = 'Réponse fictive à l’écran'`)).rowCount; i++) await new Promise((r) => setTimeout(r, 100));
           assert.ok((await poolPilote.query(`SELECT 1 FROM messages_proches WHERE texte = 'Réponse fictive à l’écran' AND sens = 'etablissement'`)).rowCount, 'réponse envoyée depuis l’accueil');
           assert.ok((await poolPilote.query('SELECT lu_le FROM messages_proches WHERE id = $1', [id])).rows[0].lu_le, 'message marqué lu');
