@@ -274,6 +274,7 @@ const MESSAGES = {
   publication_autre_validateur: "Une autre personne doit valider cette publication.",
   question_invalide: "Question invalide.",
   preference_invalide: "Préférence invalide.",
+  message_introuvable: "Message introuvable.",
   transfert_hopital_ouvert: "Un transfert vers un autre hôpital est déjà ouvert pour ce résident ({numero}).",
   retour_deja_ouvert: "Un retour vers le CHSLD est déjà en préparation pour ce résident ({numero}).",
   cle_idempotence_invalide: "Identifiant d’envoi invalide.",

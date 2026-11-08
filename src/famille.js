@@ -205,6 +205,15 @@ function brancherProche(api, pool, route, s) {
 }
 function brancherPersonnel(api, pool, route, entier) {
   api.get('/famille/tableau', route((req) => tableau(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
+  // Messages des familles pour l'accueil de l'établissement : non lus d'abord, avec le résident et le proche
+  api.get('/famille/messages', route(async (req) => { const e = entier(req.query.etablissement_id, 'etablissement_id'); await garde(pool, req.utilisateur, e);
+    return (await pool.query(`SELECT m.id, m.resident_id, m.contact_id, m.categorie, m.texte, m.cree_le, (m.lu_le IS NULL) AS non_lu, r.reference AS resident_ref, r.prenom AS r_prenom, r.nom AS r_nom, k.prenom, k.nom, k.relation
+      FROM messages_proches m JOIN residents r ON r.id = m.resident_id JOIN resident_contacts k ON k.id = m.contact_id
+      WHERE r.etablissement_id = $1 AND m.sens = 'proche' ORDER BY (m.lu_le IS NULL) DESC, m.cree_le DESC LIMIT 50`, [e])).rows; }));
+  api.post('/famille/messages/:id/lu', route(async (req) => { const id = entier(req.params.id, 'id');
+    const m = (await pool.query('SELECT r.etablissement_id FROM messages_proches m JOIN residents r ON r.id = m.resident_id WHERE m.id = $1', [id])).rows[0];
+    if (!m) throw new ErreurHttp(404, 'message_introuvable'); await garde(pool, req.utilisateur, m.etablissement_id);
+    await pool.query('UPDATE messages_proches SET lu_le = COALESCE(lu_le, now()) WHERE id = $1', [id]); return { ok: true }; }));
   api.get('/famille/demandes', route((req) => demandesEtab(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   api.post('/famille/demandes/:id', route((req) => majDemande(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   api.post('/famille/confirmations', route((req) => creerConfirmation(pool, req.utilisateur, req.body)));

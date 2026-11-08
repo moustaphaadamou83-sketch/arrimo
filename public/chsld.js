@@ -15,6 +15,22 @@
   const champ = (id, lib, val = '', attrs = '') => `<div class="champ"><label class="lbl" for="${id}">${lib}</label><input id="${id}" value="${esc(val ?? '')}" ${attrs}></div>`;
 
   /* ------------------------------------------------------------------ Accueil */
+  /* Messages des familles, en tête de l'accueil : lire et répondre sans passer par la fiche du résident */
+  async function panneauMessagesFamilles(v) {
+    if (!['coordonnateur', 'admin_etab', 'gestionnaire', 'equipe_soins'].includes(role())) return;
+    const liste = await api('GET', `/famille/messages?etablissement_id=${ctx()}`).catch(() => null);
+    if (!liste) return;
+    const M = (k, x) => C(`messages_familles.${k}`, x); const nl = liste.filter((x) => x.non_lu).length;
+    v.insertAdjacentHTML('afterbegin', `<section class="panneau-c" id="messages-familles"><h3>${M('titre')} ${nl ? `<span class="badge">${M('non_lus', { n: nl })}</span>` : ''}</h3>
+      <div class="liste">${liste.slice(0, 15).map((m) => `<div class="item${m.non_lu ? ' non-lu' : ''}"><div><b>${esc(m.prenom)} ${esc(m.nom)}</b> (${esc(m.relation || '')}) · ${M('pour')} <b>${esc(m.r_prenom)} ${esc(m.r_nom)}</b> · <span class="num">${esc(m.resident_ref)}</span>
+        <div class="note">${esc(t(`chsld.categorie.${m.categorie}`))} · ${esc(dateHeure(m.cree_le))}${m.non_lu ? ` · <b>${M('nouveau')}</b>` : ''}</div><p style="white-space:pre-wrap;margin:6px 0">${esc(m.texte)}</p></div>
+        <div class="actions"><button class="btn pri" type="button" data-mf-rep="${m.id}">${M('repondre')}</button>${m.non_lu ? `<button class="btn" type="button" data-mf-lu="${m.id}">${M('marquer_lu')}</button>` : ''}<button class="btn" type="button" data-res="${m.resident_id}">${M('fiche')}</button></div></div>`).join('') || `<p class="note">${M('aucun')}</p>`}</div></section>`);
+    v.querySelectorAll('[data-mf-lu]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/famille/messages/${b.dataset.mfLu}/lu`), t('chsld.actions.ok')); });
+    v.querySelectorAll('#messages-familles [data-res]').forEach((b) => { b.onclick = () => { etat.chResident = Number(b.dataset.res); allerA('c-residents'); }; });
+    v.querySelectorAll('[data-mf-rep]').forEach((b) => { b.onclick = () => { const m = liste.find((x) => x.id === Number(b.dataset.mfRep));
+      modale(M('repondre_a', { nom: `${m.prenom} ${m.nom}` }), `<p class="note">${esc(m.texte)}</p><div class="champ"><label class="lbl" for="mf-txt">${M('reponse')}</label><textarea id="mf-txt" maxlength="2000"></textarea></div>`,
+        [{ label: t('general.annuler') }, { label: M('envoyer'), pri: true, run: async () => (await agir(null, () => api('POST', `/chsld/residents/${m.resident_id}/messages`, { contact_id: m.contact_id, categorie: m.categorie, texte: $('#mf-txt').value }), t('chsld.actions.ok'))) !== null }]); }; });
+  }
   async function vueAccueil() {
     const v = $('#v-c-accueil');
     const a = await api('GET', `/chsld/accueil?etablissement_id=${ctx()}`);
@@ -53,6 +69,7 @@
       <h3 class="titre-section">${C('accueil.raccourcis')}</h3>
       <div class="ch-raccourcis">${raccourci('c-residents', 'users', t('chsld.nav.residents'))}${raccourci('c-chambres', 'bed-double', t('chsld.nav.chambres'))}${raccourci('c-demandes', 'clipboard-list', t('chsld.nav.demandes'))}
         ${raccourci('c-taches', 'clipboard-check', t('chsld.nav.taches'))}${raccourci('c-mouvements', 'ambulance', t('chsld.nav.mouvements'))}<button class="ch-raccourci" type="button" data-ch-og>${icone('sparkles')}<span>${esc(window.ArrimoNomOg?.nom() || 'OG')}</span></button></div>`;
+    panneauMessagesFamilles(v);
     v.querySelectorAll('[data-ch-aller]').forEach((b) => { b.onclick = () => allerA(b.dataset.chAller); });
     const og = v.querySelector('[data-ch-og]'); if (og) og.onclick = () => document.querySelector('#og-open')?.click();
   }

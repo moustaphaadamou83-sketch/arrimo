@@ -1659,7 +1659,7 @@ test('écrans : transfert d’hôpital au bouton, nettoyage sous précautions, r
   try {
     for (const [nom, vp] of [['ordinateur', { width: 1366, height: 900 }], ['tablette', { width: 820, height: 1180 }], ['telephone', { width: 390, height: 844 }]]) {
       const era = await ouvrir('era', E, vp); await aller(era, 'c-taches', '#registre'); await era.waitForSelector('#famille'); await era.waitForSelector('#visites'); await era.waitForSelector('#activites'); await sansDebord(era, `${nom} registre`);
-      await aller(era, 'c-accueil', '#ch-accueil-sup'); await sansDebord(era, `${nom} accueil`);
+      await aller(era, 'c-accueil', '#ch-accueil-sup'); await era.waitForSelector('#messages-familles'); await sansDebord(era, `${nom} accueil`);
       const b = await ouvrir('b', L.B, vp); await aller(b, 'nettoyage', '#net-config'); await b.evaluate(() => { document.querySelector('#net-config').open = true; }); await b.waitForSelector('#net-proto'); await sansDebord(b, `${nom} nettoyage`);
       await aller(b, 'liaison', '.li-onglets'); await sansDebord(b, `${nom} liaison`);
       await era.context().close(); await b.context().close();
@@ -1772,6 +1772,13 @@ test('Coordination Famille : demandes en tâches, confirmations, créneaux, plus
   await api('era', 'POST', `/chsld/taches/${tache.id}/statut`, { statut: 'faite', version: (await q('SELECT version FROM taches_etab WHERE id = $1', [tache.id]))[0].version });
   vu = (await api('lise1', 'GET', '/proches/demandes')).find((x) => x.id === d.id); assert.strictEqual(vu.statut, 'resolue', 'la tâche terminée résout la demande');
   assert.deepStrictEqual((await q('SELECT statut FROM demandes_famille_historique WHERE demande_id = $1 ORDER BY id', [d.id])).map((x) => x.statut), ['nouvelle', 'en_cours', 'resolue']);
+  // Messages des familles visibles à l'accueil du CHSLD, réponse directe, marqués lus
+  await api('lise1', 'POST', '/proches/messages', { categorie: 'administratif', texte: 'Il est où mon grand-père ? (fictif)' });
+  let mf = (await api('era', 'GET', `/famille/messages?etablissement_id=${E}`)).find((x) => x.texte.startsWith('Il est où mon grand-père'));
+  assert.ok(mf && mf.non_lu && mf.prenom === 'Lise'); await refuse('stl', 'GET', `/famille/messages?etablissement_id=${E}`, null, 403); await refuse('era_entretien', 'GET', `/famille/messages?etablissement_id=${E}`, null, 403);
+  await api('era', 'POST', `/chsld/residents/${mf.resident_id}/messages`, { contact_id: mf.contact_id, categorie: mf.categorie, texte: 'Il est dans sa chambre (fictif).' });
+  mf = (await api('era', 'GET', `/famille/messages?etablissement_id=${E}`)).find((x) => x.id === mf.id); assert.strictEqual(mf.non_lu, false, 'lu après la réponse');
+  assert.ok((await api('lise1', 'GET', '/proches/moi')).messages.some((x) => x.texte === 'Il est dans sa chambre (fictif).'));
   // Annulation par le proche, et relances bornées
   const d2 = await api('lise1', 'POST', '/proches/demandes', { categorie: 'lunettes', texte: 'Lunettes oubliées (fictif)' });
   await api('lise1', 'POST', `/proches/demandes/${d2.id}/annuler`); await refuse('lise1', 'POST', `/proches/demandes/${d2.id}/annuler`, null, 409, 'demande_close');
