@@ -103,7 +103,7 @@ async function journalVieProche(pool, p) {
  * OG Famille : répond à toute question d'un proche, à partir des seules données de ce proche et dans ses autorisations.
  * Jamais de santé, jamais d'information inventée, jamais d'action sans confirmation ; sinon il propose d'écrire à l'établissement.
  */
-const NORM = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[’'`]/g, ' ').replace(/\s+/g, ' ').trim();
+const NORM = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[’'`\-]/g, ' ').replace(/\s+/g, ' ').trim();
 async function og(pool, p, b) {
   const q = NORM(b?.question).slice(0, 500);
   if (!q) throw new ErreurHttp(400, 'question_invalide');
@@ -141,7 +141,7 @@ async function og(pool, p, b) {
     return rep((liste.length ? liste : d.slice(0, 3)).map((x) => `n° ${x.id} · ${x.categorie} · ${x.statut}${x.reponse ? ` · ${x.reponse}` : ''} (${st[x.statut] || x.statut})`).join('\n'), 'demandes');
   }
   // Où est mon proche, statut, hôpital, transfert, retour
-  if (has(/(ou est|ou se trouve|il est ou|elle est ou|ou il est|ou elle est|where is|where s|situation|statut|status|hopital|hospital|hospitalis|transfer|transfert|retour|return|revient|revenu|reviendr|rentr|come back|coming back|arrive|parti|depart|left|chambre|room|present|absent|nouvelles de|news about|suivi|update|des nouvelles|toujours la|still there|encore la)/)) {
+  if (has(/(ou est|ou se trouve|il est ou|elle est ou|ou il est|ou elle est|where is|where s|situation|statut|status|hopital|hospital|hospitalis|transfer|transfert|retour|return|revient|revenu|reviendr|rentr|come back|coming back|arrive|parti|depart|left|chambre|room|present|absent|nouvelles de|news about|suivi|update|des nouvelles|toujours la|toujours au|toujours a |toujours dans|still there|still at|still in|encore la|encore au)/)) {
     if (!peut('hebergement') && !peut('mouvements')) return pasAutorise(T('situation et déplacements', 'situation and movements'));
     const s = await require('./portail-proches').situation(pool, p);
     if (!s) return pasAutorise(T('situation', 'situation'));

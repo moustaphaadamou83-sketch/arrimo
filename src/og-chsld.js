@@ -478,7 +478,8 @@ async function repondre(pool, u, etabId, q, L) {
       'I can look up and explain: a resident (name, reference R-00001, bed ERA-117A, request DH-…, coordination CO-…), their room, held place, movements, hospital stays and returns; available, blocked, held and cleaning places; placement requests, planned admissions, tasks, contacts and permissions. I prepare a task, a callback request to an authorized family member or the acceptance of a return: nothing is recorded without your confirmation.'), { intentions: ['aide'] });
   }
   // Coordination Famille : messages, demandes, confirmations, visites des proches (chiffres et listes réels, mêmes droits que l'écran)
-  if (/(famille|familles|proche|proches|family|families|relative|parent du resident|enfants? du resident)/.test(qn) && !/(contact d urgence|emergency contact)/.test(qn)) {
+  // Seulement les questions de coordination avec les familles en général (pas « les proches de ce résident », qui restent à la fiche)
+  if (/(message|demande|request|confirmation|visite|visit|besoin|need)s? (des |de |from |of )?(la |the )?(familles?|families|proches)\b|(familles?|families|proches) (en attente|waiting|non lus|unread)|coordination (famille|des familles)|family coordination/.test(qn)) {
     if (u.role === 'entretien') return local(T(L, 'La coordination avec les familles ne fait pas partie de votre rôle.', 'Family coordination is not part of your role.'), { intentions: ['famille'] });
     const q1 = (sql) => pool.query(sql, [etabId]).then((r) => r.rows);
     const [msgs, dem, conf, vis] = await Promise.all([
