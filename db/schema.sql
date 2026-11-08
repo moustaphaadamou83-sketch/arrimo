@@ -1170,3 +1170,6 @@ CREATE TABLE IF NOT EXISTS journal_vie (
 CREATE TABLE IF NOT EXISTS proches_notifications_journal (
   id serial PRIMARY KEY, acces_id int NOT NULL REFERENCES proches_acces(id) ON DELETE CASCADE, statut text NOT NULL CHECK (statut IN ('envoyee', 'echec', 'adresse_retiree')), code int, le timestamptz NOT NULL DEFAULT now());
 ALTER TABLE proches_acces ADD COLUMN IF NOT EXISTS notif_preferences jsonb NOT NULL DEFAULT '{}'::jsonb;
+-- Un même proche peut suivre plusieurs résidents : un accès ouvert par courriel ET par résident
+DROP INDEX IF EXISTS proches_acces_courriel_ouvert;
+CREATE UNIQUE INDEX IF NOT EXISTS proches_acces_courriel_resident_ouvert ON proches_acces (lower(courriel), resident_id) WHERE revoque_le IS NULL;

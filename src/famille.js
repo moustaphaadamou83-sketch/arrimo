@@ -65,7 +65,7 @@ async function confirmationsProche(pool, p) {
 async function repondreConfirmation(pool, p, id, b) {
   if (!['confirmee', 'indisponible', 'precisions'].includes(b?.reponse)) throw new ErreurHttp(400, 'confirmation_invalide');
   const precision = texte(b.precision, 500);
-  const n = (await pool.query(`UPDATE confirmations_famille SET statut = $4, reponse = $5, repondu_le = now()
+  const n = (await pool.query(`UPDATE confirmations_famille SET statut = $4, reponse = $5, repondu_le = now(), vue_le = COALESCE(vue_le, now())
     WHERE id = $1 AND resident_id = $2 AND contact_id = $3 AND statut = 'en_attente' AND (echeance IS NULL OR echeance > now()) RETURNING id, statut, repondu_le, etablissement_id`, [id, p.resident_id, p.contact_id, b.reponse, precision])).rows[0];
   if (!n) throw new ErreurHttp(409, 'confirmation_close');
   await require('./services').notifier(pool, n.etablissement_id, null, 'famille_confirmation', { n: id });
@@ -96,8 +96,8 @@ async function annulerVisite(pool, p, id) {
   return n;
 }
 async function journalVieProche(pool, p) {
-  if (!(await reglages(pool, p.etablissement_id)).journal_vie || !p.autorisations.includes('hebergement')) return null;
-  return (await pool.query(`SELECT id, titre, texte, publie_le FROM journal_vie WHERE etablissement_id = $1 AND statut = 'publie' AND (resident_id IS NULL OR resident_id = $2) ORDER BY publie_le DESC LIMIT 30`, [p.etablissement_id, p.resident_id])).rows;
+  if (!(await reglages(pool, p.etablissement_id)).journal_vie || !p.autorisations.includes('hebergement')) return { actif: false, publications: [] };
+  return { actif: true, publications: (await pool.query(`SELECT id, titre, texte, publie_le FROM journal_vie WHERE etablissement_id = $1 AND statut = 'publie' AND (resident_id IS NULL OR resident_id = $2) ORDER BY publie_le DESC LIMIT 30`, [p.etablissement_id, p.resident_id])).rows };
 }
 /** OG Famille : règles locales sur les seules données du proche. Aucune donnée inventée, aucune action sans confirmation. */
 async function og(pool, p, b) {

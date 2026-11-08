@@ -101,7 +101,7 @@
   async function ecranAccueil(info) {
     let d; try { d = await api('GET', '/proches/moi'); } catch (e) { ecranConnexion(); $('#contenu').insertAdjacentHTML('afterbegin', message('erreur', e.message)); return; }
     const opt = (p) => p.catch(() => null);
-    const [demandes, confirmations, creneaux, journal] = await Promise.all([opt(api('GET', '/proches/demandes')), opt(api('GET', '/proches/confirmations')), opt(api('GET', '/proches/creneaux')), opt(api('GET', '/proches/journal-vie'))]);
+    const [demandes, confirmations, creneaux, journal] = await Promise.all([opt(api('GET', '/proches/demandes')), opt(api('GET', '/proches/confirmations')), opt(api('GET', '/proches/creneaux')), opt(api('GET', '/proches/journal-vie')).then((j) => (j?.actif ? j.publications : null))]);
     charge = { d, demandes: demandes || [], confirmations: confirmations || [], creneaux: creneaux || [], journal, le: new Date() };
     empreinte = (await api('GET', '/proches/etat').catch(() => ({}))).empreinte || null;
     rendre(info);

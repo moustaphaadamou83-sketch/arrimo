@@ -370,6 +370,33 @@
         if (!a.erreurs.length) $('#ev-confirmer').onclick = (x) => agir(x.currentTarget, () => api('POST', '/evenements/import', { etablissement_id: ctx(), contenu, empreinte: a.empreinte, confirme: true }), ok);
       } catch (x) { $('#ev-apercu').innerHTML = `<p class="erreur">${esc(x.message)}</p>`; } };
   }
+  /* Coordination Famille, côté établissement : indicateurs mesurés, demandes, confirmations, créneaux, journal de vie */
+  async function panneauFamille(v) {
+    const F = (k, x) => C(`famille.${k}`, x); const ok = t('chsld.actions.ok');
+    let tb, dem, confs, residents, journal, regl;
+    try { [tb, dem, confs, residents, journal, regl] = await Promise.all([api('GET', `/famille/tableau?etablissement_id=${ctx()}`), api('GET', `/famille/demandes?etablissement_id=${ctx()}`), api('GET', `/famille/confirmations?etablissement_id=${ctx()}`), api('GET', `/chsld/residents?etablissement_id=${ctx()}`), api('GET', `/famille/journal-vie?etablissement_id=${ctx()}`), api('GET', `/famille/reglages?etablissement_id=${ctx()}`)]); } catch { return; }
+    const STATUTS = ['recue', 'attribuee', 'en_cours', 'attente_information', 'attente_proche', 'resolue', 'refusee', 'cloturee'];
+    const min = (x) => (x == null ? '—' : `${Math.round(x)} min`);
+    v.insertAdjacentHTML('beforeend', `<section class="panneau-c" id="famille"><h3>${F('titre')}</h3>
+      <div class="ch-kpis">${[['ouvertes', tb.demandes.ouvertes], ['en_retard', tb.demandes.en_retard], ['messages', tb.messages.non_traites], ['premiere_reponse', min(tb.messages.premiere_reponse_mediane_min)], ['resolution', min(tb.demandes.resolution_mediane_min)], ['confirmations', tb.confirmations.en_attente], ['visites_jour', tb.visites.du_jour], ['retours', tb.retours.planifies], ['echecs', tb.notifications_echouees]].map(([k, n]) => `<div class="ch-kpi"><span class="lbl">${F(`k_${k}`)}</span><span class="v num">${esc(String(n))}</span></div>`).join('')}</div>
+      <p class="note">${esc(tb.mesure)}</p>
+      <h4>${F('demandes')}</h4><div class="liste">${dem.map((d) => `<div class="item${d.en_retard ? ' en-retard' : ''}"><div><b>n° ${d.id}</b> · ${F(`c_${d.categorie}`)} · <span class="num">${esc(d.resident_ref)}</span> · ${esc(d.prenom)} ${esc(d.nom)} · <b>${F(`s_${d.statut}`)}</b>${d.en_retard ? ` · <b>${F('retard')}</b>` : ''}<div>${esc(d.texte)}</div>${d.reponse ? `<div class="note">${F('reponse')} : ${esc(d.reponse)}</div>` : ''}</div>
+        ${['resolue', 'refusee', 'annulee', 'cloturee'].includes(d.statut) ? '' : `<div class="actions"><select data-dem-statut="${d.id}" aria-label="${F('statut')}">${STATUTS.map((x) => `<option value="${x}"${x === d.statut ? ' selected' : ''}>${F(`s_${x}`)}</option>`).join('')}</select><input data-dem-rep="${d.id}" maxlength="500" placeholder="${F('reponse_famille')}" value="${esc(d.reponse || '')}"><button class="btn pri" type="button" data-dem-ok="${d.id}">${F('enregistrer')}</button></div>`}</div>`).join('') || `<p class="note">${F('aucune')}</p>`}</div>
+      <h4>${F('confirmations')}</h4><form id="fc-form"><div class="ligne">${sel('fc-res', F('resident'), residents.map((r) => [r.id, `${r.reference} · ${r.prenom} ${r.nom}`]))}<div class="champ"><label class="lbl" for="fc-contact">${F('proche')}</label><select id="fc-contact"></select></div></div>${champ('fc-sujet', F('sujet'), '', 'maxlength="160" required')}${champ('fc-echeance', F('echeance'), '', 'type="datetime-local"')}<button class="btn pri" type="submit">${F('demander')}</button></form>
+      <div class="liste">${confs.slice(0, 20).map((c) => `<div class="item"><div><b>${esc(c.sujet)}</b> · <span class="num">${esc(c.resident_ref)}</span> · ${esc(c.prenom)} · ${F(`r_${c.statut}`)}${c.repondu_le ? ` · ${esc(dateHeure(c.repondu_le))}` : ''}</div></div>`).join('')}</div>
+      <h4>${F('creneaux')}</h4><form id="cr-form"><div class="ligne">${champ('cr-debut', F('debut'), '', 'type="datetime-local" required')}${champ('cr-fin', F('fin'), '', 'type="datetime-local" required')}${champ('cr-cap', F('capacite'), '2', 'type="number" min="1" max="50" required')}</div><button class="btn pri" type="submit">${F('ajouter_creneau')}</button></form>
+      <h4>${F('journal')}</h4><label class="case"><input type="checkbox" id="jv-actif"${regl.journal_vie ? ' checked' : ''}> ${F('journal_actif')}</label>
+      <form id="jv-form">${champ('jv-titre', F('titre_pub'), '', 'maxlength="120" required')}<div class="champ"><label class="lbl" for="jv-txt">${F('texte_pub')}</label><textarea id="jv-txt" maxlength="2000" required></textarea></div><p class="note">${F('sans_photo')}</p><button class="btn" type="submit">${F('brouillon')}</button></form>
+      <div class="liste">${journal.map((j) => `<div class="item"><div><b>${esc(j.titre)}</b> · ${F(`j_${j.statut}`)} · ${esc(j.auteur_nom || '')}</div><div class="actions">${j.statut !== 'publie' ? `<button class="btn" data-jv="${j.id}" data-a="publier">${F('publier')}</button>` : `<button class="btn" data-jv="${j.id}" data-a="retirer">${F('retirer')}</button>`}</div></div>`).join('')}</div></section>`);
+    const contacts = async () => { const f = await api('GET', `/chsld/residents/${$('#fc-res').value}`).catch(() => null); $('#fc-contact').innerHTML = (f?.contacts || []).map((k) => `<option value="${k.id}">${esc(k.prenom)} ${esc(k.nom)}</option>`).join(''); };
+    if ($('#fc-res')) { $('#fc-res').onchange = contacts; contacts(); }
+    v.querySelectorAll('[data-dem-ok]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/famille/demandes/${b.dataset.demOk}`, { statut: v.querySelector(`[data-dem-statut="${b.dataset.demOk}"]`).value, reponse: v.querySelector(`[data-dem-rep="${b.dataset.demOk}"]`).value }), ok); });
+    $('#fc-form').onsubmit = (e) => { e.preventDefault(); agir(e.submitter, () => api('POST', '/famille/confirmations', { resident_id: Number($('#fc-res').value), contact_id: Number($('#fc-contact').value), sujet: $('#fc-sujet').value, echeance: $('#fc-echeance').value ? new Date($('#fc-echeance').value).toISOString() : null }), ok); };
+    $('#cr-form').onsubmit = (e) => { e.preventDefault(); agir(e.submitter, () => api('POST', '/famille/creneaux', { etablissement_id: ctx(), debut: new Date($('#cr-debut').value).toISOString(), fin: new Date($('#cr-fin').value).toISOString(), capacite: Number($('#cr-cap').value) }), ok); };
+    $('#jv-actif').onchange = (e) => agir(null, () => api('PUT', '/famille/reglages', { etablissement_id: ctx(), journal_vie: e.target.checked }), ok);
+    $('#jv-form').onsubmit = (e) => { e.preventDefault(); agir(e.submitter, () => api('POST', '/famille/journal-vie', { etablissement_id: ctx(), titre: $('#jv-titre').value, texte: $('#jv-txt').value }), ok); };
+    v.querySelectorAll('[data-jv]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/famille/journal-vie/${b.dataset.jv}/${b.dataset.a}`), ok); });
+  }
   async function vueTaches() {
     const v = $('#v-c-taches');
     const liste = await api('GET', `/chsld/taches?etablissement_id=${ctx()}`);
@@ -383,6 +410,7 @@
         <div class="actions">${x.statut === 'a_faire' ? `<button class="btn" data-ta="en_cours" data-id="${x.id}" data-version="${x.version}">${C('taches.commencer')}</button>` : ''}<button class="btn pri" data-ta="faite" data-id="${x.id}" data-version="${x.version}">${C('taches.faite')}</button>
           ${peutCreer ? `<button class="btn dan" data-ta="annulee" data-id="${x.id}" data-version="${x.version}">${C('taches.annuler')}</button>` : ''}</div></div>`).join('')}</div>` : `<p class="vide">${C('taches.aucune')}</p>`}`;
     if (role() !== 'entretien') panneauxCoordination(v);
+    if (role() !== 'entretien') panneauFamille(v);
     for (const x of ['valider', 'reprendre']) v.querySelectorAll(`[data-net-${x}]`).forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/nettoyage/${b.dataset[`net${x[0].toUpperCase()}${x.slice(1)}`]}/${x}`), t('nettoyage.ok')); });
     v.querySelectorAll('[data-ta]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/chsld/taches/${b.dataset.id}/statut`, { statut: b.dataset.ta, version: Number(b.dataset.version) }), t('chsld.actions.ok')); });
     if ($('#ta-nouvelle')) $('#ta-nouvelle').onclick = async () => {

@@ -36,6 +36,7 @@ async function inviter(pool, u, contactId, b = {}) {
     // Une nouvelle invitation remplace l'accès précédent du même contact (révoqué)
     await c.query(`UPDATE proches_acces SET revoque_le = now(), revoque_par = $2 WHERE contact_id = $1 AND revoque_le IS NULL`, [k.id, u.id]);
     await c.query('DELETE FROM proches_sessions WHERE acces_id IN (SELECT id FROM proches_acces WHERE contact_id = $1)', [k.id]);
+    await c.query('DELETE FROM proches_notifications_attente WHERE acces_id IN (SELECT id FROM proches_acces WHERE contact_id = $1)', [k.id]);
     const a = (await c.query(`INSERT INTO proches_acces (contact_id, resident_id, etablissement_id, courriel, invitation_hash, invitation_expire_le, expire_le, cree_par)
       VALUES ($1, $2, $3, $4, $5, now() + make_interval(hours => $6), $7, $8) RETURNING id, courriel, invitation_expire_le, expire_le`,
     [k.id, k.resident_id, k.etablissement_id, k.courriel, empreinte(jeton), DUREE_INVITATION_H, expire, u.id]).catch((err) => {
@@ -53,6 +54,9 @@ async function revoquer(pool, u, accesId) {
   return transaction(pool, async (c) => {
     await c.query('UPDATE proches_acces SET revoque_le = COALESCE(revoque_le, now()), revoque_par = COALESCE(revoque_par, $2), actif = false WHERE id = $1', [accesId, u.id]);
     await c.query('DELETE FROM proches_sessions WHERE acces_id = $1', [accesId]);
+    // Plus aucune notification : file d'attente et adresses de poussée retirées
+    await c.query('DELETE FROM proches_notifications_attente WHERE acces_id = $1', [accesId]);
+    await c.query('DELETE FROM proches_abonnements_push WHERE acces_id = $1', [accesId]);
     await journaliser(c, { etablissementId: a.etablissement_id, utilisateurId: u.id, action: 'Portail des proches', detail: `${a.reference} · accès révoqué` });
     return { revoque: true };
   });

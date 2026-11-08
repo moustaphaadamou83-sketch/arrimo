@@ -1658,7 +1658,7 @@ test('écrans : transfert d’hôpital au bouton, nettoyage sous précautions, r
   const aller = async (pg, v, sel) => { await pg.evaluate((x) => document.querySelector(`#onglets button[data-v="${x}"]`).click(), v); await pg.waitForSelector(sel); };
   try {
     for (const [nom, vp] of [['ordinateur', { width: 1366, height: 900 }], ['tablette', { width: 820, height: 1180 }], ['telephone', { width: 390, height: 844 }]]) {
-      const era = await ouvrir('era', E, vp); await aller(era, 'c-taches', '#registre'); await era.waitForSelector('#visites'); await era.waitForSelector('#activites'); await sansDebord(era, `${nom} registre`);
+      const era = await ouvrir('era', E, vp); await aller(era, 'c-taches', '#registre'); await era.waitForSelector('#famille'); await era.waitForSelector('#visites'); await era.waitForSelector('#activites'); await sansDebord(era, `${nom} registre`);
       await aller(era, 'c-accueil', '#ch-accueil-sup'); await sansDebord(era, `${nom} accueil`);
       const b = await ouvrir('b', L.B, vp); await aller(b, 'nettoyage', '#net-config'); await b.evaluate(() => { document.querySelector('#net-config').open = true; }); await b.waitForSelector('#net-proto'); await sansDebord(b, `${nom} nettoyage`);
       await aller(b, 'liaison', '.li-onglets'); await sansDebord(b, `${nom} liaison`);
@@ -1749,11 +1749,12 @@ test('Coordination Famille : demandes en tâches, confirmations, créneaux, plus
   for (const k of [k1, k2, k3]) await inviter(k);
   const cx = await api(null, 'POST', '/proches/connexion', { courriel: 'lise@exemple.invalid', mot_de_passe: MDPP });
   assert.strictEqual(cx.profils.length, 2, 'un profil par résident');
-  sessions.lise1 = cx.profils.find((x) => x.resident.startsWith(r1.prenom)).token; sessions.lise2 = cx.profils.find((x) => x.resident.startsWith(r2.prenom)).token;
+  // Profils dans l'ordre des accès (k1 puis k2) : deux résidents peuvent porter le même prénom
+  sessions.lise1 = cx.profils[0].token; sessions.lise2 = cx.profils[1].token;
   sessions.paul = (await api(null, 'POST', '/proches/connexion', { courriel: 'paul@exemple.invalid', mot_de_passe: MDPP })).token;
   // Profils étanches : chaque session ne voit que son résident et ses propres droits
   const m1 = await api('lise1', 'GET', '/proches/moi'); const m2 = await api('lise2', 'GET', '/proches/moi');
-  assert.strictEqual(m1.resident.prenom, r1.prenom); assert.strictEqual(m2.resident.prenom, r2.prenom); assert.deepStrictEqual(m2.autorisations, ['hebergement']);
+  assert.strictEqual(m1.resident.prenom, r1.prenom); assert.strictEqual(m2.resident.prenom, r2.prenom); assert.deepStrictEqual(m2.autorisations, ['hebergement']); assert.strictEqual(m1.autorisations.length, 4);
   await refuse('lise2', 'POST', '/proches/demandes', { categorie: 'vetements', texte: 'x' }, 403, 'proche_non_autorise');
   await refuse('paul', 'POST', '/proches/demandes', { categorie: 'vetements', texte: 'x' }, 403, 'proche_non_autorise');
   // Demande → tâche → résolution par la tâche, sans double saisie ; le proche voit le statut et la réponse
@@ -1796,13 +1797,13 @@ test('Coordination Famille : demandes en tâches, confirmations, créneaux, plus
   await api(qui, 'POST', `/proches/visites/${gagnant.corps.id}/annuler`);
   assert.strictEqual((await api(qui === 'lise1' ? 'paul' : 'lise1', 'POST', '/proches/visites/creneau', { creneau_id: cr.id })).statut, 'demandee', 'la place libérée se reprend');
   // Journal de vie : désactivé par défaut, validé par une autre personne, retirable
-  assert.strictEqual(await api('lise1', 'GET', '/proches/journal-vie'), null);
+  assert.deepStrictEqual(await api('lise1', 'GET', '/proches/journal-vie'), { actif: false, publications: [] });
   await api('era', 'PUT', '/famille/reglages', { etablissement_id: E, journal_vie: true, delai_heures: 24 });
   const j = await api('era_soins', 'POST', '/famille/journal-vie', { etablissement_id: E, titre: 'Atelier musique', texte: 'Après-midi musical (fictif)' });
-  assert.deepStrictEqual(await api('lise1', 'GET', '/proches/journal-vie'), [], 'un brouillon n’est pas publié');
+  assert.deepStrictEqual((await api('lise1', 'GET', '/proches/journal-vie')).publications, [], 'un brouillon n’est pas publié');
   await api('era', 'POST', `/famille/journal-vie/${j.id}/publier`);
-  assert.strictEqual((await api('lise1', 'GET', '/proches/journal-vie'))[0].titre, 'Atelier musique');
-  await api('era', 'POST', `/famille/journal-vie/${j.id}/retirer`); assert.deepStrictEqual(await api('lise1', 'GET', '/proches/journal-vie'), []);
+  assert.strictEqual((await api('lise1', 'GET', '/proches/journal-vie')).publications[0].titre, 'Atelier musique');
+  await api('era', 'POST', `/famille/journal-vie/${j.id}/retirer`); assert.deepStrictEqual((await api('lise1', 'GET', '/proches/journal-vie')).publications, []);
   // OG Famille : vraies données, jamais de santé
   assert.match((await api('lise1', 'POST', '/proches/og', { question: 'Est-ce que ma demande concernant les vêtements a été traitée ?' })).reponse, new RegExp(`n° ${d.id} · vetements · resolue`));
   assert.match((await api('lise1', 'POST', '/proches/og', { question: 'Quel est son diagnostic ?' })).reponse, /aucune information de santé/);
@@ -1886,7 +1887,8 @@ test('captures : formulaire SH (type puis modules), liste SH, écrans CHSLD rée
     }
     const ctxP = await navigateur.newContext({ viewport: { width: 390, height: 844 } }); const pp = await ctxP.newPage(); pp.on('pageerror', (e) => erreurs.push(`portail ${e}`));
     await pp.addInitScript((j) => sessionStorage.setItem('arrimo-proche', j), sessions.marie);
-    await pp.goto(`${basePilote}/proches`); await pp.waitForSelector('#txt');
+    await pp.goto(`${basePilote}/proches`); await pp.waitForSelector('#carte-resident'); await pp.screenshot({ path: `${dossier}/portail-proches-accueil.png`, fullPage: true });
+    await pp.click('.barre-f [data-onglet="messages"]'); await pp.waitForSelector('#txt');
     await pp.screenshot({ path: `${dossier}/portail-proches-telephone.png`, fullPage: true });
     await ctxP.close();
   } finally { await navigateur.close(); }
