@@ -12,3 +12,5 @@ preuves/
 dependances-reference
 __pycache__/
 *.pyc
+.local
+node_modules
