@@ -275,6 +275,7 @@ const MESSAGES = {
   question_invalide: "Question invalide.",
   preference_invalide: "Préférence invalide.",
   message_introuvable: "Message introuvable.",
+  chambre_non_prete: "La chambre n’est pas encore prête : l’entretien doit d’abord terminer sa préparation.",
   transfert_hopital_ouvert: "Un transfert vers un autre hôpital est déjà ouvert pour ce résident ({numero}).",
   retour_deja_ouvert: "Un retour vers le CHSLD est déjà en préparation pour ce résident ({numero}).",
   cle_idempotence_invalide: "Identifiant d’envoi invalide.",

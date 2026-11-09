@@ -677,6 +677,7 @@ window.ARRIMO_I18N.en = {
     question_invalide: "Invalid question.",
     preference_invalide: "Invalid preference.",
     message_introuvable: "Message not found.",
+    chambre_non_prete: "The room is not ready yet: housekeeping must finish preparing it first.",
     transfert_hopital_ouvert: "A transfer to another hospital is already open for this resident ({numero}).",
     retour_deja_ouvert: "A return to the CHSLD is already being prepared for this resident ({numero}).",
     cle_idempotence_invalide: "Invalid sending identifier.",

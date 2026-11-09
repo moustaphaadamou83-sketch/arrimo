@@ -1903,6 +1903,44 @@ test('Coordination Famille : demandes en tâches, confirmations, créneaux, plus
   assert.strictEqual((await q('SELECT count(*)::int n FROM proches_notifications_attente WHERE acces_id = $1', [acces]))[0].n, 0, 'aucune notification après révocation');
 });
 
+test('chambre prête : l’entretien la déclare ; personne n’est admis avant ; même règle pour retour, transfert entre CHSLD et RPA', { timeout: 120000 }, async () => {
+  const E = ids.era; const q = (sql, v) => poolPilote.query(sql, v).then((r) => r.rows);
+  const prep = async (lit) => (await api('era_entretien', 'GET', `/chsld/taches?etablissement_id=${E}`)).filter((x) => x.lit_id === lit && x.type === 'preparation_chambre');
+  // 1. Nouvelle admission, dans un établissement présenté comme RPA (même moteur, nom propre au pays)
+  await poolPilote.query(`UPDATE etablissements SET type_libelle = 'Résidence privée pour aînés (RPA)' WHERE id = $1`, [E]);
+  try {
+    const libre = (await api('era', 'GET', `/chsld/places?etablissement_id=${E}`)).find((x) => x.etat === 'libre');
+    const r = await api('era', 'POST', '/chsld/residents', { etablissement_id: E, prenom: 'Rita', nom: 'Fictive', date_naissance: '1940-02-02', confirmer_doublon: true });
+    const r2 = await api('era', 'POST', `/chsld/residents/${r.id}/reserver-place`, { lit_id: libre.id, version: libre.version, version_resident: r.version });
+    await refuse('era', 'POST', `/chsld/residents/${r.id}/arrivee`, { version: r2.version }, 409, 'chambre_non_prete');
+    const [t] = await prep(libre.id); assert.ok(t, 'tâche de préparation pour l’entretien');
+    const ecran = await api('era_entretien', 'GET', `/chsld/taches?etablissement_id=${E}`); assert.ok(!JSON.stringify(ecran).includes('Rita'), 'l’entretien ne voit pas le nom');
+    await api('era_entretien', 'POST', `/chsld/taches/${t.id}/statut`, { statut: 'faite', version: t.version });
+    assert.strictEqual((await api('era', 'POST', `/chsld/residents/${r.id}/arrivee`, { version: r2.version })).statut, 'present', 'admission après la chambre prête');
+  } finally { await poolPilote.query('UPDATE etablissements SET type_libelle = NULL WHERE id = $1', [E]); }
+  // 2. Retour d'hospitalisation : l'entretien déclare la chambre prête, la coordination réintègre
+  const x = await residentPresent('era', E, [p.dupont]);
+  const act = (qui, etab, id, corps) => api(qui, 'POST', `/coordinations/${id}/action`, { etablissement_id: etab, ...corps });
+  let co = await api('era', 'POST', `/chsld/residents/${x.id}/hospitalisation`, { hopital_id: L.B, identite_verifiee: true, version: (await api('era', 'GET', `/chsld/residents/${x.id}`)).resident.version });
+  co = await act('b', L.B, co.id, { action: 'accepter', version: co.version }); co = await act('era', E, co.id, { action: 'confirmer_depart', version: co.version }); co = await act('b', L.B, co.id, { action: 'confirmer_reception', version: co.version });
+  let r = await api('b', 'POST', `/coordinations/${co.id}/retour`, { retour_prevu_le: new Date(Date.now() + 3600000).toISOString() });
+  r = await act('era', E, r.id, { action: 'accepter', version: r.version });
+  const lit = (await api('era', 'GET', `/chsld/residents/${x.id}`)).resident.lit_id;
+  for (const t of (await api('era', 'GET', `/chsld/taches?etablissement_id=${E}`)).filter((y) => y.lit_id === lit && y.type !== 'preparation_chambre')) await api('era', 'POST', `/chsld/taches/${t.id}/statut`, { statut: 'faite', version: t.version });
+  const [tp] = await prep(lit); assert.ok(tp, 'préparation de la chambre pour le retour');
+  assert.strictEqual((await q('SELECT chambre_verifiee_le FROM coordinations WHERE id = $1', [r.id]))[0].chambre_verifiee_le, null);
+  await api('era_entretien', 'POST', `/chsld/taches/${tp.id}/statut`, { statut: 'faite', version: tp.version });
+  const apres = (await q('SELECT chambre_verifiee_le, version FROM coordinations WHERE id = $1', [r.id]))[0];
+  assert.ok(apres.chambre_verifiee_le, 'chambre prête déclarée par l’entretien');
+  const etapeCh = (await q(`SELECT e.detail, u.role FROM coordination_etapes e JOIN utilisateurs u ON u.id = e.par WHERE e.coordination_id = $1 AND e.statut = 'chambre_verifiee'`, [r.id]))[0];
+  assert.deepStrictEqual([etapeCh.role, etapeCh.detail], ['entretien', 'Chambre prête, déclarée par l’entretien'], 'tracée avec son auteur');
+  assert.ok((await api('b', 'GET', `/coordinations?etablissement_id=${L.B}`)).find((c) => c.id === r.id).chronologie.find((pp) => pp.code === 'chambre_verifiee').fait, 'l’hôpital voit « Chambre prête »');
+  await refuse('era_entretien', 'POST', `/coordinations/${r.id}/action`, { etablissement_id: E, action: 'reintegrer', identite_verifiee: true, conditions_accueil: true, version: apres.version }, 403);
+  r = await act('b', L.B, r.id, { action: 'confirmer_depart', version: apres.version }); r = await act('era', E, r.id, { action: 'confirmer_arrivee', version: r.version });
+  r = await act('era', E, r.id, { action: 'reintegrer', identite_verifiee: true, conditions_accueil: true, version: r.version });
+  assert.ok(r.reintegree_le, 'admission par la coordination une fois la chambre prête');
+});
+
 test('captures : formulaire SH (type puis modules), liste SH, écrans CHSLD réels', { timeout: 180000 }, async () => {
   const { chromium } = require('playwright'); const dossier = path.resolve('.local/captures-chsld'); fs.mkdirSync(dossier, { recursive: true });
   const navigateur = await chromium.launch(); const erreurs = [];

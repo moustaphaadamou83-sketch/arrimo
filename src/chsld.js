@@ -325,11 +325,33 @@ async function reserverPlace(pool, u, residentId, b) {
     return n;
   });
 }
+/**
+ * Chambre prête : c'est l'entretien qui la déclare, en terminant la tâche de préparation. Tant qu'une tâche de préparation
+ * ou d'entretien reste ouverte sur la place, ou qu'un nettoyage sous précautions n'est pas validé, personne n'y est admis.
+ */
+async function exigerChambrePrete(c, litId) {
+  if (!litId) return;
+  const t = (await c.query(`SELECT count(*)::int n FROM taches_etab WHERE lit_id = $1 AND type IN ('preparation_chambre', 'entretien') AND statut IN ('a_faire', 'en_cours')`, [litId])).rows[0].n;
+  const i = (await c.query(`SELECT count(*)::int n FROM nettoyage_interventions WHERE lit_id = $1 AND statut IN ('en_cours', 'controle_requis')`, [litId])).rows[0].n;
+  if (t || i) throw new ErreurHttp(409, 'chambre_non_prete');
+}
+/** Tâche de préparation terminée par l'entretien : le retour ou le transfert qui attend cette place passe à « Chambre prête ». */
+async function chambrePrete(c, u, litId) {
+  const cos = (await c.query(`SELECT * FROM coordinations WHERE lit_id = $1 AND chambre_verifiee_le IS NULL AND cloturee_le IS NULL
+    AND ((type = 'retour' AND (statut IN ('acceptee', 'en_cours') OR (statut = 'recue' AND arrivee_le IS NOT NULL))) OR (type = 'transfert_chsld' AND statut IN ('acceptee', 'en_cours'))) FOR UPDATE`, [litId])).rows;
+  for (const co of cos) {
+    if (co.type === 'retour') { const ri = await etatReintegration(c, co.resident_id); if (!ri?.pret) continue; }
+    else if ((await c.query(`SELECT count(*)::int n FROM taches_etab WHERE lit_id = $1 AND type IN ('preparation_chambre', 'entretien') AND statut IN ('a_faire', 'en_cours')`, [litId])).rows[0].n) continue;
+    const n = (await c.query('UPDATE coordinations SET chambre_verifiee_le = now(), version = version + 1, modifie_le = now() WHERE id = $1 RETURNING *', [co.id])).rows[0];
+    await etape(c, n, 'chambre_verifiee', co.destination_id, u, 'Chambre prête, déclarée par l’entretien');
+  }
+}
 async function confirmerArrivee(pool, u, residentId, b) {
   const { e } = await lireResident(pool, u, residentId, { roles: GERER });
   return transaction(pool, async (c) => {
     const r = await verrouResident(c, residentId); versionAttendue(r, b.version);
     if (r.statut !== 'preadmission' || !r.lit_id) throw new ErreurHttp(409, 'resident_statut_incompatible');
+    await exigerChambrePrete(c, r.lit_id);
     const l = await changerEtat(c, pool, u.id, r.lit_id, 'occupe', { detail: `Arrivée de ${r.reference}` });
     const n = (await c.query(`UPDATE residents SET statut = 'present', admis_le = now(), version = version + 1, modifie_le = now() WHERE id = $1 RETURNING *`, [r.id])).rows[0];
     await mouvement(c, n, 'admission', u, { vers: l.id, detail: `Arrivée confirmée · ${l.code}` });
@@ -734,6 +756,7 @@ async function actionCoordination(pool, u, id, b) {
     } else if (t === 'transfert_chsld' && cote === 'destination' && a === 'confirmer_arrivee') {
       if (co.statut !== 'en_cours') throw new ErreurHttp(409, 'coordination_statut_incompatible');
       exigerFictifs();
+      await exigerChambrePrete(c, co.lit_id);
       const l = await changerEtat(c, pool, u.id, co.lit_id, 'occupe', { detail: `Arrivée de ${co.resident_ref} (${co.numero})` });
       // Le dossier suit le résident : identité, langue, accessibilité et contacts actifs ; la vérification de représentation est à refaire.
       const nouveau = (await c.query(`INSERT INTO residents (etablissement_id, reference, prenom, nom, nom_usage, date_naissance, dossier_officiel, langue, telephone, courriel,
@@ -982,6 +1005,7 @@ async function statutTache(pool, u, id, b) {
       else if (!ouvertes && !attenteControle) await majEntretien(c, t.lit_id, 'propre', u);
     }
     if (b.statut === 'faite') await require('./famille').tacheTerminee(c, t, u);
+    if (b.statut === 'faite' && t.lit_id && ['preparation_chambre', 'entretien'].includes(t.type)) await chambrePrete(c, u, t.lit_id);
     await journalChsld(c, e.id, u, 'Tâche', `${t.type} · n° ${t.id} · ${b.statut}`);
     return n;
   }));

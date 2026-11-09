@@ -97,7 +97,10 @@ async function peupler(api, { erables, stLaurent, hopitalB }) {
     const libre = (await places(qui, e)).find((p) => p.etat === 'libre');
     const r = await api(qui, 'POST', '/chsld/residents', { etablissement_id: e, ...identite, contacts });
     const r2 = await api(qui, 'POST', `/chsld/residents/${r.id}/reserver-place`, { lit_id: libre.id, version: libre.version, version_resident: r.version });
-    return arrivee ? api(qui, 'POST', `/chsld/residents/${r.id}/arrivee`, { version: r2.version }) : r2;
+    if (!arrivee) return r2;
+    // La chambre doit être prête avant l'arrivée : préparation terminée (ici par la coordination, faute d'agent d'entretien)
+    for (const t of (await api(qui, 'GET', `/chsld/taches?etablissement_id=${e}`)).filter((x) => x.lit_id === libre.id && ['preparation_chambre', 'entretien'].includes(x.type))) await api(qui, 'POST', `/chsld/taches/${t.id}/statut`, { statut: 'faite', version: t.version });
+    return api(qui, 'POST', `/chsld/residents/${r.id}/arrivee`, { version: r2.version });
   }
   const naissance = (i) => `19${30 + (i % 15)}-${String((i % 12) + 1).padStart(2, '0')}-${String((i % 27) + 1).padStart(2, '0')}`;
   // Jean Dupont : deux proches, autorisations distinctes (la fille reçoit l'administratif et les mouvements ; le fils est seulement à prévenir)
