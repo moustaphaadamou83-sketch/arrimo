@@ -1067,7 +1067,8 @@ test('phase 2 — portail des proches : activé depuis SH, invitation, accès li
       await pousser(); assert.strictEqual(recus.length, 1); assert.strictEqual(recus[0].corps, ''); assert.match(recus[0].auth, /^vapid t=/);
       const [tete, corps, sig] = recus[0].auth.slice(8).split(',')[0].split('.');
       assert.ok(crypto.verify('sha256', Buffer.from(`${tete}.${corps}`), { key: paire.publicKey, dsaEncoding: 'ieee-p1363' }, Buffer.from(sig, 'base64url')), 'jeton VAPID valide');
-      assert.ok(!JSON.stringify(recus[0]).match(/R-\d|Dupont|hospital/i));
+      // Le contenu envoyé (corps et adresse) ne dit rien ; le jeton signé, aléatoire, n'est pas un contenu
+      assert.ok(!JSON.stringify({ corps: recus[0].corps, url: recus[0].url }).match(/R-\d|Dupont|hospital/i));
       co = await act('b', L.B, co.id, { action: 'accepter', version: co.version });
       assert.strictEqual((await sit()).statut, 'transfert_preparation', 'une acceptation n’est pas un départ');
       co = await act('era', ids.era, co.id, { action: 'confirmer_depart', version: co.version });
@@ -2092,7 +2093,7 @@ test('interface réelle : parcours CHSLD A → Hôpital B → CHSLD A dans le na
     await ent.context().close();
     // La coordination n'a plus à vérifier : la chambre est déjà déclarée prête, avec l'étape dans la chronologie
     await onglet(era, 'c-residents', '#v-c-residents'); await onglet(era, 'c-mouvements', `[data-co="confirmer_arrivee"], [data-coordination="${ret0.id}"], .ch-chrono`);
-    assert.strictEqual(await era.locator(`[data-co="verifier_chambre"][data-id="${ret0.id}"]`).count(), 0, 'plus de vérification à faire par la coordination');
+    await era.waitForFunction((id) => !document.querySelector(`[data-co="verifier_chambre"][data-id="${id}"]`), ret0.id, { timeout: 10000 });
     assert.ok((await api('era', 'GET', `/coordinations?etablissement_id=${ids.era}`)).find((c) => c.id === ret0.id).chronologie.find((pp) => pp.code === 'chambre_verifiee').fait);
     // Hôpital : départ et transport
     await onglet(b, 'transferts', '#v-transferts .kanban'); await onglet(b, 'liaison', `[data-li="confirmer_depart"][data-id="${ret0.id}"]`);
