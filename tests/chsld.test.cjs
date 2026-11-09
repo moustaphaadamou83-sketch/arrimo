@@ -225,6 +225,10 @@ test('parcours CHSLD réels : peuplement par le personnel, places, contacts, dem
   await refuse('era', 'POST', '/chsld/residents', { etablissement_id: ids.era, prenom: 'Jean', nom: 'Dupont', date_naissance: '1938-04-02' }, 409, 'resident_doublon_possible');
   // Accueil prévu → arrivée ; changement de chambre → ancienne place en préparation ; nettoyage → place libre
   const prevu = (await api('era', 'GET', `/chsld/residents?etablissement_id=${ids.era}&statut=preadmission`))[0];
+  // La chambre d'abord : l'entretien termine la préparation, ensuite seulement l'arrivée est confirmée
+  await refuse('era', 'POST', `/chsld/residents/${prevu.id}/arrivee`, { version: prevu.version }, 409, 'chambre_non_prete');
+  const litPrevu = (await api('era', 'GET', `/chsld/residents/${prevu.id}`)).resident.lit_id;
+  for (const t of (await api('era_entretien', 'GET', `/chsld/taches?etablissement_id=${ids.era}`)).filter((x) => x.lit_id === litPrevu)) await api('era_entretien', 'POST', `/chsld/taches/${t.id}/statut`, { statut: 'faite', version: t.version });
   await api('era', 'POST', `/chsld/residents/${prevu.id}/arrivee`, { version: prevu.version });
   const libre = (await api('era', 'GET', `/chsld/places?etablissement_id=${ids.era}`)).find((x) => x.etat === 'libre');
   const fd = (await api('era', 'GET', `/chsld/residents/${p.dupont}`)).resident;
@@ -288,6 +292,10 @@ test('inter-CHSLD : demande, acceptation avec place réservée, départ, arrivé
   co = (await api('era', 'GET', `/coordinations?etablissement_id=${ids.era}`)).find((c) => c.id === p.transfert);
   if (co.statut === 'envoyee') { const l2 = (await api('era', 'GET', `/chsld/places?etablissement_id=${ids.era}`)).find((x) => x.etat === 'libre'); co = await api('era', 'POST', `/coordinations/${co.id}/action`, { etablissement_id: ids.era, action: 'accepter', lit_id: l2.id, version_lit: l2.version, version: co.version }); }
   co = await api('stl', 'POST', `/coordinations/${co.id}/action`, { etablissement_id: ids.stl, action: 'confirmer_depart', version: co.version });
+  await refuse('era', 'POST', `/coordinations/${co.id}/action`, { etablissement_id: ids.era, action: 'confirmer_arrivee', version: co.version }, 409, 'chambre_non_prete');
+  const litAccueil = (await poolPilote.query('SELECT lit_id FROM coordinations WHERE id = $1', [co.id])).rows[0].lit_id;
+  for (const t of (await api('era_entretien', 'GET', `/chsld/taches?etablissement_id=${ids.era}`)).filter((x) => x.lit_id === litAccueil)) await api('era_entretien', 'POST', `/chsld/taches/${t.id}/statut`, { statut: 'faite', version: t.version });
+  assert.ok((await poolPilote.query('SELECT chambre_verifiee_le FROM coordinations WHERE id = $1', [co.id])).rows[0].chambre_verifiee_le, 'place d’accueil déclarée prête par l’entretien');
   co = await api('era', 'POST', `/coordinations/${co.id}/action`, { etablissement_id: ids.era, action: 'confirmer_arrivee', version: co.version });
   assert.strictEqual(co.statut, 'recue');
   const arrive = (await api('era', 'GET', `/chsld/residents?etablissement_id=${ids.era}`)).find((r) => r.nom.endsWith('-Stl1'));
@@ -2077,10 +2085,15 @@ test('interface réelle : parcours CHSLD A → Hôpital B → CHSLD A dans le na
     const ent = await ouvrir('era_entretien', ids.era);
     await ent.click('#onglets button[data-v="c-taches"]'); await ent.waitForSelector('#v-c-taches');
     assert.strictEqual(await ent.locator('#onglets button[data-v="c-accueil"]').isHidden(), true, 'aucun tableau de bord général pour l’entretien');
-    for (const tt of (await api('era_entretien', 'GET', `/chsld/taches?etablissement_id=${ids.era}`)).filter((y) => y.lit === litCode)) await api('era_entretien', 'POST', `/chsld/taches/${tt.id}/statut`, { statut: 'faite', version: tt.version });
+    // L'entretien déclare la chambre prête à l'écran (bouton « Chambre prête »)
+    for (const tt of (await api('era_entretien', 'GET', `/chsld/taches?etablissement_id=${ids.era}`)).filter((y) => y.lit === litCode)) {
+      await ent.click(`[data-ta="faite"][data-id="${tt.id}"]`); await ent.waitForSelector(`[data-ta="faite"][data-id="${tt.id}"]`, { state: 'detached' });
+    }
     await ent.context().close();
-    await onglet(era, 'c-residents', '#v-c-residents'); await onglet(era, 'c-mouvements', `[data-co="verifier_chambre"][data-id="${ret0.id}"]`);
-    await era.click(`[data-co="verifier_chambre"][data-id="${ret0.id}"]`); await era.waitForSelector(`[data-co="verifier_chambre"][data-id="${ret0.id}"]`, { state: 'detached' });
+    // La coordination n'a plus à vérifier : la chambre est déjà déclarée prête, avec l'étape dans la chronologie
+    await onglet(era, 'c-residents', '#v-c-residents'); await onglet(era, 'c-mouvements', `[data-co="confirmer_arrivee"], [data-coordination="${ret0.id}"], .ch-chrono`);
+    assert.strictEqual(await era.locator(`[data-co="verifier_chambre"][data-id="${ret0.id}"]`).count(), 0, 'plus de vérification à faire par la coordination');
+    assert.ok((await api('era', 'GET', `/coordinations?etablissement_id=${ids.era}`)).find((c) => c.id === ret0.id).chronologie.find((pp) => pp.code === 'chambre_verifiee').fait);
     // Hôpital : départ et transport
     await onglet(b, 'transferts', '#v-transferts .kanban'); await onglet(b, 'liaison', `[data-li="confirmer_depart"][data-id="${ret0.id}"]`);
     await b.click(`[data-li="confirmer_depart"][data-id="${ret0.id}"]`); await b.waitForSelector(`[data-li="transport"][data-id="${ret0.id}"]`);

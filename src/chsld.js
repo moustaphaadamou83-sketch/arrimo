@@ -342,7 +342,8 @@ async function chambrePrete(c, u, litId) {
   for (const co of cos) {
     if (co.type === 'retour') { const ri = await etatReintegration(c, co.resident_id); if (!ri?.pret) continue; }
     else if ((await c.query(`SELECT count(*)::int n FROM taches_etab WHERE lit_id = $1 AND type IN ('preparation_chambre', 'entretien') AND statut IN ('a_faire', 'en_cours')`, [litId])).rows[0].n) continue;
-    const n = (await c.query('UPDATE coordinations SET chambre_verifiee_le = now(), version = version + 1, modifie_le = now() WHERE id = $1 RETURNING *', [co.id])).rows[0];
+    // Sans changer la version : le personnel qui a l'écran ouvert garde la main sur le parcours
+    const n = (await c.query('UPDATE coordinations SET chambre_verifiee_le = now(), modifie_le = now() WHERE id = $1 RETURNING *', [co.id])).rows[0];
     await etape(c, n, 'chambre_verifiee', co.destination_id, u, 'Chambre prête, déclarée par l’entretien');
   }
 }
@@ -600,6 +601,8 @@ async function actionCoordination(pool, u, id, b) {
     await expirerCoordinations(c);
     const co = (await c.query('SELECT * FROM coordinations WHERE id = $1 FOR UPDATE', [id])).rows[0];
     if (a === 'reintegrer' && cote === 'destination' && co.type === 'retour' && co.reintegree_le) return { ...co, deja_confirme: true };
+    // Chambre déjà déclarée prête par l'entretien : la confirmation de la coordination ne change rien
+    if (a === 'verifier_chambre' && cote === 'destination' && co.chambre_verifiee_le) return { ...co, deja_confirme: true };
     // Confirmations répétées ou simultanées d'une même arrivée : la seconde ne change rien (aucune double occupation).
     if (a === 'confirmer_arrivee' && cote === 'destination' && co.statut === 'recue') return { ...co, deja_confirme: true };
     if (a === 'confirmer_reception' && cote === 'destination' && co.type === 'hospitalisation' && co.statut === 'recue') return { ...co, deja_confirme: true };
