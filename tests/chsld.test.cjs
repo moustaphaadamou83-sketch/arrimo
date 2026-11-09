@@ -1165,7 +1165,8 @@ test('phase 2 — portail des proches : activé depuis SH, invitation, accès li
 });
 
 test('audit de sécurité : attaques automatiques sur toutes les routes, isolation, injections, XSS, en-têtes, journal immuable', { timeout: 240000 }, async () => {
-  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'app.js'), 'utf8') + fs.readFileSync(path.join(__dirname, '..', 'src', 'portail-proches.js'), 'utf8');
+  // Toutes les routes de l'application, y compris celles des modules branchés depuis app.js (famille, nettoyage, évaluations, registre, notifications)
+  const src = fs.readdirSync(path.join(__dirname, '..', 'src')).filter((f) => f.endsWith('.js')).map((f) => fs.readFileSync(path.join(__dirname, '..', 'src', f), 'utf8')).join('\n');
   const routes = [...new Set([...src.matchAll(/api\.(get|post|put|delete)\(\s*'([^']+)'/g)].map((m) => `${m[1].toUpperCase()} ${m[2]}`))];
   assert.ok(routes.length > 100, `${routes.length} routes trouvées`);
   const brut = async (jeton, methode, chemin, corps) => {
@@ -1205,6 +1206,19 @@ test('audit de sécurité : attaques automatiques sur toutes les routes, isolati
     ['POST', `/chsld/taches/${tache.id}/statut`, { statut: 'faite' }], ['POST', `/chsld/demandes/${demande.id}/action`, { action: 'annuler' }], ['GET', `/chsld/residents?etablissement_id=${ids.era}`], ['GET', `/chsld/places?etablissement_id=${ids.era}`], ['GET', `/chsld/accueil?etablissement_id=${ids.era}`],
     ['GET', `/chsld/taches?etablissement_id=${ids.era}`], ['GET', `/coordinations?etablissement_id=${ids.era}`], ['POST', `/coordinations/${co.id}/action`, { etablissement_id: ids.era, action: 'annuler' }], ['POST', `/coordinations/${co.id}/action`, { etablissement_id: L.B, action: 'accepter' }],
     ['GET', `/liaison-chsld/${co.id}/emplacements?etablissement_id=${L.B}`], ['GET', `/liaison-chsld?etablissement_id=${L.B}`], ['GET', `/notifications?etablissement_id=${ids.era}`], ['GET', `/journal?etablissement_id=${ids.era}`]];
+  // Nouvelles ressources (coordination famille, nettoyage, registre, évaluations) : mêmes attaques croisées
+  const chambre = (await api('era', 'GET', `/chsld/places?etablissement_id=${ids.era}`))[0];
+  const chambreId = (await poolPilote.query('SELECT chambre_id FROM lits WHERE id = $1', [chambre.id])).rows[0].chambre_id;
+  const kE = (await api('era', 'GET', `/chsld/residents/${p.dupont}`)).contacts[0];
+  const conf = await api('era', 'POST', '/famille/confirmations', { resident_id: p.dupont, contact_id: kE.id, sujet: 'Essai isolation' });
+  const evt = await api('era', 'POST', '/evenements', { etablissement_id: ids.era, type: 'information', contenu: 'Essai isolation' });
+  attaques.push(['GET', `/famille/demandes?etablissement_id=${ids.era}`], ['GET', `/famille/messages?etablissement_id=${ids.era}`], ['GET', `/famille/tableau?etablissement_id=${ids.era}`],
+    ['GET', `/famille/confirmations?etablissement_id=${ids.era}`], ['POST', '/famille/confirmations', { resident_id: p.dupont, contact_id: kE.id, sujet: 'Pirate' }],
+    ['PUT', '/famille/reglages', { etablissement_id: ids.era, journal_vie: true }], ['POST', '/famille/journal-vie', { etablissement_id: ids.era, titre: 'Pirate', texte: 'x' }],
+    ['GET', `/evenements?etablissement_id=${ids.era}`], ['POST', `/evenements/${evt.id}/statut`, { statut: 'traite', version: evt.version }],
+    ['GET', `/chambres/precautions?etablissement_id=${ids.era}`], ['PUT', `/chambres/${chambreId}/precautions`, { precautions: ['acces_interdit'], version: 0 }],
+    ['GET', `/nettoyage/configuration?etablissement_id=${ids.era}`], ['POST', `/nettoyage/${chambre.id}/valider`, {}], ['GET', `/chsld/visites?etablissement_id=${ids.era}`]);
+  void conf;
   for (const qui of ['stl', 'c']) for (const [m, c, corps] of attaques) {
     const r = await brut(sessions[qui], m, c, corps);
     assert.ok([403, 404, 409].includes(r.statut) && !r.texte.includes(resident.nom), `${qui} ${m} ${c} → ${r.statut} ${r.texte.slice(0, 140)}`);
@@ -1868,6 +1882,18 @@ test('Coordination Famille : demandes en tâches, confirmations, créneaux, plus
   // Tableau de bord : chiffres tirés des données
   const tb = await api('era', 'GET', `/famille/tableau?etablissement_id=${E}`);
   assert.ok(tb.demandes.ouvertes >= 1 && tb.demandes.en_retard >= 1 && tb.confirmations.en_attente >= 0 && tb.demandes.resolution_mediane_min !== null); assert.match(tb.mesure, /Aucun nombre d’appels évités/);
+  // Sécurité du portail : un proche ne touche jamais aux demandes, confirmations ni visites d'un autre ; adresse de notification non détournable
+  await refuse('paul', 'POST', `/proches/demandes/${d3.id}/annuler`, null, 404);
+  await refuse('lise2', 'POST', `/proches/confirmations/${c.id}/repondre`, { reponse: 'indisponible' }, 409);
+  await refuse('paul', 'GET', '/famille/demandes?etablissement_id=' + E, null, 401);
+  const avantPush = { ...process.env };
+  Object.assign(process.env, { ARRIMO_VAPID_PUBLIQUE: 'x'.repeat(87), ARRIMO_VAPID_PRIVEE: 'y', ARRIMO_VAPID_SUJET: 'mailto:test@exemple.invalid', ARRIMO_PUSH_HOTES: 'fcm.googleapis.com' });
+  try {
+    const adresse = 'https://fcm.googleapis.com/fcm/send/essai-isolation';
+    await api('lise1', 'POST', '/proches/notifications', { endpoint: adresse });
+    await refuse('paul', 'POST', '/proches/notifications', { endpoint: adresse }, 409, 'abonnement_invalide');
+    assert.strictEqual((await q('SELECT a.contact_id FROM proches_abonnements_push s JOIN proches_acces a ON a.id = s.acces_id WHERE s.endpoint = $1', [adresse]))[0].contact_id, k1, 'adresse non détournée');
+  } finally { for (const k of ['ARRIMO_VAPID_PUBLIQUE', 'ARRIMO_VAPID_PRIVEE', 'ARRIMO_VAPID_SUJET', 'ARRIMO_PUSH_HOTES']) { if (avantPush[k] === undefined) delete process.env[k]; else process.env[k] = avantPush[k]; } }
   // Révocation : sessions coupées tout de suite, plus de notifications
   const acces = (await q('SELECT id FROM proches_acces WHERE contact_id = $1', [k1]))[0].id;
   await api('era', 'POST', `/chsld/acces-portail/${acces}/revoquer`, {});

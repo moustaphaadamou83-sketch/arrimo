@@ -58,7 +58,10 @@ function brancherProche(api, pool, route, session) {
   api.post('/proches/notifications', session, route(async (req) => {
     if (!actif()) throw new ErreurHttp(409, 'notifications_indisponibles');
     const u = validerAdresse(req.body?.endpoint);
-    await pool.query(`INSERT INTO proches_abonnements_push (acces_id, endpoint) VALUES ($1, $2) ON CONFLICT (endpoint) DO UPDATE SET acces_id = $1`, [req.proche.id, u.href]);
+    // Une adresse déjà liée à un autre accès n'est jamais réattribuée (pas de détournement des notifications d'un autre proche)
+    const r = await pool.query(`INSERT INTO proches_abonnements_push (acces_id, endpoint) VALUES ($1, $2) ON CONFLICT (endpoint) DO UPDATE SET acces_id = EXCLUDED.acces_id
+      WHERE proches_abonnements_push.acces_id = EXCLUDED.acces_id RETURNING id`, [req.proche.id, u.href]);
+    if (!r.rowCount) throw new ErreurHttp(409, 'abonnement_invalide');
     return { abonne: true };
   }));
   api.put('/proches/notifications/preferences', session, route(async (req) => {
