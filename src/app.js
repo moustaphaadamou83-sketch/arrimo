@@ -114,7 +114,9 @@ function creerApp(pool, options = {}) {
   api.get('/sante', async (req, res) => {
     try {
       const t0 = Date.now();
-      await pool.query('SELECT 1');
+      // Base joignable ET schéma présent : une base vidée par erreur doit être signalée (incident du 9 nov. 2026)
+      const { rows } = await pool.query(`SELECT to_regclass('etablissements') IS NOT NULL AND to_regclass('utilisateurs') IS NOT NULL AND to_regclass('journal') IS NOT NULL AS ok`);
+      if (!rows[0].ok) return res.status(503).json({ etat: 'degrade', version, base: 'schema_incomplet' });
       res.json({ etat: 'ok', version, base: 'ok', latence_ms: Date.now() - t0, heure: new Date().toISOString() });
     } catch {
       res.status(503).json({ etat: 'degrade', version, base: 'injoignable' });

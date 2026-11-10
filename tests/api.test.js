@@ -80,6 +80,9 @@ test.before(async () => {
   routage.definirFetchTest(async (url) => routeurFictif(url));
   pool = creerPool(URL_TEST);
   await viderBase(pool);
+  // Remise à zéro complète : aucune table du schéma ne doit rester (incident du 9 nov. 2026 : les nouvelles tables bloquaient le schéma)
+  const restantes = (await pool.query('SELECT tablename FROM pg_tables WHERE schemaname = current_schema() AND tablename = ANY($1)', [require('../db/vider').TABLES_SCHEMA])).rows.map((r) => r.tablename);
+  assert.deepStrictEqual(restantes, [], 'tables laissées par la remise à zéro');
   await seed(pool, { silencieux: true });
   process.env.SH_API_KEY = 'cle-de-test-sh-123456';
   serveur = await demarrerServeur(creerApp(pool));
@@ -99,6 +102,16 @@ test.after(async () => {
   if (routeurAvant === undefined) delete process.env.ARRIMO_ROUTEUR_URL;
   else process.env.ARRIMO_ROUTEUR_URL = routeurAvant;
   delete process.env.ARRIMO_ROUTEUR_NOM;
+});
+
+test('surveillance : /api/sante signale une base sans schéma, pas seulement une base injoignable', async () => {
+  assert.strictEqual((await appel(null, 'GET', '/sante')).corps.base, 'ok');
+  await pool.query('ALTER TABLE etablissements RENAME TO etablissements_essai_sante');
+  try {
+    const r = await appel(null, 'GET', '/sante');
+    assert.strictEqual(r.statut, 503); assert.strictEqual(r.corps.base, 'schema_incomplet');
+  } finally { await pool.query('ALTER TABLE etablissements_essai_sante RENAME TO etablissements'); }
+  assert.strictEqual((await appel(null, 'GET', '/sante')).statut, 200);
 });
 
 test('connexion : mauvais mot de passe refusé, accès sans session refusé', async () => {
