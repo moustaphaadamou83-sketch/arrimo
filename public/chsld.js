@@ -31,6 +31,43 @@
       modale(M('repondre_a', { nom: `${m.prenom} ${m.nom}` }), `<p class="note">${esc(m.texte)}</p><div class="champ"><label class="lbl" for="mf-txt">${M('reponse')}</label><textarea id="mf-txt" maxlength="2000"></textarea></div>`,
         [{ label: t('general.annuler') }, { label: M('envoyer'), pri: true, run: async () => (await agir(null, () => api('POST', `/chsld/residents/${m.resident_id}/messages`, { contact_id: m.contact_id, categorie: m.categorie, texte: $('#mf-txt').value }), t('chsld.actions.ok'))) !== null }]); }; });
   }
+  /* Arrimo Famille : demandes de rattachement des proches qui ont créé leur compte. Rien n'est visible au proche avant l'acceptation. */
+  async function panneauRattachements(v) {
+    if (!gerer()) return;
+    const liste = await api('GET', `/chsld/rattachements?etablissement_id=${ctx()}`).catch(() => null);
+    if (!liste) return;
+    const R = (k, x) => C(`rattachement.${k}`, x);
+    const attente = liste.filter((d) => d.statut === 'en_attente'), traitees = liste.filter((d) => d.statut !== 'en_attente').slice(0, 10);
+    const ligne = (d) => `<div class="item" data-rat-ligne="${d.id}"><div><b>${esc(d.proche_prenom)} ${esc(d.proche_nom)}</b> · ${C(`relation.${d.lien}`)}${d.representant_legal ? ` · ${R('representant')}` : ''}
+      <div class="note">${R('demande_pour')} : <b>${esc(d.resident_prenom)} ${esc(d.resident_nom)}</b> · ${R('recue', { date: dateHeure(d.cree_le) })}</div>
+      <div class="note">${d.code_valide ? R('code_ok', { resident: `${d.code_resident_ref} · ${d.code_resident_prenom} ${d.code_resident_nom}` }) : R('sans_code')}</div></div>
+      <div class="actions">${d.statut === 'en_attente' ? `<button class="btn pri" type="button" data-rat-examiner="${d.id}">${R('examiner')}</button><button class="btn dan" type="button" data-rat-refuser="${d.id}">${R('refuser')}</button>` : `<span class="note">${R(`s_${d.statut}`)}</span>`}</div></div>`;
+    v.insertAdjacentHTML('afterbegin', `<section class="panneau-c" id="rattachements"><h3>${R('titre')} ${attente.length ? `<span class="badge">${R('en_attente', { n: attente.length })}</span>` : ''}</h3>
+      <p class="note">${R('aide')}</p><div class="liste">${attente.map(ligne).join('') || `<p class="note">${R('aucune')}</p>`}</div>
+      ${traitees.length ? `<details><summary>${R('traitees')}</summary><div class="liste">${traitees.map(ligne).join('')}</div></details>` : ''}</section>`);
+    v.querySelectorAll('[data-rat-refuser]').forEach((b) => { b.onclick = () => modale(R('refuser'), `<p>${R('confirmer_refus')}</p>`,
+      [{ label: t('general.annuler') }, { label: R('refuser'), pri: true, run: async () => (await agir(null, () => api('POST', `/chsld/rattachements/${b.dataset.ratRefuser}/decision`, { decision: 'refusee' }), R('refuse'))) !== null }]); });
+    v.querySelectorAll('[data-rat-examiner]').forEach((b) => { b.onclick = async () => {
+      const d = liste.find((x) => String(x.id) === b.dataset.ratExaminer); if (!d) return;
+      const residents = (await api('GET', `/chsld/residents?etablissement_id=${ctx()}`)).filter((r) => !['sorti', 'transfere'].includes(r.statut));
+      const aujourd = new Date().toISOString().slice(0, 10);
+      modale(R('titre'), `<p><b>${esc(d.proche_prenom)} ${esc(d.proche_nom)}</b> · ${esc(d.courriel)}${d.proche_telephone ? ` · ${esc(d.proche_telephone)}` : ''}<br><span class="note">${R('demande_pour')} : ${esc(d.resident_prenom)} ${esc(d.resident_nom)} · ${C(`relation.${d.lien}`)}</span></p>
+        ${sel('rat-res', R('resident'), [['', R('choisir')], ...residents.map((r) => [r.id, `${r.reference} · ${r.prenom} ${r.nom}`])], d.code_resident_id || '')}
+        <div class="champ"><label class="lbl" for="rat-contact">${R('contact')}</label><select id="rat-contact"><option value="">${R('nouveau_contact')}</option></select></div>
+        ${sel('rat-verif', R('verification'), ['rappel_telephonique', 'piece_identite', 'code_remis', 'autre'].map((x) => [x, R(`v_${x}`)]))}${champ('rat-precision', R('precision'), '', 'maxlength="200"')}
+        <p class="lbl">${R('consentement')}</p><div class="ligne">${sel('rat-ctype', R('consentement'), ['resident', 'representant_legal', 'mandataire', 'tuteur', 'curateur'].map((x) => [x, R(`c_${x}`)]), d.representant_legal ? 'representant_legal' : 'resident')}
+        ${champ('rat-cpar', R('donne_par'), '', 'maxlength="120"')}${champ('rat-cle', R('donne_le'), aujourd, `type="date" max="${aujourd}"`)}</div>
+        <p class="lbl">${R('autorisations')}</p><div class="cases">${['administratif', 'hebergement', 'rendez_vous', 'mouvements'].map((c) => `<label class="case"><input type="checkbox" data-rat-aut value="${c}"${c !== 'mouvements' ? ' checked' : ''}> ${C(`categorie.${c}`)}</label>`).join('')}</div>
+        ${champ('rat-expire', R('expire'), '', 'type="date"')}`,
+      [{ label: t('general.annuler') }, { label: R('accepter'), pri: true, run: async () => (await agir(null, () => api('POST', `/chsld/rattachements/${d.id}/decision`, { decision: 'acceptee', resident_id: Number($('#rat-res').value) || null,
+        contact_id: Number($('#rat-contact').value) || null, verification: $('#rat-verif').value, verification_precision: $('#rat-precision').value, consentement_type: $('#rat-ctype').value, consentement_par: $('#rat-cpar').value,
+        consentement_le: $('#rat-cle').value, autorisations: [...document.querySelectorAll('[data-rat-aut]:checked')].map((x) => x.value), expire_le: $('#rat-expire').value ? new Date(`${$('#rat-expire').value}T23:59:00`).toISOString() : null }), R('accepte'))) !== null }]);
+      $('#modale .boite').classList.add('large');
+      const contacts = async () => { const id = Number($('#rat-res').value); const f = id ? await api('GET', `/chsld/residents/${id}`).catch(() => null) : null;
+        $('#rat-contact').innerHTML = `<option value="">${R('nouveau_contact')}</option>${(f?.contacts || []).map((k) => `<option value="${k.id}">${esc(k.prenom)} ${esc(k.nom)} · ${C(`relation.${k.relation}`)}</option>`).join('')}`; };
+      $('#rat-res').onchange = contacts; contacts();
+    }; });
+  }
   async function vueAccueil() {
     const v = $('#v-c-accueil');
     const a = await api('GET', `/chsld/accueil?etablissement_id=${ctx()}`);
@@ -70,6 +107,7 @@
       <div class="ch-raccourcis">${raccourci('c-residents', 'users', t('chsld.nav.residents'))}${raccourci('c-chambres', 'bed-double', t('chsld.nav.chambres'))}${raccourci('c-demandes', 'clipboard-list', t('chsld.nav.demandes'))}
         ${raccourci('c-taches', 'clipboard-check', t('chsld.nav.taches'))}${raccourci('c-mouvements', 'ambulance', t('chsld.nav.mouvements'))}<button class="ch-raccourci" type="button" data-ch-og>${icone('sparkles')}<span>${esc(window.ArrimoNomOg?.nom() || 'OG')}</span></button></div>`;
     panneauMessagesFamilles(v);
+    panneauRattachements(v);
     v.querySelectorAll('[data-ch-aller]').forEach((b) => { b.onclick = () => allerA(b.dataset.chAller); });
     const og = v.querySelector('[data-ch-og]'); if (og) og.onclick = () => document.querySelector('#og-open')?.click();
   }
@@ -206,6 +244,8 @@
     if ($('#ch-com')) $('#ch-com').onclick = () => nouvelleCommunication(r, f.contacts);
     v.querySelectorAll('[data-inviter]').forEach((b) => { b.onclick = async () => { b.disabled = true; try { const a = await api('POST', `/chsld/contacts/${b.dataset.inviter}/acces-portail`, {});
       modale(t('chsld.portail.inviter'), `<p>${C('portail.lien')}</p><p><code class="ch-lien">${esc(location.origin + a.lien)}</code></p>`, [{ label: t('general.fermer'), pri: true }]); rafraichir(); } catch (e) { toast(e.message, true); b.disabled = false; } }; });
+    v.querySelectorAll('[data-code-rattachement]').forEach((b) => { b.onclick = async () => { b.disabled = true; try { const x = await api('POST', `/chsld/residents/${r.id}/code-rattachement`);
+      $('#code-rattachement').innerHTML = `<p><b class="num">${C('rattachement.code_cree', { code: x.code, date: jour(x.expire_le) })}</b></p>`; } catch (e) { toast(e.message, true); } b.disabled = false; }; });
     v.querySelectorAll('[data-revoquer]').forEach((b) => { b.onclick = () => { if (window.confirm(t('chsld.portail.confirmer_revocation'))) agir(b, () => api('POST', `/chsld/acces-portail/${b.dataset.revoquer}/revoquer`), t('chsld.actions.ok')); }; });
     v.querySelectorAll('[data-repondre]').forEach((b) => { b.onclick = () => { const k = f.contacts.find((x) => x.id === Number(b.dataset.repondre));
       modale(t('chsld.portail.repondre'), `${sel('pm-cat', C('communication.categorie'), k.autorisations.map((c) => [c, t(`chsld.categorie.${c}`)]))}<div class="champ"><label class="lbl" for="pm-txt">${C('communication.sujet')}</label><textarea id="pm-txt" maxlength="2000"></textarea></div>`,
@@ -220,6 +260,7 @@
           ${fil.length ? `<ul class="liste-simple">${fil.slice(-5).map((m) => `<li><span class="note">${esc(dateHeure(m.cree_le))} · ${C(`categorie.${m.categorie}`)}</span> ${m.sens === 'proche' ? '←' : '→'} ${esc(m.texte)}</li>`).join('')}</ul>` : ''}</div>
           <div class="actions">${g && !a && k.courriel && k.autorisations.length ? `<button class="btn" data-inviter="${k.id}">${C('portail.inviter')}</button>` : ''}${g && a ? `<button class="btn dan" data-revoquer="${a.id}">${C('portail.revoquer')}</button>` : ''}
             ${k.autorisations.length ? `<button class="btn" data-repondre="${k.id}">${C('portail.repondre')}</button>` : ''}</div></div>`; }).join('')}
+      ${g ? `<div class="item"><div><b>${C('rattachement.code_titre')}</b><div class="note">${C('rattachement.code_aide')}</div><div id="code-rattachement" role="status"></div></div><div class="actions"><button class="btn" type="button" data-code-rattachement>${C('rattachement.code_creer')}</button></div></div>` : ''}
       <p class="note">${C('portail.conditions')}</p></div>`;
   }
   function modifierIdentite(r) {

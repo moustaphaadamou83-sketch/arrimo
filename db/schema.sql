@@ -1173,3 +1173,81 @@ ALTER TABLE proches_acces ADD COLUMN IF NOT EXISTS notif_preferences jsonb NOT N
 -- Un même proche peut suivre plusieurs résidents : un accès ouvert par courriel ET par résident
 DROP INDEX IF EXISTS proches_acces_courriel_ouvert;
 CREATE UNIQUE INDEX IF NOT EXISTS proches_acces_courriel_resident_ouvert ON proches_acces (lower(courriel), resident_id) WHERE revoque_le IS NULL;
+
+-- ---------------------------------------------------------------- Arrimo Famille : comptes créés par les proches (10 nov. 2026)
+-- Un compte ne donne accès à aucune information. Chaque lien avec un résident (proches_acces) est validé par l'établissement.
+CREATE TABLE IF NOT EXISTS proches_comptes (
+  id                   serial PRIMARY KEY,
+  courriel             text NOT NULL,
+  mot_de_passe_hash    text,
+  confirme_le          timestamptz,
+  confirmation_hash    text,                                -- empreinte du jeton de confirmation (jamais le jeton)
+  confirmation_expire_le timestamptz,
+  reinit_hash          text,
+  reinit_expire_le     timestamptz,
+  envois               int NOT NULL DEFAULT 0,              -- courriels envoyés dans la fenêtre en cours (limite)
+  envois_depuis        timestamptz,
+  echecs               int NOT NULL DEFAULT 0,
+  bloque_jusqu_au      timestamptz,
+  essais_code          int NOT NULL DEFAULT 0,              -- codes de rattachement erronés dans la fenêtre en cours
+  essais_code_depuis   timestamptz,
+  avis_accepte_le      timestamptz,
+  derniere_connexion   timestamptz,
+  supprime_le          timestamptz,
+  cree_le              timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS proches_comptes_courriel ON proches_comptes (lower(courriel)) WHERE supprime_le IS NULL;
+CREATE TABLE IF NOT EXISTS proches_comptes_sessions (
+  jeton_hash           text PRIMARY KEY,
+  compte_id            int NOT NULL REFERENCES proches_comptes(id),
+  expire_le            timestamptz NOT NULL,
+  cree_le              timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE proches_acces ADD COLUMN IF NOT EXISTS compte_id int REFERENCES proches_comptes(id);
+CREATE INDEX IF NOT EXISTS proches_acces_compte ON proches_acces (compte_id) WHERE revoque_le IS NULL;
+CREATE TABLE IF NOT EXISTS proches_codes_rattachement (
+  id                   serial PRIMARY KEY,
+  resident_id          int NOT NULL REFERENCES residents(id),
+  etablissement_id     int NOT NULL REFERENCES etablissements(id),
+  code_hash            text NOT NULL,                       -- empreinte seulement ; le code est remis une fois
+  expire_le            timestamptz NOT NULL,
+  utilise_le           timestamptz,
+  cree_par             int REFERENCES utilisateurs(id),
+  cree_le              timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS proches_codes_rattachement_code ON proches_codes_rattachement (etablissement_id, code_hash);
+CREATE TABLE IF NOT EXISTS proches_demandes_rattachement (
+  id                   serial PRIMARY KEY,
+  compte_id            int NOT NULL REFERENCES proches_comptes(id),
+  etablissement_id     int NOT NULL REFERENCES etablissements(id),
+  proche_prenom        text NOT NULL,
+  proche_nom           text NOT NULL,
+  proche_telephone     text,
+  resident_prenom      text NOT NULL,
+  resident_nom         text NOT NULL,
+  lien                 text NOT NULL CHECK (lien IN ('fille', 'fils', 'conjoint', 'soeur', 'frere', 'parent', 'petit_enfant', 'ami', 'voisin', 'tuteur', 'autre')),
+  representant_legal   boolean NOT NULL DEFAULT false,
+  code_id              int REFERENCES proches_codes_rattachement(id),   -- code valide fourni ; jamais révélé au proche
+  consentement_declare_le timestamptz NOT NULL,
+  statut               text NOT NULL DEFAULT 'en_attente' CHECK (statut IN ('en_attente', 'acceptee', 'refusee', 'retiree', 'expiree')),
+  traite_par           int REFERENCES utilisateurs(id),
+  traite_le            timestamptz,
+  acces_id             int REFERENCES proches_acces(id),
+  cree_le              timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS proches_demandes_rattachement_file ON proches_demandes_rattachement (etablissement_id, statut, cree_le);
+CREATE INDEX IF NOT EXISTS proches_demandes_rattachement_compte ON proches_demandes_rattachement (compte_id, cree_le);
+CREATE TABLE IF NOT EXISTS proches_consentements (
+  id                   serial PRIMARY KEY,
+  acces_id             int NOT NULL REFERENCES proches_acces(id),
+  demande_id           int REFERENCES proches_demandes_rattachement(id),
+  resident_id          int NOT NULL REFERENCES residents(id),
+  etablissement_id     int NOT NULL REFERENCES etablissements(id),
+  type                 text NOT NULL CHECK (type IN ('resident', 'representant_legal', 'mandataire', 'tuteur', 'curateur')),
+  donne_par            text NOT NULL,
+  donne_le             date NOT NULL,
+  verification         text NOT NULL CHECK (verification IN ('rappel_telephonique', 'piece_identite', 'code_remis', 'autre')),
+  verification_precision text,
+  enregistre_par       int REFERENCES utilisateurs(id),
+  cree_le              timestamptz NOT NULL DEFAULT now()
+);

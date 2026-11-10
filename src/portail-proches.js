@@ -121,33 +121,30 @@ async function accepterInvitation(pool, b) {
     const a = (await c.query(`SELECT * FROM proches_acces WHERE invitation_hash = $1 AND revoque_le IS NULL AND invitation_expire_le > now() FOR UPDATE`, [empreinte(b.jeton || '')])).rows[0];
     if (!a) throw new ErreurHttp(400, 'invitation_invalide');
     await c.query('UPDATE proches_acces SET mot_de_passe_hash = $2, actif = true, invitation_hash = NULL, invitation_expire_le = NULL WHERE id = $1', [a.id, hash]);
+    await require('./proches-comptes').rattacherInvitation(c, a, hash, String(b.mot_de_passe));
     await journaliser(c, { etablissementId: a.etablissement_id, action: 'Portail des proches', detail: 'invitation acceptée' });
     return { courriel: a.courriel };
   });
 }
+/** Connexion : par le compte du proche (src/proches-comptes.js) ; repli sur l'ancien mot de passe par accès d'une invitation. */
 async function connexion(pool, b) {
   ch.exigerFictifs();
-  const courriel = String(b.courriel || '').trim().toLowerCase();
-  // Un même courriel peut être lié à plusieurs résidents, chacun avec son accès et ses droits : une session étanche par accès valide
-  const tous = (await pool.query('SELECT * FROM proches_acces WHERE lower(courriel) = $1 AND revoque_le IS NULL AND actif AND mot_de_passe_hash IS NOT NULL ORDER BY id', [courriel])).rows;
+  return require('./proches-comptes').connexion(pool, b, { accesValide, ancienne: (adr, mdp) => connexionAncienne(pool, adr, mdp) });
+}
+async function connexionAncienne(pool, courriel, mdp) {
+  // Un même courriel peut être lié à plusieurs résidents, chacun avec son accès et ses droits
+  const tous = (await pool.query('SELECT * FROM proches_acces WHERE lower(courriel) = $1 AND compte_id IS NULL AND revoque_le IS NULL AND actif AND mot_de_passe_hash IS NOT NULL ORDER BY id', [courriel])).rows;
   const ok = [];
   for (const a of tous.length ? tous : [null]) {
     // Même message et même coût pour un courriel inconnu, un mot de passe faux ou un accès bloqué
-    const bon = await verifierAsync(String(b.mot_de_passe || ''), a?.mot_de_passe_hash || 'x:00');
+    const bon = await verifierAsync(mdp, a?.mot_de_passe_hash || 'x:00');
     if (a && bon && !(a.bloque_jusqu_au && a.bloque_jusqu_au > new Date())) { try { await accesValide(pool, a.id); ok.push(a); } catch { /* accès devenu invalide : ignoré */ } }
     else if (a && !bon) await pool.query(`UPDATE proches_acces SET echecs = echecs + 1,
       bloque_jusqu_au = CASE WHEN echecs + 1 >= $2 THEN now() + make_interval(mins => $3) ELSE bloque_jusqu_au END WHERE id = $1`, [a.id, ECHECS_MAX, BLOCAGE_MIN]);
   }
   if (!ok.length) throw new ErreurHttp(401, 'identifiants_incorrects');
-  const profils = [];
-  for (const a of ok) {
-    const jeton = crypto.randomBytes(32).toString('hex');
-    await pool.query(`INSERT INTO proches_sessions (jeton_hash, acces_id, expire_le) VALUES ($1, $2, now() + make_interval(hours => $3))`, [empreinte(jeton), a.id, DUREE_SESSION_H]);
-    await pool.query('UPDATE proches_acces SET echecs = 0, bloque_jusqu_au = NULL, derniere_connexion = now() WHERE id = $1', [a.id]);
-    const v = await accesValide(pool, a.id);
-    profils.push({ token: `P.${jeton}`, resident: `${v.r_prenom} ${String(v.r_nom).slice(0, 1)}.`, etablissement: v.etab_nom });
-  }
-  return { token: profils[0].token, profils };
+  for (const a of ok) await pool.query('UPDATE proches_acces SET echecs = 0, bloque_jusqu_au = NULL, derniere_connexion = now() WHERE id = $1', [a.id]);
+  return ok;
 }
 /**
  * Situation du résident, seulement dans les catégories autorisées, à partir des faits enregistrés :
@@ -251,6 +248,7 @@ async function deconnexion(pool, p) { await pool.query('DELETE FROM proches_sess
 function brancherPublic(api, pool, route) {
   api.post('/proches/invitation', route((req) => accepterInvitation(pool, req.body)));
   api.post('/proches/connexion', route((req) => connexion(pool, req.body)));
+  require('./proches-comptes').brancherPublic(api, pool, route, { accesValide });
   const s = sessionPortail(pool);
   api.get('/proches/moi', s, route((req) => moi(pool, req.proche)));
   api.post('/proches/messages', s, route((req) => messageProche(pool, req.proche, req.body)));
@@ -263,6 +261,7 @@ function brancherPublic(api, pool, route) {
 /** Routes du personnel (avec session). */
 function brancherPersonnel(api, pool, route, entier) {
   require('./famille').brancherPersonnel(api, pool, route, entier);
+  require('./proches-comptes').brancherPersonnel(api, pool, route, entier);
   const GESTION = ['coordonnateur', 'admin_etab', 'gestionnaire', 'equipe_soins'];
   const garde = async (u, id) => { await ch.etabChsld(pool, u, id, { roles: GESTION }); };
   api.get('/chsld/visites', route(async (req) => { const e = entier(req.query.etablissement_id, 'etablissement_id'); await garde(req.utilisateur, e);

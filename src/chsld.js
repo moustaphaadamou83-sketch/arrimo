@@ -1191,4 +1191,4 @@ async function libererPlacementHopital(c, pool, u, retour) {
 module.exports = { etapeParcours, chronologie, etatReintegration, libererPlace, OCCUPATION_SQL, hopitauxLiaison, listeHopitauxLiaison, accueil, listeResidents, ficheResident, creerResident, modifierResident, ajouterContact, modifierContact, verifierRepresentant,
   reserverPlace, confirmerArrivee, changerChambre, sortie, absence, listeDemandes, creerDemande, actionDemande, preparerHospitalisation, actionCoordination,
   preparerRetour, preparerTransfertChsld, preparerTransfertHopital, listeCoordinations, reseau, listeTaches, creerTache, statutTache, creerCommunication, statutCommunication,
-  places, indicateurs, etabChsld, CATEGORIES, RELATIONS, DOCUMENTS, ACCESSIBILITE, exigerFictifs };
+  places, indicateurs, etabChsld, CATEGORIES, RELATIONS, DOCUMENTS, ACCESSIBILITE, exigerFictifs, lireContact, insererContact, mouvement, verrouResident };

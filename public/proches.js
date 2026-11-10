@@ -29,27 +29,122 @@
       retour: 'Return planned on {date}.', s_autre: 'Situation being updated.', pas_temps_reel: 'This reflects the latest confirmed steps; it is not a real-time location.', confidentialite: 'This portal contains no medical information. In an emergency, call 911.',
       cat: { administratif: 'Administrative questions', hebergement: 'Accommodation', rendez_vous: 'Appointments and visits', mouvements: 'Hospital stay and return' } },
   };
+  /* Arrimo Famille : compte créé par le proche, demandes de rattachement (rien n'est visible avant la validation de l'établissement) */
+  Object.assign(TXT.fr, { creer_compte: 'Créer un compte', mdp_oublie: 'Mot de passe oublié', inscription_titre: 'Créer votre compte Arrimo Famille', inscription_aide: 'Votre compte ne montre rien tant qu’un établissement n’a pas vérifié votre identité et accepté votre demande.', mdp_regle: 'Au moins 12 caractères, avec des lettres et des chiffres.', avis: 'J’ai lu l’avis de confidentialité : Arrimo conserve mon courriel et mes demandes pour me relier à mon proche ; aucune information de santé n’est transmise ; je peux supprimer mon compte à tout moment.', creer: 'Créer mon compte', verifier_courriel: 'Si cette adresse peut être utilisée, un courriel vient de vous être envoyé. Ouvrez le lien qu’il contient (valable 24 heures).', renvoyer: 'Renvoyer le lien', renvoye: 'Si un compte attend une confirmation, un nouveau lien a été envoyé.', courriel_confirme: 'Courriel confirmé. Vous pouvez vous connecter.', oubli_titre: 'Mot de passe oublié', oubli_envoye: 'Si un compte existe pour cette adresse, un lien vient d’être envoyé (valable 1 heure).', envoyer_lien: 'Recevoir un lien', reinit_titre: 'Nouveau mot de passe', reinit_ok: 'Mot de passe changé. Connectez-vous.', retour_connexion: 'Retour à la connexion', mes_proches: 'Mes proches', aucun_proche: 'Vous ne suivez encore aucun proche.', ouvrir: 'Ouvrir', quitter: 'Ne plus suivre', confirmer_quitter: 'Ne plus suivre ce proche ? Il faudra une nouvelle demande pour le suivre à nouveau.', ajouter_proche: '+ Ajouter un proche', mes_demandes: 'Mes demandes', retirer: 'Retirer', r_en_attente: 'Envoyée · en vérification par l’établissement', r_acceptee: 'Acceptée', r_refusee: 'Non retenue. Communiquez avec l’établissement.', r_retiree: 'Retirée', r_expiree: 'Expirée sans réponse', ajouter_titre: 'Ajouter un proche', ajouter_aide: 'L’établissement vérifiera votre identité (par exemple en vous rappelant) avant tout accès. Aucune information n’est affichée avant.', type_hebergement: 'Type d’hébergement', etablissement: 'Établissement', vos_infos: 'Vous', prenom: 'Prénom', nom: 'Nom', telephone: 'Téléphone (pour vous rappeler)', le_resident: 'Votre proche résident', lien: 'Votre lien avec lui ou elle', representant: 'Je suis son représentant légal (mandat, tutelle ou curatelle)', code: 'Code de rattachement (facultatif, remis par l’établissement)', consentement: 'Je déclare que mon proche, ou son représentant légal, accepte que je reçoive des informations de l’établissement. L’établissement le vérifiera.', envoyer_rattachement: 'Envoyer la demande', demande_transmise: 'Demande transmise. L’établissement vérifiera votre identité avant tout accès.', mon_compte: 'Mon compte', mdp_actuel: 'Mot de passe actuel', mdp_nouveau: 'Nouveau mot de passe', changer_mdp: 'Changer le mot de passe', mdp_change: 'Mot de passe changé.', supprimer_compte: 'Supprimer mon compte', supprimer_aide: 'Tous vos accès seront coupés et vos demandes retirées. Entrez votre mot de passe pour confirmer.', compte_supprime: 'Votre compte a été supprimé.', aucun_etab: 'Aucun établissement n’accepte de demandes pour le moment.', choisir_option: '— Choisir —', t_chsld: 'CHSLD', t_maison_aines: 'Maison des aînés', t_rpa: 'Résidence privée pour aînés (RPA)', t_ressource_intermediaire: 'Ressource intermédiaire (RI)', t_rtf: 'Ressource de type familial (RTF)', l_fille: 'Fille', l_fils: 'Fils', l_conjoint: 'Conjoint(e)', l_soeur: 'Sœur', l_frere: 'Frère', l_parent: 'Parent', l_petit_enfant: 'Petit-enfant', l_ami: 'Ami(e)', l_voisin: 'Voisin(e)', l_tuteur: 'Tuteur ou tutrice', l_autre: 'Autre', autre_proche: 'Mes proches et mon compte' });
+  Object.assign(TXT.en, { creer_compte: 'Create an account', mdp_oublie: 'Forgot password', inscription_titre: 'Create your Arrimo Family account', inscription_aide: 'Your account shows nothing until a facility has verified your identity and accepted your request.', mdp_regle: 'At least 12 characters, with letters and numbers.', avis: 'I have read the privacy notice: Arrimo keeps my email and my requests to link me to my loved one; no health information is shared; I can delete my account at any time.', creer: 'Create my account', verifier_courriel: 'If this address can be used, an email has just been sent. Open the link it contains (valid 24 hours).', renvoyer: 'Resend the link', renvoye: 'If an account is awaiting confirmation, a new link has been sent.', courriel_confirme: 'Email confirmed. You can sign in.', oubli_titre: 'Forgot password', oubli_envoye: 'If an account exists for this address, a link has just been sent (valid 1 hour).', envoyer_lien: 'Get a link', reinit_titre: 'New password', reinit_ok: 'Password changed. Sign in.', retour_connexion: 'Back to sign in', mes_proches: 'My loved ones', aucun_proche: 'You do not follow anyone yet.', ouvrir: 'Open', quitter: 'Stop following', confirmer_quitter: 'Stop following this person? A new request will be needed to follow them again.', ajouter_proche: '+ Add a loved one', mes_demandes: 'My requests', retirer: 'Withdraw', r_en_attente: 'Sent · being verified by the facility', r_acceptee: 'Accepted', r_refusee: 'Not accepted. Contact the facility.', r_retiree: 'Withdrawn', r_expiree: 'Expired without answer', ajouter_titre: 'Add a loved one', ajouter_aide: 'The facility will verify your identity (for example by calling you back) before any access. No information is shown before that.', type_hebergement: 'Type of residence', etablissement: 'Facility', vos_infos: 'You', prenom: 'First name', nom: 'Last name', telephone: 'Phone (to call you back)', le_resident: 'Your loved one (resident)', lien: 'Your relationship with them', representant: 'I am their legal representative (mandate, tutorship or curatorship)', code: 'Link code (optional, given by the facility)', consentement: 'I declare that my loved one, or their legal representative, agrees that I receive information from the facility. The facility will check this.', envoyer_rattachement: 'Send the request', demande_transmise: 'Request sent. The facility will verify your identity before any access.', mon_compte: 'My account', mdp_actuel: 'Current password', mdp_nouveau: 'New password', changer_mdp: 'Change password', mdp_change: 'Password changed.', supprimer_compte: 'Delete my account', supprimer_aide: 'All your access will be cut and your requests withdrawn. Enter your password to confirm.', compte_supprime: 'Your account has been deleted.', aucun_etab: 'No facility accepts requests right now.', choisir_option: '— Choose —', t_chsld: 'Long-term care centre (CHSLD)', t_maison_aines: 'Seniors’ home (maison des aînés)', t_rpa: 'Private seniors’ residence (RPA)', t_ressource_intermediaire: 'Intermediate resource (RI)', t_rtf: 'Family-type resource (RTF)', l_fille: 'Daughter', l_fils: 'Son', l_conjoint: 'Spouse', l_soeur: 'Sister', l_frere: 'Brother', l_parent: 'Parent', l_petit_enfant: 'Grandchild', l_ami: 'Friend', l_voisin: 'Neighbour', l_tuteur: 'Tutor', l_autre: 'Other', autre_proche: 'My loved ones and account' });
   let langue = (() => { try { return localStorage.getItem('arrimo-langue') === 'en' ? 'en' : 'fr'; } catch { return 'fr'; } })();
   let jeton = null; try { jeton = sessionStorage.getItem('arrimo-proche'); } catch { /* */ }
   const $ = (s) => document.querySelector(s);
   const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const T = (k, v) => { let s = k.split('.').reduce((o, x) => o?.[x], TXT[langue]) ?? k; if (v) s = s.replace(/\{(\w+)\}/g, (m, x) => v[x] ?? m); return s; };
-  async function api(m, chemin, corps) {
-    const r = await fetch(`/api${chemin}`, { method: m, headers: { 'Content-Type': 'application/json', 'X-Langue': langue, ...(jeton ? { Authorization: `Bearer ${jeton}` } : {}) }, body: corps ? JSON.stringify(corps) : undefined });
+  let compte = null; try { compte = sessionStorage.getItem('arrimo-proche-compte'); } catch { /* */ }
+  async function api(m, chemin, corps, avecCompte = false) {
+    const tok = avecCompte ? compte : jeton;
+    const r = await fetch(`/api${chemin}`, { method: m, headers: { 'Content-Type': 'application/json', 'X-Langue': langue, ...(tok ? { Authorization: `Bearer ${tok}` } : {}) }, body: corps ? JSON.stringify(corps) : undefined });
     const d = await r.json().catch(() => null);
-    if (r.status === 401 && jeton) { jeton = null; try { sessionStorage.removeItem('arrimo-proche'); } catch { /* */ } }
-    if (!r.ok) throw new Error((d && d.erreur) || `Erreur ${r.status}`);
+    if (r.status === 401 && tok && !avecCompte) { jeton = null; try { sessionStorage.removeItem('arrimo-proche'); } catch { /* */ } }
+    if (r.status === 401 && tok && avecCompte) { compte = null; try { sessionStorage.removeItem('arrimo-proche-compte'); } catch { /* */ } }
+    if (!r.ok) throw Object.assign(new Error((d && d.erreur) || `Erreur ${r.status}`), { code: d?.code, statut: r.status });
     return d;
   }
+  const apiC = (m, chemin, corps) => api(m, chemin, corps, true);
   const z = () => $('#contenu');
   const message = (cls, texte) => `<p class="${cls}" role="${cls === 'erreur' ? 'alert' : 'status'}">${esc(texte)}</p>`;
+  const garderProfils = (liste) => { try { sessionStorage.setItem('arrimo-proche-profils', JSON.stringify(liste || [])); } catch { /* */ } };
   function ecranConnexion(info) {
     z().innerHTML = `<form id="f" class="panneau-c"><h2>${esc(T('connexion'))}</h2>${info ? message('succes-msg', info) : ''}
       <label class="lbl" for="c">${esc(T('courriel'))}</label><input id="c" type="email" autocomplete="username" required>
       <label class="lbl" for="m">${esc(T('mdp'))}</label><input id="m" type="password" autocomplete="current-password" required>
-      <div id="e"></div><button class="btn pri" type="submit">${esc(T('entrer'))}</button><p class="note">${esc(T('confidentialite'))}</p></form>`;
+      <div id="e"></div><button class="btn pri" type="submit">${esc(T('entrer'))}</button>
+      <div class="actions-f"><button class="btn" type="button" id="b-creer">${esc(T('creer_compte'))}</button><button class="btn" type="button" id="b-oubli">${esc(T('mdp_oublie'))}</button></div>
+      <p class="note">${esc(T('confidentialite'))}</p></form>`;
+    $('#b-creer').onclick = () => ecranInscription(); $('#b-oubli').onclick = () => ecranOubli($('#c').value);
     $('#f').onsubmit = async (ev) => { ev.preventDefault(); try { const r = await api('POST', '/proches/connexion', { courriel: $('#c').value, mot_de_passe: $('#m').value });
-      jeton = r.token; try { sessionStorage.setItem('arrimo-proche', jeton); sessionStorage.setItem('arrimo-proche-profils', JSON.stringify(r.profils || [])); } catch { /* */ } ecranAccueil(); } catch (e) { $('#e').innerHTML = message('erreur', e.message); } };
+      jeton = r.token; compte = r.compte || null;
+      try { if (jeton) sessionStorage.setItem('arrimo-proche', jeton); else sessionStorage.removeItem('arrimo-proche'); if (compte) sessionStorage.setItem('arrimo-proche-compte', compte); } catch { /* */ }
+      garderProfils(r.profils); if (jeton) ecranAccueil(); else ecranMesProches(); } catch (e) {
+        $('#e').innerHTML = message('erreur', e.message);
+        if (e.code === 'courriel_non_confirme') { $('#e').insertAdjacentHTML('beforeend', `<button class="btn" type="button" id="b-renv">${esc(T('renvoyer'))}</button>`); $('#b-renv').onclick = async () => { try { await api('POST', '/proches/compte/renvoyer', { courriel: $('#c').value }); $('#e').innerHTML = message('succes-msg', T('renvoye')); } catch (x) { $('#e').innerHTML = message('erreur', x.message); } }; }
+      } };
+  }
+  const retour = () => `<button class="btn" type="button" id="b-retour">${esc(T('retour_connexion'))}</button>`;
+  const brancherRetour = () => { if ($('#b-retour')) $('#b-retour').onclick = () => { history.replaceState(null, '', '/proches'); ecranConnexion(); }; };
+  function ecranInscription() {
+    z().innerHTML = `<form id="f" class="panneau-c"><h2>${esc(T('inscription_titre'))}</h2><p class="note">${esc(T('inscription_aide'))}</p>
+      <label class="lbl" for="c">${esc(T('courriel'))}</label><input id="c" type="email" autocomplete="email" maxlength="120" required>
+      <label class="lbl" for="m">${esc(T('mdp'))}</label><input id="m" type="password" autocomplete="new-password" required><p class="note">${esc(T('mdp_regle'))}</p>
+      <label class="case"><input type="checkbox" id="avis" required> ${esc(T('avis'))}</label>
+      <div id="e"></div><button class="btn pri" type="submit">${esc(T('creer'))}</button>${retour()}</form>`;
+    brancherRetour();
+    $('#f').onsubmit = async (ev) => { ev.preventDefault(); const c = $('#c').value; try { await api('POST', '/proches/compte/inscription', { courriel: c, mot_de_passe: $('#m').value, avis: $('#avis').checked });
+      z().innerHTML = `<section class="panneau-c"><h2>${esc(T('inscription_titre'))}</h2>${message('succes-msg', T('verifier_courriel'))}<div id="e"></div><div class="actions-f"><button class="btn" type="button" id="b-renv">${esc(T('renvoyer'))}</button>${retour()}</div></section>`;
+      brancherRetour(); $('#b-renv').onclick = async () => { try { await api('POST', '/proches/compte/renvoyer', { courriel: c }); $('#e').innerHTML = message('succes-msg', T('renvoye')); } catch (x) { $('#e').innerHTML = message('erreur', x.message); } };
+    } catch (e) { $('#e').innerHTML = message('erreur', e.message); } };
+  }
+  async function ecranConfirmer(cle) {
+    history.replaceState(null, '', '/proches');
+    try { await api('POST', '/proches/compte/confirmer', { jeton: cle }); ecranConnexion(T('courriel_confirme')); } catch (e) { ecranConnexion(); $('#e').innerHTML = message('erreur', e.message); }
+  }
+  function ecranOubli(c0) {
+    z().innerHTML = `<form id="f" class="panneau-c"><h2>${esc(T('oubli_titre'))}</h2><label class="lbl" for="c">${esc(T('courriel'))}</label><input id="c" type="email" autocomplete="email" value="${esc(c0 || '')}" required>
+      <div id="e"></div><button class="btn pri" type="submit">${esc(T('envoyer_lien'))}</button>${retour()}</form>`;
+    brancherRetour();
+    $('#f').onsubmit = async (ev) => { ev.preventDefault(); try { await api('POST', '/proches/compte/oubli', { courriel: $('#c').value }); $('#e').innerHTML = message('succes-msg', T('oubli_envoye')); } catch (e) { $('#e').innerHTML = message('erreur', e.message); } };
+  }
+  function ecranReinit(cle) {
+    z().innerHTML = `<form id="f" class="panneau-c"><h2>${esc(T('reinit_titre'))}</h2><p class="note">${esc(T('mdp_regle'))}</p><label class="lbl" for="m">${esc(T('mdp_nouveau'))}</label><input id="m" type="password" autocomplete="new-password" required>
+      <div id="e"></div><button class="btn pri" type="submit">${esc(T('changer_mdp'))}</button></form>`;
+    $('#f').onsubmit = async (ev) => { ev.preventDefault(); try { await api('POST', '/proches/compte/reinitialiser', { jeton: cle, mot_de_passe: $('#m').value }); history.replaceState(null, '', '/proches'); ecranConnexion(T('reinit_ok')); } catch (e) { $('#e').innerHTML = message('erreur', e.message); } };
+  }
+  /* Mes proches : résidents suivis (chacun dans sa session étanche), demandes, compte */
+  async function ecranMesProches(info) {
+    let k; try { k = await apiC('GET', '/proches/compte'); } catch (e) { ecranConnexion(); $('#e').innerHTML = message('erreur', e.message); return; }
+    z().innerHTML = `${info ? message('succes-msg', info) : ''}<section class="panneau-c carte-f" id="mes-proches"><h2>${esc(T('mes_proches'))}</h2>
+        ${k.proches.length ? k.proches.map((p) => `<div class="ligne-f"><span><b>${esc(p.resident)}</b><br><span class="note">${esc(p.etablissement)}</span></span><span><button class="btn pri" type="button" data-ouvrir="${p.acces_id}">${esc(T('ouvrir'))}</button> <button class="btn" type="button" data-quitter="${p.acces_id}">${esc(T('quitter'))}</button></span></div>`).join('') : `<p class="note">${esc(T('aucun_proche'))}</p>`}
+        <button class="btn pri" type="button" id="b-ajouter">${esc(T('ajouter_proche'))}</button></section>
+      <section class="panneau-c carte-f" id="mes-demandes"><h2>${esc(T('mes_demandes'))}</h2>${k.demandes.length ? k.demandes.map((d) => `<div class="ligne-f"><span><b>${esc(d.resident_prenom)} ${esc(d.resident_nom)}</b> · ${esc(d.etablissement)}<br><span class="note">${esc(dt(d.cree_le))} · <b data-statut="${esc(d.statut)}">${esc(T(`r_${d.statut}`))}</b></span></span>${d.statut === 'en_attente' ? `<button class="btn" type="button" data-retirer="${d.id}">${esc(T('retirer'))}</button>` : ''}</div>`).join('') : `<p class="note">${esc(T('aucune_demande'))}</p>`}</section>
+      <section class="panneau-c carte-f" id="mon-compte"><h2>${esc(T('mon_compte'))}</h2><p class="note">${esc(k.courriel)}</p>
+        <details><summary>${esc(T('changer_mdp'))}</summary><label class="lbl" for="mdp-a">${esc(T('mdp_actuel'))}</label><input id="mdp-a" type="password" autocomplete="current-password"><label class="lbl" for="mdp-n">${esc(T('mdp_nouveau'))}</label><input id="mdp-n" type="password" autocomplete="new-password"><p class="note">${esc(T('mdp_regle'))}</p><button class="btn" type="button" id="b-mdp">${esc(T('changer_mdp'))}</button></details>
+        <details><summary>${esc(T('supprimer_compte'))}</summary><p class="note">${esc(T('supprimer_aide'))}</p><label class="lbl" for="mdp-s">${esc(T('mdp'))}</label><input id="mdp-s" type="password" autocomplete="current-password"><button class="btn dan" type="button" id="b-suppr">${esc(T('supprimer_compte'))}</button></details>
+        <div id="e"></div><button class="btn" type="button" id="dec-c">${esc(T('deconnexion'))}</button><p class="note">${esc(T('confidentialite'))}</p></section>`;
+    const err = (e) => { $('#e').innerHTML = message('erreur', e.message); };
+    $('#b-ajouter').onclick = () => ecranAjouter();
+    document.querySelectorAll('[data-ouvrir]').forEach((b) => { b.onclick = async () => { try { const r = await apiC('POST', '/proches/compte/profils'); garderProfils(r.profils);
+      const p = r.profils.find((x) => String(x.acces_id) === b.dataset.ouvrir); if (p) changerProfil(p.token); else ecranMesProches(); } catch (e) { err(e); } }; });
+    document.querySelectorAll('[data-quitter]').forEach((b) => { b.onclick = async () => { if (!window.confirm(T('confirmer_quitter'))) return; try { await apiC('POST', `/proches/compte/acces/${b.dataset.quitter}/quitter`); ecranMesProches(); } catch (e) { err(e); } }; });
+    document.querySelectorAll('[data-retirer]').forEach((b) => { b.onclick = async () => { try { await apiC('POST', `/proches/compte/rattachements/${b.dataset.retirer}/retirer`); ecranMesProches(); } catch (e) { err(e); } }; });
+    $('#b-mdp').onclick = async () => { try { await apiC('POST', '/proches/compte/mot-de-passe', { actuel: $('#mdp-a').value, nouveau: $('#mdp-n').value }); ecranMesProches(T('mdp_change')); } catch (e) { err(e); } };
+    $('#b-suppr').onclick = async () => { try { await apiC('POST', '/proches/compte/supprimer', { mot_de_passe: $('#mdp-s').value }); oublierSessions(); ecranConnexion(T('compte_supprime')); } catch (e) { err(e); } };
+    $('#dec-c').onclick = () => deconnecter();
+  }
+  async function ecranAjouter() {
+    let etabs = []; try { etabs = await apiC('GET', '/proches/compte/etablissements'); } catch (e) { ecranMesProches(); return; }
+    const types = [...new Set(etabs.map((x) => x.type))];
+    const opt = (v, l) => `<option value="${esc(v)}">${esc(l)}</option>`;
+    z().innerHTML = `<form id="f" class="panneau-c carte-f"><h2>${esc(T('ajouter_titre'))}</h2><p class="note">${esc(T('ajouter_aide'))}</p>
+      ${etabs.length ? '' : message('erreur', T('aucun_etab'))}
+      <label class="lbl" for="r-type">${esc(T('type_hebergement'))}</label><select id="r-type">${types.map((x) => opt(x, T(`t_${x}`))).join('')}</select>
+      <label class="lbl" for="r-etab">${esc(T('etablissement'))}</label><select id="r-etab" required></select>
+      <h3>${esc(T('vos_infos'))}</h3><label class="lbl" for="r-pp">${esc(T('prenom'))}</label><input id="r-pp" maxlength="80" autocomplete="given-name" required><label class="lbl" for="r-pn">${esc(T('nom'))}</label><input id="r-pn" maxlength="80" autocomplete="family-name" required>
+      <label class="lbl" for="r-tel">${esc(T('telephone'))}</label><input id="r-tel" type="tel" maxlength="30" autocomplete="tel">
+      <h3>${esc(T('le_resident'))}</h3><label class="lbl" for="r-rp">${esc(T('prenom'))}</label><input id="r-rp" maxlength="80" required><label class="lbl" for="r-rn">${esc(T('nom'))}</label><input id="r-rn" maxlength="80" required>
+      <label class="lbl" for="r-lien">${esc(T('lien'))}</label><select id="r-lien">${['fille', 'fils', 'conjoint', 'soeur', 'frere', 'parent', 'petit_enfant', 'ami', 'voisin', 'tuteur', 'autre'].map((x) => opt(x, T(`l_${x}`))).join('')}</select>
+      <label class="case"><input type="checkbox" id="r-rep"> ${esc(T('representant'))}</label>
+      <label class="lbl" for="r-code">${esc(T('code'))}</label><input id="r-code" maxlength="12" autocomplete="off" autocapitalize="characters">
+      <label class="case"><input type="checkbox" id="r-cons" required> ${esc(T('consentement'))}</label>
+      <div id="e"></div><button class="btn pri" type="submit"${etabs.length ? '' : ' disabled'}>${esc(T('envoyer_rattachement'))}</button><button class="btn" type="button" id="b-annuler">${esc(T('annuler'))}</button></form>`;
+    const remplir = () => { $('#r-etab').innerHTML = etabs.filter((x) => x.type === $('#r-type').value).map((x) => opt(x.id, x.nom)).join(''); };
+    $('#r-type').onchange = remplir; remplir();
+    $('#b-annuler').onclick = () => ecranMesProches();
+    $('#f').onsubmit = async (ev) => { ev.preventDefault(); try { await apiC('POST', '/proches/compte/rattachements', { etablissement_id: Number($('#r-etab').value), proche_prenom: $('#r-pp').value, proche_nom: $('#r-pn').value,
+      proche_telephone: $('#r-tel').value, resident_prenom: $('#r-rp').value, resident_nom: $('#r-rn').value, lien: $('#r-lien').value, representant_legal: $('#r-rep').checked, code: $('#r-code').value, consentement: $('#r-cons').checked });
+      ecranMesProches(T('demande_transmise')); } catch (e) { $('#e').innerHTML = message('erreur', e.message); } };
+  }
+  function oublierSessions() { jeton = null; compte = null; try { for (const x of ['arrimo-proche', 'arrimo-proche-profils', 'arrimo-proche-compte']) sessionStorage.removeItem(x); } catch { /* */ } }
+  async function deconnecter() {
+    for (const p of profils()) { jeton = p.token; await api('POST', '/proches/deconnexion').catch(() => {}); }
+    if (compte) await apiC('POST', '/proches/compte/deconnexion').catch(() => {});
+    oublierSessions(); ecranConnexion();
   }
   function ecranInvitation(cle) {
     z().innerHTML = `<form id="f" class="panneau-c"><h2>${esc(T('invitation'))}</h2><p>${esc(T('invitation_aide'))}</p>
@@ -99,7 +194,7 @@
   const heure = (iso) => (iso ? new Date(iso).toLocaleTimeString(langue === 'en' ? 'en-CA' : 'fr-CA', { hour: '2-digit', minute: '2-digit' }) : '');
   const carte = (titre, corps, id = '') => `<section class="panneau-c carte-f"${id ? ` id="${id}"` : ''}>${titre ? `<h2>${esc(titre)}</h2>` : ''}${corps}</section>`;
   async function ecranAccueil(info) {
-    let d; try { d = await api('GET', '/proches/moi'); } catch (e) { ecranConnexion(); $('#contenu').insertAdjacentHTML('afterbegin', message('erreur', e.message)); return; }
+    let d; try { d = await api('GET', '/proches/moi'); } catch (e) { if (compte) { ecranMesProches(); return; } ecranConnexion(); $('#contenu').insertAdjacentHTML('afterbegin', message('erreur', e.message)); return; }
     const opt = (p) => p.catch(() => null);
     const [demandes, confirmations, creneaux, journal] = await Promise.all([opt(api('GET', '/proches/demandes')), opt(api('GET', '/proches/confirmations')), opt(api('GET', '/proches/creneaux')), opt(api('GET', '/proches/journal-vie')).then((j) => (j?.actif ? j.publications : null))]);
     charge = { d, demandes: demandes || [], confirmations: confirmations || [], creneaux: creneaux || [], journal, le: new Date() };
@@ -146,7 +241,7 @@
         <section class="panneau-c carte-f" id="notifications" hidden></section>
         ${carte(T('parametres'), `${profils().length > 1 ? `<label class="lbl" for="profil">${esc(T('profil'))}</label><select id="profil">${profils().map((x) => `<option value="${esc(x.token)}"${x.token === jeton ? ' selected' : ''}>${esc(x.resident)} · ${esc(x.etablissement)}</option>`).join('')}</select>` : ''}
           <fieldset><legend class="lbl">${esc(T('theme'))}</legend>${[['clair', 'theme_clair'], ['sombre', 'theme_sombre'], ['automatique', 'theme_auto']].map(([v, k]) => `<label class="case"><input type="radio" name="theme" value="${v}"${(localStorage.getItem('arrimo-proche-theme') || 'automatique') === v ? ' checked' : ''}> ${esc(T(k))}</label>`).join(' ')}</fieldset>
-          <button class="btn" id="dec">${esc(T('deconnexion'))}</button><p class="note">${esc(T('confidentialite'))}</p>`, 'parametres')}`,
+          ${compte ? `<button class="btn" type="button" id="b-mes-proches">${esc(T('autre_proche'))}</button>` : ''}<button class="btn" id="dec">${esc(T('deconnexion'))}</button><p class="note">${esc(T('confidentialite'))}</p>`, 'parametres')}`,
     };
     z().innerHTML = `${info ? message('succes-msg', info) : ''}<p class="note fraicheur" id="fraicheur">${navigator.onLine ? esc(T('maj_il_y_a', { heure: heure(charge.le) })) : esc(T('hors_ligne'))}</p>${vues[onglet]()}
       <nav class="barre-f" aria-label="${esc(T('nav_plus'))}">${onglets.map(([o, k]) => `<button type="button" data-onglet="${o}"${o === onglet ? ' aria-current="page"' : ''}>${esc(T(k))}${o === 'demandes' && attendues.length ? ` <span class="pastille-f">${attendues.length}</span>` : ''}${o === 'messages' && d.nouveaux_messages ? ` <span class="pastille-f">${d.nouveaux_messages}</span>` : ''}</button>`).join('')}</nav>`;
@@ -171,7 +266,8 @@
     if ($('#og-q')) $('#og-q').onkeydown = (e) => { if (e.key === 'Enter') $('#og-ok').click(); };
     if ($('#profil')) $('#profil').onchange = (e) => changerProfil(e.target.value);
     document.querySelectorAll('input[name="theme"]').forEach((r) => { r.onchange = () => { try { localStorage.setItem('arrimo-proche-theme', r.value); } catch { /* */ } appliquerTheme(); }; });
-    if ($('#dec')) $('#dec').onclick = async () => { for (const p of profils()) { jeton = p.token; await api('POST', '/proches/deconnexion').catch(() => {}); } await api('POST', '/proches/deconnexion').catch(() => {}); jeton = null; try { sessionStorage.removeItem('arrimo-proche'); sessionStorage.removeItem('arrimo-proche-profils'); } catch { /* */ } ecranConnexion(); };
+    if ($('#dec')) $('#dec').onclick = () => deconnecter();
+    if ($('#b-mes-proches')) $('#b-mes-proches').onclick = () => ecranMesProches();
     panneauNotifications();
   }
   function appliquerTheme() {
@@ -185,8 +281,11 @@
     document.documentElement.lang = langue === 'en' ? 'en-CA' : 'fr-CA'; $('#titre').textContent = T('titre');
     document.querySelectorAll('[data-langue]').forEach((b) => { b.setAttribute('aria-pressed', String(b.dataset.langue === langue)); b.onclick = () => { langue = b.dataset.langue; try { localStorage.setItem('arrimo-langue', langue); } catch { /* */ } demarrer(); }; });
     const inv = (location.hash.match(/invitation=([a-f0-9]{64})/) || [])[1];
-    if (inv) ecranInvitation(inv); else if (jeton) ecranAccueil(); else ecranConnexion();
+    const conf = (location.hash.match(/confirmer=([a-f0-9]{64})/) || [])[1], reinit = (location.hash.match(/reinitialiser=([a-f0-9]{64})/) || [])[1];
+    if (inv) ecranInvitation(inv); else if (conf) ecranConfirmer(conf); else if (reinit) ecranReinit(reinit); else if (jeton) ecranAccueil(); else if (compte) ecranMesProches(); else ecranConnexion();
   }
   demarrer();
+  // Lien d'un courriel ouvert alors que le portail est déjà affiché : seule l'ancre change
+  window.addEventListener('hashchange', () => { if (/(invitation|confirmer|reinitialiser)=/.test(location.hash)) demarrer(); });
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw-proches.js', { scope: '/proches' }).catch(() => {});
 })();

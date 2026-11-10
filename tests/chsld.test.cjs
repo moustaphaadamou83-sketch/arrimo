@@ -57,7 +57,7 @@ test.before(async () => {
   process.env.SH_API_KEY = 'cle-chsld-sh-0123456789abcdef'; process.env.SH_MFA_ENCRYPTION_KEY = CLE_MFA;
   process.env.ARRIMO_URL = 'https://arrimo.test.invalid'; process.env.SH_PUBLIC_URL = 'https://sh.test.invalid';
   process.env.SH_INITIAL_ADMIN_EMAIL = 'admin.chsld@sh.exemple'; process.env.ARRIMO_ENV = 'pilote'; process.env.ARRIMO_PATIENTS_FICTIFS = '1';
-  process.env.API_LIMITE_SESSION = '100000'; process.env.API_LIMITE_ANONYME = '100000'; // batteries de 600 cas et d'attaques : limites de débit relevées pour ce test seulement
+  process.env.API_LIMITE_SESSION = '100000'; process.env.API_LIMITE_ANONYME = '100000'; process.env.PROCHES_LIMITE_IP = '100000'; // batteries de 600 cas et d'attaques : limites de débit relevées pour ce test seulement
   delete process.env.ARRIMO_DEMO;
   courriel.definirTransport(async (m) => { courriels.push(m); });
   pool = creerPool(URL_TEST);
@@ -1129,10 +1129,12 @@ test('phase 2 — portail des proches : activé depuis SH, invitation, accès li
   const cle = inv.lien.match(/invitation=([a-f0-9]{64})/)[1];
   assert.strictEqual((await poolPilote.query('SELECT count(*)::int n FROM proches_acces WHERE invitation_hash = $1', [cle])).rows[0].n, 0, 'le jeton n’est jamais stocké en clair');
   await refuse(null, 'POST', '/proches/invitation', { jeton: cle, mot_de_passe: 'court' }, 400, 'mdp_faible');
-  await api(null, 'POST', '/proches/invitation', { jeton: cle, mot_de_passe: 'Proche-Fictive-2026' });
-  await refuse(null, 'POST', '/proches/invitation', { jeton: cle, mot_de_passe: 'Proche-Fictive-2026' }, 400, 'invitation_invalide');
+  // Marie a déjà son compte Arrimo Famille (première connexion) : l'invitation se rattache à ce compte, avec son mot de passe
+  await refuse(null, 'POST', '/proches/invitation', { jeton: cle, mot_de_passe: 'Proche-Fictive-2026' }, 409, 'compte_existant_mdp');
+  await api(null, 'POST', '/proches/invitation', { jeton: cle, mot_de_passe: MDP });
+  await refuse(null, 'POST', '/proches/invitation', { jeton: cle, mot_de_passe: MDP }, 400, 'invitation_invalide');
   await refuse(null, 'POST', '/proches/connexion', { courriel: 'marie.dupont@example.invalid', mot_de_passe: 'Mauvais-mot-2026' }, 401, 'identifiants_incorrects');
-  sessions.marie = (await api(null, 'POST', '/proches/connexion', { courriel: 'marie.dupont@example.invalid', mot_de_passe: 'Proche-Fictive-2026' })).token;
+  sessions.marie = (await api(null, 'POST', '/proches/connexion', { courriel: 'marie.dupont@example.invalid', mot_de_passe: MDP })).token;
   assert.match(sessions.marie, /^P\./);
   // Ce que voit le proche : profil, prénom et initiale du résident, établissement, catégories autorisées ; jamais la chambre ni la référence
   const moi = await api('marie', 'GET', '/proches/moi');
@@ -1160,11 +1162,14 @@ test('phase 2 — portail des proches : activé depuis SH, invitation, accès li
   await refuse('marie', 'GET', '/proches/moi', null, 401);
   // Blocage : 5 échecs bloquent 15 minutes, même avec le bon mot de passe ensuite
   const inv2 = await api('era', 'POST', `/chsld/contacts/${fille.id}/acces-portail`, { expire_le: new Date(Date.now() + 30 * 86400000).toISOString() });
-  await api(null, 'POST', '/proches/invitation', { jeton: inv2.lien.match(/invitation=([a-f0-9]{64})/)[1], mot_de_passe: 'Proche-Fictive-2027' });
+  // Marie a déjà un compte (créé à sa première connexion) : la nouvelle invitation exige le mot de passe de ce compte
+  const cle2 = inv2.lien.match(/invitation=([a-f0-9]{64})/)[1];
+  await refuse(null, 'POST', '/proches/invitation', { jeton: cle2, mot_de_passe: 'Proche-Fictive-2027' }, 409, 'compte_existant_mdp');
+  await api(null, 'POST', '/proches/invitation', { jeton: cle2, mot_de_passe: MDP });
   for (let i = 0; i < 5; i += 1) await refuse(null, 'POST', '/proches/connexion', { courriel: 'marie.dupont@example.invalid', mot_de_passe: `Faux-${i}-2026xx` }, 401);
-  await refuse(null, 'POST', '/proches/connexion', { courriel: 'marie.dupont@example.invalid', mot_de_passe: 'Proche-Fictive-2027' }, 401, 'identifiants_incorrects');
-  await poolPilote.query('UPDATE proches_acces SET bloque_jusqu_au = now() - interval \'1 second\' WHERE revoque_le IS NULL AND courriel = $1', ['marie.dupont@example.invalid']);
-  sessions.marie = (await api(null, 'POST', '/proches/connexion', { courriel: 'marie.dupont@example.invalid', mot_de_passe: 'Proche-Fictive-2027' })).token;
+  await refuse(null, 'POST', '/proches/connexion', { courriel: 'marie.dupont@example.invalid', mot_de_passe: MDP }, 401, 'identifiants_incorrects');
+  await poolPilote.query('UPDATE proches_comptes SET bloque_jusqu_au = now() - interval \'1 second\' WHERE lower(courriel) = $1', ['marie.dupont@example.invalid']);
+  sessions.marie = (await api(null, 'POST', '/proches/connexion', { courriel: 'marie.dupont@example.invalid', mot_de_passe: MDP })).token;
   assert.match((await api('marie', 'GET', '/proches/moi')).expire_le, /^\d{4}-/);
   const page = await fetch(`${basePilote}/proches`); assert.strictEqual(page.status, 200);
   // Journal : aucune donnée personnelle du proche ni texte de message
@@ -1948,6 +1953,216 @@ test('chambre prête : l’entretien la déclare ; personne n’est admis avant 
   r = await act('b', L.B, r.id, { action: 'confirmer_depart', version: apres.version }); r = await act('era', E, r.id, { action: 'confirmer_arrivee', version: r.version });
   r = await act('era', E, r.id, { action: 'reintegrer', identite_verifiee: true, conditions_accueil: true, version: r.version });
   assert.ok(r.reintegree_le, 'admission par la coordination une fois la chambre prête');
+});
+
+test('Arrimo Famille : compte créé par le proche, confirmation, demande de rattachement, validation par l’établissement, consentement, plusieurs établissements, retrait, journal', { timeout: 240000 }, async () => {
+  const E = ids.era, S = ids.stl; const q = (sql, v) => poolPilote.query(sql, v).then((r) => r.rows);
+  const lien = (a, cle) => { const m = courriels.filter((x) => x.a === a).pop(); assert.ok(m, `courriel envoyé à ${a}`); return (m.texte.match(new RegExp(`${cle}=([a-f0-9]{64})`)) || [])[1]; };
+  const ADR = 'nouvelle.proche@exemple.invalid', MDPN = 'Famille-Nouvelle-2026';
+  // Portail actif aussi à Saint-Laurent (même activation depuis SH qu'aux Érables)
+  const stl = crees.find((c) => c.code === 'CHSLD-STL');
+  const cfg = await sh('GET', `/hopitaux/${stl.hopital_id}/configuration-operationnelle`);
+  await sh('PUT', `/hopitaux/${stl.hopital_id}/configuration-operationnelle`, { version: cfg.version, vocation: 'general', modules: Object.fromEntries(cfg.modules_modifiables.map((k) => [k, true])) });
+  // 1. Création du compte : contrôles, courriel de confirmation, réponse identique pour un courriel déjà inscrit
+  await refuse(null, 'POST', '/proches/compte/inscription', { courriel: 'pas-un-courriel', mot_de_passe: MDPN, avis: true }, 400, 'courriel_invalide');
+  await refuse(null, 'POST', '/proches/compte/inscription', { courriel: ADR, mot_de_passe: 'court', avis: true }, 400, 'mdp_faible');
+  await refuse(null, 'POST', '/proches/compte/inscription', { courriel: ADR, mot_de_passe: MDPN }, 400, 'avis_requis');
+  const rNouveau = await api(null, 'POST', '/proches/compte/inscription', { courriel: ADR, mot_de_passe: MDPN, avis: true });
+  const rExistant = await api(null, 'POST', '/proches/compte/inscription', { courriel: 'lise@exemple.invalid', mot_de_passe: MDPN, avis: true });
+  assert.deepStrictEqual(rNouveau, rExistant, 'même réponse : on ne peut pas savoir qui est inscrit');
+  assert.match(courriels.filter((x) => x.a === 'lise@exemple.invalid').pop().sujet, /déjà un compte/, 'le titulaire est prévenu par courriel seulement');
+  const cle = lien(ADR, 'confirmer'); assert.ok(cle);
+  assert.strictEqual((await q('SELECT count(*)::int n FROM proches_comptes WHERE confirmation_hash = $1', [cle]))[0].n, 0, 'jeton jamais stocké en clair');
+  // Avant confirmation : aucune connexion
+  await refuse(null, 'POST', '/proches/connexion', { courriel: ADR, mot_de_passe: 'Mauvais-mot-2026' }, 401, 'identifiants_incorrects');
+  await refuse(null, 'POST', '/proches/connexion', { courriel: ADR, mot_de_passe: MDPN }, 403, 'courriel_non_confirme');
+  await refuse(null, 'POST', '/proches/compte/confirmer', { jeton: 'f'.repeat(64) }, 400, 'lien_invalide');
+  await api(null, 'POST', '/proches/compte/confirmer', { jeton: cle });
+  await refuse(null, 'POST', '/proches/compte/confirmer', { jeton: cle }, 400, 'lien_invalide');
+  // 2. Connexion : un compte sans proche ne voit rien ; sa session n'ouvre pas le portail d'un résident
+  let cx = await api(null, 'POST', '/proches/connexion', { courriel: ADR, mot_de_passe: MDPN });
+  assert.strictEqual(cx.token, null); assert.deepStrictEqual(cx.profils, []); assert.match(cx.compte, /^C\./);
+  sessions.nc = cx.compte;
+  await refuse('nc', 'GET', '/proches/moi', null, 401);
+  assert.deepStrictEqual((await api('nc', 'GET', '/proches/compte')).proches, []);
+  const etabs = await api('nc', 'GET', '/proches/compte/etablissements');
+  assert.ok(etabs.some((x) => x.id === E) && etabs.some((x) => x.id === S), 'établissements ouverts aux demandes');
+  assert.ok(!etabs.some((x) => x.type === 'hopital'), 'jamais un hôpital');
+  assert.deepStrictEqual(Object.keys(etabs[0]).sort(), ['id', 'nom', 'type', 'type_nom'], 'aucune autre donnée');
+  // 3. Demandes : réponse identique, que le résident existe ou non ; mesurée aussi en temps
+  const base = { etablissement_id: E, proche_prenom: 'Nadia', proche_nom: 'Fictive', proche_telephone: '514 555-0199', lien: 'fille', consentement: true };
+  await refuse('nc', 'POST', '/proches/compte/rattachements', { ...base, resident_prenom: 'Jean', resident_nom: 'Dupont', consentement: false }, 400, 'consentement_requis');
+  await refuse('nc', 'POST', '/proches/compte/rattachements', { ...base, etablissement_id: L.B, resident_prenom: 'Jean', resident_nom: 'Dupont' }, 400, 'etablissement_invalide');
+  await refuse('nc', 'POST', '/proches/compte/rattachements', { ...base, resident_prenom: '', resident_nom: 'Dupont' }, 400, 'rattachement_invalide');
+  const temps = async (corps) => { const t0 = process.hrtime.bigint(); const r = await api('nc', 'POST', '/proches/compte/rattachements', corps); return { r, ms: Number(process.hrtime.bigint() - t0) / 1e6 }; };
+  const existe = await temps({ ...base, resident_prenom: 'Jean', resident_nom: 'Dupont' });
+  const inexistant = await temps({ ...base, resident_prenom: 'Personne', resident_nom: 'Inexistante' });
+  assert.deepStrictEqual(Object.keys(existe.r).sort(), Object.keys(inexistant.r).sort()); assert.strictEqual(existe.r.statut, inexistant.r.statut);
+  assert.ok(Math.abs(existe.ms - inexistant.ms) < 250, `temps comparables (${existe.ms.toFixed(0)} / ${inexistant.ms.toFixed(0)} ms)`);
+  let moiC = await api('nc', 'GET', '/proches/compte');
+  assert.deepStrictEqual(moiC.proches, [], 'rien de visible avant la validation'); assert.ok(moiC.demandes.every((d) => d.statut === 'en_attente'));
+  assert.ok(!JSON.stringify(moiC).match(/reference|ERA-|chambre|lit_/i), 'aucune référence ni chambre');
+  // 4. File de l'établissement : rôles qui invitent déjà les proches seulement ; isolation
+  await refuse('era_entretien', 'GET', `/chsld/rattachements?etablissement_id=${E}`, null, 403);
+  await refuse('stl', 'GET', `/chsld/rattachements?etablissement_id=${E}`, null, 403);
+  await refuse('b', 'GET', `/chsld/rattachements?etablissement_id=${E}`, null, 403);
+  await refuse('stl', 'POST', `/chsld/rattachements/${existe.r.id}/decision`, { decision: 'refusee' }, 403);
+  const file = await api('era', 'GET', `/chsld/rattachements?etablissement_id=${E}`);
+  const dEx = file.find((d) => d.id === existe.r.id), dIn = file.find((d) => d.id === inexistant.r.id);
+  assert.ok(dEx && dIn); assert.strictEqual(dEx.courriel, ADR); assert.strictEqual(dEx.code_valide, false); assert.strictEqual(dEx.code_resident_id, null, 'aucun rapprochement automatique sans code');
+  assert.ok((await q(`SELECT 1 FROM notifications WHERE etablissement_id = $1 AND code = 'famille_rattachement'`, [E])).length, 'le personnel est prévenu');
+  // 5. Refus : le proche voit « non retenue », sans motif ; décision unique
+  await api('era', 'POST', `/chsld/rattachements/${dIn.id}/decision`, { decision: 'refusee' });
+  await refuse('era', 'POST', `/chsld/rattachements/${dIn.id}/decision`, { decision: 'refusee' }, 409, 'demande_deja_traitee');
+  // 6. Acceptation : résident choisi, identité vérifiée, consentement tracé, autorisations choisies
+  const jean = (await api('era', 'GET', `/chsld/residents/${p.dupont}`)).resident;
+  const acc = { decision: 'acceptee', resident_id: jean.id, verification: 'rappel_telephonique', consentement_type: 'resident', consentement_par: 'Jean Dupont (fictif)', consentement_le: new Date().toISOString().slice(0, 10), autorisations: ['administratif', 'hebergement'] };
+  await refuse('era', 'POST', `/chsld/rattachements/${dEx.id}/decision`, { ...acc, verification: undefined }, 400, 'verification_requise');
+  await refuse('era', 'POST', `/chsld/rattachements/${dEx.id}/decision`, { ...acc, verification: 'autre' }, 400, 'verification_requise');
+  await refuse('era', 'POST', `/chsld/rattachements/${dEx.id}/decision`, { ...acc, consentement_par: '' }, 400, 'consentement_invalide');
+  await refuse('era', 'POST', `/chsld/rattachements/${dEx.id}/decision`, { ...acc, consentement_le: '2999-01-01' }, 400, 'consentement_invalide');
+  await refuse('era', 'POST', `/chsld/rattachements/${dEx.id}/decision`, { ...acc, autorisations: [] }, 409, 'proche_sans_autorisation');
+  await refuse('era', 'POST', `/chsld/rattachements/${dEx.id}/decision`, { ...acc, resident_id: p.martin }, 404, 'resident_introuvable');
+  await refuse('era_soins', 'POST', `/chsld/rattachements/${dEx.id}/decision`, acc, 403);
+  const ok = await api('era', 'POST', `/chsld/rattachements/${dEx.id}/decision`, acc);
+  assert.strictEqual(ok.statut, 'acceptee');
+  const cons = (await q('SELECT * FROM proches_consentements WHERE acces_id = $1', [ok.acces_id]))[0];
+  assert.deepStrictEqual([cons.type, cons.verification, cons.resident_id], ['resident', 'rappel_telephonique', jean.id], 'consentement et vérification enregistrés');
+  moiC = await api('nc', 'GET', '/proches/compte');
+  assert.strictEqual(moiC.proches.length, 1); assert.strictEqual(moiC.demandes.find((d) => d.id === dIn.id).statut, 'refusee');
+  let pr = (await api('nc', 'POST', '/proches/compte/profils')).profils; sessions.np = pr[0].token;
+  const vue = await api('np', 'GET', '/proches/moi');
+  assert.deepStrictEqual(vue.resident, { prenom: 'Jean', initiale: 'D.' }); assert.deepStrictEqual(vue.autorisations.sort(), ['administratif', 'hebergement']);
+  await refuse('np', 'POST', '/proches/visites', { souhaitee_le: new Date(Date.now() + 86400000).toISOString() }, 403, 'proche_non_autorise');
+  // 7. Code de rattachement : remis une fois, rapproche la demande du bon résident ; essais erronés limités sans le dire
+  await refuse('era_entretien', 'POST', `/chsld/residents/${p.dupont}/code-rattachement`, null, 403);
+  await refuse('stl', 'POST', `/chsld/residents/${p.dupont}/code-rattachement`, null, 403);
+  const code = await api('era', 'POST', `/chsld/residents/${p.dupont}/code-rattachement`);
+  assert.match(code.code, /^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+  assert.strictEqual((await q('SELECT count(*)::int n FROM proches_codes_rattachement WHERE code_hash = $1', [code.code.replace('-', '')]))[0].n, 0, 'code jamais stocké en clair');
+  await api(null, 'POST', '/proches/compte/inscription', { courriel: 'devine@exemple.invalid', mot_de_passe: MDPN, avis: true });
+  await api(null, 'POST', '/proches/compte/confirmer', { jeton: lien('devine@exemple.invalid', 'confirmer') });
+  sessions.devine = (await api(null, 'POST', '/proches/connexion', { courriel: 'devine@exemple.invalid', mot_de_passe: MDPN })).compte;
+  const essai = async (c) => { const r = await api('devine', 'POST', '/proches/compte/rattachements', { ...base, resident_prenom: 'Jean', resident_nom: 'Dupont', code: c }); await api('devine', 'POST', `/proches/compte/rattachements/${r.id}/retirer`); return r; };
+  const reponses = [];
+  for (let i = 0; i < 5; i++) reponses.push(await essai(`ZZZZ-ZZZ${i + 2}`));
+  const apresEssais = await essai(code.code);
+  assert.ok(reponses.every((r) => r.statut === apresEssais.statut), 'réponse identique, bon ou mauvais code');
+  assert.strictEqual((await q('SELECT code_id FROM proches_demandes_rattachement WHERE id = $1', [apresEssais.id]))[0].code_id, null, 'après 5 essais erronés, même le bon code est ignoré');
+  const avecCode = await api('nc', 'POST', '/proches/compte/rattachements', { ...base, resident_prenom: 'J.', resident_nom: 'D.', code: code.code.toLowerCase() });
+  const dc = (await api('era', 'GET', `/chsld/rattachements?etablissement_id=${E}`)).find((d) => d.id === avecCode.id);
+  assert.strictEqual(dc.code_valide, true); assert.strictEqual(dc.code_resident_id, jean.id, 'le code désigne le résident au personnel seulement');
+  const autre = (await api('era', 'GET', `/chsld/residents?etablissement_id=${E}`)).find((r) => r.id !== jean.id && !['sorti', 'transfere'].includes(r.statut));
+  await refuse('era', 'POST', `/chsld/rattachements/${avecCode.id}/decision`, { ...acc, resident_id: autre.id }, 409, 'code_autre_resident');
+  await refuse('era', 'POST', `/chsld/rattachements/${avecCode.id}/decision`, acc, 409, 'proche_deja_rattache');
+  await api('era', 'POST', `/chsld/rattachements/${avecCode.id}/decision`, { decision: 'refusee' });
+  // 8. Plusieurs établissements, sans mélange : demande à Saint-Laurent, acceptée par Saint-Laurent
+  const dS = await api('nc', 'POST', '/proches/compte/rattachements', { ...base, etablissement_id: S, resident_prenom: 'Marc', resident_nom: 'Martin', lien: 'ami' });
+  await refuse('era', 'GET', `/chsld/rattachements?etablissement_id=${S}`, null, 403);
+  assert.ok(!(await api('era', 'GET', `/chsld/rattachements?etablissement_id=${E}`)).some((d) => d.id === dS.id), 'la demande n’apparaît que dans son établissement');
+  await refuse('era', 'POST', `/chsld/rattachements/${dS.id}/decision`, { ...acc, resident_id: p.martin }, 403);
+  const okS = await api('stl', 'POST', `/chsld/rattachements/${dS.id}/decision`, { ...acc, resident_id: p.martin, autorisations: ['rendez_vous'], consentement_type: 'representant_legal', verification: 'piece_identite' });
+  cx = await api(null, 'POST', '/proches/connexion', { courriel: ADR, mot_de_passe: MDPN }); sessions.nc = cx.compte;
+  assert.strictEqual(cx.profils.length, 2, 'un profil par résident, dans deux établissements');
+  const vues = await Promise.all(cx.profils.map((x) => fetch(`${basePilote}/api/proches/moi`, { headers: { Authorization: `Bearer ${x.token}` } }).then((r) => r.json())));
+  assert.deepStrictEqual(vues.map((v) => v.etablissement.nom).sort(), [...new Set(vues.map((v) => v.etablissement.nom))].sort(), 'deux établissements distincts');
+  const vS = vues.find((v) => v.autorisations.includes('rendez_vous')), vE = vues.find((v) => !v.autorisations.includes('rendez_vous'));
+  assert.ok(vS && vE && vS.resident.prenom !== vE.resident.prenom, 'chaque profil ne voit que son résident et ses droits');
+  // 9. Retrait : par le proche (ne plus suivre) et par l'établissement (révocation immédiate)
+  await refuse('devine', 'POST', `/proches/compte/acces/${okS.acces_id}/quitter`, null, 404);
+  await api('nc', 'POST', `/proches/compte/acces/${okS.acces_id}/quitter`);
+  sessions.npS = cx.profils.find((x) => x.acces_id === okS.acces_id).token;
+  await refuse('npS', 'GET', '/proches/moi', null, 401);
+  await api('era', 'POST', `/chsld/acces-portail/${ok.acces_id}/revoquer`);
+  sessions.np = cx.profils.find((x) => x.acces_id === ok.acces_id).token;
+  await refuse('np', 'GET', '/proches/moi', null, 401);
+  assert.strictEqual((await api('nc', 'GET', '/proches/compte')).proches.length, 0);
+  // 10. Mot de passe oublié : lien unique, sessions fermées ; réponse identique pour un courriel inconnu
+  assert.deepStrictEqual(await api(null, 'POST', '/proches/compte/oubli', { courriel: ADR }), await api(null, 'POST', '/proches/compte/oubli', { courriel: 'inconnu@exemple.invalid' }));
+  assert.ok(!courriels.some((x) => x.a === 'inconnu@exemple.invalid'));
+  const ri = lien(ADR, 'reinitialiser');
+  await refuse(null, 'POST', '/proches/compte/reinitialiser', { jeton: ri, mot_de_passe: 'court' }, 400, 'mdp_faible');
+  await api(null, 'POST', '/proches/compte/reinitialiser', { jeton: ri, mot_de_passe: 'Famille-Changee-2026' });
+  await refuse(null, 'POST', '/proches/compte/reinitialiser', { jeton: ri, mot_de_passe: 'Famille-Changee-2027' }, 400, 'lien_invalide');
+  await refuse('nc', 'GET', '/proches/compte', null, 401);
+  sessions.nc = (await api(null, 'POST', '/proches/connexion', { courriel: ADR, mot_de_passe: 'Famille-Changee-2026' })).compte;
+  await refuse('nc', 'POST', '/proches/compte/mot-de-passe', { actuel: 'Faux-mot-2026x', nouveau: MDPN }, 401);
+  await api('nc', 'POST', '/proches/compte/mot-de-passe', { actuel: 'Famille-Changee-2026', nouveau: MDPN });
+  // 11. Compte non confirmé créé par un tiers : la personne invitée par l'établissement en prend possession
+  await api(null, 'POST', '/proches/compte/inscription', { courriel: 'nina@exemple.invalid', mot_de_passe: 'Tiers-Malveillant-2026', avis: true });
+  const kN = (await q(`INSERT INTO resident_contacts (resident_id, prenom, nom, relation, courriel, autorisations, rang) VALUES ($1, 'Nina', 'Fictive', 'soeur', 'nina@exemple.invalid', '{administratif}', 9) RETURNING id`, [jean.id]))[0].id;
+  const invN = await api('era', 'POST', `/chsld/contacts/${kN}/acces-portail`, {});
+  await api(null, 'POST', '/proches/invitation', { jeton: invN.lien.match(/invitation=([a-f0-9]{64})/)[1], mot_de_passe: 'Nina-Fictive-2026' });
+  await refuse(null, 'POST', '/proches/connexion', { courriel: 'nina@exemple.invalid', mot_de_passe: 'Tiers-Malveillant-2026' }, 401);
+  assert.strictEqual((await api(null, 'POST', '/proches/connexion', { courriel: 'nina@exemple.invalid', mot_de_passe: 'Nina-Fictive-2026' })).profils.length, 1, 'l’invitation reste disponible');
+  // 12. Suppression du compte (Loi 25) : accès coupés, demandes retirées, courriel effacé ; réinscription possible
+  const dAtt = await api('nc', 'POST', '/proches/compte/rattachements', { ...base, resident_prenom: 'Jean', resident_nom: 'Dupont' });
+  await refuse('nc', 'POST', '/proches/compte/supprimer', { mot_de_passe: 'Faux-mot-2026x' }, 401);
+  await api('nc', 'POST', '/proches/compte/supprimer', { mot_de_passe: MDPN });
+  await refuse('nc', 'GET', '/proches/compte', null, 401);
+  assert.strictEqual((await q('SELECT statut FROM proches_demandes_rattachement WHERE id = $1', [dAtt.id]))[0].statut, 'retiree');
+  assert.strictEqual((await q('SELECT count(*)::int n FROM proches_comptes WHERE courriel = $1', [ADR]))[0].n, 0, 'courriel effacé');
+  await refuse(null, 'POST', '/proches/connexion', { courriel: ADR, mot_de_passe: MDPN }, 401, 'identifiants_incorrects');
+  // 13. Limites : trop de demandes en attente ; trop de tentatives par adresse IP
+  // 6 demandes déjà faites aujourd'hui par ce compte (essais de code) : au plus 10 par jour
+  for (let i = 0; i < 4; i++) await api('devine', 'POST', '/proches/compte/rattachements', { ...base, resident_prenom: `R${i}`, resident_nom: 'Fictif' });
+  await refuse('devine', 'POST', '/proches/compte/rattachements', { ...base, resident_prenom: 'R6', resident_nom: 'Fictif' }, 429, 'trop_de_demandes');
+  process.env.PROCHES_LIMITE_IP = '1';
+  try { await refuse(null, 'POST', '/proches/compte/oubli', { courriel: 'x@exemple.invalid' }, 429, 'trop_de_tentatives'); } finally { process.env.PROCHES_LIMITE_IP = '100000'; }
+  // 14. Minimisation : demandes sans réponse expirées après 30 jours, comptes jamais confirmés supprimés après 7 jours
+  await q(`UPDATE proches_demandes_rattachement SET cree_le = now() - interval '31 days' WHERE compte_id = (SELECT id FROM proches_comptes WHERE courriel = 'devine@exemple.invalid') AND statut = 'en_attente'`);
+  await api(null, 'POST', '/proches/compte/inscription', { courriel: 'jamais@exemple.invalid', mot_de_passe: MDPN, avis: true });
+  await q(`UPDATE proches_comptes SET cree_le = now() - interval '8 days' WHERE courriel = 'jamais@exemple.invalid'`);
+  await require('../src/proches-comptes').entretien(poolPilote);
+  assert.strictEqual((await q(`SELECT count(*)::int n FROM proches_comptes WHERE courriel = 'jamais@exemple.invalid'`))[0].n, 0);
+  assert.strictEqual((await api('devine', 'GET', '/proches/compte')).demandes.filter((d) => d.statut === 'expiree').length, 4);
+  // 15. Journal immuable : les faits sont inscrits, sans nom de proche ni de résident, ni courriel
+  const j = (await q(`SELECT string_agg(detail, ' | ') t FROM (SELECT detail FROM journal WHERE action IN ('Arrimo Famille', 'Portail des proches') UNION ALL SELECT detail FROM journal_admin WHERE action = 'Arrimo Famille') x`))[0].t;
+  for (const fait of ['créé', 'confirmé', 'reçue', 'refusée', 'acceptée', 'code de rattachement', 'réinitialisé', 'supprimé']) assert.match(j, new RegExp(fait), `journal : ${fait}`);
+  assert.doesNotMatch(j, /Nadia|Dupont|Martin|Jean|exemple\.invalid|514/, 'aucune donnée personnelle au journal');
+  // 16. Messages traduits (le serveur renvoie un code ; l'interface affiche la traduction)
+  const r16 = await refuse('devine', 'POST', '/proches/compte/rattachements', { ...base, consentement: false, resident_prenom: 'a', resident_nom: 'b' }, 400, 'consentement_requis');
+  assert.match(r16.erreur, /consentement/);
+  const enI18n = fs.readFileSync(path.join(__dirname, '..', 'public', 'i18n', 'en.js'), 'utf8');
+  for (const k of ['consentement_requis', 'courriel_non_confirme', 'compte_existant_mdp', 'demande_deja_traitee', 'verification_requise']) assert.match(enI18n, new RegExp(`${k}: "`), `traduction anglaise : ${k}`);
+});
+
+test('écrans Arrimo Famille : créer un compte, demander un rattachement, valider dans la file de l’établissement, au clic', { timeout: 180000 }, async () => {
+  const { chromium } = require('playwright'); const nav = await chromium.launch(); const err = []; const E = ids.era;
+  const avant = process.env.ARRIMO_ENV; process.env.ARRIMO_ENV = 'demo';
+  try {
+    const ctx = await nav.newContext({ viewport: { width: 390, height: 844 } }); const pg = await ctx.newPage(); pg.on('pageerror', (e) => err.push(String(e)));
+    await pg.addInitScript(() => { localStorage.setItem('arrimo-langue', 'fr'); });
+    await pg.goto(`${basePilote}/proches`); await pg.click('#b-creer');
+    await pg.fill('#c', 'ecran.proche@exemple.invalid'); await pg.fill('#m', 'Ecran-Proche-2026'); await pg.check('#avis'); await pg.click('#f button[type=submit]');
+    await pg.waitForSelector('text=un courriel vient de vous être envoyé');
+    const cle = courriels.filter((x) => x.a === 'ecran.proche@exemple.invalid').pop().texte.match(/confirmer=([a-f0-9]{64})/)[1];
+    await pg.goto(`${basePilote}/proches#confirmer=${cle}`); await pg.waitForSelector('text=Courriel confirmé');
+    await pg.fill('#c', 'ecran.proche@exemple.invalid'); await pg.fill('#m', 'Ecran-Proche-2026'); await pg.click('#f button[type=submit]');
+    await pg.waitForSelector('#mes-proches'); await pg.click('#b-ajouter'); await pg.waitForSelector('#r-etab');
+    await pg.selectOption('#r-etab', String(E)); await pg.fill('#r-pp', 'Écran'); await pg.fill('#r-pn', 'Fictif'); await pg.fill('#r-rp', 'Jean'); await pg.fill('#r-rn', 'Dupont'); await pg.check('#r-cons');
+    await pg.click('#f button[type=submit]'); await pg.waitForSelector('text=Demande transmise');
+    assert.ok(await pg.locator('#mes-demandes [data-statut="en_attente"]').count() >= 1);
+    assert.ok(await pg.evaluate(() => document.documentElement.scrollWidth - innerWidth) <= 1, 'aucun débordement sur téléphone');
+    // Personnel : la file à l'accueil, l'examen et l'acceptation au clic
+    const ctxP = await nav.newContext({ viewport: { width: 1366, height: 900 } }); const era = await ctxP.newPage(); era.on('pageerror', (e) => err.push(String(e)));
+    await era.addInitScript(({ jeton, id }) => { localStorage.setItem('arrimo-token', jeton); localStorage.setItem('arrimo-ctx', String(id)); localStorage.setItem('arrimo-langue', 'fr'); }, { jeton: sessions.era, id: E });
+    await era.goto(basePilote); await era.waitForSelector('body[data-pret="1"]');
+    if (await era.locator('#b-premiers-pas-ok').isVisible().catch(() => false)) await era.click('#b-premiers-pas-ok');
+    await era.evaluate(() => document.querySelector('#onglets button[data-v="c-accueil"]').click()); await era.waitForSelector('#rattachements');
+    const id = (await poolPilote.query(`SELECT max(d.id) id FROM proches_demandes_rattachement d JOIN proches_comptes k ON k.id = d.compte_id WHERE k.courriel = 'ecran.proche@exemple.invalid'`)).rows[0].id;
+    await era.click(`[data-rat-examiner="${id}"]`); await era.waitForSelector('#rat-res');
+    await era.selectOption('#rat-res', String(p.dupont)); await era.fill('#rat-cpar', 'Jean Dupont (fictif)'); await era.click('#modale button.pri');
+    await era.waitForFunction((x) => !document.querySelector(`[data-rat-examiner="${x}"]`), id);
+    assert.strictEqual((await poolPilote.query('SELECT statut FROM proches_demandes_rattachement WHERE id = $1', [id])).rows[0].statut, 'acceptee');
+    // Le proche voit son proche et l'ouvre
+    await pg.reload(); await pg.waitForSelector('[data-ouvrir]'); await pg.click('[data-ouvrir]'); await pg.waitForSelector('#carte-resident');
+    assert.match(await pg.textContent('#carte-resident'), /Jean D\./);
+    await pg.click('[data-onglet="plus"]'); await pg.waitForSelector('#b-mes-proches');
+    assert.deepStrictEqual(err, [], 'aucune erreur JavaScript');
+    // Fin : accès retiré pour ne pas gêner les tests suivants
+    await poolPilote.query(`UPDATE proches_acces SET revoque_le = now(), actif = false WHERE compte_id = (SELECT id FROM proches_comptes WHERE courriel = 'ecran.proche@exemple.invalid')`);
+  } finally { await nav.close(); process.env.ARRIMO_ENV = avant; }
 });
 
 test('captures : formulaire SH (type puis modules), liste SH, écrans CHSLD réels', { timeout: 180000 }, async () => {
