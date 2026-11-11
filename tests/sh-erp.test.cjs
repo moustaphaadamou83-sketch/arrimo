@@ -1133,7 +1133,7 @@ test('demandes du site : dépôt réservé au serveur du site, écran limité au
       assert.deepStrictEqual(await (await envoi(demande, cle)).json(), { ok: true, nouvelle: false }, 'un renvoi ne crée pas de doublon');
       assert.strictEqual((await pool.query('SELECT count(*)::int n FROM sh_demandes_site')).rows[0].n, 1);
       await Promise.all([site.entretien(pool, envSh), site.entretien(pool, envSh), site.entretien(pool, envSh)]);
-      for (let i = 0; i < 50 && !envoyes.length; i++) await new Promise((r) => setTimeout(r, 20));
+      for (let i = 0; i < 250 && !envoyes.length; i++) await new Promise((r) => setTimeout(r, 20));   // jusqu'à 5 s : recette en parallèle
       assert.strictEqual(envoyes.length, 1, 'une seule alerte par demande');
       const brut = JSON.stringify(envoyes[0]);
       for (const prive of ['Personne fictive', 'personne@exemple.invalid', 'Organisation fictive', 'Message fictif']) assert.ok(!brut.includes(prive), `alerte sans ${prive}`);

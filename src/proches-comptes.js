@@ -203,7 +203,8 @@ async function connexion(pool, b, { accesValide, ancienne }) {
     }
   }
   const bloque = k.bloque_jusqu_au && k.bloque_jusqu_au > new Date();
-  const bon = await verifierAsync(mdp, k.mot_de_passe_hash || 'x:00');
+  // Même coût que la connexion par invitation (4 vérifications en parallèle) : la durée ne dit rien du compte (audit)
+  const [bon] = await Promise.all([verifierAsync(mdp, k.mot_de_passe_hash || 'x:00'), ...[1, 2, 3].map(() => verifierAsync(mdp, 'x:00'))]);
   if (!bon || bloque) {
     if (!bon) await pool.query(`UPDATE proches_comptes SET echecs = echecs + 1,
       bloque_jusqu_au = CASE WHEN echecs + 1 >= $2 THEN now() + make_interval(mins => $3) ELSE bloque_jusqu_au END WHERE id = $1`, [k.id, ECHECS_MAX, BLOCAGE_MIN]);
@@ -247,7 +248,7 @@ function sessionCompte(pool) {
     } catch (err) { next(err); }
   };
 }
-const etabsOuverts = async (db) => (await db.query(`SELECT id, nom, type_etablissement, modules, module_actif FROM etablissements
+const etabsOuverts = async (db) => (await db.query(`SELECT id, nom, type_etablissement, type_local_code, modules, module_actif FROM etablissements
   WHERE type_etablissement <> 'hopital' AND module_actif ORDER BY nom`)).rows.filter((e) => TE.moduleActif(e, 'portail_proches'));
 
 async function monCompte(pool, k, accesValide) {
@@ -259,7 +260,12 @@ async function monCompte(pool, k, accesValide) {
   return { courriel: k.courriel, proches, demandes };
 }
 async function etablissements(pool) {
-  return (await etabsOuverts(pool)).map((e) => ({ id: e.id, nom: e.nom, type: e.type_etablissement, type_nom: TE.TYPES?.[e.type_etablissement]?.nom || e.type_etablissement }));
+  // Une RPA, une RI, une RTF ou une maison des aînés (modèle CHSLD) est rangée sous son vrai type dans la liste du proche
+  const PORTAIL = { rpa: 'rpa', ri: 'ressource_intermediaire', rtf: 'rtf', maison_aines: 'maison_aines' };
+  return (await etabsOuverts(pool)).map((e) => {
+    const type = PORTAIL[e.type_local_code] || e.type_etablissement;
+    return { id: e.id, nom: e.nom, type, type_nom: TE.TYPES?.[type]?.nom || (type === 'rtf' ? 'Ressource de type familial (RTF)' : type) };
+  });
 }
 
 /* ---------------------------------------------------------------- demande de rattachement (réponse toujours identique) */
@@ -471,4 +477,4 @@ function brancherPersonnel(api, pool, route, entier) {
   api.post('/chsld/rattachements/:id/decision', route((req) => decider(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   api.post('/chsld/residents/:id/code-rattachement', route((req) => creerCode(pool, req.utilisateur, entier(req.params.id, 'id'))));
 }
-module.exports = { brancherPublic, brancherPersonnel, connexion, rattacherInvitation, entretien, GERER };
+module.exports = { etablissements, brancherPublic, brancherPersonnel, connexion, rattacherInvitation, entretien, GERER };

@@ -469,7 +469,8 @@ async function repondre(pool, u, etabId, q, L) {
   const e = await ch.etabChsld(pool, u, etabId, { roles: ['coordonnateur', 'admin_etab', 'gestionnaire', 'equipe_soins', 'entretien'] });
   const fuseau = (await pool.query('SELECT c.fuseau FROM config_pays c WHERE c.id = $1', [e.config_id])).rows[0]?.fuseau || 'America/Toronto';
   const fmt = formateur(L, fuseau);
-  const local = (reponse, extra = {}) => ({ mode: 'local', reponse, sources: ['arrimo'], ...extra });
+  // Une RPA, une RI ou une RTF garde son nom dans les réponses (mêmes écrans et même moteur que le CHSLD)
+  const local = (reponse, extra = {}) => ({ mode: 'local', reponse: require('./types-etablissement').nommer(reponse, e, L), sources: ['arrimo'], ...extra });
   const ctx = lireContexte(u, etabId);
 
   // Ce qu'OG peut faire : seulement sur demande explicite

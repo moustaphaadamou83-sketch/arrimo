@@ -118,6 +118,40 @@ function libelleType(valeur) {
   if (s.length < 2 || s.length > 80 || /[\u0000-\u001f\u007f]/.test(s)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'type_libelle' });
   return s;
 }
+/**
+ * Types locaux sur le modèle CHSLD (choisis dans SH) : même moteur et mêmes écrans, nom court propre.
+ * Aucune fonction clinique n'est activée par défaut (clinique_fictive reste false, démonstration seulement).
+ */
+const TYPES_LOCAUX = {
+  chsld_prive: { court: 'CHSLD', court_en: 'CHSLD' },
+  rpa: { court: 'RPA', court_en: 'RPA' },
+  ri: { court: 'RI', court_en: 'RI' },
+  rtf: { court: 'RTF', court_en: 'RTF' },
+  maison_aines: { court: 'maison des aînés', court_en: 'seniors’ home' },
+  maison_retraite: { court: 'résidence', court_en: 'residence' },
+};
+/** Code de type local reçu de SH ou de l'administration : vide = aucun. */
+function codeTypeLocal(valeur) {
+  const { ErreurHttp } = require('./db');
+  if (valeur === undefined || valeur === null || valeur === '') return null;
+  const s = String(valeur).trim();
+  if (!/^[a-z][a-z0-9_]{1,39}$/.test(s)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'type_local_code' });
+  return s;
+}
+/** Nom court du type d'un établissement d'hébergement (« CHSLD », « RPA », « RI »…), dans la langue demandée. */
+function nomCourt(etab, langue = 'fr') {
+  const t = etab && TYPES_LOCAUX[etab.type_local_code];
+  if (!t) return 'CHSLD';
+  return langue === 'en' ? t.court_en : t.court;
+}
+/** Remplace « CHSLD » par le nom court de l'établissement dans un texte (aucun changement pour un CHSLD). */
+function nommer(texte, etab, langue = 'fr') {
+  const n = nomCourt(etab, langue);
+  if (n === 'CHSLD' || typeof texte !== 'string') return texte;
+  if (langue === 'en') return texte.replace(/\bCHSLD\b/g, n);
+  // Tous ces types sont féminins en français (résidence, ressource, maison) : « au CHSLD » devient « à la RPA »
+  return texte.replace(/\b(au|du|le|Le|un|Un|ce|Ce|Au|Du) CHSLD\b/g, (m, d) => `${({ au: 'à la', Au: 'À la', du: 'de la', Du: 'De la', le: 'la', Le: 'La', un: 'une', Un: 'Une', ce: 'cette', Ce: 'Cette' })[d]} ${n}`).replace(/\bCHSLD\b/g, n);
+}
 /** Drapeaux des modules optionnels (désactivés par défaut). */
 const drapeauxOptionnels = (type) => [...new Set(MODULES.filter((m) => m.types.includes(type) && m.categorie === 'optionnel' && m.statut === 'disponible' && m.drapeau).map((m) => m.drapeau))];
-module.exports = { libelleType, drapeauxOptionnels, TYPES, TYPES_OPERATIONNELS, MODULES, catalogue, drapeaux, exigerTypeOperationnel, drapeauxDepuisChoix, moduleActif, configChsld, UNITES_CHSLD };
+module.exports = { TYPES_LOCAUX, codeTypeLocal, nomCourt, nommer, libelleType, drapeauxOptionnels, TYPES, TYPES_OPERATIONNELS, MODULES, catalogue, drapeaux, exigerTypeOperationnel, drapeauxDepuisChoix, moduleActif, configChsld, UNITES_CHSLD };

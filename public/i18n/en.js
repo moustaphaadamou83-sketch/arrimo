@@ -12,7 +12,7 @@ window.ARRIMO_I18N.en = {
     t_blouse: 'Lab coat', t_veste: 'Jacket', t_polo: 'Polo', a_aucun: 'None', a_lunettes: 'Glasses', a_casque: 'Headset', v_feminine: 'Female', v_masculine: 'Male',
     f_texte: 'Text assistant', f_vocal: 'Voice features', f_dictee: 'Dictation', f_conversation: 'Continuous conversation', f_personnalisation: 'Personalization', f_actions: 'Supervised administrative actions',
     f_patients: 'Fictitious patients (demo and test)', f_documents: 'Document reading', f_rapports: 'Reports', couleur_n: 'Shade {n}', peau_n: 'Tone {n}' },
-  types_etab: { hopitaux: 'Hospitals', chsld: 'CHSLDs (long-term care)' },
+  types_etab: { hopitaux: 'Hospitals', chsld: 'CHSLDs (long-term care)', hebergement: 'Long-term care and seniors’ housing' },
   nav: { operations: 'Operations', pilotage: 'Monitoring', gestion: 'Management', principale: 'Main navigation', ouvrir: 'Open the menu', fermer: 'Close the menu' },
   apparence: { basculer: 'Switch theme', choisir: 'Appearance', clair: 'Light', sombre: 'Dark', automatique: 'Automatic (system)', soleil: 'Follow sunrise and sunset (facility)', enregistree: 'Appearance saved.' },
   priorites_ui: {
@@ -84,7 +84,7 @@ window.ARRIMO_I18N.en = {
     vigilance: 'Discharges & alerts',
     national: 'National',
     urgence: 'ER',
-    copilote: 'OG', reseau: 'Network', lits: 'Beds', admissions: 'Admissions', transferts: 'Transfers', liaison: 'CHSLD liaison', nettoyage: 'Cleaning',
+    copilote: 'OG', reseau: 'Network', lits: 'Beds', admissions: 'Admissions', transferts: 'Transfers', liaison: 'CHSLD liaison (and seniors’ residences)', nettoyage: 'Cleaning',
     nsa: 'ALC', indicateurs: 'Indicators', journal: 'Log', params: 'Settings', admin: 'Administration', compte: 'My account',
   },
   pied: { confidentialite: 'Privacy', conditions: 'Terms of use' },
@@ -150,7 +150,7 @@ window.ARRIMO_I18N.en = {
     agrege_note: 'This facility only shares its number of available beds.',
     urgence: 'ER: {occ|no patients|# patient|# patients} for {fonc|# stretcher|# stretchers}', urgence_24h: '{n|none over 24 h|# over 24 h|# over 24 h}',
   },
-  dispo: { voir: 'See the national dashboard', plus_libre: 'This bed was just taken. Check the national dashboard.' },
+  dispo: { voir_admissions: 'See the admission queue', voir: 'See the national dashboard', plus_libre: 'This bed was just taken. Check the national dashboard.' },
   national: {
     titre: 'National dashboard', intro: 'Every facility that shares its capacity, from nearest to farthest from {etab}, with no distance limit.',
     inactif: 'The national dashboard is available once the module is enabled.', affichage: 'Display', liste: 'List', carte: 'Map',

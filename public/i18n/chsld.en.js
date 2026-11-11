@@ -61,7 +61,7 @@
       incident_retour_retarde: 'Return delayed', incident_chambre_indisponible: 'Room unavailable', incident_informations_manquantes: 'Missing information',
       incident_hospitalisation_prolongee: 'Extended hospital stay', incident_arrivee_retardee: 'Arrival delayed', incident_changement_hopital: 'Hospital changed', etapes: 'Steps',
       residents_chsld: 'CHSLD residents', residents_chsld_intro: 'Residents hospitalized here from a CHSLD, and their returns. Only the reference is shared between facilities.' },
-    liaison: { titre: 'CHSLD liaison · {etab}', titre_court: 'CHSLD liaison', intro: 'Requests and movements of CHSLD residents to this hospital, reception, hospital stays and returns. Kept apart from inter-hospital transfers.',
+    liaison: { titre: 'CHSLD liaison (and seniors’ residences) · {etab}', titre_court: 'CHSLD liaison (and seniors’ residences)', intro: 'Requests and movements of CHSLD residents to this hospital, reception, hospital stays and returns. Kept apart from inter-hospital transfers.',
       regle: 'A sent request does not mean the resident has arrived: each step is confirmed by a person. Only the resident reference travels between facilities. No clinical orientation or priority is decided automatically.',
       action_annuler_transfert: "Cancel the transfer", action_confirmer_depart_transfert: "Confirm departure to the other hospital",
       justif_precautions_a_confirmer: "precautions to confirm", justif_chambre_sous_precautions: "room under precautions, to check",

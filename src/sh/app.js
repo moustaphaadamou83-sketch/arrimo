@@ -365,9 +365,9 @@ function creerAppSh(pool, { env = process.env } = {}) {
   };
   /* Libellé transmis à l'environnement : un instantané, resynchronisé à chaque « relier ». */
   const libelleTypeLocal = async (db, h) => {
-    if (!h.type_local_id) return { type_libelle: null, type_libelle_en: null };
-    const t = (await db.query('SELECT nom, nom_en FROM sh_types_locaux WHERE id = $1', [h.type_local_id])).rows[0];
-    return { type_libelle: t?.nom ?? null, type_libelle_en: t?.nom_en ?? null };
+    if (!h.type_local_id) return { type_libelle: null, type_libelle_en: null, type_local_code: null };
+    const t = (await db.query('SELECT code, nom, nom_en FROM sh_types_locaux WHERE id = $1', [h.type_local_id])).rows[0];
+    return { type_libelle: t?.nom ?? null, type_libelle_en: t?.nom_en ?? null, type_local_code: t?.code ?? null };
   };
   /**
    * Démonstration CHSLD : l'administration crée les deux CHSLD fictifs dans un environnement fictif, par le parcours SH

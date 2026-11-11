@@ -80,7 +80,7 @@ function brancherSh(api, pool, route) {
   api.get('/sh/etablissements', sh(async () => {
     const rows=(await pool.query(
     `SELECT e.id, e.code, e.nom, e.ville, e.adresse, e.partage, e.module_actif, e.sous_domaine,COALESCE(e.profil_config_id,e.config_id) config_id,profil.code configuration_code,
-            e.type_etablissement, e.type_libelle, e.modules,
+            e.type_etablissement, e.type_libelle, e.type_local_code, e.modules,
             (SELECT count(*)::int FROM unites u WHERE u.etablissement_id = e.id) AS unites,
             (SELECT count(*)::int FROM chambres ch JOIN unites u ON u.id = ch.unite_id WHERE u.etablissement_id = e.id) AS chambres,
             (SELECT count(*)::int FROM lits l WHERE l.etablissement_id = e.id) AS lits,
@@ -164,6 +164,9 @@ function brancherSh(api, pool, route) {
       vals.push(TE.libelleType(b.type_libelle)); sets.push(`type_libelle = $${vals.length}`);
       vals.push(TE.libelleType(b.type_libelle_en)); sets.push(`type_libelle_en = $${vals.length}`);
       detail.push(`type local : ${b.type_libelle || 'aucun'}`);
+    }
+    if (b.type_local_code !== undefined) {
+      vals.push(require('./types-etablissement').codeTypeLocal(b.type_local_code)); sets.push(`type_local_code = $${vals.length}`);
     }
     if (b.vocation !== undefined) {
       if (!['general', 'pediatrique', 'specialise'].includes(b.vocation)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'vocation' });

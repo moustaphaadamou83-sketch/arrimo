@@ -41,9 +41,23 @@ function t(cle, vars) {
   if (v == null) v = chercher('fr', cle);
   if (v == null) return cle;
   if (typeof v !== 'string') return v;
-  if (!vars) return avecNomOg(v);
+  if (!vars) return avecNomType(avecNomOg(v));
   // Pluriels {n|un|plusieurs}, nombres selon la langue ; une variable « *_etat » est un état de lit ou de civière
-  return avecNomOg(F.remplir(locale(), v, vars, (k, x) => (k.endsWith('_etat') ? t(`etats.${x}`) : undefined)));
+  return avecNomType(avecNomOg(F.remplir(locale(), v, vars, (k, x) => (k.endsWith('_etat') ? t(`etats.${x}`) : undefined))));
+}
+
+/* ---------------- Nom du type d'hébergement : une RPA, une RI ou une RTF garde son nom (mêmes écrans que le CHSLD) ---------------- */
+// Mêmes noms courts que src/types-etablissement.js (TYPES_LOCAUX) ; un CHSLD (ou un type inconnu) garde « CHSLD ».
+const TYPES_COURTS = { rpa: ['RPA', 'RPA'], ri: ['RI', 'RI'], rtf: ['RTF', 'RTF'], maison_aines: ['maison des aînés', 'seniors’ home'], maison_retraite: ['résidence', 'residence'] };
+function avecNomType(texte) {
+  let e = null;
+  try { e = etat.moi?.etablissements?.find((x) => x.id === etat.ctx); } catch { return texte; }
+  const c = e && e.type_etablissement === 'chsld' && TYPES_COURTS[e.type_local_code];
+  if (!c || typeof texte !== 'string') return texte;
+  // Tous ces types sont féminins en français (résidence, ressource, maison) : « au CHSLD » devient « à la RPA »
+  if (langue === 'en') return texte.replace(/\bCHSLD\b/g, c[1]);
+  const n = c[0];
+  return texte.replace(/\b(au|du|le|Le|un|Un|ce|Ce|Au|Du) CHSLD\b/g, (m, d) => `${({ au: 'à la', Au: 'À la', du: 'de la', Du: 'De la', le: 'la', Le: 'La', un: 'une', Un: 'Une', ce: 'cette', Ce: 'Cette' })[d]} ${n}`).replace(/\bCHSLD\b/g, n);
 }
 
 /* ---------------- Nom de l'assistant : source unique, propre à l'établissement courant ---------------- */
@@ -473,7 +487,7 @@ function majSelecteurCtx() {
   // Hôpitaux et CHSLD distingués : groupes séparés dans le sélecteur quand l'utilisateur a accès aux deux types
   const nomType = (e) => (etat.moi.utilisateur.langue_interface === 'en' && e.type_libelle_en) || e.type_libelle;
   const option = (e) => `<option value="${e.id}" data-type="${esc(e.type_etablissement || 'hopital')}">${esc(e.nom)}${nomType(e) ? ` · ${esc(nomType(e))}` : ''}${e.module_actif ? '' : esc(t('barre.module_desactive'))}</option>`;
-  const groupes = [['hopital', t('types_etab.hopitaux')], ['chsld', t('types_etab.chsld')]].map(([ty, lib]) => [lib, etat.moi.etablissements.filter((e) => (e.type_etablissement || 'hopital') === ty)]).filter(([, l]) => l.length);
+  const groupes = [['hopital', t('types_etab.hopitaux')], ['chsld', t('types_etab.hebergement')]].map(([ty, lib]) => [lib, etat.moi.etablissements.filter((e) => (e.type_etablissement || 'hopital') === ty)]).filter(([, l]) => l.length);
   $('#ctx').innerHTML = groupes.length > 1 ? groupes.map(([lib, l]) => `<optgroup label="${esc(lib)}">${l.map(option).join('')}</optgroup>`).join('') : etat.moi.etablissements.map(option).join('');
   $('#ctx').value = etat.ctx;
   $('label.ctx').hidden = !etat.moi.etablissements.length;   // environnement neuf : rien à choisir
@@ -513,6 +527,7 @@ async function demarrer() {
   const memo = Number(lire('arrimo-ctx'));
   const duLien = etat.lien && etabs.some((e) => e.id === etat.lien.id) ? etat.lien.id : null;
   etat.ctx = duLien || (etabs.some((e) => e.id === memo) ? memo : (etabs.find((e) => e.module_actif) || etabs[0]).id);
+  appliquerLangue();   // textes fixes au nom du type de l'établissement courant (RPA, RI, RTF…)
   majSelecteurCtx();
   $('#ecran-connexion').hidden = true;
   $('#ecran-app').hidden = false;
@@ -562,6 +577,7 @@ $('#ctx').onchange = async (e) => {
   window.dispatchEvent(new Event('arrimo:session-reset'));
   etat.question = '';
   ecrire('arrimo-ctx', etat.ctx);
+  appliquerLangue();
   etat.filtreUnite = '*';
   etat.suites = {};
   etat.recherche = { ...etat.recherche, res: null, choix: null };
@@ -632,20 +648,22 @@ async function veilleNotifs() {
   const dernier = etat.derniereNotif?.[ctx];
   etat.derniereNotif = { ...(etat.derniereNotif || {}), [ctx]: max };
   if (dernier == null) return;   // premier passage : rien n'est « nouveau »
-  const dispo = notifs.find((n) => Number(n.id) > dernier && !n.lu && ['dispo_lit', 'dispo_civiere'].includes(n.code));
+  const dispo = notifs.find((n) => Number(n.id) > dernier && !n.lu && ['dispo_lit', 'dispo_civiere', 'lit_libre'].includes(n.code));
   if (dispo) montrerDispo(dispo);
 }
 setInterval(veilleNotifs, Number(window.ARRIMO_VEILLE_MS || 15000));
 function montrerDispo(n) {
   const b = $('#bandeau-dispo');
-  const lit = n.code === 'dispo_lit';
-  b.innerHTML = `<div>${icone(lit ? 'bed-double' : 'siren')}<span>${esc(n.message)}</span>
-    <span class="actions-dispo">${lit ? `<button class="btn pri" id="b-dispo-ici">${esc(t('national.transferer_ici'))}</button>` : `<button class="btn" id="b-dispo-voir">${esc(t('dispo.voir'))}</button>`}
+  const lit = n.code === 'dispo_lit'; const interne = n.code === 'lit_libre';
+  b.innerHTML = `<div>${icone(lit || interne ? 'bed-double' : 'siren')}<span>${esc(n.message)}</span>
+    <span class="actions-dispo">${interne ? `<button class="btn pri" id="b-dispo-admissions">${esc(t('dispo.voir_admissions'))}</button>` : lit ? `<button class="btn pri" id="b-dispo-ici">${esc(t('national.transferer_ici'))}</button>` : `<button class="btn" id="b-dispo-voir">${esc(t('dispo.voir'))}</button>`}
     <button class="btn discret" id="b-dispo-fermer" aria-label="${esc(t('general.fermer'))}">${icone('x')}</button></span></div>`;
   b.hidden = false;
   $('#b-dispo-fermer').onclick = () => { b.hidden = true; };
   const voir = $('#b-dispo-voir');
   if (voir) voir.onclick = () => { b.hidden = true; allerA('national'); };
+  const adm = $('#b-dispo-admissions');
+  if (adm) adm.onclick = () => { b.hidden = true; allerA('admissions'); };
   const ici = $('#b-dispo-ici');
   if (ici) {
     ici.onclick = async () => {

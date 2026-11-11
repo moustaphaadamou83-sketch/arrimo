@@ -51,13 +51,31 @@ async function envoyer(c, r, code, vars, cle) {
   return true;
 }
 
+/**
+ * Alerte « lit libre » à l'intérieur de l'hôpital (coordination des lits et urgence) : un lit devient libre et des patients
+ * attendent ce type de lit à l'admission. Fonctionne aussi pour un hôpital seul, sans partage. Au plus une alerte par type
+ * de lit toutes les 10 minutes ; aucune référence de patient dans le texte.
+ */
+async function litLibreIci(c, s) {
+  if ((s.type_etablissement || 'hopital') !== 'hopital' || !s.attente_ici) return false;
+  const cle = `ici-lit-${s.type_id}`;
+  const recente = await c.query(`SELECT 1 FROM notifications WHERE etablissement_id = $1 AND code = 'lit_libre' AND vars->>'cle' = $2
+      AND date > now() - make_interval(mins => $3) LIMIT 1`, [s.etablissement_id, cle, DELAI_MIN]);
+  if (recente.rows[0]) return false;
+  await notifier(c, s.etablissement_id, null, 'lit_libre', { cle, lit: s.lit_code, type_id: s.type_id, type_nom: s.type_nom, type: s.type_nom.toLowerCase(), n: s.attente_ici });
+  return true;
+}
+
 /** Un lit vient de se libérer (dans la transaction `c`). Retourne le nombre d'hôpitaux avisés. */
 async function litLibere(c, litId) {
   const s = (await c.query(
-    `SELECT l.etablissement_id, l.type_id, t.nom AS type_nom, e.nom, e.partage, e.module_actif,
+    `SELECT l.etablissement_id, l.type_id, l.code AS lit_code, t.nom AS type_nom, e.nom, e.partage, e.module_actif, e.type_etablissement,
+            (SELECT count(*)::int FROM demandes_admission d WHERE d.etablissement_id = l.etablissement_id AND d.statut = 'attente' AND d.type_id = l.type_id) AS attente_ici,
             (SELECT count(*)::int FROM lits x WHERE x.etablissement_id = l.etablissement_id AND x.type_id = l.type_id AND x.etat = 'libre') AS libres
        FROM lits l JOIN types_unite t ON t.id = l.type_id JOIN etablissements e ON e.id = l.etablissement_id WHERE l.id = $1`, [litId])).rows[0];
-  if (!s || s.partage === 'aucun' || !s.module_actif) return 0;
+  if (!s || !s.module_actif) return 0;
+  await litLibreIci(c, s);
+  if (s.partage === 'aucun') return 0;
   let n = 0;
   const rs = await receveurs(c, s.etablissement_id, s.type_id);
   const urg = await cv.statsUrgence(c, rs.map((r) => r.id));
@@ -90,4 +108,4 @@ async function civiereLiberee(c, civiereId) {
   return n;
 }
 
-module.exports = { litLibere, civiereLiberee, DELAI_MIN };
+module.exports = { litLibere, litLibreIci, civiereLiberee, DELAI_MIN };

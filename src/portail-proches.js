@@ -134,14 +134,19 @@ async function connexion(pool, b) {
 async function connexionAncienne(pool, courriel, mdp) {
   // Un même courriel peut être lié à plusieurs résidents, chacun avec son accès et ses droits
   const tous = (await pool.query('SELECT * FROM proches_acces WHERE lower(courriel) = $1 AND compte_id IS NULL AND revoque_le IS NULL AND actif AND mot_de_passe_hash IS NOT NULL ORDER BY id', [courriel])).rows;
-  const ok = [];
-  for (const a of tous.length ? tous : [null]) {
-    // Même message et même coût pour un courriel inconnu, un mot de passe faux ou un accès bloqué
-    const bon = await verifierAsync(mdp, a?.mot_de_passe_hash || 'x:00');
-    if (a && bon && !(a.bloque_jusqu_au && a.bloque_jusqu_au > new Date())) { try { await accesValide(pool, a.id); ok.push(a); } catch { /* accès devenu invalide : ignoré */ } }
-    else if (a && !bon) await pool.query(`UPDATE proches_acces SET echecs = echecs + 1,
-      bloque_jusqu_au = CASE WHEN echecs + 1 >= $2 THEN now() + make_interval(mins => $3) ELSE bloque_jusqu_au END WHERE id = $1`, [a.id, ECHECS_MAX, BLOCAGE_MIN]);
+  // Durée égale (audit) : toujours au moins VERIFS_MIN vérifications, en parallèle, qu'un courriel soit inconnu ou lié à
+  // un, deux ou plusieurs résidents ; les échecs sont comptés en une seule requête.
+  const VERIFS_MIN = 4;
+  const candidats = [...tous, ...Array(Math.max(0, VERIFS_MIN - tous.length)).fill(null)];
+  const bons = await Promise.all(candidats.map((a) => verifierAsync(mdp, a?.mot_de_passe_hash || 'x:00')));
+  const ok = []; const rates = [];
+  for (const [i, a] of candidats.entries()) {
+    if (!a) continue;
+    if (bons[i] && !(a.bloque_jusqu_au && a.bloque_jusqu_au > new Date())) { try { await accesValide(pool, a.id); ok.push(a); } catch { /* accès devenu invalide : ignoré */ } }
+    else if (!bons[i]) rates.push(a.id);
   }
+  if (rates.length) await pool.query(`UPDATE proches_acces SET echecs = echecs + 1,
+      bloque_jusqu_au = CASE WHEN echecs + 1 >= $2 THEN now() + make_interval(mins => $3) ELSE bloque_jusqu_au END WHERE id = ANY($1)`, [rates, ECHECS_MAX, BLOCAGE_MIN]);
   if (!ok.length) throw new ErreurHttp(401, 'identifiants_incorrects');
   for (const a of ok) await pool.query('UPDATE proches_acces SET echecs = 0, bloque_jusqu_au = NULL, derniere_connexion = now() WHERE id = $1', [a.id]);
   return ok;
@@ -287,4 +292,4 @@ function brancherPersonnel(api, pool, route, entier) {
   api.get('/chsld/residents/:id/portail', route((req) => accesResident(pool, req.utilisateur, entier(req.params.id, 'id'))));
   api.post('/chsld/residents/:id/messages', route((req) => messagePersonnel(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
 }
-module.exports = { brancherPublic, brancherPersonnel, inviter, revoquer, connexion, accepterInvitation, situation };
+module.exports = { connexionAncienne, brancherPublic, brancherPersonnel, inviter, revoquer, connexion, accepterInvitation, situation };

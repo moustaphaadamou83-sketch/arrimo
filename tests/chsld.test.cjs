@@ -2165,6 +2165,110 @@ test('écrans Arrimo Famille : créer un compte, demander un rattachement, valid
   } finally { await nav.close(); process.env.ARRIMO_ENV = avant; }
 });
 
+test('Arrimo Famille, audit : la connexion dure le même temps qu’un courriel soit inconnu ou lié à un ou trois résidents', { timeout: 120000 }, async () => {
+  const { connexionAncienne } = require('../src/portail-proches');
+  const { hacherAsync } = require('../src/auth');
+  const modele = (await poolPilote.query('SELECT id FROM proches_acces ORDER BY id LIMIT 1')).rows[0];
+  assert.ok(modele, 'un accès fictif existe déjà');
+  const hash = await hacherAsync('Mauvais-Ou-Bon-2026');
+  const creer = async (courriel, n) => {
+    const c = await poolPilote.connect();   // une seule connexion : la table temporaire lui est propre
+    try {
+      await c.query('CREATE TEMP TABLE IF NOT EXISTS t_acces AS SELECT * FROM proches_acces WITH NO DATA');
+      for (let i = 0; i < n; i += 1) {
+        await c.query('TRUNCATE t_acces');
+        await c.query('INSERT INTO t_acces SELECT * FROM proches_acces WHERE id = $1', [modele.id]);
+        // Un contact fictif distinct par accès (un seul accès ouvert par contact)
+        await c.query('CREATE TEMP TABLE IF NOT EXISTS t_contact AS SELECT * FROM resident_contacts WITH NO DATA'); await c.query('TRUNCATE t_contact');
+        await c.query('INSERT INTO t_contact SELECT * FROM resident_contacts WHERE id = (SELECT contact_id FROM proches_acces WHERE id = $1)', [modele.id]);
+        const nc = (await c.query(`UPDATE t_contact SET id = nextval(pg_get_serial_sequence('resident_contacts', 'id')) RETURNING id`)).rows[0].id;
+        await c.query('INSERT INTO resident_contacts SELECT * FROM t_contact');
+        // Un résident fictif différent par accès (un seul accès ouvert par courriel et par résident)
+        const rid = (await c.query(`SELECT r.id FROM residents r WHERE r.etablissement_id = (SELECT etablissement_id FROM residents WHERE id = (SELECT resident_id FROM proches_acces WHERE id = $1))
+          ORDER BY r.id OFFSET $2 LIMIT 1`, [modele.id, i])).rows[0].id;
+        await c.query('UPDATE resident_contacts SET resident_id = $2 WHERE id = $1', [nc, rid]);
+        await c.query('UPDATE t_acces SET contact_id = $1, resident_id = $2', [nc, rid]);
+        await c.query(`UPDATE t_acces SET id = nextval(pg_get_serial_sequence('proches_acces', 'id')), courriel = $1, compte_id = NULL, mot_de_passe_hash = $2,
+          revoque_le = NULL, actif = true, echecs = 0, bloque_jusqu_au = NULL`, [courriel, hash]);
+        await c.query('INSERT INTO proches_acces SELECT * FROM t_acces');
+      }
+    } finally { c.release(); }
+  };
+  // Les copies peuvent heurter une contrainte d'unicité propre au résident : on se contente alors d'un seul accès par courriel distinct
+  try { await creer('un.resident@exemple.invalid', 1); await creer('trois.residents@exemple.invalid', 3); }
+  catch (e) { await poolPilote.query("DELETE FROM proches_acces WHERE courriel IN ('un.resident@exemple.invalid', 'trois.residents@exemple.invalid')").catch(() => {}); throw e; }
+  try {
+    // Mesures entrelacées (inconnu, un, trois, inconnu…) : la charge de la machine touche les trois cas de la même façon
+    const adresses = ['inconnu.total@exemple.invalid', 'un.resident@exemple.invalid', 'trois.residents@exemple.invalid'];
+    const mesures = adresses.map(() => []);
+    for (let tour = 0; tour < 15; tour += 1) {
+      for (const [i, courriel] of adresses.entries()) {
+        const t0 = process.hrtime.bigint();
+        await connexionAncienne(poolPilote, courriel, 'Faux-mot-de-passe').catch(() => {});
+        mesures[i].push(Number(process.hrtime.bigint() - t0) / 1e6);
+        await poolPilote.query('UPDATE proches_acces SET echecs = 0, bloque_jusqu_au = NULL WHERE courriel = $1', [courriel]);
+      }
+    }
+    // Minimum de 15 mesures : le coût propre de la vérification, sans les à-coups de charge de la machine (recette en parallèle)
+    const [d0, d1, d3] = mesures.map((m) => Math.min(...m));
+    const max = Math.max(d0, d1, d3), min = Math.min(d0, d1, d3);
+    assert.ok(max / min < 1.5, `durées minimales trop différentes : inconnu ${d0.toFixed(1)} ms, un résident ${d1.toFixed(1)} ms, trois résidents ${d3.toFixed(1)} ms`);
+    RESULTATS.connexion_proches = { inconnu_ms: Math.round(d0), un_ms: Math.round(d1), trois_ms: Math.round(d3) };
+  } finally {
+    await poolPilote.query("UPDATE proches_acces SET revoque_le = now(), actif = false WHERE courriel IN ('un.resident@exemple.invalid', 'trois.residents@exemple.invalid')");
+  }
+});
+
+test('RPA, RI, RTF, maison des aînés : type choisi dans SH, écrans CHSLD sous leur propre nom, aucune fonction clinique par défaut, Arrimo Famille', { timeout: 180000 }, async () => {
+  const E = ids.era; const c = crees.find((x) => x.code === 'CHSLD-ERA');
+  const rpa = (await sh('GET', '/types-locaux?pays=CA')).find((x) => x.code === 'rpa');
+  assert.ok(rpa && rpa.modele === 'chsld', 'SH propose le type RPA, sur le modèle CHSLD');
+  const fiche = await sh('GET', `/hopitaux/${c.hopital_id}`);
+  const { chromium } = require('playwright'); const nav = await chromium.launch(); const err = [];
+  try {
+    // 1. Le type choisi dans SH arrive dans l'environnement : nom long et code du type
+    await sh('PUT', `/hopitaux/${c.hopital_id}`, { ...fiche, type_local_id: rpa.id });
+    await sh('POST', `/hopitaux/${c.hopital_id}/relier`, {});
+    const e = (await poolPilote.query('SELECT type_etablissement, type_local_code, type_libelle FROM etablissements WHERE id = $1', [E])).rows[0];
+    assert.deepStrictEqual([e.type_etablissement, e.type_local_code, e.type_libelle], ['chsld', 'rpa', 'Résidence privée pour aînés (RPA)'], 'même moteur, nom propre');
+    assert.strictEqual((await api('era', 'GET', '/moi')).etablissements.find((x) => x.id === E).type_local_code, 'rpa');
+    // 2. OG parle de la RPA, jamais du « CHSLD »
+    const og = await ogQ('era', E, 'Combien de places libres ?');
+    assert.ok(!/CHSLD/.test(og.reponse), `OG : ${og.reponse}`);
+    // 3. Aucune fonction clinique par défaut : une RPA neuve est créée sans évaluation clinique
+    const neuve = await require('../src/admin').creerEtablissement(poolPilote, { code: 'RPA-PINS', nom: 'Résidence des Pins (fictive)', type_etablissement: 'chsld', type_local_code: 'rpa', pays_code: 'CA', latitude: 46.81, longitude: -71.2 }, async () => {});
+    assert.strictEqual(neuve.type_local_code, 'rpa');
+    assert.strictEqual((await poolPilote.query('SELECT clinique_fictive FROM etablissements WHERE id = $1', [neuve.id])).rows[0].clinique_fictive, false, 'évaluation clinique désactivée par défaut');
+    // Un type local d'hôpital (ex. clinique de district) garde le comportement hospitalier : le nom court ne s'applique qu'à l'hébergement
+    assert.strictEqual(require('../src/types-etablissement').nommer('CHSLD', { type_etablissement: 'hopital', type_local_code: 'clinique_district' }), 'CHSLD');
+    // 4. Arrimo Famille : la RPA est rangée sous « Résidence privée pour aînés (RPA) »
+    const liste = await require('../src/proches-comptes').etablissements(poolPilote);
+    const x = liste.find((y) => y.id === E); if (x) assert.strictEqual(x.type, 'rpa', 'le proche la trouve sous RPA');
+    // 5. Écrans : la navigation dit « RPA », jamais « CHSLD » ; l'hôpital voit « Liaison CHSLD et résidences »
+    const ouvrir = async (jeton, id, langue = 'fr') => {
+      const ctx = await nav.newContext({ viewport: { width: 1366, height: 900 } }); const pg = await ctx.newPage(); pg.on('pageerror', (er) => err.push(String(er)));
+      await pg.addInitScript(({ jeton, id, langue }) => { localStorage.setItem('arrimo-token', jeton); localStorage.setItem('arrimo-ctx', String(id)); localStorage.setItem('arrimo-langue', langue); }, { jeton, id, langue });
+      await pg.goto(basePilote); await pg.waitForSelector('body[data-pret="1"]');
+      if (await pg.locator('#b-premiers-pas-ok').isVisible().catch(() => false)) await pg.click('#b-premiers-pas-ok');
+      return pg;
+    };
+    for (const langue of ['fr', 'en']) {
+      const pg = await ouvrir(sessions.era, E, langue);
+      const onglets = await pg.evaluate(() => [...document.querySelectorAll('#onglets button')].filter((b) => b.offsetParent).map((b) => b.textContent).join(' | '));
+      assert.ok(!/CHSLD/.test(onglets), `navigation (${langue}) : ${onglets}`);
+      if (/R[ée]seau|network/i.test(onglets)) assert.match(onglets, /RPA/, `le réseau porte le nom RPA (${langue})`);
+      await pg.close();
+    }
+    const hop = await ouvrir(sessions.b, L.B);
+    assert.match(await hop.evaluate(() => document.querySelector('#onglets').textContent), /Liaison CHSLD et résidences/);
+    assert.deepStrictEqual(err, [], 'aucune erreur JavaScript');
+  } finally {
+    await nav.close();
+    await sh('PUT', `/hopitaux/${c.hopital_id}`, { ...fiche, type_local_id: null });
+    await poolPilote.query('UPDATE etablissements SET type_local_code = NULL, type_libelle = NULL, type_libelle_en = NULL WHERE id = $1', [E]);
+  }
+});
+
 test('captures : formulaire SH (type puis modules), liste SH, écrans CHSLD réels', { timeout: 180000 }, async () => {
   const { chromium } = require('playwright'); const dossier = path.resolve('.local/captures-chsld'); fs.mkdirSync(dossier, { recursive: true });
   const navigateur = await chromium.launch(); const erreurs = [];
@@ -2376,7 +2480,7 @@ test('surveillance : une seule alerte par panne, une au rétablissement, adresse
   const sante = http.createServer((req, res) => { res.statusCode = sain ? 200 : 503; res.end(sain ? '{"etat":"ok"}' : '{"etat":"panne"}'); });
   await Promise.all([alerte, sante].map((x) => new Promise((r) => x.listen(0, '127.0.0.1', r))));
   const passer = (webhook) => new Promise((r) => {
-    const p = spawn('bash', [path.join(racine, 'deploy/surveillance.sh')], { env: { PATH: process.env.PATH, ARRIMO_URL_SANTE: `http://127.0.0.1:${sante.address().port}/api/sante`, SURVEILLANCE_NOM: 'essai-surveillance', SURVEILLANCE_ETAT_DIR: dossier, ALERTE_WEBHOOK_URL: webhook } });
+    const p = spawn('bash', [path.join(racine, 'deploy/surveillance.sh')], { env: { PATH: process.env.PATH, ARRIMO_URL_SANTE: `http://127.0.0.1:${sante.address().port}/api/sante`, SURVEILLANCE_NOM: 'essai-surveillance', ALERTE_CONFIG: '/dev/null', SURVEILLANCE_ETAT_DIR: dossier, ALERTE_WEBHOOK_URL: webhook } });
     p.on('close', r);
   });
   const url = `http://127.0.0.1:${alerte.address().port}/secret`;
@@ -2391,8 +2495,76 @@ test('surveillance : une seule alerte par panne, une au rétablissement, adresse
     assert.deepStrictEqual(messages, []);
     assert.ok(fs.existsSync(path.join(dossier, 'essai-surveillance.echec')));
     const script = fs.readFileSync(path.join(racine, 'deploy/surveillance.sh'), 'utf8');
-    assert.match(script, /curl -sS --max-time 10 -o \/dev\/null -K -/); assert.doesNotMatch(script, /curl[^\n]*"\$ALERTE_WEBHOOK_URL"/);
+    const lib = fs.readFileSync(path.join(racine, 'deploy/alerte.sh'), 'utf8');
+    assert.match(lib, /curl -sS --max-time 10 -o \/dev\/null -K -/); assert.doesNotMatch(lib + script, /curl[^\n]*"\$ALERTE_(WEBHOOK|SMTP)_URL"/);
   } finally { alerte.close(); sante.close(); fs.rmSync(dossier, { recursive: true, force: true }); }
+});
+
+test('alertes par courriel : panne d’un site, démo vide, sauvegarde échouée ; identifiants jamais dans les arguments, une fois par heure', async () => {
+  const net = require('node:net'); const { spawn } = require('node:child_process');
+  const racine = path.join(__dirname, '..');
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'arrimo-alertes-'));
+  const recus = []; let auth = null;
+  // Serveur SMTP minimal en local : reçoit le message comme un vrai serveur d'envoi
+  const smtp = net.createServer((s) => {
+    let data = false; let corps = ''; let attenteAuth = false; s.write('220 essai ESMTP\r\n');
+    s.on('data', (b) => {
+      for (const l of b.toString().split('\r\n')) {
+        if (data) { if (l === '.') { data = false; recus.push(corps); s.write('250 OK\r\n'); } else corps += `${l}\n`; continue; }
+        if (attenteAuth && l) { attenteAuth = false; auth = Buffer.from(l, 'base64').toString(); s.write('235 OK\r\n'); continue; }
+        if (/^EHLO/i.test(l)) s.write('250-essai\r\n250 AUTH PLAIN\r\n');
+        else if (/^AUTH PLAIN \S/i.test(l)) { auth = Buffer.from(l.split(' ')[2], 'base64').toString(); s.write('235 OK\r\n'); }
+        else if (/^AUTH PLAIN/i.test(l)) { attenteAuth = true; s.write('334 \r\n'); }
+        else if (/^(MAIL|RCPT)/i.test(l)) s.write('250 OK\r\n');
+        else if (/^DATA/i.test(l)) { data = true; corps = ''; s.write('354 go\r\n'); }
+        else if (/^QUIT/i.test(l)) { s.write('221 bye\r\n'); s.end(); }
+      }
+    });
+  });
+  await new Promise((r) => smtp.listen(0, '127.0.0.1', r));
+  const conf = path.join(dossier, 'alertes.env');
+  fs.writeFileSync(conf, `ALERTE_SMTP_URL=smtp://alerte%40exemple.invalid:Secret-SMTP-2026@127.0.0.1:${smtp.address().port}\nALERTE_COURRIEL=senseafri61@gmail.com\n`, { mode: 0o600 });
+  const lancer = (args, env = {}) => new Promise((r) => {
+    const p = spawn('bash', args, { env: { PATH: process.env.PATH, ALERTE_CONFIG: conf, ALERTE_ETAT_DIR: dossier, ...env } });
+    p.on('close', r);
+  });
+  let sain = false; let reponse = '{"etat":"panne"}';
+  const http = require('node:http');
+  const sante = http.createServer((req, res) => { res.statusCode = sain ? 200 : 503; res.end(sain ? '{"etat":"ok"}' : reponse); });
+  await new Promise((r) => sante.listen(0, '127.0.0.1', r));
+  const surveiller = () => lancer([path.join(racine, 'deploy/surveillance.sh')], { ARRIMO_URL_SANTE: `http://127.0.0.1:${sante.address().port}/api/sante`, SURVEILLANCE_NOM: 'arrimo-surveillance', SURVEILLANCE_ETAT_DIR: dossier });
+  try {
+    // 1. Démo vide : /api/sante répond « schema_incomplet » ; une seule alerte au 2e échec, puis « rétabli »
+    reponse = '{"etat":"panne","base":"schema_incomplet"}';
+    assert.strictEqual(await surveiller(), 1); assert.strictEqual(recus.length, 0, 'pas d’alerte au premier échec (5 minutes)');
+    assert.strictEqual(await surveiller(), 1); assert.strictEqual(await surveiller(), 1);
+    assert.strictEqual(recus.length, 1, 'une seule alerte par panne');
+    assert.match(recus[0], /To: <senseafri61@gmail.com>/); assert.match(recus[0], /base est vide ou incompl/);
+    assert.doesNotMatch(recus[0], /Secret-SMTP-2026/, 'le mot de passe SMTP n’est jamais dans le message');
+    assert.strictEqual(auth && auth.includes('Secret-SMTP-2026') && auth.includes('alerte@exemple.invalid'), true, 'identifiants transmis au serveur SMTP');
+    sain = true; assert.strictEqual(await surveiller(), 0);
+    assert.strictEqual(recus.length, 2); assert.match(recus[1], /Subject: =\?UTF-8\?B\?/);
+    assert.match(Buffer.from(recus[1].match(/Subject: =\?UTF-8\?B\?([^?]+)\?=/)[1], 'base64').toString(), /rétabli/);
+    // 2. Sauvegarde échouée (OnFailure des services de sauvegarde) : courriel, puis au plus une fois par heure
+    assert.strictEqual(await lancer([path.join(racine, 'deploy/alerte.sh'), 'Sauvegarde échouée : arrimo-sauvegarde.service', 'Voir journalctl -u arrimo-sauvegarde']), 0);
+    assert.strictEqual(await lancer([path.join(racine, 'deploy/alerte.sh'), 'Sauvegarde échouée : arrimo-sauvegarde.service', 'idem']), 0);
+    assert.strictEqual(recus.length, 3, 'la même alerte ne repart pas dans l’heure');
+    // 3. Aucun secret dans les arguments des processus ; installateur : sauvegardes reliées à l'alerte
+    for (const f of ['deploy/alerte.sh', 'deploy/surveillance.sh']) assert.doesNotMatch(fs.readFileSync(path.join(racine, f), 'utf8'), /curl[^\n]*"\$ALERTE_(SMTP|WEBHOOK)_URL"/);
+    const inst = fs.readFileSync(path.join(racine, 'deploy/installer-alertes.sh'), 'utf8');
+    assert.match(inst, /OnFailure=arrimo-alerte@%%n\.service/); assert.match(inst, /chmod 600 "\$CONF"/);
+  } finally { smtp.close(); sante.close(); fs.rmSync(dossier, { recursive: true, force: true }); }
+});
+
+test('courriels : aucun renseignement de santé, aucune référence de résident ou de patient, aucun nom de résident', async () => {
+  assert.ok(courriels.length >= 5, `courriels captés pendant la recette : ${courriels.length}`);
+  const residents = (await poolPilote.query('SELECT DISTINCT nom FROM residents WHERE length(nom) > 3')).rows.map((r) => r.nom);
+  for (const m of courriels) {
+    const tout = `${m.sujet}\n${m.texte}\n${m.html || ''}`;
+    assert.doesNotMatch(tout, /\b[RP]-\d{5}\b/, `référence dans « ${m.sujet} »`);
+    assert.doesNotMatch(tout, /patholog|symptôme|symptom|diagnos|médica|allerg|précaution/i, `donnée clinique dans « ${m.sujet} »`);
+    for (const n of residents) assert.ok(!tout.includes(n), `nom de résident « ${n} » dans « ${m.sujet} »`);
+  }
 });
 
 test('démos sans double authentification : administration directe, activation refusée ; exigée ailleurs', async () => {

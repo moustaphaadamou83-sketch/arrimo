@@ -12,7 +12,7 @@ window.ARRIMO_I18N.fr = {
     t_blouse: 'Blouse', t_veste: 'Veste', t_polo: 'Polo', a_aucun: 'Aucun', a_lunettes: 'Lunettes', a_casque: 'Casque-micro', v_feminine: 'Féminine', v_masculine: 'Masculine',
     f_texte: 'Assistant texte', f_vocal: 'Fonctions vocales', f_dictee: 'Dictée', f_conversation: 'Conversation continue', f_personnalisation: 'Personnalisation', f_actions: 'Actions administratives supervisées',
     f_patients: 'Patients fictifs (démo et recette)', f_documents: 'Lecture de documents', f_rapports: 'Rapports', couleur_n: 'Teinte {n}', peau_n: 'Teinte {n}' },
-  types_etab: { hopitaux: 'Hôpitaux', chsld: 'CHSLD' },
+  types_etab: { hopitaux: 'Hôpitaux', chsld: 'CHSLD', hebergement: 'Hébergement pour aînés' },
   nav: { operations: 'Opérations', pilotage: 'Pilotage', gestion: 'Gestion', principale: 'Navigation principale', ouvrir: 'Ouvrir le menu', fermer: 'Fermer le menu' },
   apparence: { basculer: 'Changer le thème', choisir: 'Apparence', clair: 'Clair', sombre: 'Sombre', automatique: 'Automatique (système)', soleil: 'Selon le soleil (établissement)', enregistree: 'Apparence enregistrée.' },
   priorites_ui: {
@@ -84,7 +84,7 @@ window.ARRIMO_I18N.fr = {
     vigilance: 'Congés et alertes',
     national: 'National',
     urgence: 'Urgence',
-    copilote: 'OG', reseau: 'Réseau', lits: 'Lits', admissions: 'Admissions', transferts: 'Transferts', liaison: 'Liaison CHSLD', nettoyage: 'Nettoyage',
+    copilote: 'OG', reseau: 'Réseau', lits: 'Lits', admissions: 'Admissions', transferts: 'Transferts', liaison: 'Liaison CHSLD et résidences', nettoyage: 'Nettoyage',
     nsa: 'NSA', indicateurs: 'Indicateurs', journal: 'Journal', params: 'Paramètres', admin: 'Administration', compte: 'Mon compte',
   },
   pied: { confidentialite: 'Confidentialité', conditions: 'Conditions d’utilisation' },
@@ -151,7 +151,7 @@ window.ARRIMO_I18N.fr = {
     agrege_note: 'Cet établissement partage seulement le nombre de lits libres.',
     urgence: 'Urgence : {occ|aucun patient|# patient|# patients} pour {fonc|# civière|# civières}', urgence_24h: '{n|aucun depuis plus de 24 h|# depuis plus de 24 h|# depuis plus de 24 h}',
   },
-  dispo: { voir: 'Voir au tableau national', plus_libre: 'Ce lit vient d’être pris. Consultez le tableau national.' },
+  dispo: { voir_admissions: 'Voir la file d’admission', voir: 'Voir au tableau national', plus_libre: 'Ce lit vient d’être pris. Consultez le tableau national.' },
   national: {
     titre: 'Tableau national', intro: 'Tous les établissements qui partagent leur capacité, du plus proche au plus loin depuis {etab}, sans limite de distance.',
     inactif: 'Le tableau national est disponible une fois le module activé.', affichage: 'Affichage', liste: 'Liste', carte: 'Carte',

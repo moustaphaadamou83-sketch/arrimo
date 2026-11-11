@@ -61,7 +61,7 @@
       incident_retour_retarde: 'Retour retardé', incident_chambre_indisponible: 'Chambre indisponible', incident_informations_manquantes: 'Informations manquantes',
       incident_hospitalisation_prolongee: 'Hospitalisation prolongée', incident_arrivee_retardee: 'Arrivée retardée', incident_changement_hopital: 'Changement d’hôpital', etapes: 'Étapes',
       residents_chsld: 'Résidents de CHSLD', residents_chsld_intro: 'Résidents hospitalisés ici depuis un CHSLD, et leurs retours. Seule la référence circule entre établissements.' },
-    liaison: { titre: 'Liaison CHSLD · {etab}', titre_court: 'Liaison CHSLD', intro: 'Demandes et mouvements des résidents de CHSLD vers cet hôpital, accueil, hospitalisations et retours. Séparé des transferts interhospitaliers.',
+    liaison: { titre: 'Liaison CHSLD et résidences · {etab}', titre_court: 'Liaison CHSLD et résidences', intro: 'Demandes et mouvements des résidents de CHSLD vers cet hôpital, accueil, hospitalisations et retours. Séparé des transferts interhospitaliers.',
       regle: 'Une demande transmise ne signifie pas que le résident est arrivé : chaque étape est confirmée par une personne. Seule la référence du résident circule entre établissements. Aucune orientation ni priorité clinique n’est décidée automatiquement.',
       action_annuler_transfert: "Annuler le transfert", action_confirmer_depart_transfert: "Confirmer le départ vers l’autre hôpital",
       justif_precautions_a_confirmer: "précautions à confirmer", justif_chambre_sous_precautions: "chambre sous précautions, à vérifier",

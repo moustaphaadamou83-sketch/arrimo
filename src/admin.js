@@ -41,13 +41,13 @@ async function creerEtablissement(pool, b, journaliserCreation,{env=process.env}
   const type = b.type_etablissement === undefined ? 'hopital' : String(b.type_etablissement);
   TE.exigerTypeOperationnel(type);
   const modules = TE.drapeauxDepuisChoix(type, b.modules || {});
-  const typeLibelle = TE.libelleType(b.type_libelle); const typeLibelleEn = TE.libelleType(b.type_libelle_en);
+  const typeLibelle = TE.libelleType(b.type_libelle); const typeLibelleEn = TE.libelleType(b.type_libelle_en); const typeLocal = TE.codeTypeLocal(b.type_local_code);
   return transaction(pool, async (c) => {
     if ((await c.query('SELECT 1 FROM etablissements WHERE code = $1', [code])).rows[0]) throw new ErreurHttp(409, 'code_etab_existe');
     const configId = type === 'chsld' ? await TE.configChsld(c, config.id) : config.id;
-    const e = (await c.query(`INSERT INTO etablissements (code, nom, ville, adresse, latitude, longitude, config_id, partage, module_actif, type_etablissement, modules, profil_config_id, type_libelle, type_libelle_en)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, $9, $10, $11, $12, $13) RETURNING id, code, nom, ville, adresse, partage, module_actif, type_etablissement, modules, type_libelle, type_libelle_en`,
-    [code, nom, String(b.ville || '').trim() || null, String(b.adresse || '').trim() || null, lat, lon, configId, partage, type, modules, configId === config.id ? null : config.id, typeLibelle, typeLibelleEn])).rows[0];
+    const e = (await c.query(`INSERT INTO etablissements (code, nom, ville, adresse, latitude, longitude, config_id, partage, module_actif, type_etablissement, modules, profil_config_id, type_libelle, type_libelle_en, type_local_code)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, $9, $10, $11, $12, $13, $14) RETURNING id, code, nom, ville, adresse, partage, module_actif, type_etablissement, modules, type_libelle, type_libelle_en, type_local_code`,
+    [code, nom, String(b.ville || '').trim() || null, String(b.adresse || '').trim() || null, lat, lon, configId, partage, type, modules, configId === config.id ? null : config.id, typeLibelle, typeLibelleEn, typeLocal])).rows[0];
     await journaliserCreation(c, e);
     return {...e,config_id:config.id,configuration_code:config.code};
   });

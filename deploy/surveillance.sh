@@ -7,30 +7,31 @@ URL="${ARRIMO_URL_SANTE:-http://127.0.0.1:3010/api/sante}"
 NOM="${SURVEILLANCE_NOM:-arrimo-surveillance}"   # un nom par environnement (ex. arrimo-recette-surveillance)
 ETAT="${SURVEILLANCE_ETAT_DIR:-/run}/$NOM.echec"
 
-# Alerte facultative : ALERTE_WEBHOOK_URL (HTTPS). Un seul message par panne et un au rétablissement, jamais à chaque passage.
-# L'adresse contient souvent un secret : elle passe par l'entrée standard de curl, jamais par ses arguments.
-alerter() {
-  [ -n "${ALERTE_WEBHOOK_URL:-}" ] || return 0
-  case "$ALERTE_WEBHOOK_URL" in
-    https://*|http://127.0.0.1:*) ;;
-    *) logger -t "$NOM" -p user.err "Alerte non envoyée : ALERTE_WEBHOOK_URL doit être en HTTPS."; return 0 ;;
-  esac
-  printf 'url = "%s"\n' "$ALERTE_WEBHOOK_URL" | curl -sS --max-time 10 -o /dev/null -K - -H 'Content-Type: application/json' -d "{\"text\":\"$1\"}" \
-    || logger -t "$NOM" -p user.err "Alerte non envoyée : le service d'alerte ne répond pas."
-}
+# Alerte à un humain (deploy/alerte.sh) : courriel et/ou webhook HTTPS, réglés dans /etc/arrimo/alertes.env.
+# Une panne est signalée au 2e échec de suite (10 minutes), une seule fois, puis une fois au rétablissement.
+# Un schéma manquant (démo vide) répond 503 « schema_incomplet » : c'est une panne comme une autre.
+ICI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=deploy/alerte.sh
+. "$ICI/alerte.sh"
+export ALERTE_ETAT_DIR="${ALERTE_ETAT_DIR:-${SURVEILLANCE_ETAT_DIR:-/run}/arrimo-alertes}" ALERTE_TAG="$NOM"
+SEUIL="${SURVEILLANCE_SEUIL:-2}"
 
 REPONSE=$(curl -sS --max-time 10 "$URL" 2>&1)
 if printf '%s' "$REPONSE" | grep -q '"etat":"ok"'; then
   if [ -f "$ETAT" ]; then
-    logger -t "$NOM" -p user.notice "Rétabli : $URL répond de nouveau (panne depuis $(cat "$ETAT"))"
-    alerter "Arrimo $NOM : rétabli"
-    rm -f "$ETAT"
+    logger -t "$NOM" -p user.notice "Rétabli : $URL répond de nouveau (panne depuis $(head -1 "$ETAT"))"
+    [ -f "$ETAT.alerte" ] && envoyer_alerte "Arrimo $NOM : rétabli" "$URL répond de nouveau (panne depuis $(head -1 "$ETAT"))."
+    rm -f "$ETAT" "$ETAT.n" "$ETAT.alerte"
   fi
   exit 0
 fi
-if [ ! -f "$ETAT" ]; then
-  date -u +%Y-%m-%dT%H:%M:%SZ > "$ETAT"
-  alerter "Arrimo $NOM : panne détectée"
+[ -f "$ETAT" ] || date -u +%Y-%m-%dT%H:%M:%SZ > "$ETAT"
+N=$(( $(cat "$ETAT.n" 2>/dev/null || echo 0) + 1 )); echo "$N" > "$ETAT.n"
+CAUSE="$(printf '%s' "$REPONSE" | head -c 200)"
+case "$CAUSE" in *schema_incomplet*) CAUSE="la base est vide ou incomplète (schéma manquant)" ;; esac
+if [ "$N" -ge "$SEUIL" ] && [ ! -f "$ETAT.alerte" ]; then
+  touch "$ETAT.alerte"
+  envoyer_alerte "Arrimo $NOM : panne détectée" "$URL ne répond pas correctement depuis $(head -1 "$ETAT") : $CAUSE"
 fi
-logger -t "$NOM" -p user.err "ÉCHEC : $URL ne répond pas correctement : $(printf '%s' "$REPONSE" | head -c 200)"
+logger -t "$NOM" -p user.err "ÉCHEC : $URL ne répond pas correctement : $CAUSE"
 exit 1

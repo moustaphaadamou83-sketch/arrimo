@@ -215,7 +215,7 @@ function creerApp(pool, options = {}) {
   api.get('/moi', route(async (req) => {
     const u = req.utilisateur;
     const { rows } = await pool.query(
-      `SELECT e.id, e.code, e.nom, e.ville, e.partage, e.module_actif, e.config_id, e.rayon_alerte_km, e.modules, e.vocation, e.latitude, e.longitude, e.type_etablissement, e.type_libelle, e.type_libelle_en,
+      `SELECT e.id, e.code, e.nom, e.ville, e.partage, e.module_actif, e.config_id, e.rayon_alerte_km, e.modules, e.vocation, e.latitude, e.longitude, e.type_etablissement, e.type_local_code, e.type_libelle, e.type_libelle_en,
               ARRAY(SELECT DISTINCT l.type_id FROM lits l WHERE l.etablissement_id = e.id) AS types_presents
          FROM etablissements e
         WHERE e.actif AND ($1 OR e.id = ANY($2::int[]))

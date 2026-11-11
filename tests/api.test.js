@@ -838,6 +838,49 @@ test('disponibilité à côté : alerte aux hôpitaux proches qui en ont besoin,
   }
 });
 
+test('lit libre à l’intérieur de l’hôpital : coordination et urgence avisées quand des patients attendent ce type de lit, hôpital seul, sans spam, sans référence patient', async () => {
+  const { transaction } = require('../src/db');
+  const { changerEtat } = require('../src/regles');
+  const hx = await id('HX');
+  const avant = (await pool.query('SELECT partage FROM etablissements WHERE id = $1', [hx])).rows[0].partage;
+  await pool.query(`UPDATE etablissements SET partage = 'aucun' WHERE id = $1`, [hx]);   // hôpital utilisé seul : aucun partage réseau
+  try {
+    await pool.query(`DELETE FROM notifications WHERE code = 'lit_libre'`);
+    const attente = async (code) => (await pool.query(`SELECT count(*)::int n FROM demandes_admission d JOIN types_unite t ON t.id = d.type_id WHERE d.etablissement_id = $1 AND d.statut = 'attente' AND t.code = $2`, [hx, code])).rows[0].n;
+    const typeAttendu = (await pool.query(`SELECT t.code FROM demandes_admission d JOIN types_unite t ON t.id = d.type_id WHERE d.etablissement_id = $1 AND d.statut = 'attente'
+       AND EXISTS (SELECT 1 FROM lits l WHERE l.etablissement_id = $1 AND l.type_id = t.id AND l.etat = 'occupe' AND l.nsa_depuis IS NULL) GROUP BY t.code ORDER BY count(*) DESC LIMIT 1`, [hx])).rows[0]?.code;
+    assert.ok(typeAttendu, 'la démo a des patients en attente d’un type de lit à X');
+    const liberer = async (code) => {
+      const l = (await pool.query(`SELECT l.id, l.code FROM lits l JOIN types_unite t ON t.id = l.type_id WHERE l.etablissement_id = $1 AND t.code = $2 AND l.etat = 'occupe' AND l.nsa_depuis IS NULL LIMIT 1`, [hx, code])).rows[0];
+      if (!l) return null;
+      const compte = async () => (await pool.query(`SELECT count(*)::int n FROM notifications WHERE etablissement_id = $1 AND code = 'lit_libre'`, [hx])).rows[0].n;
+      const avantNet = await compte();
+      await transaction(pool, (c) => changerEtat(c, pool, null, l.id, 'nettoyage', {}));
+      assert.strictEqual(await compte(), avantNet, 'rien pendant le nettoyage : le lit n’est pas encore prêt');
+      await transaction(pool, (c) => changerEtat(c, pool, null, l.id, 'libre', {}));
+      return l;
+    };
+    const ici = async () => (await pool.query(`SELECT message, vars FROM notifications WHERE etablissement_id = $1 AND code = 'lit_libre' ORDER BY id`, [hx])).rows;
+    const l = await liberer(typeAttendu);
+    let n = await ici();
+    assert.strictEqual(n.length, 1, 'X est avisé, même sans partage réseau');
+    assert.strictEqual(n[0].vars.lit, l.code); assert.strictEqual(n[0].vars.n, await attente(typeAttendu));
+    assert.strictEqual(n[0].message, require('../src/langue').tr('fr', 'notif.lit_libre', n[0].vars));
+    assert.ok(!/P-\d{5}/.test(JSON.stringify(n)), 'aucune référence patient');
+    // Visible par la coordination (et l'urgence) de X dans ses notifications, en anglais aussi
+    const en = await fetch(`${base}/api/notifications?etablissement_id=${hx}`, { headers: { Authorization: `Bearer ${tokens.x}`, 'X-Langue': 'en' } }).then((r) => r.json());
+    assert.ok(en.some((x) => x.code === 'lit_libre' && /^Bed .+ is free/.test(x.message)), en.map((x) => x.message).join(' | '));
+    // Sans spam : un 2e lit du même type dans les 10 minutes ne crée pas de nouvelle alerte
+    if (await liberer(typeAttendu)) assert.strictEqual((await ici()).length, 1);
+    // Un type que personne n'attend : aucune alerte
+    const sansAttente = (await pool.query(`SELECT t.code FROM types_unite t JOIN lits l ON l.type_id = t.id AND l.etablissement_id = $1 AND l.etat = 'occupe' AND l.nsa_depuis IS NULL
+       WHERE NOT EXISTS (SELECT 1 FROM demandes_admission d WHERE d.etablissement_id = $1 AND d.statut = 'attente' AND d.type_id = t.id) LIMIT 1`, [hx])).rows[0]?.code;
+    if (sansAttente) { await liberer(sansAttente); assert.strictEqual((await ici()).length, 1, 'aucune alerte sans patient en attente'); }
+  } finally {
+    await pool.query('UPDATE etablissements SET partage = $2 WHERE id = $1', [hx, avant]);
+  }
+});
+
 test('OG par établissement : licence SH, réglages administrateur bornés, personnalisation isolée, refus côté serveur', async () => {
   const ex = (await appel('x', 'GET', '/moi')).corps.etablissements[0].id, ey = (await appel('y', 'GET', '/moi')).corps.etablissements[0].id;
   const codeX = (await pool.query('SELECT code FROM etablissements WHERE id=$1', [ex])).rows[0].code;
