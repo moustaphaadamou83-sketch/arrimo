@@ -14,7 +14,12 @@ class ErreurCible extends Error {
   constructor(statut, message, code) { super(message); this.statut = statut; this.code = code; }
 }
 
-const estCodeProduction = (code) => typeof code === 'string' && /^production(_[a-z]{2})?$/.test(code);
+const estCodeProduction = (code) => typeof code === 'string' && /^production(_[a-z]{2}(_[a-z0-9]{2,24})?)?$/.test(code);
+
+/* Registre des serveurs ajoutés depuis SH (table sh_serveurs, chargée par serveurs.charger) : s'ajoute à la configuration. */
+let REGISTRE = [];
+function definirRegistre(liste) { REGISTRE = Array.isArray(liste) ? liste : []; }
+const registre = () => REGISTRE;
 
 /** Tous les environnements connus : la liste de base et les productions déclarées dans SH_PRODUCTIONS. */
 function nomsEnvironnements(env = process.env) {
@@ -26,6 +31,7 @@ function nomsEnvironnements(env = process.env) {
     }
     noms[code] = nom;
   }
+  for (const r of REGISTRE) if (r.statut !== 'desactive' && !Object.hasOwn(noms, r.code)) noms[r.code] = r.nom;
   return noms;
 }
 
@@ -45,9 +51,14 @@ function cibles(env = process.env) {
     const p = `SH_ENV_${code.toUpperCase()}_`;
     return { code, nom: noms[code], url: (env[`${p}URL`] || '').replace(/\/$/, ''), cle: env[`${p}CLE`] || '', public: (env[`${p}PUBLIC`] || '').replace(/\/$/, '') };
   }).filter((c) => c.url && c.cle);
+  // Serveurs du registre : appairés ou reliés, avec leur clé (jamais désactivés, jamais sans clé)
+  for (const r of REGISTRE) {
+    if (!['appaire', 'relie'].includes(r.statut) || !r.cle || configurees.some((c) => c.code === r.code)) continue;
+    configurees.push({ code: r.code, nom: r.nom, url: r.url.replace(/\/$/, ''), cle: r.cle, public: (r.public || '').replace(/\/$/, ''), pays_code: r.pays_code, region: r.region, registre: true });
+  }
   configurees.forEach((c) => exigerAdresseSure(c.code, c.url));
   // Une production compromise ne doit jamais ouvrir un autre environnement : ni adresse ni clé partagée.
-  for (const c of configurees.filter((x) => /^production_/.test(x.code))) {
+  for (const c of configurees.filter((x) => /^production_/.test(x.code) || x.registre)) {
     if (configurees.some((x) => x !== c && (x.url === c.url || x.cle === c.cle))) {
       throw new ErreurCible(503, `La production ${c.code} doit avoir une adresse et une clé propres.`, 'production_non_isolee');
     }
@@ -87,4 +98,4 @@ function lienAcces(cible, sousDomaine) {
   return `${u.protocol}//${sousDomaine}.${u.host}`;
 }
 
-module.exports = { NOMS, nomsEnvironnements, estCodeProduction, cibles, appeler, lienAcces, ErreurCible };
+module.exports = { definirRegistre, registre, NOMS, nomsEnvironnements, estCodeProduction, cibles, appeler, lienAcces, ErreurCible };

@@ -6,7 +6,13 @@
 # Usage (root) : arrimo-courriel-configurer
 set -euo pipefail
 [ "$(id -u)" = 0 ] || { echo "À lancer en root."; exit 1; }
-ENVS=(/opt/arrimo/.env:arrimo /opt/arrimo-recette/.env:arrimo-recette /opt/arrimo-demo/shared/.env:arrimo-public-demo /opt/arrimo-sh/.env:arrimo-sh)
+# Fichier réellement lu par chaque service : le premier EnvironmentFile de son unité systemd (jamais un ancien .env)
+ENVS=()
+for svc in arrimo arrimo-recette arrimo-public-demo arrimo-sh; do
+  f="$(systemctl cat "$svc" 2>/dev/null | sed -n 's/^EnvironmentFile=-\{0,1\}//p' | head -1)"
+  [ -n "$f" ] && [ -f "$f" ] && ENVS+=("$f:$svc")
+done
+[ "${#ENVS[@]}" -gt 0 ] || { echo "Aucun service Arrimo trouvé : rien n'a été modifié."; exit 1; }
 
 read -r -p "Serveur SMTP [email-smtp.ca-central-1.amazonaws.com] : " HOTE; HOTE="${HOTE:-email-smtp.ca-central-1.amazonaws.com}"
 read -r -p "Port SMTPS [465] : " PORT; PORT="${PORT:-465}"

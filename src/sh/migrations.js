@@ -83,7 +83,9 @@ async function migrerSh(pool, env = process.env) {
     const typesLocaux=await require('./types-etablissement-migrations').migrerTypesLocaux(c);
     const demandesSite=await require('./types-etablissement-migrations').migrerDemandesSite(c);
     const typesAines=await require('./types-etablissement-migrations').migrerTypesAines(c);
-    return { version: require('./types-etablissement-migrations').VERSION_SH, appliquee: typesAines || demandesSite || typesLocaux || productions || liaisonChsld || socle || erp || acces || projets || presence || perimetre || cycle || pilote || concurrence || liens || support || supportDroits || notificationsFinances || supportPagination || notificationsPerimetres || raccordementSupport || supportSla || supportPj || supportCourriels || supportCalendrier || preferences || fiscalite || change || apparence || parametres || financesProjets || tachesSuivi || projetsPilotage || competences || recherche || deploiement || collaborateurs || typesEtablissement };
+    const serveurs=await require('./serveurs-migrations').migrerServeurs(c);
+    const profilsPays=await require('./serveurs-migrations').migrerProfilsPays(c);
+    return { version: require('./serveurs-migrations').PROFILS_PAYS_VERSION, appliquee: profilsPays || serveurs || typesAines || demandesSite || typesLocaux || productions || liaisonChsld || socle || erp || acces || projets || presence || perimetre || cycle || pilote || concurrence || liens || support || supportDroits || notificationsFinances || supportPagination || notificationsPerimetres || raccordementSupport || supportSla || supportPj || supportCourriels || supportCalendrier || preferences || fiscalite || change || apparence || parametres || financesProjets || tachesSuivi || projetsPilotage || competences || recherche || deploiement || collaborateurs || typesEtablissement };
   });
 }
 

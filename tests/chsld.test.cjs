@@ -1314,7 +1314,8 @@ test('audit de sécurité : attaques automatiques sur toutes les routes, isolati
     const routesSh = [...new Set([...srcSh.matchAll(/api\.(get|post|put|delete)\(\s*'([^']+)'/g)].map((m) => `${m[1].toUpperCase()} ${m[2]}`))];
     assert.ok(routesSh.length > 150, `${routesSh.length} routes SH`);
     const brutSh = async (jeton, m, c) => { const r = await fetch(`${baseSh}/api${c}`, { method: m, headers: { 'Content-Type': 'application/json', ...(jeton ? { Authorization: `Bearer ${jeton}` } : {}) }, body: m === 'GET' ? undefined : '{}' }); return { statut: r.status, texte: await r.text() }; };
-    const SH_PUBLIQUES = new Set(['GET /sante', 'POST /connexion', 'POST /connexion/2fa', 'POST /invitations/consommer', 'GET /connexion/configuration', 'POST /mot-de-passe/demander', 'POST /mot-de-passe/reinitialiser']);
+    // Appairage d'un serveur : public, protégé par le code à usage unique (empreinte, 15 min) et limité à 10 essais par 15 min et par adresse
+    const SH_PUBLIQUES = new Set(['POST /serveurs/appairage', 'GET /sante', 'POST /connexion', 'POST /connexion/2fa', 'POST /invitations/consommer', 'GET /connexion/configuration', 'POST /mot-de-passe/demander', 'POST /mot-de-passe/reinitialiser']);
     const chemin = (c) => c.replace(/:[a-zA-Z_]+/g, '1');
     const ouvertesSh = [];
     for (const rt of routesSh) { const [m, c] = rt.split(' '); const r = await brutSh(null, m, chemin(c)); assert.ok(r.statut < 500 && r.statut !== 429, `SH ${rt} → ${r.statut} ${r.texte.slice(0, 100)}`); if (r.statut < 400 && !SH_PUBLIQUES.has(rt)) ouvertesSh.push(`${rt} → ${r.statut}`); }
@@ -2236,7 +2237,7 @@ test('RPA, RI, RTF, maison des aînés : type choisi dans SH, écrans CHSLD sous
     const og = await ogQ('era', E, 'Combien de places libres ?');
     assert.ok(!/CHSLD/.test(og.reponse), `OG : ${og.reponse}`);
     // 3. Aucune fonction clinique par défaut : une RPA neuve est créée sans évaluation clinique
-    const neuve = await require('../src/admin').creerEtablissement(poolPilote, { code: 'RPA-PINS', nom: 'Résidence des Pins (fictive)', type_etablissement: 'chsld', type_local_code: 'rpa', pays_code: 'CA', latitude: 46.81, longitude: -71.2 }, async () => {});
+    const neuve = await require('../src/admin').creerEtablissement(poolPilote, { code: 'RPA-ESSAI', nom: 'Résidence d’essai (fictive)', type_etablissement: 'chsld', type_local_code: 'rpa', pays_code: 'CA', latitude: 46.81, longitude: -71.2 }, async () => {});
     assert.strictEqual(neuve.type_local_code, 'rpa');
     assert.strictEqual((await poolPilote.query('SELECT clinique_fictive FROM etablissements WHERE id = $1', [neuve.id])).rows[0].clinique_fictive, false, 'évaluation clinique désactivée par défaut');
     // Un type local d'hôpital (ex. clinique de district) garde le comportement hospitalier : le nom court ne s'applique qu'à l'hébergement
@@ -2660,4 +2661,32 @@ test('démonstration : un seul compte par CHSLD (administrateur), six comptes d�
     await ctxH.close();
   } finally { await navigateur.close(); }
   assert.deepStrictEqual(erreurs, []);
+});
+
+test('bouton SH « Créer la RPA de démonstration » : parcours SH habituel, type local RPA, résidents fictifs, compte unique, proche invitée ; environnement fictif seulement', { timeout: 240000 }, async () => {
+  assert.strictEqual((await appelSh('POST', '/demo-rpa', { environnement: 'production' })).statut, 409, 'jamais hors environnement fictif');
+  await sh('POST', '/demo-rpa', { environnement: 'pilote' });
+  assert.strictEqual((await appelSh('POST', '/demo-rpa', { environnement: 'pilote' })).statut, 409, 'une seule création à la fois');
+  let demo; for (let i = 0; i < 120; i += 1) { demo = await sh('GET', '/demo-rpa?environnement=pilote'); if (demo.statut !== 'en_cours') break; await new Promise((r) => setTimeout(r, 2000)); }
+  assert.strictEqual(demo.statut, 'termine', JSON.stringify(demo));
+  assert.deepStrictEqual(demo.etablissements.map((e) => e.nom), ['Résidence des Pins (RPA)']);
+  // Fiche SH : type CHSLD, type local RPA, active, modules propres aux RPA désactivés
+  const fiche = await sh('GET', `/hopitaux/${demo.etablissements[0].id}`);
+  const rpa = (await sh('GET', '/types-locaux?pays=CA')).find((t) => t.code === 'rpa');
+  assert.deepStrictEqual([fiche.type_etablissement, fiche.type_local_id, fiche.statut], ['chsld', rpa.id, 'actif']);
+  // Environnement : même moteur, nom propre, 40 logements, aucune fonction clinique, réseau inter-CHSLD et demandes d'hébergement désactivés
+  const e = (await poolPilote.query(`SELECT id, type_etablissement, type_local_code, type_libelle, module_actif, clinique_fictive, modules FROM etablissements WHERE code = 'RPA-PINS'`)).rows[0];
+  assert.deepStrictEqual([e.type_etablissement, e.type_local_code, e.type_libelle, e.module_actif, e.clinique_fictive], ['chsld', 'rpa', 'Résidence privée pour aînés (RPA)', true, false]);
+  assert.strictEqual(e.modules.reseau_chsld, false); assert.strictEqual(e.modules.demandes_hebergement, false);
+  assert.strictEqual((await poolPilote.query('SELECT count(*)::int n FROM lits WHERE etablissement_id = $1', [e.id])).rows[0].n, 40);
+  assert.strictEqual(demo.residents, 29, 'résidents fictifs');
+  assert.ok(demo.comptes.every((c) => c.endsWith('@rpa.example.invalid')));
+  // Connexion avec le compte de la RPA : OG parle de la RPA
+  const jeton = (await api(null, 'POST', '/connexion', { email: 'coordination.pins@rpa.example.invalid', mot_de_passe: MDP })).token;
+  sessions.pins = jeton;
+  const og = await ogQ('pins', e.id, 'Combien de places libres ?');
+  assert.ok(!/CHSLD/.test(og.reponse), og.reponse);
+  // Aucun doublon
+  assert.strictEqual((await appelSh('POST', '/demo-rpa', { environnement: 'pilote' })).statut, 409, 'pas de doublon');
+  assert.strictEqual((await poolPilote.query("SELECT count(*)::int n FROM etablissements WHERE code = 'RPA-PINS'")).rows[0].n, 1);
 });

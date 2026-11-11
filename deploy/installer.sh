@@ -265,6 +265,7 @@ install -m 750 "$DOSSIER/deploy/restaurer-isolee.sh" /usr/local/lib/arrimo/resta
 install -m 750 "$DOSSIER/deploy/restaurer.sh" /usr/local/lib/arrimo/restaurer.sh
 install -m 750 "$DOSSIER/deploy/surveillance.sh" /usr/local/lib/arrimo/surveillance.sh
 install -m 750 "$DOSSIER/deploy/lien.sh" /usr/local/lib/arrimo/lien.sh
+printf '#!/usr/bin/env bash\nSERVICE=%s exec bash %s/deploy/appairer.sh "$@"\n' "$NOM" "$DOSSIER" > "/usr/local/bin/$NOM-appairer"; chmod 700 "/usr/local/bin/$NOM-appairer"   # appairage avec SH (code saisi masqué)
 install -m 750 "$DOSSIER/deploy/b2-configurer.sh" /usr/local/bin/arrimo-b2-configurer
 printf '#!/usr/bin/env bash\nDOSSIER_APP=%s SAUVEGARDE_DOSSIER=%s exec /usr/local/lib/arrimo/sauvegarde.sh "$@"\n' "$DOSSIER" "$SAUVEGARDES" > "/usr/local/bin/$NOM-sauvegarde"
 printf '#!/usr/bin/env bash\nexec /usr/local/lib/arrimo/sauvegarde-complete.sh "%s" "%s" "$@"\n' "$ROOT_DOSSIER" "$NOM" > "/usr/local/bin/$NOM-sauvegarde-complete"

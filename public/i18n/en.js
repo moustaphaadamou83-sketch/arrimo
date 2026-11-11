@@ -592,6 +592,8 @@ window.ARRIMO_I18N.en = {
     apparence_invalide: 'Invalid appearance.',
     demo_mot_de_passe_absent: "The demo password is not configured in this environment.",
     demo_chsld_absents: "Both demo CHSLDs must first be created and activated from SH.",
+    reference_format_verrouille: "This profile’s reference format is already used by a facility: it can no longer change.",
+    demo_rpa_absente: "The demo seniors’ residence (RPA) must first be created and activated from SH.",
     demo_chsld_deja_peuplee: "The CHSLD demo already contains residents.",
     demo_hopital_b_absent: "Demo Hospital B was not found.",
     demo_chsld_comptes_incomplets: "The demo CHSLD accounts are incomplete.",

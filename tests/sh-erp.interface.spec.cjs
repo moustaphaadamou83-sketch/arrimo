@@ -296,6 +296,12 @@ test('ERP SH dans le navigateur : parcours complet par les écrans, 3 largeurs',
     await page.vue('hebergement');
     await page.rendu(() => page.click('[data-action="heb-verifier"]'));
     assert.match(await page.textContent('#contenu'), /répond/);
+    // Administration : serveurs ajoutés depuis la console et profils de pays, avec leurs boutons
+    if (await page.isVisible('#b-serveur-ajouter')) {
+      assert.ok(await page.isVisible('#serveurs') && await page.isVisible('#profils-pays'));
+      await page.click('#b-serveur-ajouter'); assert.ok(await page.isVisible('#code-2fa'), 'double authentification demandée');
+      await page.click('#modale button:has-text("Annuler")');
+    }
     await page.viderToasts();
     await verifier(page, L, 'sh-erp-11-hebergement');
     await page.vue('rapports');

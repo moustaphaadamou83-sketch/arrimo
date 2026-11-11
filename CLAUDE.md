@@ -76,7 +76,7 @@ Tout changement : ajouter ou adapter un test dans `tests/api.test.js`, puis `npm
 4. **Politique de confidentialité et conditions d’utilisation** (pages accessibles depuis l’écran de connexion), à faire relire par un avocat.
 5. **Mot de passe oublié** : aujourd’hui, réinitialisation par un administrateur seulement ; ajouter l’envoi par courriel quand un courriel professionnel Arrimo existera.
 6. **Présentation** de 10 diapositives pour accompagner la démo.
-7. Plus tard (pilote) : hébergement au Canada, évaluation Loi 25, test d’intrusion, connexion HL7/FHIR réelle avec l’équipe informatique d’un hôpital, calcul d’itinéraire réel, prévisions entraînées sur l’historique.
+7. Plus tard (pilote) : hébergement au Canada (environnements **et console SH**, décision de Moustafa du 11 nov. 2026 : SH contient les contacts et la facturation des clients), évaluation Loi 25, test d’intrusion, connexion HL7/FHIR réelle avec l’équipe informatique d’un hôpital, calcul d’itinéraire réel, prévisions entraînées sur l’historique.
 
 ## Documents liés
 - `README.md` fonctionnement et API · `GUIDE-DEMO.md` démonstration de 10 minutes

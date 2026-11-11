@@ -401,7 +401,7 @@ async function vueHopitaux(v) {
   const voitEnvs = ['administration', 'implantation', 'support'].includes(etat.moi.utilisateur.role);
   const [liste, envs] = await Promise.all([api('GET', `/hopitaux${qs ? `?${qs}` : ''}`), voitEnvs ? api('GET', '/environnements') : []]);
   v.innerHTML = `<div class="entete"><div><h2>Établissements clients</h2><p>Chaque établissement suit un assistant en 6 étapes. Les 7 étapes de contrôle existantes restent conservées sous le capot, et le module ne s’active qu’après validation des prérequis.</p></div>
-      <div class="actions">${etat.moi?.utilisateur?.role === 'administration' ? `<button class="btn" id="b-demo-chsld">Créer les CHSLD de démonstration</button>` : ''}<button class="btn pri" id="b-nouveau">${icone('plus')}Nouvel établissement</button></div></div>
+      <div class="actions">${etat.moi?.utilisateur?.role === 'administration' ? `<button class="btn" id="b-demo-chsld">Créer les CHSLD de démonstration</button><button class="btn" id="b-demo-rpa">Créer la RPA de démonstration</button>` : ''}<button class="btn pri" id="b-nouveau">${icone('plus')}Nouvel établissement</button></div></div>
     <div class="envs">${envs.map((e) => `<span class="env"><span class="etat-niveau ${e.joignable ? 'n-vert' : 'n-rouge'}">${esc(e.nom)}</span>
       <span class="note">${e.joignable ? pl('{n|aucun établissement|# établissement|# établissements}', { n: e.etablissements }) : 'ne répond pas'}</span></span>`).join('') || '<span class="note">Aucun environnement relié à la console.</span>'}</div>
     <div class="ligne filtres">
@@ -439,6 +439,21 @@ async function vueHopitaux(v) {
     $('#h-type').onchange = (e) => { afficherModulesType(e.target.value, $('#h-modules')); afficherTypesLocaux(); };
     $('#h-pays').onchange = afficherTypesLocaux; afficherTypesLocaux();
   };
+  if ($('#b-demo-rpa')) $('#b-demo-rpa').onclick = () => modale('Créer la RPA de démonstration',
+    `<p>Crée <b>Résidence des Pins (RPA)</b> (40 logements) par le parcours SH habituel : type CHSLD avec le type local « Résidence privée pour aînés (RPA) », création dans l’environnement, import de la structure et des comptes, liste de contrôle, activation ; puis 29 résidents fictifs, une arrivée prévue et une proche invitée dans Arrimo Famille.</p>
+     <p class="note">Environnement fictif seulement. Le compte de la RPA utilise le mot de passe de démonstration déjà en place. Aucune fonction clinique n’est activée.</p>
+     <div class="champ"><label class="lbl" for="dr-env">Environnement</label><select id="dr-env"><option value="demo_abc">Démonstration ABC (demo.arrimo.senseafri.com)</option><option value="pilote">Pilote fictif</option></select></div>`,
+    [{ label: 'Annuler' }, { label: 'Créer', pri: true, run: async () => {
+      const env = $('#dr-env').value;
+      try {
+        await api('POST', '/demo-rpa', { environnement: env }); toast('Création lancée : structure, compte, activation, puis résidents fictifs (environ 1 minute).');
+        const suivre = async () => { const r = await api('GET', `/demo-rpa?environnement=${env}`).catch(() => null);
+          if (r?.statut === 'en_cours') return setTimeout(suivre, 4000);
+          if (r?.statut === 'termine') toast(`${r.etablissements.map((e) => e.nom).join(', ')} : créée et activée (${r.residents} résidents fictifs). Compte : ${r.comptes.join(', ')}`); else if (r?.statut === 'echec') toast(r.erreur, true);
+          afficher(); };
+        setTimeout(suivre, 4000); return true;
+      } catch (e) { toast(e.message, true); return false; }
+    } }]);
   if ($('#b-demo-chsld')) $('#b-demo-chsld').onclick = () => modale('Créer les CHSLD de démonstration',
     `<p>Crée <b>CHSLD 1 — des Érables</b> (60 lits) et <b>CHSLD 2 — du Saint-Laurent</b> (90 lits) par le parcours SH habituel : type CHSLD et modules, création dans l’environnement, import de la structure et des comptes, liste de contrôle, activation ; puis les scénarios fictifs (résidents, proches, hospitalisation à l’Hôpital B, transfert inter-CHSLD).</p>
      <p class="note">Environnement fictif seulement. Les comptes des CHSLD utilisent le mot de passe de démonstration déjà en place pour les hôpitaux A, B et C. Aucun compte existant n’est modifié.</p>

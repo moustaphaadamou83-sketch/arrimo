@@ -41,6 +41,19 @@ const PERMISSIONS = {
   'PUT /types-locaux/:id': ['administration'],
   'POST /demo-chsld': ['administration'],
   'GET /demo-chsld': ['administration'],
+  'POST /demo-rpa': ['administration'],
+  // Serveurs (registre) et profils de pays : administration seule ; les écritures redemandent la double authentification
+  'GET /serveurs': ['administration'],
+  'POST /serveurs': ['administration'],
+  'POST /serveurs/:code/appairage': ['administration'],
+  'POST /serveurs/:code/verifier': ['administration'],
+  'POST /serveurs/:code/desactiver': ['administration'],
+  'POST /serveurs/:code/reactiver': ['administration'],
+  'GET /profils-pays': ['administration', 'implantation'],
+  'POST /profils-pays': ['administration'],
+  'PUT /profils-pays/:id': ['administration'],
+  'POST /profils-pays/:id/diffuser': ['administration'],
+  'GET /demo-rpa': ['administration'],
   'GET /hopitaux/:id/structure': ['administration', 'implantation'],
   'GET /hopitaux/:id/profils-pays': ['administration','implantation'],
   'GET /hopitaux/:id/suivi': ROLES_SH,
@@ -228,7 +241,9 @@ function cleRoute(method, path) {
     .replace(/\/hopitaux\/:id\/import\/modeles\/[^/]+$/, '/hopitaux/:id/import/modeles/:type')
     .replace(/\/hopitaux\/:id\/formation\/(coordination|urgence|entretien|administration)$/, '/hopitaux/:id/formation/:role')
     .replace(/^\/parametres\/[a-z_]{2,60}$/, '/parametres/:cle')
-    .replace(/^(\/hopitaux\/:id\/deploiement)\/[a-z_]{3,40}(\/preuves)?$/, '$1/:code$2')}`;
+    .replace(/^(\/hopitaux\/:id\/deploiement)\/[a-z_]{3,40}(\/preuves)?$/, '$1/:code$2')
+    .replace(/^\/serveurs\/[a-z0-9_]{5,60}\/(appairage|verifier|desactiver|reactiver)$/, '/serveurs/:code/$1')
+    .replace(/^\/profils-pays\/:id\/diffuser$/, '/profils-pays/:id/diffuser')}`;
 }
 
 function autoriser(u, req) {

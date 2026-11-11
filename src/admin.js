@@ -33,7 +33,7 @@ async function creerEtablissement(pool, b, journaliserCreation,{env=process.env}
   const partage = b.partage || 'complet';
   if (!['complet', 'agrege', 'aucun'].includes(partage)) throw new ErreurHttp(400, 'partage_invalide');
   // Les configurations dérivées (« <profil>-CHSLD ») ne sont pas des profils pays : on choisit toujours parmi les profils d'origine.
-  const profils=require('./profils-pays').profilsAvecPays((await pool.query("SELECT id,code,nom FROM config_pays WHERE code NOT LIKE '%-CHSLD' ORDER BY id")).rows,env);
+  const profils=require('./profils-pays').profilsAvecPays((await pool.query("SELECT id,code,nom,pays_code FROM config_pays WHERE code NOT LIKE '%-CHSLD' ORDER BY id")).rows,env);
   if(!profils.length)throw new ErreurHttp(400,'config_introuvable');
   const config=require('./profils-pays').choisirProfil(profils,b);
   // Type d'établissement (hôpital par défaut) : seuls les types opérationnels sont créés ; modules choisis dans SH, validés ici.

@@ -1160,3 +1160,81 @@ test('demandes du site : dépôt réservé au serveur du site, écran limité au
   delete envSh.SH_DEPOT_SITE_CLE_SHA256; delete envSh.SH_DEPOT_SITE_ALERTE;
   assert.strictEqual((await envoi(demande, { 'X-Depot-Cle': 'cle-depot-fictive' })).status, 404);
 });
+
+test('serveurs ajoutés depuis SH : double authentification, clé jamais affichée, appairage à usage unique, plusieurs serveurs par pays, profil de pays diffusé', { timeout: 120000 }, async () => {
+  const { dechiffrerSecret } = require('../src/sh/security');
+  const secret = dechiffrerSecret((await pool.query("SELECT totp_secret FROM sh_utilisateurs WHERE email = 'admin.erp@sh.exemple'")).rows[0].totp_secret, envSh);
+  // Un code par action (anti-rejeu) : la recette remet le dernier pas utilisé à zéro avant chaque action, comme si 30 s s'étaient écoulées
+  const code2fa = async () => { await pool.query("UPDATE sh_utilisateurs SET totp_dernier_pas = 0 WHERE email = 'admin.erp@sh.exemple'"); return totp.codePourPas(secret, totp.pasActuel()); };
+  // Deux serveurs fictifs de plus (schémas séparés) : une région du Canada et un autre pays
+  const schema = fs.readFileSync(path.join(__dirname, '..', 'db', 'schema.sql'), 'utf8');
+  const serveurs = {};
+  for (const s of ['estrie_erp', 'lome_erp']) {
+    await pool.query(`DROP SCHEMA IF EXISTS ${s} CASCADE; CREATE SCHEMA ${s}`);
+    const p = new Pool({ connectionString: URL_TEST, options: `-c search_path=${s}` }); await p.query(schema); await configurationBase(p);
+    const srv = await demarrerServeur(creerApp(p)); serveurs[s] = { pool: p, srv, base: `http://127.0.0.1:${srv.address().port}` };
+  }
+  const cleAvant = process.env.SH_API_KEY;
+  try {
+    // 1. Réservé à l'administration ; chaque écriture redemande la double authentification
+    assert.strictEqual(await statut('implantation', 'GET', '/serveurs'), 403);
+    const corps = { type: 'production', pays_code: 'CA', suffixe: 'estrie', region: 'Estrie', nom: 'Production Estrie (fictive)', url: serveurs.estrie_erp.base, public: 'https://estrie.arrimo.exemple' };
+    assert.strictEqual(await statut('admin', 'POST', '/serveurs', corps), 403, 'sans code de double authentification');
+    assert.strictEqual(await statut('admin', 'POST', '/serveurs', { ...corps, code_2fa: '000000' }), 403, 'code faux');
+    assert.strictEqual(await statut('admin', 'POST', '/serveurs', { ...corps, url: 'http://estrie.exemple', code_2fa: await code2fa() }), 400, 'HTTP refusé hors de la machine');
+    const ajout = await ok('admin', 'POST', '/serveurs', { ...corps, code_2fa: await code2fa() });
+    assert.strictEqual(ajout.serveur.code, 'production_ca_estrie'); assert.match(ajout.code_appairage, /^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
+    assert.ok(!('cle' in ajout) && !('cle' in ajout.serveur) && !('cle_chiffree' in ajout.serveur), 'aucune clé rendue');
+    assert.strictEqual(await statut('admin', 'POST', '/serveurs', { ...corps, suffixe: 'estrie2', code_2fa: await code2fa() }), 409, 'même adresse refusée');
+    const liste = await ok('admin', 'GET', '/serveurs');
+    assert.ok(!JSON.stringify(liste).match(/cle_chiffree|"cle"|enc:v1/), 'la liste ne contient aucune clé');
+    assert.strictEqual(liste.find((s) => s.code === 'production_ca_estrie').statut, 'en_attente');
+    assert.ok(!(await ok('admin', 'GET', '/environnements')).some((e) => e.code === 'production_ca_estrie'), 'pas encore appelé avant l’appairage');
+    // 2. Appairage par le serveur : code inconnu refusé, bon code une seule fois, clé remise au serveur
+    const apparier = (code) => fetch(`${baseSh}/api/serveurs/appairage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code_appairage: code }) });
+    assert.strictEqual((await apparier('AAAA-BBBB-CCCC')).status, 404);
+    const r = await apparier(ajout.code_appairage.toLowerCase()); assert.strictEqual(r.status, 200);
+    const recu = await r.json(); assert.strictEqual(recu.environnement, 'production_ca_estrie'); assert.match(recu.cle, /^[0-9a-f]{64}$/);
+    assert.strictEqual((await apparier(ajout.code_appairage)).status, 404, 'usage unique');
+    assert.ok(!(await pool.query('SELECT 1 FROM sh_journal WHERE detail LIKE $1 OR cible LIKE $1', [`%${recu.cle}%`])).rowCount, 'clé absente du journal');
+    // 3. Vérification avec la clé reçue : le serveur est relié et apparaît comme environnement de la console
+    process.env.SH_API_KEY = recu.cle;
+    assert.strictEqual((await ok('admin', 'POST', '/serveurs/production_ca_estrie/verifier', {})).statut, 'relie');
+    assert.ok((await ok('admin', 'GET', '/moi')).environnements.some((e) => e.code === 'production_ca_estrie'), 'environnement disponible pour les fiches');
+    // 4. Un 2e serveur dans un autre pays, puis un profil de pays créé dans SH et diffusé seulement à ce pays
+    const lome = await ok('admin', 'POST', '/serveurs', { type: 'production', pays_code: 'TG', suffixe: 'lome', nom: 'Production Lomé (fictive)', url: serveurs.lome_erp.base, public: 'https://lome.arrimo.exemple', code_2fa: await code2fa() });
+    const cleLome = (await (await apparier(lome.code_appairage)).json()).cle;
+    assert.notStrictEqual(cleLome, recu.cle, 'une clé par serveur');
+    process.env.SH_API_KEY = cleLome;
+    await ok('admin', 'POST', '/serveurs/production_tg_lome/verifier', {});
+    const profilCorps = { code: 'TG', pays_code: 'TG', nom: 'Togo (fictif)', reference_prefixe: 'P', reference_chiffres: 6, fuseau: 'Africa/Lome', langues: ['fr'], rayon_km: 200, nettoyage_cible_min: 60, transport_libelle: 'Ambulance' };
+    assert.strictEqual(await statut('admin', 'POST', '/profils-pays', { ...profilCorps, reference_prefixe: 'P1', code_2fa: await code2fa() }), 400, 'préfixe : lettres seulement');
+    assert.strictEqual(await statut('admin', 'POST', '/profils-pays', { ...profilCorps, fuseau: 'Lune/Mer', code_2fa: await code2fa() }), 400);
+    const profil = await ok('admin', 'POST', '/profils-pays', { ...profilCorps, code_2fa: await code2fa() });
+    assert.strictEqual(profil.reference_exemple, 'P-000000');
+    assert.strictEqual(await statut('admin', 'POST', `/profils-pays/${profil.id}/diffuser`, { environnement: 'production_ca_estrie', code_2fa: await code2fa() }), 409, 'jamais vers un serveur d’un autre pays');
+    const diff = await ok('admin', 'POST', `/profils-pays/${profil.id}/diffuser`, { environnement: 'production_tg_lome', code_2fa: await code2fa() });
+    assert.strictEqual(diff.cree, true);
+    const cfg = (await serveurs.lome_erp.pool.query("SELECT pays_code, fuseau, reference_regex, reference_exemple, langues, (SELECT count(*)::int FROM types_unite t WHERE t.config_id = c.id) AS types FROM config_pays c WHERE code = 'TG'")).rows[0];
+    assert.deepStrictEqual([cfg.pays_code, cfg.fuseau, cfg.reference_regex, cfg.reference_exemple, cfg.langues], ['TG', 'Africa/Lome', '^P-[0-9]{6}$', 'P-000000', ['fr']]);
+    assert.ok(cfg.types > 0, 'types d’unités de départ repris');
+    assert.ok((await (await fetch(`${serveurs.lome_erp.base}/api/sh/capacites`, { headers: { 'X-SH-Key': cleLome } })).json()).profilsPays.some((p) => p.code === 'TG' && p.pays_code === 'TG'), 'profil proposé pour les fiches du Togo');
+    assert.ok(!(await serveurs.estrie_erp.pool.query("SELECT 1 FROM config_pays WHERE code = 'TG'")).rowCount, 'rien sur le serveur de l’Estrie');
+    // Le format de référence ne change plus une fois diffusé ; le reste se met à jour
+    assert.strictEqual(await statut('admin', 'PUT', `/profils-pays/${profil.id}`, { reference_chiffres: 7, code_2fa: await code2fa() }), 409);
+    await ok('admin', 'PUT', `/profils-pays/${profil.id}`, { rayon_km: 250, code_2fa: await code2fa() });
+    assert.strictEqual((await ok('admin', 'POST', `/profils-pays/${profil.id}/diffuser`, { environnement: 'production_tg_lome', code_2fa: await code2fa() })).cree, false);
+    assert.strictEqual((await serveurs.lome_erp.pool.query("SELECT rayon_km FROM config_pays WHERE code = 'TG'")).rows[0].rayon_km, 250);
+    // 5. Désactivation : la console cesse de l'appeler ; nouveau code = nouvelle clé
+    const unCode = await code2fa();
+    await ok('admin', 'POST', '/serveurs/production_ca_estrie/desactiver', { code_2fa: unCode });
+    assert.strictEqual(await statut('admin', 'POST', '/serveurs/production_ca_estrie/reactiver', { code_2fa: unCode }), 403, 'un code ne sert qu’une fois');
+    assert.ok(!(await ok('admin', 'GET', '/moi')).environnements.some((e) => e.code === 'production_ca_estrie'));
+    assert.strictEqual(await statut('admin', 'POST', '/serveurs/production_ca_estrie/appairage', { code_2fa: await code2fa() }), 409, 'désactivé : pas d’appairage');
+    const journalSh = (await pool.query("SELECT action FROM sh_journal WHERE action LIKE 'Serveur%' OR action LIKE 'Profil de pays%'")).rows.map((x) => x.action);
+    for (const a of ['Serveur ajouté', 'Serveur appairé', 'Serveur relié (vérification réussie)', 'Profil de pays créé', 'Profil de pays diffusé (créé)', 'Serveur désactivé']) assert.ok(journalSh.includes(a), `journal : ${a}`);
+  } finally {
+    process.env.SH_API_KEY = cleAvant;
+    for (const s of Object.values(serveurs)) { s.srv.close(); await s.pool.end(); }
+  }
+});

@@ -12,9 +12,14 @@ const CHSLD = [
   { code: 'CHSLD-STL', nom: 'CHSLD 2 — du Saint-Laurent', ville: 'Mont-Clair', latitude: 45.288, longitude: -72.135, prefixe: 'STL', courriel: 'saint-laurent',
     unites: [['Unité du Fleuve', 'HLD', 18, 9], ['Unité des Îles', 'HLD', 12, 9], ['Unité Transition', 'TEMP', 24, 0]] },
 ];
+// Résidence privée pour aînés fictive (même moteur que le CHSLD, type local « rpa » choisi dans SH) : 40 logements.
+const RPA = [
+  { code: 'RPA-PINS', nom: 'Résidence des Pins (RPA)', ville: 'Val-des-Pins', latitude: 45.402, longitude: -71.889, prefixe: 'PIN', courriel: 'pins', domaine: 'rpa.example.invalid', type_local: 'rpa',
+    unites: [['Pavillon des Pins', 'HLD', 20, 4], ['Pavillon du Lac', 'HLD', 12, 0]] },
+];
 // [unité, type, chambres individuelles, chambres doubles] : 60 lits pour les Érables (14+2×5, 10+2×5, 16) ; 90 pour le Saint-Laurent (18+2×9, 12+2×9, 24)
 const ROLES = [['Direction', 'direction', 'admin_etab'], ['Coordination de l’hébergement', 'coordination', 'coordonnateur'], ['Équipe de soins', 'soins', 'equipe_soins'], ['Entretien', 'entretien', 'entretien']];
-const courrielDe = (c, r) => `${r}.${c.courriel}@chsld.example.invalid`;
+const courrielDe = (c, r) => `${r}.${c.courriel}@${c.domaine || 'chsld.example.invalid'}`;
 
 function csvChsld(c) {
   const lignes = { departements: ['departement;code', 'Hébergement;HEB'], services: ['service;code;departement', 'Hébergement de longue durée;HLD;Hébergement'],
@@ -44,9 +49,13 @@ async function ecartStructure(lireStructure, h, c, csv) {
   return { unites: s.unites.length, chambres: s.chambres.length, lits: s.lits.length, cible_lits: tLits.size };
 }
 
-async function provisionner(sh, { environnement = 'pilote', modules = {}, existants = {}, lireStructure } = {}) {
+async function provisionner(sh, { environnement = 'pilote', modules = {}, existants = {}, lireStructure, liste = CHSLD } = {}) {
   const resultats = [];
-  for (const c of CHSLD) {
+  // Type local du pays (ex. RPA) : choisi dans le catalogue SH, comme à l'écran
+  const typesLocaux = liste.some((c) => c.type_local) ? await sh('GET', '/types-locaux?pays=CA') : [];
+  for (const c of liste) {
+    const typeLocal = c.type_local ? typesLocaux.find((t) => t.code === c.type_local && t.modele === 'chsld' && t.actif) : null;
+    if (c.type_local && !typeLocal) throw new Error(`${c.code} : type local « ${c.type_local} » absent du catalogue SH.`);
     const csv = csvChsld(c);
     let h, reprise = null;
     if (existants[c.code]) {
@@ -57,7 +66,7 @@ async function provisionner(sh, { environnement = 'pilote', modules = {}, exista
       if (typeof lireStructure !== 'function') throw new Error(`${c.code} : lecture de la structure indisponible pour la reprise.`);
       reprise = { avant: await ecartStructure(lireStructure, h, c, csv), ajouts: {} };
     } else {
-      h = await sh('POST', '/hopitaux', { type_etablissement: 'chsld', modules, nom: c.nom, code_etab: c.code, environnement, pays_code: 'CA', ville: c.ville,
+      h = await sh('POST', '/hopitaux', { type_etablissement: 'chsld', ...(typeLocal ? { type_local_id: typeLocal.id } : {}), modules, nom: c.nom, code_etab: c.code, environnement, pays_code: 'CA', ville: c.ville,
         latitude: c.latitude, longitude: c.longitude, utilisateurs_prevus: ROLES.length, utilisateurs_autorises: ROLES.length + 4, contact_nom: `Direction fictive · ${c.nom}` });
       await sh('POST', `/hopitaux/${h.id}/relier`, {});
     }
@@ -143,4 +152,4 @@ async function peupler(api, { erables, stLaurent, hopitalB }) {
   await api('stl', 'POST', '/chsld/taches', { etablissement_id: ids.stl, type: 'relance', titre: 'Relancer le mécanisme d’accès pour MA-2026-0418', assigne_role: 'coordonnateur', echeance: new Date(Date.now() - 3600000).toISOString() });
   return { ids, dupont: dupont.id, martin: martin.id, hospitalisation: co3.id, retour: retour.id, transfert: tr.id };
 }
-module.exports = { CHSLD, ROLES, csvChsld, provisionner, peupler, courrielDe };
+module.exports = { RPA, CHSLD, ROLES, csvChsld, provisionner, peupler, courrielDe };

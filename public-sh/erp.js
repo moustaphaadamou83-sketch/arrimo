@@ -634,6 +634,8 @@ async function vueHebergement(v) {
     ${tableSH(['Environnement', 'État', 'Version', 'Disponibilité 24 h', 'Latence', 'Établissements actifs', 'Dernière sauvegarde'], lignes, 'Aucun environnement relié.')}
     <p class="note">${h.sauvegardes.configure ? (h.sauvegardes.illisible ? 'Le fichier d’état des sauvegardes est illisible.' : `État des sauvegardes généré ${esc(quand(h.sauvegardes.genere_le))}.`) : 'Le suivi des sauvegardes n’est pas configuré (SH_SAUVEGARDES_ETAT) : aucune valeur n’est affichée par défaut.'} Console SH ${esc(h.console.version)} · Node ${esc(h.console.node)}.</p>`;
   surAction(v, 'heb-verifier', (id, b) => agir(b, () => api('POST', '/hebergement/verifier'), (r) => r.map((x) => `${x.code} : ${x.ok ? 'répond' : x.detail}`).join(' · ')));
+  // Serveurs ajoutés depuis la console et profils de pays (administration)
+  if (window.ArrimoServeurs) await window.ArrimoServeurs.sections(v);
 }
 
 /* ---------------- rapports ---------------- */

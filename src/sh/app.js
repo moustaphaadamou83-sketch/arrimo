@@ -156,6 +156,10 @@ function creerAppSh(pool, { env = process.env } = {}) {
   api.post('/mot-de-passe/demander', route(req => recuperation.demander(pool,req.body.email,env)));
   api.post('/mot-de-passe/reinitialiser', route(req => recuperation.consommer(pool,req.body.jeton,req.body.nouveau)));
 
+  // Serveurs ajoutés depuis SH : registre chargé au démarrage ; appairage d'un serveur (code à usage unique, sans session)
+  const serveurs = require('./serveurs');
+  serveurs.charger(poolService, env).catch((e) => console.error('Registre des serveurs :', e.code || e.name));
+  serveurs.brancherPublic(api, poolService, env);
   /* ---------------------------------------------------------------- session obligatoire pour la suite */
   require('./portail-support').brancher(api,poolService,env);
   api.use(async (req, res, next) => {
@@ -251,6 +255,8 @@ function creerAppSh(pool, { env = process.env } = {}) {
   commercial.brancher(api, pool, route, journal);
   erp.brancher(api, pool, route, journal, { cibles: () => ciblesSh(), appeler, env });
   acces.brancher(api,pool,route,journal,env);
+  serveurs.brancher(api, pool, route, journal, { env, ErreurSh, appeler });
+  require('./pays-profils').brancher(api, pool, route, journal, { env, ErreurSh, appeler, cibles: () => ciblesSh(), entier });
   presence.brancher(api,pool,route,journal);
   rolesPerimetres.brancher(api,pool,route,journal);
 
@@ -403,6 +409,38 @@ function creerAppSh(pool, { env = process.env } = {}) {
       const peuplement = await appeler(cible(environnement), 'POST', '/sh/demo-chsld/peupler', {}, { delaiMs: 600000 });
       await journal(pool, req.u, 'Démonstration CHSLD créée', crees.map((c) => c.code).join(', '), `environnement ${environnement} · ${peuplement.comptes.length} comptes`, null);
       Object.assign(etat, { statut: 'termine', fin: new Date().toISOString(), etablissements: crees.map((c) => ({ id: c.hopital_id, code: c.code, nom: c.nom, reprise: c.reprise })), comptes: peuplement.comptes, proche: peuplement.proche, scenarios: peuplement.scenarios });
+    })().catch((e) => Object.assign(etat, { statut: 'echec', fin: new Date().toISOString(), erreur: e.message }));
+    return etat;
+  }));
+  /**
+   * Démonstration RPA : « Résidence des Pins », type local RPA (moteur CHSLD), créée par le parcours SH habituel dans un
+   * environnement fictif (fiche, type local, relier, import, liste de contrôle, activation), puis résidents fictifs.
+   */
+  const DEMO_RPA = new Map();
+  api.get('/demo-rpa', route(async (req) => DEMO_RPA.get(String(req.query.environnement || '')) || { statut: 'aucune' }));
+  api.post('/demo-rpa', route(async (req) => {
+    const environnement = String(req.body.environnement || '');
+    if (DEMO_RPA.get(environnement)?.statut === 'en_cours') throw new ErreurSh(409, 'Une création est déjà en cours dans cet environnement.');
+    if (!['demo_abc', 'pilote'].includes(environnement)) throw new ErreurSh(409, 'La démonstration RPA se crée seulement dans un environnement fictif (Démo ABC ou pilote).');
+    const { provisionner, RPA } = require('../../db/provisionner-chsld');
+    const deja = (await pool.query('SELECT id, code_etab, statut, type_etablissement FROM hopitaux WHERE environnement = $1 AND code_etab = ANY($2)', [environnement, RPA.map((c) => c.code)])).rows;
+    const bloquants = deja.filter((x) => x.type_etablissement !== 'chsld' || !['prospect', 'implantation'].includes(x.statut));
+    if (bloquants.length) throw new ErreurSh(409, `Déjà créée dans cet environnement : ${bloquants.map((x) => x.code_etab).join(', ')}.`);
+    const existants = Object.fromEntries(deja.map((x) => [x.code_etab, x.id]));
+    const base = `http://127.0.0.1:${req.socket.localPort}`;
+    const sh = async (methode, chemin, corps) => {
+      const r = await fetch(`${base}/api${chemin}`, { method: methode, headers: { 'Content-Type': 'application/json', Authorization: req.get('authorization') }, body: corps ? JSON.stringify(corps) : undefined });
+      const d = await r.json().catch(() => null);
+      if (!r.ok) throw new ErreurSh(r.status, (d && d.erreur) || `Étape SH refusée (${r.status}).`);
+      return d;
+    };
+    const etat = { statut: 'en_cours', debut: new Date().toISOString() }; DEMO_RPA.set(environnement, etat);
+    (async () => {
+      const lireStructure = (h) => appeler(cible(environnement), 'GET', `/sh/etablissements/${encodeURIComponent(h.code_etab)}/structure/detaillee`);
+      const crees = await provisionner(sh, { environnement, liste: RPA, modules: { portail_proches: true, messagerie_securisee: true }, existants, lireStructure });
+      const peuplement = await appeler(cible(environnement), 'POST', '/sh/demo-rpa/peupler', {}, { delaiMs: 600000 });
+      await journal(pool, req.u, 'Démonstration RPA créée', crees.map((c) => c.code).join(', '), `environnement ${environnement} · ${peuplement.residents} résidents fictifs · ${peuplement.comptes.length} compte(s)`, null);
+      Object.assign(etat, { statut: 'termine', fin: new Date().toISOString(), etablissements: crees.map((c) => ({ id: c.hopital_id, code: c.code, nom: c.nom, reprise: c.reprise })), comptes: peuplement.comptes, proche: peuplement.proche, residents: peuplement.residents });
     })().catch((e) => Object.assign(etat, { statut: 'echec', fin: new Date().toISOString(), erreur: e.message }));
     return etat;
   }));

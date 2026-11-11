@@ -189,6 +189,8 @@ const MESSAGES = {
   apparence_invalide: 'Apparence invalide.',
   demo_mot_de_passe_absent: "Le mot de passe de démonstration n’est pas configuré dans cet environnement.",
   demo_chsld_absents: "Les deux CHSLD de démonstration doivent d’abord être créés et activés depuis SH.",
+  reference_format_verrouille: "Le format de référence de ce profil est déjà utilisé par un établissement : il ne peut plus changer.",
+  demo_rpa_absente: "La RPA de démonstration doit d’abord être créée et activée depuis SH.",
   demo_chsld_deja_peuplee: "La démonstration CHSLD contient déjà des résidents.",
   demo_hopital_b_absent: "L’Hôpital B de démonstration est introuvable.",
   demo_chsld_comptes_incomplets: "Les comptes des CHSLD de démonstration sont incomplets.",

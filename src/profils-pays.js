@@ -20,7 +20,8 @@ function profilsAvecPays(profils,env=process.env){
     }
   }catch{throw new ErreurHttp(503,'profil_pays_correspondance_invalide');}
   const correspondances=new Map(Object.entries(valeurs).map(([code,paysCode])=>[code.trim().toUpperCase(),paysCode]));
-  return profils.map(p=>({...p,pays_code:correspondances.get(String(p.code).trim().toUpperCase())||(String(p.code).trim().toUpperCase()==='QC'?'CA':null)}));
+  // Pays enregistré avec le profil (créé depuis SH) d'abord, puis la correspondance de configuration, puis QC → CA
+  return profils.map(p=>({...p,pays_code:(p.pays_code&&Object.hasOwn(pays,String(p.pays_code).trim())?String(p.pays_code).trim():null)||correspondances.get(String(p.code).trim().toUpperCase())||(String(p.code).trim().toUpperCase()==='QC'?'CA':null)}));
 }
 function choisirProfil(profils,demande={},options={}){
   const fourni=demande.pays_code!==undefined;

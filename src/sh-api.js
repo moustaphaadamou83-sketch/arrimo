@@ -41,7 +41,7 @@ function brancherSh(api, pool, route) {
   };
 
   api.get('/sh/capacites', sh(async () => ({ api: 1, invitationsSecurisees: true, courrielActif: courriel.actif(), configurationOperationnelle: true,
-    selectionPays:true,profilsPays:require('./profils-pays').profilsAvecPays((await pool.query("SELECT id,code,nom FROM config_pays WHERE code NOT LIKE '%-CHSLD' ORDER BY id")).rows), typesEtablissement:true })));
+    selectionPays:true,profilsPays:require('./profils-pays').profilsAvecPays((await pool.query("SELECT id,code,nom,pays_code FROM config_pays WHERE code NOT LIKE '%-CHSLD' ORDER BY id")).rows), typesEtablissement:true })));
 
   // Licence OG décidée dans SH (module OG souscrit et ses fonctions) ; les réglages de l'établissement sont conservés.
   api.get('/sh/etablissements/:code/og-licence', sh(async (req) => require('./og-configuration').lire(pool, (await etabParCode(req.params.code)).id)));
@@ -77,6 +77,48 @@ function brancherSh(api, pool, route) {
   // Démonstration CHSLD : scénarios fictifs après la création des deux CHSLD par la console (environnement fictif seulement)
   api.post('/sh/demo-chsld/peupler', sh((req) => require('./demo-chsld').peuplerDemo(pool, `http://127.0.0.1:${req.socket.localPort}`)));
   api.post('/sh/demo-chsld/comptes', sh(() => require('./demo-chsld').simplifierComptesDemo(pool)));
+  /**
+   * Profil de pays diffusé par SH (créé dans l'écran « Pays ») : créé s'il est absent, sinon mis à jour.
+   * Le format de référence ne change jamais une fois qu'un établissement utilise ce profil (les références existantes
+   * deviendraient invalides) ; les types d'unités de départ sont repris du profil d'origine du serveur.
+   */
+  api.put('/sh/profils-pays', sh(async (req) => {
+    const b = req.body || {};
+    const code = String(b.code || '').trim().toUpperCase();
+    if (!/^[A-Z][A-Z0-9-]{1,11}$/.test(code) || /-CHSLD$/.test(code)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'code' });
+    const pays = String(b.pays_code || '').toUpperCase();
+    if (!/^[A-Z]{2}$/.test(pays)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'pays_code' });
+    const prefixe = String(b.reference_prefixe || ''); const chiffres = Number(b.reference_chiffres);
+    if (!/^[A-Z]{1,4}$/.test(prefixe) || !Number.isInteger(chiffres) || chiffres < 5 || chiffres > 8) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'reference' });
+    const regex = `^${prefixe}-[0-9]{${chiffres}}$`; const exemple = `${prefixe}-${'0'.repeat(chiffres)}`;
+    let fuseauOk = false; try { new Intl.DateTimeFormat('fr', { timeZone: String(b.fuseau) }); fuseauOk = true; } catch { /* refusé */ }
+    if (!fuseauOk) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'fuseau' });
+    const langues = Array.isArray(b.langues) ? b.langues.filter((l) => ['fr', 'en'].includes(l)) : [];
+    if (!langues.length) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'langues' });
+    const entier = (v, min, max, nom) => { const n = Number(v); if (!Number.isInteger(n) || n < min || n > max) throw new ErreurHttp(400, 'parametre_invalide', { nom }); return n; };
+    const rayon = entier(b.rayon_km, 5, 2000, 'rayon_km'); const net = entier(b.nettoyage_cible_min, 10, 240, 'nettoyage_cible_min'); const version = entier(b.version, 1, 100000, 'version');
+    const transport = String(b.transport_libelle || '').trim().slice(0, 60) || 'Ambulance';
+    const nom = String(b.nom || '').trim().slice(0, 80); if (nom.length < 2) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'nom' });
+    return transaction(pool, async (c) => {
+      const avant = (await c.query('SELECT * FROM config_pays WHERE code = $1 FOR UPDATE', [code])).rows[0];
+      if (avant) {
+        if (avant.pays_code && avant.pays_code !== pays) throw new ErreurHttp(409, 'profil_pays_changement_interdit');
+        const utilise = (await c.query('SELECT 1 FROM etablissements WHERE config_id = $1 OR profil_config_id = $1 LIMIT 1', [avant.id])).rowCount;
+        if (utilise && avant.reference_regex !== regex) throw new ErreurHttp(409, 'reference_format_verrouille');
+        await c.query(`UPDATE config_pays SET nom = $2, pays_code = $3, fuseau = $4, langues = $5, reference_regex = $6, reference_exemple = $7, rayon_km = $8,
+          nettoyage_cible_min = $9, transport_libelle = $10, version_sh = $11 WHERE id = $1`, [avant.id, nom, pays, b.fuseau, langues, regex, exemple, rayon, net, transport, version]);
+        await journalAdmin(c, systeme, 'Profil de pays mis à jour', code, `version ${version} · ${parSh(b)}`);
+        return { code, cree: false, version };
+      }
+      const base = (await c.query("SELECT id FROM config_pays WHERE code NOT LIKE '%-CHSLD' ORDER BY id LIMIT 1")).rows[0];
+      const id = (await c.query(`INSERT INTO config_pays (code, nom, pays_code, fuseau, langues, reference_regex, reference_exemple, rayon_km, nettoyage_cible_min, transport_libelle, version_sh)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`, [code, nom, pays, b.fuseau, langues, regex, exemple, rayon, net, transport, version])).rows[0].id;
+      if (base) await c.query('INSERT INTO types_unite (config_id, code, nom, ordre, nom_en) SELECT $1, code, nom, ordre, nom_en FROM types_unite WHERE config_id = $2 ON CONFLICT DO NOTHING', [id, base.id]);
+      await journalAdmin(c, systeme, 'Profil de pays créé', code, `${nom} · ${pays} · version ${version} · ${parSh(b)}`);
+      return { code, cree: true, version };
+    });
+  }));
+  api.post('/sh/demo-rpa/peupler', sh((req) => require('./demo-chsld').peuplerDemoRpa(pool, `http://127.0.0.1:${req.socket.localPort}`)));
   api.get('/sh/etablissements', sh(async () => {
     const rows=(await pool.query(
     `SELECT e.id, e.code, e.nom, e.ville, e.adresse, e.partage, e.module_actif, e.sous_domaine,COALESCE(e.profil_config_id,e.config_id) config_id,profil.code configuration_code,

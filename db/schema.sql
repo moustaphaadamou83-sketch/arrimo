@@ -1253,3 +1253,8 @@ CREATE TABLE IF NOT EXISTS proches_consentements (
   enregistre_par       int REFERENCES utilisateurs(id),
   cree_le              timestamptz NOT NULL DEFAULT now()
 );
+
+-- Profils de pays créés depuis SH (11 nov. 2026) : pays ISO du profil et langues ; la correspondance ARRIMO_PROFILS_PAYS reste lue en secours
+ALTER TABLE config_pays ADD COLUMN IF NOT EXISTS pays_code char(2) CHECK (pays_code IS NULL OR pays_code ~ '^[A-Z]{2}$');
+ALTER TABLE config_pays ADD COLUMN IF NOT EXISTS langues text[];
+ALTER TABLE config_pays ADD COLUMN IF NOT EXISTS version_sh int;
