@@ -11,6 +11,8 @@ const copie = (x) => /^arrimo_publication_restore_[a-z0-9_]+$/.test(x);
 const AJOUTS_CATALOGUE_SH = new Set(['comptes', 'documents', 'support', 'journal', 'parametres', 'admissions_hopital', 'nsa', 'nettoyage',
   'national', 'residents', 'chambres', 'demandes_hebergement', 'entretien_chsld', 'taches', 'proches', 'hospitalisations', 'reseau_chsld',
   'portail_proches', 'messagerie_securisee', 'appels_video',
+  // Préhospitalier et Liaison Établissements (migration SH 45, 12 nov. 2026)
+  'liaison_secours', 'transport_ambulancier', 'profil_ccs', 'profil_ambulance',
   // Migration 38 : module hospitalier Liaison CHSLD (une ligne ajoutée, aucune ligne existante modifiée)
   'liaison_chsld']);
 async function lignesCatalogue(c, cols) {
