@@ -144,6 +144,21 @@ window.ARRIMO_I18N.en.aide = {
         ['“Transfer … is no longer at the expected status”', 'Someone already did this step. The page refreshes.'],
       ],
     },
+    secours: {
+      nom: 'Emergency liaison',
+      but: 'Ambulances announced by pre-alert, before they arrive: company, unit, plate, crew, declared priority, category, expected time and position. No identity is sent. OG proposes the department from your rules; your team decides.',
+      gestes: [
+        '“Acknowledge the pre-alert”: confirms that a person has read it (the ambulance sees it).',
+        'Department proposed by OG: “Confirm the department”, “Indicate another department” or “Decline the proposal”. Nothing is assigned automatically.',
+        '“Preparation in progress”, then “Preparation complete”: the ambulance follows your preparation.',
+        'On arrival: “Confirm the arrived vehicle” with the unit number. Another vehicle is recorded without closing the pre-alert. Then “Confirm handover”.',
+        'Your emergency status: declare “Open”, “Limited capacity”, “Saturation” or “Diversion”; past the threshold, the declaration is flagged as stale.',
+      ],
+      erreurs: [
+        ['“This step is not possible at this stage of the pre-alert”', 'Another step must be confirmed first, or the pre-alert changed destination. Open the history.'],
+        ['“The version has changed”', 'Someone already acted on this pre-alert: the screen updates, try again if needed.'],
+      ],
+    },
     liaison: {
       nom: 'CHSLD liaison',
       but: 'Requests and movements of CHSLD residents to your hospital, kept apart from inter-hospital transfers: arrivals, reception, hospital stays, returns and history. Only the resident reference (R-00000) is visible.',

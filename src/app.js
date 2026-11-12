@@ -551,6 +551,8 @@ function creerApp(pool, options = {}) {
 
   /* ---------- mon compte et administration ---------- */
   const { exigerGestionnaire, journalAdmin } = admin.brancher(api, pool, route, entier, { maintenanceDemo: (req, fn) => req.avecMaintenanceDemo(fn) });
+  // Administration du préhospitalier : organisations de secours, unités, comptes, systèmes reliés (gestionnaire réseau)
+  require('./admin-secours').brancher(api, pool, route, entier);
   api.put('/admin/etablissements/:id', route(async (req) => {
     exigerGestionnaire(req);
     const r = await majEtablissement('id', entier(req.params.id, 'id'), req.body);

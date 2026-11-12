@@ -2333,6 +2333,7 @@ async function vueAdmin() {
   }
   const onglets = ['utilisateurs', 'structure', 'import', 'connecteurs', 'journal'];
   if (u.gestionnaire) onglets.splice(3, 0, 'config');
+  if (u.gestionnaire) onglets.splice(onglets.indexOf('connecteurs') + 1, 0, 'secours');
   if (u.gestionnaire && etat.moi.demo) onglets.push('demo');
   if (!onglets.includes(etat.adminOnglet)) etat.adminOnglet = 'utilisateurs';
   v.innerHTML = `<div class="entete"><div><h2>${D('titre')}</h2><p>${D('intro', { portee: t(u.gestionnaire ? 'admin.tout_reseau' : 'admin.vos_etabs') })}</p></div></div>
@@ -2543,6 +2544,7 @@ async function vueAdmin() {
   }
 
   if (etat.adminOnglet === 'demo') await vueAdminDemo(corps);
+  if (etat.adminOnglet === 'secours') await window.ArrimoSecours?.admin(corps);
   if (etat.adminOnglet === 'import') await vueAdminImport(corps);
 }
 

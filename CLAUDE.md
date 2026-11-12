@@ -25,6 +25,7 @@ Propriétaire : Moustafa Adamou. Langue de travail et de l’interface : **fran�
 - `src/copilote.js` briefing, recommandations, vue réseau, questions (mode local ; mode IA facultatif sans référence patient)
 - `src/liaison-chsld.js` module hospitalier Liaison CHSLD (arrivées, accueil, retours ; moteur de coordination de `src/chsld.js`) · `src/og-liaison.js` OG pour ce module
 - `src/connecteurs.js` réception d’événements HL7 ADT traduits en JSON, capacité réseau en lecture
+- Préhospitalier (cahiers du 12 nov. 2026, `docs/cahiers-prehospitalier-20261112/`, décisions : `docs/AUDIT_PREHOSPITALIER_2026-11-12.md`, section 14) : `src/prealertes.js` préalertes ambulance → hôpital (module optionnel `liaison_secours`, organisations de secours à part des établissements, rôles `paramedic`, `superviseur_secours`, `repartiteur` limités à `/api/secours/*`) · `src/transports.js` demandes de transport d'un établissement (CHSLD, RPA, RI, RTF) ou d'un hôpital vers une ambulance (Liaison Établissements) · `src/og-secours.js` OG pour l'hôpital, l'ambulance et le CCS · `src/connect.js` Arrimo Connect v1 (`/api/connect/v1`, requêtes signées HMAC) · `src/admin-secours.js` administration (gestionnaire réseau) · écrans `public/secours.html` (Ambulance, CCS), `public/liaison-secours.js` (onglet hospitalier), `public/transports.js`
 - `src/admin.js` mon compte, double authentification, administration · `src/totp.js` codes à 6 chiffres (RFC 6238)
 - `db/schema.sql` schéma (idempotent, rejouable) · `db/seed.js` ancienne démo à 6 établissements (tests) · `db/demo-reseau.js` démo : réseau de 20 hôpitaux (comptes hopital.x, hopital.y, reseau)
 - `src/environnement.js` ARRIMO_ENV (demo, recette, production) et ARRIMO_DOMAINE (seul réglage de domaine) · `deploy/noms.sh` noms par environnement · `db/premier-compte.js` premier compte d'un environnement vide
@@ -41,7 +42,7 @@ createdb arrimo && createdb arrimo_test
 npm install
 DATABASE_URL=postgres:///arrimo npm run demo:reset
 DATABASE_URL=postgres:///arrimo HOST=127.0.0.1 npm start        # http://localhost:3010
-TEST_DATABASE_URL=postgres:///arrimo_test npm test               # 53 tests, tous doivent passer
+TEST_DATABASE_URL=postgres:///arrimo_test npm test               # 10 fichiers (≈ 220 tests) ; les 2 tests SH exigent le rôle PostgreSQL restreint (recette)
 TEST_DATABASE_URL=postgres:///arrimo_test npm run test:interface   # 9 tests dans Chromium (captures dans captures/)
 ```
 Tout changement : ajouter ou adapter un test dans `tests/api.test.js`, puis `npm test` vert avant de déployer.

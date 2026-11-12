@@ -144,6 +144,21 @@ window.ARRIMO_I18N.fr.aide = {
         ['« Le transfert … n’est plus au statut attendu »', 'Quelqu’un a déjà fait l’étape. La page se met à jour.'],
       ],
     },
+    secours: {
+      nom: 'Liaison Secours',
+      but: 'Les ambulances annoncées par préalerte, avant leur arrivée : entreprise, unité, plaque, équipage, priorité déclarée, catégorie, heure prévue et position. Aucune identité n’est transmise. OG propose le service selon vos règles ; votre équipe décide.',
+      gestes: [
+        '« Accuser la préalerte » : confirme qu’une personne en a pris connaissance (l’ambulance le voit).',
+        'Service proposé par OG : « Confirmer le service », « Indiquer un autre service » ou « Refuser la proposition ». Rien n’est affecté automatiquement.',
+        '« Préparation en cours », puis « Préparation terminée » : l’ambulance suit votre préparation.',
+        'À l’arrivée : « Confirmer le véhicule arrivé » avec le numéro de l’unité. Un autre véhicule est enregistré sans fermer la préalerte. Puis « Confirmer la remise ».',
+        'Statut de votre urgence : déclarez « Ouverte », « Capacité limitée », « Saturation » ou « Délestage » ; au-delà du seuil, la déclaration est signalée comme ancienne.',
+      ],
+      erreurs: [
+        ['« Cette étape n’est pas possible à ce stade de la préalerte »', 'Une autre étape doit d’abord être confirmée, ou la préalerte a changé de destination. Ouvrez l’historique.'],
+        ['« La version a changé »', 'Quelqu’un a déjà agi sur cette préalerte : l’écran se met à jour, recommencez si nécessaire.'],
+      ],
+    },
     liaison: {
       nom: 'Liaison CHSLD',
       but: 'Les demandes et mouvements des résidents de CHSLD vers votre hôpital, séparés des transferts interhospitaliers : arrivées, accueil, hospitalisations, retours et historique. Seule la référence du résident (R-00000) est visible.',

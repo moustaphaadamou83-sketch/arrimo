@@ -449,3 +449,50 @@ test('Arrimo Connect : requêtes signées des systèmes partenaires (répartitio
   await pool.query('UPDATE connecteurs_secours SET actif = false WHERE id = $1', [sysB.id]);
   assert.strictEqual((await connect(sysB, 'GET', '/connect/v1/statut')).statut, 401);
 });
+
+test('administration du préhospitalier : gestionnaire réseau seulement, organisation, unité, compte à mot de passe temporaire, système relié, journal', async () => {
+  const avant = process.env.ARRIMO_2FA_ADMIN; process.env.ARRIMO_2FA_ADMIN = '0';   // double authentification couverte par les tests d'administration
+  test.after(() => { if (avant === undefined) delete process.env.ARRIMO_2FA_ADMIN; else process.env.ARRIMO_2FA_ADMIN = avant; });
+  await connecter('reseau', 'reseau@demo.arrimo');
+  // Un coordonnateur d'hôpital ou un paramédic n'administrent pas les organisations de secours
+  assert.strictEqual((await appel('tremblay', 'GET', '/admin/secours')).corps.code, 'reserve_admin');
+  assert.strictEqual((await appel('para', 'GET', '/admin/secours')).corps.code, 'role_secours');
+  const cfg = (await pool.query('SELECT config_id FROM etablissements WHERE id = $1', [ids.mb])).rows[0].config_id;
+  let r = await appel('reseau', 'POST', '/admin/secours/organisations', { code: 'amb-est', nom: 'Ambulances de l’Est (fictif)', type: 'ambulancier', config_id: cfg });
+  assert.strictEqual(r.statut, 200, JSON.stringify(r.corps)); assert.strictEqual(r.corps.code, 'AMB-EST');
+  const org = r.corps.id;
+  assert.strictEqual((await appel('reseau', 'POST', '/admin/secours/organisations', { code: 'AMB-EST', nom: 'Doublon', type: 'ambulancier', config_id: cfg })).corps.code, 'organisation_existe');
+  assert.strictEqual((await appel('reseau', 'POST', '/admin/secours/organisations', { code: 'X1', nom: 'Type inconnu', type: 'pompiers', config_id: cfg })).corps.code, 'organisation_invalide');
+  r = await appel('reseau', 'POST', `/admin/secours/organisations/${org}/unites`, { numero: '88-01', plaque: 'FICT 881' });
+  assert.strictEqual(r.statut, 200);
+  assert.strictEqual((await appel('reseau', 'POST', `/admin/secours/organisations/${org}/unites`, { numero: '88-01' })).corps.code, 'unite_existe');
+  // Compte : seulement les rôles du type d'organisation ; mot de passe temporaire
+  assert.strictEqual((await appel('reseau', 'POST', `/admin/secours/organisations/${org}/comptes`, { nom: 'X', email: 'x.est@demo.arrimo', role: 'repartiteur' })).corps.code, 'role_inconnu');
+  assert.strictEqual((await appel('reseau', 'POST', `/admin/secours/organisations/${org}/comptes`, { nom: 'X', email: 'x.est@demo.arrimo', role: 'coordonnateur' })).corps.code, 'role_inconnu');
+  r = await appel('reseau', 'POST', `/admin/secours/organisations/${org}/comptes`, { nom: 'Paramédic Est', email: 'para.est@demo.arrimo', role: 'paramedic' });
+  assert.strictEqual(r.statut, 200, JSON.stringify(r.corps)); assert.ok(r.corps.mot_de_passe_temporaire);
+  const cx = await fetch(`${base}/api/connexion`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'para.est@demo.arrimo', mot_de_passe: r.corps.mot_de_passe_temporaire }) });
+  const jeton = (await cx.json()).token;
+  const essai = await fetch(`${base}/api/secours/prealertes`, { headers: { Authorization: `Bearer ${jeton}` } });
+  assert.strictEqual((await essai.json()).code, 'mdp_temporaire_dabord', 'le mot de passe temporaire doit être changé d’abord');
+  // Système relié : clé et secret montrés une seule fois, jamais relus
+  r = await appel('reseau', 'POST', `/admin/secours/organisations/${org}/systemes`, { nom: 'Répartition Est (fictif)' });
+  assert.match(r.corps.cle, /^acx_/); assert.ok(r.corps.secret);
+  const vue = (await appel('reseau', 'GET', '/admin/secours')).corps.organisations.find((o) => o.id === org);
+  assert.deepStrictEqual([vue.unites.map((x) => x.numero), vue.comptes.map((x) => x.email), vue.systemes.map((x) => x.nom)], [['88-01'], ['para.est@demo.arrimo'], ['Répartition Est (fictif)']]);
+  assert.ok(!JSON.stringify(vue).includes(r.corps.secret) && !JSON.stringify(vue).includes(r.corps.cle));
+  assert.strictEqual((await appel('reseau', 'PUT', `/admin/secours/systemes/${r.corps.id}`, {})).corps.actif, false);
+  // Journal d'administration immuable
+  const j = (await pool.query("SELECT action FROM journal_admin WHERE action LIKE '%secours%' OR action LIKE '%Arrimo Connect%' ORDER BY id")).rows.map((x) => x.action);
+  assert.deepStrictEqual(j, ['Organisation de secours créée', 'Unité de secours créée', 'Compte de secours créé', 'Système relié (Arrimo Connect)', 'Système révoqué (Arrimo Connect)']);
+  // Supervision : préalerte non reçue par l'écran de l'hôpital depuis plus de 2 min, transport sans réponse
+  await pool.query("UPDATE prealertes SET recue_le = NULL, statut = 'envoyee', cree_le = now() - interval '7 minutes' WHERE id = (SELECT id FROM prealertes WHERE statut NOT IN ('cloturee', 'annulee', 'remplacee') ORDER BY id LIMIT 1)");
+  const sup = (await appel('reseau', 'GET', '/admin/secours/supervision')).corps;
+  assert.ok(sup.non_recues.length >= 1 && sup.non_recues[0].minutes >= 7);
+  assert.ok(sup.systemes_silencieux.some((x) => x.nom === 'Système ambulancier fictif A') === false, 'un système utilisé aujourd’hui n’est pas silencieux');
+  assert.strictEqual((await appel('tremblay', 'GET', '/admin/secours/supervision')).corps.code, 'reserve_admin');
+  // Organisation désactivée : ses comptes n'ont plus accès
+  await appel('reseau', 'PUT', `/admin/secours/organisations/${ids.ambB}`, { actif: false });
+  assert.strictEqual((await appel('paraB', 'GET', '/secours/prealertes')).corps.code, 'organisation_interdite');
+  await appel('reseau', 'PUT', `/admin/secours/organisations/${ids.ambB}`, { actif: true });
+});

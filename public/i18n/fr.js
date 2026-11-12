@@ -93,6 +93,16 @@ window.ARRIMO_I18N.fr = {
     suivi: 'Transport {numero} · {org} : {statut}', unite: 'unité {unite}', heure: 'souhaité à {heure}', annuler: 'Annuler le transport', confirmer_annuler: 'Annuler cette demande de transport ? L’entreprise ambulancière sera informée.', ok: 'Enregistré.',
     s_demandee: 'demandé, en attente de l’entreprise', s_acceptee: 'accepté', s_refusee: 'refusé par l’entreprise', s_en_route: 'ambulance en route', s_pris_en_charge: 'résident pris en charge', s_arrivee: 'arrivé à destination', s_annulee: 'annulé',
   },
+  secours_admin: {
+    supervision: 'Supervision', rien: 'rien à signaler', depuis: 'depuis {n} min', sup_non_recues: 'Préalertes non reçues par l’écran de l’hôpital',
+    sup_non_prises: 'Préalertes non prises en compte', sup_transports: 'Transports sans réponse de l’entreprise', sup_positions: 'Positions anciennes (plus de 10 min)', sup_systemes: 'Systèmes reliés silencieux depuis 24 h',
+    intro: 'Entreprises ambulancières et centres de communication santé (CCS) : organisations à part des établissements, sans lits ni places. Chaque action est journalisée.',
+    nouvelle: 'Nouvelle organisation de secours', code: 'Code', nom: 'Nom', creer: 'Créer', type_ambulancier: 'Entreprise ambulancière', type_ccs: 'CCS', inactive: 'inactive',
+    unites: 'Unités', numero: 'Numéro d’unité', plaque: 'Plaque', ajouter_unite: 'Ajouter l’unité', comptes: 'Comptes', courriel: 'Courriel', creer_compte: 'Créer le compte',
+    systemes: 'Systèmes reliés (Arrimo Connect)', nom_systeme: 'Nom du système', relier: 'Relier un système', revoquer: 'Révoquer', revoque: 'révoqué', aucune: 'Aucune.', aucun: 'Aucun.',
+    activer: 'Activer l’organisation', desactiver: 'Désactiver l’organisation', une_fois: 'Clé et secret du système', une_fois_aide: 'Copiez-les maintenant : ils ne seront plus jamais affichés. Chaque requête doit être signée (HMAC-SHA256).',
+    cle: 'Clé', secret: 'Secret de signature', compte_cree: 'Compte créé', mdp_temporaire: 'Mot de passe temporaire de {email}, à changer à la première connexion :',
+  },
   liaison_secours: {
     urg_titre: 'Statut de votre urgence', urg_aide: 'Déclaration visible par les ambulances et le CCS, avec son heure. Au-delà de {seuil} min, elle est signalée comme ancienne.',
     urg_actuel: 'Déclaré : {statut}, il y a {age} min{par}', urg_aucun: 'Aucun statut déclaré.', urg_perime: 'Déclaration ancienne : confirmez-la ou mettez-la à jour.',
@@ -157,6 +167,7 @@ window.ARRIMO_I18N.fr = {
   roles_texte: { coordonnateur: 'coordination', entretien: 'entretien', admin_etab: 'administration d’établissement', gestionnaire: 'gestionnaire réseau' },
   // Actions inscrites au journal (texte enregistré → libellé)
   journal_actions: {
+    'Préalerte reçue': 'Préalerte reçue', 'Préalerte mise à jour': 'Préalerte mise à jour', 'Arrivée d’ambulance signalée': 'Arrivée d’ambulance signalée', 'Préalerte annulée': 'Préalerte annulée', 'Préalerte prise en compte': 'Préalerte prise en compte', 'Préparation commencée': 'Préparation commencée', 'Préparation terminée': 'Préparation terminée', 'Service confirmé': 'Service confirmé', 'Service modifié': 'Service modifié', 'Proposition de service refusée': 'Proposition de service refusée', 'Véhicule confirmé': 'Véhicule confirmé', 'Remise confirmée': 'Remise confirmée', 'Destination de préalerte modifiée': 'Destination de préalerte modifiée', 'Statut de l’urgence déclaré': 'Statut de l’urgence déclaré', 'Transport demandé': 'Transport demandé', 'Transport accepté': 'Transport accepté', 'Transport refusé': 'Transport refusé', 'Ambulance en route': 'Ambulance en route', 'Résident pris en charge': 'Résident pris en charge', 'Transport arrivé': 'Transport arrivé', 'Transport annulé': 'Transport annulé',
     'Changement d’état': 'Changement d’état', 'Action refusée': 'Action refusée', 'Création': 'Création', 'Référence transmise': 'Référence transmise',
     'Transfert validé': 'Transfert validé', 'Transport organisé': 'Transport organisé', 'Départ confirmé': 'Départ confirmé',
     'Désignation NSA': 'Désignation NSA', 'Fin du statut NSA': 'Fin du statut NSA', 'Orientation NSA modifiée': 'Orientation NSA modifiée',
@@ -164,6 +175,7 @@ window.ARRIMO_I18N.fr = {
     'Équipement modifié': 'Équipement modifié', 'Chambre prête': 'Chambre prête', 'Civière': 'Civière',
   },
   journal_admin_actions: {
+    'Organisation de secours créée': 'Organisation de secours créée', 'Organisation de secours activée': 'Organisation de secours activée', 'Organisation de secours désactivée': 'Organisation de secours désactivée', 'Unité de secours créée': 'Unité de secours créée', 'Unité de secours modifiée': 'Unité de secours modifiée', 'Unité de secours désactivée': 'Unité de secours désactivée', 'Compte de secours créé': 'Compte de secours créé', 'Système relié (Arrimo Connect)': 'Système relié (Arrimo Connect)', 'Système révoqué (Arrimo Connect)': 'Système révoqué (Arrimo Connect)',
     'Mot de passe changé': 'Mot de passe changé', 'Double authentification activée': 'Double authentification activée',
     'Double authentification désactivée': 'Double authentification désactivée', 'Compte créé': 'Compte créé', 'Compte modifié': 'Compte modifié',
     'Compte désactivé': 'Compte désactivé', 'Mot de passe réinitialisé': 'Mot de passe réinitialisé', 'Unité créée': 'Unité créée',

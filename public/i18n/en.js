@@ -93,6 +93,16 @@ window.ARRIMO_I18N.en = {
     suivi: 'Transport {numero} · {org}: {statut}', unite: 'unit {unite}', heure: 'requested at {heure}', annuler: 'Cancel the transport', confirmer_annuler: 'Cancel this transport request? The ambulance company will be informed.', ok: 'Saved.',
     s_demandee: 'requested, awaiting the company', s_acceptee: 'accepted', s_refusee: 'declined by the company', s_en_route: 'ambulance on its way', s_pris_en_charge: 'resident picked up', s_arrivee: 'arrived at destination', s_annulee: 'cancelled',
   },
+  secours_admin: {
+    supervision: 'Supervision', rien: 'nothing to report', depuis: 'for {n} min', sup_non_recues: 'Pre-alerts not received by the hospital screen',
+    sup_non_prises: 'Pre-alerts not acknowledged', sup_transports: 'Transports without company response', sup_positions: 'Stale positions (over 10 min)', sup_systemes: 'Linked systems silent for 24 h',
+    intro: 'Ambulance companies and health communication centres (CCS): organizations separate from facilities, with no beds or places. Every action is logged.',
+    nouvelle: 'New emergency organization', code: 'Code', nom: 'Name', creer: 'Create', type_ambulancier: 'Ambulance company', type_ccs: 'CCS', inactive: 'inactive',
+    unites: 'Units', numero: 'Unit number', plaque: 'Plate', ajouter_unite: 'Add the unit', comptes: 'Accounts', courriel: 'Email', creer_compte: 'Create the account',
+    systemes: 'Linked systems (Arrimo Connect)', nom_systeme: 'System name', relier: 'Link a system', revoquer: 'Revoke', revoque: 'revoked', aucune: 'None.', aucun: 'None.',
+    activer: 'Activate the organization', desactiver: 'Deactivate the organization', une_fois: 'System key and secret', une_fois_aide: 'Copy them now: they will never be shown again. Every request must be signed (HMAC-SHA256).',
+    cle: 'Key', secret: 'Signing secret', compte_cree: 'Account created', mdp_temporaire: 'Temporary password for {email}, to change at first sign-in:',
+  },
   liaison_secours: {
     urg_titre: 'Your emergency department status', urg_aide: 'Declaration visible to ambulances and the CCS, with its time. After {seuil} min, it is flagged as stale.',
     urg_actuel: 'Declared: {statut}, {age} min ago{par}', urg_aucun: 'No status declared.', urg_perime: 'Stale declaration: confirm or update it.',
@@ -156,6 +166,7 @@ window.ARRIMO_I18N.en = {
   roles:{ paramedic: 'Paramedic', superviseur_secours: 'EMS supervisor', repartiteur: 'Dispatch (CCS)', coordonnateur: 'Coordination', entretien: 'Housekeeping', admin_etab: 'Facility admin', gestionnaire: 'Network manager', equipe_soins: 'Care team' },
   roles_texte: { coordonnateur: 'coordination', entretien: 'housekeeping', admin_etab: 'facility administration', gestionnaire: 'network manager' },
   journal_actions: {
+    'Préalerte reçue': 'Pre-alert received', 'Préalerte mise à jour': 'Pre-alert updated', 'Arrivée d’ambulance signalée': 'Ambulance arrival reported', 'Préalerte annulée': 'Pre-alert cancelled', 'Préalerte prise en compte': 'Pre-alert acknowledged', 'Préparation commencée': 'Preparation started', 'Préparation terminée': 'Preparation complete', 'Service confirmé': 'Department confirmed', 'Service modifié': 'Department changed', 'Proposition de service refusée': 'Department proposal declined', 'Véhicule confirmé': 'Vehicle confirmed', 'Remise confirmée': 'Handover confirmed', 'Destination de préalerte modifiée': 'Pre-alert destination changed', 'Statut de l’urgence déclaré': 'Emergency status declared', 'Transport demandé': 'Transport requested', 'Transport accepté': 'Transport accepted', 'Transport refusé': 'Transport declined', 'Ambulance en route': 'Ambulance on its way', 'Résident pris en charge': 'Resident picked up', 'Transport arrivé': 'Transport arrived', 'Transport annulé': 'Transport cancelled',
     'Changement d’état': 'State change', 'Action refusée': 'Action refused', 'Création': 'Creation', 'Référence transmise': 'Reference sent',
     'Transfert validé': 'Transfer accepted', 'Transport organisé': 'Transport arranged', 'Départ confirmé': 'Departure confirmed',
     'Désignation NSA': 'ALC designation', 'Fin du statut NSA': 'ALC status ended', 'Orientation NSA modifiée': 'ALC destination changed',
@@ -163,6 +174,7 @@ window.ARRIMO_I18N.en = {
     'Équipement modifié': 'Equipment changed', 'Chambre prête': 'Room ready', 'Civière': 'Stretcher',
   },
   journal_admin_actions: {
+    'Organisation de secours créée': 'Emergency organization created', 'Organisation de secours activée': 'Emergency organization activated', 'Organisation de secours désactivée': 'Emergency organization deactivated', 'Unité de secours créée': 'Emergency unit created', 'Unité de secours modifiée': 'Emergency unit changed', 'Unité de secours désactivée': 'Emergency unit deactivated', 'Compte de secours créé': 'Emergency account created', 'Système relié (Arrimo Connect)': 'System linked (Arrimo Connect)', 'Système révoqué (Arrimo Connect)': 'System revoked (Arrimo Connect)',
     'Mot de passe changé': 'Password changed', 'Double authentification activée': 'Two-factor authentication enabled',
     'Double authentification désactivée': 'Two-factor authentication disabled', 'Compte créé': 'Account created', 'Compte modifié': 'Account changed',
     'Compte désactivé': 'Account disabled', 'Mot de passe réinitialisé': 'Password reset', 'Unité créée': 'Unit created',
@@ -694,6 +706,10 @@ window.ARRIMO_I18N.en = {
     transport_statut_incompatible: "This step is not possible at this stage of the transport.",
     connect_signature_invalide: "Request refused: invalid partner system key or signature.",
     connect_horodatage_expire: "Request refused: timestamp outside the 5-minute window.",
+    organisation_invalide: "Invalid organization: code (2 to 20 characters), name and type (ambulance company or CCS) required.",
+    organisation_existe: "An emergency organization already uses this code.",
+    unite_invalide: "Invalid unit number (letters, digits, spaces and hyphens, 20 characters at most).",
+    unite_existe: "This organization already has a unit with this number.",
     liaison_secours_inactive: "This hospital has not enabled the Emergency liaison module: the pre-alert cannot be sent to it.",
     organisation_interdite: "Your account is not linked to any active emergency organization.",
     prealerte_invalide: "Incomplete or invalid pre-alert: check the priority, category, arrival time and crew.",

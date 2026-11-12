@@ -105,6 +105,8 @@ function actions(d, u, cote, etabId) {
   return [];
 }
 const MOTIFS = ['aucune_unite', 'hors_territoire', 'autre'];
+// Libellés du journal (traduits par l'interface : journal_actions)
+const ACTIONS_JOURNAL = { accepter: 'Transport accepté', refuser: 'Transport refusé', en_route: 'Ambulance en route', pris_en_charge: 'Résident pris en charge', arrivee: 'Transport arrivé', annuler: 'Transport annulé' };
 /** Étapes du transport : l'ambulance accepte (unité), part, prend en charge, arrive ; l'établissement d'origine peut annuler avant la prise en charge. */
 async function agir(pool, u, id, b) {
   const d0 = (await pool.query('SELECT * FROM demandes_transport WHERE id = $1', [entier(id)])).rows[0];
@@ -143,7 +145,7 @@ async function agir(pool, u, id, b) {
     await evenement(c, n, a, u, detail);
     const co = (await c.query('SELECT numero FROM coordinations WHERE id = $1', [n.coordination_id])).rows[0];
     for (const etab of [n.origine_id, n.destination_id]) {
-      await journaliser(c, { etablissementId: etab, utilisateurId: u.id, action: `Transport : ${a.replace(/_/g, ' ')}`, detail: `${n.numero} · ${co.numero}` });
+      await journaliser(c, { etablissementId: etab, utilisateurId: u.id || null, action: ACTIONS_JOURNAL[a], detail: `${n.numero} · ${co.numero}` });
     }
     // L'établissement d'origine suit son transport (cahier 3, étape 6) ; la destination est avertie de l'approche
     const vars = { numero: n.numero, coordination: co.numero, ref: n.resident_ref };
