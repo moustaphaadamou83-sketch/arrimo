@@ -15,7 +15,8 @@
       e_envoyee: 'Transmise', e_recue: 'Reçue par l’hôpital', e_consultee: 'Consultée', e_prise_en_compte: 'Prise en compte', e_preparation: 'Préparation', e_preparation_terminee: 'Prête', e_arrivee: 'Arrivée confirmée',
       s_envoyee: 'transmise, réception non confirmée', s_recue: 'reçue par l’écran de l’hôpital', s_consultee: 'consultée', s_prise_en_compte: 'prise en compte', s_preparation: 'préparation en cours',
       s_preparation_terminee: 'préparation terminée', s_arrivee: 'arrivée confirmée', s_cloturee: 'remise confirmée, clôturée', s_annulee: 'annulée', s_remplacee: 'remplacée (destination modifiée)',
-      urgences: 'Urgences de la région', vol_oiseau: '{km} km à vol d’oiseau', civieres: '{n} civières libres', civiere1: '{n} civière libre', sans_donnee: 'aucune donnée d’urgence',
+      urgences: 'Urgences de la région', declare: 'Déclaré : {statut}, il y a {age} min', ancien: 'donnée ancienne',
+      st: { ouvert: 'ouverte', capacite_limitee: 'capacité limitée', saturation: 'saturation', delestage: 'délestage' }, vol_oiseau: '{km} km à vol d’oiseau', civieres: '{n} civières libres', civiere1: '{n} civière libre', sans_donnee: 'aucune donnée d’urgence',
       position: 'Partager la position de l’unité', position_aide: 'Facultatif : améliore l’heure d’arrivée vue par l’hôpital. Conservée 24 h au plus.', position_on: 'Position partagée',
       position_refus: 'Position non disponible sur cet appareil.', historique: 'Dernières 24 heures', aucune: 'Aucune préalerte.', organisation: 'Préalertes de l’organisation',
       ccs_en_cours: 'Ambulances annoncées dans la région', ccs_aide: 'Consultation seulement : votre système de répartition reste la référence.',
@@ -23,6 +24,13 @@
       og_titre: 'OG, votre assistant Arrimo', og_aide: 'OG suit les préalertes et l’état des urgences ; il ne décide ni de la destination ni de la priorité.', og_question: 'Posez une question à OG',
       og_envoyer: 'Demander', og_q_reception: 'L’hôpital a-t-il confirmé la réception ?', og_q_manque: 'Que manque-t-il à ma préalerte ?', og_q_urgences: 'État des urgences de la région',
       og_q_en_cours: 'Préalertes en cours', og_q_ccs_route: 'Quelles ambulances sont en route ?', og_q_ccs_attente: 'Quelles préalertes ne sont pas encore prises en compte ?',
+      transports: 'Demandes de transport des établissements', tr_aide: 'Référence du résident et informations de transport seulement ; le départ et l’arrivée restent confirmés par les établissements.',
+      tr_de: 'De {origine}', tr_vers: 'vers {dest}', tr_heure: 'souhaité à {heure}', tr_accepter: 'Accepter avec l’unité {unite}', tr_refuser: 'Refuser', tr_en_route: 'En route vers le départ',
+      tr_pris_en_charge: 'Résident pris en charge', tr_arrivee: 'Arrivé à destination', tr_confirmer_refus: 'Refuser cette demande ? L’établissement choisira une autre entreprise.', tr_aucune: 'Aucune demande de transport.',
+      og_q_transports: 'Demandes des établissements',
+      trs: { demandee: 'à accepter', acceptee: 'acceptée', en_route: 'en route', pris_en_charge: 'résident pris en charge', arrivee: 'arrivée', refusee: 'refusée', annulee: 'annulée par l’établissement' },
+      acc: { fauteuil: 'fauteuil roulant', deambulateur: 'déambulateur', leve_personne: 'lève-personne', lit_electrique: 'lit électrique', malentendant: 'malentendant', malvoyant: 'malvoyant' },
+      accompagnateur: 'accompagnateur', langue: 'langue : {l}',
       prio: { immediate: 'Immédiate', urgente: 'Urgente', non_urgente: 'Non urgente' },
       cat: { medicale: 'Médicale', traumatologie: 'Traumatologie', cardiaque: 'Cardiaque', neurologique: 'Neurologique', respiratoire: 'Respiratoire', pediatrique: 'Pédiatrique',
         obstetrique: 'Obstétrique', sante_mentale: 'Santé mentale', autre: 'Autre' },
@@ -38,7 +46,8 @@
       e_envoyee: 'Sent', e_recue: 'Received by hospital', e_consultee: 'Viewed', e_prise_en_compte: 'Acknowledged', e_preparation: 'Preparing', e_preparation_terminee: 'Ready', e_arrivee: 'Arrival confirmed',
       s_envoyee: 'sent, receipt not confirmed', s_recue: 'received by the hospital screen', s_consultee: 'viewed', s_prise_en_compte: 'acknowledged', s_preparation: 'preparation in progress',
       s_preparation_terminee: 'preparation complete', s_arrivee: 'arrival confirmed', s_cloturee: 'handover confirmed, closed', s_annulee: 'cancelled', s_remplacee: 'replaced (destination changed)',
-      urgences: 'Emergency departments in the region', vol_oiseau: '{km} km as the crow flies', civieres: '{n} free stretchers', civiere1: '{n} free stretcher', sans_donnee: 'no emergency data',
+      urgences: 'Emergency departments in the region', declare: 'Declared: {statut}, {age} min ago', ancien: 'stale data',
+      st: { ouvert: 'open', capacite_limitee: 'limited capacity', saturation: 'saturation', delestage: 'diversion' }, vol_oiseau: '{km} km as the crow flies', civieres: '{n} free stretchers', civiere1: '{n} free stretcher', sans_donnee: 'no emergency data',
       position: 'Share the unit’s position', position_aide: 'Optional: improves the arrival time seen by the hospital. Kept 24 h at most.', position_on: 'Position shared',
       position_refus: 'Position unavailable on this device.', historique: 'Last 24 hours', aucune: 'No pre-alert.', organisation: 'Organization pre-alerts',
       ccs_en_cours: 'Ambulances announced in the region', ccs_aide: 'View only: your dispatch system remains the reference.',
@@ -46,6 +55,13 @@
       og_titre: 'OG, your Arrimo assistant', og_aide: 'OG tracks pre-alerts and emergency status; it decides neither the destination nor the priority.', og_question: 'Ask OG a question',
       og_envoyer: 'Ask', og_q_reception: 'Has the hospital confirmed receipt?', og_q_manque: 'What is missing from my pre-alert?', og_q_urgences: 'Regional emergency status',
       og_q_en_cours: 'Pre-alerts in progress', og_q_ccs_route: 'Which ambulances are on the way?', og_q_ccs_attente: 'Which pre-alerts are not yet acknowledged?',
+      transports: 'Transport requests from facilities', tr_aide: 'Resident reference and transport information only; departure and arrival remain confirmed by the facilities.',
+      tr_de: 'From {origine}', tr_vers: 'to {dest}', tr_heure: 'requested at {heure}', tr_accepter: 'Accept with unit {unite}', tr_refuser: 'Decline', tr_en_route: 'On the way to pickup',
+      tr_pris_en_charge: 'Resident picked up', tr_arrivee: 'Arrived at destination', tr_confirmer_refus: 'Decline this request? The facility will choose another company.', tr_aucune: 'No transport request.',
+      og_q_transports: 'Requests from facilities',
+      trs: { demandee: 'to accept', acceptee: 'accepted', en_route: 'on the way', pris_en_charge: 'resident picked up', arrivee: 'arrived', refusee: 'declined', annulee: 'cancelled by the facility' },
+      acc: { fauteuil: 'wheelchair', deambulateur: 'walker', leve_personne: 'patient lift', lit_electrique: 'electric bed', malentendant: 'hard of hearing', malvoyant: 'visually impaired' },
+      accompagnateur: 'escort', langue: 'language: {l}',
       prio: { immediate: 'Immediate', urgente: 'Urgent', non_urgente: 'Non-urgent' },
       cat: { medicale: 'Medical', traumatologie: 'Trauma', cardiaque: 'Cardiac', neurologique: 'Neurological', respiratoire: 'Respiratory', pediatrique: 'Pediatric',
         obstetrique: 'Obstetric', sante_mentale: 'Mental health', autre: 'Other' },
@@ -64,7 +80,7 @@
   const ROLES_AMB = ['paramedic', 'superviseur_secours'];
   const OUVERTES = ['envoyee', 'recue', 'consultee', 'prise_en_compte', 'preparation', 'preparation_terminee', 'arrivee'];
   const ETAPES = ['envoyee', 'recue', 'consultee', 'prise_en_compte', 'preparation', 'preparation_terminee', 'arrivee'];
-  const etat = { token: lire('arrimo-token'), moi: null, unites: [], prealertes: [], destinations: [], formulaire: { priorite: null, categorie: null, destination: null, delai: 10 },
+  const etat = { token: lire('arrimo-token'), moi: null, unites: [], prealertes: [], transports: [], destinations: [], formulaire: { priorite: null, categorie: null, destination: null, delai: 10 },
     enLigne: navigator.onLine, message: null, erreur: null, position: null, partage: lire('arrimo-secours-position') === '1', dernierEnvoiPos: 0, choixDest: false, og: null };
   const lireFile = () => { try { return JSON.parse(lire('arrimo-secours-file') || '[]'); } catch { return []; } };
   const ecrireFile = (f) => ecrire('arrimo-secours-file', f.length ? JSON.stringify(f) : null);
@@ -105,6 +121,7 @@
     try {
       const [p, d] = await Promise.all([api('GET', '/secours/prealertes'), api('GET', `/secours/destinations${etat.position ? `?latitude=${etat.position.latitude}&longitude=${etat.position.longitude}` : ''}`)]);
       etat.prealertes = p.prealertes; etat.destinations = d; etat.enLigne = true;
+      etat.transports = await api('GET', '/secours/transports').catch(() => []);
       if (ROLES_AMB.includes(etat.moi.utilisateur.role)) etat.unites = await api('GET', '/secours/unites');
     } catch (e) { if (estReseau(e)) etat.enLigne = false; else etat.erreur = e.message; }
     rendre();
@@ -134,7 +151,7 @@
   const choix = (nom, valeurs, libelle, courant) => `<div class="grille choix" data-choix="${nom}">${valeurs.map((v) => `<button type="button" data-v="${esc(v)}" aria-pressed="${courant === v}">${esc(libelle(v))}</button>`).join('')}</div>`;
   function urgences() {
     const d = etat.destinations;
-    return `<section class="carte-s"><h2>${t('urgences')}</h2>${d.length ? d.map((h) => `<div class="ligne-s"><div><span class="pt-niveau ${esc(h.urgence?.niveau || 'inconnu')}" aria-hidden="true"></span><strong>${esc(h.nom)}</strong> <span class="note">${esc(h.ville || '')}</span></div>
+    return `<section class="carte-s"><h2>${t('urgences')}</h2>${d.length ? d.map((h) => `<div class="ligne-s"><div><span class="pt-niveau ${esc(h.urgence?.niveau || 'inconnu')}" aria-hidden="true"></span><strong>${esc(h.nom)}</strong> <span class="note">${esc(h.ville || '')}</span>${h.statut_declare ? `<br><span class="note"${h.statut_declare.perime ? '' : ' style="color:var(--texte)"'}>${esc(t('declare', { statut: t('st.' + h.statut_declare.statut), age: h.statut_declare.age_min }))}${h.statut_declare.perime ? ` · ${t('ancien')}` : ''}</span>` : ''}</div>
       <div class="note">${esc([h.distance_km != null ? t('vol_oiseau', { km: h.distance_km }) : null, h.urgence ? t(h.urgence.civieres_libres > 1 ? 'civieres' : 'civiere1', { n: h.urgence.civieres_libres }) : t('sans_donnee')].filter(Boolean).join(' · '))}</div></div>`).join('') : `<p class="note">${t('aucune')}</p>`}</section>`;
   }
   function carteEnCours(p) {
@@ -170,7 +187,7 @@
       <p class="note">${etat.partage && etat.position ? `${t('position_on')} · ${heure(etat.position.le)}` : t('position_aide')}</p></section>`;
   }
   function carteOg(amb) {
-    const qs = amb ? ['og_q_reception', 'og_q_manque', 'og_q_urgences', 'og_q_en_cours'] : ['og_q_ccs_route', 'og_q_ccs_attente', 'og_q_urgences'];
+    const qs = amb ? ['og_q_reception', 'og_q_manque', 'og_q_urgences', 'og_q_en_cours', 'og_q_transports'] : ['og_q_ccs_route', 'og_q_ccs_attente', 'og_q_urgences', 'og_q_transports'];
     return `<section class="carte-s" aria-label="OG"><h2><img src="og-robot.svg" alt="" width="28" height="28" style="vertical-align:middle;margin-right:8px">${t('og_titre')}</h2>
       <p class="note">${t('og_aide')}</p>
       <div class="grille">${qs.map((k) => `<button type="button" class="btn" data-og="${k}">${t(k)}</button>`).join('')}</div>
@@ -182,6 +199,20 @@
     if (!question) return;
     try { etat.og = (await api('POST', '/secours/og', { question })).reponse; } catch (e) { etat.og = estReseau(e) ? t('hors_ligne') : e.message; }
     rendre();
+  }
+  function carteTransports(amb) {
+    const u = uniteCourante();
+    const lignes = etat.transports.map((d) => {
+      const infos = [...(d.infos?.accessibilite || []).map((x) => t('acc.' + x)), ...(d.infos?.accompagnateur ? [t('accompagnateur')] : []), ...(d.infos?.langue ? [t('langue', { l: d.infos.langue.toUpperCase() })] : [])];
+      const a = amb ? d.actions : [];
+      return `<div class="ligne-s"><div><strong>${esc(d.numero)}</strong> · ${esc(d.resident_ref)} · <b>${esc(t('trs.' + d.statut))}</b><br>
+        <span class="note">${esc(t('tr_de', { origine: `${d.origine}${d.origine_adresse ? `, ${d.origine_adresse}` : ''}` }))} ${esc(t('tr_vers', { dest: d.destination }))}${d.heure_souhaitee ? ` · ${esc(t('tr_heure', { heure: heure(d.heure_souhaitee) }))}` : ''}${d.unite ? ` · ${esc(d.unite)}` : ''}</span>
+        ${infos.length ? `<br><span class="note">${esc(infos.join(' · '))}</span>` : ''}</div>
+        ${a.length ? `<div class="grille" style="min-width:min(100%,320px)">${a.includes('accepter') && u ? `<button class="btn pri" data-tr="accepter" data-id="${d.id}" data-version="${d.version}">${esc(t('tr_accepter', { unite: u.numero }))}</button>` : ''}
+          ${a.includes('refuser') ? `<button class="btn" data-tr="refuser" data-id="${d.id}" data-version="${d.version}">${t('tr_refuser')}</button>` : ''}
+          ${['en_route', 'pris_en_charge', 'arrivee'].filter((x) => a.includes(x)).map((x) => `<button class="btn pri" data-tr="${x}" data-id="${d.id}" data-version="${d.version}">${t('tr_' + x)}</button>`).join('')}</div>` : ''}</div>`;
+    });
+    return `<section class="carte-s"><h2>${t('transports')}</h2><p class="note">${t('tr_aide')}</p>${lignes.join('') || `<p class="note">${t('tr_aucune')}</p>`}</section>`;
   }
   const ligneListe = (p) => `<div class="ligne-s prio-${esc(p.priorite)}" style="padding-left:10px"><div><strong>${esc(p.numero)}</strong> · ${esc(p.unite)} → ${esc(p.destination)}</div>
     <div class="note">${t('prio.' + p.priorite)} · ${t('cat.' + p.categorie)} · ${t('s_' + p.statut)}${OUVERTES.includes(p.statut) ? ` · ${esc(eta(p))}` : ''}</div></div>`;
@@ -200,7 +231,7 @@
     const msg = `${etat.erreur ? `<p class="erreur" role="alert">${esc(etat.erreur)}</p>` : ''}${etat.message ? `<p class="bandeau" role="status">${esc(etat.message)}</p>` : ''}`;
     if (!amb) {
       const ouvertes = etat.prealertes.filter((p) => OUVERTES.includes(p.statut));
-      m.innerHTML = `${msg}${carteOg(false)}<section class="carte-s"><h2>${t('ccs_en_cours')}</h2><p class="note">${t('ccs_aide')}</p>${ouvertes.length ? ouvertes.map(ligneListe).join('') : `<p class="note">${t('aucune')}</p>`}</section>${urgences()}`;
+      m.innerHTML = `${msg}${carteOg(false)}${carteTransports(false)}<section class="carte-s"><h2>${t('ccs_en_cours')}</h2><p class="note">${t('ccs_aide')}</p>${ouvertes.length ? ouvertes.map(ligneListe).join('') : `<p class="note">${t('aucune')}</p>`}</section>${urgences()}`;
       return;
     }
     const u = uniteCourante();
@@ -209,7 +240,7 @@
     const enAttente = lireFile().some((x) => x.chemin === '/secours/prealertes' && Number(x.corps.unite_id) === u.id);
     const recentes = etat.prealertes.filter((p) => p.unite_id === u.id && !OUVERTES.includes(p.statut));
     const superviseur = etat.moi.utilisateur.role === 'superviseur_secours';
-    m.innerHTML = `${msg}${enCours ? carteEnCours(enCours) : enAttente ? '' : formulaire(u)}${carteOg(true)}${positionCarte(u)}${urgences()}
+    m.innerHTML = `${msg}${enCours ? carteEnCours(enCours) : enAttente ? '' : formulaire(u)}${carteOg(true)}${carteTransports(true)}${positionCarte(u)}${urgences()}
       ${superviseur ? `<section class="carte-s"><h2>${t('organisation')}</h2>${etat.prealertes.filter((p) => OUVERTES.includes(p.statut)).map(ligneListe).join('') || `<p class="note">${t('aucune')}</p>`}</section>` : ''}
       <section class="carte-s"><h2>${t('historique')}</h2>${recentes.length ? recentes.map(ligneListe).join('') : `<p class="note">${t('aucune')}</p>`}</section>`;
   }
@@ -224,6 +255,14 @@
     const b = ev.target.closest('button'); if (!b) return;
     if (b.dataset.langue) { L = b.dataset.langue; ecrire('arrimo-langue', L); document.documentElement.lang = L === 'en' ? 'en-CA' : 'fr-CA'; rendre(); return; }
     if (b.dataset.og) return demanderOg(t(b.dataset.og));
+    if (b.dataset.tr) {
+      const a = b.dataset.tr; const u0 = uniteCourante();
+      if (a === 'refuser' && !confirm(t('tr_confirmer_refus'))) return;
+      etat.erreur = null; etat.message = null;
+      try { await api('POST', `/secours/transports/${b.dataset.id}/action`, { action: a, version: Number(b.dataset.version), ...(a === 'accepter' ? { unite_id: u0.id } : {}), ...(a === 'refuser' ? { motif: 'aucune_unite' } : {}) }); etat.message = t('fait'); }
+      catch (e) { etat.erreur = estReseau(e) ? t('hors_ligne') : e.message; }
+      return charger();
+    }
     if (b.id === 'sortir') { try { await api('POST', '/deconnexion'); } catch { /* session déjà close */ } ecrire('arrimo-token', null); location.replace('/'); return; }
     const u = uniteCourante(); const p = u && etat.prealertes.find((x) => x.unite_id === u.id && OUVERTES.includes(x.statut));
     const groupe = b.closest('[data-choix]')?.dataset.choix;

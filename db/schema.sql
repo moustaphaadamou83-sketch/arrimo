@@ -1351,3 +1351,60 @@ CREATE TRIGGER prealerte_evenements_pas_de_modif BEFORE UPDATE OR DELETE ON prea
 DROP TRIGGER IF EXISTS prealerte_evenements_pas_de_vidage ON prealerte_evenements;
 CREATE TRIGGER prealerte_evenements_pas_de_vidage BEFORE TRUNCATE ON prealerte_evenements
   FOR EACH STATEMENT EXECUTE FUNCTION journal_immuable();
+
+-- Préhospitalier, phase 4 (12 nov. 2026) : proposition de service par OG, validée par l'hôpital (cahier, section 2.2)
+-- La règle vient de l'établissement : services.attributs.categories_secours (liste de catégories) et services.attributs.secours_defaut.
+ALTER TABLE prealertes ADD COLUMN IF NOT EXISTS service_propose_id int REFERENCES services(id);
+ALTER TABLE prealertes ADD COLUMN IF NOT EXISTS service_justification jsonb;
+ALTER TABLE prealertes ADD COLUMN IF NOT EXISTS service_statut text CHECK (service_statut IN ('a_confirmer', 'confirme', 'modifie', 'refuse', 'sans_proposition'));
+ALTER TABLE prealertes ADD COLUMN IF NOT EXISTS service_confirme_id int REFERENCES services(id);
+ALTER TABLE prealertes ADD COLUMN IF NOT EXISTS service_confirme_par int REFERENCES utilisateurs(id);
+ALTER TABLE prealertes ADD COLUMN IF NOT EXISTS service_confirme_le timestamptz;
+
+-- Préhospitalier, phase 5 (12 nov. 2026) : statut déclaré de l'urgence (cahier, section 9), avec source, auteur et heure.
+-- Une déclaration plus ancienne que le seuil n'est jamais présentée comme actuelle (seuil initial 15 min, à valider avec les établissements).
+ALTER TABLE etablissements ADD COLUMN IF NOT EXISTS urgence_statut_declare text CHECK (urgence_statut_declare IN ('ouvert', 'capacite_limitee', 'saturation', 'delestage'));
+ALTER TABLE etablissements ADD COLUMN IF NOT EXISTS urgence_statut_le timestamptz;
+ALTER TABLE etablissements ADD COLUMN IF NOT EXISTS urgence_statut_par int REFERENCES utilisateurs(id);
+ALTER TABLE config_pays ADD COLUMN IF NOT EXISTS disponibilite_fraicheur_min int NOT NULL DEFAULT 15 CHECK (disponibilite_fraicheur_min BETWEEN 1 AND 240);
+
+-- Liaison Établissements (cahier 3, 12 nov. 2026) : demandes de transport d'un établissement (CHSLD, RPA, RI, RTF) ou d'un hôpital
+-- vers une entreprise ambulancière, rattachées à une coordination existante (hospitalisation ou retour). Parcours distinct des préalertes.
+-- L'ambulance ne voit que la référence du résident (R-00000), les lieux et les informations de transport (listes fermées).
+CREATE SEQUENCE IF NOT EXISTS transport_demande_seq;
+CREATE TABLE IF NOT EXISTS demandes_transport (
+  id                serial PRIMARY KEY,
+  numero            text NOT NULL UNIQUE,                 -- DT-000001
+  coordination_id   int  NOT NULL REFERENCES coordinations(id),
+  organisation_id   int  NOT NULL REFERENCES organisations_secours(id),
+  unite_id          int  REFERENCES unites_secours(id),
+  origine_id        int  NOT NULL REFERENCES etablissements(id),
+  destination_id    int  NOT NULL REFERENCES etablissements(id),
+  resident_ref      text NOT NULL,
+  heure_souhaitee   timestamptz,
+  infos             jsonb NOT NULL DEFAULT '{}'::jsonb,   -- accessibilité, accompagnateur, langue (listes fermées de la coordination)
+  statut            text NOT NULL DEFAULT 'demandee' CHECK (statut IN ('demandee', 'acceptee', 'refusee', 'en_route', 'pris_en_charge', 'arrivee', 'annulee')),
+  acceptee_le       timestamptz, en_route_le timestamptz, pris_en_charge_le timestamptz, arrivee_le timestamptz,
+  motif_refus       text CHECK (motif_refus IN ('aucune_unite', 'hors_territoire', 'autre')),
+  cle_idempotence   text,
+  version           int  NOT NULL DEFAULT 1,
+  cree_par          int  REFERENCES utilisateurs(id),
+  cree_le           timestamptz NOT NULL DEFAULT now(),
+  modifie_le        timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (origine_id, cle_idempotence)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS demandes_transport_ouverte ON demandes_transport (coordination_id) WHERE statut IN ('demandee', 'acceptee', 'en_route', 'pris_en_charge');
+CREATE TABLE IF NOT EXISTS demande_transport_evenements (
+  id             bigserial PRIMARY KEY,
+  demande_id     int  NOT NULL REFERENCES demandes_transport(id),
+  type           text NOT NULL,
+  detail         jsonb NOT NULL DEFAULT '{}'::jsonb,
+  utilisateur_id int  REFERENCES utilisateurs(id),
+  cree_le        timestamptz NOT NULL DEFAULT now()
+);
+DROP TRIGGER IF EXISTS demande_transport_evenements_pas_de_modif ON demande_transport_evenements;
+CREATE TRIGGER demande_transport_evenements_pas_de_modif BEFORE UPDATE OR DELETE ON demande_transport_evenements
+  FOR EACH ROW EXECUTE FUNCTION journal_immuable();
+DROP TRIGGER IF EXISTS demande_transport_evenements_pas_de_vidage ON demande_transport_evenements;
+CREATE TRIGGER demande_transport_evenements_pas_de_vidage BEFORE TRUNCATE ON demande_transport_evenements
+  FOR EACH STATEMENT EXECUTE FUNCTION journal_immuable();

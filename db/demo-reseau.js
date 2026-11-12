@@ -341,6 +341,15 @@ async function demoReseau(pool, { silencieux = false, comptesRoles = false, avec
   // Préhospitalier (cahier du 12 nov. 2026, section 18.1) : 2 entreprises ambulancières, 1 CCS, Liaison Secours dans 3 hôpitaux.
   // Organisations, unités et équipages fictifs ; la préalerte en cours est créée par les vraies règles (src/prealertes.js).
   await pool.query(`UPDATE etablissements SET modules = COALESCE(modules, '{}'::jsonb) || '{"liaison_secours": true}' WHERE id = ANY($1)`, [[ids.HX, ids.HY, ids.HA]]);
+  // Services et règles de correspondance de chaque hôpital (validées par l'établissement) : base de la proposition d'OG
+  const SERVICES_SECOURS = [['URGG', 'Urgence générale', { secours_defaut: true, categories_secours: ['medicale', 'respiratoire', 'sante_mentale', 'autre'] }],
+    ['REA', 'Réanimation / soins intensifs', {}], ['CARD', 'Cardiologie', { categories_secours: ['cardiaque'] }], ['NEURO', 'Neurologie / AVC', { categories_secours: ['neurologique'] }],
+    ['TRAUMA', 'Traumatologie', { categories_secours: ['traumatologie'] }], ['PED', 'Pédiatrie', { categories_secours: ['pediatrique'] }], ['OBST', 'Obstétrique', { categories_secours: ['obstetrique'] }]];
+  for (const h of [ids.HX, ids.HY, ids.HA]) {
+    for (const [code, nom, attributs] of SERVICES_SECOURS) {
+      await pool.query(`INSERT INTO services (etablissement_id, code, nom, attributs) VALUES ($1, $2, $3, $4) ON CONFLICT (etablissement_id, code) DO UPDATE SET attributs = services.attributs || EXCLUDED.attributs`, [h, code, nom, JSON.stringify(attributs)]);
+    }
+  }
   const cfgQc = (await pool.query('SELECT config_id FROM etablissements WHERE id = $1', [ids.HX])).rows[0].config_id;
   const orgSecours = async (code, nom, type) => (await pool.query('INSERT INTO organisations_secours (code, nom, type, config_id) VALUES ($1, $2, $3, $4) RETURNING id', [code, nom, type, cfgQc])).rows[0].id;
   const ambA = await orgSecours('AMB-NORD', 'Ambulances du Nord (fictif)', 'ambulancier');
@@ -359,6 +368,9 @@ async function demoReseau(pool, { silencieux = false, comptesRoles = false, avec
   const parB = await compteSecours('ambulance.b@demo.arrimo', 'Équipe 57-03 (démo)', 'paramedic', ambB);
   await compteSecours('ccs@demo.arrimo', 'Répartition régionale (démo)', 'repartiteur', ccs);
   void uA;
+  // Statuts déclarés des urgences (cahier, section 9) : X en saturation déclarée il y a 35 min (donnée ancienne, scénario G), Y ouverte à l'instant
+  await pool.query(`UPDATE etablissements SET urgence_statut_declare = 'saturation', urgence_statut_le = now() - interval '35 minutes', urgence_statut_par = $2 WHERE id = $1`, [ids.HX, coX.id]);
+  await pool.query(`UPDATE etablissements SET urgence_statut_declare = 'ouvert', urgence_statut_le = now(), urgence_statut_par = $2 WHERE id = $1`, [ids.HY, coY.id]);
   // Une ambulance déjà annoncée à l'Hôpital X, prise en compte et en préparation
   const prealertes = require('../src/prealertes');
   const paB = await prealertes.creer(pool, parB, { unite_id: uB, destination_id: ids.HX, priorite: 'urgente', categorie: 'respiratoire', delai_min: 14 });

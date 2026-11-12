@@ -409,6 +409,16 @@ function creerApp(pool, options = {}) {
   api.post('/chsld/taches/:id/statut', route((req) => ch.statutTache(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   api.post('/chsld/communications/:id/statut', route((req) => ch.statutCommunication(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   // Coordinations entre établissements (hôpitaux et CHSLD) : chacun ne voit et n'agit que de son côté
+  /* ---------- Liaison Établissements : demandes de transport (établissement ↔ ambulance), cahier 3 ---------- */
+  const tr = require('./transports');
+  api.get('/transports/organisations', route((req) => tr.organisations(pool, req.utilisateur, req.query.etablissement_id)));
+  api.get('/transports', route((req) => tr.liste(pool, req.utilisateur, req.query)));
+  api.get('/transports/:id', route((req) => tr.fiche(pool, req.utilisateur, entier(req.params.id, 'id'), req.query)));
+  api.post('/coordinations/:id/transport', route((req) => tr.demander(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
+  api.post('/transports/:id/action', route((req) => tr.agir(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
+  api.get('/secours/transports', route((req) => tr.liste(pool, req.utilisateur, {})));
+  api.get('/secours/transports/:id', route((req) => tr.fiche(pool, req.utilisateur, entier(req.params.id, 'id'), {})));
+  api.post('/secours/transports/:id/action', route((req) => tr.agir(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   /* ---------- Préhospitalier : préalertes (Liaison Secours), unités, positions ---------- */
   const pa = require('./prealertes');
   api.get('/secours/prealertes', route((req) => pa.liste(pool, req.utilisateur, req.query)));
@@ -416,6 +426,9 @@ function creerApp(pool, options = {}) {
   api.get('/secours/prealertes/:id', route((req) => pa.fiche(pool, req.utilisateur, entier(req.params.id, 'id'), req.query)));
   api.post('/secours/prealertes/:id/action', route((req) => pa.agir(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   api.get('/secours/unites', route((req) => pa.unites(pool, req.utilisateur)));
+  api.get('/secours/services', route((req) => pa.servicesHopital(pool, req.utilisateur, req.query.etablissement_id)));
+  api.get('/secours/urgence', route((req) => pa.statutUrgence(pool, req.utilisateur, req.query.etablissement_id)));
+  api.post('/secours/urgence', route((req) => pa.declarerUrgence(pool, req.utilisateur, req.body)));
   api.get('/secours/destinations', route((req) => pa.destinations(pool, req.utilisateur, req.query)));
   api.post('/secours/og', route((req) => require('./og-secours').repondreSecours(pool, req.utilisateur, req.body.question, req.langue)));
   api.post('/secours/unites/:id/position', route((req) => pa.position(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));

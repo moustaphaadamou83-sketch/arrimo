@@ -501,10 +501,12 @@
       ${c.reintegration ? `<div class="note">${c.reintegration.lit ? `${esc(c.reintegration.lit.code)} · ` : ''}${c.reintegration.pret ? `<b>${C('reint.pret')}</b>` : c.reintegration.raisons.map((x) => C(`reint.r_${x}`)).join(' · ')}</div>` : ''}
       ${c.cloturee_le || ['refusee', 'annulee', 'expiree'].includes(c.statut) ? '' : chronoHTML(c.chronologie)}
       ${c.etapes?.length ? `<details><summary class="note">${C('coord.etapes')}</summary><ol class="ch-historique">${c.etapes.map((e) => `<li><span class="note num">${esc(dateHeure(e.date))}</span> ${esc(libelleEtape(e.statut))}${e.detail ? ` · ${esc(e.detail)}` : ''}</li>`).join('')}</ol></details>` : ''}</div>
+      ${window.ArrimoTransports?.bloc(c) || ''}
       ${actions.length ? `<div class="actions">${actions.map((a) => `<button class="btn${['confirmer_depart', 'confirmer_reception', 'confirmer_arrivee', 'accepter', 'reintegrer'].includes(a) ? ' pri' : a === 'refuser' || a === 'annuler' ? ' dan' : ''}" data-co="${a}" data-id="${c.id}" data-version="${c.version}" data-type="${c.type}">${C(`coord.${a === 'retour' ? 'preparer_retour' : a}`)}</button>`).join('')}</div>` : ''}</div>`;
   }
   const gererCo = () => ['coordonnateur', 'admin_etab', 'gestionnaire'].includes(role());
   function brancherCoordinations(zone) {
+    window.ArrimoTransports?.brancher(zone);
     zone.querySelectorAll('[data-co]').forEach((b) => { b.onclick = async () => {
       const id = b.dataset.id, version = Number(b.dataset.version), a = b.dataset.co, ok = t('chsld.actions.ok');
       if (a === 'retour') return modale(t('chsld.coord.preparer_retour'), `${champ('rt-date', C('actions.retour_prevu'), '', 'type="datetime-local"')}${champ('rt-motif', C('actions.motif_admin'), '', 'maxlength="200"')}`,
@@ -566,6 +568,7 @@
       ${r ? chronoHTML(r.chronologie) : chronoHTML(c.chronologie)}
       ${r ? `<div class="note li-retour">${L('retour_vers', { chsld: esc(c.origine) })} · <b>${esc(t(`chsld.liaison.etape_${r.etape}`))}</b>${r.retour_prevu_le ? ` · ${C('coord.retour_le', { date: dateHeure(r.retour_prevu_le) })}` : ''} <span class="num">${esc(r.numero)}</span></div>` : ''}
       ${c.etapes?.length ? `<details><summary class="note">${C('coord.etapes')}</summary><ol class="ch-historique">${c.etapes.map((e) => `<li><span class="note num">${esc(dateHeure(e.date))}</span> ${esc(libelleEtape(e.statut))}${e.detail ? ` · ${esc(e.detail)}` : ''}</li>`).join('')}</ol></details>` : ''}</div>
+      ${window.ArrimoTransports?.bloc(c) || ''}${r ? window.ArrimoTransports?.bloc({ ...r, type: 'retour', origine_id: c.destination_id }) || '' : ''}
       ${c.actions.length || r?.actions.length ? `<div class="actions">${c.actions.map((a) => act(a)).join('')}${(r?.actions || []).map((a) => act(a, r.id, r.version, 'retour')).join('')}</div>` : ''}</article>`;
   }
   async function vueLiaison() {
@@ -584,6 +587,7 @@
     brancherLiaison(v);
   }
   function brancherLiaison(v) {
+    window.ArrimoTransports?.brancher(v);
     const ok = t('chsld.actions.ok');
     v.querySelectorAll('[data-li-eval]').forEach((b) => { b.onclick = () => agir(null, async () => { const e = await api('GET', `/coordinations/${b.dataset.liEval}/evaluation?etablissement_id=${ctx()}`); modale(C('evaluation.titre'), `<p class="note">${C('evaluation.aide')}</p>${evalHTML(e)}`, [{ label: t('general.fermer') }]); }); });
     v.querySelectorAll('[data-li]').forEach((b) => { b.onclick = async () => {

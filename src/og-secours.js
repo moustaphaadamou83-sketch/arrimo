@@ -21,6 +21,8 @@ const lang = (L) => (L === 'en' ? 'en' : 'fr');
 function concerne(qn, q) {
   // Transferts interhospitaliers (TR-…) : ils relèvent des réponses de transfert, sauf mention explicite d'une préalerte
   if ((/\bTR-\d/i.test(q) || /transferts?|transfers?/.test(qn)) && !/pre-?\s?alert|\bPA[\s-]?\d/i.test(qn)) return false;
+  // « Quel service est potentiellement concerné ? » (cahier, section 2.1) : formulation propre aux préalertes
+  if (/\b(services?|departements?|departments?)\b.*\b(potentiel\w*|potential\w*)/.test(qn)) return true;
   return /\b(ambulances?|prealertes?|pre alertes?|pre-alertes?|pre-alerts?|prealerts?|paramedic\w*|liaison secours)\b/.test(qn) || /\bPA[\s-]?\d{1,6}\b/i.test(q);
 }
 function minutes(d) { return d ? Math.round((new Date(d).getTime() - Date.now()) / 60000) : null; }
@@ -53,6 +55,14 @@ async function repondre(pool, u, etabId, q, L) {
     if (!p) return local(T(L, `Aucune préalerte ${num} n’est visible pour cet hôpital.`, `No pre-alert ${num} is visible for this hospital.`));
     return local(ligne(L, p).slice(2));
   }
+  // « Quel service est potentiellement concerné ? » : proposition d'OG d'après les règles de l'établissement, et décision de l'équipe
+  if (/(services?|departements?|departments?)\b.*(concern|propos|potenti)|(concern|propos)\w*.*(services?|departements?|departments?)\b/.test(qn)) {
+    if (!ouvertes.length) return local(T(L, 'Aucune ambulance n’est annoncée pour le moment.', 'No ambulance is announced at the moment.'));
+    const lignes = ouvertes.map((p) => `• ${p.numero} (${p.unite}) : ${p.service_statut === 'confirme' || p.service_statut === 'modifie' ? T(L, `service retenu par l’équipe : ${p.service_confirme}`, `department set by the team: ${p.service_confirme}`)
+      : p.service_statut === 'a_confirmer' ? T(L, `proposition : ${p.service_propose} (règle de l’établissement), à confirmer par l’équipe`, `proposal: ${p.service_propose} (hospital rule), to be confirmed by the team`)
+        : T(L, 'aucune règle de service pour cette catégorie : à indiquer par l’équipe', 'no department rule for this category: to be set by the team')}`);
+    return local(`${lignes.join('\n')}\n${T(L, 'Je propose d’après les règles de l’établissement ; je ne pose aucun diagnostic et n’affecte pas le patient.', 'I propose from the hospital’s rules; I make no diagnosis and do not assign the patient.')}`);
+  }
   if (/(non (prise|confirme)|pas (encore )?(prise|confirme)|attente|a confirmer|not (yet )?acknowledged|awaiting|pending)/.test(qn)) {
     const a = ouvertes.filter((p) => !p.prise_en_compte_le);
     if (!a.length) return local(T(L, 'Toutes les préalertes ouvertes ont été prises en compte.', 'All open pre-alerts have been acknowledged.'));
@@ -78,6 +88,14 @@ async function repondreSecours(pool, u, question, L) {
     return local(T(L, 'Je ne décide ni de la destination, ni du service, ni d’une priorité clinique : ce sont l’équipe et les protocoles applicables qui en décident. Je peux afficher l’état des urgences de la région et le suivi des préalertes.',
       'I do not decide the destination, the department or a clinical priority: the crew and applicable protocols do. I can show the regional emergency status and pre-alert tracking.'), 'refus_decision');
   }
+  // Demandes de transport des établissements (cahier 3) : référence et étapes seulement
+  if (/(transports?|demandes? (des|d.)? ?etablissements?|requests? from facilit|chsld|rpa|residence|ressource)/.test(qn)) {
+    const tr = await require('./transports').liste(pool, u, {});
+    const ouv = tr.filter((x) => require('./transports').OUVERTES.includes(x.statut));
+    if (!ouv.length) return local(T(L, 'Aucune demande de transport en cours.', 'No transport request in progress.'), 'transports');
+    const ST = { fr: { demandee: 'à accepter', acceptee: 'acceptée', en_route: 'en route', pris_en_charge: 'résident pris en charge' }, en: { demandee: 'to accept', acceptee: 'accepted', en_route: 'on the way', pris_en_charge: 'resident picked up' } };
+    return local(ouv.map((x) => `• ${x.numero} · ${x.resident_ref} : ${x.origine} → ${x.destination} · ${ST[lang(L)][x.statut]}${x.unite ? ` (${x.unite})` : ''}`).join('\n'), 'transports');
+  }
   const d = await pa.liste(pool, u, {});
   const ouvertes = d.prealertes.filter((p) => pa.OUVERTES.includes(p.statut));
   const m = q.match(/\bPA[\s-]?(\d{1,6})\b/i);
@@ -86,7 +104,9 @@ async function repondreSecours(pool, u, question, L) {
   if (/(urgences?|emergenc|civieres?|stretchers?|satur|deborde|overcrowd|capacit|proches?|nearby|disponib|availab)/.test(qn)) {
     const h = await pa.destinations(pool, u, {});
     if (!h.length) return local(T(L, 'Aucun hôpital de la région ne reçoit encore de préalertes par Arrimo.', 'No hospital in the region receives pre-alerts through Arrimo yet.'), 'disponibilites');
-    const lignes = h.map((x) => `• ${x.nom} : ${x.urgence ? `${T(L, 'urgence', 'emergency')} ${NIVEAU[lang(L)][x.urgence.niveau] || x.urgence.niveau}, ${x.urgence.civieres_libres} ${T(L, x.urgence.civieres_libres > 1 ? 'civières libres' : 'civière libre', x.urgence.civieres_libres > 1 ? 'free stretchers' : 'free stretcher')}` : T(L, 'aucune donnée d’urgence', 'no emergency data')}`);
+    const STAT = { fr: { ouvert: 'ouverte', capacite_limitee: 'capacité limitée', saturation: 'saturation déclarée', delestage: 'délestage déclaré' }, en: { ouvert: 'open', capacite_limitee: 'limited capacity', saturation: 'saturation declared', delestage: 'diversion declared' } };
+    const decl = (x) => (x.statut_declare ? ` ; ${T(L, 'statut déclaré', 'declared status')} : ${STAT[lang(L)][x.statut_declare.statut]} (${x.statut_declare.perime ? T(L, `il y a ${x.statut_declare.age_min} min, donnée ancienne`, `${x.statut_declare.age_min} min ago, stale`) : T(L, `il y a ${x.statut_declare.age_min} min`, `${x.statut_declare.age_min} min ago`)})` : '');
+    const lignes = h.map((x) => `• ${x.nom}${decl(x)} — ${x.urgence ? `${T(L, 'urgence', 'emergency')} ${NIVEAU[lang(L)][x.urgence.niveau] || x.urgence.niveau}, ${x.urgence.civieres_libres} ${T(L, x.urgence.civieres_libres > 1 ? 'civières libres' : 'civière libre', x.urgence.civieres_libres > 1 ? 'free stretchers' : 'free stretcher')}` : T(L, 'aucune donnée d’urgence', 'no emergency data')}`);
     return local(`${T(L, 'État déclaré dans Arrimo maintenant (une aide à la lecture, pas un choix de destination) :', 'Status declared in Arrimo now (a reading aid, not a destination choice):')}\n${lignes.join('\n')}`, 'disponibilites');
   }
   if (!cible.length) return local(T(L, 'Aucune préalerte en cours.', 'No pre-alert in progress.'), 'suivi');

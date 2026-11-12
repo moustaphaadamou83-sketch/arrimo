@@ -136,6 +136,7 @@
       <button role="tab" data-type="hopital" data-v="admissions" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-clipboard-list"/></svg><span data-i18n="onglets.admissions"></span> <span class="n" id="n-adm">0</span></button>
       <button role="tab" data-type="hopital" data-v="patients" aria-selected="false" hidden><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-users"/></svg><span data-i18n="onglets.patients"></span></button>
       <button role="tab" data-type="hopital" data-v="transferts" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-ambulance"/></svg><span data-i18n="onglets.transferts"></span> <span class="n" id="n-tr">0</span></button>
+      <button role="tab" data-type="hopital" data-module-optionnel="liaison_secours" data-v="secours" aria-selected="false" hidden><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-siren"/></svg><span data-i18n="onglets.secours"></span> <span class="n" id="n-secours" hidden>0</span></button>
       <button role="tab" data-type="hopital" data-module="liaison_chsld" data-v="liaison" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-house"/></svg><span data-i18n="onglets.liaison"></span></button>
       <button role="tab" data-v="nettoyage" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-spray-can"/></svg><span data-i18n="onglets.nettoyage"></span> <span class="n" id="n-net">0</span></button>
       <button role="tab" data-type="hopital" data-v="vigilance" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-clock"/></svg><span data-i18n="onglets.vigilance"></span> <span class="n" id="n-vig" hidden>0</span></button>
@@ -174,6 +175,7 @@
     <section id="v-admissions" hidden></section>
     <section id="v-patients" hidden></section>
     <section id="v-transferts" hidden></section>
+    <section id="v-secours" hidden></section>
     <section id="v-liaison" hidden></section>
     <section id="v-vigilance" hidden></section>
     <section id="v-nettoyage" hidden></section>
@@ -218,6 +220,8 @@
 <script src="support-client.js"></script>
 <script src="app.js"></script>
 <script src="chsld.js"></script>
+<script src="liaison-secours.js"></script>
+<script src="transports.js"></script>
 <script src="og.js"></script>
 <script src="og-vocal-moteur.js"></script>
 <script src="og-vocal.js"></script>

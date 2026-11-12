@@ -68,6 +68,24 @@ async function exigerDestination(c, id) {
   if (!TE.moduleActif(e, 'liaison_secours')) throw new ErreurHttp(409, 'liaison_secours_inactive');
   return e;
 }
+/**
+ * Proposition de service par OG (cahier, section 2.2) : uniquement d'après les règles de l'établissement
+ * (services actifs dont attributs.categories_secours contient la catégorie ; sinon le service marqué secours_defaut).
+ * Une proposition n'affecte jamais le patient : l'équipe hospitalière la confirme, la modifie ou la refuse.
+ */
+async function proposerService(c, pa) {
+  const services = (await c.query(`SELECT id, nom, attributs FROM services WHERE etablissement_id = $1 AND actif ORDER BY nom`, [pa.destination_id])).rows;
+  const cats = (s) => (Array.isArray(s.attributs?.categories_secours) ? s.attributs.categories_secours : []);
+  const correspondants = services.filter((s) => cats(s).includes(pa.categorie));
+  const defaut = services.find((s) => s.attributs?.secours_defaut === true);
+  const choisi = correspondants[0] || defaut || null;
+  const justification = choisi ? { regle: correspondants.length ? 'correspondance_etablissement' : 'service_par_defaut', categorie: pa.categorie,
+    autres: correspondants.slice(1).map((s) => s.nom) } : { regle: 'aucune_correspondance', categorie: pa.categorie };
+  const n = (await c.query(`UPDATE prealertes SET service_propose_id = $2, service_justification = $3, service_statut = $4 WHERE id = $1 RETURNING *`,
+    [pa.id, choisi ? choisi.id : null, JSON.stringify(justification), choisi ? 'a_confirmer' : 'sans_proposition'])).rows[0];
+  await evenement(c, n, 'service_propose', null, { og: true, service: choisi ? choisi.nom : null, ...justification });
+  return n;
+}
 async function numero(c) { return `PA-${String((await c.query("SELECT nextval('prealerte_seq') AS n")).rows[0].n).padStart(6, '0')}`; }
 
 /** Préalerte transmise par une équipe ambulancière. `cle` : identifiant d'envoi du poste (renvoi après coupure = même préalerte). */
@@ -93,9 +111,10 @@ async function creer(pool, u, b) {
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
     [await numero(c), unite.organisation_id, unite.id, dest.id, priorite, categorie, equipage, heure, cle, u.id])).rows[0];
     await evenement(c, pa, 'envoyee', u, { destination: dest.id, priorite, categorie, heure_prevue: heure });
+    const pr = await proposerService(c, pa);
     await journaliser(c, { etablissementId: dest.id, utilisateurId: u.id, action: 'Préalerte reçue', detail: `${pa.numero} · ${priorite}` });
-    await notifier(c, dest.id, 'secours_prealerte', pa, { priorite });
-    return pa;
+    await notifier(c, dest.id, priorite === 'immediate' ? 'secours_prealerte_prioritaire' : 'secours_prealerte', pa, { priorite });
+    return pr;
   });
 }
 async function lireEquipage(c, liste, orgId, u) {
@@ -108,6 +127,7 @@ async function lireEquipage(c, liste, orgId, u) {
 }
 
 const CHAMPS = (k) => `p.*, o.nom AS organisation, un.numero AS unite, un.plaque, e.nom AS destination,
+  (SELECT nom FROM services WHERE id = p.service_propose_id) AS service_propose, (SELECT nom FROM services WHERE id = p.service_confirme_id) AS service_confirme,
   (SELECT COALESCE(json_agg(us.nom ORDER BY us.nom), '[]') FROM utilisateurs us WHERE us.id = ANY(p.equipage)) AS equipage_noms,
   (SELECT json_build_object('latitude', pu.latitude, 'longitude', pu.longitude, 'precision_m', pu.precision_m, 'le', pu.enregistree_le)
      FROM positions_unites pu WHERE pu.unite_id = p.unite_id AND p.statut = ANY($${k}) ORDER BY pu.enregistree_le DESC LIMIT 1) AS position`;
@@ -134,7 +154,9 @@ async function liste(pool, u, q = {}) {
   const rows = (await pool.query(`SELECT ${CHAMPS(2)} ${FROM} WHERE ${filtre} AND (p.statut = ANY($2) OR p.modifie_le > now() - interval '24 hours')
     ORDER BY (p.statut = ANY($2)) DESC, CASE p.priorite WHEN 'immediate' THEN 0 WHEN 'urgente' THEN 1 ELSE 2 END, p.heure_prevue NULLS LAST, p.id`,
   [...args, OUVERTES])).rows;
-  return { prealertes: rows.map((p) => ({ ...p, actions: actions(p, u) })), priorites: PRIORITES, categories: CATEGORIES };
+  const urg = ROLES_HOPITAL.includes(u.role) ? await urgenceAvecDeclaration(pool, args[0]) : null;
+  return { prealertes: rows.map((p) => ({ ...p, actions: actions(p, u), etat_preparation: etatPreparation(p), ...(ROLES_HOPITAL.includes(u.role) ? { synthese: synthese(p, urg) } : {}) })),
+    priorites: PRIORITES, categories: CATEGORIES };
 }
 /** Fiche détaillée avec l'historique ; ouverte par une personne de l'hôpital, elle passe à « consultée ». */
 async function fiche(pool, u, id, q = {}) {
@@ -152,7 +174,8 @@ async function fiche(pool, u, id, q = {}) {
   const p = (await pool.query(`SELECT ${CHAMPS(2)} ${FROM} WHERE p.id = $1`, [pa0.id, OUVERTES])).rows[0];
   const evenements = (await pool.query(`SELECT ev.type, ev.detail, ev.cree_le, us.nom AS par FROM prealerte_evenements ev LEFT JOIN utilisateurs us ON us.id = ev.utilisateur_id
     WHERE ev.prealerte_id = $1 ORDER BY ev.id`, [pa0.id])).rows;
-  return { ...p, actions: actions(p, u), evenements };
+  const urg = ROLES_HOPITAL.includes(u.role) ? await urgenceAvecDeclaration(pool, p.destination_id) : null;
+  return { ...p, actions: actions(p, u), etat_preparation: etatPreparation(p), ...(ROLES_HOPITAL.includes(u.role) ? { synthese: synthese(p, urg) } : {}), evenements };
 }
 async function exigerVisibilite(db, u, pa, etabId) {
   if (ROLES_HOPITAL.includes(u.role)) {
@@ -171,6 +194,50 @@ async function exigerVisibilite(db, u, pa, etabId) {
   }
   throw new ErreurHttp(403, 'role_insuffisant');
 }
+/** État de préparation affiché à l'hôpital (cahier, section 8.3), déduit des étapes confirmées. */
+function etatPreparation(p) {
+  if (['annulee', 'remplacee'].includes(p.statut)) return 'annulee_modifiee';
+  if (p.statut === 'cloturee') return 'patient_remis';
+  if (p.statut === 'arrivee') return 'patient_arrive';
+  if (p.preparation_terminee_le) return 'preparation_terminee';
+  if (p.preparation_le) return 'preparation_en_cours';
+  if (!p.consultee_le) return 'non_consultee';
+  if (!p.prise_en_compte_le) return 'a_prendre_en_compte';
+  if (['a_confirmer', 'sans_proposition'].includes(p.service_statut)) return 'service_a_confirmer';
+  return 'preparation_a_effectuer';
+}
+/**
+ * Synthèse opérationnelle d'OG pour l'hôpital (cahier, sections 2.1 et 7.3) : codes stables traduits par l'interface.
+ * Informations manquantes, position ancienne, heure dépassée, capacité de l'urgence ; jamais de diagnostic.
+ */
+function synthese(p, urgence) {
+  const points = [];
+  if (!OUVERTES.includes(p.statut)) return points;
+  if (!p.heure_prevue) points.push({ code: 'heure_manquante' });
+  else if (new Date(p.heure_prevue).getTime() < Date.now() && p.statut !== 'arrivee') points.push({ code: 'heure_depassee' });
+  if (!p.position) points.push({ code: 'position_absente' });
+  else if (Date.now() - new Date(p.position.le).getTime() > 10 * 60000) points.push({ code: 'position_ancienne', minutes: Math.round((Date.now() - new Date(p.position.le).getTime()) / 60000) });
+  if (p.service_statut === 'sans_proposition') points.push({ code: 'service_sans_regle' });
+  if (urgence && urgence.niveau) points.push({ code: 'capacite_urgence', niveau: urgence.niveau, civieres_libres: urgence.civieres_libres });
+  if (urgence && urgence.declaration?.perime) points.push({ code: 'declaration_perimee', minutes: urgence.declaration.age_min });
+  if (p.priorite === 'immediate' && !p.prise_en_compte_le) points.push({ code: 'immediate_non_prise_en_compte' });
+  return points;
+}
+async function urgenceDe(db, etabId) {
+  const cv = require('./civieres');
+  const st = (await cv.statsUrgence(db, [etabId])).get(etabId);
+  if (!st) return null;
+  const cfg = (await db.query('SELECT c.* FROM config_pays c JOIN etablissements e ON e.config_id = c.id WHERE e.id = $1', [etabId])).rows[0];
+  return { niveau: cv.niveauCivieres(st, cfg), civieres_libres: st.libres };
+}
+async function urgenceAvecDeclaration(db, etabId) {
+  const [u, d] = await Promise.all([urgenceDe(db, etabId), declarationDe(db, etabId)]);
+  return u || d ? { ...(u || {}), declaration: d } : null;
+}
+async function declarationDe(db, etabId) {
+  const r = (await db.query('SELECT e.urgence_statut_declare, e.urgence_statut_le, c.disponibilite_fraicheur_min FROM etablissements e JOIN config_pays c ON c.id = e.config_id WHERE e.id = $1', [etabId])).rows[0];
+  return r ? declaration(r) : null;
+}
 /** Actions proposées selon le rôle et l'étape (le serveur revérifie chacune). Le CCS ne fait que consulter. */
 function actions(p, u) {
   if (!OUVERTES.includes(p.statut)) return [];
@@ -183,6 +250,9 @@ function actions(p, u) {
   if (!p.prise_en_compte_le) a.push('prendre_en_compte');
   if (RANG[p.statut] < RANG.preparation) a.push('preparation');
   if (RANG[p.statut] < RANG.preparation_terminee) a.push('preparation_terminee');
+  if (p.service_statut === 'a_confirmer') a.push('confirmer_service');
+  if (p.statut !== 'arrivee') a.push('modifier_service');
+  if (p.service_statut === 'a_confirmer') a.push('refuser_service');
   if (p.statut !== 'arrivee') a.push('confirmer_vehicule');
   if (p.statut === 'arrivee') a.push('confirmer_remise');
   a.push('signaler_probleme');
@@ -232,6 +302,18 @@ async function agir(pool, u, id, b) {
         if (RANG[pa.statut] >= RANG[a]) throw new ErreurHttp(409, 'prealerte_statut_incompatible');
         n = await maj(`${a === 'preparation' ? 'preparation_le' : 'preparation_terminee_le'} = now(), prise_en_compte_le = COALESCE(prise_en_compte_le, now()),
           prise_en_compte_par = COALESCE(prise_en_compte_par, $2), statut = $3`, [u.id, a]);
+      } else if (a === 'confirmer_service') {
+        if (pa.service_statut !== 'a_confirmer') throw new ErreurHttp(409, 'prealerte_statut_incompatible');
+        n = await maj(`service_statut = 'confirme', service_confirme_id = service_propose_id, service_confirme_par = $2, service_confirme_le = now()`, [u.id]);
+      } else if (a === 'modifier_service') {
+        if (pa.statut === 'arrivee') throw new ErreurHttp(409, 'prealerte_statut_incompatible');
+        const sv = (await c.query('SELECT id, nom FROM services WHERE id = $1 AND etablissement_id = $2 AND actif', [entier(b.service_id), pa.destination_id])).rows[0];
+        if (!sv) throw new ErreurHttp(404, 'service_introuvable');
+        n = await maj(`service_statut = 'modifie', service_confirme_id = $2, service_confirme_par = $3, service_confirme_le = now()`, [sv.id, u.id]);
+        detail = { service: sv.nom };
+      } else if (a === 'refuser_service') {
+        if (pa.service_statut !== 'a_confirmer') throw new ErreurHttp(409, 'prealerte_statut_incompatible');
+        n = await maj(`service_statut = 'refuse', service_confirme_id = NULL, service_confirme_par = $2, service_confirme_le = now()`, [u.id]);
       } else if (a === 'confirmer_vehicule') {
         // L'hôpital indique l'unité réellement arrivée : seule la bonne unité confirme l'arrivée ; une autre est enregistrée sans rien fermer.
         if (pa.statut === 'arrivee') throw new ErreurHttp(409, 'prealerte_statut_incompatible');
@@ -270,10 +352,11 @@ async function changerDestination(c, u, pa, b) {
   [await numero(c), pa.organisation_id, pa.unite_id, dest.id, pa.priorite, pa.categorie, pa.equipage, heure, pa.id, u.id])).rows[0];
   await evenement(c, ancienne, 'destination_modifiee', u, { nouvelle: nv.numero, destination: dest.id });
   await evenement(c, nv, 'envoyee', u, { remplace: pa.numero, destination: dest.id, priorite: nv.priorite, categorie: nv.categorie, heure_prevue: heure });
+  await proposerService(c, nv);
   await journaliser(c, { etablissementId: pa.destination_id, utilisateurId: u.id, action: 'Préalerte : destination modifiée', detail: `${pa.numero} → ${nv.numero}` });
   await journaliser(c, { etablissementId: dest.id, utilisateurId: u.id, action: 'Préalerte reçue', detail: `${nv.numero} · ${nv.priorite}` });
   await notifier(c, pa.destination_id, 'secours_destination_modifiee', ancienne);
-  await notifier(c, dest.id, 'secours_prealerte', nv, { priorite: nv.priorite });
+  await notifier(c, dest.id, nv.priorite === 'immediate' ? 'secours_prealerte_prioritaire' : 'secours_prealerte', nv, { priorite: nv.priorite });
   return { ...nv, remplace: ancienne.numero };
 }
 
@@ -286,6 +369,7 @@ async function destinations(pool, u, q = {}) {
   if (!orgs.length) throw new ErreurHttp(403, 'organisation_interdite');
   const cfgs = [...new Set(orgs.map((o) => o.config_id))];
   const hop = (await pool.query(`SELECT e.id, e.nom, e.ville, e.latitude, e.longitude, e.modules, e.type_etablissement, e.config_id, e.module_actif,
+      e.urgence_statut_declare, e.urgence_statut_le, c.disponibilite_fraicheur_min,
       c.seuil_civieres_jaune, c.seuil_civieres_orange, c.seuil_civieres_rouge
     FROM etablissements e JOIN config_pays c ON c.id = e.config_id WHERE e.actif AND e.config_id = ANY($1) ORDER BY e.nom`, [cfgs])).rows
     .filter((e) => (e.type_etablissement || 'hopital') === 'hopital' && TE.moduleActif(e, 'liaison_secours'));
@@ -302,8 +386,41 @@ async function destinations(pool, u, q = {}) {
   return hop.map((e) => {
     const st = stats.get(e.id);
     return { id: e.id, nom: e.nom, ville: e.ville, latitude: e.latitude, longitude: e.longitude, distance_km: km(e),
-      urgence: st ? { niveau: cv.niveauCivieres(st, e), civieres_libres: st.libres, taux: st.taux } : null };
+      urgence: st ? { niveau: cv.niveauCivieres(st, e), civieres_libres: st.libres, taux: st.taux, source: 'arrimo_civieres', le: new Date().toISOString() } : null,
+      statut_declare: declaration(e) };
   }).sort((a, b) => (a.distance_km ?? 1e9) - (b.distance_km ?? 1e9) || a.nom.localeCompare(b.nom));
+}
+/** Services actifs de l'hôpital, pour confirmer ou modifier la proposition d'OG. */
+async function servicesHopital(pool, u, etabId) {
+  const e = await exigerHopital(pool, u, etabId);
+  return (await pool.query(`SELECT id, nom, attributs->'categories_secours' AS categories_secours, (attributs->>'secours_defaut')::boolean AS secours_defaut
+    FROM services WHERE etablissement_id = $1 AND actif ORDER BY nom`, [e.id])).rows;
+}
+/** Statut déclaré de l'urgence avec sa fraîcheur : au-delà du seuil, la déclaration est marquée périmée (jamais présentée comme actuelle). */
+function declaration(e) {
+  if (!e.urgence_statut_declare) return null;
+  const age = Math.round((Date.now() - new Date(e.urgence_statut_le).getTime()) / 60000);
+  return { statut: e.urgence_statut_declare, le: e.urgence_statut_le, age_min: age, perime: age > (e.disponibilite_fraicheur_min || 15), source: 'declaration_etablissement' };
+}
+const STATUTS_URGENCE = ['ouvert', 'capacite_limitee', 'saturation', 'delestage'];
+/** L'hôpital déclare le statut de son urgence (personne habilitée, journalisé). Une confirmation sans changement renouvelle l'heure. */
+async function declarerUrgence(pool, u, b) {
+  const e = await exigerHopital(pool, u, b.etablissement_id);
+  if (!['coordonnateur', 'gestionnaire', 'admin_etab'].includes(u.role)) throw new ErreurHttp(403, 'role_insuffisant');
+  const statut = String(b.statut || '');
+  if (!STATUTS_URGENCE.includes(statut)) throw new ErreurHttp(400, 'statut_urgence_invalide');
+  return transaction(pool, async (c) => {
+    const r = (await c.query(`UPDATE etablissements SET urgence_statut_declare = $2, urgence_statut_le = now(), urgence_statut_par = $3 WHERE id = $1
+      RETURNING urgence_statut_declare AS statut, urgence_statut_le AS le`, [e.id, statut, u.id])).rows[0];
+    await journaliser(c, { etablissementId: e.id, utilisateurId: u.id, action: 'Statut de l’urgence déclaré', detail: statut });
+    return r;
+  });
+}
+async function statutUrgence(pool, u, etabId) {
+  const e = await exigerHopital(pool, u, etabId);
+  const r = (await pool.query(`SELECT e.urgence_statut_declare, e.urgence_statut_le, c.disponibilite_fraicheur_min, us.nom AS par
+    FROM etablissements e JOIN config_pays c ON c.id = e.config_id LEFT JOIN utilisateurs us ON us.id = e.urgence_statut_par WHERE e.id = $1`, [e.id])).rows[0];
+  return { declaration: declaration(r), par: r.par, seuil_min: r.disponibilite_fraicheur_min, statuts: STATUTS_URGENCE };
 }
 /** Unités de l'organisation de l'ambulancier, avec leur dernière position. */
 async function unites(pool, u) {
@@ -330,4 +447,4 @@ async function purgerPositions(pool) {
   return (await pool.query("DELETE FROM positions_unites WHERE enregistree_le < now() - interval '24 hours'")).rowCount;
 }
 
-module.exports = { creer, liste, fiche, agir, unites, destinations, position, purgerPositions, PRIORITES, CATEGORIES, OUVERTES, ROLES_SECOURS, ROLES_AMBULANCE, ROLES_CCS };
+module.exports = { creer, liste, fiche, agir, unites, destinations, declarerUrgence, statutUrgence, declaration, servicesHopital, etatPreparation, synthese, position, purgerPositions, PRIORITES, CATEGORIES, OUVERTES, ROLES_SECOURS, ROLES_AMBULANCE, ROLES_CCS };

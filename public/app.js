@@ -561,7 +561,9 @@ function appliquerModules() {
     // Entretien : nettoyage (et ses tâches en CHSLD) seulement
     const entretienInterdit = entretien && !(b.dataset.v === 'nettoyage' || (type === 'chsld' && b.dataset.v === 'c-taches'));
     b.hidden = autreType || entretienInterdit || (b.dataset.v === 'admin' && !etat.moi.utilisateur.admin) || (mod && mods[mod] === false)
-      || (b.dataset.module && mods[b.dataset.module] === false) || (b.dataset.v === 'patients' && !etat.moi.patients_fictifs);
+      || (b.dataset.module && mods[b.dataset.module] === false) || (b.dataset.v === 'patients' && !etat.moi.patients_fictifs)
+      // Module optionnel (Liaison Secours) : visible seulement s'il a été activé pour cet établissement
+      || (b.dataset.moduleOptionnel && mods[b.dataset.moduleOptionnel] !== true);
   });
   document.querySelectorAll('#onglets .onglets-groupe[data-type]').forEach((g) => { g.hidden = g.dataset.type !== type || entretien; });
   // Nettoyage (commun) : dans le groupe Hébergement d'un CHSLD, dans Opérations d'un hôpital
@@ -617,7 +619,7 @@ async function rafraichir() {
     await Promise.all([e ? majCompteurs() : null, ({
       copilote: vueCopilote, reseau: vueReseau, national: vueNational, lits: vueLits, urgence: vueUrgence, admissions: vueAdmissions, transferts: vueTransferts,
       nettoyage: vueNettoyage, vigilance: vueVigilance, nsa: vueNsa, indicateurs: vueIndicateurs, journal: vueJournal, params: vueParams,
-      admin: vueAdmin, compte: vueCompte, support:vueSupportClient, patients: vuePatients, ...(window.ArrimoChsld?.vues || {}),
+      admin: vueAdmin, compte: vueCompte, support:vueSupportClient, patients: vuePatients, ...(window.ArrimoChsld?.vues || {}), ...(window.ArrimoSecours?.vues || {}),
     })[etat.vue]()]);
     poserMenuParametres();
     majInfosLieu();

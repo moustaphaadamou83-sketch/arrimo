@@ -734,8 +734,14 @@ test('réseau de démonstration : 20 hôpitaux, un compte par hôpital, proximit
   assert.ok(etabs.filter((e) => d(x, e) > 10 && d(y, e) > 10).length >= 10);
   // Un seul compte par hôpital (X, Y) et le compte réseau ; les autres hôpitaux n'ont pas de compte
   const comptes = (await pool.query(`SELECT u.email, array_agg(ue.etablissement_id) AS etabs FROM utilisateurs u
-    LEFT JOIN utilisateur_etablissements ue ON ue.utilisateur_id = u.id WHERE u.email NOT LIKE 'entretien.%' GROUP BY u.email ORDER BY u.email`)).rows;
+    LEFT JOIN utilisateur_etablissements ue ON ue.utilisateur_id = u.id WHERE u.email NOT LIKE 'entretien.%'
+      AND u.role NOT IN ('paramedic', 'superviseur_secours', 'repartiteur') GROUP BY u.email ORDER BY u.email`)).rows;
   assert.deepStrictEqual(comptes.map((c) => c.email), ['hopital.x@demo.arrimo', 'hopital.y@demo.arrimo', 'reseau@demo.arrimo']);
+  // Préhospitalier : comptes d'ambulance et de CCS rattachés à une organisation de secours, jamais à un établissement
+  const secours = (await pool.query(`SELECT u.email, (SELECT count(*)::int FROM utilisateur_etablissements ue WHERE ue.utilisateur_id = u.id) AS etabs,
+      (SELECT count(*)::int FROM utilisateur_organisations uo WHERE uo.utilisateur_id = u.id) AS orgs
+    FROM utilisateurs u WHERE u.role IN ('paramedic', 'superviseur_secours', 'repartiteur') ORDER BY u.email`)).rows;
+  assert.deepStrictEqual(secours.map((c) => [c.email, c.etabs, c.orgs]), [['ambulance.a@demo.arrimo', 0, 1], ['ambulance.b@demo.arrimo', 0, 1], ['ccs@demo.arrimo', 0, 1], ['superviseur.a@demo.arrimo', 0, 1]]);
   // Chacun a des lits et des civières, avec des charges différentes
   const charge = (await pool.query(`SELECT e.code, count(l.*) FILTER (WHERE l.etat <> 'indispo')::int AS dotes, count(l.*) FILTER (WHERE l.etat = 'libre')::int AS libres,
       (SELECT count(*)::int FROM civieres c WHERE c.etablissement_id = e.id) AS civieres
@@ -1363,7 +1369,9 @@ test('admin d’établissement : limité à ses établissements ; structure hosp
   assert.strictEqual(lit2.statut,200);
   assert.strictEqual((await appel('asl','POST','/admin/lits',{chambre_id:ch.corps.id,code:'MEDB-901C'})).corps.code,'structure_capacite_depassee');
   const detail=(await appel('asl','GET',`/admin/structure/detaillee?etablissement_id=${sl}`)).corps;
-  assert.deepStrictEqual([detail.departements.length,detail.services.length,detail.etages.length],[1,1,1]);
+  // La démo prévoit aussi les services de la Liaison Secours (préhospitalier) : seuls ceux créés ici sont comptés
+  assert.deepStrictEqual([detail.departements.length,detail.services.filter(x=>x.code==='MEDB').length,detail.etages.length],[1,1,1]);
+  assert.ok(detail.services.filter(x=>x.code!=='MEDB').every(x=>x.departement_id==null),'les services de la démo préhospitalière ne sont rattachés à aucun département');
   const chambre=detail.chambres.find(x=>x.id===ch.corps.id);
   assert.deepStrictEqual([chambre.lits_calcules,chambre.capacite_declaree,chambre.type_chambre,chambre.accessible],[2,2,'double',true]);
   assert.strictEqual((await appel('asl','PUT',`/admin/chambres/${ch.corps.id}`,{capacite_declaree:1})).corps.code,'structure_capacite_depassee');
