@@ -134,6 +134,8 @@ test('activation réelle SH et parité avec Hôpital B, sans données publiques'
   const restaurationRouteur=require('./routeur-fictif.cjs').activer();t.after(restaurationRouteur);
   const preuve={fictif:true,etapes:[],source_b_avant_publication:require('node:fs').realpathSync(BASELINE_B),connexion_reelle:false};
   const h=await ok('admin','POST','/hopitaux',{nom:'Hôpital Nouveau Parité Fictif',code_etab:'PARITE-NEW',environnement:'pilote',pays_code:'CA',latitude:45.28,longitude:-72.16,ville:'Ville fictive'});
+  // Mêmes modules optionnels que B (Hôpital Y de la démo : Liaison Secours et Liaison Établissements), souscrits dans SH avant la liaison
+  await ok('admin','PUT',`/hopitaux/${h.id}/modules`,{modules:[{code:'liaison_secours',licence:'souscrit'},{code:'transport_ambulancier',licence:'souscrit'}]});
   await ok('admin','POST',`/hopitaux/${h.id}/relier`);
   const csv={departements:'departement;code\nSoins Parité;SOINS\n',services:'service;code;departement\nMédecine Parité;MED-P;Soins Parité\n',unites:'unite;type_unite;service;departement\nUnité Parité;MED;Médecine Parité;Soins Parité\n',chambres:'unite;chambre\nUnité Parité;P101\nUnité Parité;P102\n',lits:'unite;chambre;lit\nUnité Parité;P101;PAR-101\nUnité Parité;P102;PAR-102\n',civieres:'civiere;categorie\nPAR-C1;reguliere\nPAR-C2;reguliere\n',utilisateurs:'nom;courriel;role\nCoordination Parité;coord.parite@example.invalid;coordonnateur\nEntretien Parité;entretien.parite@example.invalid;entretien\nAdministration Parité;admin.parite@example.invalid;admin_etab\n'};
   const invitationsHop={};
