@@ -774,7 +774,9 @@ function creerAppSh(pool, { env = process.env } = {}) {
         const choix = await choixModulesEnvironnement(pool, h);
         if (TE.estSecours(h.type_etablissement)) await appeler(cible(h.environnement), 'PUT', `/sh/organisations-secours/${h.code_etab}`, { profils_choix: choix, par: req.u.email });
         else {
-          const connus = Object.fromEntries(Object.entries(choix).filter(([code]) => TE.MODULES.some((m) => m.code === code && m.drapeau && m.types.includes(h.type_etablissement || 'hopital'))));
+          // Seuls les modules optionnels (activés explicitement) suivent la licence ; les autres restent réglés par la
+          // configuration opérationnelle (jamais écrasée ici)
+          const connus = Object.fromEntries(Object.entries(choix).filter(([code]) => TE.MODULES.some((m) => m.code === code && m.drapeau && m.categorie === 'optionnel' && m.types.includes(h.type_etablissement || 'hopital'))));
           await appeler(cible(h.environnement), 'PUT', `/sh/etablissements/${h.code_etab}`, { modules_choix: connus, par: req.u.email });
         }
         modules_transmis = true;
