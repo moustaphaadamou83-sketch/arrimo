@@ -56,6 +56,8 @@ function creerApp(pool, options = {}) {
   app.get('/secours', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'secours.html')));
   // Remise à usage unique d'un accès de connexion (contact technique du client) : la page ne fait que lire le lien
   app.get('/remise', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'remise.html')));
+  // Scénario guidé de la démonstration (aucune donnée, aucun mot de passe)
+  app.get('/demo-guide', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'demo-guide.html')));
   app.get(['/confidentialite', '/conditions', '/privacy', '/terms'], (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'legal.html')));
 
   const api = express.Router();
