@@ -297,6 +297,32 @@ async function afficherModulesType(type, zone) {
         <span>${esc(m.nom)} <span class="badge">${esc(STATUT_MODULE[m.statut])}</span>${m.dependances?.length ? ` <span class="note">requiert : ${esc(m.dependances.join(', '))}</span>` : ''}${m.note ? ` <span class="note">· ${esc(m.note)}</span>` : ''}</span></label>`).join('')}</fieldset>`; }).join('');
   } catch (e) { zone.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; }
 }
+/* Connexions des logiciels externes, client par client : activées ici, secrets remis au contact technique (jamais affichés). */
+const GENRES_CONNEXION = { adt: 'Événements ADT (JSON)', hl7v2: 'HL7 v2 (ADT, sur HTTPS)', fhir: 'FHIR R4 (lecture de ses données)', connect: 'Client API Arrimo Connect v1', webhook: 'Webhooks signés (sortants)' };
+const SECOURS_SH = ['ccs', 'entreprise_ambulanciere', 'urgences_sante', 'premiers_repondants'];
+async function afficherConnexions(h) {
+  const z = $('#zone-connexions'); if (!z) return;
+  let d;
+  try { d = await api('GET', `/hopitaux/${h.id}/connexions`); } catch (e) { z.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; return; }
+  const genres = SECOURS_SH.includes(h.type_etablissement) ? ['connect', 'webhook'] : ['adt', 'hl7v2', 'fhir', 'webhook'];
+  const ligne = (c) => `<tr><td>${esc(c.nom)}</td><td>${esc(c.genre === 'connecteur' ? (c.portees || []).map((x) => GENRES_CONNEXION[x]).join(', ') : GENRES_CONNEXION[c.genre])}${c.url ? `<br><span class="note">${esc(c.url)}</span>` : ''}</td>
+    <td>${c.actif ? 'Active' : 'Désactivée'}${c.abandonnees ? ` · ${nb(c.abandonnees)} ${c.abandonnees > 1 ? 'envois abandonnés' : 'envoi abandonné'}` : ''}</td><td class="note">${c.derniere_activite ? esc(new Date(c.derniere_activite).toLocaleString('fr-CA')) : '—'}</td>
+    <td>${c.actif ? `<button class="btn" data-cx-revoquer="${esc(c.genre)}" data-id="${c.id}">Désactiver</button>` : ''}</td></tr>`;
+  z.innerHTML = `<p class="note">Droits limités aux données de ce client. Clés et secrets générés sur le serveur et remis une seule fois au contact technique par un lien de 24 h : jamais affichés ici. Aucun port ouvert (HTTPS seulement).</p>
+    <table><thead><tr><th>Nom</th><th>Type</th><th>État</th><th>Dernière activité</th><th></th></tr></thead><tbody>${d.connexions.map(ligne).join('') || '<tr><td colspan="5" class="note">Aucune connexion.</td></tr>'}</tbody></table>
+    <div class="grille-form" style="margin-top:10px">
+      <label>Type<select id="cx-genre">${genres.map((g) => `<option value="${g}">${esc(GENRES_CONNEXION[g])}</option>`).join('')}</select></label>
+      <label>Nom<input id="cx-nom" maxlength="100" placeholder="Ex. moteur d’interface"></label>
+      <label>Courriel du contact technique<input id="cx-courriel" type="email" value="${esc(h.contact_courriel || '')}"></label>
+      <label>Adresse HTTPS (webhook)<input id="cx-url" placeholder="https://"></label>
+    </div><button class="btn pri" id="b-cx-activer">Activer la connexion</button>`;
+  $('#b-cx-activer').onclick = (ev) => agir(ev.currentTarget, async () => {
+    const r = await api('POST', `/hopitaux/${h.id}/connexions`, { genre: $('#cx-genre').value, nom: $('#cx-nom').value, courriel_technique: $('#cx-courriel').value, url: $('#cx-url').value || undefined });
+    afficherConnexions(h);
+    return r;
+  }, (r) => (r && r.remise && r.remise.envoyee ? `Connexion activée : lien unique envoyé à ${r.remise.destinataire} (24 h).` : 'Connexion activée, mais le courriel n’est pas configuré dans cet environnement : lien non envoyé.'));
+  z.querySelectorAll('[data-cx-revoquer]').forEach((b) => { b.onclick = () => agir(b, async () => { await api('POST', `/hopitaux/${h.id}/connexions/${b.dataset.cxRevoquer}/${b.dataset.id}/revoquer`, {}); afficherConnexions(h); }, 'Connexion désactivée.'); });
+}
 /* Types locaux du pays saisi, limités au type choisi sur la fiche. */
 async function afficherTypesLocaux() {
   const zone = $('#h-type-local'); if (!zone) return;
@@ -501,6 +527,7 @@ async function vueHopital(v) {
           ${h.relie ? '<p class="note">Relié à son établissement : l’environnement et le code ne changent plus.</p>' : ''}</div>
         <div class="panneau-c"><h3>Sites et responsables</h3>${blocDossier(h)}</div>
         <div class="panneau-c" id="modules"><h3>Modules et licences</h3>${blocModules(h)}</div>
+        ${etat.moi.utilisateur.role === 'administration' && h.relie ? '<div class="panneau-c" id="connexions"><h3>Connexions des logiciels externes</h3><div id="zone-connexions"><p class="note">Chargement…</p></div></div>' : ''}
         ${etat.moi.utilisateur.role === 'administration' && h.relie ? '<div class="panneau-c"><h3>Configuration hospitalière Arrimo</h3><p class="note">Consulter et régler les modules opérationnels, la vocation et le catalogue des spécialités. Les occupations, demandes, transferts et historiques sont conservés. Les priorités sont approuvées dans Arrimo par les professionnels habilités.</p><button class="btn" id="b-configuration-operationnelle">Configurer dans Arrimo</button></div>' : ''}
         <div class="panneau-c"><h3>Comptes de l’établissement</h3><p>${nb(h.utilisateurs_prevus)} prévus · ${nb(h.utilisateurs_autorises)} autorisés · ${h.comptes.invites == null ? '—' : nb(h.comptes.invites)} invités · ${h.comptes.actifs == null ? '—' : nb(h.comptes.actifs)} activés</p>${h.comptes.par_role ? `<ul>${Object.entries(h.comptes.par_role).map(([role,x])=>`<li>${esc(role)} : ${nb(x.invites)} invité(s), ${nb(x.actifs)} activé(s)</li>`).join('')}</ul>` : ''}<p class="note">Les comptes invités et activés sont lus depuis l’environnement relié; aucune donnée d’authentification n’est affichée.</p></div>
       </div>
@@ -530,6 +557,7 @@ async function vueHopital(v) {
   $('#b-dossier').onclick=(ev)=>agir(ev.currentTarget,()=>api('PUT',`/hopitaux/${h.id}/dossier`,{sites:lireLignes('#liste-sites','site-sh'),contacts:lireLignes('#liste-contacts','contact-sh')}),'Dossier établissement enregistré.');
   $('#b-modules').onclick=(ev)=>agir(ev.currentTarget,()=>api('PUT',`/hopitaux/${h.id}/modules`,{modules:[...v.querySelectorAll('[data-module]')].map((x)=>({code:x.dataset.module,licence:x.value,parametres:JSON.parse(v.querySelector(`[data-param="${CSS.escape(x.dataset.module)}"]`).value)}))}),'Catalogue enregistré.');
   if ($('#b-configuration-operationnelle')) $('#b-configuration-operationnelle').onclick = () => configurationOperationnelle(h);
+  if ($('#zone-connexions')) afficherConnexions(h);
   v.querySelectorAll('[data-verif]').forEach((c) => { c.onchange = () => agir(null, () => api('PUT', `/verifications/${c.dataset.verif}`, { faite: c.checked })); });
   v.querySelectorAll('[data-etape]').forEach((b) => {
     b.onclick = () => {

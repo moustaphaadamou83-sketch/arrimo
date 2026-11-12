@@ -765,10 +765,23 @@ function creerAppSh(pool, { env = process.env } = {}) {
       if (choisis.size) await terminerTacheAuto(c, h.id, 'modules', req.u);
       await journal(c,req.u,'Catalogue de modules modifié',`${h.code_etab} · ${h.nom}`,`${nombre(choisis.size, 'licence souscrite', 'licences souscrites')}`,h.id);
     });
+    // Client déjà relié : modules (ou profils d'une organisation de secours) transmis un par un à son environnement
+    let modules_transmis = null;
+    if (h.relie) {
+      try {
+        const choix = await choixModulesEnvironnement(pool, h);
+        if (TE.estSecours(h.type_etablissement)) await appeler(cible(h.environnement), 'PUT', `/sh/organisations-secours/${h.code_etab}`, { profils_choix: choix, par: req.u.email });
+        else {
+          const connus = Object.fromEntries(Object.entries(choix).filter(([code]) => TE.MODULES.some((m) => m.code === code && m.drapeau && m.types.includes(h.type_etablissement || 'hopital'))));
+          await appeler(cible(h.environnement), 'PUT', `/sh/etablissements/${h.code_etab}`, { modules_choix: connus, par: req.u.email });
+        }
+        modules_transmis = true;
+      } catch (e) { modules_transmis = false; await journal(pool, req.u, 'Modules non transmis', `${h.code_etab} · ${h.nom}`, String(e.message || '').slice(0, 200), h.id); }
+    }
     // Établissement déjà relié : la licence OG est transmise à son environnement (réglages locaux conservés).
-    const og_licence = h.relie ? await require('./og-licence').transmettre(pool, appeler, cible(h.environnement), h, req.u.email) : null;
+    const og_licence = h.relie && !TE.estSecours(h.type_etablissement) ? await require('./og-licence').transmettre(pool, appeler, cible(h.environnement), h, req.u.email) : null;
     if (og_licence && !og_licence.ignoree) await journal(pool, req.u, og_licence.transmise ? 'Licence OG transmise' : 'Licence OG non transmise', `${h.code_etab} · ${h.nom}`, og_licence.transmise ? JSON.stringify(og_licence.licence) : og_licence.raison, h.id);
-    return { ...(await fiche(h.id)), og_licence };
+    return { ...(await fiche(h.id)), og_licence, modules_transmis };
   }));
 
   /** Coche un élément de la liste de vérification (automatique), et passe un prospect en implantation. */
@@ -788,8 +801,24 @@ function creerAppSh(pool, { env = process.env } = {}) {
     const h=await hopital(entier(req.params.id));
     return profilsPays.lireProfilsCibles(appeler,cible(h.environnement),h);
   }));
+  /** Organisation de secours (CCS, entreprise ambulancière, Urgences-santé…) : un seul modèle ; profils = modules souscrits. */
+  async function relierSecours(h, req) {
+    const c = cible(h.environnement);
+    const existante = (await appeler(c, 'GET', '/sh/organisations-secours')).find((o) => o.code === h.code_etab);
+    const profil = await profilsPays.lireProfilCible(appeler, c, h, existante?.config_id ?? req.body.config_id);
+    if (existante && TE.TYPES[h.type_etablissement].type_secours !== existante.type) throw new ErreurSh(409, 'Une organisation de même code existe dans cet environnement avec un autre type.');
+    const profils_choix = await choixModulesEnvironnement(pool, h);
+    if (!existante) await appeler(c, 'POST', '/sh/organisations-secours', { code: h.code_etab, nom: h.nom, type_etablissement: h.type_etablissement, config_id: profil.id, profils_choix, par: req.u.email });
+    await transaction(pool, async (db) => {
+      await db.query('UPDATE hopitaux SET relie = true WHERE id = $1', [h.id]);
+      await cocher(db, h.id, 'etablissement_cree', req.u);
+      await journal(db, req.u, existante ? 'Organisation de secours reliée' : 'Organisation de secours créée', `${h.code_etab} · ${h.nom}`, `environnement ${h.environnement}`, h.id);
+    });
+    return { cree: !existante, actif: !!existante?.actif };
+  }
   api.post('/hopitaux/:id/relier', route(async (req) => {
     const h = await hopital(entier(req.params.id));
+    if (TE.estSecours(h.type_etablissement)) return relierSecours(h, req);
     const c = cible(h.environnement);
     const existants = await appeler(c, 'GET', '/sh/etablissements');
     const existant=existants.find(e=>e.code===h.code_etab);
@@ -853,6 +882,16 @@ function creerAppSh(pool, { env = process.env } = {}) {
       WHERE e.hopital_id = $1 AND e.rang < $2 AND NOT v.faite`, [h.id, RANG_GOLIVE])).rows[0].n;
     if (manque) throw new ErreurSh(409, `Activation impossible : ${manque} élément${manque > 1 ? 's' : ''} à cocher avant le go-live.`);
     await require('./projets').exigerTachesCritiquesTerminees(pool,h.id);
+    if (TE.estSecours(h.type_etablissement)) {
+      await appeler(cible(h.environnement), 'PUT', `/sh/organisations-secours/${h.code_etab}`, { actif: true, par: req.u.email });
+      await transaction(pool, async (c) => {
+        await c.query(`INSERT INTO activations (hopital_id, action, par) VALUES ($1, 'activation', $2)`, [h.id, req.u.email]);
+        await c.query(`UPDATE hopitaux SET statut = 'actif' WHERE id = $1`, [h.id]);
+        await cocher(c, h.id, 'module_active', req.u);
+        await journal(c, req.u, 'Organisation de secours activée', `${h.code_etab} · ${h.nom}`, `environnement ${h.environnement}`, h.id);
+      });
+      return;
+    }
     const environnementCible=cible(h.environnement);
     const distant=(await appeler(environnementCible,'GET','/sh/etablissements')).find(e=>e.code===h.code_etab);
     await profilsPays.lireProfilCible(appeler,environnementCible,h,distant?.config_id);
@@ -870,13 +909,39 @@ function creerAppSh(pool, { env = process.env } = {}) {
     const motif = texte(req.body.motif, 300);
     if (!motif || motif.length < 3) throw new ErreurSh(400, 'Indiquez le motif de la désactivation.');
     if (!h.relie) throw new ErreurSh(409, 'L’hôpital n’est pas encore relié à son établissement.');
-    await appeler(cible(h.environnement), 'PUT', `/sh/etablissements/${h.code_etab}`, { module_actif: false, motif, par: req.u.email });
+    if (TE.estSecours(h.type_etablissement)) await appeler(cible(h.environnement), 'PUT', `/sh/organisations-secours/${h.code_etab}`, { actif: false, motif, par: req.u.email });
+    else await appeler(cible(h.environnement), 'PUT', `/sh/etablissements/${h.code_etab}`, { module_actif: false, motif, par: req.u.email });
     await transaction(pool, async (c) => {
       await c.query(`INSERT INTO activations (hopital_id, action, motif, par) VALUES ($1, 'desactivation', $2, $3)`, [h.id, motif, req.u.email]);
       await c.query(`UPDATE hopitaux SET statut = 'suspendu' WHERE id = $1`, [h.id]);
       await cocher(c, h.id, 'module_active', req.u, false);
       await journal(c, req.u, 'Module désactivé', `${h.code_etab} · ${h.nom}`, `motif : ${motif}`, h.id);
     });
+  }));
+
+  /* ---------------------------------------------------------------- connexions des logiciels externes (client par client) */
+  // Activées ici, créées dans l'environnement du client : droits limités à ses données, secrets remis à son contact technique
+  // par un lien unique (jamais affichés dans SH), désactivables à tout moment, journalisées des deux côtés.
+  api.get('/hopitaux/:id/connexions', route(async (req) => {
+    const h = await hopital(entier(req.params.id));
+    if (!h.relie) return { client: { code: h.code_etab, nom: h.nom }, connexions: [], relie: false };
+    return { ...(await appeler(cible(h.environnement), 'GET', `/sh/connexions/${h.code_etab}`)), relie: true };
+  }));
+  api.post('/hopitaux/:id/connexions', route(async (req) => {
+    const h = await hopital(entier(req.params.id));
+    if (!h.relie) throw new ErreurSh(409, 'Reliez d’abord le client à son environnement.');
+    const b = req.body || {};
+    const r = await appeler(cible(h.environnement), 'POST', `/sh/connexions/${h.code_etab}`, { genre: b.genre, nom: b.nom, url: b.url, evenements: b.evenements,
+      courriel_technique: b.courriel_technique || h.contact_courriel, par: req.u.email });
+    await journal(pool, req.u, 'Connexion activée', `${h.code_etab} · ${h.nom}`, `${b.genre} · remise à ${r.remise?.destinataire || '—'}`, h.id);
+    return r;
+  }));
+  api.post('/hopitaux/:id/connexions/:genre/:cid/revoquer', route(async (req) => {
+    const h = await hopital(entier(req.params.id));
+    if (!['connecteur', 'connect', 'webhook'].includes(req.params.genre)) throw new ErreurSh(400, 'Type de connexion inconnu.');
+    const r = await appeler(cible(h.environnement), 'POST', `/sh/connexions/${h.code_etab}/${req.params.genre}/${entier(req.params.cid)}/revoquer`, { par: req.u.email });
+    await journal(pool, req.u, 'Connexion désactivée', `${h.code_etab} · ${h.nom}`, `${req.params.genre} · ${r.nom}`, h.id);
+    return r;
   }));
 
   /* ---------------------------------------------------------------- import CSV (par l'API de l'environnement) */

@@ -65,6 +65,9 @@ const PERMISSIONS = {
   'PUT /hopitaux/:id/configuration-operationnelle': ['administration'],
   'POST /hopitaux/:id/specialites': ['administration'],
   'POST /hopitaux/:id/relier': ['administration', 'implantation'],
+  'GET /hopitaux/:id/connexions': ['administration', 'implantation', 'support'],
+  'POST /hopitaux/:id/connexions': ['administration'],
+  'POST /hopitaux/:id/connexions/:genre/:id/revoquer': ['administration'],
   'PUT /etapes/:id': ['administration', 'implantation'],
   'GET /hopitaux/:id/deploiement': ['administration', 'implantation', 'formation', 'support'],
   'PUT /hopitaux/:id/deploiement/:code': ['administration', 'implantation'],
@@ -243,7 +246,8 @@ function cleRoute(method, path) {
     .replace(/^\/parametres\/[a-z_]{2,60}$/, '/parametres/:cle')
     .replace(/^(\/hopitaux\/:id\/deploiement)\/[a-z_]{3,40}(\/preuves)?$/, '$1/:code$2')
     .replace(/^\/serveurs\/[a-z0-9_]{5,60}\/(appairage|verifier|desactiver|reactiver)$/, '/serveurs/:code/$1')
-    .replace(/^\/profils-pays\/:id\/diffuser$/, '/profils-pays/:id/diffuser')}`;
+    .replace(/^\/profils-pays\/:id\/diffuser$/, '/profils-pays/:id/diffuser')
+    .replace(/^(\/hopitaux\/:id\/connexions)\/(connecteur|connect|webhook)\/:id\/revoquer$/, '$1/:genre/:id/revoquer')}`;
 }
 
 function autoriser(u, req) {
