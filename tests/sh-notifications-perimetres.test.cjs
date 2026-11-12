@@ -6,7 +6,7 @@ test('notifications : droits du destinataire, ressources et révocation',{timeou
   const pool=creerPool(url.href);t.after(()=>pool.end());assert.equal((await pool.query("SELECT count(*)::int n FROM pg_tables WHERE schemaname='public'")).rows[0].n,0);
   await pool.query(fs.readFileSync(require.resolve('../db/sh-schema.sql'),'utf8'));
   const env={SH_MFA_ENCRYPTION_KEY:Buffer.alloc(32,7).toString('base64')};
-  assert.equal((await require('../src/sh/migrations').migrerSh(pool,env)).version,44);
+  assert.equal((await require('../src/sh/migrations').migrerSh(pool,env)).version,45);
   const users={};
   for(const [nom,role]of Object.entries({admin:'administration',commercial:'commercial',formation:'formation',support:'support',membre:'implantation',voisin:'implantation'})){
     const u=(await pool.query("INSERT INTO sh_utilisateurs(email,nom,role,mot_de_passe_hash,mdp_temporaire,totp_actif) VALUES($1,$2,$3,'fixture-sans-connexion',false,true) RETURNING id,role",[nom+'@example.invalid',nom,role])).rows[0];

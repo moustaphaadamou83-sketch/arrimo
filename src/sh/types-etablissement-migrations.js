@@ -111,5 +111,18 @@ async function migrerTypesAines(c) {
   await c.query('INSERT INTO sh_migrations(version) VALUES($1)', [TYPES_AINES_VERSION]);
   return true;
 }
+/* Migration 45 (12 nov. 2026) : module hospitalier optionnel « Liaison Secours » (préalertes des ambulances).
+   Une seule ligne ajoutée au catalogue, comme la migration 38 ; aucune ligne existante n'est modifiée. Recette d'abord. */
+const LIAISON_SECOURS_VERSION = 45;
+async function migrerLiaisonSecours(c) {
+  if ((await c.query('SELECT 1 FROM sh_migrations WHERE version=$1', [LIAISON_SECOURS_VERSION])).rowCount) return false;
+  const { MODULES } = require('../types-etablissement');
+  const i = MODULES.findIndex((m) => m.code === 'liaison_secours'); const m = MODULES[i];
+  await c.query(`INSERT INTO sh_modules_catalogue (code, nom, description, dependances, categorie, types, statut, ordre, nom_en, note)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT (code) DO NOTHING`,
+  [m.code, m.nom, m.note || m.nom, m.dependances || [], m.categorie, m.types, m.statut, i + 1, m.nom_en, m.note || null]);
+  await c.query('INSERT INTO sh_migrations(version) VALUES($1)', [LIAISON_SECOURS_VERSION]);
+  return true;
+}
 const VERSION_SH = TYPES_AINES_VERSION;
-module.exports = { TYPES_ETABLISSEMENT_VERSION, LIAISON_CHSLD_VERSION, PRODUCTIONS_VERSION, TYPES_LOCAUX_VERSION, DEMANDES_SITE_VERSION, VERSION_SH, migrerTypesEtablissement, migrerLiaisonChsld, migrerProductions, migrerTypesLocaux, migrerDemandesSite, migrerTypesAines };
+module.exports = { LIAISON_SECOURS_VERSION, migrerLiaisonSecours, TYPES_ETABLISSEMENT_VERSION, LIAISON_CHSLD_VERSION, PRODUCTIONS_VERSION, TYPES_LOCAUX_VERSION, DEMANDES_SITE_VERSION, VERSION_SH, migrerTypesEtablissement, migrerLiaisonChsld, migrerProductions, migrerTypesLocaux, migrerDemandesSite, migrerTypesAines };
