@@ -379,6 +379,9 @@ test('Liaison Établissements : demande de transport d’un CHSLD vers une ambul
   assert.strictEqual((await pool.query('SELECT statut FROM coordinations WHERE id = $1', [co])).rows[0].statut, 'envoyee', 'le départ reste confirmé par le CHSLD');
   assert.strictEqual((await appel('ch', 'POST', `/transports/${dt.id}/action`, { etablissement_id: ch, action: 'annuler' })).corps.code, 'transport_statut_incompatible');
   r = await appel('para', 'POST', `/secours/transports/${dt.id}/action`, { action: 'arrivee' }); assert.strictEqual(r.corps.statut, 'arrivee');
+  // OG du CHSLD : où en est le transport du résident, d'après les étapes
+  const ogc = (await appel('ch', 'POST', '/assistant', { etablissement_id: ch, question: 'Où en est le transport de R-90001 ?' })).corps;
+  assert.deepStrictEqual(ogc.intentions, ['transports']); assert.match(ogc.reponse, new RegExp(`${dt.numero} · R-90001 → Hôpital Mont-Bellevue · Ambulances fictives A : arrivé à destination \\(unité 12-35\\)`));
   // Historique complet et immuable, visible par l'établissement d'origine et par l'hôpital
   const f = (await appel('ch', 'GET', `/transports/${dt.id}?etablissement_id=${ch}`)).corps;
   assert.deepStrictEqual(f.evenements.map((e) => e.type), ['demandee', 'accepter', 'en_route', 'pris_en_charge', 'arrivee']);

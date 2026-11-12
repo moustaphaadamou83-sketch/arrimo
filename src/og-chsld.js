@@ -478,6 +478,17 @@ async function repondre(pool, u, etabId, q, L) {
     return local(T(L, 'Je peux consulter et expliquer : un résident (nom, référence R-00001, lit ERA-117A, demande DH-…, coordination CO-…), sa chambre, sa place conservée, ses mouvements, ses hospitalisations et retours ; les places libres, bloquées, conservées, en nettoyage ; les demandes d’hébergement, les accueils prévus, les tâches, les contacts et autorisations. Je prépare une tâche, une demande de rappel à un proche autorisé ou l’acceptation d’un retour : rien n’est enregistré sans votre confirmation.',
       'I can look up and explain: a resident (name, reference R-00001, bed ERA-117A, request DH-…, coordination CO-…), their room, held place, movements, hospital stays and returns; available, blocked, held and cleaning places; placement requests, planned admissions, tasks, contacts and permissions. I prepare a task, a callback request to an authorized family member or the acceptance of a return: nothing is recorded without your confirmation.'), { intentions: ['aide'] });
   }
+  // Transports ambulanciers demandés par l'établissement (cahier 3) : d'après les étapes enregistrées, référence du résident
+  if (/\b(transports?|ambulances?|ambulancier\w*)\b/.test(qn) && !/\btransferts?\b/.test(qn)) {
+    if (u.role === 'entretien') return local(T(L, 'Les transports ne font pas partie de votre rôle.', 'Transports are not part of your role.'), { intentions: ['transports'] });
+    const trs = await require('./transports').liste(pool, u, { etablissement_id: etabId });
+    const m = q.match(/\bR[\s-]?(\d{1,5})\b/i);
+    const choisis = m ? trs.filter((x) => x.resident_ref === `R-${m[1].padStart(5, '0')}`) : trs.filter((x) => require('./transports').OUVERTES.includes(x.statut));
+    const ST = { fr: { demandee: 'demandé, en attente de l’entreprise', acceptee: 'accepté', en_route: 'ambulance en route', pris_en_charge: 'résident pris en charge', arrivee: 'arrivé à destination', refusee: 'refusé par l’entreprise', annulee: 'annulé' },
+      en: { demandee: 'requested, awaiting the company', acceptee: 'accepted', en_route: 'ambulance on its way', pris_en_charge: 'resident picked up', arrivee: 'arrived at destination', refusee: 'declined by the company', annulee: 'cancelled' } };
+    if (!choisis.length) return local(m ? T(L, `Aucun transport n’est demandé pour ${m[0].toUpperCase()}.`, `No transport is requested for ${m[0].toUpperCase()}.`) : T(L, 'Aucun transport ambulancier en cours.', 'No ambulance transport in progress.'), { intentions: ['transports'] });
+    return local(`${choisis.map((x) => `• ${x.numero} · ${x.resident_ref} → ${x.destination} · ${x.organisation} : ${ST[lng(L)][x.statut]}${x.unite ? ` (${T(L, 'unité', 'unit')} ${x.unite})` : ''}`).join('\n')}\n${T(L, 'Le départ et l’arrivée restent confirmés par les établissements.', 'Departure and arrival remain confirmed by the facilities.')}`, { intentions: ['transports'] });
+  }
   // Coordination Famille : messages, demandes, confirmations, visites des proches (chiffres et listes réels, mêmes droits que l'écran)
   // Seulement les questions de coordination avec les familles en général (pas « les proches de ce résident », qui restent à la fiche)
   if (/(message|demande|request|confirmation|visite|visit|besoin|need)s? (des |de |from |of )?(la |the )?(familles?|families|proches)\b|(familles?|families|proches) (en attente|waiting|non lus|unread)|coordination (famille|des familles)|family coordination/.test(qn)) {
