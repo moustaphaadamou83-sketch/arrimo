@@ -2325,8 +2325,18 @@ test('C4 : patients fictifs en recette seulement, formation par rôle, go-live s
   const serveurProd = await demarrerServeur(creerApp(poolProd));
   const baseProd = `http://127.0.0.1:${serveurProd.address().port}`;
   const cle = process.env.SH_API_KEY;
-  await viderBaseSh(pool);
-  const motDePasseSh = await creerPremierCompteShTest('sh@exemple.ca', 'Équipe SH');
+  let motDePasseSh;
+  try {
+    await viderBaseSh(pool);
+    motDePasseSh = await creerPremierCompteShTest('sh@exemple.ca', 'Équipe SH');
+  } catch (e) {
+    // Échec avant le bloc principal : fermer l'instance « production » déjà démarrée, sinon le fichier de tests ne se termine jamais
+    courierSh.definirTransport(null);
+    if (ancienneUrlPublique === undefined) delete process.env.ARRIMO_URL; else process.env.ARRIMO_URL = ancienneUrlPublique;
+    serveurProd.close(); await poolProd.end();
+    await pool.query('DROP SCHEMA IF EXISTS prod_c4 CASCADE');
+    throw e;
+  }
   courierSh.definirTransport(async (m) => { courrielsSh.push(m); });
   const serveurSh = await demarrerServeur(creerAppSh(pool, { env: { SH_PUBLIC_URL: 'https://sh.test.invalid', SH_MFA_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'), SH_ENV_RECETTE_URL: base, SH_ENV_RECETTE_CLE: cle, SH_ENV_PRODUCTION_URL: baseProd, SH_ENV_PRODUCTION_CLE: cle, SH_ENV_PRODUCTION_PUBLIC: 'https://arrimo.exemple' } }));
   const baseSh = `http://127.0.0.1:${serveurSh.address().port}`;

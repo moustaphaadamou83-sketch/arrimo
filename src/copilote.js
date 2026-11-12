@@ -386,6 +386,8 @@ async function repondreQuestion(pool, utilisateur, etabId, q, fetchImpl, patient
   const type = (await pool.query('SELECT type_etablissement FROM etablissements WHERE id = $1', [etabId])).rows[0]?.type_etablissement;
   if (type === 'chsld') { require('./auth').exigerEtablissement(utilisateur, etabId); return require('./og-chsld').repondre(pool, utilisateur, etabId, q, L); }
   // Hôpital : Liaison CHSLD (arrivées, accueil, retours), mêmes droits que le module ; null si la question n'en relève pas
+  // Hôpital : Liaison Secours (préalertes des ambulances), mêmes droits que le module ; null si la question n'en relève pas
+  if (type === 'hopital' || !type) { require('./auth').exigerEtablissement(utilisateur, etabId); const secours = await require('./og-secours').repondre(pool, utilisateur, etabId, q, L); if (secours) return secours; }
   if (type === 'hopital' || !type) { require('./auth').exigerEtablissement(utilisateur, etabId); const liaison = await require('./og-liaison').repondre(pool, utilisateur, etabId, q, L); if (liaison) return liaison; }
   // Guide d'utilisation : étapes et écran à ouvrir, selon les modules actifs de l'établissement.
   const og_guide = require('./og-guide');

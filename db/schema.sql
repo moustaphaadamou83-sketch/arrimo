@@ -239,7 +239,7 @@ CREATE INDEX IF NOT EXISTS notif_etab ON notifications (etablissement_id, lu, da
 -- Rôle entretien (écran Nettoyage seulement) et rôle connecteur (systèmes externes)
 ALTER TABLE utilisateurs DROP CONSTRAINT IF EXISTS utilisateurs_role_check;
 ALTER TABLE utilisateurs ADD CONSTRAINT utilisateurs_role_check
-  CHECK (role IN ('coordonnateur', 'gestionnaire', 'entretien', 'admin_etab', 'equipe_soins'));  -- liste complète : le schéma reste rejouable sur des comptes existants
+  CHECK (role IN ('coordonnateur', 'gestionnaire', 'entretien', 'admin_etab', 'equipe_soins', 'paramedic', 'superviseur_secours', 'repartiteur'));  -- liste complète : le schéma reste rejouable sur des comptes existants
 
 -- Seuils d'alerte et protocoles, par pays
 ALTER TABLE config_pays ADD COLUMN IF NOT EXISTS seuil_jaune int NOT NULL DEFAULT 85;
@@ -330,7 +330,7 @@ ALTER TABLE config_pays ADD COLUMN IF NOT EXISTS penalite_rouge_km int NOT NULL 
 -- Version 4 : comptes, double authentification, administration
 ALTER TABLE utilisateurs DROP CONSTRAINT IF EXISTS utilisateurs_role_check;
 ALTER TABLE utilisateurs ADD CONSTRAINT utilisateurs_role_check
-  CHECK (role IN ('coordonnateur', 'gestionnaire', 'entretien', 'admin_etab', 'equipe_soins'));  -- liste complète : le schéma reste rejouable sur des comptes existants
+  CHECK (role IN ('coordonnateur', 'gestionnaire', 'entretien', 'admin_etab', 'equipe_soins', 'paramedic', 'superviseur_secours', 'repartiteur'));  -- liste complète : le schéma reste rejouable sur des comptes existants
 ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS totp_secret text;
 ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS totp_actif boolean NOT NULL DEFAULT false;
 ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS totp_dernier_pas bigint NOT NULL DEFAULT 0;
@@ -787,7 +787,7 @@ ALTER TABLE etablissements ADD COLUMN IF NOT EXISTS conservation_place_jours int
 
 ALTER TABLE utilisateurs DROP CONSTRAINT IF EXISTS utilisateurs_role_check;
 ALTER TABLE utilisateurs ADD CONSTRAINT utilisateurs_role_check
-  CHECK (role IN ('coordonnateur', 'gestionnaire', 'entretien', 'admin_etab', 'equipe_soins'));
+  CHECK (role IN ('coordonnateur', 'gestionnaire', 'entretien', 'admin_etab', 'equipe_soins', 'paramedic', 'superviseur_secours', 'repartiteur'));
 
 CREATE SEQUENCE IF NOT EXISTS resident_seq;
 CREATE TABLE IF NOT EXISTS residents (
@@ -1258,3 +1258,96 @@ CREATE TABLE IF NOT EXISTS proches_consentements (
 ALTER TABLE config_pays ADD COLUMN IF NOT EXISTS pays_code char(2) CHECK (pays_code IS NULL OR pays_code ~ '^[A-Z]{2}$');
 ALTER TABLE config_pays ADD COLUMN IF NOT EXISTS langues text[];
 ALTER TABLE config_pays ADD COLUMN IF NOT EXISTS version_sh int;
+
+-- ======================================================================
+-- Arrimo Préhospitalier, phase 1 (12 nov. 2026) : organisations de secours, unités, préalertes
+-- Décisions de Moustafa (docs/AUDIT_PREHOSPITALIER_2026-11-12.md, section 14) : organisations à part (ni lits ni places),
+-- aucune identité ni motif libre (catégorie en liste fermée), moteurs de transfert séparés (simple lien).
+-- ======================================================================
+CREATE TABLE IF NOT EXISTS organisations_secours (
+  id         serial PRIMARY KEY,
+  code       text NOT NULL UNIQUE CHECK (code ~ '^[A-Z0-9-]{2,20}$'),
+  nom        text NOT NULL,
+  type       text NOT NULL CHECK (type IN ('ambulancier', 'ccs')),   -- entreprise ambulancière ou centre de communication santé
+  config_id  int  NOT NULL REFERENCES config_pays(id),               -- région : profil du pays (périmètre d'un CCS)
+  actif      boolean NOT NULL DEFAULT true,
+  cree_le    timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS utilisateur_organisations (
+  utilisateur_id   int NOT NULL REFERENCES utilisateurs(id) ON DELETE CASCADE,
+  organisation_id  int NOT NULL REFERENCES organisations_secours(id) ON DELETE CASCADE,
+  PRIMARY KEY (utilisateur_id, organisation_id)
+);
+CREATE TABLE IF NOT EXISTS unites_secours (
+  id               serial PRIMARY KEY,
+  organisation_id  int  NOT NULL REFERENCES organisations_secours(id),
+  numero           text NOT NULL,          -- numéro d'unité
+  plaque           text,
+  actif            boolean NOT NULL DEFAULT true,
+  UNIQUE (organisation_id, numero)
+);
+-- Positions : seulement si l'équipe l'autorise ; conservées 24 h (purge dans src/server.js)
+CREATE TABLE IF NOT EXISTS positions_unites (
+  id             bigserial PRIMARY KEY,
+  unite_id       int NOT NULL REFERENCES unites_secours(id) ON DELETE CASCADE,
+  latitude       double precision NOT NULL CHECK (latitude BETWEEN -90 AND 90),
+  longitude      double precision NOT NULL CHECK (longitude BETWEEN -180 AND 180),
+  precision_m    int CHECK (precision_m IS NULL OR precision_m >= 0),
+  enregistree_le timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS positions_unite_date ON positions_unites (unite_id, enregistree_le DESC);
+
+CREATE SEQUENCE IF NOT EXISTS prealerte_seq;
+CREATE TABLE IF NOT EXISTS prealertes (
+  id                    serial PRIMARY KEY,
+  numero                text NOT NULL UNIQUE,     -- PA-000001 : identifiant temporaire d'intervention, jamais une identité
+  organisation_id       int  NOT NULL REFERENCES organisations_secours(id),
+  unite_id              int  NOT NULL REFERENCES unites_secours(id),
+  destination_id        int  NOT NULL REFERENCES etablissements(id),
+  statut                text NOT NULL DEFAULT 'envoyee' CHECK (statut IN ('envoyee', 'recue', 'consultee', 'prise_en_compte', 'preparation',
+                          'preparation_terminee', 'arrivee', 'cloturee', 'annulee', 'remplacee')),
+  priorite              text NOT NULL CHECK (priorite IN ('immediate', 'urgente', 'non_urgente')),   -- déclarée par le professionnel
+  categorie             text NOT NULL,            -- liste fermée (src/prealertes.js), jamais de texte libre
+  equipage              int[] NOT NULL DEFAULT '{}',
+  heure_prevue          timestamptz,
+  recue_le              timestamptz,              -- confirmation technique : l'écran de l'hôpital l'a reçue
+  consultee_le          timestamptz,              -- fiche ouverte par une personne de l'hôpital
+  prise_en_compte_le    timestamptz,              -- confirmation humaine explicite
+  prise_en_compte_par   int REFERENCES utilisateurs(id),
+  preparation_le        timestamptz,
+  preparation_terminee_le timestamptz,
+  arrivee_signalee_le   timestamptz,              -- signalée par l'ambulance
+  arrivee_confirmee_le  timestamptz,              -- l'hôpital a confirmé que c'est le bon véhicule
+  remise_le             timestamptz,
+  cloturee_le           timestamptz,
+  remplace_id           int REFERENCES prealertes(id),   -- changement de destination : l'ancienne est conservée
+  transfert_id          int REFERENCES transferts(id),   -- lien facultatif vers un transfert existant
+  coordination_id       int REFERENCES coordinations(id),
+  cle_idempotence       text,
+  version               int  NOT NULL DEFAULT 1,
+  cree_par              int  REFERENCES utilisateurs(id),
+  cree_le               timestamptz NOT NULL DEFAULT now(),
+  modifie_le            timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (organisation_id, cle_idempotence)
+);
+-- Une seule préalerte ouverte par unité
+CREATE UNIQUE INDEX IF NOT EXISTS prealertes_unite_ouverte ON prealertes (unite_id)
+  WHERE statut NOT IN ('cloturee', 'annulee', 'remplacee');
+CREATE INDEX IF NOT EXISTS prealertes_destination ON prealertes (destination_id, statut);
+
+-- Historique des préalertes : immuable, comme le journal
+CREATE TABLE IF NOT EXISTS prealerte_evenements (
+  id              bigserial PRIMARY KEY,
+  prealerte_id    int  NOT NULL REFERENCES prealertes(id),
+  type            text NOT NULL,
+  detail          jsonb NOT NULL DEFAULT '{}'::jsonb,
+  utilisateur_id  int  REFERENCES utilisateurs(id),
+  cree_le         timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS prealerte_evenements_pa ON prealerte_evenements (prealerte_id, id);
+DROP TRIGGER IF EXISTS prealerte_evenements_pas_de_modif ON prealerte_evenements;
+CREATE TRIGGER prealerte_evenements_pas_de_modif BEFORE UPDATE OR DELETE ON prealerte_evenements
+  FOR EACH ROW EXECUTE FUNCTION journal_immuable();
+DROP TRIGGER IF EXISTS prealerte_evenements_pas_de_vidage ON prealerte_evenements;
+CREATE TRIGGER prealerte_evenements_pas_de_vidage BEFORE TRUNCATE ON prealerte_evenements
+  FOR EACH STATEMENT EXECUTE FUNCTION journal_immuable();

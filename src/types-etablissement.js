@@ -38,6 +38,9 @@ const MODULES = [
   // Un seul module commun à tous les hôpitaux : arrivées depuis les CHSLD, accueil, hospitalisations et retours (moteur de coordination commun)
   { code: 'liaison_chsld', categorie: 'hopital', types: ['hopital'], statut: 'disponible', drapeau: 'liaison_chsld', nom: 'Liaison CHSLD', nom_en: 'CHSLD liaison',
     note: 'Arrivées depuis les CHSLD, accueil, hospitalisations et retours', dependances: ['admissions_hopital', 'transferts'] },
+  // Préhospitalier (12 nov. 2026) : préalertes des ambulances, activé explicitement par hôpital depuis SH
+  { code: 'liaison_secours', categorie: 'optionnel', types: ['hopital'], statut: 'disponible', drapeau: 'liaison_secours', nom: 'Liaison Secours', nom_en: 'Emergency liaison',
+    note: 'Préalertes des ambulances : arrivées prévues, accusés, préparation, confirmation du véhicule' },
   // CHSLD
   { code: 'residents', categorie: 'chsld', types: ['chsld'], statut: 'inclus', nom: 'Résidents et accueil', nom_en: 'Residents and admission', note: 'Dossier, contacts, autorisations, mouvements' },
   { code: 'chambres', categorie: 'chsld', types: ['chsld'], statut: 'inclus', nom: 'Chambres et lits', nom_en: 'Rooms and beds' },

@@ -59,7 +59,8 @@ function fixture(){
   const appels=[];let connexions=0;
   const query=async(sql,args)=>{
     appels.push({sql,args});
-    if(sql==='SELECT id,code,nom FROM config_pays ORDER BY id')return {rows:profils};
+    // Lecture des profils (la requête exclut aussi les configurations dérivées « -CHSLD ») : la forme exacte du SQL n'est pas l'objet du test
+    if(/^SELECT .* FROM config_pays\b/.test(sql))return {rows:profils};
     if(sql.startsWith('INSERT INTO etablissements'))return {rows:[{id:42,code:args[0],nom:args[1]}]};
     return {rows:[]};
   };

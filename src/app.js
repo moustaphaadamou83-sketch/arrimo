@@ -173,6 +173,14 @@ function creerApp(pool, options = {}) {
     return ok ? next() : next(new ErreurHttp(403, 'role_entretien'));
   });
 
+  // Rôles de secours (paramédic, superviseur, répartiteur) : écrans de secours seulement, jamais les lits, patients ni résidents
+  api.use((req, res, next) => {
+    if (!require('./prealertes').ROLES_SECOURS.includes(req.utilisateur.role)) return next();
+    const ok = (req.method === 'GET' && req.path === '/moi') || req.path.startsWith('/moi/') || req.path.startsWith('/secours/')
+      || (req.method === 'POST' && req.path === '/deconnexion');
+    return ok ? next() : next(new ErreurHttp(403, 'role_secours'));
+  });
+
   // Mot de passe temporaire : le changer est la seule action permise
   api.use((req, res, next) => {
     if (!req.utilisateur.mdp_temporaire) return next();
@@ -227,6 +235,8 @@ function creerApp(pool, options = {}) {
     return { utilisateur: { id: u.id, nom: u.nom, email: u.email, role: u.role, admin: u.admin, gestionnaire: u.gestionnaire,
       totp_actif: u.totp_actif, mdp_temporaire: u.mdp_temporaire, premiers_pas_vus: u.premiers_pas_vus, apparence: u.apparence || 'automatique',
       langue_interface: u.langue_interface || null, preferences_og: u.preferences_og || {} },
+    organisations: (await pool.query(`SELECT o.id, o.code, o.nom, o.type FROM utilisateur_organisations uo JOIN organisations_secours o ON o.id = uo.organisation_id
+      WHERE uo.utilisateur_id = $1 AND o.actif ORDER BY o.nom`, [u.id])).rows,
     etablissements: rows, configs: configs.rows, demo: env.estDemo(), environnement: env.environnement(),
     patients_fictifs: ['demo', 'recette'].includes(env.environnement()) || process.env.ARRIMO_PATIENTS_FICTIFS === '1' };
   }));
@@ -396,6 +406,14 @@ function creerApp(pool, options = {}) {
   api.post('/chsld/taches/:id/statut', route((req) => ch.statutTache(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   api.post('/chsld/communications/:id/statut', route((req) => ch.statutCommunication(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   // Coordinations entre établissements (hôpitaux et CHSLD) : chacun ne voit et n'agit que de son côté
+  /* ---------- Préhospitalier : préalertes (Liaison Secours), unités, positions ---------- */
+  const pa = require('./prealertes');
+  api.get('/secours/prealertes', route((req) => pa.liste(pool, req.utilisateur, req.query)));
+  api.post('/secours/prealertes', route((req) => pa.creer(pool, req.utilisateur, req.body)));
+  api.get('/secours/prealertes/:id', route((req) => pa.fiche(pool, req.utilisateur, entier(req.params.id, 'id'), req.query)));
+  api.post('/secours/prealertes/:id/action', route((req) => pa.agir(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
+  api.get('/secours/unites', route((req) => pa.unites(pool, req.utilisateur)));
+  api.post('/secours/unites/:id/position', route((req) => pa.position(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   api.get('/coordinations', route((req) => ch.listeCoordinations(pool, req.utilisateur, E(req), { toutes: req.query.toutes === '1' })));
   api.post('/coordinations/:id/action', route((req) => ch.actionCoordination(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   api.get('/liaison-chsld/hopitaux', route(async (req) => { await require('./liaison-chsld').etabHopital(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id')); return (await ch.hopitauxLiaison(pool)).map((h) => ({ id: h.id, nom: h.nom })); }));

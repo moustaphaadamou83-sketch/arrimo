@@ -10,7 +10,7 @@
     "start": "node src/server.js",
     "db:seed": "node db/seed.js",
     "db:reset": "node db/reset.js",
-    "test": "node scripts/verifier-runtime-tests.cjs && node --test --test-concurrency=1 tests/api.test.js tests/courriel-transport.test.cjs tests/routage.test.cjs tests/finalisation.test.cjs tests/connecteurs-atomicite.test.cjs tests/priorites.test.cjs tests/priorites-ui-contract.test.cjs tests/configuration-operationnelle.test.cjs tests/simulation-connecteurs.test.cjs",
+    "test": "node scripts/verifier-runtime-tests.cjs && node --test --test-concurrency=1 tests/api.test.js tests/courriel-transport.test.cjs tests/routage.test.cjs tests/finalisation.test.cjs tests/connecteurs-atomicite.test.cjs tests/priorites.test.cjs tests/priorites-ui-contract.test.cjs tests/configuration-operationnelle.test.cjs tests/simulation-connecteurs.test.cjs tests/prealertes.test.cjs",
     "test:vnext-local": "node scripts/test-vnext-local.cjs",
     "test:priorites-postgres": "node tests/priorites-postgres.test.cjs",
     "test:priorites-interface": "node tests/priorites.interface.spec.cjs",

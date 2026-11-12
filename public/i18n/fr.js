@@ -108,7 +108,7 @@ window.ARRIMO_I18N.fr = {
   risques: { eleve: 'Saturation', modere: 'Tension', faible: 'Disponible' },
   blocages_niveaux: { eleve: 'Prioritaire', modere: 'À vérifier', faible: 'Info' },
   motifs_refus: { pas_de_lit: 'pas de lit', pas_de_personnel: 'pas de personnel', plateau_technique: 'plateau technique', autre: 'autre' },
-  roles: { coordonnateur: 'Coordination', entretien: 'Entretien', admin_etab: 'Admin d’établissement', gestionnaire: 'Gestionnaire réseau', equipe_soins: 'Équipe de soins' },
+  roles:{ paramedic: 'Paramédic', superviseur_secours: 'Superviseur des secours', repartiteur: 'Répartition (CCS)', coordonnateur: 'Coordination', entretien: 'Entretien', admin_etab: 'Admin d’établissement', gestionnaire: 'Gestionnaire réseau', equipe_soins: 'Équipe de soins' },
   roles_texte: { coordonnateur: 'coordination', entretien: 'entretien', admin_etab: 'administration d’établissement', gestionnaire: 'gestionnaire réseau' },
   // Actions inscrites au journal (texte enregistré → libellé)
   journal_actions: {
