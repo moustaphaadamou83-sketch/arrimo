@@ -454,8 +454,12 @@ function creerAppSh(pool, { env = process.env } = {}) {
       const voulu = choix && typeof choix === 'object' ? choix[m.code] : undefined;
       if (voulu !== undefined && typeof voulu !== 'boolean') throw new ErreurSh(400, 'Choix de module invalide.');
       if (voulu === true && ['a_venir', 'etude'].includes(m.statut)) throw new ErreurSh(409, `Le module « ${m.nom} » n’est pas encore disponible.`);
-      // Optionnels : souscrits seulement sur choix explicite ; autres modules disponibles : souscrits sauf refus
-      const licence = m.statut === 'inclus' || (m.statut === 'disponible' && (m.categorie === 'optionnel' ? voulu === true : voulu !== false)) ? 'souscrit' : 'non_selectionne';
+      // Optionnels : souscrits seulement sur choix explicite ; autres modules disponibles : souscrits sauf refus.
+      // Profils d'une organisation de secours : par défaut selon son type (CCS → CCS ; entreprise ambulancière → Ambulance ;
+      // Urgences-santé → les deux) ; un choix explicite l'emporte.
+      const PROFIL_DEFAUT = { ccs: ['profil_ccs'], entreprise_ambulanciere: ['profil_ambulance'], urgences_sante: ['profil_ccs', 'profil_ambulance'], premiers_repondants: [] };
+      const parDefaut = m.categorie === 'secours' ? (PROFIL_DEFAUT[type] || []).includes(m.code) : m.categorie !== 'optionnel';
+      const licence = m.statut === 'inclus' || (m.statut === 'disponible' && (voulu === undefined ? parDefaut : voulu === true)) ? 'souscrit' : 'non_selectionne';
       await c.query(`INSERT INTO sh_hopital_modules(hopital_id,module_code,licence,modifie_par) VALUES($1,$2,$3,$4) ON CONFLICT(hopital_id,module_code) DO NOTHING`,
         [h, m.code, licence, u.email]);
     }
