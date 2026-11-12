@@ -477,13 +477,18 @@ test('administration du préhospitalier : gestionnaire réseau seulement, organi
   const jeton = (await cx.json()).token;
   const essai = await fetch(`${base}/api/secours/prealertes`, { headers: { Authorization: `Bearer ${jeton}` } });
   assert.strictEqual((await essai.json()).code, 'mdp_temporaire_dabord', 'le mot de passe temporaire doit être changé d’abord');
-  // Système relié : clé et secret montrés une seule fois, jamais relus
-  r = await appel('reseau', 'POST', `/admin/secours/organisations/${org}/systemes`, { nom: 'Répartition Est (fictif)' });
-  assert.match(r.corps.cle, /^acx_/); assert.ok(r.corps.secret);
+  // Système relié : clé et secret générés sur le serveur, jamais affichés ; remis une fois au contact technique
+  const mails = []; const cm = require('../src/courriel'); cm.definirTransport(async (m) => { mails.push(m); });
+  r = await appel('reseau', 'POST', `/admin/secours/organisations/${org}/systemes`, { nom: 'Répartition Est (fictif)', courriel_technique: 'it@ambulances.exemple' });
+  cm.definirTransport(null);
+  assert.strictEqual(r.statut, 200, JSON.stringify(r.corps)); assert.ok(!('cle' in r.corps) && !('secret' in r.corps));
+  const remis = (await appel(null, 'POST', '/remise', { jeton: mails[0].texte.match(/\/remise#([A-Za-z0-9_-]+)/)[1] })).corps;
+  assert.match(remis.cle, /^acx_/); assert.ok(remis.secret);
   const vue = (await appel('reseau', 'GET', '/admin/secours')).corps.organisations.find((o) => o.id === org);
   assert.deepStrictEqual([vue.unites.map((x) => x.numero), vue.comptes.map((x) => x.email), vue.systemes.map((x) => x.nom)], [['88-01'], ['para.est@demo.arrimo'], ['Répartition Est (fictif)']]);
-  assert.ok(!JSON.stringify(vue).includes(r.corps.secret) && !JSON.stringify(vue).includes(r.corps.cle));
+  assert.ok(!JSON.stringify(vue).includes(remis.secret) && !JSON.stringify(vue).includes(remis.cle));
   assert.strictEqual((await appel('reseau', 'PUT', `/admin/secours/systemes/${r.corps.id}`, {})).corps.actif, false);
+  assert.strictEqual((await pool.query("SELECT count(*)::int n FROM remises_secrets WHERE contenu IS NOT NULL AND genre = 'connect'")).rows[0].n, 0);
   // Journal d'administration immuable
   const j = (await pool.query("SELECT action FROM journal_admin WHERE action LIKE '%secours%' OR action LIKE '%Arrimo Connect%' ORDER BY id")).rows.map((x) => x.action);
   assert.deepStrictEqual(j, ['Organisation de secours créée', 'Unité de secours créée', 'Compte de secours créé', 'Système relié (Arrimo Connect)', 'Système révoqué (Arrimo Connect)']);

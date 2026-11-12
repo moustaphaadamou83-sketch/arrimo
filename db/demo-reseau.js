@@ -337,6 +337,8 @@ async function demoReseau(pool, { silencieux = false, comptesRoles = false, avec
   await pool.query('UPDATE demo_etat SET reference = now() WHERE id = 1');
   const conX = await creerConnecteur(pool, `Interface ADT · ${X.nom} (démo)`, ids.HX);
   const conR = await creerConnecteur(pool, 'Coordination régionale (démo, lecture)', null);
+  // Clés jamais affichées (exigence permanente) : un accès s'obtient par l'administration, remis au contact technique
+  void conX; void conR;
 
   // Préhospitalier (cahier du 12 nov. 2026, section 18.1) : 2 entreprises ambulancières, 1 CCS, Liaison Secours dans 3 hôpitaux.
   // Organisations, unités et équipages fictifs ; la préalerte en cours est créée par les vraies règles (src/prealertes.js).
@@ -378,9 +380,6 @@ async function demoReseau(pool, { silencieux = false, comptesRoles = false, avec
   await prealertes.agir(pool, { ...coX, nom: 'Coordination X' }, paB.id, { etablissement_id: ids.HX, action: 'prendre_en_compte' });
   await prealertes.agir(pool, { ...coX, nom: 'Coordination X' }, paB.id, { etablissement_id: ids.HX, action: 'preparation' });
 
-  // Arrimo Connect : un système ambulancier et un système de répartition (CCS) fictifs, requêtes signées
-  const cxAmb = await require('../src/connect').creerConnecteurSecours(pool, (await pool.query("SELECT id FROM organisations_secours WHERE code = 'AMB-RIVES'")).rows[0].id, 'Système ambulancier (démo)');
-  const cxCcs = await require('../src/connect').creerConnecteurSecours(pool, (await pool.query("SELECT id FROM organisations_secours WHERE code = 'CCS-REGION'")).rows[0].id, 'Système de répartition du CCS (démo)');
   const acces = [
     'ARRIMO · DÉMONSTRATION · RÉSEAU DE 20 HÔPITAUX (données fictives)',
     `Mot de passe de tous les comptes : ${MDP}`,
@@ -398,10 +397,6 @@ async function demoReseau(pool, { silencieux = false, comptesRoles = false, avec
     '  ccs@demo.arrimo          répartition régionale (consultation)',
     `Liaison Secours activée : ${X.nom}, ${Y.nom}, Hôpital du Bois-Joli.`,
     '',
-    `Clé du connecteur ADT de ${X.nom} : ${conX.cle}`,
-    `Clé du connecteur réseau (lecture) : ${conR.cle}`,
-    `Arrimo Connect, système ambulancier (Paramédics des Rives) : clé ${cxAmb.cle} · secret de signature ${cxAmb.secret}`,
-    `Arrimo Connect, répartition du CCS : clé ${cxCcs.cle} · secret de signature ${cxCcs.secret}`,
   ].join('\n');
   if (!silencieux) console.log(acces);
   return { ids, types, acces };

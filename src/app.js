@@ -54,6 +54,8 @@ function creerApp(pool, options = {}) {
   app.get('/proches', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'proches.html')));
   // Écrans de secours (ambulance, CCS) : même connexion que le personnel, page séparée adaptée aux tablettes embarquées
   app.get('/secours', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'secours.html')));
+  // Remise à usage unique d'un accès de connexion (contact technique du client) : la page ne fait que lire le lien
+  app.get('/remise', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'remise.html')));
   app.get(['/confidentialite', '/conditions', '/privacy', '/terms'], (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'legal.html')));
 
   const api = express.Router();
@@ -147,6 +149,8 @@ function creerApp(pool, options = {}) {
   /* ---------- connecteurs : systèmes de l'hôpital et du réseau (clé dédiée) ---------- */
   // Arrimo Connect (secours) : systèmes de répartition et ambulanciers, requêtes signées, mêmes règles que l'écran
   require('./connect').brancher(api, pool, route);
+  // Récupération unique d'un secret de connexion (sans session : le jeton du lien suffit, une seule fois)
+  api.post('/remise', route((req) => require('./remises').recuperer(pool, req.body?.jeton)));
   api.post('/connecteurs/evenements', route(async (req) => {
     const con = await cx.identifier(pool, req.get('x-connecteur-key'));
     const evs = Array.isArray(req.body) ? req.body.slice(0, 200) : [req.body];

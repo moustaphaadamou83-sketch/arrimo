@@ -131,9 +131,12 @@ function brancher(api, pool, route, entier) {
     exiger(req); const id = entier(req.params.id, 'id');
     const o = (await pool.query('SELECT * FROM organisations_secours WHERE id = $1 AND actif', [id])).rows[0];
     if (!o) throw new ErreurHttp(404, 'organisation_introuvable');
+    // Clé et secret générés sur le serveur, jamais affichés : remise unique au contact technique (lien de 24 h)
+    const destinataire = require('./remises').exigerCourriel(req.body.courriel_technique);
     const s = await require('./connect').creerConnecteurSecours(pool, o.id, texte(req.body.nom, 100) || 'Système partenaire');
-    await journalAdmin(pool, req.utilisateur, 'Système relié (Arrimo Connect)', o.code, s.nom);
-    return s;   // clé et secret montrés une seule fois
+    const remise = await require('./remises').creer(pool, { genre: 'connect', refId: s.id, contenu: { cle: s.cle, secret: s.secret }, destinataire, utilisateurId: req.utilisateur.id, nom: s.nom });
+    await journalAdmin(pool, req.utilisateur, 'Système relié (Arrimo Connect)', o.code, `${s.nom} · remise à ${remise.destinataire}`);
+    return { id: s.id, nom: s.nom, organisation_id: s.organisation_id, remise };
   }));
   api.put('/admin/secours/systemes/:id', route(async (req) => {
     exiger(req); const id = entier(req.params.id, 'id');

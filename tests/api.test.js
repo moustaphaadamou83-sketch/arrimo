@@ -1399,10 +1399,24 @@ test('admin d’établissement : limité à ses établissements ; structure hosp
   assert.strictEqual(eq.corps.telemetrie, true);
   assert.strictEqual(eq.corps.isolement, true, 'les autres équipements sont conservés');
   // Connecteur d'établissement : créé, puis révoqué, la clé ne fonctionne plus
-  const con = await appel('asl', 'POST', '/admin/connecteurs', { nom: 'ADT test', etablissement_id: sl });
-  assert.strictEqual((await appel('asl', 'POST', '/admin/connecteurs', { nom: 'Réseau', etablissement_id: null })).statut, 403);
+  // Clé jamais affichée : remise unique au contact technique par un lien de 24 h (exigence permanente)
+  const courrielsCon = []; const courrielMod = require('../src/courriel'); courrielMod.definirTransport(async (m) => { courrielsCon.push(m); });
+  assert.strictEqual((await appel('asl', 'POST', '/admin/connecteurs', { nom: 'ADT test', etablissement_id: sl })).corps.code, 'courriel_technique_requis');
+  const con = await appel('asl', 'POST', '/admin/connecteurs', { nom: 'ADT test', etablissement_id: sl, courriel_technique: 'tech@hopital.exemple' });
+  courrielMod.definirTransport(null);
+  assert.strictEqual(con.statut, 200, JSON.stringify(con.corps));
+  assert.ok(!('cle' in con.corps) && !JSON.stringify(con.corps).includes('arr_'), 'aucune clé dans la réponse de l’administration');
+  assert.deepStrictEqual([con.corps.remise.envoyee, con.corps.remise.destinataire], [true, 't•••@hopital.exemple']);
+  const jetonRemise = courrielsCon[0].texte.match(/\/remise#([A-Za-z0-9_-]+)/)[1];
+  const recup = await appel(null, 'POST', '/remise', { jeton: jetonRemise });
+  assert.match(recup.corps.cle, /^arr_/);
+  assert.strictEqual((await appel(null, 'POST', '/remise', { jeton: jetonRemise })).corps.code, 'remise_introuvable', 'le lien ne sert qu’une fois');
+  assert.ok(!(await pool.query("SELECT 1 FROM remises_secrets WHERE contenu IS NOT NULL AND ref_id = $1 AND genre = 'adt'", [con.corps.id])).rowCount, 'contenu effacé après récupération');
+  assert.ok(!JSON.stringify((await pool.query('SELECT * FROM journal_admin')).rows).includes(recup.corps.cle), 'jamais dans le journal');
+  assert.strictEqual((await appel(null, 'GET', '/connecteurs/capacite', null, { 'X-Connecteur-Key': recup.corps.cle })).statut, 200, 'la clé remise fonctionne');
+  assert.strictEqual((await appel('asl', 'POST', '/admin/connecteurs', { nom: 'Réseau', etablissement_id: null, courriel_technique: 'tech@hopital.exemple' })).statut, 403);
   await appel('asl', 'POST', `/admin/connecteurs/${con.corps.id}/revoquer`);
-  assert.strictEqual((await appel(null, 'GET', '/connecteurs/capacite', null, { 'X-Connecteur-Key': con.corps.cle })).statut, 401);
+  assert.strictEqual((await appel(null, 'GET', '/connecteurs/capacite', null, { 'X-Connecteur-Key': recup.corps.cle })).statut, 401);
   // Réinitialisation d'un compte par le gestionnaire, avec la double authentification
   const r = await appel('admin', 'POST', `/admin/utilisateurs/${cree.corps.id}/reinitialiser`, { reinitialiser_2fa: true });
   assert.ok(r.corps.mot_de_passe_temporaire);

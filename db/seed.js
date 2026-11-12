@@ -164,8 +164,7 @@ async function seed(pool, { silencieux = false } = {}) {
   const con = await creerConnecteur(pool, 'Interface ADT Mont-Bellevue (démo)', await id('MB'));
   const reseau = await creerConnecteur(pool, 'Coordination régionale (démo, lecture)', null);
   if (!silencieux) {
-    console.log('Clé du connecteur ADT de démonstration (Mont-Bellevue) :', con.cle);
-    console.log('Clé du connecteur réseau de démonstration (lecture) :', reseau.cle);
+    void con; void reseau;   // clés jamais affichées : accès remis au contact technique par l'administration
     console.log('Démo prête. Comptes (mot de passe :', MOT_DE_PASSE_DEMO + ') :');
     console.log('  tremblay@demo.arrimo (Mont-Bellevue), bouchard@demo.arrimo (CHU Saint-Laurent),');
     console.log('  roy@, gagnon@, cote@demo.arrimo, reseau@demo.arrimo (gestionnaire réseau),');

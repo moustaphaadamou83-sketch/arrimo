@@ -1451,3 +1451,20 @@ UPDATE organisations_secours SET profils = CASE type WHEN 'ccs' THEN ARRAY['ccs'
   WHERE profils IS NULL;
 ALTER TABLE organisations_secours ALTER COLUMN profils SET DEFAULT '{}';
 ALTER TABLE organisations_secours ALTER COLUMN profils SET NOT NULL;
+
+-- Remise des secrets (exigence permanente de Moustafa, 12 nov. 2026) : clés et secrets de connexion générés sur le serveur et
+-- jamais affichés (administration, SH, journal) ; remis une seule fois par un lien à usage unique, valable 24 h, envoyé au contact
+-- technique du client. Contenu chiffré au repos, effacé dès qu'il est récupéré ou expiré.
+CREATE TABLE IF NOT EXISTS remises_secrets (
+  id             serial PRIMARY KEY,
+  genre          text NOT NULL CHECK (genre IN ('connect', 'adt')),
+  ref_id         int  NOT NULL,
+  jeton_hash     text NOT NULL UNIQUE,
+  contenu        text,                     -- chiffré ; NULL une fois récupéré ou expiré
+  destinataire   text NOT NULL,
+  envoyee        boolean NOT NULL DEFAULT false,
+  expire_le      timestamptz NOT NULL,
+  recupere_le    timestamptz,
+  cree_par       int REFERENCES utilisateurs(id),
+  cree_le        timestamptz NOT NULL DEFAULT now()
+);

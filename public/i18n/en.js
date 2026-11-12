@@ -94,6 +94,7 @@ window.ARRIMO_I18N.en = {
     s_demandee: 'requested, awaiting the company', s_acceptee: 'accepted', s_refusee: 'declined by the company', s_en_route: 'ambulance on its way', s_pris_en_charge: 'resident picked up', s_arrivee: 'arrived at destination', s_annulee: 'cancelled',
   },
   secours_admin: {
+    courriel_technique: 'Client technical contact email', remise_envoyee: 'Access delivered through a single-use link (24 h) sent to {a}.', remise_non_envoyee: 'Access prepared for {a}, but email is not configured: the link could not be sent.',
     type_urgences_sante: 'Urgences-santé (call centre and ambulances)', type_premiers_repondants: 'Firefighters / first responders', profils: 'Enabled profiles', profil_ccs: 'CCS (dispatch, regional view)', profil_ambulance: 'Ambulance (units, pre-alerts)',
     supervision: 'Supervision', rien: 'nothing to report', depuis: 'for {n} min', sup_non_recues: 'Pre-alerts not received by the hospital screen',
     sup_non_prises: 'Pre-alerts not acknowledged', sup_transports: 'Transports without company response', sup_positions: 'Stale positions (over 10 min)', sup_systemes: 'Linked systems silent for 24 h',
@@ -101,8 +102,7 @@ window.ARRIMO_I18N.en = {
     nouvelle: 'New emergency organization', code: 'Code', nom: 'Name', creer: 'Create', type_ambulancier: 'Ambulance company', type_ccs: 'CCS', inactive: 'inactive',
     unites: 'Units', numero: 'Unit number', plaque: 'Plate', ajouter_unite: 'Add the unit', comptes: 'Accounts', courriel: 'Email', creer_compte: 'Create the account',
     systemes: 'Linked systems (Arrimo Connect)', nom_systeme: 'System name', relier: 'Link a system', revoquer: 'Revoke', revoque: 'revoked', aucune: 'None.', aucun: 'None.',
-    activer: 'Activate the organization', desactiver: 'Deactivate the organization', une_fois: 'System key and secret', une_fois_aide: 'Copy them now: they will never be shown again. Every request must be signed (HMAC-SHA256).',
-    cle: 'Key', secret: 'Signing secret', compte_cree: 'Account created', mdp_temporaire: 'Temporary password for {email}, to change at first sign-in:',
+    activer: 'Activate the organization', desactiver: 'Deactivate the organization',
   },
   liaison_secours: {
     cd_titre: 'Hospital record', cd_simulation: 'SIMULATION — simulated hospital system, fictitious records (demonstration only)', cd_aucune_recherche: 'No search; the pre-alert continues with its temporary number.',
@@ -517,6 +517,7 @@ window.ARRIMO_I18N.en = {
     },
   },
   admin: {
+    courriel_technique: 'Client technical contact email', remise_envoyee: 'Access delivered through a single-use link (24 h) sent to {a}.', remise_non_envoyee: 'Access prepared for {a}, but email is not configured: the link could not be sent.',
     filtre_statut: 'Account status', statut_tous: 'All accounts', statut_actifs: 'Active', statut_desactives: 'Deactivated',
     acces_titre: 'Effective access by role. Modules turned off for a facility stay hidden for everyone.', acces_fonction: 'Feature',
     acces_operations: 'Beds, emergency, admissions, transfers, watch', acces_nettoyage: 'Cleaning', acces_pilotage: 'ALC, indicators, network',
@@ -719,6 +720,8 @@ window.ARRIMO_I18N.en = {
     unite_invalide: "Invalid unit number (letters, digits, spaces and hyphens, 20 characters at most).",
     unite_existe: "This organization already has a unit with this number.",
     correspondance_reserve_demo: "Matching with a simulated hospital record is reserved for the demonstration.",
+    courriel_technique_requis: "Enter the client technical contact’s email: the access will be delivered through a single-use link.",
+    remise_introuvable: "Invalid, already used or expired link. Ask your Arrimo contact for a new access.",
     liaison_secours_inactive: "This hospital has not enabled the Emergency liaison module: the pre-alert cannot be sent to it.",
     organisation_interdite: "Your account is not linked to any active emergency organization.",
     prealerte_invalide: "Incomplete or invalid pre-alert: check the priority, category, arrival time and crew.",

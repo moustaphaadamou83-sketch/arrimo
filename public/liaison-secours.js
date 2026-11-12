@@ -177,7 +177,7 @@
       <p><b>${A('comptes')}</b> : ${o.comptes.map((x) => `${esc(x.nom)} <span class="note">${esc(x.email)} · ${esc(t(`roles.${x.role}`))}</span>`).join(' ; ') || A('aucun')}</p>
       <div class="ligne" style="display:flex;gap:8px;flex-wrap:wrap"><input placeholder="${A('nom')}" data-sc-nom="${o.id}" maxlength="120"><input placeholder="${A('courriel')}" type="email" data-sc-email="${o.id}"><select data-sc-role="${o.id}">${o.roles.map((r) => `<option value="${r}">${esc(t(`roles.${r}`))}</option>`).join('')}</select><button class="btn" data-sc-compte="${o.id}">${A('creer_compte')}</button></div>
       <p><b>${A('systemes')}</b> : ${o.systemes.map((x) => `${esc(x.nom)}${x.actif ? ` <button class="btn discret" data-ss-revoquer="${x.id}">${A('revoquer')}</button>` : ` · ${A('revoque')}`}`).join(' ; ') || A('aucun')}</p>
-      <div class="ligne" style="display:flex;gap:8px;flex-wrap:wrap"><input placeholder="${A('nom_systeme')}" data-ss-nom="${o.id}" maxlength="100"><button class="btn" data-ss-creer="${o.id}">${A('relier')}</button>
+      <div class="ligne" style="display:flex;gap:8px;flex-wrap:wrap"><input placeholder="${A('nom_systeme')}" data-ss-nom="${o.id}" maxlength="100"><input type="email" placeholder="${A('courriel_technique')}" data-ss-courriel="${o.id}"><button class="btn" data-ss-creer="${o.id}">${A('relier')}</button>
         <button class="btn discret" data-so-actif="${o.id}" data-actif="${!o.actif}">${o.actif ? A('desactiver') : A('activer')}</button></div></div>`;
     corps.innerHTML = `<p class="note">${A('intro')}</p>${supervision}
       <div class="panneau-c" style="margin-bottom:12px"><h3>${A('nouvelle')}</h3><div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -185,7 +185,6 @@
         <select id="so-type">${d.types.map((x) => `<option value="${x}">${A(`type_${x}`)}</option>`).join('')}</select>
         <select id="so-cfg">${d.profils.map((c) => `<option value="${c.id}">${esc(c.nom)}</option>`).join('')}</select><button class="btn pri" id="so-creer">${A('creer')}</button></div></div>
       ${d.organisations.map(ligne).join('') || `<p class="note">${A('aucune')}</p>`}`;
-    const secret = (r) => modale(t('secours_admin.une_fois'), `<p class="note">${A('une_fois_aide')}</p><p><b>${A('cle')}</b><br><code>${esc(r.cle)}</code></p><p><b>${A('secret')}</b><br><code>${esc(r.secret)}</code></p>`, [{ label: t('general.fermer'), pri: true }]);
     $('#so-creer').onclick = () => agir($('#so-creer'), () => api('POST', '/admin/secours/organisations', { code: $('#so-code').value, nom: $('#so-nom').value, type: $('#so-type').value, config_id: Number($('#so-cfg').value) }), t('liaison_secours.ok'));
     corps.querySelectorAll('[data-su-unite]').forEach((b) => { b.onclick = () => { const id = b.dataset.suUnite; agir(b, () => api('POST', `/admin/secours/organisations/${id}/unites`, { numero: corps.querySelector(`[data-su-num="${id}"]`).value, plaque: corps.querySelector(`[data-su-plaque="${id}"]`).value }), t('liaison_secours.ok')); }; });
     corps.querySelectorAll('[data-sc-compte]').forEach((b) => { b.onclick = async () => {
@@ -193,7 +192,11 @@
       const r = await agir(b, () => api('POST', `/admin/secours/organisations/${id}/comptes`, { nom: corps.querySelector(`[data-sc-nom="${id}"]`).value, email: corps.querySelector(`[data-sc-email="${id}"]`).value, role: corps.querySelector(`[data-sc-role="${id}"]`).value }));
       if (r) modale(t('secours_admin.compte_cree'), `<p>${A('mdp_temporaire', { email: r.email })}</p><p><code>${esc(r.mot_de_passe_temporaire)}</code></p>`, [{ label: t('general.fermer'), pri: true }]);
     }; });
-    corps.querySelectorAll('[data-ss-creer]').forEach((b) => { b.onclick = async () => { const id = b.dataset.ssCreer; const r = await agir(b, () => api('POST', `/admin/secours/organisations/${id}/systemes`, { nom: corps.querySelector(`[data-ss-nom="${id}"]`).value })); if (r) secret(r); }; });
+    corps.querySelectorAll('[data-ss-creer]').forEach((b) => { b.onclick = async () => {
+      const id = b.dataset.ssCreer;
+      const r = await agir(b, () => api('POST', `/admin/secours/organisations/${id}/systemes`, { nom: corps.querySelector(`[data-ss-nom="${id}"]`).value, courriel_technique: corps.querySelector(`[data-ss-courriel="${id}"]`).value }));
+      if (r) toast(t(r.remise.envoyee ? 'secours_admin.remise_envoyee' : 'secours_admin.remise_non_envoyee', { a: r.remise.destinataire }));
+    }; });
     corps.querySelectorAll('[data-ss-revoquer]').forEach((b) => { b.onclick = () => agir(b, () => api('PUT', `/admin/secours/systemes/${b.dataset.ssRevoquer}`, {}), t('liaison_secours.ok')); });
     corps.querySelectorAll('[data-sp-org]').forEach((c) => { c.onchange = () => {
       const id = c.dataset.spOrg; const profils = [...corps.querySelectorAll(`[data-sp-org="${id}"]`)].filter((x) => x.checked).map((x) => x.value);

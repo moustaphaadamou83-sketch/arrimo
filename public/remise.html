@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="fr-CA" translate="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arrimo · Accès de connexion</title>
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex">
+<script src="apparence.js"></script>
+<link rel="stylesheet" href="style.css">
+<style>
+  body.remise { background: var(--fond); }
+  .remise main { max-width: 640px; margin: 40px auto; padding: 16px; }
+  .remise .carte-r { background: var(--carte); border: 1px solid var(--bordure); border-radius: var(--rayon-carte); padding: 20px; }
+  .remise code { display: block; padding: 10px; margin: 6px 0 14px; background: var(--fond); border: 1px solid var(--bordure); border-radius: 8px; overflow-wrap: anywhere; font-size: 15px; }
+</style>
+</head>
+<body class="remise">
+<main><div class="carte-r" id="contenu" aria-live="polite"></div></main>
+<script src="remise.js"></script>
+</body>
+</html>

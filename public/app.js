@@ -2522,6 +2522,7 @@ async function vueAdmin() {
     const cons = await api('GET', '/admin/connecteurs');
     corps.innerHTML = `<div class="deux"><div class="panneau-c"><h3>${D('nouveau_connecteur')}</h3>
         <div class="champ"><label class="lbl" for="c-nom-con">${D('nom')}</label><input id="c-nom-con" placeholder="${D('nom_connecteur')}" autocomplete="off"></div>
+        <div class="champ"><label class="lbl" for="c-courriel-con">${D('courriel_technique')}</label><input id="c-courriel-con" type="email" autocomplete="off"></div>
         <div class="champ"><label class="lbl" for="c-etab-con">${D('etablissement')}</label><select id="c-etab-con">${etabs.map((e) => `<option value="${e.id}"${e.id === etat.ctx ? ' selected' : ''}>${esc(e.nom)}</option>`).join('')}${u.gestionnaire ? `<option value="">${D('reseau_lecture')}</option>` : ''}</select></div>
         <button class="btn pri" id="b-con">${D('creer_cle')}</button>
         <p class="note">${D('connecteur_aide')}</p></div>
@@ -2530,8 +2531,9 @@ async function vueAdmin() {
         <td class="note">${c.dernier_message ? heure(c.dernier_message) : esc(t('general.aucun'))}</td><td class="num${c.rejets_24h ? ' refuse' : ''}">${c.rejets_24h}</td>
         <td>${c.actif ? `<button class="btn dan" data-revoquer="${c.id}">${D('revoquer')}</button>` : ''}</td></tr>`).join('') || `<tr><td colspan="5" class="muted">${D('aucun_connecteur')}</td></tr>`}</tbody></table></div></div>`;
     $('#b-con').onclick = (ev) => agir(ev.target, async () => {
-      const r = await api('POST', '/admin/connecteurs', { nom: $('#c-nom-con').value || t('admin.connecteur_defaut'), etablissement_id: $('#c-etab-con').value ? Number($('#c-etab-con').value) : null });
-      montrerSecret(t('admin.cle_titre', { nom: r.nom }), r.cle, t('admin.cle_aide'));
+      // Clé jamais affichée : remise unique au contact technique du client
+      const r = await api('POST', '/admin/connecteurs', { nom: $('#c-nom-con').value || t('admin.connecteur_defaut'), etablissement_id: $('#c-etab-con').value ? Number($('#c-etab-con').value) : null, courriel_technique: $('#c-courriel-con').value });
+      toast(t(r.remise.envoyee ? 'admin.remise_envoyee' : 'admin.remise_non_envoyee', { a: r.remise.destinataire }));
     });
     corps.querySelectorAll('[data-revoquer]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/admin/connecteurs/${b.dataset.revoquer}/revoquer`), t('admin.revoque_ok')); });
   }

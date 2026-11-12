@@ -671,9 +671,12 @@ function brancher(api, pool, route, entier, options = {}) {
     const etab = req.body.etablissement_id ? entier(req.body.etablissement_id, 'etablissement_id') : null;
     if (etab) await exigerEtabGerable(req.utilisateur, etab);
     else if (!req.utilisateur.gestionnaire) throw new ErreurHttp(403, 'connecteur_reseau_gestionnaire');
+    // Clé générée sur le serveur, jamais affichée : remise unique au contact technique (lien de 24 h)
+    const destinataire = require('./remises').exigerCourriel(req.body.courriel_technique);
     const con = await cx.creerConnecteur(pool, req.body.nom, etab);
-    await journalAdmin(pool, req.utilisateur, 'Connecteur créé', con.nom, null, etab);
-    return con;
+    const remise = await require('./remises').creer(pool, { genre: 'adt', refId: con.id, contenu: { cle: con.cle }, destinataire, utilisateurId: req.utilisateur.id, nom: con.nom });
+    await journalAdmin(pool, req.utilisateur, 'Connecteur créé', con.nom, `remise à ${remise.destinataire}`, etab);
+    return { id: con.id, nom: con.nom, etablissement_id: con.etablissement_id, remise };
   }));
   api.post('/admin/connecteurs/:id/revoquer', route(async (req) => {
     exigerAdmin(req);

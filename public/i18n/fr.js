@@ -94,6 +94,7 @@ window.ARRIMO_I18N.fr = {
     s_demandee: 'demandé, en attente de l’entreprise', s_acceptee: 'accepté', s_refusee: 'refusé par l’entreprise', s_en_route: 'ambulance en route', s_pris_en_charge: 'résident pris en charge', s_arrivee: 'arrivé à destination', s_annulee: 'annulé',
   },
   secours_admin: {
+    courriel_technique: 'Courriel du contact technique du client', remise_envoyee: 'Accès remis par un lien à usage unique (24 h) envoyé à {a}.', remise_non_envoyee: 'Accès préparé pour {a}, mais le courriel n’est pas configuré : le lien n’a pas pu être envoyé.',
     type_urgences_sante: 'Urgences-santé (centre d’appel et ambulances)', type_premiers_repondants: 'Pompiers / premiers répondants', profils: 'Profils activés', profil_ccs: 'CCS (répartition, vue régionale)', profil_ambulance: 'Ambulance (unités, préalertes)',
     supervision: 'Supervision', rien: 'rien à signaler', depuis: 'depuis {n} min', sup_non_recues: 'Préalertes non reçues par l’écran de l’hôpital',
     sup_non_prises: 'Préalertes non prises en compte', sup_transports: 'Transports sans réponse de l’entreprise', sup_positions: 'Positions anciennes (plus de 10 min)', sup_systemes: 'Systèmes reliés silencieux depuis 24 h',
@@ -101,8 +102,7 @@ window.ARRIMO_I18N.fr = {
     nouvelle: 'Nouvelle organisation de secours', code: 'Code', nom: 'Nom', creer: 'Créer', type_ambulancier: 'Entreprise ambulancière', type_ccs: 'CCS', inactive: 'inactive',
     unites: 'Unités', numero: 'Numéro d’unité', plaque: 'Plaque', ajouter_unite: 'Ajouter l’unité', comptes: 'Comptes', courriel: 'Courriel', creer_compte: 'Créer le compte',
     systemes: 'Systèmes reliés (Arrimo Connect)', nom_systeme: 'Nom du système', relier: 'Relier un système', revoquer: 'Révoquer', revoque: 'révoqué', aucune: 'Aucune.', aucun: 'Aucun.',
-    activer: 'Activer l’organisation', desactiver: 'Désactiver l’organisation', une_fois: 'Clé et secret du système', une_fois_aide: 'Copiez-les maintenant : ils ne seront plus jamais affichés. Chaque requête doit être signée (HMAC-SHA256).',
-    cle: 'Clé', secret: 'Secret de signature', compte_cree: 'Compte créé', mdp_temporaire: 'Mot de passe temporaire de {email}, à changer à la première connexion :',
+    activer: 'Activer l’organisation', desactiver: 'Désactiver l’organisation',
   },
   liaison_secours: {
     cd_titre: 'Dossier hospitalier', cd_simulation: 'SIMULATION — système hospitalier simulé, fiches fictives (démonstration seulement)', cd_aucune_recherche: 'Aucune recherche ; la préalerte continue avec son numéro temporaire.',
@@ -518,6 +518,7 @@ window.ARRIMO_I18N.fr = {
     },
   },
   admin: {
+    courriel_technique: 'Courriel du contact technique du client', remise_envoyee: 'Accès remis par un lien à usage unique (24 h) envoyé à {a}.', remise_non_envoyee: 'Accès préparé pour {a}, mais le courriel n’est pas configuré : le lien n’a pas pu être envoyé.',
     filtre_statut: 'État du compte', statut_tous: 'Tous les comptes', statut_actifs: 'Actifs', statut_desactives: 'Désactivés',
     acces_titre: 'Accès effectifs par rôle. Les modules désactivés pour un établissement restent masqués pour tous.', acces_fonction: 'Fonction',
     acces_operations: 'Lits, urgence, admissions, transferts, vigilance', acces_nettoyage: 'Nettoyage', acces_pilotage: 'ALC, indicateurs, réseau',
