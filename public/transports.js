@@ -15,7 +15,8 @@
       const coId = Number(p.dataset.trCo);
       const d = liste.filter((x) => x.coordination_id === coId).sort((a, b) => b.id - a.id)[0];
       const origine = Number(p.dataset.trOrigine) === etat.ctx;
-      const peutDemander = gerer && origine && ['envoyee', 'acceptee'].includes(p.dataset.trStatut) && !(d && OUVERTES.includes(d.statut));
+      const moduleActif = (etat.moi.etablissements.find((e) => e.id === etat.ctx)?.modules || {}).transport_ambulancier === true;
+      const peutDemander = moduleActif && gerer && origine && ['envoyee', 'acceptee'].includes(p.dataset.trStatut) && !(d && OUVERTES.includes(d.statut));
       p.innerHTML = `${d ? `<div class="note tr-suivi"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-ambulance"/></svg> ${T('suivi', { numero: d.numero, org: d.organisation, statut: t(`transports.s_${d.statut}`) })}${d.unite ? ` · ${T('unite', { unite: d.unite })}` : ''}${d.heure_souhaitee ? ` · ${T('heure', { heure: heure(d.heure_souhaitee) })}` : ''}
           ${d.actions.includes('annuler') ? ` <button class="btn discret" type="button" data-tr-annuler="${d.id}" data-version="${d.version}">${T('annuler')}</button>` : ''}</div>` : ''}
         ${peutDemander ? `<div class="actions"><button class="btn" type="button" data-tr-demander="${coId}">${T('demander')}</button></div>` : ''}`;

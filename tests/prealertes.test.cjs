@@ -62,7 +62,7 @@ test.before(async () => {
   const cfg = (await pool.query('SELECT config_id FROM etablissements WHERE code = $1', ['MB'])).rows[0].config_id;
   ids.mb = await etab('MB'); ids.sl = await etab('SL'); ids.lm = await etab('LM');
   // Liaison Secours activée à Mont-Bellevue et au CHU Saint-Laurent seulement
-  await pool.query(`UPDATE etablissements SET modules = COALESCE(modules, '{}'::jsonb) || '{"liaison_secours": true}' WHERE code IN ('MB', 'SL')`);
+  await pool.query(`UPDATE etablissements SET modules = COALESCE(modules, '{}'::jsonb) || '{"liaison_secours": true, "transport_ambulancier": true}' WHERE code IN ('MB', 'SL')`);
   const PROFILS = { ambulancier: ['ambulance'], ccs: ['ccs'], urgences_sante: ['ccs', 'ambulance'] };
   const org = async (code, nom, type) => (await pool.query('INSERT INTO organisations_secours (code, nom, type, profils, config_id) VALUES ($1, $2, $3, $4, $5) RETURNING id', [code, nom, type, PROFILS[type], cfg])).rows[0].id;
   ids.cfg = cfg;
@@ -338,6 +338,13 @@ test('Liaison Établissements : demande de transport d’un CHSLD vers une ambul
   const cfgCh = await TE.configChsld(pool, cfgMb);
   const ch = (await pool.query(`INSERT INTO etablissements (code, nom, ville, adresse, latitude, longitude, config_id, partage, module_actif, type_etablissement)
     VALUES ('CH-T1', 'CHSLD fictif des Pins', 'Sherbrooke', '12, rue des Pins', 45.41, -71.90, $1, 'complet', true, 'chsld') RETURNING id`, [cfgCh])).rows[0].id;
+  // Module « Liaison Établissements » : refusé tant qu'il n'est pas activé pour le CHSLD
+  const r00 = (await pool.query(`INSERT INTO residents (etablissement_id, reference, prenom, nom, date_naissance, statut) VALUES ($1, 'R-90000', 'Prénom', 'Fictif-Zéro', '1940-01-01', 'present') RETURNING id`, [ch])).rows[0].id;
+  const co0 = (await pool.query(`INSERT INTO coordinations (numero, type, resident_id, resident_ref, origine_id, destination_id, statut) VALUES ('CO-90000', 'hospitalisation', $1, 'R-90000', $2, $3, 'envoyee') RETURNING id`, [r00, ch, ids.mb])).rows[0].id;
+  const coordoTmp = await compte('coord0.ch@demo.arrimo', 'Coordination CHSLD (essai module)', 'coordonnateur', null);
+  await pool.query('INSERT INTO utilisateur_etablissements VALUES ($1, $2)', [coordoTmp, ch]); await connecter('ch0', 'coord0.ch@demo.arrimo');
+  assert.strictEqual((await appel('ch0', 'POST', `/coordinations/${co0}/transport`, { organisation_id: ids.ambA })).corps.code, 'module_desactive');
+  await pool.query(`UPDATE etablissements SET modules = '{"transport_ambulancier": true}' WHERE id = $1`, [ch]);
   const coordo = await compte('coord.ch@demo.arrimo', 'Coordination CHSLD fictif', 'coordonnateur', null);
   await pool.query('INSERT INTO utilisateur_etablissements VALUES ($1, $2)', [coordo, ch]);
   await connecter('ch', 'coord.ch@demo.arrimo');

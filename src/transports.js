@@ -45,6 +45,9 @@ async function demander(pool, u, coordinationId, b) {
   if (!co0 || !['hospitalisation', 'retour'].includes(co0.type)) throw new ErreurHttp(404, 'coordination_introuvable');
   exigerEtablissement(u, co0.origine_id);
   if (!ROLES_ETAB.includes(u.role)) throw new ErreurHttp(403, 'role_insuffisant');
+  // Module « Liaison Établissements » activé pour cet établissement (depuis SH)
+  const origine = (await pool.query('SELECT type_etablissement, modules FROM etablissements WHERE id = $1', [co0.origine_id])).rows[0];
+  if (!require('./types-etablissement').moduleActif(origine, 'transport_ambulancier')) throw new ErreurHttp(403, 'module_desactive', { module: 'transport_ambulancier' });
   const orgs = await organisationsRegion(pool, co0.origine_id);
   const org = orgs.find((o) => o.id === entier(b.organisation_id));
   if (!org) throw new ErreurHttp(404, 'organisation_introuvable');

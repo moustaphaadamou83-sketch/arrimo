@@ -342,7 +342,7 @@ async function demoReseau(pool, { silencieux = false, comptesRoles = false, avec
 
   // Préhospitalier (cahier du 12 nov. 2026, section 18.1) : 2 entreprises ambulancières, 1 CCS, Liaison Secours dans 3 hôpitaux.
   // Organisations, unités et équipages fictifs ; la préalerte en cours est créée par les vraies règles (src/prealertes.js).
-  await pool.query(`UPDATE etablissements SET modules = COALESCE(modules, '{}'::jsonb) || '{"liaison_secours": true}' WHERE id = ANY($1)`, [[ids.HX, ids.HY, ids.HA]]);
+  await pool.query(`UPDATE etablissements SET modules = COALESCE(modules, '{}'::jsonb) || '{"liaison_secours": true, "transport_ambulancier": true}' WHERE id = ANY($1)`, [[ids.HX, ids.HY, ids.HA]]);
   // Services et règles de correspondance de chaque hôpital (validées par l'établissement) : base de la proposition d'OG
   const SERVICES_SECOURS = [['URGG', 'Urgence générale', { secours_defaut: true, categories_secours: ['medicale', 'respiratoire', 'sante_mentale', 'autre'] }],
     ['REA', 'Réanimation / soins intensifs', {}], ['CARD', 'Cardiologie', { categories_secours: ['cardiaque'] }], ['NEURO', 'Neurologie / AVC', { categories_secours: ['neurologique'] }],
