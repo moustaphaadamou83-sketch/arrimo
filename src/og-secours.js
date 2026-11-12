@@ -5,6 +5,7 @@
  * priorité déclarée par l'équipe, dernière confirmation. OG ne décide ni de la destination, ni d'un service, ni d'une priorité.
  */
 const pa = require('./prealertes');
+const { ErreurHttp } = require('./db');
 const norm = (q) => String(q || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const T = (L, fr, en) => (L === 'en' ? en : fr);
 const PRIO = { fr: { immediate: 'immédiate', urgente: 'urgente', non_urgente: 'non urgente' }, en: { immediate: 'immediate', urgente: 'urgent', non_urgente: 'non-urgent' } };
@@ -62,4 +63,51 @@ async function repondre(pool, u, etabId, q, L) {
   const n = ouvertes.length;
   return local(`${T(L, n > 1 ? `${n} ambulances annoncées :` : '1 ambulance annoncée :', n > 1 ? `${n} ambulances announced:` : '1 ambulance announced:')}\n${ouvertes.map((p) => ligne(L, p)).join('\n')}`);
 }
-module.exports = { repondre, concerne };
+
+/**
+ * OG sur l'écran des ambulances et des CCS : mêmes droits que l'écran (préalertes de l'organisation ou de la région,
+ * urgences de la région). Exemples du cahier (section 2.1) : ambulance en route, réception confirmée, heure prévue,
+ * informations manquantes, état des urgences. Aucune destination, aucun service ni aucune priorité n'est décidé.
+ */
+const NIVEAU = { fr: { vert: 'fluide', jaune: 'chargée', orange: 'très chargée', rouge: 'saturée' }, en: { vert: 'flowing', jaune: 'busy', orange: 'very busy', rouge: 'saturated' } };
+async function repondreSecours(pool, u, question, L) {
+  if (!pa.ROLES_SECOURS.includes(u.role)) throw new ErreurHttp(403, 'role_insuffisant');
+  const q = String(question || '').slice(0, 500); const qn = norm(q);
+  const local = (reponse, intention) => ({ mode: 'local', reponse, sources: ['arrimo'], intentions: [intention] });
+  if (/(quel(le)? (hopital|destination|service)|which (hospital|destination|service)|ou (aller|l.?amener|transporter)|where (to go|should))|priorit\w* clinique|clinical priority|diagnosti|triage/.test(qn)) {
+    return local(T(L, 'Je ne décide ni de la destination, ni du service, ni d’une priorité clinique : ce sont l’équipe et les protocoles applicables qui en décident. Je peux afficher l’état des urgences de la région et le suivi des préalertes.',
+      'I do not decide the destination, the department or a clinical priority: the crew and applicable protocols do. I can show the regional emergency status and pre-alert tracking.'), 'refus_decision');
+  }
+  const d = await pa.liste(pool, u, {});
+  const ouvertes = d.prealertes.filter((p) => pa.OUVERTES.includes(p.statut));
+  const m = q.match(/\bPA[\s-]?(\d{1,6})\b/i);
+  const cible = m ? d.prealertes.filter((x) => x.numero === `PA-${m[1].padStart(6, '0')}`) : ouvertes;
+  if (m && !cible.length) return local(T(L, `Aucune préalerte ${m[0].toUpperCase()} n’est visible pour vous.`, `No pre-alert ${m[0].toUpperCase()} is visible to you.`), 'suivi');
+  if (/(urgences?|emergenc|civieres?|stretchers?|satur|deborde|overcrowd|capacit|proches?|nearby|disponib|availab)/.test(qn)) {
+    const h = await pa.destinations(pool, u, {});
+    if (!h.length) return local(T(L, 'Aucun hôpital de la région ne reçoit encore de préalertes par Arrimo.', 'No hospital in the region receives pre-alerts through Arrimo yet.'), 'disponibilites');
+    const lignes = h.map((x) => `• ${x.nom} : ${x.urgence ? `${T(L, 'urgence', 'emergency')} ${NIVEAU[lang(L)][x.urgence.niveau] || x.urgence.niveau}, ${x.urgence.civieres_libres} ${T(L, x.urgence.civieres_libres > 1 ? 'civières libres' : 'civière libre', x.urgence.civieres_libres > 1 ? 'free stretchers' : 'free stretcher')}` : T(L, 'aucune donnée d’urgence', 'no emergency data')}`);
+    return local(`${T(L, 'État déclaré dans Arrimo maintenant (une aide à la lecture, pas un choix de destination) :', 'Status declared in Arrimo now (a reading aid, not a destination choice):')}\n${lignes.join('\n')}`, 'disponibilites');
+  }
+  if (!cible.length) return local(T(L, 'Aucune préalerte en cours.', 'No pre-alert in progress.'), 'suivi');
+  if (/(manqu|missing|incomplet|incomplete|complet)/.test(qn)) {
+    const lignes = cible.map((p) => {
+      const manque = [];
+      if (!p.heure_prevue) manque.push(T(L, 'heure d’arrivée prévue', 'expected arrival time'));
+      if (!p.equipage || !p.equipage.length) manque.push(T(L, 'équipage', 'crew'));
+      if (!p.position) manque.push(T(L, 'position de l’unité (facultative)', 'unit position (optional)'));
+      return `• ${p.numero} : ${manque.length ? `${T(L, 'à compléter', 'to complete')} — ${manque.join(', ')}` : T(L, 'rien ne manque', 'nothing missing')}`;
+    });
+    return local(lignes.join('\n'), 'informations_manquantes');
+  }
+  if (/(recu|reception|received|receipt|confirm|accus|acknowledg|pris en compte|vu|seen|consult)/.test(qn)) {
+    const lignes = cible.map((p) => `• ${p.numero} → ${p.destination} : ${p.prise_en_compte_le ? T(L, `prise en compte confirmée par une personne à ${new Date(p.prise_en_compte_le).toLocaleTimeString(L === 'en' ? 'en-CA' : 'fr-CA', { hour: '2-digit', minute: '2-digit' })}`, 'acknowledged by a person')
+      : p.consultee_le ? T(L, 'consultée, prise en compte pas encore confirmée', 'viewed, acknowledgement not yet confirmed')
+        : p.recue_le ? T(L, 'reçue par l’écran de l’hôpital, personne ne l’a encore ouverte', 'received by the hospital screen, nobody has opened it yet')
+          : T(L, 'réception non confirmée : prévenez l’hôpital par vos moyens habituels si nécessaire', 'receipt not confirmed: alert the hospital through your usual means if needed')}`);
+    return local(lignes.join('\n'), 'reception');
+  }
+  const n = cible.length;
+  return local(`${n > 1 ? T(L, `${n} préalertes en cours :`, `${n} pre-alerts in progress:`) : T(L, '1 préalerte en cours :', '1 pre-alert in progress:')}\n${cible.map((p) => `${ligne(L, p)} → ${p.destination}`).join('\n')}`, 'suivi');
+}
+module.exports = { repondre, repondreSecours, concerne };

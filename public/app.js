@@ -505,6 +505,8 @@ async function demarrer() {
   majApparence();
   bandeauEnvironnement(etat.moi.environnement);
   if (etat.moi.utilisateur.mdp_temporaire) { montrerFormulaire('#f-mdp-temp'); $('#t-actuel').focus(); return; }
+  // Ambulances et CCS : écran de secours dédié (/secours), jamais l'interface des établissements
+  if (['paramedic', 'superviseur_secours', 'repartiteur'].includes(etat.moi.utilisateur.role)) { location.replace('/secours'); return; }
   const etabs = etat.moi.etablissements;
   majNomUtilisateur();
   if (!etabs.length && etat.moi.utilisateur.gestionnaire) {

@@ -338,6 +338,34 @@ async function demoReseau(pool, { silencieux = false, comptesRoles = false, avec
   const conX = await creerConnecteur(pool, `Interface ADT · ${X.nom} (démo)`, ids.HX);
   const conR = await creerConnecteur(pool, 'Coordination régionale (démo, lecture)', null);
 
+  // Préhospitalier (cahier du 12 nov. 2026, section 18.1) : 2 entreprises ambulancières, 1 CCS, Liaison Secours dans 3 hôpitaux.
+  // Organisations, unités et équipages fictifs ; la préalerte en cours est créée par les vraies règles (src/prealertes.js).
+  await pool.query(`UPDATE etablissements SET modules = COALESCE(modules, '{}'::jsonb) || '{"liaison_secours": true}' WHERE id = ANY($1)`, [[ids.HX, ids.HY, ids.HA]]);
+  const cfgQc = (await pool.query('SELECT config_id FROM etablissements WHERE id = $1', [ids.HX])).rows[0].config_id;
+  const orgSecours = async (code, nom, type) => (await pool.query('INSERT INTO organisations_secours (code, nom, type, config_id) VALUES ($1, $2, $3, $4) RETURNING id', [code, nom, type, cfgQc])).rows[0].id;
+  const ambA = await orgSecours('AMB-NORD', 'Ambulances du Nord (fictif)', 'ambulancier');
+  const ambB = await orgSecours('AMB-RIVES', 'Paramédics des Rives (fictif)', 'ambulancier');
+  const ccs = await orgSecours('CCS-REGION', 'CCS régional (fictif)', 'ccs');
+  const uniteSecours = async (org, numero, plaque) => (await pool.query('INSERT INTO unites_secours (organisation_id, numero, plaque) VALUES ($1, $2, $3) RETURNING id', [org, numero, plaque])).rows[0].id;
+  const uA = await uniteSecours(ambA, '41-12', 'DEMO 412'); await uniteSecours(ambA, '41-15', 'DEMO 415');
+  const uB = await uniteSecours(ambB, '57-03', 'DEMO 573');
+  const compteSecours = async (email, nom, role, org) => {
+    const u = (await pool.query('INSERT INTO utilisateurs (email, nom, mot_de_passe_hash, role) VALUES ($1, $2, $3, $4) RETURNING id', [email, nom, hash, role])).rows[0].id;
+    await pool.query('INSERT INTO utilisateur_organisations VALUES ($1, $2)', [u, org]);
+    return { id: u, role };
+  };
+  await compteSecours('ambulance.a@demo.arrimo', 'Équipe 41-12 (démo)', 'paramedic', ambA);
+  await compteSecours('superviseur.a@demo.arrimo', 'Superviseur Ambulances du Nord (démo)', 'superviseur_secours', ambA);
+  const parB = await compteSecours('ambulance.b@demo.arrimo', 'Équipe 57-03 (démo)', 'paramedic', ambB);
+  await compteSecours('ccs@demo.arrimo', 'Répartition régionale (démo)', 'repartiteur', ccs);
+  void uA;
+  // Une ambulance déjà annoncée à l'Hôpital X, prise en compte et en préparation
+  const prealertes = require('../src/prealertes');
+  const paB = await prealertes.creer(pool, parB, { unite_id: uB, destination_id: ids.HX, priorite: 'urgente', categorie: 'respiratoire', delai_min: 14 });
+  await pool.query('INSERT INTO positions_unites (unite_id, latitude, longitude, precision_m) VALUES ($1, $2, $3, 20)', [uB, X.lat + 0.05, X.lon - 0.06]);
+  await prealertes.agir(pool, { ...coX, nom: 'Coordination X' }, paB.id, { etablissement_id: ids.HX, action: 'prendre_en_compte' });
+  await prealertes.agir(pool, { ...coX, nom: 'Coordination X' }, paB.id, { etablissement_id: ids.HX, action: 'preparation' });
+
   const acces = [
     'ARRIMO · DÉMONSTRATION · RÉSEAU DE 20 HÔPITAUX (données fictives)',
     `Mot de passe de tous les comptes : ${MDP}`,
@@ -346,6 +374,14 @@ async function demoReseau(pool, { silencieux = false, comptesRoles = false, avec
     `  hopital.y@demo.arrimo    ${Y.nom} (a de la place)`,
     '  reseau@demo.arrimo       coordination régionale (tous les établissements)',
     'Les 18 autres hôpitaux n’ont pas de compte : leur capacité évolue d’elle-même.',
+    '',
+    '',
+    'Préhospitalier (écran /secours) :',
+    '  ambulance.a@demo.arrimo  paramédic, Ambulances du Nord (unités 41-12, 41-15)',
+    '  superviseur.a@demo.arrimo superviseur, Ambulances du Nord',
+    '  ambulance.b@demo.arrimo  paramédic, Paramédics des Rives (unité 57-03, préalerte en cours vers X)',
+    '  ccs@demo.arrimo          répartition régionale (consultation)',
+    `Liaison Secours activée : ${X.nom}, ${Y.nom}, Hôpital du Bois-Joli.`,
     '',
     `Clé du connecteur ADT de ${X.nom} : ${conX.cle}`,
     `Clé du connecteur réseau (lecture) : ${conR.cle}`,

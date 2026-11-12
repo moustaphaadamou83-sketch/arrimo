@@ -277,6 +277,34 @@ async function changerDestination(c, u, pa, b) {
   return { ...nv, remplace: ancienne.numero };
 }
 
+/**
+ * Hôpitaux qui reçoivent les préalertes (Liaison Secours actif) dans la région de l'organisation, avec l'état déclaré de l'urgence.
+ * Distance à vol d'oiseau depuis la position fournie (facultative) : une aide à la lecture, jamais un choix de destination.
+ */
+async function destinations(pool, u, q = {}) {
+  const orgs = ROLES_SECOURS.includes(u.role) ? await organisationsDe(pool, u) : [];
+  if (!orgs.length) throw new ErreurHttp(403, 'organisation_interdite');
+  const cfgs = [...new Set(orgs.map((o) => o.config_id))];
+  const hop = (await pool.query(`SELECT e.id, e.nom, e.ville, e.latitude, e.longitude, e.modules, e.type_etablissement, e.config_id, e.module_actif,
+      c.seuil_civieres_jaune, c.seuil_civieres_orange, c.seuil_civieres_rouge
+    FROM etablissements e JOIN config_pays c ON c.id = e.config_id WHERE e.actif AND e.config_id = ANY($1) ORDER BY e.nom`, [cfgs])).rows
+    .filter((e) => (e.type_etablissement || 'hopital') === 'hopital' && TE.moduleActif(e, 'liaison_secours'));
+  const cv = require('./civieres');
+  const stats = await cv.statsUrgence(pool, hop.map((e) => e.id));
+  const lat = Number(q.latitude); const lon = Number(q.longitude);
+  const ici = q.latitude != null && q.longitude != null && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180 ? [lat, lon] : null;
+  const km = (e) => {
+    if (!ici || e.latitude == null) return null;
+    const r = (x) => x * Math.PI / 180; const dLat = r(e.latitude - ici[0]); const dLon = r(e.longitude - ici[1]);
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(r(ici[0])) * Math.cos(r(e.latitude)) * Math.sin(dLon / 2) ** 2;
+    return Math.round(6371 * 2 * Math.asin(Math.sqrt(h)) * 10) / 10;
+  };
+  return hop.map((e) => {
+    const st = stats.get(e.id);
+    return { id: e.id, nom: e.nom, ville: e.ville, latitude: e.latitude, longitude: e.longitude, distance_km: km(e),
+      urgence: st ? { niveau: cv.niveauCivieres(st, e), civieres_libres: st.libres, taux: st.taux } : null };
+  }).sort((a, b) => (a.distance_km ?? 1e9) - (b.distance_km ?? 1e9) || a.nom.localeCompare(b.nom));
+}
 /** Unités de l'organisation de l'ambulancier, avec leur dernière position. */
 async function unites(pool, u) {
   const orgs = await exigerAmbulance(pool, u);
@@ -302,4 +330,4 @@ async function purgerPositions(pool) {
   return (await pool.query("DELETE FROM positions_unites WHERE enregistree_le < now() - interval '24 hours'")).rowCount;
 }
 
-module.exports = { creer, liste, fiche, agir, unites, position, purgerPositions, PRIORITES, CATEGORIES, OUVERTES, ROLES_SECOURS, ROLES_AMBULANCE, ROLES_CCS };
+module.exports = { creer, liste, fiche, agir, unites, destinations, position, purgerPositions, PRIORITES, CATEGORIES, OUVERTES, ROLES_SECOURS, ROLES_AMBULANCE, ROLES_CCS };

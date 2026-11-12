@@ -1,0 +1,14 @@
+{
+ "name": "Arrimo Secours",
+ "short_name": "Arrimo Secours",
+ "start_url": "/secours",
+ "scope": "/secours",
+ "display": "standalone",
+ "background_color": "#F5F8FA",
+ "theme_color": "#0E5E6F",
+ "lang": "fr-CA",
+ "icons": [
+  { "src": "/logo.svg", "sizes": "any", "type": "image/svg+xml" },
+  { "src": "/icone-proches-192.png", "sizes": "192x192", "type": "image/png" }
+ ]
+}

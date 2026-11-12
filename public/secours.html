@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="fr-CA" translate="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arrimo · Secours</title>
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0E5E6F">
+<link rel="manifest" href="/secours.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Arrimo Secours">
+<meta name="google" content="notranslate">
+<meta name="referrer" content="no-referrer">
+<script src="apparence.js"></script>
+<link rel="stylesheet" href="style.css">
+<style>
+  /* Écran embarqué : grands caractères, grands boutons, actions principales visibles sans défiler */
+  body.secours { font-size: 18px; background: var(--fond); }
+  .secours .tete { background: var(--principal-plein); color: #fff; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .secours .tete h1 { font-size: 20px; margin: 0; color: #fff; }
+  .secours .tete .outils { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .secours .tete select, .secours .tete button { min-height: 44px; font-size: 16px; }
+  .secours .tete button { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.6); border-radius: 8px; padding: 0 12px; }
+  .secours .tete button[aria-pressed="true"] { background: #fff; color: var(--principal); }
+  .secours main { max-width: 980px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+  .secours .carte-s { background: var(--carte); border: 1px solid var(--bordure); border-radius: var(--rayon-carte); padding: 16px; }
+  .secours .carte-s h2 { margin: 0 0 10px; font-size: 20px; }
+  .secours .btn { min-height: 56px; font-size: 18px; padding: 8px 14px; white-space: normal; height: auto; line-height: 1.25; }
+  .secours .grille { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .secours .choix button { min-height: 56px; font-size: 17px; border: 2px solid var(--bordure); background: var(--carte); color: var(--texte); border-radius: 10px; padding: 6px 10px; }
+  .secours .choix button[aria-pressed="true"] { border-color: var(--principal); background: var(--principal); color: #fff; }
+  .secours .prio-immediate { border-left: 8px solid #DC2626; }
+  .secours .prio-urgente { border-left: 8px solid #F59E0B; }
+  .secours .prio-non_urgente { border-left: 8px solid #94A3B8; }
+  .secours .etapes { list-style: none; padding: 0; margin: 12px 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 6px; }
+  .secours .etapes li { padding: 8px; border-radius: 8px; border: 1px solid var(--bordure); font-size: 15px; }
+  .secours .etapes li.fait { background: var(--principal); color: #fff; border-color: var(--principal); }
+  .secours .gros { font-size: 30px; font-weight: 700; margin: 4px 0; }
+  .secours .reseau-s { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 14px; font-weight: 600; color: #fff; }
+  .secours .reseau-s.en-ligne { background: #16A34A; } .secours .reseau-s.hors-ligne { background: #DC2626; } .secours .reseau-s.attente { background: #B45309; }
+  .secours .pt-niveau { display: inline-block; width: 14px; height: 14px; border-radius: 50%; vertical-align: middle; margin-right: 6px; flex: none; }
+  .secours .pt-niveau.vert { background: #16A34A; } .secours .pt-niveau.jaune, .secours .pt-niveau.orange { background: #F59E0B; } .secours .pt-niveau.rouge { background: #DC2626; } .secours .pt-niveau.inconnu { background: #94A3B8; }
+  .secours .ligne-s > div { min-width: 0; overflow-wrap: anywhere; }
+  .secours .choix button { white-space: normal; overflow-wrap: anywhere; }
+  .secours .ligne-s { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--bordure); flex-wrap: wrap; }
+  .secours .note { font-size: 15px; color: var(--texte-2, #64748B); }
+  .secours .erreur { color: #DC2626; font-weight: 600; }
+  .secours .bandeau { padding: 10px 14px; border-radius: 10px; background: var(--carte); border: 2px solid #F59E0B; }
+  .secours label { display: block; font-weight: 600; margin: 12px 0 6px; }
+  .secours input[type=number] { min-height: 56px; font-size: 20px; width: 120px; }
+  @media (max-width: 600px) { .secours .gros { font-size: 24px; } }
+</style>
+</head>
+<body class="secours">
+<header class="tete">
+  <h1 id="titre">Arrimo Secours</h1>
+  <div class="outils">
+    <span id="reseau" class="reseau-s en-ligne" role="status"></span>
+    <select id="unite" aria-label="Unité" hidden></select>
+    <button type="button" class="barre-btn" data-langue="fr">FR</button><button type="button" class="barre-btn" data-langue="en">EN</button>
+    <button type="button" class="barre-btn" id="sortir"></button>
+  </div>
+</header>
+<main id="contenu" aria-live="polite"></main>
+<script src="secours.js"></script>
+</body>
+</html>

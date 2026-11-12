@@ -37,7 +37,8 @@ function creerApp(pool, options = {}) {
       'X-Content-Type-Options': 'nosniff',
       'X-Frame-Options': 'DENY',
       'Referrer-Policy': 'no-referrer',
-      'Permissions-Policy': 'camera=(), geolocation=(), payment=(), microphone=(self)',
+      // Géolocalisation : écran Ambulance seulement (position facultative, partagée par l'équipe)
+      'Permissions-Policy': `camera=(), geolocation=(${req.path === '/secours' ? 'self' : ''}), payment=(), microphone=(self)`,
       // Réponses de l'API jamais conservées par le navigateur ni par un intermédiaire
       ...(req.path.startsWith('/api/') ? { 'Cache-Control': 'no-store' } : {}),
       // Police hébergée ici (aucun appel à un service tiers)
@@ -50,6 +51,8 @@ function creerApp(pool, options = {}) {
   app.use(express.static(path.join(__dirname, '..', 'public')));
   // Pages légales, accessibles sans connexion (français et anglais)
   app.get('/proches', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'proches.html')));
+  // Écrans de secours (ambulance, CCS) : même connexion que le personnel, page séparée adaptée aux tablettes embarquées
+  app.get('/secours', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'secours.html')));
   app.get(['/confidentialite', '/conditions', '/privacy', '/terms'], (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'legal.html')));
 
   const api = express.Router();
@@ -413,6 +416,8 @@ function creerApp(pool, options = {}) {
   api.get('/secours/prealertes/:id', route((req) => pa.fiche(pool, req.utilisateur, entier(req.params.id, 'id'), req.query)));
   api.post('/secours/prealertes/:id/action', route((req) => pa.agir(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   api.get('/secours/unites', route((req) => pa.unites(pool, req.utilisateur)));
+  api.get('/secours/destinations', route((req) => pa.destinations(pool, req.utilisateur, req.query)));
+  api.post('/secours/og', route((req) => require('./og-secours').repondreSecours(pool, req.utilisateur, req.body.question, req.langue)));
   api.post('/secours/unites/:id/position', route((req) => pa.position(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   api.get('/coordinations', route((req) => ch.listeCoordinations(pool, req.utilisateur, E(req), { toutes: req.query.toutes === '1' })));
   api.post('/coordinations/:id/action', route((req) => ch.actionCoordination(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));

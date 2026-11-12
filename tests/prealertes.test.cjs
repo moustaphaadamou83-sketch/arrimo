@@ -210,3 +210,38 @@ test('OG : ambulances annoncées et préalertes à prendre en compte, d’après
   r = await appel('gagnon', 'POST', '/assistant', { etablissement_id: ids.lm, question: 'Quelles ambulances sont en approche ?' });
   assert.strictEqual(r.statut, 200); assert.ok(!(r.corps.intentions || []).includes('liaison_secours'));
 });
+
+test('écran Secours : page dédiée, géolocalisation permise là seulement, urgences de la région, OG ambulance et CCS sans décision', async () => {
+  const page = await fetch(`${base}/secours`);
+  assert.strictEqual(page.status, 200); assert.match(await page.text(), /secours\.js/);
+  assert.match(page.headers.get('permissions-policy'), /geolocation=\(self\)/);
+  assert.match((await fetch(`${base}/`)).headers.get('permissions-policy'), /geolocation=\(\)/);
+  // Urgences de la région : seulement les hôpitaux qui reçoivent les préalertes, triés par distance à vol d'oiseau
+  const d = await appel('para', 'GET', '/secours/destinations?latitude=45.40&longitude=-71.89');
+  assert.strictEqual(d.statut, 200, JSON.stringify(d.corps));
+  assert.deepStrictEqual(d.corps.map((h) => h.id), [ids.mb, ids.sl]);
+  assert.strictEqual(d.corps[0].distance_km, 0);
+  assert.ok(d.corps.every((h) => !('modules' in h) && !('config_id' in h)));
+  assert.strictEqual((await appel('tremblay', 'GET', '/secours/destinations')).corps.code, 'organisation_interdite');
+  // OG de l'ambulance : préalertes de son organisation seulement, réception, informations manquantes, urgences
+  const og = async (qui, question) => (await appel(qui, 'POST', '/secours/og', { question })).corps;
+  let r = await og('para', 'Préalertes en cours');
+  assert.match(r.reponse, /12-35/); assert.deepStrictEqual(r.intentions, ['suivi']);
+  r = await og('para', 'L’hôpital a-t-il confirmé la réception ?');
+  assert.deepStrictEqual(r.intentions, ['reception']);
+  r = await og('para', 'Que manque-t-il à ma préalerte ?');
+  assert.match(r.reponse, /position de l’unité/);
+  await pool.query("INSERT INTO civieres (etablissement_id, code) VALUES ($1, 'PA-T1'), ($1, 'PA-T2')", [ids.mb]);
+  r = await og('para', 'État des urgences de la région');
+  assert.match(r.reponse, /Hôpital Mont-Bellevue : urgence fluide, 2 civières libres/); assert.match(r.reponse, /CHU Saint-Laurent : aucune donnée d’urgence/); assert.match(r.reponse, /pas un choix de destination/);
+  r = await og('para', 'Où l’amener, quel hôpital choisir ?');
+  assert.deepStrictEqual(r.intentions, ['refus_decision']);
+  // Une autre entreprise ne voit pas ces préalertes, même par OG
+  r = await og('paraB', 'Préalertes en cours');
+  assert.doesNotMatch(r.reponse, /12-35/);
+  // CCS : lecture régionale par OG
+  r = await og('ccs', 'Quelles ambulances sont en route ?');
+  assert.match(r.reponse, /12-35/);
+  // Le personnel hospitalier passe par OG de l'hôpital, pas par celui des secours
+  assert.strictEqual((await appel('tremblay', 'POST', '/secours/og', { question: 'ambulances' })).statut, 403);
+});
