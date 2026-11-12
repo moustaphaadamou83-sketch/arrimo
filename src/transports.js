@@ -34,6 +34,9 @@ async function organisations(pool, u, etabId) {
   if (!ROLES_ETAB.includes(u.role)) throw new ErreurHttp(403, 'role_insuffisant');
   return organisationsRegion(pool, id);
 }
+/** Webhooks des clients concernés (établissements d'origine et de destination, entreprise) : référence du résident seulement. */
+const emettre = (c, d, evenement) => require('./webhooks').emettre(c, { etablissements: [d.origine_id, d.destination_id], organisations: [d.organisation_id], evenement,
+  charge: { numero: d.numero, statut: d.statut, resident_ref: d.resident_ref, heure_souhaitee: d.heure_souhaitee } });
 const numero = async (c) => `DT-${String((await c.query("SELECT nextval('transport_demande_seq') AS n")).rows[0].n).padStart(6, '0')}`;
 
 /** L'établissement d'origine de la coordination demande le transport (avant le départ confirmé). */
@@ -68,6 +71,7 @@ async function demander(pool, u, coordinationId, b) {
     await journaliser(c, { etablissementId: co.origine_id, utilisateurId: u.id, action: 'Transport demandé', detail: `${d.numero} · ${co.numero} · ${org.nom}` });
     // L'établissement de destination est averti qu'un transport est demandé pour cette coordination
     await require('./services').notifier(c, co.destination_id, null, 'transport_demande', { numero: d.numero, coordination: co.numero, ref: co.resident_ref, org: org.nom });
+    await emettre(c, d, 'transport.demandee');
     return d;
   });
 }
@@ -143,6 +147,7 @@ async function agir(pool, u, id, b) {
       n = await maj("statut = 'annulee'");
     }
     await evenement(c, n, a, u, detail);
+    await emettre(c, n, `transport.${a}`);
     const co = (await c.query('SELECT numero FROM coordinations WHERE id = $1', [n.coordination_id])).rows[0];
     for (const etab of [n.origine_id, n.destination_id]) {
       await journaliser(c, { etablissementId: etab, utilisateurId: u.id || null, action: ACTIONS_JOURNAL[a], detail: `${n.numero} · ${co.numero}` });

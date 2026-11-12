@@ -30,10 +30,10 @@ let pool; let serveur; let base;
 const tokens = {};
 const ids = {};
 
-async function appel(qui, methode, chemin, corps) {
+async function appel(qui, methode, chemin, corps, entetes = {}) {
   const r = await fetch(`${base}/api${chemin}`, {
     method: methode,
-    headers: { 'Content-Type': 'application/json', ...(qui ? { Authorization: `Bearer ${tokens[qui]}` } : {}) },
+    headers: { 'Content-Type': 'application/json', ...(qui ? { Authorization: `Bearer ${tokens[qui]}` } : {}), ...entetes },
     body: corps ? JSON.stringify(corps) : undefined,
   });
   return { statut: r.status, corps: await r.json().catch(() => null) };
@@ -604,4 +604,109 @@ test('parcours démo : malaise au CHSLD → transport → préalerte qui le prol
   assert.deepStrictEqual(vue.transport, { numero: dt.numero, resident_ref: 'R-90002', origine: 'CHSLD fictif des Pins' });
   // L'ambulance d'une autre entreprise ne peut pas s'en servir
   assert.strictEqual((await appel('paraB', 'POST', '/secours/prealertes', { ...corps, unite_id: ids.u3 })).corps.code, 'transport_statut_incompatible');
+});
+
+test('SH et connexions externes : organisation de secours et profils, modules un par un, FHIR R4, HL7 v2, webhooks signés ; client par client, secrets remis, révocables', async () => {
+  const http = require('node:http');
+  const avant = { cle: process.env.SH_API_KEY, local: process.env.ARRIMO_WEBHOOKS_LOCAL };
+  process.env.SH_API_KEY = 'cle-sh-connexions-0123456789'; process.env.ARRIMO_WEBHOOKS_LOCAL = '1';
+  test.after(() => { for (const [k, v] of [['SH_API_KEY', avant.cle], ['ARRIMO_WEBHOOKS_LOCAL', avant.local]]) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } });
+  const sh = async (methode, chemin, corps) => {
+    const r = await fetch(`${base}/api${chemin}`, { method: methode, headers: { 'Content-Type': 'application/json', 'X-SH-Key': process.env.SH_API_KEY }, body: corps ? JSON.stringify({ par: 'admin@sh.exemple', ...corps }) : undefined });
+    return { statut: r.status, corps: await r.json().catch(() => null) };
+  };
+  const mails = []; const cm = require('../src/courriel'); cm.definirTransport(async (m) => { mails.push(m); });
+  const remise = async () => (await appel(null, 'POST', '/remise', { jeton: mails.at(-1).texte.match(/\/remise#([A-Za-z0-9_-]+)/)[1] })).corps;
+  try {
+    // 1. Client de type Urgences-santé créé depuis SH : un seul modèle, deux profils activés un par un
+    let r = await sh('POST', '/sh/organisations-secours', { code: 'US-SH', nom: 'Urgences-santé fictive (SH)', type_etablissement: 'urgences_sante', config_id: ids.cfg, profils_choix: { profil_ccs: true, profil_ambulance: false } });
+    assert.strictEqual(r.statut, 200, JSON.stringify(r.corps)); assert.deepStrictEqual([r.corps.type, r.corps.profils, r.corps.actif], ['urgences_sante', ['ccs'], false]);
+    assert.strictEqual((await sh('POST', '/sh/organisations-secours', { code: 'X2', nom: 'Type établissement', type_etablissement: 'hopital', config_id: ids.cfg })).corps.code, 'organisation_invalide');
+    assert.strictEqual((await sh('PUT', '/sh/organisations-secours/US-SH', { actif: false })).corps.code, 'motif_desactivation');
+    r = await sh('PUT', '/sh/organisations-secours/US-SH', { profils_choix: { profil_ccs: true, profil_ambulance: true }, actif: true });
+    assert.deepStrictEqual([r.corps.profils, r.corps.actif], [['ccs', 'ambulance'], true]);
+    assert.ok((await sh('GET', '/sh/organisations-secours')).corps.some((o) => o.code === 'US-SH'));
+    assert.strictEqual((await fetch(`${base}/api/sh/organisations-secours`)).status, 401, 'clé SH exigée');
+    // 2. Modules un par un sur un établissement relié (Liaison Secours, Liaison Établissements)
+    r = await sh('PUT', '/sh/etablissements/LM', { modules_choix: { liaison_secours: true, transport_ambulancier: true } });
+    assert.strictEqual(r.statut, 200, JSON.stringify(r.corps));
+    let mods = (await pool.query("SELECT modules FROM etablissements WHERE code = 'LM'")).rows[0].modules;
+    assert.deepStrictEqual([mods.liaison_secours, mods.transport_ambulancier], [true, true]);
+    await sh('PUT', '/sh/etablissements/LM', { modules_choix: { liaison_secours: false } });
+    mods = (await pool.query("SELECT modules FROM etablissements WHERE code = 'LM'")).rows[0].modules;
+    assert.ok(!('liaison_secours' in mods) && mods.transport_ambulancier === true);
+    assert.strictEqual((await sh('PUT', '/sh/etablissements/LM', { modules_choix: { profil_ccs: true } })).corps.code, 'module_invalide', 'un profil de secours n’est pas un module d’établissement');
+    // 3. FHIR R4 : portée activée pour MB seulement ; données de MB seulement ; jamais de Patient
+    assert.strictEqual((await sh('POST', '/sh/connexions/MB', { genre: 'fhir', nom: 'Dossier hospitalier fictif' })).corps.code, 'courriel_technique_requis');
+    r = await sh('POST', '/sh/connexions/MB', { genre: 'fhir', nom: 'Dossier hospitalier fictif', courriel_technique: 'it@mb.exemple' });
+    assert.strictEqual(r.statut, 200, JSON.stringify(r.corps)); assert.ok(!JSON.stringify(r.corps).includes('arr_'));
+    const cleFhir = (await remise()).cle;
+    const fhir = async (chemin, cle = cleFhir) => { const x = await fetch(`${base}/api/fhir/r4${chemin}`, { headers: { Authorization: `Bearer ${cle}` } }); return { statut: x.status, type: x.headers.get('content-type'), corps: await x.json() }; };
+    assert.strictEqual((await fetch(`${base}/api/fhir/r4/metadata`)).status, 200);
+    let f = await fhir('/Location');
+    assert.strictEqual(f.statut, 200); assert.match(f.type, /fhir\+json/); assert.ok(f.corps.total > 0 && f.corps.entry.every((e) => e.resource.managingOrganization.reference === 'Organization/MB'));
+    assert.strictEqual((await fhir('/Organization/SL')).statut, 404, 'jamais un autre établissement');
+    f = await fhir('/Encounter');
+    assert.ok(f.corps.entry.every((e) => !e.resource.subject && e.resource.class.code === 'EMER'));
+    assert.ok(f.corps.entry.some((e) => /^PA-/.test(e.resource.id)));
+    assert.notStrictEqual((await fhir('/Patient')).statut, 200, 'aucune ressource Patient');
+    assert.strictEqual((await appel(null, 'POST', '/connecteurs/evenements', { identifiant: 'x', evenement: 'conge', lit: 'MED-201' }, { 'X-Connecteur-Key': cleFhir })).statut, 403, 'portée FHIR seulement');
+    // 4. HL7 v2 brut : lit libre de MB occupé par A01 ; nom ignoré ; idempotent ; accusé HL7
+    await sh('POST', '/sh/connexions/MB', { genre: 'hl7v2', nom: 'Moteur d’interface fictif', courriel_technique: 'it@mb.exemple' });
+    const cleHl7 = (await remise()).cle;
+    const lit = (await pool.query("SELECT code FROM lits WHERE etablissement_id = $1 AND etat = 'libre' ORDER BY code LIMIT 1", [ids.mb])).rows[0].code;
+    const msg = `MSH|^~\\&|SIH|MB|ARRIMO|ARRIMO|20261112103000||ADT^A01|CTRL-0001|P|2.5\rEVN|A01|20261112103000\rPID|1||P-88001^^^MB||NomFictif^PrenomFictif||19500101\rPV1|1|I|MED^201^${lit}`;
+    const hl7 = async (texte, cle = cleHl7) => { const x = await fetch(`${base}/api/connecteurs/hl7v2`, { method: 'POST', headers: { 'Content-Type': 'application/hl7-v2', 'X-Connecteur-Key': cle }, body: texte }); return { statut: x.status, texte: await x.text() }; };
+    let h = await hl7(msg);
+    assert.strictEqual(h.statut, 200, h.texte); assert.match(h.texte, /MSA\|AA\|CTRL-0001/);
+    assert.deepStrictEqual((await pool.query('SELECT etat, patient_ref FROM lits WHERE etablissement_id = $1 AND code = $2', [ids.mb, lit])).rows[0], { etat: 'occupe', patient_ref: 'P-88001' });
+    assert.match((await hl7(msg)).texte, /MSA\|AA\|CTRL-0001\|deja_recu/);
+    const traces = JSON.stringify((await pool.query("SELECT * FROM messages_connecteur")).rows) + JSON.stringify((await pool.query("SELECT detail FROM journal WHERE detail IS NOT NULL")).rows);
+    assert.ok(!traces.includes('NomFictif') && !traces.includes('PrenomFictif') && !traces.includes('19500101'), 'aucune identité conservée');
+    assert.match((await hl7(msg.replace('ADT^A01', 'ADT^A28').replace('CTRL-0001', 'CTRL-0002'))).texte, /MSA\|AE\|CTRL-0002\|hl7_evenement_non_pris_en_charge/);
+    assert.strictEqual((await hl7(msg, cleFhir)).statut, 403, 'portée HL7 v2 requise');
+    // 5. Webhooks signés : événements du client seulement, signature vérifiable, nouvelles tentatives, révocation
+    const recus = []; let repondre = 200;
+    const srv = http.createServer((q, s) => { let b = ''; q.on('data', (d) => { b += d; }); q.on('end', () => { recus.push({ h: q.headers, b }); s.writeHead(repondre); s.end(); }); });
+    await new Promise((ok) => srv.listen(0, '127.0.0.1', ok));
+    test.after(() => srv.close());
+    assert.strictEqual((await sh('POST', '/sh/connexions/MB', { genre: 'webhook', url: 'http://10.0.0.5/x', courriel_technique: 'it@mb.exemple' })).corps.code, 'webhook_url_invalide');
+    r = await sh('POST', '/sh/connexions/MB', { genre: 'webhook', nom: 'SIH fictif', url: `http://127.0.0.1:${srv.address().port}/arrimo`, evenements: ['prealerte'], courriel_technique: 'it@mb.exemple' });
+    assert.strictEqual(r.statut, 200, JSON.stringify(r.corps));
+    const secretWh = (await remise()).secret; const whId = r.corps.id;
+    await pool.query("UPDATE prealertes SET statut = 'annulee' WHERE unite_id = $1 AND statut NOT IN ('cloturee', 'annulee', 'remplacee')", [ids.u1]);
+    const pa = (await appel('para', 'POST', '/secours/prealertes', { unite_id: ids.u1, destination_id: ids.mb, priorite: 'urgente', categorie: 'cardiaque', delai_min: 9 })).corps;
+    // Une préalerte vers un autre hôpital n'est pas envoyée à MB
+    await pool.query("UPDATE prealertes SET statut = 'annulee' WHERE unite_id = $1 AND statut NOT IN ('cloturee', 'annulee', 'remplacee')", [ids.u2]);
+    await appel('para', 'POST', '/secours/prealertes', { unite_id: ids.u2, destination_id: ids.sl, priorite: 'urgente', categorie: 'cardiaque' });
+    const wh = require('../src/webhooks');
+    let env = await wh.envoyer(pool);
+    assert.strictEqual(recus.length, 1, JSON.stringify(env));
+    const { h: entetes, b: corps } = recus[0];
+    assert.strictEqual(entetes['x-arrimo-signature'], wh.signer(secretWh, entetes['x-arrimo-horodatage'], corps));
+    const charge = JSON.parse(corps);
+    assert.deepStrictEqual([charge.evenement, charge.numero, charge.priorite], ['prealerte.envoyee', pa.numero, 'urgente']);
+    assert.ok(!('patient' in charge) && !corps.includes('Fictif'));
+    // Système du client en panne : nouvelles tentatives, puis abandon visible
+    repondre = 503;
+    await appel('tremblay', 'POST', `/secours/prealertes/${pa.id}/action`, { etablissement_id: ids.mb, action: 'prendre_en_compte' });
+    await wh.envoyer(pool);
+    let l = (await pool.query("SELECT statut, tentatives, derniere_erreur FROM webhook_livraisons WHERE webhook_id = $1 AND evenement = 'prealerte.prendre_en_compte'", [whId])).rows[0];
+    assert.deepStrictEqual([l.statut, l.tentatives, l.derniere_erreur], ['a_envoyer', 1, 'HTTP 503']);
+    // Révocation : plus rien n'est envoyé
+    const liste = (await sh('GET', '/sh/connexions/MB')).corps;
+    assert.ok(liste.connexions.some((x) => x.genre === 'webhook' && x.en_attente === 1) && !JSON.stringify(liste).includes(secretWh));
+    r = await sh('POST', `/sh/connexions/MB/webhook/${whId}/revoquer`, {});
+    assert.strictEqual(r.corps.actif, false);
+    l = (await pool.query("SELECT statut FROM webhook_livraisons WHERE webhook_id = $1 AND evenement = 'prealerte.prendre_en_compte'", [whId])).rows[0];
+    assert.strictEqual(l.statut, 'abandonnee');
+    // Révocation de la portée FHIR : la clé ne lit plus rien ; journal d'administration
+    const fhirId = liste.connexions.find((x) => x.genre === 'connecteur' && x.portees.includes('fhir')).id;
+    await sh('POST', `/sh/connexions/MB/connecteur/${fhirId}/revoquer`, {});
+    assert.strictEqual((await fhir('/Location')).statut, 401);
+    const j = (await pool.query("SELECT action FROM journal_admin WHERE action LIKE 'Connexion%'")).rows.map((x) => x.action);
+    assert.ok(j.filter((x) => x === 'Connexion activée').length >= 3 && j.includes('Connexion désactivée'));
+    assert.strictEqual((await sh('POST', '/sh/connexions/MB/connecteur/999999/revoquer', {})).statut, 404);
+    assert.strictEqual((await sh('POST', '/sh/connexions/US-SH', { genre: 'fhir', courriel_technique: 'it@us.exemple' })).corps.code, 'connexion_genre_invalide', 'FHIR : établissements seulement');
+  } finally { cm.definirTransport(null); }
 });

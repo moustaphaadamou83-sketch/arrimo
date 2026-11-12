@@ -1471,3 +1471,41 @@ CREATE TABLE IF NOT EXISTS remises_secrets (
 
 -- Démo et terrain : une préalerte peut prolonger une demande de transport (résident d'un établissement) ; simple lien, parcours distincts
 ALTER TABLE prealertes ADD COLUMN IF NOT EXISTS demande_transport_id int REFERENCES demandes_transport(id);
+
+-- Connexions des logiciels externes, client par client (exigence permanente de Moustafa, 12 nov. 2026) : activées depuis SH,
+-- droits limités aux données du client, désactivables, journalisées ; secrets remis au contact technique, jamais affichés.
+-- Aucun port ouvert : tout passe par HTTPS (443). Portées d'un connecteur d'établissement : adt (JSON), hl7v2 (messages bruts), fhir (lecture R4).
+ALTER TABLE connecteurs ADD COLUMN IF NOT EXISTS portees text[] NOT NULL DEFAULT ARRAY['adt'];
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'connecteurs_portees_check') THEN
+    ALTER TABLE connecteurs ADD CONSTRAINT connecteurs_portees_check CHECK (portees <@ ARRAY['adt', 'hl7v2', 'fhir']::text[]);
+  END IF;
+END $$;
+-- Webhooks sortants signés (HMAC-SHA256) : file d'envoi, nouvelles tentatives, abandon visible en supervision (file d'échec)
+CREATE TABLE IF NOT EXISTS webhooks (
+  id                serial PRIMARY KEY,
+  etablissement_id  int REFERENCES etablissements(id),
+  organisation_id   int REFERENCES organisations_secours(id),
+  nom               text NOT NULL,
+  url               text NOT NULL,
+  secret            text NOT NULL,                 -- chiffré au repos, remis une seule fois
+  evenements        text[] NOT NULL,
+  actif             boolean NOT NULL DEFAULT true,
+  cree_le           timestamptz NOT NULL DEFAULT now(),
+  CHECK ((etablissement_id IS NULL) <> (organisation_id IS NULL))
+);
+CREATE TABLE IF NOT EXISTS webhook_livraisons (
+  id               bigserial PRIMARY KEY,
+  webhook_id       int NOT NULL REFERENCES webhooks(id),
+  evenement        text NOT NULL,
+  charge           jsonb NOT NULL,
+  statut           text NOT NULL DEFAULT 'a_envoyer' CHECK (statut IN ('a_envoyer', 'envoyee', 'abandonnee')),
+  tentatives       int NOT NULL DEFAULT 0,
+  prochain_essai   timestamptz NOT NULL DEFAULT now(),
+  derniere_erreur  text,
+  cree_le          timestamptz NOT NULL DEFAULT now(),
+  envoyee_le       timestamptz
+);
+CREATE INDEX IF NOT EXISTS webhook_livraisons_dues ON webhook_livraisons (prochain_essai) WHERE statut = 'a_envoyer';
+ALTER TABLE remises_secrets DROP CONSTRAINT IF EXISTS remises_secrets_genre_check;
+ALTER TABLE remises_secrets ADD CONSTRAINT remises_secrets_genre_check CHECK (genre IN ('connect', 'adt', 'webhook'));

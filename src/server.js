@@ -41,6 +41,8 @@ setInterval(tourner, intervalle);
 
 setInterval(() => require('./proches-comptes').entretien(pool).catch((e) => console.error('Arrimo Famille, entretien :', e.code || e.name)), 60 * 60000).unref();
 setInterval(() => require('./famille').relancer(pool).catch((e) => console.error('Relances famille :', e.code || e.name)), 15 * 60000).unref();
+// Webhooks sortants signés : file d'envoi traitée toutes les 30 s (nouvelles tentatives, abandon visible en supervision)
+setInterval(() => require('./webhooks').envoyer(pool).catch((e) => console.error('Webhooks :', e.code || e.name)), 30000).unref();
 // Remises de secrets expirées : contenu chiffré effacé
 setInterval(() => require('./remises').purger(pool).catch((e) => console.error('Remises de secrets :', e.code || e.name)), 60 * 60000).unref();
 // Positions des unités de secours : conservées 24 h au plus

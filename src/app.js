@@ -31,6 +31,8 @@ function creerApp(pool, options = {}) {
   // Import CSV : jusqu'à 1 Mo (même limite que Nginx) ; ailleurs 50 Ko
   app.use(['/api/admin/import', '/api/sh/import'], express.json({ limit: '1mb' }));
   app.use('/api/support', express.json({ limit: '15mb' }));
+  // HL7 v2 brut (moteur d'interface de l'hôpital) : corps texte, sur HTTPS seulement (aucun port MLLP)
+  app.use('/api/connecteurs/hl7v2', express.text({ type: ['application/hl7-v2', 'x-application/hl7-v2+er7', 'text/plain'], limit: '100kb' }));
   // Arrimo Connect : le corps brut est gardé pour vérifier la signature HMAC des systèmes partenaires
   app.use(express.json({ limit: '50kb', verify: (req, res, buf) => { if (req.originalUrl.startsWith('/api/connect/')) req.rawBody = buf.toString('utf8'); } }));
   app.use((req, res, next) => {
@@ -56,6 +58,8 @@ function creerApp(pool, options = {}) {
   app.get('/secours', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'secours.html')));
   // Remise à usage unique d'un accès de connexion (contact technique du client) : la page ne fait que lire le lien
   app.get('/remise', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'remise.html')));
+  // FHIR R4 en lecture pour le système d'un hôpital relié (portée « fhir », données de l'établissement seulement)
+  require('./fhir').brancher(app, pool);
   // Scénario guidé de la démonstration (aucune donnée, aucun mot de passe)
   app.get('/demo-guide', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'demo-guide.html')));
   app.get(['/confidentialite', '/conditions', '/privacy', '/terms'], (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'legal.html')));
@@ -153,8 +157,26 @@ function creerApp(pool, options = {}) {
   require('./connect').brancher(api, pool, route);
   // Récupération unique d'un secret de connexion (sans session : le jeton du lien suffit, une seule fois)
   api.post('/remise', route((req) => require('./remises').recuperer(pool, req.body?.jeton)));
+  // HL7 v2 (ADT A01, A02, A03, A04, A16) : traduit vers les mêmes événements ; accusé HL7 (AA ou AE), jamais le contenu du message
+  api.post('/connecteurs/hl7v2', async (req, res) => {
+    let controle = '';
+    // Identifiant de contrôle (MSH-10) lu d'abord : l'accusé le reprend même en cas de refus
+    try { controle = require('./hl7v2').analyser(typeof req.body === 'string' ? req.body : '').champ('MSH', 10, 1).slice(0, 120); } catch { /* message illisible : accusé sans identifiant */ }
+    try {
+      const con = await cx.identifier(pool, req.get('x-connecteur-key'));
+      if (!con.etablissement_id || !(con.portees || []).includes('hl7v2')) throw new ErreurHttp(403, 'connecteur_portee_refusee');
+      const t = require('./hl7v2').traduire(typeof req.body === 'string' ? req.body : '');
+      controle = t.controle;
+      const r = await cx.recevoirEvenement(pool, con, t.ev);
+      res.status(200).type('application/hl7-v2').send(require('./hl7v2').accuse(controle, 'AA', r.statut));
+    } catch (e) {
+      res.status(e.statut && e.statut < 500 ? e.statut : 500).type('application/hl7-v2').send(require('./hl7v2').accuse(controle, 'AE', e.code || 'erreur'));
+    }
+  });
   api.post('/connecteurs/evenements', route(async (req) => {
     const con = await cx.identifier(pool, req.get('x-connecteur-key'));
+    // Portée « adt » (événements JSON) : un connecteur d'établissement créé pour HL7 v2 ou FHIR seulement ne l'a pas
+    if (con.etablissement_id && !(con.portees || ['adt']).includes('adt')) throw new ErreurHttp(403, 'connecteur_portee_refusee');
     const evs = Array.isArray(req.body) ? req.body.slice(0, 200) : [req.body];
     const res = [];
     for (const ev of evs) {

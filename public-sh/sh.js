@@ -283,13 +283,14 @@ const nb = (n) => F.nombre(L, n, 6);
 const TYPES_ETAB = [['hopital', 'Hôpital', true], ['chsld', 'CHSLD', true], ['maison_aines', 'Maison des aînés', false], ['rpa', 'Résidence privée pour aînés (RPA)', false], ['ressource_intermediaire', 'Ressource intermédiaire', false]];
 const libelleType = (t) => (TYPES_ETAB.find((x) => x[0] === t) || [, 'Hôpital'])[1];
 const STATUT_MODULE = { inclus: 'Inclus', disponible: 'Disponible', a_venir: 'À venir', etude: 'À l’étude' };
-const CATEGORIE_MODULE = { commun: 'Modules communs', hopital: 'Modules hospitaliers', chsld: 'Modules CHSLD', optionnel: 'Modules optionnels' };
+const CATEGORIE_MODULE = { commun: 'Modules communs', hopital: 'Modules hospitaliers', chsld: 'Modules CHSLD', secours: 'Profils de l’organisation de secours (activés un par un)', optionnel: 'Modules optionnels' };
 /** Modules proposés pour le type : inclus (cochés, figés), disponibles (cochables), à venir ou à l'étude (non cochables). */
 async function afficherModulesType(type, zone) {
   zone.innerHTML = '<p class="note">Chargement des modules…</p>';
   try {
     const r = await api('GET', `/catalogue-modules?type=${encodeURIComponent(type)}`);
-    const groupes = ['commun', type === 'hopital' ? 'hopital' : 'chsld', 'optionnel'];
+    // Le catalogue est déjà filtré par type : chaque groupe présent est affiché (organisation de secours : ses profils)
+    const groupes = ['commun', 'hopital', 'chsld', 'secours', 'optionnel'];
     zone.innerHTML = groupes.map((g) => { const ms = r.modules.filter((m) => m.categorie === g); if (!ms.length) return '';
       return `<fieldset class="modules-type"><legend>${esc(CATEGORIE_MODULE[g])}</legend>${ms.map((m) => `<label class="case module-${m.statut}">
         <input type="checkbox" data-module="${esc(m.code)}"${m.statut === 'inclus' || (m.statut === 'disponible' && m.categorie !== 'optionnel') ? ' checked' : ''}${m.statut === 'disponible' ? '' : ' disabled'}>

@@ -201,6 +201,19 @@ function brancherSh(api, pool, route) {
       for (const k of require('./configuration-operationnelle').MODULES) if (b.modules && b.modules[k] === false) m[k] = false;
       vals.push(m); sets.push(`modules = $${vals.length}::jsonb`); detail.push(`modules désactivés : ${Object.keys(m).join(', ') || 'aucun'}`);
     }
+    // Modules choisis un par un dans SH (licence souscrite ou non) : drapeaux de l'établissement recalculés pour ces modules seulement
+    if (b.modules_choix !== undefined) {
+      const TE = require('./types-etablissement');
+      const type = (await pool.query('SELECT type_etablissement, modules FROM etablissements WHERE id = $1', [e.id])).rows[0];
+      TE.drapeauxDepuisChoix(type.type_etablissement || 'hopital', b.modules_choix);   // validation (type, statut, dépendances)
+      const m = { ...(type.modules || {}) };
+      for (const [code, actif] of Object.entries(b.modules_choix)) {
+        const mod = TE.MODULES.find((x) => x.code === code);
+        if (!mod || !mod.drapeau || mod.statut !== 'disponible') continue;
+        if (mod.categorie === 'optionnel') { if (actif) m[mod.drapeau] = true; else Reflect.deleteProperty(m, mod.drapeau); } else if (actif) Reflect.deleteProperty(m, mod.drapeau); else m[mod.drapeau] = false;
+      }
+      vals.push(m); sets.push(`modules = $${vals.length}::jsonb`); detail.push(`modules : ${Object.entries(b.modules_choix).map(([k, v]) => `${k} ${v ? 'activé' : 'désactivé'}`).join(', ')}`);
+    }
     if (b.type_libelle !== undefined || b.type_libelle_en !== undefined) {
       const TE = require('./types-etablissement');
       vals.push(TE.libelleType(b.type_libelle)); sets.push(`type_libelle = $${vals.length}`);
@@ -221,6 +234,52 @@ function brancherSh(api, pool, route) {
   }));
 
   // Catalogue des spécialités et activation pour la configuration de l'établissement (types d'unité, groupe d'âge)
+  /* ---------- Organisations de secours (CCS, entreprise ambulancière, Urgences-santé…) : un seul modèle, profils activés depuis SH ---------- */
+  const TYPE_SECOURS = (t) => require('./types-etablissement').TYPES[t]?.type_secours;
+  const orgParCode = async (code) => {
+    const o = (await pool.query('SELECT * FROM organisations_secours WHERE code = $1', [String(code || '').trim().toUpperCase()])).rows[0];
+    if (!o) throw new ErreurHttp(404, 'organisation_introuvable');
+    return o;
+  };
+  const PROFILS = (b) => [...new Set(Object.entries(b.profils_choix || {}).filter(([, v]) => v === true).map(([k]) => ({ profil_ccs: 'ccs', profil_ambulance: 'ambulance' }[k])).filter(Boolean))];
+  api.get('/sh/organisations-secours', sh(async () => (await pool.query(`SELECT o.code, o.nom, o.type, o.profils, o.actif, o.config_id, c.code AS configuration_code,
+      (SELECT count(*)::int FROM unites_secours un WHERE un.organisation_id = o.id) AS unites,
+      (SELECT count(*)::int FROM utilisateur_organisations uo WHERE uo.organisation_id = o.id) AS comptes
+    FROM organisations_secours o JOIN config_pays c ON c.id = o.config_id ORDER BY o.nom`)).rows));
+  api.post('/sh/organisations-secours', sh(async (req) => {
+    const b = req.body || {}; const type = TYPE_SECOURS(b.type_etablissement);
+    const code = String(b.code || '').trim().toUpperCase(); const nom = String(b.nom || '').trim().slice(0, 120);
+    if (!type || !/^[A-Z0-9-]{2,20}$/.test(code) || !nom) throw new ErreurHttp(400, 'organisation_invalide');
+    const cfg = (await pool.query("SELECT id FROM config_pays WHERE id = $1 AND code NOT LIKE '%-CHSLD'", [Number(b.config_id)])).rows[0];
+    if (!cfg) throw new ErreurHttp(404, 'config_introuvable');
+    return transaction(pool, async (c) => {
+      if ((await c.query('SELECT 1 FROM organisations_secours WHERE code = $1', [code])).rowCount) throw new ErreurHttp(409, 'organisation_existe');
+      // Créée inactive (sauf en recette, pour les tests et la formation) : l'activation suit l'implantation, comme un établissement
+      const o = (await c.query('INSERT INTO organisations_secours (code, nom, type, profils, config_id, actif) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+        [code, nom, type, PROFILS(b), cfg.id, env.environnement() === 'recette'])).rows[0];
+      await journalAdmin(c, systeme, 'Organisation de secours créée', `${code} · ${nom}`, `${type} · ${o.profils.join('+') || 'aucun profil'} · ${parSh(b)}`);
+      return o;
+    });
+  }));
+  api.put('/sh/organisations-secours/:code', sh(async (req) => {
+    const b = req.body || {}; const o = await orgParCode(req.params.code);
+    const sets = []; const vals = [o.id]; const detail = [];
+    if (b.profils_choix !== undefined) { vals.push(PROFILS(b)); sets.push(`profils = $${vals.length}`); detail.push(`profils : ${PROFILS(b).join('+') || 'aucun'}`); }
+    if (b.actif !== undefined) {
+      if (!b.actif && String(b.motif || '').trim().length < 3) throw new ErreurHttp(400, 'motif_desactivation');
+      vals.push(!!b.actif); sets.push(`actif = $${vals.length}`); detail.push(b.actif ? 'activée' : `désactivée · motif : ${String(b.motif).slice(0, 300)}`);
+    }
+    if (!sets.length) return o;
+    const n = (await pool.query(`UPDATE organisations_secours SET ${sets.join(', ')} WHERE id = $1 RETURNING *`, vals)).rows[0];
+    await journalAdmin(pool, systeme, 'Organisation de secours modifiée', n.code, `${detail.join(' · ')} · ${parSh(b)}`);
+    return n;
+  }));
+  /* ---------- Connexions des logiciels externes, client par client : créées depuis SH, secrets remis au contact technique, jamais affichés ---------- */
+  const connexions = require('./connexions');
+  api.get('/sh/connexions/:code', sh((req) => connexions.lister(pool, req.params.code)));
+  api.post('/sh/connexions/:code', sh((req) => connexions.creer(pool, req.params.code, req.body || {}, parSh(req.body))));
+  api.post('/sh/connexions/:code/:genre/:id/revoquer', sh((req) => connexions.revoquer(pool, req.params.code, req.params.genre, Number(req.params.id), parSh(req.body))));
+
   api.get('/sh/specialites', sh(async () => (await pool.query('SELECT * FROM specialites_catalogue ORDER BY ordre')).rows));
   api.post('/sh/etablissements/:code/specialites', sh(async (req) => {
     const e = await etabParCode(req.params.code);

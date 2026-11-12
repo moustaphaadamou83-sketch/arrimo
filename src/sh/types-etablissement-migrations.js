@@ -7,7 +7,7 @@ async function migrerTypesEtablissement(c) {
   await c.query(`ALTER TABLE hopitaux ADD COLUMN IF NOT EXISTS type_etablissement text NOT NULL DEFAULT 'hopital'
     CHECK (type_etablissement IN ('hopital','chsld','maison_aines','rpa','ressource_intermediaire'))`);
   await c.query(`ALTER TABLE sh_modules_catalogue
-    ADD COLUMN IF NOT EXISTS categorie text NOT NULL DEFAULT 'hopital' CHECK (categorie IN ('commun','hopital','chsld','optionnel')),
+    ADD COLUMN IF NOT EXISTS categorie text NOT NULL DEFAULT 'hopital' CHECK (categorie IN ('commun','hopital','chsld','secours','optionnel')),
     ADD COLUMN IF NOT EXISTS types text[] NOT NULL DEFAULT '{hopital}',
     ADD COLUMN IF NOT EXISTS statut text NOT NULL DEFAULT 'disponible' CHECK (statut IN ('inclus','disponible','a_venir','etude')),
     ADD COLUMN IF NOT EXISTS ordre int NOT NULL DEFAULT 100,
@@ -111,16 +111,26 @@ async function migrerTypesAines(c) {
   await c.query('INSERT INTO sh_migrations(version) VALUES($1)', [TYPES_AINES_VERSION]);
   return true;
 }
-/* Migration 45 (12 nov. 2026) : module hospitalier optionnel « Liaison Secours » (préalertes des ambulances).
-   Une seule ligne ajoutée au catalogue, comme la migration 38 ; aucune ligne existante n'est modifiée. Recette d'abord. */
+/* Migration 45 (12 nov. 2026) : préhospitalier et Liaison Établissements. Recette d'abord.
+   - clients de type organisation de secours (CCS, entreprise ambulancière, Urgences-santé, premiers répondants) : un seul modèle ;
+   - catégorie « secours » au catalogue : profils CCS et Ambulance, activés un par un ;
+   - modules optionnels « Liaison Secours » (hôpital) et « Liaison Établissements » (transport ambulancier, hôpital et CHSLD).
+   Contraintes élargies, lignes du catalogue ajoutées ; aucune ligne existante n'est modifiée. */
 const LIAISON_SECOURS_VERSION = 45;
 async function migrerLiaisonSecours(c) {
   if ((await c.query('SELECT 1 FROM sh_migrations WHERE version=$1', [LIAISON_SECOURS_VERSION])).rowCount) return false;
-  const { MODULES } = require('../types-etablissement');
-  const i = MODULES.findIndex((m) => m.code === 'liaison_secours'); const m = MODULES[i];
-  await c.query(`INSERT INTO sh_modules_catalogue (code, nom, description, dependances, categorie, types, statut, ordre, nom_en, note)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT (code) DO NOTHING`,
-  [m.code, m.nom, m.note || m.nom, m.dependances || [], m.categorie, m.types, m.statut, i + 1, m.nom_en, m.note || null]);
+  const TE = require('../types-etablissement');
+  const types = Object.keys(TE.TYPES).map((t) => `'${t}'`).join(',');
+  await c.query(`ALTER TABLE hopitaux DROP CONSTRAINT IF EXISTS hopitaux_type_etablissement_check;
+    ALTER TABLE hopitaux ADD CONSTRAINT hopitaux_type_etablissement_check CHECK (type_etablissement IN (${types}));
+    ALTER TABLE sh_modules_catalogue DROP CONSTRAINT IF EXISTS sh_modules_catalogue_categorie_check;
+    ALTER TABLE sh_modules_catalogue ADD CONSTRAINT sh_modules_catalogue_categorie_check CHECK (categorie IN ('commun','hopital','chsld','secours','optionnel'));`);
+  for (const code of ['liaison_secours', 'transport_ambulancier', 'profil_ccs', 'profil_ambulance']) {
+    const i = TE.MODULES.findIndex((m) => m.code === code); const m = TE.MODULES[i];
+    await c.query(`INSERT INTO sh_modules_catalogue (code, nom, description, dependances, categorie, types, statut, ordre, nom_en, note)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT (code) DO NOTHING`,
+    [m.code, m.nom, m.note || m.nom, m.dependances || [], m.categorie, m.types, m.statut, i + 1, m.nom_en, m.note || null]);
+  }
   await c.query('INSERT INTO sh_migrations(version) VALUES($1)', [LIAISON_SECOURS_VERSION]);
   return true;
 }

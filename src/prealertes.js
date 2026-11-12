@@ -88,6 +88,9 @@ async function proposerService(c, pa) {
   await evenement(c, n, 'service_propose', null, { og: true, service: choisi ? choisi.nom : null, ...justification });
   return n;
 }
+/** Webhooks des clients concernés (hôpital destinataire, organisation émettrice) : numéro, statut, priorité, catégorie ; jamais d'identité. */
+const emettre = (c, p, evenement) => require('./webhooks').emettre(c, { etablissements: [p.destination_id], organisations: [p.organisation_id], evenement,
+  charge: { numero: p.numero, statut: p.statut, priorite: p.priorite, categorie: p.categorie, heure_prevue: p.heure_prevue } });
 async function numero(c) { return `PA-${String((await c.query("SELECT nextval('prealerte_seq') AS n")).rows[0].n).padStart(6, '0')}`; }
 
 /** Préalerte transmise par une équipe ambulancière. `cle` : identifiant d'envoi du poste (renvoi après coupure = même préalerte). */
@@ -123,6 +126,7 @@ async function creer(pool, u, b) {
     const pr = await proposerService(c, pa);
     await journaliser(c, { etablissementId: dest.id, utilisateurId: u.id || null, action: 'Préalerte reçue', detail: `${pa.numero} · ${priorite}` });
     await notifier(c, dest.id, priorite === 'immediate' ? 'secours_prealerte_prioritaire' : 'secours_prealerte', pa, { priorite });
+    await emettre(c, pr, 'prealerte.envoyee');
     return sansCorrespondance(pr);
   });
 }
@@ -367,6 +371,7 @@ async function agir(pool, u, id, b) {
       } else throw new ErreurHttp(400, 'action_inconnue');
     }
     await evenement(c, n, a, u, detail);
+    await emettre(c, n, `prealerte.${a}`);
     await journaliser(c, { etablissementId: n.destination_id, utilisateurId: u.id || null, action: ACTIONS_JOURNAL[a] || 'Préalerte mise à jour', detail: n.numero });
     return { ...n, correspond: a === 'confirmer_vehicule' ? true : undefined };
   });
@@ -386,6 +391,7 @@ async function changerDestination(c, u, pa, b) {
   await journaliser(c, { etablissementId: pa.destination_id, utilisateurId: u.id || null, action: 'Destination de préalerte modifiée', detail: `${pa.numero} → ${nv.numero}` });
   await journaliser(c, { etablissementId: dest.id, utilisateurId: u.id || null, action: 'Préalerte reçue', detail: `${nv.numero} · ${nv.priorite}` });
   await notifier(c, pa.destination_id, 'secours_destination_modifiee', ancienne);
+  await emettre(c, ancienne, 'prealerte.remplacee'); await emettre(c, nv, 'prealerte.envoyee');
   await notifier(c, dest.id, nv.priorite === 'immediate' ? 'secours_prealerte_prioritaire' : 'secours_prealerte', nv, { priorite: nv.priorite });
   return { ...nv, remplace: ancienne.numero };
 }

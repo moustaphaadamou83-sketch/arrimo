@@ -13,8 +13,16 @@ const TYPES = {
   maison_aines: { nom: 'Maison des aînés', nom_en: 'Seniors’ home (maison des aînés)', statut: 'a_venir' },
   rpa: { nom: 'Résidence privée pour aînés (RPA)', nom_en: 'Private seniors’ residence (RPA)', statut: 'a_venir' },
   ressource_intermediaire: { nom: 'Ressource intermédiaire', nom_en: 'Intermediate resource', statut: 'a_venir' },
+  // Organisations de secours (12 nov. 2026) : un seul modèle, à part des établissements (ni lits ni résidents) ; profils activés depuis SH
+  ccs: { nom: 'Centre de communication santé (CCS)', nom_en: 'Health communication centre (CCS)', statut: 'operationnel', famille: 'secours', type_secours: 'ccs' },
+  entreprise_ambulanciere: { nom: 'Entreprise ambulancière', nom_en: 'Ambulance company', statut: 'operationnel', famille: 'secours', type_secours: 'ambulancier' },
+  urgences_sante: { nom: 'Urgences-santé', nom_en: 'Urgences-santé', statut: 'operationnel', famille: 'secours', type_secours: 'urgences_sante' },
+  premiers_repondants: { nom: 'Pompiers / premiers répondants', nom_en: 'Firefighters / first responders', statut: 'a_venir', famille: 'secours', type_secours: 'premiers_repondants' },
 };
-const TYPES_OPERATIONNELS = Object.keys(TYPES).filter((t) => TYPES[t].statut === 'operationnel');
+// Types d'établissement opérationnels (lits, résidents) : jamais une organisation de secours
+const TYPES_OPERATIONNELS = Object.keys(TYPES).filter((t) => TYPES[t].statut === 'operationnel' && TYPES[t].famille !== 'secours');
+const TYPES_SECOURS = Object.keys(TYPES).filter((t) => TYPES[t].famille === 'secours');
+const estSecours = (type) => TYPES[type]?.famille === 'secours';
 
 // categorie : commun (inclus), hopital, chsld, optionnel. statut : inclus, disponible, a_venir, etude.
 const MODULES = [
@@ -41,6 +49,12 @@ const MODULES = [
   // Préhospitalier (12 nov. 2026) : préalertes des ambulances, activé explicitement par hôpital depuis SH
   { code: 'liaison_secours', categorie: 'optionnel', types: ['hopital'], statut: 'disponible', drapeau: 'liaison_secours', nom: 'Liaison Secours', nom_en: 'Emergency liaison',
     note: 'Préalertes des ambulances : arrivées prévues, accusés, préparation, confirmation du véhicule' },
+  // Liaison Établissements (cahier 3) : demandes de transport ambulancier d'un établissement ou d'un hôpital, activées explicitement
+  { code: 'transport_ambulancier', categorie: 'optionnel', types: ['hopital', 'chsld'], statut: 'disponible', drapeau: 'transport_ambulancier', nom: 'Liaison Établissements (transport ambulancier)', nom_en: 'Facility liaison (ambulance transport)',
+    note: 'Demandes de transport vers une entreprise ambulancière, suivi des étapes ; référence du résident seulement' },
+  // Organisations de secours : profils activés un par un (CCS, Ambulance) ; Urgences-santé = les deux
+  { code: 'profil_ccs', categorie: 'secours', types: TYPES_SECOURS, statut: 'disponible', drapeau: 'ccs', nom: 'Profil CCS (répartition, vue régionale)', nom_en: 'CCS profile (dispatch, regional view)' },
+  { code: 'profil_ambulance', categorie: 'secours', types: TYPES_SECOURS, statut: 'disponible', drapeau: 'ambulance', nom: 'Profil Ambulance (unités, préalertes, transports)', nom_en: 'Ambulance profile (units, pre-alerts, transports)' },
   // CHSLD
   { code: 'residents', categorie: 'chsld', types: ['chsld'], statut: 'inclus', nom: 'Résidents et accueil', nom_en: 'Residents and admission', note: 'Dossier, contacts, autorisations, mouvements' },
   { code: 'chambres', categorie: 'chsld', types: ['chsld'], statut: 'inclus', nom: 'Chambres et lits', nom_en: 'Rooms and beds' },
@@ -64,6 +78,7 @@ function catalogue(type) {
   return MODULES.filter((m) => !type || m.types.includes(type));
 }
 function exigerTypeOperationnel(type) {
+  if (estSecours(type)) throw new ErreurHttp(409, 'type_etablissement_non_disponible');
   const { ErreurHttp } = require('./db');
   if (!Object.hasOwn(TYPES, type)) throw new ErreurHttp(400, 'type_etablissement_invalide');
   if (TYPES[type].statut !== 'operationnel') throw new ErreurHttp(409, 'type_etablissement_non_disponible');
@@ -157,4 +172,4 @@ function nommer(texte, etab, langue = 'fr') {
 }
 /** Drapeaux des modules optionnels (désactivés par défaut). */
 const drapeauxOptionnels = (type) => [...new Set(MODULES.filter((m) => m.types.includes(type) && m.categorie === 'optionnel' && m.statut === 'disponible' && m.drapeau).map((m) => m.drapeau))];
-module.exports = { TYPES_LOCAUX, codeTypeLocal, nomCourt, nommer, libelleType, drapeauxOptionnels, TYPES, TYPES_OPERATIONNELS, MODULES, catalogue, drapeaux, exigerTypeOperationnel, drapeauxDepuisChoix, moduleActif, configChsld, UNITES_CHSLD };
+module.exports = { TYPES_SECOURS, estSecours, TYPES_LOCAUX, codeTypeLocal, nomCourt, nommer, libelleType, drapeauxOptionnels, TYPES, TYPES_OPERATIONNELS, MODULES, catalogue, drapeaux, exigerTypeOperationnel, drapeauxDepuisChoix, moduleActif, configChsld, UNITES_CHSLD };
