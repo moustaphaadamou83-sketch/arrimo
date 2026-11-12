@@ -117,7 +117,7 @@ async function creer(pool, u, b) {
     const pr = await proposerService(c, pa);
     await journaliser(c, { etablissementId: dest.id, utilisateurId: u.id || null, action: 'Préalerte reçue', detail: `${pa.numero} · ${priorite}` });
     await notifier(c, dest.id, priorite === 'immediate' ? 'secours_prealerte_prioritaire' : 'secours_prealerte', pa, { priorite });
-    return pr;
+    return sansCorrespondance(pr);
   });
 }
 async function lireEquipage(c, liste, orgId, u) {
@@ -159,8 +159,13 @@ async function liste(pool, u, q = {}) {
     ORDER BY (p.statut = ANY($2)) DESC, CASE p.priorite WHEN 'immediate' THEN 0 WHEN 'urgente' THEN 1 ELSE 2 END, p.heure_prevue NULLS LAST, p.id`,
   [...args, OUVERTES])).rows;
   const urg = ROLES_HOPITAL.includes(u.role) ? await urgenceAvecDeclaration(pool, args[0]) : null;
-  return { prealertes: rows.map((p) => ({ ...p, actions: actions(p, u), etat_preparation: etatPreparation(p), ...(ROLES_HOPITAL.includes(u.role) ? { synthese: synthese(p, urg) } : {}) })),
-    priorites: PRIORITES, categories: CATEGORIES };
+  const cs = require('./correspondance-simulee');
+  const out = [];
+  for (const p of rows) {
+    out.push(ROLES_HOPITAL.includes(u.role) ? { ...sansCorrespondance(p), actions: actions(p, u), etat_preparation: etatPreparation(p), synthese: synthese(p, urg), correspondance: await cs.pourHopital(pool, p) }
+      : { ...sansCorrespondance(p), actions: actions(p, u), etat_preparation: etatPreparation(p) });
+  }
+  return { prealertes: out, priorites: PRIORITES, categories: CATEGORIES };
 }
 /** Fiche détaillée avec l'historique ; ouverte par une personne de l'hôpital, elle passe à « consultée ». */
 async function fiche(pool, u, id, q = {}) {
@@ -179,7 +184,9 @@ async function fiche(pool, u, id, q = {}) {
   const evenements = (await pool.query(`SELECT ev.type, ev.detail, ev.cree_le, us.nom AS par FROM prealerte_evenements ev LEFT JOIN utilisateurs us ON us.id = ev.utilisateur_id
     WHERE ev.prealerte_id = $1 ORDER BY ev.id`, [pa0.id])).rows;
   const urg = ROLES_HOPITAL.includes(u.role) ? await urgenceAvecDeclaration(pool, p.destination_id) : null;
-  return { ...p, actions: actions(p, u), etat_preparation: etatPreparation(p), ...(ROLES_HOPITAL.includes(u.role) ? { synthese: synthese(p, urg) } : {}), evenements };
+  const hop = ROLES_HOPITAL.includes(u.role);
+  return { ...sansCorrespondance(p), actions: actions(p, u), etat_preparation: etatPreparation(p),
+    ...(hop ? { synthese: synthese(p, urg), correspondance: await require('./correspondance-simulee').pourHopital(pool, p) } : {}), evenements };
 }
 async function exigerVisibilite(db, u, pa, etabId) {
   if (ROLES_HOPITAL.includes(u.role)) {
@@ -197,6 +204,11 @@ async function exigerVisibilite(db, u, pa, etabId) {
     return 'ccs';
   }
   throw new ErreurHttp(403, 'role_insuffisant');
+}
+/** Les colonnes de correspondance (scénario D, démo) ne sortent jamais telles quelles : l'hôpital reçoit une vue dédiée, les autres rien. */
+function sansCorrespondance(p) {
+  const { correspondance_statut, correspondance_patient_id, correspondance_candidats, correspondance_le, correspondance_par, ...reste } = p;
+  return reste;
 }
 /** État de préparation affiché à l'hôpital (cahier, section 8.3), déduit des étapes confirmées. */
 function etatPreparation(p) {

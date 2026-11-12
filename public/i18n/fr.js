@@ -104,6 +104,10 @@ window.ARRIMO_I18N.fr = {
     cle: 'Clé', secret: 'Secret de signature', compte_cree: 'Compte créé', mdp_temporaire: 'Mot de passe temporaire de {email}, à changer à la première connexion :',
   },
   liaison_secours: {
+    cd_titre: 'Dossier hospitalier', cd_simulation: 'SIMULATION — système hospitalier simulé, fiches fictives (démonstration seulement)', cd_aucune_recherche: 'Aucune recherche ; la préalerte continue avec son numéro temporaire.',
+    cd_rechercher: 'Rechercher le dossier', cd_confirmee: 'Correspondance confirmée', cd_incertaine: 'Correspondance incertaine : vérifiez et choisissez la fiche (jamais automatique).', cd_choisir: 'C’est ce dossier',
+    cd_aucune: 'Aucune correspondance : la préalerte continue avec son numéro temporaire ; l’identification suivra vos procédures.', cd_aide: 'Identité fictive transmise au système simulé ; elle reste dans votre hôpital (jamais vue par l’ambulance, le CCS, le journal ni les notifications).',
+    cd_prenom: 'Prénom', cd_nom: 'Nom', cd_naissance: 'Date de naissance',
     urg_titre: 'Statut de votre urgence', urg_aide: 'Déclaration visible par les ambulances et le CCS, avec son heure. Au-delà de {seuil} min, elle est signalée comme ancienne.',
     urg_actuel: 'Déclaré : {statut}, il y a {age} min{par}', urg_aucun: 'Aucun statut déclaré.', urg_perime: 'Déclaration ancienne : confirmez-la ou mettez-la à jour.',
     st_ouvert: 'Ouverte', st_capacite_limitee: 'Capacité limitée', st_saturation: 'Saturation', st_delestage: 'Délestage',
@@ -138,6 +142,7 @@ window.ARRIMO_I18N.fr = {
     s_envoyee: 'Transmise', s_recue: 'Reçue', s_consultee: 'Consultée', s_prise_en_compte: 'Prise en compte', s_preparation: 'Préparation en cours', s_preparation_terminee: 'Préparation terminée',
     s_arrivee: 'Arrivée confirmée', s_cloturee: 'Remise, clôturée', s_annulee: 'Annulée', s_remplacee: 'Remplacée (destination modifiée)',
     ev_service_propose: 'Service proposé par OG', ev_confirmer_service: 'Service confirmé', ev_modifier_service: 'Service modifié', ev_refuser_service: 'Proposition d’OG refusée', 
+    ev_correspondance: 'Correspondance de dossier (simulation)', 
     ev_envoyee: 'Préalerte transmise', ev_recue: 'Reçue par l’écran de l’hôpital', ev_consultee: 'Consultée', ev_prendre_en_compte: 'Prise en compte', ev_preparation: 'Préparation en cours',
     ev_preparation_terminee: 'Préparation terminée', ev_mettre_a_jour: 'Mise à jour par l’ambulance', ev_signaler_arrivee: 'Arrivée signalée par l’ambulance', ev_vehicule_different: 'Autre véhicule signalé',
     ev_confirmer_vehicule: 'Bon véhicule confirmé', ev_confirmer_remise: 'Remise confirmée', ev_probleme: 'Problème signalé', ev_annuler: 'Annulée par l’ambulance', ev_destination_modifiee: 'Destination modifiée',
@@ -167,6 +172,7 @@ window.ARRIMO_I18N.fr = {
   roles_texte: { coordonnateur: 'coordination', entretien: 'entretien', admin_etab: 'administration d’établissement', gestionnaire: 'gestionnaire réseau' },
   // Actions inscrites au journal (texte enregistré → libellé)
   journal_actions: {
+    'Correspondance de dossier (simulation)': 'Correspondance de dossier (simulation)', 'Correspondance de dossier vérifiée (simulation)': 'Correspondance de dossier vérifiée (simulation)',
     'Préalerte reçue': 'Préalerte reçue', 'Préalerte mise à jour': 'Préalerte mise à jour', 'Arrivée d’ambulance signalée': 'Arrivée d’ambulance signalée', 'Préalerte annulée': 'Préalerte annulée', 'Préalerte prise en compte': 'Préalerte prise en compte', 'Préparation commencée': 'Préparation commencée', 'Préparation terminée': 'Préparation terminée', 'Service confirmé': 'Service confirmé', 'Service modifié': 'Service modifié', 'Proposition de service refusée': 'Proposition de service refusée', 'Véhicule confirmé': 'Véhicule confirmé', 'Remise confirmée': 'Remise confirmée', 'Destination de préalerte modifiée': 'Destination de préalerte modifiée', 'Statut de l’urgence déclaré': 'Statut de l’urgence déclaré', 'Transport demandé': 'Transport demandé', 'Transport accepté': 'Transport accepté', 'Transport refusé': 'Transport refusé', 'Ambulance en route': 'Ambulance en route', 'Résident pris en charge': 'Résident pris en charge', 'Transport arrivé': 'Transport arrivé', 'Transport annulé': 'Transport annulé',
     'Changement d’état': 'Changement d’état', 'Action refusée': 'Action refusée', 'Création': 'Création', 'Référence transmise': 'Référence transmise',
     'Transfert validé': 'Transfert validé', 'Transport organisé': 'Transport organisé', 'Départ confirmé': 'Départ confirmé',

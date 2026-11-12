@@ -1423,3 +1423,12 @@ CREATE TABLE IF NOT EXISTS connecteurs_secours (
 );
 ALTER TABLE prealertes ADD COLUMN IF NOT EXISTS mission_externe text;          -- identifiant de mission du système partenaire, si fourni
 ALTER TABLE prealertes ADD COLUMN IF NOT EXISTS connecteur_id int REFERENCES connecteurs_secours(id);
+
+-- Scénario D (décision de Moustafa, 12 nov. 2026) : correspondance avec un dossier par un système hospitalier SIMULÉ,
+-- en démonstration seulement, parmi les fiches fictives (src/patients.js). Identité visible par l'hôpital seulement ;
+-- jamais dans le journal, les notifications, ni pour l'ambulance ou le CCS.
+ALTER TABLE prealertes ADD COLUMN IF NOT EXISTS correspondance_statut text CHECK (correspondance_statut IN ('confirmee', 'incertaine', 'aucune'));
+ALTER TABLE prealertes ADD COLUMN IF NOT EXISTS correspondance_patient_id int REFERENCES patients(id);
+ALTER TABLE prealertes ADD COLUMN IF NOT EXISTS correspondance_candidats int[];
+ALTER TABLE prealertes ADD COLUMN IF NOT EXISTS correspondance_le timestamptz;
+ALTER TABLE prealertes ADD COLUMN IF NOT EXISTS correspondance_par int REFERENCES utilisateurs(id);

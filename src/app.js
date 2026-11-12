@@ -429,6 +429,9 @@ function creerApp(pool, options = {}) {
   api.get('/secours/prealertes/:id', route((req) => pa.fiche(pool, req.utilisateur, entier(req.params.id, 'id'), req.query)));
   api.post('/secours/prealertes/:id/action', route((req) => pa.agir(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   api.get('/secours/unites', route((req) => pa.unites(pool, req.utilisateur)));
+  // Scénario D : correspondance de dossier par un système hospitalier simulé (démonstration seulement)
+  api.post('/secours/prealertes/:id/correspondance', route((req) => require('./correspondance-simulee').rechercher(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
+  api.post('/secours/prealertes/:id/correspondance/confirmer', route((req) => require('./correspondance-simulee').confirmer(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   api.get('/secours/services', route((req) => pa.servicesHopital(pool, req.utilisateur, req.query.etablissement_id)));
   api.get('/secours/urgence', route((req) => pa.statutUrgence(pool, req.utilisateur, req.query.etablissement_id)));
   api.post('/secours/urgence', route((req) => pa.declarerUrgence(pool, req.utilisateur, req.body)));

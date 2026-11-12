@@ -496,3 +496,49 @@ test('administration du préhospitalier : gestionnaire réseau seulement, organi
   assert.strictEqual((await appel('paraB', 'GET', '/secours/prealertes')).corps.code, 'organisation_interdite');
   await appel('reseau', 'PUT', `/admin/secours/organisations/${ids.ambB}`, { actif: true });
 });
+
+test('scénario D : correspondance de dossier par un système hospitalier simulé, démonstration seulement ; identité réservée à l’hôpital', async () => {
+  await pool.query("UPDATE prealertes SET statut = 'annulee' WHERE unite_id = $1 AND statut NOT IN ('cloturee', 'annulee', 'remplacee')", [ids.u1]);
+  const pa = (await appel('para', 'POST', '/secours/prealertes', { unite_id: ids.u1, destination_id: ids.mb, priorite: 'urgente', categorie: 'medicale', delai_min: 10 })).corps;
+  const ident = { etablissement_id: ids.mb, prenom: 'Gaston', nom: 'Fictif', date_naissance: '1951-03-04' };
+  // Hors démonstration (ici : développement ; en recette et en production de même) : refusé
+  assert.strictEqual((await appel('tremblay', 'POST', `/secours/prealertes/${pa.id}/correspondance`, ident)).corps.code, 'correspondance_reserve_demo');
+  const envAvant = process.env.ARRIMO_ENV;
+  for (const e of ['recette', 'production']) {
+    process.env.ARRIMO_ENV = e;
+    assert.strictEqual((await appel('tremblay', 'POST', `/secours/prealertes/${pa.id}/correspondance`, ident)).corps.code, 'correspondance_reserve_demo', e);
+  }
+  process.env.ARRIMO_ENV = 'demo';
+  try {
+    // Aucune fiche : la préalerte continue (scénario E)
+    let r = await appel('tremblay', 'POST', `/secours/prealertes/${pa.id}/correspondance`, ident);
+    assert.strictEqual(r.statut, 200, JSON.stringify(r.corps)); assert.deepStrictEqual([r.corps.correspondance.statut, r.corps.correspondance.simulation], ['aucune', true]);
+    // Fiches fictives de l'hôpital : une exacte, une seulement proche (même nom et date)
+    const fiche = async (prenom, nom, ref) => (await pool.query(`INSERT INTO patients (etablissement_id, reference, prenom, nom, date_naissance) VALUES ($1, $2, $3, $4, '1951-03-04') RETURNING id`, [ids.mb, ref, prenom, nom])).rows[0].id;
+    const g = await fiche('Gaston', 'Fictif', 'P-91001');
+    r = await appel('tremblay', 'POST', `/secours/prealertes/${pa.id}/correspondance`, ident);
+    assert.strictEqual(r.corps.correspondance.statut, 'confirmee'); assert.deepStrictEqual(r.corps.correspondance.fiches.map((f) => f.id), [g]);
+    // Une seconde fiche du même nom, même date : incertaine, une personne choisit
+    const g2 = await fiche('Gaëtan', 'Fictif', 'P-91002');
+    r = await appel('tremblay', 'POST', `/secours/prealertes/${pa.id}/correspondance`, { ...ident, prenom: 'Gaetan' });
+    assert.strictEqual(r.corps.correspondance.statut, 'incertaine'); assert.deepStrictEqual(r.corps.correspondance.fiches.map((f) => f.id).sort(), [g, g2].sort());
+    assert.strictEqual((await appel('tremblay', 'POST', `/secours/prealertes/${pa.id}/correspondance/confirmer`, { etablissement_id: ids.mb, patient_id: 999999 })).corps.code, 'prealerte_statut_incompatible');
+    r = await appel('tremblay', 'POST', `/secours/prealertes/${pa.id}/correspondance/confirmer`, { etablissement_id: ids.mb, patient_id: g2 });
+    assert.deepStrictEqual([r.corps.correspondance.statut, r.corps.correspondance.fiches[0].reference], ['confirmee', 'P-91002']);
+    // L'hôpital voit la fiche ; un autre hôpital, l'ambulance et le CCS ne voient rien de la correspondance
+    const fh = (await appel('tremblay', 'GET', `/secours/prealertes/${pa.id}?etablissement_id=${ids.mb}`)).corps;
+    assert.strictEqual(fh.correspondance.fiches[0].nom, 'Fictif');
+    assert.strictEqual((await appel('bouchard', 'POST', `/secours/prealertes/${pa.id}/correspondance`, { ...ident, etablissement_id: ids.sl })).statut, 404);
+    for (const qui of ['para', 'ccs']) {
+      const brut = JSON.stringify((await appel(qui, 'GET', '/secours/prealertes')).corps);
+      assert.deepStrictEqual(['Fictif', '"correspondance"', 'P-9100', '1951'].filter((x) => brut.includes(x)), [], qui);
+      assert.doesNotMatch(brut, /"correspondance_(statut|patient_id|candidats|le|par)"/, qui);
+    }
+    assert.strictEqual((await appel('para', 'POST', `/secours/prealertes/${pa.id}/correspondance`, ident)).statut, 403);
+    // Journal, notifications et historique : statut seulement, jamais l'identité
+    const j = JSON.stringify((await pool.query("SELECT action, detail FROM journal WHERE action LIKE 'Correspondance%'")).rows);
+    assert.ok(j.includes('confirmee') && !j.includes('Fictif') && !j.includes('Gaston') && !j.includes('1951'));
+    assert.ok(!(await pool.query("SELECT 1 FROM notifications WHERE message LIKE '%Fictif%'")).rowCount);
+    assert.ok(!JSON.stringify(fh.evenements).includes('Fictif'));
+  } finally { if (envAvant === undefined) delete process.env.ARRIMO_ENV; else process.env.ARRIMO_ENV = envAvant; }
+});

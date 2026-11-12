@@ -34,6 +34,7 @@
       ${(p.synthese || []).length ? `<div class="og-synthese" style="margin:8px 0;padding:8px 12px;border-left:4px solid var(--principal);background:var(--doux, #EEF6F7);border-radius:8px">
         <div class="note"><img src="og-robot.svg" alt="" width="18" height="18" style="vertical-align:middle;margin-right:6px"><b>${S('syn_titre')}</b></div>
         <ul style="margin:4px 0 0;padding-left:18px">${p.synthese.map((x) => `<li>${S(`syn_${x.code}`, { ...x, n: x.civieres_libres, niveau: x.niveau ? t(`liaison_secours.niv_${x.niveau}`) : '' })}</li>`).join('')}</ul></div>` : ''}
+      ${blocCorrespondance(p)}
       ${p.arrivee_signalee_le && p.statut !== 'arrivee' && OUVERTES.includes(p.statut) ? `<div class="bandeau" role="status">${S('arrivee_signalee', { heure: heureCourte(p.arrivee_signalee_le) })}</div>` : ''}
       <div class="actions">${boutons}${a.includes('signaler_probleme') ? `<button class="btn discret" type="button" data-ls="signaler_probleme" data-id="${p.id}">${S('act_signaler_probleme')}</button>` : ''}
         <button class="btn discret" type="button" data-ls="details" data-id="${p.id}">${S('act_details')}</button></div>
@@ -46,6 +47,16 @@
       ${d && d.perime ? `<p class="bandeau" role="status">${S('urg_perime')}</p>` : ''}
       ${gerer ? `<div class="chips" role="group">${u.statuts.map((x) => `<button class="chip" type="button" data-ls-urg="${x}" aria-pressed="${d?.statut === x}">${S(`st_${x}`)}</button>`).join('')}</div>` : ''}
       <p class="note">${S('urg_aide', { seuil: u.seuil_min })}</p></div>`;
+  }
+  // Scénario D (démonstration seulement) : système hospitalier SIMULÉ, fiches fictives ; identité visible par l'hôpital seulement
+  function blocCorrespondance(p) {
+    if (!etat.moi.demo || !OUVERTES.includes(p.statut)) return '';
+    const c = p.correspondance; const fiche = (f) => `${esc(f.prenom)} ${esc(f.nom)} · ${esc(f.date_naissance)} · <span class="num">${esc(f.reference)}</span>`;
+    return `<div class="note" style="border:1px dashed var(--bordure);border-radius:8px;padding:6px 10px;margin:6px 0"><b>${S('cd_titre')}</b> · ${S('cd_simulation')}<br>
+      ${!c ? `${S('cd_aucune_recherche')} <button class="btn discret" type="button" data-ls="correspondance" data-id="${p.id}">${S('cd_rechercher')}</button>`
+        : c.statut === 'confirmee' ? `${S('cd_confirmee')} : ${c.fiches.map(fiche).join('')}`
+          : c.statut === 'incertaine' ? `${S('cd_incertaine')}<br>${c.fiches.map((f) => `${fiche(f)} <button class="btn discret" type="button" data-ls-cd="${f.id}" data-id="${p.id}">${S('cd_choisir')}</button>`).join('<br>')}`
+            : `${S('cd_aucune')} <button class="btn discret" type="button" data-ls="correspondance" data-id="${p.id}">${S('cd_rechercher')}</button>`}</div>`;
   }
   function blocService(p) {
     if (!OUVERTES.includes(p.statut) && !p.service_confirme) return '';
@@ -99,6 +110,7 @@
     brancher(v);
   }
   function brancher(v) {
+    v.querySelectorAll('[data-ls-cd]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/secours/prealertes/${b.dataset.id}/correspondance/confirmer`, { etablissement_id: etat.ctx, patient_id: Number(b.dataset.lsCd) }), t('liaison_secours.ok')); });
     v.querySelectorAll('[data-ls-urg]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', '/secours/urgence', { etablissement_id: etat.ctx, statut: b.dataset.lsUrg }), t('liaison_secours.ok')); });
     v.querySelectorAll('[data-ls-vue]').forEach((b) => { b.onclick = () => { etatS.affichage = b.dataset.lsVue; ls.ecrire('arrimo-secours-affichage', etatS.affichage); vueSecours(); }; });
     const caseSon = v.querySelector('#ls-son'); if (caseSon) caseSon.onchange = () => { ls.ecrire('arrimo-secours-son', caseSon.checked ? '1' : null); if (caseSon.checked) bip(); };
@@ -125,6 +137,13 @@
             if (r && r.correspond === false) toast(t('liaison_secours.vehicule_non', { numero: r.unite_attendue }), true); else if (r) toast(t('liaison_secours.vehicule_ok'));
             return r !== null;
           } }]);
+      }
+      if (a === 'correspondance') {
+        return modale(t('liaison_secours.cd_titre'), `<p class="note">${S('cd_aide')}</p>
+          <div class="champ"><label class="lbl" for="cd-prenom">${S('cd_prenom')}</label><input id="cd-prenom" maxlength="80" autocomplete="off"></div>
+          <div class="champ"><label class="lbl" for="cd-nom">${S('cd_nom')}</label><input id="cd-nom" maxlength="80" autocomplete="off"></div>
+          <div class="champ"><label class="lbl" for="cd-dn">${S('cd_naissance')}</label><input id="cd-dn" type="date"></div>`,
+        [{ label: t('general.annuler') }, { label: t('liaison_secours.cd_rechercher'), pri: true, run: async () => (await agir(null, () => api('POST', `/secours/prealertes/${p.id}/correspondance`, { etablissement_id: etat.ctx, prenom: $('#cd-prenom').value, nom: $('#cd-nom').value, date_naissance: $('#cd-dn').value }))) !== null }]);
       }
       if (a === 'modifier_service') {
         const services = await api('GET', `/secours/services?etablissement_id=${etat.ctx}`);

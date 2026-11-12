@@ -251,6 +251,7 @@ const MESSAGES = {
   organisation_existe: "Une organisation de secours porte déjà ce code.",
   unite_invalide: "Numéro d’unité invalide (lettres, chiffres, espaces et tirets, 20 caractères au plus).",
   unite_existe: "Cette organisation a déjà une unité portant ce numéro.",
+  correspondance_reserve_demo: "La correspondance avec un dossier hospitalier simulé est réservée à la démonstration.",
   liaison_secours_inactive: "Cet hôpital n’a pas activé la Liaison Secours : la préalerte ne peut pas lui être transmise.",
   organisation_interdite: "Votre compte n’est rattaché à aucune organisation de secours active.",
   prealerte_invalide: "Préalerte incomplète ou invalide : vérifiez la priorité, la catégorie, l’heure d’arrivée et l’équipage.",
