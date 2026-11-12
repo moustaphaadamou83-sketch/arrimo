@@ -1432,3 +1432,22 @@ ALTER TABLE prealertes ADD COLUMN IF NOT EXISTS correspondance_patient_id int RE
 ALTER TABLE prealertes ADD COLUMN IF NOT EXISTS correspondance_candidats int[];
 ALTER TABLE prealertes ADD COLUMN IF NOT EXISTS correspondance_le timestamptz;
 ALTER TABLE prealertes ADD COLUMN IF NOT EXISTS correspondance_par int REFERENCES utilisateurs(id);
+
+-- Organisations de secours (décision de Moustafa, 12 nov. 2026) : un seul modèle ; le TYPE dit ce qu'est l'organisation,
+-- les PROFILS activés (depuis SH) disent ce qu'elle fait dans Arrimo : CCS (répartition, vue régionale) et/ou Ambulance (unités, préalertes).
+-- Urgences-santé : les deux profils sur la même organisation. Mêmes écrans, même API (Arrimo Connect v1).
+ALTER TABLE organisations_secours DROP CONSTRAINT IF EXISTS organisations_secours_type_check;
+ALTER TABLE organisations_secours ADD CONSTRAINT organisations_secours_type_check
+  CHECK (type IN ('ccs', 'ambulancier', 'urgences_sante', 'premiers_repondants'));
+ALTER TABLE organisations_secours ADD COLUMN IF NOT EXISTS profils text[];
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'organisations_secours_profils_check') THEN
+    ALTER TABLE organisations_secours ADD CONSTRAINT organisations_secours_profils_check CHECK (profils <@ ARRAY['ccs', 'ambulance']::text[]);
+  END IF;
+END $$;
+-- Organisations créées avant les profils (profils NULL seulement) : profil déduit du type. Un profil retiré par un administrateur
+-- ('{}') n'est jamais réactivé par une reprise du schéma.
+UPDATE organisations_secours SET profils = CASE type WHEN 'ccs' THEN ARRAY['ccs'] WHEN 'ambulancier' THEN ARRAY['ambulance'] WHEN 'urgences_sante' THEN ARRAY['ccs', 'ambulance'] ELSE ARRAY[]::text[] END
+  WHERE profils IS NULL;
+ALTER TABLE organisations_secours ALTER COLUMN profils SET DEFAULT '{}';
+ALTER TABLE organisations_secours ALTER COLUMN profils SET NOT NULL;

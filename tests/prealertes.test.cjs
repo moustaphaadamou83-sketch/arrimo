@@ -63,7 +63,9 @@ test.before(async () => {
   ids.mb = await etab('MB'); ids.sl = await etab('SL'); ids.lm = await etab('LM');
   // Liaison Secours activée à Mont-Bellevue et au CHU Saint-Laurent seulement
   await pool.query(`UPDATE etablissements SET modules = COALESCE(modules, '{}'::jsonb) || '{"liaison_secours": true}' WHERE code IN ('MB', 'SL')`);
-  const org = async (code, nom, type) => (await pool.query('INSERT INTO organisations_secours (code, nom, type, config_id) VALUES ($1, $2, $3, $4) RETURNING id', [code, nom, type, cfg])).rows[0].id;
+  const PROFILS = { ambulancier: ['ambulance'], ccs: ['ccs'], urgences_sante: ['ccs', 'ambulance'] };
+  const org = async (code, nom, type) => (await pool.query('INSERT INTO organisations_secours (code, nom, type, profils, config_id) VALUES ($1, $2, $3, $4, $5) RETURNING id', [code, nom, type, PROFILS[type], cfg])).rows[0].id;
+  ids.cfg = cfg;
   ids.ambA = await org('AMB-A', 'Ambulances fictives A', 'ambulancier');
   ids.ambB = await org('AMB-B', 'Ambulances fictives B', 'ambulancier');
   ids.ccs = await org('CCS-EST', 'CCS fictif de l’Estrie', 'ccs');
@@ -541,4 +543,39 @@ test('scénario D : correspondance de dossier par un système hospitalier simul�
     assert.ok(!(await pool.query("SELECT 1 FROM notifications WHERE message LIKE '%Fictif%'")).rowCount);
     assert.ok(!JSON.stringify(fh.evenements).includes('Fictif'));
   } finally { if (envAvant === undefined) delete process.env.ARRIMO_ENV; else process.env.ARRIMO_ENV = envAvant; }
+});
+
+test('profils : un seul modèle d’organisation ; Urgences-santé = CCS et Ambulance sur la même organisation ; un profil retiré coupe les droits', async () => {
+  const us = (await pool.query("INSERT INTO organisations_secours (code, nom, type, profils, config_id) VALUES ('US-FICT', 'Urgences-santé fictive', 'urgences_sante', ARRAY['ccs','ambulance'], $1) RETURNING id", [ids.cfg])).rows[0].id;
+  const unite = (await pool.query("INSERT INTO unites_secours (organisation_id, numero, plaque) VALUES ($1, '70-01', 'FICT 701') RETURNING id", [us])).rows[0].id;
+  await compte('para.us@demo.arrimo', 'Paramédic US', 'paramedic', us); await compte('rep.us@demo.arrimo', 'Répartition US', 'repartiteur', us);
+  await connecter('paraUS', 'para.us@demo.arrimo'); await connecter('repUS', 'rep.us@demo.arrimo');
+  // Profil Ambulance : préalerte de ses unités ; profil CCS : vue régionale (dont les autres entreprises), sans agir sur elles
+  const pa = await appel('paraUS', 'POST', '/secours/prealertes', { unite_id: unite, destination_id: ids.mb, priorite: 'urgente', categorie: 'medicale', delai_min: 9 });
+  assert.strictEqual(pa.statut, 200, JSON.stringify(pa.corps));
+  const region = (await appel('repUS', 'GET', '/secours/prealertes')).corps.prealertes;
+  assert.ok(region.some((p) => p.id === pa.corps.id) && region.some((p) => p.organisation === 'Ambulances fictives A'), 'vue régionale');
+  assert.ok(region.every((p) => p.actions.length === 0));
+  // Même écran, même API : le système relié d'Urgences-santé lit la région et agit pour ses propres unités seulement
+  const cx = require('../src/connect'); const sys = await cx.creerConnecteurSecours(pool, us, 'Système fictif US');
+  const signe = async (methode, chemin, corps) => {
+    const h = Date.now(); const brut = corps ? JSON.stringify(corps) : '';
+    const r = await fetch(`${base}/api${chemin}`, { method: methode, headers: { 'Content-Type': 'application/json', 'X-Arrimo-Cle': sys.cle, 'X-Arrimo-Horodatage': String(h), 'X-Arrimo-Signature': cx.signer(sys.secret, h, methode, `/api${chemin}`, brut) }, body: corps ? brut : undefined });
+    return { statut: r.status, corps: await r.json().catch(() => null) };
+  };
+  assert.deepStrictEqual((await signe('GET', '/connect/v1/statut')).corps.profils, ['ccs', 'ambulance']);
+  const lus = (await signe('GET', '/connect/v1/prealertes')).corps;
+  assert.ok(lus.some((p) => p.organisation === 'Ambulances fictives A'));
+  const autre = lus.find((p) => p.organisation === 'Ambulances fictives A' && !['cloturee', 'annulee', 'remplacee'].includes(p.statut));
+  if (autre) assert.strictEqual((await signe('POST', `/connect/v1/prealertes/${autre.numero}/evenements`, { action: 'annuler' })).statut, 403, 'visible par le profil CCS, jamais modifiable : unités d’une autre entreprise');
+  assert.strictEqual((await signe('POST', `/connect/v1/prealertes/${pa.corps.numero}/evenements`, { action: 'mettre_a_jour', delai_min: 4 })).statut, 200);
+  // Profil Ambulance retiré : le paramédic perd l'accès ; le répartiteur garde la vue régionale
+  await pool.query("UPDATE organisations_secours SET profils = ARRAY['ccs'] WHERE id = $1", [us]);
+  assert.strictEqual((await appel('paraUS', 'GET', '/secours/prealertes')).corps.code, 'organisation_interdite');
+  assert.strictEqual((await appel('repUS', 'GET', '/secours/prealertes')).statut, 200);
+  assert.strictEqual((await signe('POST', `/connect/v1/prealertes/${pa.corps.numero}/evenements`, { action: 'annuler' })).statut, 403);
+  // Aucun profil : plus rien
+  await pool.query("UPDATE organisations_secours SET profils = '{}' WHERE id = $1", [us]);
+  assert.strictEqual((await appel('repUS', 'GET', '/secours/prealertes')).corps.code, 'organisation_interdite');
+  assert.strictEqual((await signe('GET', '/connect/v1/statut')).statut, 403);
 });

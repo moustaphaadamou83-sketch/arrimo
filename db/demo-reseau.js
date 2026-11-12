@@ -351,7 +351,7 @@ async function demoReseau(pool, { silencieux = false, comptesRoles = false, avec
     }
   }
   const cfgQc = (await pool.query('SELECT config_id FROM etablissements WHERE id = $1', [ids.HX])).rows[0].config_id;
-  const orgSecours = async (code, nom, type) => (await pool.query('INSERT INTO organisations_secours (code, nom, type, config_id) VALUES ($1, $2, $3, $4) RETURNING id', [code, nom, type, cfgQc])).rows[0].id;
+  const orgSecours = async (code, nom, type) => (await pool.query('INSERT INTO organisations_secours (code, nom, type, profils, config_id) VALUES ($1, $2, $3, $4, $5) RETURNING id', [code, nom, type, type === 'ccs' ? ['ccs'] : ['ambulance'], cfgQc])).rows[0].id;
   const ambA = await orgSecours('AMB-NORD', 'Ambulances du Nord (fictif)', 'ambulancier');
   const ambB = await orgSecours('AMB-RIVES', 'Paramédics des Rives (fictif)', 'ambulancier');
   const ccs = await orgSecours('CCS-REGION', 'CCS régional (fictif)', 'ccs');

@@ -24,7 +24,7 @@ const evenement = (c, d, type, u, detail = {}) => c.query('INSERT INTO demande_t
 /** Entreprises ambulancières de la région d'un établissement (un CHSLD utilise le profil dérivé « <profil>-CHSLD »). */
 async function organisationsRegion(db, etabId) {
   return (await db.query(`SELECT o.id, o.nom FROM organisations_secours o JOIN config_pays c ON c.id = o.config_id
-    WHERE o.type = 'ambulancier' AND o.actif AND (o.config_id = (SELECT config_id FROM etablissements WHERE id = $1)
+    WHERE 'ambulance' = ANY(o.profils) AND o.actif AND (o.config_id = (SELECT config_id FROM etablissements WHERE id = $1)
       OR c.code = regexp_replace((SELECT c2.code FROM config_pays c2 JOIN etablissements e ON e.config_id = c2.id WHERE e.id = $1), '-CHSLD$', ''))
     ORDER BY o.nom`, [etabId])).rows;
 }
@@ -81,10 +81,10 @@ const FROM = `FROM demandes_transport d JOIN organisations_secours o ON o.id = d
 async function liste(pool, u, q = {}) {
   let filtre; let args;
   if (pa.ROLES_AMBULANCE.includes(u.role) || pa.ROLES_CCS.includes(u.role)) {
-    const orgs = (await pool.query(`SELECT o.id, o.type, o.config_id FROM utilisateur_organisations uo JOIN organisations_secours o ON o.id = uo.organisation_id
+    const orgs = (await pool.query(`SELECT o.id, o.profils, o.config_id FROM utilisateur_organisations uo JOIN organisations_secours o ON o.id = uo.organisation_id
       WHERE uo.utilisateur_id = $1 AND o.actif`, [u.id])).rows;
-    if (pa.ROLES_AMBULANCE.includes(u.role)) { const ids = orgs.filter((o) => o.type === 'ambulancier').map((o) => o.id); if (!ids.length) throw new ErreurHttp(403, 'organisation_interdite'); filtre = 'd.organisation_id = ANY($1)'; args = [ids]; }
-    else { const cfg = orgs.filter((o) => o.type === 'ccs').map((o) => o.config_id); if (!cfg.length) throw new ErreurHttp(403, 'organisation_interdite'); filtre = 'o.config_id = ANY($1)'; args = [cfg]; }
+    if (pa.ROLES_AMBULANCE.includes(u.role)) { const ids = orgs.filter((o) => o.profils.includes('ambulance')).map((o) => o.id); if (!ids.length) throw new ErreurHttp(403, 'organisation_interdite'); filtre = 'd.organisation_id = ANY($1)'; args = [ids]; }
+    else { const cfg = orgs.filter((o) => o.profils.includes('ccs')).map((o) => o.config_id); if (!cfg.length) throw new ErreurHttp(403, 'organisation_interdite'); filtre = 'o.config_id = ANY($1)'; args = [cfg]; }
   } else {
     const id = entier(q.etablissement_id); if (!id) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'etablissement_id' });
     exigerEtablissement(u, id);
@@ -113,7 +113,7 @@ async function agir(pool, u, id, b) {
   if (!d0) throw new ErreurHttp(404, 'transport_introuvable');
   let cote;
   if (pa.ROLES_AMBULANCE.includes(u.role)) {
-    const ok = (await pool.query(`SELECT 1 FROM utilisateur_organisations uo JOIN organisations_secours o ON o.id = uo.organisation_id WHERE uo.utilisateur_id = $1 AND o.id = $2 AND o.actif`, [u.id, d0.organisation_id])).rowCount;
+    const ok = (await pool.query(`SELECT 1 FROM utilisateur_organisations uo JOIN organisations_secours o ON o.id = uo.organisation_id WHERE uo.utilisateur_id = $1 AND o.id = $2 AND o.actif AND 'ambulance' = ANY(o.profils)`, [u.id, d0.organisation_id])).rowCount;
     if (!ok) throw new ErreurHttp(404, 'transport_introuvable');
     cote = 'ambulance';
   } else if (ROLES_ETAB.includes(u.role) && Number(b.etablissement_id) === d0.origine_id) { exigerEtablissement(u, d0.origine_id); cote = 'etablissement'; }

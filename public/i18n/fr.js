@@ -94,6 +94,7 @@ window.ARRIMO_I18N.fr = {
     s_demandee: 'demandé, en attente de l’entreprise', s_acceptee: 'accepté', s_refusee: 'refusé par l’entreprise', s_en_route: 'ambulance en route', s_pris_en_charge: 'résident pris en charge', s_arrivee: 'arrivé à destination', s_annulee: 'annulé',
   },
   secours_admin: {
+    type_urgences_sante: 'Urgences-santé (centre d’appel et ambulances)', type_premiers_repondants: 'Pompiers / premiers répondants', profils: 'Profils activés', profil_ccs: 'CCS (répartition, vue régionale)', profil_ambulance: 'Ambulance (unités, préalertes)',
     supervision: 'Supervision', rien: 'rien à signaler', depuis: 'depuis {n} min', sup_non_recues: 'Préalertes non reçues par l’écran de l’hôpital',
     sup_non_prises: 'Préalertes non prises en compte', sup_transports: 'Transports sans réponse de l’entreprise', sup_positions: 'Positions anciennes (plus de 10 min)', sup_systemes: 'Systèmes reliés silencieux depuis 24 h',
     intro: 'Entreprises ambulancières et centres de communication santé (CCS) : organisations à part des établissements, sans lits ni places. Chaque action est journalisée.',
@@ -181,6 +182,7 @@ window.ARRIMO_I18N.fr = {
     'Équipement modifié': 'Équipement modifié', 'Chambre prête': 'Chambre prête', 'Civière': 'Civière',
   },
   journal_admin_actions: {
+    'Profils de l’organisation modifiés': 'Profils de l’organisation modifiés',
     'Organisation de secours créée': 'Organisation de secours créée', 'Organisation de secours activée': 'Organisation de secours activée', 'Organisation de secours désactivée': 'Organisation de secours désactivée', 'Unité de secours créée': 'Unité de secours créée', 'Unité de secours modifiée': 'Unité de secours modifiée', 'Unité de secours désactivée': 'Unité de secours désactivée', 'Compte de secours créé': 'Compte de secours créé', 'Système relié (Arrimo Connect)': 'Système relié (Arrimo Connect)', 'Système révoqué (Arrimo Connect)': 'Système révoqué (Arrimo Connect)',
     'Mot de passe changé': 'Mot de passe changé', 'Double authentification activée': 'Double authentification activée',
     'Double authentification désactivée': 'Double authentification désactivée', 'Compte créé': 'Compte créé', 'Compte modifié': 'Compte modifié',

@@ -11,7 +11,16 @@ const { hacherAsync, motDePasseTemporaire } = require('./auth');
 const env = require('./environnement');
 const { journalAdmin } = require('./admin');
 
-const ROLES = { ambulancier: ['paramedic', 'superviseur_secours'], ccs: ['repartiteur'] };
+// Un seul modèle d'organisation : le type dit ce qu'elle est, les profils activés ce qu'elle fait ; les rôles suivent les profils
+const TYPES = ['ccs', 'ambulancier', 'urgences_sante', 'premiers_repondants'];
+const PROFILS_PAR_DEFAUT = { ccs: ['ccs'], ambulancier: ['ambulance'], urgences_sante: ['ccs', 'ambulance'], premiers_repondants: [] };
+const ROLES_PROFIL = { ambulance: ['paramedic', 'superviseur_secours'], ccs: ['repartiteur'] };
+const rolesDe = (profils) => profils.flatMap((p) => ROLES_PROFIL[p] || []);
+const lireProfils = (v, type) => {
+  if (v == null) return PROFILS_PAR_DEFAUT[type];
+  if (!Array.isArray(v) || v.some((x) => !ROLES_PROFIL[x])) throw new ErreurHttp(400, 'organisation_invalide');
+  return [...new Set(v)];
+};
 function exiger(req) {
   const u = req.utilisateur;
   if (!u.gestionnaire) throw new ErreurHttp(403, 'reserve_admin');
@@ -23,14 +32,14 @@ function brancher(api, pool, route, entier) {
   api.get('/admin/secours', route(async (req) => {
     exiger(req);
     const [orgs, unites, comptes, systemes, configs] = await Promise.all([
-      pool.query('SELECT o.id, o.code, o.nom, o.type, o.config_id, o.actif, c.nom AS profil FROM organisations_secours o JOIN config_pays c ON c.id = o.config_id ORDER BY o.type, o.nom'),
+      pool.query('SELECT o.id, o.code, o.nom, o.type, o.profils, o.config_id, o.actif, c.nom AS profil FROM organisations_secours o JOIN config_pays c ON c.id = o.config_id ORDER BY o.type, o.nom'),
       pool.query('SELECT id, organisation_id, numero, plaque, actif FROM unites_secours ORDER BY numero'),
       pool.query(`SELECT u.id, u.nom, u.email, u.role, u.actif, uo.organisation_id FROM utilisateurs u JOIN utilisateur_organisations uo ON uo.utilisateur_id = u.id ORDER BY u.nom`),
       pool.query('SELECT id, organisation_id, nom, actif, cree_le, derniere_utilisation FROM connecteurs_secours ORDER BY cree_le'),
       pool.query("SELECT id, code, nom FROM config_pays WHERE code NOT LIKE '%-CHSLD' ORDER BY id"),
     ]);
     return { organisations: orgs.rows.map((o) => ({ ...o, unites: unites.rows.filter((x) => x.organisation_id === o.id), comptes: comptes.rows.filter((x) => x.organisation_id === o.id),
-      systemes: systemes.rows.filter((x) => x.organisation_id === o.id) })), profils: configs.rows, roles: ROLES };
+      systemes: systemes.rows.filter((x) => x.organisation_id === o.id), roles: rolesDe(o.profils) })), profils: configs.rows, types: TYPES, profils_par_defaut: PROFILS_PAR_DEFAUT };
   }));
   // Supervision (cahier 2, section 12.3) : ce qui attend une réception ou une réponse ; numéros et délais seulement, aucune donnée médicale
   api.get('/admin/secours/supervision', route(async (req) => {
@@ -54,27 +63,36 @@ function brancher(api, pool, route, entier) {
   api.post('/admin/secours/organisations', route(async (req) => {
     exiger(req);
     const code = texte(req.body.code, 20).toUpperCase(); const nom = texte(req.body.nom, 120); const type = String(req.body.type || '');
-    if (!/^[A-Z0-9-]{2,20}$/.test(code) || !nom || !ROLES[type]) throw new ErreurHttp(400, 'organisation_invalide');
+    if (!/^[A-Z0-9-]{2,20}$/.test(code) || !nom || !TYPES.includes(type)) throw new ErreurHttp(400, 'organisation_invalide');
+    const profils = lireProfils(req.body.profils, type);
     const cfg = (await pool.query("SELECT id FROM config_pays WHERE id = $1 AND code NOT LIKE '%-CHSLD'", [entier(req.body.config_id, 'config_id')])).rows[0];
     if (!cfg) throw new ErreurHttp(404, 'config_introuvable');
     return transaction(pool, async (c) => {
       if ((await c.query('SELECT 1 FROM organisations_secours WHERE code = $1', [code])).rowCount) throw new ErreurHttp(409, 'organisation_existe');
-      const o = (await c.query('INSERT INTO organisations_secours (code, nom, type, config_id) VALUES ($1, $2, $3, $4) RETURNING *', [code, nom, type, cfg.id])).rows[0];
-      await journalAdmin(c, req.utilisateur, 'Organisation de secours créée', code, `${type} · ${nom}`);
+      const o = (await c.query('INSERT INTO organisations_secours (code, nom, type, profils, config_id) VALUES ($1, $2, $3, $4, $5) RETURNING *', [code, nom, type, profils, cfg.id])).rows[0];
+      await journalAdmin(c, req.utilisateur, 'Organisation de secours créée', code, `${type} · ${profils.join('+') || 'aucun profil'} · ${nom}`);
       return o;
     });
   }));
   api.put('/admin/secours/organisations/:id', route(async (req) => {
     exiger(req); const id = entier(req.params.id, 'id');
+    const avant = (await pool.query('SELECT * FROM organisations_secours WHERE id = $1', [id])).rows[0];
+    if (!avant) throw new ErreurHttp(404, 'organisation_introuvable');
+    if (req.body.profils !== undefined) {
+      // Profils activés un par un ; un profil retiré coupe aussitôt les droits correspondants (écran et API)
+      const profils = lireProfils(req.body.profils, avant.type);
+      const o = (await pool.query('UPDATE organisations_secours SET profils = $2 WHERE id = $1 RETURNING *', [id, profils])).rows[0];
+      await journalAdmin(pool, req.utilisateur, 'Profils de l’organisation modifiés', o.code, profils.join('+') || 'aucun');
+      return o;
+    }
     const actif = req.body.actif === true;
     const o = (await pool.query('UPDATE organisations_secours SET actif = $2 WHERE id = $1 RETURNING *', [id, actif])).rows[0];
-    if (!o) throw new ErreurHttp(404, 'organisation_introuvable');
     await journalAdmin(pool, req.utilisateur, actif ? 'Organisation de secours activée' : 'Organisation de secours désactivée', o.code, null);
     return o;
   }));
   api.post('/admin/secours/organisations/:id/unites', route(async (req) => {
     exiger(req); const id = entier(req.params.id, 'id');
-    const o = (await pool.query("SELECT * FROM organisations_secours WHERE id = $1 AND type = 'ambulancier'", [id])).rows[0];
+    const o = (await pool.query("SELECT * FROM organisations_secours WHERE id = $1 AND 'ambulance' = ANY(profils)", [id])).rows[0];
     if (!o) throw new ErreurHttp(404, 'organisation_introuvable');
     const numero = texte(req.body.numero, 20); const plaque = texte(req.body.plaque, 20) || null;
     if (!/^[A-Za-z0-9 -]{1,20}$/.test(numero)) throw new ErreurHttp(400, 'unite_invalide');
@@ -98,7 +116,7 @@ function brancher(api, pool, route, entier) {
     const email = texte(req.body.email, 200).toLowerCase(); const nom = texte(req.body.nom, 120); const role = String(req.body.role || '');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ErreurHttp(400, 'courriel_invalide');
     if (!nom) throw new ErreurHttp(400, 'nom_requis');
-    if (!ROLES[o.type].includes(role)) throw new ErreurHttp(400, 'role_inconnu');
+    if (!rolesDe(o.profils).includes(role)) throw new ErreurHttp(400, 'role_inconnu');
     const temporaire = motDePasseTemporaire();
     return transaction(pool, async (c) => {
       if ((await c.query('SELECT 1 FROM utilisateurs WHERE email = $1', [email])).rowCount) throw new ErreurHttp(409, 'compte_existe');

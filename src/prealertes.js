@@ -28,13 +28,13 @@ const RANG = { envoyee: 0, recue: 1, consultee: 2, prise_en_compte: 3, preparati
 const entier = (v) => { const n = Number(v); return Number.isSafeInteger(n) && n > 0 ? n : null; };
 async function organisationsDe(db, u) {
   // Système externe (Arrimo Connect) : son organisation seulement
-  if (u.connecteur) return [{ id: u.connecteur.organisation_id, type: u.connecteur.type, config_id: u.connecteur.config_id }];
-  return (await db.query(`SELECT o.id, o.type, o.config_id FROM utilisateur_organisations uo JOIN organisations_secours o ON o.id = uo.organisation_id
+  if (u.connecteur) return [{ id: u.connecteur.organisation_id, type: u.connecteur.type, profils: u.connecteur.profils, config_id: u.connecteur.config_id }];
+  return (await db.query(`SELECT o.id, o.type, o.profils, o.config_id FROM utilisateur_organisations uo JOIN organisations_secours o ON o.id = uo.organisation_id
     WHERE uo.utilisateur_id = $1 AND o.actif`, [u.id])).rows;
 }
 async function exigerAmbulance(db, u) {
   if (!ROLES_AMBULANCE.includes(u.role)) throw new ErreurHttp(403, 'role_insuffisant');
-  const orgs = (await organisationsDe(db, u)).filter((o) => o.type === 'ambulancier');
+  const orgs = (await organisationsDe(db, u)).filter((o) => (o.profils || []).includes('ambulance'));
   if (!orgs.length) throw new ErreurHttp(403, 'organisation_interdite');
   return orgs;
 }
@@ -147,11 +147,12 @@ async function liste(pool, u, q = {}) {
         version = version + 1, modifie_le = now() WHERE destination_id = $1 AND recue_le IS NULL AND statut = ANY($2) RETURNING *`, [e.id, OUVERTES])).rows;
       for (const pa of nouvelles) await evenement(c, pa, 'recue', null, { etablissement: e.id });
     });
-  } else if (ROLES_AMBULANCE.includes(u.role)) {
+  } else if (ROLES_AMBULANCE.includes(u.role) && !(u.connecteur && u.connecteur.profils.includes('ccs'))) {
     const orgs = await exigerAmbulance(pool, u);
     filtre = 'p.organisation_id = ANY($1)'; args = [orgs.map((o) => o.id)];
-  } else if (ROLES_CCS.includes(u.role)) {
-    const orgs = (await organisationsDe(pool, u)).filter((o) => o.type === 'ccs');
+  } else if (ROLES_CCS.includes(u.role) || u.connecteur?.profils.includes('ccs')) {
+    // Profil CCS (répartition) : vue régionale en lecture ; un système à deux profils (Urgences-santé) agit en plus pour ses unités
+    const orgs = (await organisationsDe(pool, u)).filter((o) => (o.profils || []).includes('ccs'));
     if (!orgs.length) throw new ErreurHttp(403, 'organisation_interdite');
     filtre = 'o.config_id = ANY($1)'; args = [orgs.map((o) => o.config_id)];
   } else throw new ErreurHttp(403, 'role_insuffisant');
@@ -195,12 +196,12 @@ async function exigerVisibilite(db, u, pa, etabId) {
     return 'hopital';
   }
   if (ROLES_AMBULANCE.includes(u.role)) {
-    if (!(await exigerAmbulance(db, u)).some((o) => o.id === pa.organisation_id)) throw new ErreurHttp(404, 'prealerte_introuvable');
-    return 'ambulance';
+    if ((await exigerAmbulance(db, u)).some((o) => o.id === pa.organisation_id)) return 'ambulance';
+    if (!u.connecteur?.profils.includes('ccs')) throw new ErreurHttp(404, 'prealerte_introuvable');
   }
-  if (ROLES_CCS.includes(u.role)) {
+  if (ROLES_CCS.includes(u.role) || u.connecteur?.profils.includes('ccs')) {
     const cfg = (await db.query('SELECT config_id FROM organisations_secours WHERE id = $1', [pa.organisation_id])).rows[0].config_id;
-    if (!(await organisationsDe(db, u)).some((o) => o.type === 'ccs' && o.config_id === cfg)) throw new ErreurHttp(404, 'prealerte_introuvable');
+    if (!(await organisationsDe(db, u)).some((o) => (o.profils || []).includes('ccs') && o.config_id === cfg)) throw new ErreurHttp(404, 'prealerte_introuvable');
     return 'ccs';
   }
   throw new ErreurHttp(403, 'role_insuffisant');
@@ -258,6 +259,7 @@ async function declarationDe(db, etabId) {
 function actions(p, u) {
   if (!OUVERTES.includes(p.statut)) return [];
   if (ROLES_AMBULANCE.includes(u.role)) {
+    if (u.connecteur && p.organisation_id !== u.connecteur.organisation_id) return [];
     if (p.statut === 'arrivee') return [];
     return ['mettre_a_jour', 'changer_destination', 'annuler', ...(p.arrivee_signalee_le ? [] : ['signaler_arrivee'])];
   }

@@ -94,6 +94,7 @@ window.ARRIMO_I18N.en = {
     s_demandee: 'requested, awaiting the company', s_acceptee: 'accepted', s_refusee: 'declined by the company', s_en_route: 'ambulance on its way', s_pris_en_charge: 'resident picked up', s_arrivee: 'arrived at destination', s_annulee: 'cancelled',
   },
   secours_admin: {
+    type_urgences_sante: 'Urgences-santé (call centre and ambulances)', type_premiers_repondants: 'Firefighters / first responders', profils: 'Enabled profiles', profil_ccs: 'CCS (dispatch, regional view)', profil_ambulance: 'Ambulance (units, pre-alerts)',
     supervision: 'Supervision', rien: 'nothing to report', depuis: 'for {n} min', sup_non_recues: 'Pre-alerts not received by the hospital screen',
     sup_non_prises: 'Pre-alerts not acknowledged', sup_transports: 'Transports without company response', sup_positions: 'Stale positions (over 10 min)', sup_systemes: 'Linked systems silent for 24 h',
     intro: 'Ambulance companies and health communication centres (CCS): organizations separate from facilities, with no beds or places. Every action is logged.',
@@ -180,6 +181,7 @@ window.ARRIMO_I18N.en = {
     'Équipement modifié': 'Equipment changed', 'Chambre prête': 'Room ready', 'Civière': 'Stretcher',
   },
   journal_admin_actions: {
+    'Profils de l’organisation modifiés': 'Organization profiles changed',
     'Organisation de secours créée': 'Emergency organization created', 'Organisation de secours activée': 'Emergency organization activated', 'Organisation de secours désactivée': 'Emergency organization deactivated', 'Unité de secours créée': 'Emergency unit created', 'Unité de secours modifiée': 'Emergency unit changed', 'Unité de secours désactivée': 'Emergency unit deactivated', 'Compte de secours créé': 'Emergency account created', 'Système relié (Arrimo Connect)': 'System linked (Arrimo Connect)', 'Système révoqué (Arrimo Connect)': 'System revoked (Arrimo Connect)',
     'Mot de passe changé': 'Password changed', 'Double authentification activée': 'Two-factor authentication enabled',
     'Double authentification désactivée': 'Two-factor authentication disabled', 'Compte créé': 'Account created', 'Compte modifié': 'Account changed',

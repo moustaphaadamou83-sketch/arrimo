@@ -171,17 +171,18 @@
       ${bloc('sup_positions', sup.positions_anciennes, (x) => `${esc(x.numero)} · ${esc(x.unite)} (${A('depuis', { n: x.minutes })})`)}
       ${bloc('sup_systemes', sup.systemes_silencieux, (x) => `${esc(x.nom)} · ${esc(x.organisation)}`)}</div>` : '';
     const ligne = (o) => `<div class="panneau-c" style="margin-bottom:12px"><h3 style="margin:0">${esc(o.nom)} <span class="note">· ${esc(o.code)} · ${A(`type_${o.type}`)} · ${esc(o.profil)}${o.actif ? '' : ` · ${A('inactive')}`}</span></h3>
-      ${o.type === 'ambulancier' ? `<p><b>${A('unites')}</b> : ${o.unites.map((x) => `${esc(x.numero)}${x.plaque ? ` (${esc(x.plaque)})` : ''}${x.actif ? '' : ` · ${A('inactive')}`}`).join(', ') || A('aucune')}</p>
+      <p><b>${A('profils')}</b> : ${['ccs', 'ambulance'].map((x) => `<label class="case"><input type="checkbox" data-sp-org="${o.id}" value="${x}"${(o.profils || []).includes(x) ? ' checked' : ''}> ${A(`profil_${x}`)}</label>`).join(' ')}</p>
+      ${(o.profils || []).includes('ambulance') ? `<p><b>${A('unites')}</b> : ${o.unites.map((x) => `${esc(x.numero)}${x.plaque ? ` (${esc(x.plaque)})` : ''}${x.actif ? '' : ` · ${A('inactive')}`}`).join(', ') || A('aucune')}</p>
         <div class="ligne" style="display:flex;gap:8px;flex-wrap:wrap"><input placeholder="${A('numero')}" data-su-num="${o.id}" maxlength="20" style="max-width:140px"><input placeholder="${A('plaque')}" data-su-plaque="${o.id}" maxlength="20" style="max-width:140px"><button class="btn" data-su-unite="${o.id}">${A('ajouter_unite')}</button></div>` : ''}
       <p><b>${A('comptes')}</b> : ${o.comptes.map((x) => `${esc(x.nom)} <span class="note">${esc(x.email)} · ${esc(t(`roles.${x.role}`))}</span>`).join(' ; ') || A('aucun')}</p>
-      <div class="ligne" style="display:flex;gap:8px;flex-wrap:wrap"><input placeholder="${A('nom')}" data-sc-nom="${o.id}" maxlength="120"><input placeholder="${A('courriel')}" type="email" data-sc-email="${o.id}"><select data-sc-role="${o.id}">${d.roles[o.type].map((r) => `<option value="${r}">${esc(t(`roles.${r}`))}</option>`).join('')}</select><button class="btn" data-sc-compte="${o.id}">${A('creer_compte')}</button></div>
+      <div class="ligne" style="display:flex;gap:8px;flex-wrap:wrap"><input placeholder="${A('nom')}" data-sc-nom="${o.id}" maxlength="120"><input placeholder="${A('courriel')}" type="email" data-sc-email="${o.id}"><select data-sc-role="${o.id}">${o.roles.map((r) => `<option value="${r}">${esc(t(`roles.${r}`))}</option>`).join('')}</select><button class="btn" data-sc-compte="${o.id}">${A('creer_compte')}</button></div>
       <p><b>${A('systemes')}</b> : ${o.systemes.map((x) => `${esc(x.nom)}${x.actif ? ` <button class="btn discret" data-ss-revoquer="${x.id}">${A('revoquer')}</button>` : ` · ${A('revoque')}`}`).join(' ; ') || A('aucun')}</p>
       <div class="ligne" style="display:flex;gap:8px;flex-wrap:wrap"><input placeholder="${A('nom_systeme')}" data-ss-nom="${o.id}" maxlength="100"><button class="btn" data-ss-creer="${o.id}">${A('relier')}</button>
         <button class="btn discret" data-so-actif="${o.id}" data-actif="${!o.actif}">${o.actif ? A('desactiver') : A('activer')}</button></div></div>`;
     corps.innerHTML = `<p class="note">${A('intro')}</p>${supervision}
       <div class="panneau-c" style="margin-bottom:12px"><h3>${A('nouvelle')}</h3><div style="display:flex;gap:8px;flex-wrap:wrap">
         <input id="so-code" placeholder="${A('code')}" maxlength="20" style="max-width:140px"><input id="so-nom" placeholder="${A('nom')}" maxlength="120">
-        <select id="so-type"><option value="ambulancier">${A('type_ambulancier')}</option><option value="ccs">${A('type_ccs')}</option></select>
+        <select id="so-type">${d.types.map((x) => `<option value="${x}">${A(`type_${x}`)}</option>`).join('')}</select>
         <select id="so-cfg">${d.profils.map((c) => `<option value="${c.id}">${esc(c.nom)}</option>`).join('')}</select><button class="btn pri" id="so-creer">${A('creer')}</button></div></div>
       ${d.organisations.map(ligne).join('') || `<p class="note">${A('aucune')}</p>`}`;
     const secret = (r) => modale(t('secours_admin.une_fois'), `<p class="note">${A('une_fois_aide')}</p><p><b>${A('cle')}</b><br><code>${esc(r.cle)}</code></p><p><b>${A('secret')}</b><br><code>${esc(r.secret)}</code></p>`, [{ label: t('general.fermer'), pri: true }]);
@@ -194,6 +195,10 @@
     }; });
     corps.querySelectorAll('[data-ss-creer]').forEach((b) => { b.onclick = async () => { const id = b.dataset.ssCreer; const r = await agir(b, () => api('POST', `/admin/secours/organisations/${id}/systemes`, { nom: corps.querySelector(`[data-ss-nom="${id}"]`).value })); if (r) secret(r); }; });
     corps.querySelectorAll('[data-ss-revoquer]').forEach((b) => { b.onclick = () => agir(b, () => api('PUT', `/admin/secours/systemes/${b.dataset.ssRevoquer}`, {}), t('liaison_secours.ok')); });
+    corps.querySelectorAll('[data-sp-org]').forEach((c) => { c.onchange = () => {
+      const id = c.dataset.spOrg; const profils = [...corps.querySelectorAll(`[data-sp-org="${id}"]`)].filter((x) => x.checked).map((x) => x.value);
+      agir(null, () => api('PUT', `/admin/secours/organisations/${id}`, { profils }), t('liaison_secours.ok'));
+    }; });
     corps.querySelectorAll('[data-so-actif]').forEach((b) => { b.onclick = () => agir(b, () => api('PUT', `/admin/secours/organisations/${b.dataset.soActif}`, { actif: b.dataset.actif === 'true' }), t('liaison_secours.ok')); });
   }
   window.ArrimoSecours = { vues: { secours: vueSecours }, admin };
