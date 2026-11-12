@@ -10,6 +10,8 @@ const QRCode = require('qrcode');
 const { transaction, ErreurHttp } = require('../db');
 const { hacherAsync, verifierAsync, motDePasseTemporaire, verifierRobustesse } = require('../auth');
 const totp = require('../totp');
+// Types d'établissement et organisations de secours (source unique) : liaison, modules et activation
+const TE = require('../types-etablissement');
 const { limiteur } = require('../limites');
 const { version } = require('../../package.json');
 const { ETAPES, RANG_GOLIVE, ELEMENT_IMPORT, FORMATION, ELEMENTS_AUTOMATIQUES, creerEtapes } = require('./etapes');
