@@ -1408,3 +1408,18 @@ CREATE TRIGGER demande_transport_evenements_pas_de_modif BEFORE UPDATE OR DELETE
 DROP TRIGGER IF EXISTS demande_transport_evenements_pas_de_vidage ON demande_transport_evenements;
 CREATE TRIGGER demande_transport_evenements_pas_de_vidage BEFORE TRUNCATE ON demande_transport_evenements
   FOR EACH STATEMENT EXECUTE FUNCTION journal_immuable();
+
+-- Arrimo Connect (12 nov. 2026, cahier 2, section 11) : systèmes externes des organisations de secours (répartition des CCS,
+-- systèmes ambulanciers). Clé montrée une seule fois (empreinte stockée) ; secret de signature HMAC chiffré au repos.
+CREATE TABLE IF NOT EXISTS connecteurs_secours (
+  id                    serial PRIMARY KEY,
+  organisation_id       int  NOT NULL REFERENCES organisations_secours(id),
+  nom                   text NOT NULL,
+  cle_hash              text NOT NULL UNIQUE,
+  secret                text NOT NULL,
+  actif                 boolean NOT NULL DEFAULT true,
+  cree_le               timestamptz NOT NULL DEFAULT now(),
+  derniere_utilisation  timestamptz
+);
+ALTER TABLE prealertes ADD COLUMN IF NOT EXISTS mission_externe text;          -- identifiant de mission du système partenaire, si fourni
+ALTER TABLE prealertes ADD COLUMN IF NOT EXISTS connecteur_id int REFERENCES connecteurs_secours(id);

@@ -31,7 +31,8 @@ function creerApp(pool, options = {}) {
   // Import CSV : jusqu'à 1 Mo (même limite que Nginx) ; ailleurs 50 Ko
   app.use(['/api/admin/import', '/api/sh/import'], express.json({ limit: '1mb' }));
   app.use('/api/support', express.json({ limit: '15mb' }));
-  app.use(express.json({ limit: '50kb' }));
+  // Arrimo Connect : le corps brut est gardé pour vérifier la signature HMAC des systèmes partenaires
+  app.use(express.json({ limit: '50kb', verify: (req, res, buf) => { if (req.originalUrl.startsWith('/api/connect/')) req.rawBody = buf.toString('utf8'); } }));
   app.use((req, res, next) => {
     res.set({
       'X-Content-Type-Options': 'nosniff',
@@ -144,6 +145,8 @@ function creerApp(pool, options = {}) {
   }
 
   /* ---------- connecteurs : systèmes de l'hôpital et du réseau (clé dédiée) ---------- */
+  // Arrimo Connect (secours) : systèmes de répartition et ambulanciers, requêtes signées, mêmes règles que l'écran
+  require('./connect').brancher(api, pool, route);
   api.post('/connecteurs/evenements', route(async (req) => {
     const con = await cx.identifier(pool, req.get('x-connecteur-key'));
     const evs = Array.isArray(req.body) ? req.body.slice(0, 200) : [req.body];

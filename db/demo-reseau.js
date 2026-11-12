@@ -378,6 +378,9 @@ async function demoReseau(pool, { silencieux = false, comptesRoles = false, avec
   await prealertes.agir(pool, { ...coX, nom: 'Coordination X' }, paB.id, { etablissement_id: ids.HX, action: 'prendre_en_compte' });
   await prealertes.agir(pool, { ...coX, nom: 'Coordination X' }, paB.id, { etablissement_id: ids.HX, action: 'preparation' });
 
+  // Arrimo Connect : un système ambulancier et un système de répartition (CCS) fictifs, requêtes signées
+  const cxAmb = await require('../src/connect').creerConnecteurSecours(pool, (await pool.query("SELECT id FROM organisations_secours WHERE code = 'AMB-RIVES'")).rows[0].id, 'Système ambulancier (démo)');
+  const cxCcs = await require('../src/connect').creerConnecteurSecours(pool, (await pool.query("SELECT id FROM organisations_secours WHERE code = 'CCS-REGION'")).rows[0].id, 'Système de répartition du CCS (démo)');
   const acces = [
     'ARRIMO · DÉMONSTRATION · RÉSEAU DE 20 HÔPITAUX (données fictives)',
     `Mot de passe de tous les comptes : ${MDP}`,
@@ -397,6 +400,8 @@ async function demoReseau(pool, { silencieux = false, comptesRoles = false, avec
     '',
     `Clé du connecteur ADT de ${X.nom} : ${conX.cle}`,
     `Clé du connecteur réseau (lecture) : ${conR.cle}`,
+    `Arrimo Connect, système ambulancier (Paramédics des Rives) : clé ${cxAmb.cle} · secret de signature ${cxAmb.secret}`,
+    `Arrimo Connect, répartition du CCS : clé ${cxCcs.cle} · secret de signature ${cxCcs.secret}`,
   ].join('\n');
   if (!silencieux) console.log(acces);
   return { ids, types, acces };

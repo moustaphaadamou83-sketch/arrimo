@@ -245,6 +245,8 @@ const MESSAGES = {
   transport_introuvable: "Demande de transport introuvable.",
   transport_clos: "Cette demande de transport est close.",
   transport_statut_incompatible: "Cette étape n’est pas possible à ce stade du transport.",
+  connect_signature_invalide: "Requête refusée : clé ou signature du système partenaire invalide.",
+  connect_horodatage_expire: "Requête refusée : horodatage hors de la fenêtre de 5 minutes.",
   liaison_secours_inactive: "Cet hôpital n’a pas activé la Liaison Secours : la préalerte ne peut pas lui être transmise.",
   organisation_interdite: "Votre compte n’est rattaché à aucune organisation de secours active.",
   prealerte_invalide: "Préalerte incomplète ou invalide : vérifiez la priorité, la catégorie, l’heure d’arrivée et l’équipage.",

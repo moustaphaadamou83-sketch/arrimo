@@ -27,6 +27,8 @@ const RANG = { envoyee: 0, recue: 1, consultee: 2, prise_en_compte: 3, preparati
 
 const entier = (v) => { const n = Number(v); return Number.isSafeInteger(n) && n > 0 ? n : null; };
 async function organisationsDe(db, u) {
+  // Système externe (Arrimo Connect) : son organisation seulement
+  if (u.connecteur) return [{ id: u.connecteur.organisation_id, type: u.connecteur.type, config_id: u.connecteur.config_id }];
   return (await db.query(`SELECT o.id, o.type, o.config_id FROM utilisateur_organisations uo JOIN organisations_secours o ON o.id = uo.organisation_id
     WHERE uo.utilisateur_id = $1 AND o.actif`, [u.id])).rows;
 }
@@ -47,7 +49,7 @@ async function exigerHopital(db, u, etabId) {
   return e;
 }
 const evenement = (c, pa, type, u, detail = {}) => c.query('INSERT INTO prealerte_evenements (prealerte_id, type, detail, utilisateur_id) VALUES ($1, $2, $3, $4)',
-  [pa.id, type, JSON.stringify(detail), u ? u.id : null]);
+  [pa.id, type, JSON.stringify(u?.connecteur ? { ...detail, systeme: u.connecteur.nom } : detail), u ? u.id || null : null]);
 async function notifier(c, etabId, code, pa, extra = {}) {
   const org = (await c.query('SELECT nom FROM organisations_secours WHERE id = $1', [pa.organisation_id])).rows[0]?.nom;
   const unite = (await c.query('SELECT numero FROM unites_secours WHERE id = $1', [pa.unite_id])).rows[0]?.numero;
@@ -107,17 +109,19 @@ async function creer(pool, u, b) {
     const ouverte = (await c.query(`SELECT numero FROM prealertes WHERE unite_id = $1 AND statut = ANY($2)`, [unite.id, OUVERTES])).rows[0];
     if (ouverte) throw new ErreurHttp(409, 'prealerte_deja_ouverte', { numero: ouverte.numero });
     const equipage = await lireEquipage(c, b.equipage, unite.organisation_id, u);
-    const pa = (await c.query(`INSERT INTO prealertes (numero, organisation_id, unite_id, destination_id, priorite, categorie, equipage, heure_prevue, cle_idempotence, cree_par)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-    [await numero(c), unite.organisation_id, unite.id, dest.id, priorite, categorie, equipage, heure, cle, u.id])).rows[0];
+    const mission = b.mission_externe == null || b.mission_externe === '' ? null : String(b.mission_externe).slice(0, 64);
+    const pa = (await c.query(`INSERT INTO prealertes (numero, organisation_id, unite_id, destination_id, priorite, categorie, equipage, heure_prevue, cle_idempotence, cree_par, mission_externe, connecteur_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+    [await numero(c), unite.organisation_id, unite.id, dest.id, priorite, categorie, equipage, heure, cle, u.id || null, mission, u.connecteur ? u.connecteur.id : null])).rows[0];
     await evenement(c, pa, 'envoyee', u, { destination: dest.id, priorite, categorie, heure_prevue: heure });
     const pr = await proposerService(c, pa);
-    await journaliser(c, { etablissementId: dest.id, utilisateurId: u.id, action: 'Préalerte reçue', detail: `${pa.numero} · ${priorite}` });
+    await journaliser(c, { etablissementId: dest.id, utilisateurId: u.id || null, action: 'Préalerte reçue', detail: `${pa.numero} · ${priorite}` });
     await notifier(c, dest.id, priorite === 'immediate' ? 'secours_prealerte_prioritaire' : 'secours_prealerte', pa, { priorite });
     return pr;
   });
 }
 async function lireEquipage(c, liste, orgId, u) {
+  if (u.connecteur && !Array.isArray(liste)) return [];
   const ids = [...new Set((Array.isArray(liste) ? liste : [u.id]).map(entier))];
   if (ids.includes(null) || ids.length > 6) throw new ErreurHttp(400, 'prealerte_invalide');
   const ok = (await c.query(`SELECT count(*)::int AS n FROM utilisateur_organisations uo JOIN utilisateurs us ON us.id = uo.utilisateur_id
@@ -337,7 +341,7 @@ async function agir(pool, u, id, b) {
       } else throw new ErreurHttp(400, 'action_inconnue');
     }
     await evenement(c, n, a, u, detail);
-    await journaliser(c, { etablissementId: n.destination_id, utilisateurId: u.id, action: `Préalerte : ${a.replace(/_/g, ' ')}`, detail: n.numero });
+    await journaliser(c, { etablissementId: n.destination_id, utilisateurId: u.id || null, action: `Préalerte : ${a.replace(/_/g, ' ')}`, detail: n.numero });
     return { ...n, correspond: a === 'confirmer_vehicule' ? true : undefined };
   });
 }
@@ -349,12 +353,12 @@ async function changerDestination(c, u, pa, b) {
   const heure = lireHeure(b) || pa.heure_prevue;
   const nv = (await c.query(`INSERT INTO prealertes (numero, organisation_id, unite_id, destination_id, priorite, categorie, equipage, heure_prevue, remplace_id, cree_par)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-  [await numero(c), pa.organisation_id, pa.unite_id, dest.id, pa.priorite, pa.categorie, pa.equipage, heure, pa.id, u.id])).rows[0];
+  [await numero(c), pa.organisation_id, pa.unite_id, dest.id, pa.priorite, pa.categorie, pa.equipage, heure, pa.id, u.id || null])).rows[0];
   await evenement(c, ancienne, 'destination_modifiee', u, { nouvelle: nv.numero, destination: dest.id });
   await evenement(c, nv, 'envoyee', u, { remplace: pa.numero, destination: dest.id, priorite: nv.priorite, categorie: nv.categorie, heure_prevue: heure });
   await proposerService(c, nv);
-  await journaliser(c, { etablissementId: pa.destination_id, utilisateurId: u.id, action: 'Préalerte : destination modifiée', detail: `${pa.numero} → ${nv.numero}` });
-  await journaliser(c, { etablissementId: dest.id, utilisateurId: u.id, action: 'Préalerte reçue', detail: `${nv.numero} · ${nv.priorite}` });
+  await journaliser(c, { etablissementId: pa.destination_id, utilisateurId: u.id || null, action: 'Préalerte : destination modifiée', detail: `${pa.numero} → ${nv.numero}` });
+  await journaliser(c, { etablissementId: dest.id, utilisateurId: u.id || null, action: 'Préalerte reçue', detail: `${nv.numero} · ${nv.priorite}` });
   await notifier(c, pa.destination_id, 'secours_destination_modifiee', ancienne);
   await notifier(c, dest.id, nv.priorite === 'immediate' ? 'secours_prealerte_prioritaire' : 'secours_prealerte', nv, { priorite: nv.priorite });
   return { ...nv, remplace: ancienne.numero };

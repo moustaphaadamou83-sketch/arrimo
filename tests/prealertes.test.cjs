@@ -396,3 +396,56 @@ test('Liaison Établissements : demande de transport d’un CHSLD vers une ambul
   r = await appel('tremblay', 'POST', `/transports/${d2.id}/action`, { etablissement_id: ids.mb, action: 'annuler' }); assert.strictEqual(r.corps.statut, 'annulee');
   assert.strictEqual((await appel('paraB', 'POST', `/secours/transports/${d2.id}/action`, { action: 'accepter', unite_id: ids.u3 })).corps.code, 'transport_clos');
 });
+
+test('Arrimo Connect : requêtes signées des systèmes partenaires (répartition, ambulancier), mêmes règles que l’écran, idempotence, isolation', async () => {
+  const cx = require('../src/connect');
+  // Comme en production (clé exigée au démarrage) : le secret de signature est chiffré au repos
+  const cleAvant = process.env.ARRIMO_MFA_ENCRYPTION_KEY; process.env.ARRIMO_MFA_ENCRYPTION_KEY = Buffer.alloc(32, 9).toString('base64');
+  test.after(() => { if (cleAvant === undefined) delete process.env.ARRIMO_MFA_ENCRYPTION_KEY; else process.env.ARRIMO_MFA_ENCRYPTION_KEY = cleAvant; });
+  const sysA = await cx.creerConnecteurSecours(pool, ids.ambA, 'Système ambulancier fictif A');
+  const sysCcs = await cx.creerConnecteurSecours(pool, ids.ccs, 'Répartition fictive (CCS)');
+  const sysB = await cx.creerConnecteurSecours(pool, ids.ambB, 'Système ambulancier fictif B');
+  assert.match(sysA.cle, /^acx_[0-9a-f]{36}$/);
+  assert.ok(!(await pool.query('SELECT 1 FROM connecteurs_secours WHERE cle_hash = $1 OR secret = $2', [sysA.cle, sysA.secret])).rowCount, 'ni la clé ni le secret ne sont stockés en clair');
+  assert.match((await pool.query('SELECT secret FROM connecteurs_secours WHERE id = $1', [sysA.id])).rows[0].secret, /^enc:v1:/);
+  const connect = async (sys, methode, chemin, corps, { horodatage = Date.now(), signature = null } = {}) => {
+    const brut = corps ? JSON.stringify(corps) : '';
+    const sig = signature || cx.signer(sys.secret, horodatage, methode, `/api${chemin}`, brut);
+    const r = await fetch(`${base}/api${chemin}`, { method: methode, headers: { 'Content-Type': 'application/json', 'X-Arrimo-Cle': sys.cle, 'X-Arrimo-Horodatage': String(horodatage), 'X-Arrimo-Signature': sig }, body: corps ? brut : undefined });
+    return { statut: r.status, corps: await r.json().catch(() => null) };
+  };
+  let r = await connect(sysA, 'GET', '/connect/v1/statut');
+  assert.strictEqual(r.statut, 200, JSON.stringify(r.corps)); assert.deepStrictEqual([r.corps.version, r.corps.type], ['v1', 'ambulancier']);
+  assert.strictEqual((await connect(sysA, 'GET', '/connect/v1/statut', null, { signature: 'f'.repeat(64) })).corps.code, 'connect_signature_invalide');
+  assert.strictEqual((await connect(sysA, 'GET', '/connect/v1/statut', null, { horodatage: Date.now() - 10 * 60000 })).corps.code, 'connect_horodatage_expire');
+  assert.strictEqual((await connect({ ...sysA, cle: 'acx_inconnue' }, 'GET', '/connect/v1/statut')).statut, 401);
+  // Corps modifié après signature : refusé
+  const corps = { unite_numero: '12-35', destination_id: ids.mb, priorite: 'urgente', categorie: 'traumatologie', delai_min: 18, cle_envoi: 'cad-mission-77001', mission_externe: 'M-77001' };
+  const sig = cx.signer(sysA.secret, Date.now(), 'POST', '/api/connect/v1/prealertes', JSON.stringify(corps));
+  assert.strictEqual((await connect(sysA, 'POST', '/connect/v1/prealertes', { ...corps, priorite: 'immediate' }, { signature: sig })).statut, 401);
+  // Préalerte transmise par le système ambulancier : mêmes règles que l'écran, idempotente
+  await pool.query("UPDATE prealertes SET statut = 'annulee' WHERE unite_id = $1 AND statut NOT IN ('cloturee', 'annulee', 'remplacee')", [ids.u2]);
+  const [a, b] = await Promise.all([connect(sysA, 'POST', '/connect/v1/prealertes', corps), connect(sysA, 'POST', '/connect/v1/prealertes', corps)]);
+  assert.strictEqual(a.statut, 200, JSON.stringify(a.corps)); assert.strictEqual(a.corps.id, b.corps.id);
+  assert.deepStrictEqual([a.corps.mission_externe, a.corps.cree_par], ['M-77001', null]);
+  assert.strictEqual((await connect(sysA, 'POST', '/connect/v1/prealertes', { ...corps, cle_envoi: 'cad-mission-77002', categorie: 'douleur' })).corps.code, 'prealerte_invalide');
+  assert.strictEqual((await connect(sysA, 'POST', '/connect/v1/prealertes', { ...corps, cle_envoi: 'cad-mission-77003', unite_numero: '20-01' })).corps.code, 'unite_introuvable');
+  // L'hôpital la voit comme toute préalerte ; l'historique nomme le système
+  const f = (await appel('tremblay', 'GET', `/secours/prealertes/${a.corps.id}?etablissement_id=${ids.mb}`)).corps;
+  assert.strictEqual(f.evenements[0].detail.systeme, 'Système ambulancier fictif A');
+  r = await connect(sysA, 'POST', `/connect/v1/prealertes/${a.corps.numero}/evenements`, { action: 'signaler_arrivee' });
+  assert.ok(r.corps.arrivee_signalee_le);
+  assert.strictEqual((await connect(sysA, 'POST', `/connect/v1/prealertes/${a.corps.numero}/evenements`, { action: 'confirmer_vehicule', unite_numero: '12-35' })).corps.code, 'action_inconnue');
+  assert.strictEqual((await connect(sysA, 'POST', '/connect/v1/unites/12-35/position', { latitude: 45.4, longitude: -71.9 })).statut, 200);
+  // Isolation : l'autre entreprise ne voit ni n'agit ; le CCS lit sans agir
+  assert.strictEqual((await connect(sysB, 'GET', `/connect/v1/prealertes/${a.corps.numero}`)).statut, 404);
+  assert.strictEqual((await connect(sysB, 'POST', `/connect/v1/prealertes/${a.corps.numero}/evenements`, { action: 'annuler' })).statut, 404);
+  const lu = (await connect(sysCcs, 'GET', '/connect/v1/prealertes')).corps;
+  assert.ok(lu.some((p) => p.numero === a.corps.numero && !('actions' in p)));
+  assert.strictEqual((await connect(sysCcs, 'POST', '/connect/v1/prealertes', corps)).statut, 403);
+  const urg = (await connect(sysCcs, 'GET', '/connect/v1/urgences')).corps;
+  assert.deepStrictEqual(urg.map((h) => h.id).sort(), [ids.mb, ids.sl].sort());
+  // Clé désactivée : refus
+  await pool.query('UPDATE connecteurs_secours SET actif = false WHERE id = $1', [sysB.id]);
+  assert.strictEqual((await connect(sysB, 'GET', '/connect/v1/statut')).statut, 401);
+});

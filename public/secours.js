@@ -19,7 +19,8 @@
       st: { ouvert: 'ouverte', capacite_limitee: 'capacité limitée', saturation: 'saturation', delestage: 'délestage' }, vol_oiseau: '{km} km à vol d’oiseau', civieres: '{n} civières libres', civiere1: '{n} civière libre', sans_donnee: 'aucune donnée d’urgence',
       position: 'Partager la position de l’unité', position_aide: 'Facultatif : améliore l’heure d’arrivée vue par l’hôpital. Conservée 24 h au plus.', position_on: 'Position partagée',
       position_refus: 'Position non disponible sur cet appareil.', historique: 'Dernières 24 heures', aucune: 'Aucune préalerte.', organisation: 'Préalertes de l’organisation',
-      ccs_en_cours: 'Ambulances annoncées dans la région', ccs_aide: 'Consultation seulement : votre système de répartition reste la référence.',
+      ccs_en_cours: 'Ambulances annoncées dans la région', carte: 'Carte régionale', alertes: 'Alertes de saturation', aucune_alerte: 'Aucune saturation déclarée ou mesurée.',
+      alerte_niveau: 'urgence saturée (civières)', alerte_declare: 'déclaration « {statut} » il y a {age} min', ccs_aide: 'Consultation seulement : votre système de répartition reste la référence.',
       gardee: 'Réseau indisponible : préalerte gardée sur l’appareil, elle sera transmise automatiquement.', transmise: 'Préalerte transmise.', fait: 'Enregistré.',
       og_titre: 'OG, votre assistant Arrimo', og_aide: 'OG suit les préalertes et l’état des urgences ; il ne décide ni de la destination ni de la priorité.', og_question: 'Posez une question à OG',
       og_envoyer: 'Demander', og_q_reception: 'L’hôpital a-t-il confirmé la réception ?', og_q_manque: 'Que manque-t-il à ma préalerte ?', og_q_urgences: 'État des urgences de la région',
@@ -50,7 +51,8 @@
       st: { ouvert: 'open', capacite_limitee: 'limited capacity', saturation: 'saturation', delestage: 'diversion' }, vol_oiseau: '{km} km as the crow flies', civieres: '{n} free stretchers', civiere1: '{n} free stretcher', sans_donnee: 'no emergency data',
       position: 'Share the unit’s position', position_aide: 'Optional: improves the arrival time seen by the hospital. Kept 24 h at most.', position_on: 'Position shared',
       position_refus: 'Position unavailable on this device.', historique: 'Last 24 hours', aucune: 'No pre-alert.', organisation: 'Organization pre-alerts',
-      ccs_en_cours: 'Ambulances announced in the region', ccs_aide: 'View only: your dispatch system remains the reference.',
+      ccs_en_cours: 'Ambulances announced in the region', carte: 'Regional map', alertes: 'Saturation alerts', aucune_alerte: 'No saturation declared or measured.',
+      alerte_niveau: 'emergency saturated (stretchers)', alerte_declare: '“{statut}” declared {age} min ago', ccs_aide: 'View only: your dispatch system remains the reference.',
       gardee: 'Network unavailable: pre-alert kept on the device; it will be sent automatically.', transmise: 'Pre-alert sent.', fait: 'Saved.',
       og_titre: 'OG, your Arrimo assistant', og_aide: 'OG tracks pre-alerts and emergency status; it decides neither the destination nor the priority.', og_question: 'Ask OG a question',
       og_envoyer: 'Ask', og_q_reception: 'Has the hospital confirmed receipt?', og_q_manque: 'What is missing from my pre-alert?', og_q_urgences: 'Regional emergency status',
@@ -200,6 +202,34 @@
     try { etat.og = (await api('POST', '/secours/og', { question })).reponse; } catch (e) { etat.og = estReseau(e) ? t('hors_ligne') : e.message; }
     rendre();
   }
+  const COUL = { vert: '#16A34A', jaune: '#F59E0B', orange: '#D97706', rouge: '#DC2626' };
+  function alertes() {
+    const a = etat.destinations.filter((h) => h.urgence?.niveau === 'rouge' || (h.statut_declare && ['saturation', 'delestage'].includes(h.statut_declare.statut)));
+    return `<section class="carte-s"><h2>${t('alertes')}</h2>${a.length ? a.map((h) => `<div class="ligne-s"><div><span class="pt-niveau rouge" aria-hidden="true"></span><strong>${esc(h.nom)}</strong></div>
+      <div class="note">${esc([h.urgence?.niveau === 'rouge' ? t('alerte_niveau') : null, h.statut_declare && ['saturation', 'delestage'].includes(h.statut_declare.statut) ? `${t('alerte_declare', { statut: t('st.' + h.statut_declare.statut), age: h.statut_declare.age_min })}${h.statut_declare.perime ? ` · ${t('ancien')}` : ''}` : null].filter(Boolean).join(' · '))}</div></div>`).join('') : `<p class="note">${t('aucune_alerte')}</p>`}</section>`;
+  }
+  let leaflet = null; let carteRegion = null;
+  const chargerLeaflet = () => leaflet || (leaflet = new Promise((ok, ko) => {
+    const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = 'vendor/leaflet/leaflet.css'; document.head.appendChild(css);
+    const js = document.createElement('script'); js.src = 'vendor/leaflet/leaflet.js'; js.onload = () => ok(window.L); js.onerror = ko; document.head.appendChild(js);
+  }));
+  async function dessinerCarte() {
+    const zone = document.getElementById('carte-region'); if (!zone) return;
+    const L = await chargerLeaflet();
+    if (carteRegion) { carteRegion.remove(); carteRegion = null; }
+    carteRegion = L.map(zone, { scrollWheelZoom: false });
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 15, attribution: '&copy; OpenStreetMap' }).addTo(carteRegion);
+    const pts = [];
+    for (const h of etat.destinations.filter((x) => x.latitude != null)) {
+      pts.push([h.latitude, h.longitude]);
+      L.circleMarker([h.latitude, h.longitude], { radius: 10, color: '#0E5E6F', weight: 3, fillColor: COUL[h.urgence?.niveau] || '#94A3B8', fillOpacity: 0.95 }).addTo(carteRegion).bindTooltip(esc(h.nom));
+    }
+    for (const p of etat.prealertes.filter((x) => OUVERTES.includes(x.statut) && x.position)) {
+      const pos = [p.position.latitude, p.position.longitude]; pts.push(pos);
+      L.circleMarker(pos, { radius: 7, color: '#fff', weight: 2, fillColor: '#2563EB', fillOpacity: 1 }).addTo(carteRegion).bindTooltip(`${esc(p.unite)} → ${esc(p.destination)} · ${esc(eta(p))}`, { permanent: true, direction: 'right' });
+    }
+    if (pts.length > 1) carteRegion.fitBounds(pts, { padding: [30, 30], maxZoom: 12 }); else if (pts.length) carteRegion.setView(pts[0], 11);
+  }
   function carteTransports(amb) {
     const u = uniteCourante();
     const lignes = etat.transports.map((d) => {
@@ -231,7 +261,8 @@
     const msg = `${etat.erreur ? `<p class="erreur" role="alert">${esc(etat.erreur)}</p>` : ''}${etat.message ? `<p class="bandeau" role="status">${esc(etat.message)}</p>` : ''}`;
     if (!amb) {
       const ouvertes = etat.prealertes.filter((p) => OUVERTES.includes(p.statut));
-      m.innerHTML = `${msg}${carteOg(false)}${carteTransports(false)}<section class="carte-s"><h2>${t('ccs_en_cours')}</h2><p class="note">${t('ccs_aide')}</p>${ouvertes.length ? ouvertes.map(ligneListe).join('') : `<p class="note">${t('aucune')}</p>`}</section>${urgences()}`;
+      m.innerHTML = `${msg}<section class="carte-s"><h2>${t('carte')}</h2><div id="carte-region" style="height:380px;border-radius:12px"></div></section>${alertes()}${carteOg(false)}${carteTransports(false)}<section class="carte-s"><h2>${t('ccs_en_cours')}</h2><p class="note">${t('ccs_aide')}</p>${ouvertes.length ? ouvertes.map(ligneListe).join('') : `<p class="note">${t('aucune')}</p>`}</section>${urgences()}`;
+      dessinerCarte().catch(() => {});
       return;
     }
     const u = uniteCourante();

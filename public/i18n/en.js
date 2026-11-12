@@ -692,6 +692,8 @@ window.ARRIMO_I18N.en = {
     transport_introuvable: "Transport request not found.",
     transport_clos: "This transport request is closed.",
     transport_statut_incompatible: "This step is not possible at this stage of the transport.",
+    connect_signature_invalide: "Request refused: invalid partner system key or signature.",
+    connect_horodatage_expire: "Request refused: timestamp outside the 5-minute window.",
     liaison_secours_inactive: "This hospital has not enabled the Emergency liaison module: the pre-alert cannot be sent to it.",
     organisation_interdite: "Your account is not linked to any active emergency organization.",
     prealerte_invalide: "Incomplete or invalid pre-alert: check the priority, category, arrival time and crew.",
