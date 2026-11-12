@@ -105,6 +105,7 @@ window.ARRIMO_I18N.fr = {
     activer: 'Activer l’organisation', desactiver: 'Désactiver l’organisation',
   },
   liaison_secours: {
+    transport_lien: 'Résident {ref} de {origine} (transport {numero}) : suivez aussi la Liaison CHSLD.',
     cd_titre: 'Dossier hospitalier', cd_simulation: 'SIMULATION — système hospitalier simulé, fiches fictives (démonstration seulement)', cd_aucune_recherche: 'Aucune recherche ; la préalerte continue avec son numéro temporaire.',
     cd_rechercher: 'Rechercher le dossier', cd_confirmee: 'Correspondance confirmée', cd_incertaine: 'Correspondance incertaine : vérifiez et choisissez la fiche (jamais automatique).', cd_choisir: 'C’est ce dossier',
     cd_aucune: 'Aucune correspondance : la préalerte continue avec son numéro temporaire ; l’identification suivra vos procédures.', cd_aide: 'Identité fictive transmise au système simulé ; elle reste dans votre hôpital (jamais vue par l’ambulance, le CCS, le journal ni les notifications).',

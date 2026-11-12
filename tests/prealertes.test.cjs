@@ -584,3 +584,24 @@ test('profils : un seul modèle d’organisation ; Urgences-santé = CCS et Ambu
   assert.strictEqual((await appel('repUS', 'GET', '/secours/prealertes')).corps.code, 'organisation_interdite');
   assert.strictEqual((await signe('GET', '/connect/v1/statut')).statut, 403);
 });
+
+test('parcours démo : malaise au CHSLD → transport → préalerte qui le prolonge → l’hôpital voit le résident et l’établissement d’origine', async () => {
+  const ch = (await pool.query("SELECT id FROM etablissements WHERE code = 'CH-T1'")).rows[0].id;
+  const r0 = (await pool.query(`INSERT INTO residents (etablissement_id, reference, prenom, nom, date_naissance, statut) VALUES ($1, 'R-90002', 'Prénom', 'Fictif-Deux', '1942-02-02', 'present') RETURNING id`, [ch])).rows[0].id;
+  const co = (await pool.query(`INSERT INTO coordinations (numero, type, resident_id, resident_ref, origine_id, destination_id, statut)
+    VALUES ('CO-90003', 'hospitalisation', $1, 'R-90002', $2, $3, 'envoyee') RETURNING id`, [r0, ch, ids.mb])).rows[0].id;
+  const dt = (await appel('ch', 'POST', `/coordinations/${co}/transport`, { organisation_id: ids.ambA })).corps;
+  await pool.query("UPDATE prealertes SET statut = 'annulee' WHERE unite_id = $1 AND statut NOT IN ('cloturee', 'annulee', 'remplacee')", [ids.u1]);
+  const corps = { unite_id: ids.u1, destination_id: ids.mb, priorite: 'urgente', categorie: 'respiratoire', delai_min: 12, demande_transport_id: dt.id };
+  // Avant la prise en charge : refusé (le transport n'a pas encore le résident)
+  assert.strictEqual((await appel('para', 'POST', '/secours/prealertes', corps)).corps.code, 'transport_statut_incompatible');
+  for (const a of [{ action: 'accepter', unite_id: ids.u1 }, { action: 'en_route' }, { action: 'pris_en_charge' }]) assert.strictEqual((await appel('para', 'POST', `/secours/transports/${dt.id}/action`, a)).statut, 200);
+  // Autre hôpital que la destination du transport : refusé
+  assert.strictEqual((await appel('para', 'POST', '/secours/prealertes', { ...corps, destination_id: ids.sl })).corps.code, 'transport_statut_incompatible');
+  const pa = await appel('para', 'POST', '/secours/prealertes', corps);
+  assert.strictEqual(pa.statut, 200, JSON.stringify(pa.corps)); assert.strictEqual(pa.corps.demande_transport_id, dt.id);
+  const vue = (await appel('tremblay', 'GET', `/secours/prealertes/${pa.corps.id}?etablissement_id=${ids.mb}`)).corps;
+  assert.deepStrictEqual(vue.transport, { numero: dt.numero, resident_ref: 'R-90002', origine: 'CHSLD fictif des Pins' });
+  // L'ambulance d'une autre entreprise ne peut pas s'en servir
+  assert.strictEqual((await appel('paraB', 'POST', '/secours/prealertes', { ...corps, unite_id: ids.u3 })).corps.code, 'transport_statut_incompatible');
+});

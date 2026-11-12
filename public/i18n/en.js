@@ -105,6 +105,7 @@ window.ARRIMO_I18N.en = {
     activer: 'Activate the organization', desactiver: 'Deactivate the organization',
   },
   liaison_secours: {
+    transport_lien: 'Resident {ref} from {origine} (transport {numero}): also follow CHSLD liaison.',
     cd_titre: 'Hospital record', cd_simulation: 'SIMULATION — simulated hospital system, fictitious records (demonstration only)', cd_aucune_recherche: 'No search; the pre-alert continues with its temporary number.',
     cd_rechercher: 'Search the record', cd_confirmee: 'Match confirmed', cd_incertaine: 'Uncertain match: check and choose the record (never automatic).', cd_choisir: 'This is the record',
     cd_aucune: 'No match: the pre-alert continues with its temporary number; identification will follow your procedures.', cd_aide: 'Fictitious identity sent to the simulated system; it stays in your hospital (never seen by the ambulance, the CCS, the log or notifications).',

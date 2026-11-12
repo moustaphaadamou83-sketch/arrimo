@@ -106,13 +106,19 @@ async function creer(pool, u, b) {
       if (deja) return { ...deja, rejoue: true };
     }
     const dest = await exigerDestination(c, b.destination_id);
+    // Prolongement d'une demande de transport : même entreprise, résident pris en charge, même hôpital de destination
+    let transport = null;
+    if (b.demande_transport_id != null) {
+      transport = (await c.query('SELECT * FROM demandes_transport WHERE id = $1', [entier(b.demande_transport_id)])).rows[0];
+      if (!transport || transport.organisation_id !== unite.organisation_id || transport.statut !== 'pris_en_charge' || transport.destination_id !== dest.id) throw new ErreurHttp(409, 'transport_statut_incompatible');
+    }
     const ouverte = (await c.query(`SELECT numero FROM prealertes WHERE unite_id = $1 AND statut = ANY($2)`, [unite.id, OUVERTES])).rows[0];
     if (ouverte) throw new ErreurHttp(409, 'prealerte_deja_ouverte', { numero: ouverte.numero });
     const equipage = await lireEquipage(c, b.equipage, unite.organisation_id, u);
     const mission = b.mission_externe == null || b.mission_externe === '' ? null : String(b.mission_externe).slice(0, 64);
-    const pa = (await c.query(`INSERT INTO prealertes (numero, organisation_id, unite_id, destination_id, priorite, categorie, equipage, heure_prevue, cle_idempotence, cree_par, mission_externe, connecteur_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
-    [await numero(c), unite.organisation_id, unite.id, dest.id, priorite, categorie, equipage, heure, cle, u.id || null, mission, u.connecteur ? u.connecteur.id : null])).rows[0];
+    const pa = (await c.query(`INSERT INTO prealertes (numero, organisation_id, unite_id, destination_id, priorite, categorie, equipage, heure_prevue, cle_idempotence, cree_par, mission_externe, connecteur_id, demande_transport_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
+    [await numero(c), unite.organisation_id, unite.id, dest.id, priorite, categorie, equipage, heure, cle, u.id || null, mission, u.connecteur ? u.connecteur.id : null, transport ? transport.id : null])).rows[0];
     await evenement(c, pa, 'envoyee', u, { destination: dest.id, priorite, categorie, heure_prevue: heure });
     const pr = await proposerService(c, pa);
     await journaliser(c, { etablissementId: dest.id, utilisateurId: u.id || null, action: 'Préalerte reçue', detail: `${pa.numero} · ${priorite}` });
@@ -131,6 +137,7 @@ async function lireEquipage(c, liste, orgId, u) {
 }
 
 const CHAMPS = (k) => `p.*, o.nom AS organisation, un.numero AS unite, un.plaque, e.nom AS destination,
+  (SELECT json_build_object('numero', dt.numero, 'resident_ref', dt.resident_ref, 'origine', eo.nom) FROM demandes_transport dt JOIN etablissements eo ON eo.id = dt.origine_id WHERE dt.id = p.demande_transport_id) AS transport,
   (SELECT nom FROM services WHERE id = p.service_propose_id) AS service_propose, (SELECT nom FROM services WHERE id = p.service_confirme_id) AS service_confirme,
   (SELECT COALESCE(json_agg(us.nom ORDER BY us.nom), '[]') FROM utilisateurs us WHERE us.id = ANY(p.equipage)) AS equipage_noms,
   (SELECT json_build_object('latitude', pu.latitude, 'longitude', pu.longitude, 'precision_m', pu.precision_m, 'le', pu.enregistree_le)

@@ -28,7 +28,7 @@
       transports: 'Demandes de transport des établissements', tr_aide: 'Référence du résident et informations de transport seulement ; le départ et l’arrivée restent confirmés par les établissements.',
       tr_de: 'De {origine}', tr_vers: 'vers {dest}', tr_heure: 'souhaité à {heure}', tr_accepter: 'Accepter avec l’unité {unite}', tr_refuser: 'Refuser', tr_en_route: 'En route vers le départ',
       tr_pris_en_charge: 'Résident pris en charge', tr_arrivee: 'Arrivé à destination', tr_confirmer_refus: 'Refuser cette demande ? L’établissement choisira une autre entreprise.', tr_aucune: 'Aucune demande de transport.',
-      og_q_transports: 'Demandes des établissements',
+      og_q_transports: 'Demandes des établissements', tr_prealerte: 'Transmettre la préalerte à {dest}', depuis_transport: 'Préalerte du transport {numero} (résident {ref})',
       trs: { demandee: 'à accepter', acceptee: 'acceptée', en_route: 'en route', pris_en_charge: 'résident pris en charge', arrivee: 'arrivée', refusee: 'refusée', annulee: 'annulée par l’établissement' },
       acc: { fauteuil: 'fauteuil roulant', deambulateur: 'déambulateur', leve_personne: 'lève-personne', lit_electrique: 'lit électrique', malentendant: 'malentendant', malvoyant: 'malvoyant' },
       accompagnateur: 'accompagnateur', langue: 'langue : {l}',
@@ -60,7 +60,7 @@
       transports: 'Transport requests from facilities', tr_aide: 'Resident reference and transport information only; departure and arrival remain confirmed by the facilities.',
       tr_de: 'From {origine}', tr_vers: 'to {dest}', tr_heure: 'requested at {heure}', tr_accepter: 'Accept with unit {unite}', tr_refuser: 'Decline', tr_en_route: 'On the way to pickup',
       tr_pris_en_charge: 'Resident picked up', tr_arrivee: 'Arrived at destination', tr_confirmer_refus: 'Decline this request? The facility will choose another company.', tr_aucune: 'No transport request.',
-      og_q_transports: 'Requests from facilities',
+      og_q_transports: 'Requests from facilities', tr_prealerte: 'Send the pre-alert to {dest}', depuis_transport: 'Pre-alert for transport {numero} (resident {ref})',
       trs: { demandee: 'to accept', acceptee: 'accepted', en_route: 'on the way', pris_en_charge: 'resident picked up', arrivee: 'arrived', refusee: 'declined', annulee: 'cancelled by the facility' },
       acc: { fauteuil: 'wheelchair', deambulateur: 'walker', leve_personne: 'patient lift', lit_electrique: 'electric bed', malentendant: 'hard of hearing', malvoyant: 'visually impaired' },
       accompagnateur: 'escort', langue: 'language: {l}',
@@ -176,7 +176,8 @@
   }
   function formulaire(u) {
     const f = etat.formulaire;
-    return `<section class="carte-s"><h2>${t('nouvelle')} · ${esc(u.numero)}</h2>
+    const tr = f.transport ? etat.transports.find((x) => x.id === f.transport) : null;
+    return `<section class="carte-s"><h2>${t('nouvelle')} · ${esc(u.numero)}</h2>${tr ? `<p class="bandeau">${esc(t('depuis_transport', { numero: tr.numero, ref: tr.resident_ref }))}</p>` : ''}
       <label>${t('destination')}</label>${choix('destination', etat.destinations.map((d) => String(d.id)), (v) => { const d = etat.destinations.find((x) => String(x.id) === v); return `${d.nom}${d.distance_km != null ? ` (${d.distance_km} km)` : ''}`; }, f.destination)}
       <label>${t('priorite')}</label>${choix('priorite', ['immediate', 'urgente', 'non_urgente'], (v) => t('prio.' + v), f.priorite)}
       <label>${t('categorie')}</label>${choix('categorie', Object.keys(TXT.fr.cat), (v) => t('cat.' + v), f.categorie)}
@@ -240,7 +241,8 @@
         ${infos.length ? `<br><span class="note">${esc(infos.join(' · '))}</span>` : ''}</div>
         ${a.length ? `<div class="grille" style="min-width:min(100%,320px)">${a.includes('accepter') && u ? `<button class="btn pri" data-tr="accepter" data-id="${d.id}" data-version="${d.version}">${esc(t('tr_accepter', { unite: u.numero }))}</button>` : ''}
           ${a.includes('refuser') ? `<button class="btn" data-tr="refuser" data-id="${d.id}" data-version="${d.version}">${t('tr_refuser')}</button>` : ''}
-          ${['en_route', 'pris_en_charge', 'arrivee'].filter((x) => a.includes(x)).map((x) => `<button class="btn pri" data-tr="${x}" data-id="${d.id}" data-version="${d.version}">${t('tr_' + x)}</button>`).join('')}</div>` : ''}</div>`;
+          ${d.statut === 'pris_en_charge' && amb ? `<button class="btn pri" data-tr-pa="${d.id}">${esc(t('tr_prealerte', { dest: d.destination }))}</button>` : ''}
+          ${['en_route', 'pris_en_charge', 'arrivee'].filter((x) => a.includes(x)).map((x) => `<button class="btn${x === 'arrivee' ? '' : ' pri'}" data-tr="${x}" data-id="${d.id}" data-version="${d.version}">${t('tr_' + x)}</button>`).join('')}</div>` : ''}</div>`;
     });
     return `<section class="carte-s"><h2>${t('transports')}</h2><p class="note">${t('tr_aide')}</p>${lignes.join('') || `<p class="note">${t('tr_aucune')}</p>`}</section>`;
   }
@@ -286,6 +288,12 @@
     const b = ev.target.closest('button'); if (!b) return;
     if (b.dataset.langue) { L = b.dataset.langue; ecrire('arrimo-langue', L); document.documentElement.lang = L === 'en' ? 'en-CA' : 'fr-CA'; rendre(); return; }
     if (b.dataset.og) return demanderOg(t(b.dataset.og));
+    if (b.dataset.trPa) {
+      // Préalerte qui prolonge le transport : hôpital de destination prérempli ; l'équipe choisit priorité et catégorie
+      const d = etat.transports.find((x) => String(x.id) === b.dataset.trPa); if (!d) return;
+      etat.formulaire = { ...etat.formulaire, destination: String(d.destination_id), transport: d.id };
+      rendre(); document.querySelector('[data-choix="priorite"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
+    }
     if (b.dataset.tr) {
       const a = b.dataset.tr; const u0 = uniteCourante();
       if (a === 'refuser' && !confirm(t('tr_confirmer_refus'))) return;
@@ -312,7 +320,7 @@
       const f = etat.formulaire; etat.erreur = null; etat.message = null;
       if (!f.destination || !f.priorite || !f.categorie) { etat.erreur = t('choisir'); rendre(); return; }
       try {
-        const r = await envoyer('/secours/prealertes', { unite_id: u.id, destination_id: Number(f.destination), priorite: f.priorite, categorie: f.categorie, delai_min: f.delai, cle: cle() }, { garder: true });
+        const r = await envoyer('/secours/prealertes', { unite_id: u.id, destination_id: Number(f.destination), priorite: f.priorite, categorie: f.categorie, delai_min: f.delai, cle: cle(), ...(f.transport ? { demande_transport_id: f.transport } : {}) }, { garder: true });
         if (r) { etat.message = t('transmise'); etat.formulaire = { priorite: null, categorie: null, destination: null, delai: 10 }; }
       } catch (e) { etat.erreur = e.message; }
       await charger();

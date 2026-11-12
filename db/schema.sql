@@ -1468,3 +1468,6 @@ CREATE TABLE IF NOT EXISTS remises_secrets (
   cree_par       int REFERENCES utilisateurs(id),
   cree_le        timestamptz NOT NULL DEFAULT now()
 );
+
+-- Démo et terrain : une préalerte peut prolonger une demande de transport (résident d'un établissement) ; simple lien, parcours distincts
+ALTER TABLE prealertes ADD COLUMN IF NOT EXISTS demande_transport_id int REFERENCES demandes_transport(id);

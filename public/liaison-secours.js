@@ -27,6 +27,7 @@
     return `<article class="item" style="border-left:6px solid ${COUL_PRIO[p.priorite]}" data-prealerte="${p.id}"><div>
       <div><b class="num">${esc(p.numero)}</b> ${pastillePrio(p)} <span class="ch-etat">${S(`s_${p.statut}`)}</span></div>
       <div><b>${esc(p.organisation)}</b> · ${S('unite', { numero: p.unite })}${p.plaque ? ` · ${S('plaque', { plaque: p.plaque })}` : ''}</div>
+      ${p.transport ? `<div class="note"><b>${S('transport_lien', { ref: p.transport.resident_ref, origine: p.transport.origine, numero: p.transport.numero })}</b></div>` : ''}
       <div class="note">${S('categorie', { cat: t(`liaison_secours.cat_${p.categorie}`) })}${(p.equipage_noms || []).length ? ` · ${S('equipage', { noms: p.equipage_noms.join(', ') })}` : ''}</div>
       ${OUVERTES.includes(p.statut) && p.statut !== 'arrivee' ? `<div><b>${delai(p)}</b> · <span class="note">${p.position ? S('position_le', { heure: heureCourte(p.position.le) }) : S('sans_position')}</span></div>` : ''}
       ${OUVERTES.includes(p.statut) ? `<div class="note">${S('prep', { etat: t(`liaison_secours.prep_${p.etat_preparation}`) })}</div>` : ''}
