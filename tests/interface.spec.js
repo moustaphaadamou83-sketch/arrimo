@@ -486,7 +486,8 @@ test('interface en anglais : aucun texte français restant (noms propres except�
   await demoReseau(pool, { silencieux: true, comptesRoles: true });
   // Noms propres et données saisies par les établissements : établissements, villes, unités, personnes, connecteurs, configuration
   const noms = (await pool.query(`SELECT nom FROM etablissements UNION SELECT ville FROM etablissements UNION SELECT nom FROM unites
-    UNION SELECT nom FROM utilisateurs UNION SELECT nom FROM connecteurs UNION SELECT nom FROM config_pays UNION SELECT transport_libelle FROM config_pays`))
+    UNION SELECT nom FROM utilisateurs UNION SELECT nom FROM connecteurs UNION SELECT nom FROM config_pays UNION SELECT transport_libelle FROM config_pays
+    UNION SELECT nom FROM organisations_secours UNION SELECT nom FROM services`))
     .rows.map((r) => r.nom).filter(Boolean).sort((a, b) => b.length - a.length);
   const L = LARGEURS[0];
   const ecran = async (page, nom) => { await sansFrancais(page, noms, nom); await verifier(page, { ...L, nom: 'anglais' }, nom); };
@@ -639,7 +640,8 @@ for (const L of LARGEURS.slice(1)) {
     await viderBase(pool);
     await demoReseau(pool, { silencieux: true, comptesRoles: true });
     const noms = (await pool.query(`SELECT nom FROM etablissements UNION SELECT ville FROM etablissements UNION SELECT nom FROM unites
-      UNION SELECT nom FROM utilisateurs UNION SELECT nom FROM connecteurs UNION SELECT nom FROM config_pays UNION SELECT transport_libelle FROM config_pays`))
+      UNION SELECT nom FROM utilisateurs UNION SELECT nom FROM connecteurs UNION SELECT nom FROM config_pays UNION SELECT transport_libelle FROM config_pays
+    UNION SELECT nom FROM organisations_secours UNION SELECT nom FROM services`))
       .rows.map((r) => r.nom).filter(Boolean).sort((a, b) => b.length - a.length);
     const ecran = async (page, nom) => { await sansFrancais(page, noms, `${L.nom}/${nom}`); await verifier(page, { ...L, nom: `anglais-${L.nom}` }, nom); };
     const x = await ouvrir(L, 'hopital.x@demo.arrimo', 'en');
