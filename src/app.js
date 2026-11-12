@@ -60,6 +60,8 @@ function creerApp(pool, options = {}) {
   app.get('/remise', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'remise.html')));
   // FHIR R4 en lecture pour le système d'un hôpital relié (portée « fhir », données de l'établissement seulement)
   require('./fhir').brancher(app, pool);
+  // Intégration : comment Arrimo s'arrime aux systèmes des clients (page publique, aucune donnée)
+  app.get('/integration', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'integration.html')));
   // Scénario guidé de la démonstration (aucune donnée, aucun mot de passe)
   app.get('/demo-guide', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'demo-guide.html')));
   app.get(['/confidentialite', '/conditions', '/privacy', '/terms'], (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'legal.html')));

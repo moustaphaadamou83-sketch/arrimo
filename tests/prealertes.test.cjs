@@ -717,3 +717,14 @@ test('SH et connexions externes : organisation de secours et profils, modules un
     assert.strictEqual((await sh('POST', '/sh/connexions/US-SH', { genre: 'fhir', courriel_technique: 'it@us.exemple' })).corps.code, 'connexion_genre_invalide', 'FHIR : établissements seulement');
   } finally { cm.definirTransport(null); }
 });
+
+test('intégration : page publique et réponse d’OG sur le DSN (complément, jamais remplacement ; aucune connexion réelle revendiquée)', async () => {
+  const p = await fetch(`${base}/integration`);
+  assert.strictEqual(p.status, 200); const html = await p.text();
+  assert.match(html, /ne remplace pas/); assert.match(html, /Dossier santé numérique/); assert.match(html, /FHIR R4/);
+  const og = (await appel('tremblay', 'POST', '/assistant', { etablissement_id: ids.mb, question: 'Comment Arrimo peut-il s’arrimer au DSN de notre clinique ?' })).corps;
+  assert.deepStrictEqual(og.intentions, ['integration']); assert.match(og.reponse, /ne remplace pas vos systèmes/); assert.match(og.reponse, /seulement après autorisation/);
+  // Les questions sur la réintégration d'un résident ne sont pas captées
+  const autre = (await appel('tremblay', 'POST', '/assistant', { etablissement_id: ids.mb, question: 'Combien de lits libres en médecine ?' })).corps;
+  assert.ok(!(autre.intentions || []).includes('integration'));
+});

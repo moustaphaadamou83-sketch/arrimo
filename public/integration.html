@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="fr-CA" translate="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arrimo · Intégration</title>
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<meta name="referrer" content="no-referrer">
+<script src="apparence.js"></script>
+<link rel="stylesheet" href="style.css">
+<style>
+  body.integ { background: var(--fond); }
+  .integ main { max-width: 960px; margin: 0 auto; padding: 16px; }
+  .integ section { background: var(--carte); border: 1px solid var(--bordure); border-radius: var(--rayon-carte); padding: 16px 20px; margin: 14px 0; }
+  .integ table { width: 100%; border-collapse: collapse; } .integ th, .integ td { text-align: left; padding: 8px; border-bottom: 1px solid var(--bordure); vertical-align: top; }
+  .integ .tableau { overflow-x: auto; } .integ code { overflow-wrap: anywhere; }
+  .integ nav a { margin-right: 12px; }
+</style>
+</head>
+<body class="integ">
+<main>
+<nav><a href="#fr">Français</a><a href="#en">English</a></nav>
+<div id="fr" lang="fr-CA">
+<h1>Comment Arrimo s’arrime à vos systèmes</h1>
+<p>Arrimo <b>ne remplace pas</b> vos solutions (dossier médical électronique, dossier patient, système de répartition, Dossier santé numérique). Il coordonne les lits, les places, les transferts, les transports et les arrivées d’ambulances, et se branche à côté de ce que vous avez déjà.</p>
+<section><h2>Principes</h2><ul>
+  <li><b>Complément</b> : vos systèmes restent la source de vérité clinique ; Arrimo ne lit que ce qui sert à coordonner.</li>
+  <li><b>Minimisation</b> : une référence pseudonymisée suffit ; aucune identité n’est conservée.</li>
+  <li><b>Client par client</b> : chaque connexion est activée pour un client, limitée à ses données, désactivable à tout moment et journalisée.</li>
+  <li><b>Secrets jamais affichés</b> : remis une seule fois à votre contact technique par un lien de 24 h.</li>
+  <li><b>Aucun port ouvert</b> : HTTPS seulement.</li>
+  <li><b>Un humain décide</b> : aucune action automatique sur un patient, un lit, une destination ou une priorité.</li></ul></section>
+<section><h2>Portes d’entrée</h2><div class="tableau"><table><thead><tr><th>Besoin</th><th>Interface</th><th>Détail</th></tr></thead><tbody>
+  <tr><td>Admissions, transferts, congés depuis votre moteur d’interface</td><td>HL7 v2 ADT sur HTTPS</td><td>A01, A02, A03, A04, A16 ; accusé HL7 ; jamais traité deux fois</td></tr>
+  <tr><td>La même chose en JSON</td><td>ADT JSON</td><td>Pour les moteurs qui produisent du JSON</td></tr>
+  <tr><td>Votre DME ou plateforme lit la situation d’Arrimo</td><td>FHIR R4 (lecture)</td><td>Organization, Location (lits), HealthcareService, Encounter (ambulances annoncées, sans patient) ; vos données seulement</td></tr>
+  <tr><td>Être prévenu en temps réel</td><td>Webhooks signés</td><td>Préalertes et transports qui vous concernent ; signature HMAC-SHA256 ; nouvelles tentatives</td></tr>
+  <tr><td>Répartition ou système ambulancier</td><td>Arrimo Connect v1</td><td>Requêtes signées ; mêmes règles que l’écran</td></tr>
+  <tr><td>Structure et comptes</td><td>Import CSV ou Excel</td><td>Vérifié avant écriture, tout ou rien</td></tr></tbody></table></div></section>
+<section><h2>Et le Dossier santé numérique (DSN) ?</h2>
+  <p>Le DSN n’est pas présumé être une interface unique et directement accessible. Arrimo s’y arrime par les voies standard, sans contourner vos systèmes :</p>
+  <ol><li><b>Par votre moteur d’interface</b>, qui reçoit déjà les événements du DSN ou de votre DME et peut en transmettre une copie minimale à Arrimo (HL7 v2 ou JSON).</li>
+    <li><b>Par FHIR R4</b>, si votre plateforme consomme FHIR.</li>
+    <li><b>Par webhooks</b>, pour recevoir les événements Arrimo qui vous concernent.</li></ol>
+  <p>Avant toute connexion réelle : documentation et autorisation de Santé Québec et de l’établissement, évaluation des facteurs relatifs à la vie privée (Loi 25), hébergement au Canada, essais en recette avec des données fictives.</p></section>
+<section><h2>Démarche</h2><ol><li>Rencontre technique : systèmes, formats, contact technique.</li><li>Activation : client, modules et connexions activés un par un.</li>
+  <li>Remise des accès : lien unique à votre contact technique.</li><li>Recette avec des données fictives, puis validation par votre équipe.</li><li>Mise en service ; désactivation possible à tout moment.</li></ol></section>
+</div>
+<div id="en" lang="en-CA">
+<h1>How Arrimo connects to your systems</h1>
+<p>Arrimo <b>does not replace</b> your solutions (EMR, patient record, dispatch system, Quebec’s Digital Health Record). It coordinates beds, places, transfers, transports and ambulance arrivals, alongside what you already have.</p>
+<section><h2>Interfaces</h2><ul><li><b>HL7 v2 ADT over HTTPS</b> (A01, A02, A03, A04, A16), with HL7 acknowledgement, never processed twice.</li>
+  <li><b>ADT JSON</b> for engines that produce JSON.</li><li><b>FHIR R4 (read)</b>: Organization, Location, HealthcareService, Encounter (announced ambulances, no patient); your data only.</li>
+  <li><b>Signed webhooks</b> (HMAC-SHA256) with retries.</li><li><b>Arrimo Connect v1</b> for dispatch and ambulance systems (signed requests).</li><li><b>CSV / Excel import</b>, verified before writing.</li></ul>
+  <p>Each connection is enabled per client, limited to its data, revocable and logged; secrets are generated server-side and delivered once to your technical contact; HTTPS only. For the Digital Health Record: through your interface engine, FHIR or webhooks — never bypassing your systems — and only after authorization, privacy assessment and testing.</p></section>
+</div>
+</main>
+</body>
+</html>

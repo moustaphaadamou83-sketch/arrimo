@@ -389,6 +389,13 @@ async function repondreQuestion(pool, utilisateur, etabId, q, fetchImpl, patient
   // Hôpital : Liaison Secours (préalertes des ambulances), mêmes droits que le module ; null si la question n'en relève pas
   if (type === 'hopital' || !type) { require('./auth').exigerEtablissement(utilisateur, etabId); const secours = await require('./og-secours').repondre(pool, utilisateur, etabId, q, L); if (secours) return secours; }
   if (type === 'hopital' || !type) { require('./auth').exigerEtablissement(utilisateur, etabId); const liaison = await require('./og-liaison').repondre(pool, utilisateur, etabId, q, L); if (liaison) return liaison; }
+  // Intégration (DSN, DME, FHIR, HL7, webhooks) : comment Arrimo s'arrime, sans remplacer les systèmes en place
+  if (/\b(dsn|dossier sante numerique|dossier de sante numerique|digital health record|fhir|hl7|webhooks?|integration|integrer|s.?arrime\w*|arrimer|interfac\w+ (avec|with)|connect\w* (a|au|aux|with|to) (notre|nos|votre|vos|our|your|leur|leurs))\b/.test(String(q || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase())) {
+    const en = L === 'en';
+    return { mode: 'local', intentions: ['integration'], sources: ['arrimo'], reponse: en
+      ? 'Arrimo does not replace your systems (EMR, patient record, dispatch, Digital Health Record): it connects alongside them, per client, limited to that client’s data, revocable and logged. Available: HL7 v2 ADT over HTTPS, ADT JSON, FHIR R4 read, signed webhooks, Arrimo Connect v1, CSV import. For the Digital Health Record: through your interface engine, FHIR or webhooks, only after authorization, privacy assessment and testing. Details: /integration'
+      : 'Arrimo ne remplace pas vos systèmes (DME, dossier patient, répartition, Dossier santé numérique) : il s’y arrime à côté, client par client, limité aux données du client, désactivable et journalisé. Disponible : HL7 v2 ADT sur HTTPS, ADT JSON, FHIR R4 en lecture, webhooks signés, Arrimo Connect v1, import CSV. Pour le DSN : par votre moteur d’interface, FHIR ou des webhooks, seulement après autorisation, évaluation de la vie privée (Loi 25) et essais en recette. Détails : /integration' };
+  }
   // Guide d'utilisation : étapes et écran à ouvrir, selon les modules actifs de l'établissement.
   const og_guide = require('./og-guide');
   if (og_guide.guider(q, L, {})) {
