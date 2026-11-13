@@ -164,6 +164,8 @@ function creerAppSh(pool, { env = process.env } = {}) {
   serveurs.brancherPublic(api, poolService, env);
   /* ---------------------------------------------------------------- session obligatoire pour la suite */
   require('./portail-support').brancher(api,poolService,env);
+  // Réponse d'un participant à une invitation de formation (lien personnel à usage unique, sans session)
+  require('./formation-invitations').brancherPublic(api, poolService, { notifier: require('./automatisations').notifier, journal });
   api.use(async (req, res, next) => {
     try {
       const entete = req.get('authorization') || '';
@@ -256,6 +258,7 @@ function creerAppSh(pool, { env = process.env } = {}) {
   require('./support-sla').brancher(api,pool,route,journal);
   commercial.brancher(api, pool, route, journal);
   erp.brancher(api, pool, route, journal, { cibles: () => ciblesSh(), appeler, env });
+  require('./retrait-clients').brancher(api, pool, route, journal);
   acces.brancher(api,pool,route,journal,env);
   serveurs.brancher(api, pool, route, journal, { env, ErreurSh, appeler });
   require('./pays-profils').brancher(api, pool, route, journal, { env, ErreurSh, appeler, cibles: () => ciblesSh(), entier });
@@ -297,7 +300,8 @@ function creerAppSh(pool, { env = process.env } = {}) {
   api.get('/hopitaux', route(async (req) => {
     const vals = []; const conds = [];
     if (req.query.q) { vals.push(`%${String(req.query.q).trim().toLowerCase()}%`); conds.push(`(lower(h.nom) LIKE $${vals.length} OR lower(coalesce(h.ville, '')) LIKE $${vals.length} OR lower(h.code_etab) LIKE $${vals.length})`); }
-    if (STATUTS.includes(req.query.statut)) { vals.push(req.query.statut); conds.push(`h.statut = $${vals.length}`); }
+    if (STATUTS.includes(req.query.statut) || req.query.statut === 'retire') { vals.push(req.query.statut); conds.push(`h.statut = $${vals.length}`); }
+    else conds.push(`h.statut <> 'retire'`);   // un client retiré (créé par erreur) n'apparaît que sur demande
     if (typeof req.query.environnement === 'string' && Object.hasOwn(nomsEnvironnements(env),req.query.environnement)) { vals.push(req.query.environnement); conds.push(`h.environnement = $${vals.length}`); }
     const rows = (await pool.query(`${SELECT_HOPITAL} ${conds.length ? `WHERE ${conds.join(' AND ')}` : ''} ORDER BY h.nom`, vals)).rows;
     const dist = await etablissementsDistants([...new Set(rows.map((h) => h.environnement))]);

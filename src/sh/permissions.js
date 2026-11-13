@@ -233,6 +233,13 @@ const PERMISSIONS = {
   'PUT /formation/sessions/:id': ['administration', 'implantation', 'formation'],
   'POST /formation/sessions/:id/participants': ['administration', 'implantation', 'formation'],
   'PUT /formation/participants/:id': ['administration', 'implantation', 'formation'],
+  'GET /formation/roles': ['administration', 'implantation', 'formation'],
+  'POST /formation/sessions/:id/inviter': ['administration', 'implantation', 'formation'],
+  'GET /formation/sessions/:id/calendrier.ics': ['administration', 'implantation', 'formation'],
+  'GET /hopitaux/:id/retrait': ['administration'],
+  'POST /hopitaux/:id/retirer': ['administration'],
+  'POST /hopitaux/:id/retablir': ['administration'],
+  'POST /facturation/paiements/:id/annuler': ['administration', 'finance'],
   // Notifications et calendrier
   'GET /notifications': ROLES_SH,
   'POST /notifications/lues': ROLES_SH,
@@ -242,7 +249,7 @@ const PERMISSIONS = {
 function cleRoute(method, path) {
   return `${method.toUpperCase()} ${String(path).replace(/\/\d+(?=\/|$)/g, '/:id')
     .replace(/\/hopitaux\/:id\/import\/modeles\/[^/]+$/, '/hopitaux/:id/import/modeles/:type')
-    .replace(/\/hopitaux\/:id\/formation\/(coordination|urgence|entretien|administration)$/, '/hopitaux/:id/formation/:role')
+    .replace(/\/hopitaux\/:id\/formation\/(coordination|urgence|entretien|administration|chsld|paramedic|superviseur_secours|repartiteur)$/, '/hopitaux/:id/formation/:role')
     .replace(/^\/parametres\/[a-z_]{2,60}$/, '/parametres/:cle')
     .replace(/^(\/hopitaux\/:id\/deploiement)\/[a-z_]{3,40}(\/preuves)?$/, '$1/:code$2')
     .replace(/^\/serveurs\/[a-z0-9_]{5,60}\/(appairage|verifier|desactiver|reactiver)$/, '/serveurs/:code/$1')

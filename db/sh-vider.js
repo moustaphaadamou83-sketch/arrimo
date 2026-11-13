@@ -2,7 +2,7 @@
 async function viderBaseSh(db) {
   const base=(await db.query('SELECT current_database() AS base')).rows[0]?.base;
   if(typeof base!=='string'||!/^arrimo_(?:[a-z0-9_]*_)?test(?:_[a-z0-9_]+)?$/.test(base))throw new Error('Nettoyage SH refusé : une base de test explicitement nommée est obligatoire.');
-  await db.query(`DROP TABLE IF EXISTS sh_support_courriels,sh_support_escalades,sh_support_sla,sh_notifications_genres,sh_affectations,sh_roles_personnalises,sh_projet_membres, sh_recuperations, sh_supervision, sh_formation_participants, sh_formation_sessions, sh_notifications, sh_equipes_membres, sh_equipes,
+  await db.query(`DROP TABLE IF EXISTS sh_support_courriels,sh_support_escalades,sh_support_sla,sh_notifications_genres,sh_affectations,sh_roles_personnalises,sh_projet_membres, sh_recuperations, sh_supervision, sh_formation_courriels, sh_formation_participants, sh_formation_sessions, sh_notifications, sh_equipes_membres, sh_equipes,
                     sh_support_evenements, sh_support_messages, sh_paiements, sh_factures, sh_abonnements, sh_compteurs, sh_contrats_renouvellements,
                     sh_taxes, sh_tarifs, sh_profils_fiscaux, sh_demandes_site, sh_types_locaux, sh_taux_change, sh_parametres, sh_projet_finances, sh_taches_checklist, sh_taches_temps, sh_projet_registre, sh_competences, sh_filtres, sh_deploiement_etapes, sh_taches_collaborateurs CASCADE;
                   DROP FUNCTION IF EXISTS sh_tache_archive_garde() CASCADE;

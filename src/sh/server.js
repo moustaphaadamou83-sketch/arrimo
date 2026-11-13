@@ -31,6 +31,9 @@ pool.query(fs.readFileSync(path.join(__dirname, '..', '..', 'db', 'sh-schema.sql
     if(Number.isFinite(courrielsMinutes)&&courrielsMinutes>0){
       const envoyerCourriels=()=>require('./support-courriels').executer(pool,{env:process.env}).catch(e=>console.error('Courriels support :',e.code||e.name));
       envoyerCourriels();setInterval(envoyerCourriels,Math.max(1,courrielsMinutes)*60000).unref();
+      // Invitations, reports et annulations de formation (même cadence)
+      const envoyerFormation=()=>require('./formation-invitations').executer(pool,{env:process.env}).catch(e=>console.error('Courriels formation :',e.code||e.name));
+      envoyerFormation();setInterval(envoyerFormation,Math.max(1,courrielsMinutes)*60000).unref();
     }
     // Taux de change officiels (SH_CHANGE_MINUTES, 720 par défaut ; 0 désactive). Les quinze derniers jours sont réimportés sans écraser.
     const changeMinutes=Number(process.env.SH_CHANGE_MINUTES??720);

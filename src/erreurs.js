@@ -241,6 +241,7 @@ const MESSAGES = {
   hopital_introuvable: "Hôpital introuvable.",
   coordination_introuvable: "Coordination introuvable.",
   organisation_introuvable: "Entreprise ambulancière introuvable dans votre région.",
+  avis_invalide: "Avis de formation incomplet (événement, titre et date requis).",
   transport_deja_demande: "Un transport est déjà demandé pour cette coordination ({numero}).",
   transport_introuvable: "Demande de transport introuvable.",
   transport_clos: "Cette demande de transport est close.",

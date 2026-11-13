@@ -172,6 +172,18 @@ function brancherSh(api, pool, route) {
     return { departements,services,unites,etages,chambres,lits,civieres };
   }));
   api.get('/sh/etablissements/:code/comptes', sh(async (req) => formation.comptes(pool, (await etabParCode(req.params.code)).id)));
+  // Avis de formation (planifiée, modifiée, annulée) dans les notifications de l'établissement : titre, date, durée et lieu seulement.
+  api.post('/sh/etablissements/:code/avis-formation', sh(async (req) => {
+    const e = await etabParCode(req.params.code); const b = req.body || {};
+    const evenement = ['invitation', 'modification', 'annulation'].includes(b.evenement) ? b.evenement : null;
+    const titre = String(b.titre || '').trim().slice(0, 160); const quand = String(b.quand || '').trim().slice(0, 80);
+    if (!evenement || !titre || !quand) throw new ErreurHttp(400, 'avis_invalide');
+    const lieu = String(b.lieu || '').trim().slice(0, 200); const motif = String(b.motif || '').trim().slice(0, 300);
+    const vars = { titre, quand, duree: Math.max(15, Math.min(600, Number(b.duree) || 90)), lieu: lieu ? ` · ${lieu}` : '', motif: motif ? ` ${motif}` : '' };
+    await require('./services').notifier(pool, e.id, null, `formation_${evenement}`, vars);
+    await journalAdmin(pool, systeme, 'Avis de formation transmis par SH', e.nom, `${evenement} · ${titre} · ${parSh(b)}`, e.id);
+    return { ok: true };
+  }));
 
   api.put('/sh/etablissements/:code', sh(async (req) => {
     const b = req.body || {};
@@ -246,6 +258,13 @@ function brancherSh(api, pool, route) {
       (SELECT count(*)::int FROM unites_secours un WHERE un.organisation_id = o.id) AS unites,
       (SELECT count(*)::int FROM utilisateur_organisations uo WHERE uo.organisation_id = o.id) AS comptes
     FROM organisations_secours o JOIN config_pays c ON c.id = o.config_id ORDER BY o.nom`)).rows));
+  // Comptes d'une organisation de secours (nom, courriel, rôle ; jamais de mot de passe), pour inscrire les participants d'une formation.
+  api.get('/sh/organisations-secours/:code/comptes', sh(async (req) => {
+    const o = (await pool.query('SELECT id FROM organisations_secours WHERE code = $1', [String(req.params.code || '').trim().toUpperCase()])).rows[0];
+    if (!o) throw new ErreurHttp(404, 'organisation_introuvable');
+    return (await pool.query(`SELECT u.nom, u.email AS courriel, u.role FROM utilisateurs u JOIN utilisateur_organisations uo ON uo.utilisateur_id = u.id
+      WHERE uo.organisation_id = $1 AND u.actif ORDER BY u.nom`, [o.id])).rows;
+  }));
   api.post('/sh/organisations-secours', sh(async (req) => {
     const b = req.body || {}; const type = TYPE_SECOURS(b.type_etablissement);
     const code = String(b.code || '').trim().toUpperCase(); const nom = String(b.nom || '').trim().slice(0, 120);

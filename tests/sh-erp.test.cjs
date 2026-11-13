@@ -379,6 +379,67 @@ test('formation : séance, participants issus des comptes Arrimo, présence et v
   assert.ok(cal.evenements.some((e) => e.type === 'formation' && e.id === s.id));
 });
 
+test('formation : invitation de calendrier, réponse du participant, report, annulation et avis au client', async () => {
+  const FI = require('../src/sh/formation-invitations');
+  const roles = (await ok('formation', 'GET', '/formation/roles')).map((r) => r.code);
+  for (const r of ['coordination', 'chsld', 'paramedic', 'superviseur_secours', 'repartiteur']) assert.ok(roles.includes(r), r);
+  const debut = new Date(Date.now() + 5 * 86400000); debut.setUTCSeconds(0, 0);
+  assert.strictEqual(await statut('formation', 'POST', `/hopitaux/${ids.hopital}/formation/sessions`, { role: 'coordination', debut: new Date(Date.now() - 2 * 86400000).toISOString() }), 400, 'pas de séance dans le passé');
+  assert.strictEqual(await statut('formation', 'POST', `/hopitaux/${ids.hopital}/formation/sessions`, { role: 'coordination', debut: debut.toISOString(), visio_url: 'javascript:alert(1)' }), 400, 'lien de visio https seulement');
+  const s = await ok('formation', 'POST', `/hopitaux/${ids.hopital}/formation/sessions`, { role: 'coordination', titre: 'Coordination · invitations', debut: debut.toISOString(), duree_minutes: 60, lieu: 'Salle fictive B', visio_url: 'https://visio.exemple.invalid/abc' });
+  assert.strictEqual(s.avis_client, 'transmis', 'le client relié voit l’avis dans Arrimo');
+  const notif = (await pool.query("SELECT message, code FROM notifications WHERE code='formation_invitation' ORDER BY id DESC LIMIT 1")).rows[0];
+  assert.ok(notif && notif.message.includes('Coordination · invitations'));
+  const ajout = await ok('formation', 'POST', `/formation/sessions/${s.id}/participants`, { participants: [{ nom: 'Participante fictive', courriel: 'participante@ch-d.exemple' }] });
+  assert.deepStrictEqual([ajout.ajoutes, ajout.invitations], [1, 1]);
+  assert.strictEqual(await statut('formation', 'POST', `/formation/sessions/${s.id}/participants`, { participants: [{ nom: 'X', courriel: 'pas-un-courriel' }] }), 400);
+  const avant = courriels.length;
+  assert.deepStrictEqual(await FI.executer(pool, { env: envSh }), { actif: true, envoyes: 1, echecs: 0 });
+  const m = courriels.slice(avant).find((x) => x.a === 'participante@ch-d.exemple');
+  assert.ok(m && m.ics && m.ics.methode === 'REQUEST');
+  assert.match(m.ics.contenu, /METHOD:REQUEST\r\n/); assert.match(m.ics.contenu, /SEQUENCE:0\r\n/);
+  const uid = m.ics.contenu.match(/UID:(\S+)\r\n/)[1];
+  assert.match(m.ics.contenu, new RegExp(`DTSTART:${debut.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')}`));
+  assert.ok(m.texte.includes('Objectifs :') && m.texte.includes('heure de Toronto'), 'objectifs du rôle et fuseau du client');
+  const jeton = m.texte.match(/#jeton=([A-Za-z0-9_-]+)/)[1];
+  const pub = async (chemin, corps) => { const r = await fetch(`${baseSh}/api/formation-reponse/${chemin}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corps) }); return { statut: r.status, corps: await r.json() }; };
+  const lu = await pub('lire', { jeton });
+  assert.strictEqual(lu.statut, 200); assert.strictEqual(lu.corps.nom, 'Participante fictive');
+  assert.strictEqual((await pub('lire', { jeton: 'x'.repeat(43) })).statut, 410);
+  assert.strictEqual((await pub('repondre', { jeton, reponse: 'autre_moment' })).statut, 400, 'un autre moment exige une précision');
+  assert.strictEqual((await pub('repondre', { jeton, reponse: 'confirme' })).statut, 200);
+  assert.strictEqual((await pub('repondre', { jeton, reponse: 'decline' })).statut, 410, 'lien à usage unique');
+  let seance = (await ok('formation', 'GET', `/hopitaux/${ids.hopital}/formation/sessions`)).find((x) => x.id === s.id);
+  assert.strictEqual(seance.participants[0].reponse, 'confirme');
+  assert.strictEqual(seance.participants[0].courriel_etat, 'envoye');
+  // Report : même UID, SEQUENCE 1, confirmation redemandée
+  const report = new Date(debut.getTime() + 86400000);
+  const r1 = await ok('formation', 'PUT', `/formation/sessions/${s.id}`, { debut: report.toISOString() });
+  assert.strictEqual(r1.sequence, 1); assert.strictEqual(r1.avis_client, 'transmis');
+  await FI.executer(pool, { env: envSh });
+  const m2 = courriels.filter((x) => x.a === 'participante@ch-d.exemple').at(-1);
+  assert.match(m2.ics.contenu, new RegExp(`UID:${uid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\r\n`)); assert.match(m2.ics.contenu, /SEQUENCE:1\r\n/);
+  assert.ok(m2.sujet.includes('Mise à jour'));
+  seance = (await ok('formation', 'GET', `/hopitaux/${ids.hopital}/formation/sessions`)).find((x) => x.id === s.id);
+  assert.strictEqual(seance.participants[0].reponse, 'en_attente', 'la date a changé : nouvelle confirmation demandée');
+  const jeton2 = m2.texte.match(/#jeton=([A-Za-z0-9_-]+)/)[1];
+  // Annulation : CANCEL, SEQUENCE 2, le lien ne sert plus
+  const r2 = await ok('formation', 'PUT', `/formation/sessions/${s.id}`, { statut: 'annulee', motif: 'Report demandé par le client fictif.' });
+  assert.strictEqual(r2.sequence, 2);
+  await FI.executer(pool, { env: envSh });
+  const m3 = courriels.filter((x) => x.a === 'participante@ch-d.exemple').at(-1);
+  assert.strictEqual(m3.ics.methode, 'CANCEL'); assert.match(m3.ics.contenu, /STATUS:CANCELLED\r\n/); assert.match(m3.ics.contenu, /SEQUENCE:2\r\n/);
+  assert.ok(m3.texte.includes('Report demandé par le client fictif.'));
+  assert.strictEqual((await pub('repondre', { jeton: jeton2, reponse: 'confirme' })).statut, 410, 'séance annulée : lien sans effet');
+  assert.strictEqual(await statut('formation', 'PUT', `/formation/sessions/${s.id}`, { statut: 'planifiee' }), 409, 'une séance annulée ne se rouvre pas');
+  assert.ok((await pool.query("SELECT 1 FROM notifications WHERE code='formation_annulation'")).rowCount, 'le client voit l’annulation');
+  const ics = await appel(jetons.formation, 'GET', `/formation/sessions/${s.id}/calendrier.ics`, null, { brut: true });
+  assert.strictEqual(ics.statut, 200); assert.match(ics.type, /text\/calendar/); assert.match(ics.octets.toString(), /METHOD:CANCEL/);
+  assert.strictEqual(await statut('finance', 'GET', `/formation/sessions/${s.id}/calendrier.ics`), 403);
+  const journalReponse = (await pool.query("SELECT detail FROM sh_journal WHERE action='Réponse à une invitation de formation' ORDER BY id DESC LIMIT 1")).rows[0];
+  assert.strictEqual(journalReponse.detail, 'présence confirmée');
+});
+
 test('activation et Go Live : recette activée, structure transférée à la production de test, projet clos', async (t) => {
   let f = await ok('implantation', 'GET', `/hopitaux/${ids.hopital}`);
   for (const x of f.etapes.filter((et) => et.rang < 6).flatMap((et) => et.verifications).filter((x) => !x.faite)) await ok('implantation', 'PUT', `/verifications/${x.id}`, { faite: true });
@@ -1237,4 +1298,31 @@ test('serveurs ajoutés depuis SH : double authentification, clé jamais affich�
     process.env.SH_API_KEY = cleAvant;
     for (const s of Object.values(serveurs)) { s.srv.close(); await s.pool.end(); }
   }
+});
+
+test('retrait d’un client créé par erreur : paiements et factures annulés, projet vide supprimé, caché puis rétabli', async () => {
+  const h = await ok('admin', 'POST', '/hopitaux', { nom: 'Client créé par erreur fictif', code_etab: 'ERR-1', environnement: 'recette', pays_code: 'CA', ville: 'Ville fictive' });
+  const org = (await pool.query("INSERT INTO sh_crm_organisations(nom, hopital_id) VALUES('Organisation créée par erreur fictive', $1) RETURNING id", [h.id])).rows[0];
+  const fx = (await pool.query("INSERT INTO sh_factures(hopital_id, organisation_id, lignes, sous_total, statut, devise, total, numero) VALUES($1,$2,'[]',100,'emise','CAD',100,'FAC-ERR-1') RETURNING id", [h.id, org.id])).rows[0];
+  const projet = await ok('admin', 'POST', '/projets', { nom: 'Projet par erreur', hopital_id: h.id, responsable_id: membres.implantation });
+  await pool.query("INSERT INTO sh_paiements(facture_id, montant, recu_le, mode) VALUES($1, 100, now()::date, 'virement')", [fx.id]);
+  assert.strictEqual(await statut('implantation', 'GET', `/hopitaux/${h.id}/retrait`), 403, 'administration seulement');
+  const b = await ok('admin', 'GET', `/hopitaux/${h.id}/retrait`);
+  assert.ok(b.possible, JSON.stringify(b.blocages));
+  assert.strictEqual(await statut('admin', 'POST', `/hopitaux/${h.id}/retirer`, { motif: 'Créé par erreur en test.', confirmation: 'RETIRER AUTRE' }), 400);
+  assert.strictEqual(await statut('admin', 'POST', `/hopitaux/${h.id}/retirer`, { motif: 'court', confirmation: 'RETIRER ERR-1' }), 400);
+  const r = await ok('admin', 'POST', `/hopitaux/${h.id}/retirer`, { motif: 'Créé par erreur en test.', confirmation: 'RETIRER ERR-1' });
+  assert.strictEqual(r.factures_annulees, 1); assert.strictEqual(r.paiements_annules, 1);
+  assert.strictEqual((await pool.query('SELECT count(*)::int n FROM sh_paiements WHERE facture_id=$1 AND annule_le IS NOT NULL', [fx.id])).rows[0].n, 1, 'le paiement est annulé, jamais effacé');
+  assert.strictEqual(r.projets_supprimes, 1, JSON.stringify(projet).slice(0, 80));
+  assert.ok(!(await ok('admin', 'GET', '/hopitaux')).some((x) => x.id === h.id), 'caché des listes');
+  assert.ok((await ok('admin', 'GET', '/hopitaux?statut=retire')).some((x) => x.id === h.id), 'visible sur demande');
+  assert.strictEqual(await statut('admin', 'POST', `/hopitaux/${h.id}/retirer`, { motif: 'Créé par erreur en test.', confirmation: 'RETIRER ERR-1' }), 409, 'déjà retiré');
+  await ok('admin', 'POST', `/hopitaux/${h.id}/retablir`, { motif: 'Rétabli pour la vérification.' });
+  assert.ok((await ok('admin', 'GET', '/hopitaux')).some((x) => x.id === h.id && x.statut === 'prospect'));
+  // Un client relié (comptes chez lui) ou de production ne se retire pas : il se suspend.
+  assert.ok(!(await ok('admin', 'GET', `/hopitaux/${ids.hopital}/retrait`)).possible);
+  assert.strictEqual(await statut('admin', 'POST', `/hopitaux/${ids.hopital}/retirer`, { motif: 'Ne doit pas passer.', confirmation: `RETIRER ${(await ok('admin', 'GET', `/hopitaux/${ids.hopital}`)).code_etab}` }), 409);
+  const journal = (await pool.query("SELECT count(*)::int n FROM sh_journal WHERE hopital_id=$1 AND action IN ('Client retiré (créé par erreur)','Client rétabli')", [h.id])).rows[0].n;
+  assert.strictEqual(journal, 2, 'retrait et rétablissement journalisés');
 });

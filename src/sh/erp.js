@@ -203,7 +203,7 @@ function brancher(api, pool, route, journal, { cibles, appeler, env }) {
         WHEN COALESCE(p.paye,0) >= f.total THEN 'payee' WHEN f.echeance_le < now()::date THEN 'en_retard'
         WHEN COALESCE(p.paye,0) > 0 THEN 'partiellement_payee' ELSE 'emise' END etat
     FROM sh_factures f JOIN sh_crm_organisations o ON o.id=f.organisation_id LEFT JOIN hopitaux h ON h.id=f.hopital_id
-    LEFT JOIN (SELECT facture_id, sum(montant) paye FROM sh_paiements GROUP BY facture_id) p ON p.facture_id=f.id`;
+    LEFT JOIN (SELECT facture_id, sum(montant) paye FROM sh_paiements WHERE annule_le IS NULL GROUP BY facture_id) p ON p.facture_id=f.id`;
   const facture = async (id, db = pool) => {
     const f = (await db.query(`${SELECT_FACTURE} WHERE f.id=$1`, [id])).rows[0];
     if (!f) throw erreur(404, 'Facture introuvable.');
@@ -336,7 +336,7 @@ function brancher(api, pool, route, journal, { cibles, appeler, env }) {
     const etats = (await pool.query(`SELECT etat, devise, count(*)::int n, sum(total)::numeric(14,2) total, sum(solde)::numeric(14,2) solde FROM (${SELECT_FACTURE}) x GROUP BY etat, devise`)).rows;
     const mrr = (await pool.query(`SELECT devise, sum(CASE periodicite WHEN 'mensuel' THEN m ELSE m/12 END)::numeric(14,2) mrr FROM
       (SELECT a.devise, a.periodicite, (SELECT sum((l->>'montant')::numeric) FROM jsonb_array_elements(a.lignes) l) m FROM sh_abonnements a WHERE statut='actif') s GROUP BY devise`)).rows;
-    const encaisse = (await pool.query(`SELECT f.devise, sum(p.montant)::numeric(14,2) total FROM sh_paiements p JOIN sh_factures f ON f.id=p.facture_id
+    const encaisse = (await pool.query(`SELECT f.devise, sum(p.montant)::numeric(14,2) total FROM sh_paiements p JOIN sh_factures f ON f.id=p.facture_id AND p.annule_le IS NULL
       WHERE p.recu_le >= date_trunc('month', now() AT TIME ZONE 'America/Toronto')::date GROUP BY f.devise`)).rows; // mois du Québec (dates métier), pas le mois UTC
     const aFacturer = (await pool.query(`SELECT count(*)::int n FROM sh_abonnements WHERE statut='actif' AND prochaine_facture_le <= (now() AT TIME ZONE 'America/Toronto')::date AND (fin IS NULL OR prochaine_facture_le <= fin)`)).rows[0].n;
     return { etats, mrr, encaisse_mois: encaisse, abonnements_a_facturer: aFacturer };
@@ -478,7 +478,7 @@ function brancher(api, pool, route, journal, { cibles, appeler, env }) {
       out.factures = f;
       out.mrr = (await pool.query(`SELECT devise, sum(CASE periodicite WHEN 'mensuel' THEN m ELSE m/12 END)::numeric(14,2) mrr FROM
         (SELECT a.devise, a.periodicite, (SELECT sum((l->>'montant')::numeric) FROM jsonb_array_elements(a.lignes) l) m FROM sh_abonnements a WHERE statut='actif') s GROUP BY devise`)).rows;
-      out.delai_moyen_paiement_jours = (await pool.query(`SELECT round(avg(p.recu_le - f.emise_le))::int j FROM sh_paiements p JOIN sh_factures f ON f.id=p.facture_id`)).rows[0].j;
+      out.delai_moyen_paiement_jours = (await pool.query(`SELECT round(avg(p.recu_le - f.emise_le))::int j FROM sh_paiements p JOIN sh_factures f ON f.id=p.facture_id AND p.annule_le IS NULL`)).rows[0].j;
     }
     if (voit(['implantation', 'support', 'formation'])) {
       out.projets = (await pool.query('SELECT statut, count(*)::int n FROM sh_projets GROUP BY statut')).rows;
@@ -530,61 +530,138 @@ function brancher(api, pool, route, journal, { cibles, appeler, env }) {
     } catch (e) { next(e); }
   });
 
-  /* ------------------------------------------------------------ formation : séances et participants */
-  const ROLES_FORMATION = ['coordination', 'urgence', 'entretien', 'administration'];
+  /* ------------------------------------------------------------ formation : séances, invitations et participants */
+  const FI = require('./formation-invitations');
+  const ROLES_FORMATION = FI.ROLES_FORMATION;
+  const urlVisio = (x) => { const v = texte(x, 500); if (v && !/^https:\/\/[^\s<>"]+$/.test(v)) throw erreur(400, 'Lien de visioconférence invalide (https:// seulement).'); return v; };
+  const SELECT_SEANCE = `SELECT s.*, h.code_etab, h.environnement, h.relie, h.type_etablissement, h.fuseau_horaire FROM sh_formation_sessions s JOIN hopitaux h ON h.id=s.hopital_id WHERE s.id=$1`;
+  /** Avis dans les notifications Arrimo du client (établissement relié). Jamais bloquant : le résultat est noté sur la séance. */
+  async function avisClient(s, evenement, u) {
+    let avis = 'non_relie';
+    if (require('../types-etablissement').estSecours(s.type_etablissement)) avis = 'non_applicable';
+    else {
+      const cible = cibles().find((x) => x.code === s.environnement);
+      if (cible && s.relie) {
+        try {
+          await appeler(cible, 'POST', `/sh/etablissements/${s.code_etab}/avis-formation`, { evenement, titre: s.titre, quand: FI.quand(s.debut, s.fuseau_horaire),
+            duree: s.duree_minutes, lieu: s.lieu || (s.visio_url ? 'visioconférence' : ''), motif: s.annulation_motif ? `Motif : ${s.annulation_motif}` : '', par: u?.email });
+          avis = 'transmis';
+        } catch { avis = 'echec'; }
+      }
+    }
+    await pool.query('UPDATE sh_formation_sessions SET avis_client=$2, avis_client_le=now() WHERE id=$1', [s.id, avis]);
+    return avis;
+  }
+  api.get('/formation/roles', route(async () => Object.entries(FI.ROLES).map(([code, r]) => ({ code, libelle: r.libelle, objectifs: r.objectifs, prerequis: r.prerequis }))));
   api.get('/hopitaux/:id/formation/sessions', route(async (req) => (await pool.query(`SELECT s.*, u.nom formateur,
-      COALESCE(json_agg(p.* ORDER BY p.nom) FILTER (WHERE p.id IS NOT NULL), '[]') participants
-    FROM sh_formation_sessions s LEFT JOIN sh_utilisateurs u ON u.id=s.formateur_id LEFT JOIN sh_formation_participants p ON p.session_id=s.id
-    WHERE s.hopital_id=$1 GROUP BY s.id, u.nom ORDER BY s.debut`, [idPositif(req.params.id)])).rows));
+      COALESCE((SELECT json_agg(p.* ORDER BY p.nom) FROM (SELECT p.id, p.session_id, p.nom, p.courriel, p.role_arrimo, p.present, p.valide, p.valide_par, p.valide_le, p.note,
+          p.reponse, p.reponse_le, p.reponse_note,
+          (SELECT m.etat FROM sh_formation_courriels m WHERE m.participant_id=p.id ORDER BY m.id DESC LIMIT 1) courriel_etat
+        FROM sh_formation_participants p WHERE p.session_id=s.id) p), '[]') participants,
+      (SELECT json_build_object('envoyes', count(*) FILTER (WHERE m.etat='envoye'), 'en_attente', count(*) FILTER (WHERE m.etat IN ('en_attente','envoi')),
+        'abandonnes', count(*) FILTER (WHERE m.etat='abandonne')) FROM sh_formation_courriels m WHERE m.session_id=s.id) courriels
+    FROM sh_formation_sessions s LEFT JOIN sh_utilisateurs u ON u.id=s.formateur_id
+    WHERE s.hopital_id=$1 ORDER BY s.debut`, [idPositif(req.params.id)])).rows));
   api.post('/hopitaux/:id/formation/sessions', route(async (req) => {
     const h = idPositif(req.params.id); const b = req.body;
     const debut = new Date(b.debut);
     if (!ROLES_FORMATION.includes(b.role) || Number.isNaN(debut.getTime())) throw erreur(400, 'Rôle formé et date de début requis.');
-    const formateur = idPositif(b.formateur_id);
-    return transaction(pool, async (c) => {
+    if (debut.getTime() < Date.now() - 3600000) throw erreur(400, 'La séance doit être planifiée dans le futur.');
+    const formateur = idPositif(b.formateur_id); const visio = urlVisio(b.visio_url); const R = FI.ROLES[b.role];
+    const s = await transaction(pool, async (c) => {
       await verifierDestinataire(c,formateur,'formation','hopital',h);
-      const { rows } = await c.query(`INSERT INTO sh_formation_sessions(hopital_id,role,titre,debut,duree_minutes,lieu,formateur_id,cree_par) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-        [h, b.role, texte(b.titre, 160) || `Formation ${b.role}`, debut, Number(b.duree_minutes) || 90, texte(b.lieu, 200), formateur, req.u.id])
+      const { rows } = await c.query(`INSERT INTO sh_formation_sessions(hopital_id,role,titre,debut,duree_minutes,lieu,formateur_id,cree_par,objectifs,prerequis,visio_url) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+        [h, b.role, texte(b.titre, 160) || `Formation · ${R.libelle}`, debut, Number(b.duree_minutes) || 90, texte(b.lieu, 200), formateur, req.u.id,
+          texte(b.objectifs, 1000) || R.objectifs, texte(b.prerequis, 500) || R.prerequis, visio])
         .catch((e) => { if (e.code === '23503') throw erreur(404, 'Établissement ou formateur introuvable.'); if (e.code === '23514') throw erreur(400, 'Durée invalide (15 à 600 minutes).'); throw e; });
       if (formateur && formateur !== req.u.id) await notifier(c, formateur, { ressourceType:'hopital',ressourceId:h, type: 'formation', titre: `Séance de formation planifiée : ${rows[0].titre}`, lien: 'calendrier' });
-      await journal(c, req.u, 'Séance de formation planifiée', rows[0].titre, debut.toISOString(), h);
+      const n = await FI.planifier(c, rows[0].id, 'invitation');
+      await journal(c, req.u, 'Séance de formation planifiée', rows[0].titre, `${debut.toISOString()} · ${nombre(n, 'invitation')} en file`, h);
       return rows[0];
     });
+    const avis = await avisClient((await pool.query(SELECT_SEANCE, [s.id])).rows[0], 'invitation', req.u);
+    return { ...s, avis_client: avis };
   }));
   api.put('/formation/sessions/:id', route(async (req) => {
-    const s = (await pool.query('SELECT * FROM sh_formation_sessions WHERE id=$1', [idPositif(req.params.id)])).rows[0];
-    if (!s) throw erreur(404, 'Séance introuvable.');
-    const statut = req.body.statut ?? s.statut;
-    if (!['planifiee', 'realisee', 'annulee'].includes(statut)) throw erreur(400, 'Statut de séance invalide.');
-    const debut = req.body.debut ? new Date(req.body.debut) : s.debut;
-    if (Number.isNaN(new Date(debut).getTime())) throw erreur(400, 'Date invalide.');
-    const { rows } = await pool.query('UPDATE sh_formation_sessions SET statut=$2, debut=$3, lieu=$4 WHERE id=$1 RETURNING *', [s.id, statut, debut, req.body.lieu === undefined ? s.lieu : texte(req.body.lieu, 200)]);
-    await journal(pool, req.u, 'Séance de formation modifiée', s.titre, statut, s.hopital_id);
-    return rows[0];
+    const b = req.body;
+    const r = await transaction(pool, async (c) => {
+      const s = (await c.query(`${SELECT_SEANCE} FOR UPDATE OF s`, [idPositif(req.params.id)])).rows[0];
+      if (!s) throw erreur(404, 'Séance introuvable.');
+      const statut = b.statut ?? s.statut;
+      if (!['planifiee', 'realisee', 'annulee'].includes(statut)) throw erreur(400, 'Statut de séance invalide.');
+      if (s.statut === 'annulee' && statut !== 'annulee') throw erreur(409, 'Une séance annulée ne peut pas être rouverte : planifiez-en une nouvelle.');
+      const debut = b.debut ? new Date(b.debut) : new Date(s.debut);
+      if (Number.isNaN(debut.getTime())) throw erreur(400, 'Date invalide.');
+      const duree = b.duree_minutes === undefined ? s.duree_minutes : Number(b.duree_minutes);
+      const lieu = b.lieu === undefined ? s.lieu : texte(b.lieu, 200);
+      const visio = b.visio_url === undefined ? s.visio_url : urlVisio(b.visio_url);
+      const motif = statut === 'annulee' && s.statut !== 'annulee' ? texte(b.motif, 300) : s.annulation_motif;
+      // Report ou changement de lieu : nouvelle version de l'invitation (même UID, SEQUENCE + 1) ; les réponses sont redemandées si la date change.
+      const modifiee = s.statut === 'planifiee' && statut === 'planifiee' && (debut.getTime() !== new Date(s.debut).getTime() || duree !== s.duree_minutes || lieu !== s.lieu || visio !== s.visio_url);
+      const annule = s.statut === 'planifiee' && statut === 'annulee';
+      const { rows } = await c.query(`UPDATE sh_formation_sessions SET statut=$2, debut=$3, lieu=$4, duree_minutes=$5, visio_url=$6, annulation_motif=$7,
+        sequence=sequence+$8, modifie_le=now() WHERE id=$1 RETURNING *`, [s.id, statut, debut, lieu, duree, visio, motif, modifiee || annule ? 1 : 0])
+        .catch((e) => { if (e.code === '23514') throw erreur(400, 'Durée invalide (15 à 600 minutes).'); throw e; });
+      if (modifiee && debut.getTime() !== new Date(s.debut).getTime()) await c.query("UPDATE sh_formation_participants SET reponse='en_attente', reponse_le=NULL WHERE session_id=$1 AND reponse <> 'decline'", [s.id]);
+      const evenement = annule ? 'annulation' : modifiee ? 'modification' : null;
+      const n = evenement ? await FI.planifier(c, s.id, evenement) : 0;
+      if (annule) await c.query('UPDATE sh_formation_participants SET jeton_hache=NULL, jeton_expire=NULL WHERE session_id=$1', [s.id]);
+      await journal(c, req.u, annule ? 'Séance de formation annulée' : modifiee ? 'Séance de formation reportée ou modifiée' : 'Séance de formation modifiée', s.titre,
+        `${statut}${evenement ? ` · ${nombre(n, 'courriel')} en file` : ''}${annule && motif ? ` · motif : ${motif}` : ''}`, s.hopital_id);
+      return { seance: { ...s, ...rows[0] }, evenement };
+    });
+    const avis = r.evenement ? await avisClient(r.seance, r.evenement, req.u) : undefined;
+    const { code_etab, environnement, relie, type_etablissement, fuseau_horaire, ...seance } = r.seance; void code_etab; void environnement; void relie; void type_etablissement; void fuseau_horaire;
+    return { ...seance, ...(avis ? { avis_client: avis } : {}) };
   }));
+  // Renvoyer l'invitation (nouveau lien personnel ; l'ancien lien n'est plus valide)
+  api.post('/formation/sessions/:id/inviter', route(async (req) => transaction(pool, async (c) => {
+    const s = (await c.query('SELECT * FROM sh_formation_sessions WHERE id=$1 FOR UPDATE', [idPositif(req.params.id)])).rows[0];
+    if (!s) throw erreur(404, 'Séance introuvable.');
+    if (s.statut !== 'planifiee') throw erreur(409, 'Seule une séance planifiée peut être envoyée.');
+    const participant = req.body.participant_id ? idPositif(req.body.participant_id) : null;
+    if (participant && !(await c.query('SELECT 1 FROM sh_formation_participants WHERE id=$1 AND session_id=$2', [participant, s.id])).rowCount) throw erreur(404, 'Participant introuvable.');
+    const n = await FI.planifier(c, s.id, 'invitation', { participantId: participant });
+    await journal(c, req.u, 'Invitation de formation renvoyée', s.titre, nombre(n, 'courriel'), s.hopital_id);
+    return { en_file: n };
+  })));
+  // Fichier de calendrier de la séance, pour l'ajouter à son propre agenda ou le transmettre au client.
+  api.get('/formation/sessions/:id/calendrier.ics', async (req, res, next) => {
+    try {
+      const s = (await pool.query('SELECT * FROM sh_formation_sessions WHERE id=$1', [idPositif(req.params.id)])).rows[0];
+      if (!s) throw erreur(404, 'Séance introuvable.');
+      const m = s.statut === 'annulee' ? 'CANCEL' : 'REQUEST';
+      res.set({ 'Content-Type': 'text/calendar; charset=utf-8', 'Content-Disposition': `attachment; filename="formation-${s.id}.ics"` }).send(FI.ics(s, { methode: m, env }));
+    } catch (e) { next(e); }
+  });
   api.post('/formation/sessions/:id/participants', route(async (req) => {
-    const s = (await pool.query('SELECT s.*, h.code_etab, h.environnement, h.relie FROM sh_formation_sessions s JOIN hopitaux h ON h.id=s.hopital_id WHERE s.id=$1', [idPositif(req.params.id)])).rows[0];
+    const s = (await pool.query('SELECT s.*, h.code_etab, h.environnement, h.relie, h.type_etablissement FROM sh_formation_sessions s JOIN hopitaux h ON h.id=s.hopital_id WHERE s.id=$1', [idPositif(req.params.id)])).rows[0];
     if (!s) throw erreur(404, 'Séance introuvable.');
     let liste = Array.isArray(req.body.participants) ? req.body.participants : [];
     if (req.body.depuis_comptes === true) {
       // Comptes réellement créés dans l'environnement de l'établissement (nom, courriel, rôle ; aucun mot de passe).
       const cible = cibles().find((c) => c.code === s.environnement);
       if (!cible || !s.relie) throw erreur(409, 'L’établissement doit être relié à son environnement.');
-      const ROLES_ARRIMO = { coordination: ['coordonnateur'], urgence: ['coordonnateur'], entretien: ['entretien'], administration: ['admin_etab'] }[s.role];
-      liste = (await appeler(cible, 'GET', `/sh/etablissements/${s.code_etab}/comptes`)).filter((u) => ROLES_ARRIMO.includes(u.role)).map((u) => ({ nom: u.nom, courriel: u.courriel, role_arrimo: u.role }));
+      const ROLES_ARRIMO = FI.ROLES[s.role]?.comptes || [];
+      const chemin = require('../types-etablissement').estSecours(s.type_etablissement) ? `/sh/organisations-secours/${s.code_etab}/comptes` : `/sh/etablissements/${s.code_etab}/comptes`;
+      liste = (await appeler(cible, 'GET', chemin)).filter((u) => ROLES_ARRIMO.includes(u.role)).map((u) => ({ nom: u.nom, courriel: u.courriel, role_arrimo: u.role }));
     }
-    if (!liste.length || liste.length > 300) throw erreur(400, 'Ajoutez de 1 à 300 participants.');
-    let ajoutes = 0;
+    if (!liste.length || liste.length > 300) throw erreur(400, req.body.depuis_comptes === true ? 'Aucun compte Arrimo de ce rôle dans l’établissement.' : 'Ajoutez de 1 à 300 participants.');
+    let ajoutes = 0; let invitations = 0;
     await transaction(pool, async (c) => {
       for (const p of liste) {
         const nom = texte(p.nom, 160); if (!nom) throw erreur(400, 'Chaque participant doit avoir un nom.');
-        const r = await c.query(`INSERT INTO sh_formation_participants(session_id,nom,courriel,role_arrimo) VALUES($1,$2,lower($3),$4) ON CONFLICT DO NOTHING`,
-          [s.id, nom, texte(p.courriel, 200), texte(p.role_arrimo, 40)]);
+        const courrielP = texte(p.courriel, 200);
+        if (courrielP && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(courrielP)) throw erreur(400, `Courriel invalide pour ${nom}.`);
+        const r = await c.query(`INSERT INTO sh_formation_participants(session_id,nom,courriel,role_arrimo) VALUES($1,$2,lower($3),$4) ON CONFLICT DO NOTHING RETURNING id`,
+          [s.id, nom, courrielP, texte(p.role_arrimo, 40)]);
         ajoutes += r.rowCount;
+        // Chaque nouveau participant d'une séance planifiée reçoit son invitation et son lien de réponse.
+        if (r.rowCount && courrielP && s.statut === 'planifiee') invitations += await FI.planifier(c, s.id, 'invitation', { participantId: r.rows[0].id });
       }
-      await journal(c, req.u, 'Participants ajoutés à une séance', s.titre, nombre(ajoutes, 'participant'), s.hopital_id);
+      await journal(c, req.u, 'Participants ajoutés à une séance', s.titre, `${nombre(ajoutes, 'participant')} · ${nombre(invitations, 'invitation')} en file`, s.hopital_id);
     });
-    return { ajoutes };
+    return { ajoutes, invitations };
   }));
   api.put('/formation/participants/:id', route(async (req) => {
     const p = (await pool.query('SELECT p.*, s.hopital_id, s.titre, s.statut statut_seance FROM sh_formation_participants p JOIN sh_formation_sessions s ON s.id=p.session_id WHERE p.id=$1', [idPositif(req.params.id)])).rows[0];

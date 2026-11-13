@@ -9,7 +9,7 @@ const LIMITE=8;
 const motif=q=>`%${q.replace(/[\\%_]/g,m=>'\\'+m)}%`;
 // [type, route de consultation qui donne le droit, requête, vue de la console]
 const SOURCES=[
-  ['hopital','GET /hopitaux',`SELECT id,nom libelle,ville detail FROM hopitaux WHERE nom ILIKE $1 OR ville ILIKE $1 OR code_etab ILIKE $1 ORDER BY nom LIMIT ${LIMITE}`,'hopitaux'],
+  ['hopital','GET /hopitaux',`SELECT id,nom libelle,ville detail FROM hopitaux WHERE statut <> 'retire' AND (nom ILIKE $1 OR ville ILIKE $1 OR code_etab ILIKE $1) ORDER BY nom LIMIT ${LIMITE}`,'hopitaux'],
   ['organisation','GET /crm/organisations',`SELECT id,nom libelle,ville detail FROM sh_crm_organisations WHERE nom ILIKE $1 ORDER BY nom LIMIT ${LIMITE}`,'crm'],
   ['projet','GET /projets',`SELECT id,nom libelle,'PRJ-'||lpad(id::text,6,'0') detail FROM sh_projets WHERE archive_le IS NULL AND (nom ILIKE $1 OR 'PRJ-'||lpad(id::text,6,'0') ILIKE $1) ORDER BY nom LIMIT ${LIMITE}`,'projets'],
   ['tache','GET /taches',`SELECT t.id,t.titre libelle,p.nom detail FROM sh_taches t JOIN sh_projets p ON p.id=t.projet_id WHERE t.titre ILIKE $1 AND ($2::int IS NULL OR t.responsable_id=$2) ORDER BY t.modifie_le DESC NULLS LAST LIMIT ${LIMITE}`,'taches'],

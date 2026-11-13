@@ -710,6 +710,7 @@ window.ARRIMO_I18N.en = {
     identite_a_verifier: "Confirm that the resident’s identity has been verified.",
     hopital_introuvable: "Hospital not found.",
     organisation_introuvable: "Ambulance company not found in your region.",
+    avis_invalide: "Incomplete training notice (event, title and date required).",
     transport_deja_demande: "A transport is already requested for this coordination ({numero}).",
     transport_introuvable: "Transport request not found.",
     transport_clos: "This transport request is closed.",

@@ -65,6 +65,9 @@ const TEXTES = {
     },
     // notifications
     notif: {
+      formation_invitation: 'Formation Arrimo planifiée : « {titre} », le {quand} ({duree} min){lieu}. Les participants inscrits reçoivent une invitation par courriel.',
+      formation_modification: 'Formation Arrimo modifiée : « {titre} », désormais le {quand} ({duree} min){lieu}. Une invitation mise à jour est envoyée.',
+      formation_annulation: 'Formation Arrimo annulée : « {titre} », prévue le {quand}.{motif}',
       transfert_demande: 'Nouvelle demande {numero}{urgent} : {type}, lit {lit} réservé, depuis {origine}.',
       transfert_relance: 'Relance pour le transfert {numero} en attente de réponse, envoyée par {origine}.',
       transfert_accepte: '{dest} accepte le transfert {numero} (lit {lit}).',
@@ -281,6 +284,9 @@ const TEXTES = {
       hors_service_long: 'Out of service for {duree}',
     },
     notif: {
+      formation_invitation: 'Arrimo training scheduled: “{titre}”, on {quand} ({duree} min){lieu}. Registered participants receive an email invitation.',
+      formation_modification: 'Arrimo training changed: “{titre}”, now on {quand} ({duree} min){lieu}. An updated invitation is being sent.',
+      formation_annulation: 'Arrimo training cancelled: “{titre}”, planned on {quand}.{motif}',
       transfert_demande: 'New request {numero}{urgent}: {type}, bed {lit} reserved, from {origine}.',
       transfert_relance: 'Reminder for transfer {numero}, awaiting a response, sent by {origine}.',
       transfert_accepte: '{dest} accepted transfer {numero} (bed {lit}).',

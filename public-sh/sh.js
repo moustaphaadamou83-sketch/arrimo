@@ -37,7 +37,7 @@ const lire = (k) => { try { return sessionStorage.getItem(BASE_SH?`${k}:${BASE_S
 const ecrire = (k, v) => { try { const cle=BASE_SH?`${k}:${BASE_SH}`:k;v == null ? sessionStorage.removeItem(cle) : sessionStorage.setItem(cle, v); } catch { /* stockage indisponible */ } };
 appliquerLangue(langueUI);
 
-const STATUTS = { prospect: 'Prospect', implantation: 'En implantation', actif: 'Actif', suspendu: 'Suspendu' };
+const STATUTS = { prospect: 'Prospect', implantation: 'En implantation', actif: 'Actif', suspendu: 'Suspendu', retire: 'Retiré (créé par erreur)' };
 const ENVS = { demo: 'Démonstration', demo_abc:'Démonstration ABC', recette: 'Recette', pilote:'Pilote', production: 'Production' };
 const TYPES = { departements:'Départements',services: 'Services hospitaliers', unites: 'Unités', etages:'Étages et ailes', chambres: 'Chambres', lits: 'Lits', civieres: 'Civières de l’urgence', utilisateurs: 'Utilisateurs' };
 const COLONNES = { departements:'departement;code;attributs_json;actif',services: 'service;code;departement;attributs_json;actif', unites: 'unite;type_unite;service;departement;attributs_json;actif', etages:'unite;etage;aile;attributs_json;actif', chambres: 'unite;chambre;etage;type_chambre;capacite;accessible;attributs_json;restrictions_json;statut_operationnel;actif', lits: 'unite;chambre;lit;isolement;pression_negative;ventilation;telemetrie;categorie;attributs_json;actif', civieres: 'civiere;categorie;unite;attributs_json;actif', utilisateurs: 'nom;courriel;role' };

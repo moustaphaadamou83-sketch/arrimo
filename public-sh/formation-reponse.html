@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="fr-CA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Arrimo · Formation</title>
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0E5E6F">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="sh.css">
+</head>
+<body>
+<main class="connexion">
+  <section class="carte-connexion" aria-live="polite">
+    <img src="logo.svg" alt="" width="56" height="56">
+    <h1>Formation Arrimo</h1>
+    <div id="fr-etat"><p class="muted">Chargement de votre invitation…</p></div>
+    <form id="fr-form" hidden novalidate>
+      <fieldset>
+        <legend>Votre réponse</legend>
+        <label class="case"><input type="radio" name="reponse" value="confirme" checked> Je serai là</label>
+        <label class="case"><input type="radio" name="reponse" value="autre_moment"> Je propose un autre moment</label>
+        <label class="case"><input type="radio" name="reponse" value="decline"> Je ne pourrai pas venir</label>
+      </fieldset>
+      <label for="fr-note">Précision (obligatoire pour proposer un autre moment)</label>
+      <textarea id="fr-note" maxlength="500" rows="3"></textarea>
+      <button class="btn pri" type="submit">Envoyer ma réponse</button>
+      <p class="note">Ce lien est personnel et ne sert qu’une fois. Aucune donnée de patient.</p>
+    </form>
+  </section>
+</main>
+<script src="formation-reponse.js"></script>
+</body>
+</html>
