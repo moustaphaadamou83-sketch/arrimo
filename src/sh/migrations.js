@@ -87,7 +87,8 @@ async function migrerSh(pool, env = process.env) {
     const profilsPays=await require('./serveurs-migrations').migrerProfilsPays(c);
     const liaisonSecours=await require('./types-etablissement-migrations').migrerLiaisonSecours(c);
     const formationRetrait=await require('./formation-retrait-migrations').migrerFormationRetrait(c);
-    return { version: require('./formation-retrait-migrations').FORMATION_RETRAIT_VERSION, appliquee: formationRetrait || liaisonSecours || profilsPays || serveurs || typesAines || demandesSite || typesLocaux || productions || liaisonChsld || socle || erp || acces || projets || presence || perimetre || cycle || pilote || concurrence || liens || support || supportDroits || notificationsFinances || supportPagination || notificationsPerimetres || raccordementSupport || supportSla || supportPj || supportCourriels || supportCalendrier || preferences || fiscalite || change || apparence || parametres || financesProjets || tachesSuivi || projetsPilotage || competences || recherche || deploiement || collaborateurs || typesEtablissement };
+    const demandesMonde=await require('./demandes-monde-migrations').migrerDemandesMonde(c);
+    return { version: require('./demandes-monde-migrations').DEMANDES_MONDE_VERSION, appliquee: demandesMonde || formationRetrait || liaisonSecours || profilsPays || serveurs || typesAines || demandesSite || typesLocaux || productions || liaisonChsld || socle || erp || acces || projets || presence || perimetre || cycle || pilote || concurrence || liens || support || supportDroits || notificationsFinances || supportPagination || notificationsPerimetres || raccordementSupport || supportSla || supportPj || supportCourriels || supportCalendrier || preferences || fiscalite || change || apparence || parametres || financesProjets || tachesSuivi || projetsPilotage || competences || recherche || deploiement || collaborateurs || typesEtablissement };
   });
 }
 

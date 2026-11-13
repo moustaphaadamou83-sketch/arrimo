@@ -1216,7 +1216,17 @@ test('demandes du site : dépôt réservé au serveur du site, écran limité au
     await pool.query("UPDATE sh_demandes_site SET recu_le = now() - interval '24 months 1 day', alerte_le = now() WHERE depot_id = $1", [vieille.depot_id]);
     await pool.query('UPDATE sh_demandes_site SET alerte_le = now() WHERE depot_id = $1', [recente.depot_id]);
     assert.strictEqual((await site.entretien(pool, envSh)).supprimees, 1);
-    assert.deepStrictEqual((await pool.query('SELECT depot_id FROM sh_demandes_site')).rows.map((x) => x.depot_id), [recente.depot_id]);
+    assert.deepStrictEqual((await pool.query('SELECT depot_id FROM sh_demandes_site')).rows.map((x) => x.depot_id), [recente.depot_id]);    // Formulaire mondial : pays ISO, ville, langue de contact, téléphone E.164 ; un numéro non conforme est gardé et marqué à vérifier
+    const monde = { ...demande, depot_id: crypto.randomUUID(), pays: undefined, pays_code: 'SN', ville: 'Ville fictive', langue_contact: 'pt', telephone: '+221771234567' };
+    assert.strictEqual((await envoi(monde, cle)).status, 200);
+    const douteux = { ...monde, depot_id: crypto.randomUUID(), pays_code: 'BE', telephone: '0470 12', langue_contact: 'es' };
+    assert.strictEqual((await envoi(douteux, cle)).status, 200, 'numéro douteux : demande gardée');
+    for (const mauvais of [{ pays_code: 'XX' }, { pays_code: 'sn' }, { langue_contact: 'klingon' }, { ville: 'x'.repeat(121) }]) assert.strictEqual((await envoi({ ...monde, depot_id: crypto.randomUUID(), ...mauvais }, cle)).status, 400, JSON.stringify(mauvais));
+    const sn = await ok('commercial', 'GET', '/demandes-site?pays=SN');
+    assert.deepStrictEqual(sn.map((x) => [x.pays_code, x.ville, x.langue_contact, x.telephone, x.telephone_a_verifier]), [['SN', 'Ville fictive', 'pt', '+221771234567', false]]);
+    assert.strictEqual((await ok('commercial', 'GET', '/demandes-site?pays=BE')).at(0).telephone_a_verifier, true);
+    assert.strictEqual((await ok('commercial', 'GET', '/demandes-site?langue=es')).length, 1);
+    assert.strictEqual((await ok('commercial', 'GET', '/demandes-site?ville=fictive')).length, 2);
   }
   delete envSh.SH_DEPOT_SITE_CLE_SHA256; delete envSh.SH_DEPOT_SITE_ALERTE;
   assert.strictEqual((await envoi(demande, { 'X-Depot-Cle': 'cle-depot-fictive' })).status, 404);
