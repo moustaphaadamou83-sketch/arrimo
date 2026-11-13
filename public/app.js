@@ -639,6 +639,17 @@ setInterval(() => {
     && !$('#v-support').contains(document.activeElement)) rafraichir();
 }, 30000);
 
+// Mise à jour en direct (SSE) des écrans du préhospitalier : Liaison Secours, urgences proches et suivi des transports, urgence
+let fluxApp = null;
+setInterval(() => {
+  if (etat.token && etat.moi && !fluxApp && window.ArrimoFlux) {
+    fluxApp = window.ArrimoFlux.ecouter(() => etat.token, () => {
+      if ($('#modale').hidden && document.visibilityState === 'visible' && ['secours', 'c-urgences', 'c-mouvements', 'liaison', 'urgence'].includes(etat.vue)) rafraichir();
+    });
+  }
+  if (!etat.token && fluxApp) { fluxApp.arreter(); fluxApp = null; }
+}, 2000);
+
 /* ---------------- Notifications en direct : pastille et bandeau « disponibilité à côté », sans recharger la page ---------------- */
 async function veilleNotifs() {
   if (!etat.token || !etat.moi || etat.pause || estEntretien() || document.visibilityState !== 'visible') return;
@@ -1501,11 +1512,13 @@ async function vueUrgence() {
     v.innerHTML = `<div class="entete"><div><h2>${U('titre', { etab: etabCtx().nom })}</h2><p>${U('aucune')}</p></div></div>`;
     return;
   }
-  const libres = civieres.filter((c) => c.etat === 'libre');
+  const libres = civieres.filter((c) => c.etat === 'libre' && !c.reservation);
   const carte = (c) => {
-    const actions = (ACTIONS_CIV[c.etat] || []).filter(([a]) => !(a === 'demander' && c.demande_id) && !(a === 'deplacer' && !libres.length));
-    return `<div class="fiche e-${c.etat}">
-      <div class="t"><b>${esc(c.code)}</b><span class="note">${esc(t(`etats.${c.etat}`))}</span></div>
+    // Civière réservée pour une ambulance (Liaison Secours) : aucune action qui la donnerait à un autre patient
+    const actions = c.reservation ? [] : (ACTIONS_CIV[c.etat] || []).filter(([a]) => !(a === 'demander' && c.demande_id) && !(a === 'deplacer' && !libres.length));
+    return `<div class="fiche e-${c.etat}"${c.reservation ? ' style="border-left-color:#2563EB"' : ''}>
+      <div class="t"><b>${esc(c.code)}</b><span class="note">${c.reservation ? `<b style="color:#2563EB">${esc(t('urgence.reservee'))}</b>` : esc(t(`etats.${c.etat}`))}</span></div>
+      ${c.reservation ? `<div class="note">${esc(t('urgence.reservee_pour', { unite: c.reservation.unite, numero: c.reservation.numero }))}</div>` : ''}
       ${c.patient_ref ? `<div class="note">${t('lits.patient', { ref: esc(c.patient_ref) })}${c.patient_nom_court ? ` · ${esc(c.patient_nom_court)}` : ''} · <span class="${classeDuree(c.heures)}">${U('depuis_h', { duree: duree(c.heures * 60) })}</span></div>${libelleAge(c.groupe_age)}` : ''}
       ${c.demande_id ? `<div class="note">${c.demande_statut === 'assignee' ? t('urgence.lit_assigne', { code: esc(c.lit_code) }) : U('demande', { type: c.type_nom, prio: c.demande_priorite_affichage })}</div><div class="note">${esc(c.demande_priorite_explication)}</div>`
     : c.etat === 'occupee' ? `<div class="alerte">${U('sans_demande')}</div>` : ''}

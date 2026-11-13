@@ -75,7 +75,9 @@ async function listeCivieres(pool, utilisateur, etabId) {
             d.id AS demande_id, d.statut AS demande_statut, d.priorite AS demande_priorite, t.nom AS type_nom, l.code AS lit_code,
             d.priorite_code, d.priorite_libelle, d.priorite_rang, d.priorite_revision, d.priorite_validee_par, d.priorite_validee_le,
             validateur.nom AS priorite_validateur_nom,
-            p.id AS patient_id, p.prenom AS patient_prenom, left(p.nom, 1) AS patient_initiale, p.date_naissance AS patient_naissance
+            p.id AS patient_id, p.prenom AS patient_prenom, left(p.nom, 1) AS patient_initiale, p.date_naissance AS patient_naissance,
+            (SELECT json_build_object('numero', pa.numero, 'unite', un.numero) FROM reservations_civieres rc JOIN prealertes pa ON pa.id = rc.prealerte_id
+              JOIN unites_secours un ON un.id = pa.unite_id WHERE rc.civiere_id = cv.id AND rc.statut = 'reservee') AS reservation
        FROM civieres cv
        LEFT JOIN patients p ON p.etablissement_id = cv.etablissement_id AND p.reference = cv.patient_ref
        LEFT JOIN demandes_admission d ON d.civiere_id = cv.id AND d.statut IN ('attente', 'assignee')

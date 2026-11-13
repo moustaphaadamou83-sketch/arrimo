@@ -14,6 +14,7 @@
     if (pa) {
       x.push(T('vers', { dest: pa.destination }));
       if (pa.arrivee_confirmee_le) x.push(T('arrivee_confirmee', { heure: heure(pa.arrivee_confirmee_le) }));
+      else if (pa.eta_minutes != null && pa.statut !== 'arrivee') x.push(`<b>${T('arrive_dans', { n: pa.eta_minutes, km: pa.eta_km })}</b>`);
       else if (pa.heure_prevue) x.push(T('eta', { heure: heure(pa.heure_prevue) }));
     }
     if (d.categorie_urgence) x.push(T('cat_info', { cat: t(`transports.cat.${d.categorie_urgence}`) }));

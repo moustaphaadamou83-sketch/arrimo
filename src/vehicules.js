@@ -35,6 +35,8 @@ async function fixer(c, uniteId, etat, { destinationId = null, source = 'equipag
 }
 
 async function organisationsDe(db, u) {
+  // Système externe (Arrimo Connect) : son organisation seulement, avec ses profils
+  if (u.connecteur) return [{ id: u.connecteur.organisation_id, profils: u.connecteur.profils, config_id: u.connecteur.config_id }];
   return (await db.query(`SELECT o.id, o.profils, o.config_id FROM utilisateur_organisations uo JOIN organisations_secours o ON o.id = uo.organisation_id
     WHERE uo.utilisateur_id = $1 AND o.actif`, [u.id])).rows;
 }
@@ -50,7 +52,7 @@ async function definir(pool, u, uniteId, b) {
     if (!un || !orgs.includes(un.organisation_id)) throw new ErreurHttp(404, 'unite_introuvable');
     const avant = (await c.query('SELECT * FROM etats_vehicules WHERE unite_id = $1', [un.id])).rows[0];
     if (b.version != null && avant && Number(b.version) !== avant.version) throw new ErreurHttp(409, 'version_perimee');
-    return fixer(c, un.id, etat, { destinationId: avant?.destination_id || null, source: 'equipage', utilisateurId: u.id });
+    return fixer(c, un.id, etat, { destinationId: avant?.destination_id || null, source: 'equipage', utilisateurId: u.id || null });
   });
 }
 
@@ -58,11 +60,11 @@ async function definir(pool, u, uniteId, b) {
 async function liste(pool, u) {
   const orgs = await organisationsDe(pool, u);
   let filtre; let args;
-  if (ROLES_AMBULANCE.includes(u.role)) {
+  if (ROLES_AMBULANCE.includes(u.role) && !(u.connecteur && u.connecteur.profils.includes('ccs'))) {
     const ids = orgs.filter((o) => o.profils.includes('ambulance')).map((o) => o.id);
     if (!ids.length) throw new ErreurHttp(403, 'organisation_interdite');
     filtre = 'o.id = ANY($1)'; args = [ids];
-  } else if (u.role === 'repartiteur') {
+  } else if (u.role === 'repartiteur' || u.connecteur?.profils.includes('ccs')) {
     const cfg = orgs.filter((o) => o.profils.includes('ccs')).map((o) => o.config_id);
     if (!cfg.length) throw new ErreurHttp(403, 'organisation_interdite');
     filtre = "o.config_id = ANY($1) AND 'ambulance' = ANY(o.profils)"; args = [cfg];
@@ -159,7 +161,7 @@ async function urgencesProches(pool, u, etabId) {
 /** Point de départ d'un classement pour les secours : une unité (dernière position, 24 h) ou un établissement d'hébergement de la région. */
 async function urgencesClassees(pool, u, q = {}) {
   const orgs = await organisationsDe(pool, u);
-  const ambulance = ROLES_AMBULANCE.includes(u.role); const ccs = u.role === 'repartiteur';
+  const ccs = u.role === 'repartiteur' || Boolean(u.connecteur?.profils.includes('ccs')); const ambulance = ROLES_AMBULANCE.includes(u.role) && !ccs;
   if (!ambulance && !ccs) throw new ErreurHttp(403, 'role_insuffisant');
   const voit = ambulance ? orgs.filter((o) => o.profils.includes('ambulance')) : orgs.filter((o) => o.profils.includes('ccs'));
   if (!voit.length) throw new ErreurHttp(403, 'organisation_interdite');
@@ -179,6 +181,8 @@ async function urgencesClassees(pool, u, q = {}) {
     [entier(q.etablissement_id), cfgs])).rows[0];
     if (!e) throw new ErreurHttp(404, 'etab_introuvable');
     depart = e;
+  } else if (q.latitude != null && q.longitude != null && Math.abs(Number(q.latitude)) <= 90 && Math.abs(Number(q.longitude)) <= 180) {
+    depart = { latitude: Number(q.latitude), longitude: Number(q.longitude), nom: null };
   } else throw new ErreurHttp(400, 'parametre_invalide', { nom: 'unite_id' });
   // Hôpitaux qui reçoivent les préalertes (Liaison Secours actif) dans la région
   const hops = (await pool.query(SQL_HOPITAUX, [cfgs])).rows.filter((e) => TE.moduleActif(e, 'liaison_secours'));

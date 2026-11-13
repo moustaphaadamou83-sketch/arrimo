@@ -75,6 +75,23 @@ function brancher(api, pool, route) {
     if (!['mettre_a_jour', 'signaler_arrivee', 'annuler', 'changer_destination'].includes(b.action)) throw new ErreurHttp(400, 'action_inconnue');
     return pa.agir(pool, u, await prealerteParNumero(pool, u, req.params.numero), b);
   }));
+  // Parcours final (13 nov. 2026) : état des véhicules reçu des logiciels ambulanciers, disponibilité renvoyée (urgences classées),
+  // confirmations de l'hôpital lues ici et poussées par webhooks signés (prealerte.acceptee, .reorientee, .sans_reponse, .civiere_reservee)
+  const vh = require('./vehicules');
+  api.post('/connect/v1/unites/:numero/etat', avec(async (u, req) => {
+    if (!u.connecteur.profils.includes('ambulance')) throw new ErreurHttp(403, 'role_insuffisant');
+    return vh.definir(pool, u, await uniteParNumero(pool, u, req.params.numero), req.body || {});
+  }));
+  api.get('/connect/v1/vehicules', avec((u) => vh.liste(pool, u)));
+  api.get('/connect/v1/disponibilite', avec(async (u, req) => {
+    const q = req.query || {};
+    return vh.urgencesClassees(pool, u, q.unite_numero ? { unite_id: await uniteParNumero(pool, u, q.unite_numero) } : { latitude: q.latitude, longitude: q.longitude });
+  }));
+  api.get('/connect/v1/prealertes/:numero/confirmation', avec(async (u, req) => {
+    const id = await prealerteParNumero(pool, u, req.params.numero);
+    const { confirmation, reservation, statut, numero } = await pa.fiche(pool, u, id, {});
+    return { numero, statut, confirmation, reservation: reservation ? { statut: reservation.statut, civiere: reservation.civiere } : null };
+  }));
   api.post('/connect/v1/unites/:numero/position', avec(async (u, req) => {
     if (!u.connecteur.profils.includes('ambulance')) throw new ErreurHttp(403, 'role_insuffisant');
     return pa.position(pool, u, await uniteParNumero(pool, u, req.params.numero), req.body || {});

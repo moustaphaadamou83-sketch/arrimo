@@ -751,6 +751,41 @@ test('parcours final : demande du CCS, confirmation rapide qui ne bloque jamais,
   assert.strictEqual((await fetch(`${base}/api/flux`)).status, 401);
 });
 
+test('Arrimo Connect v1 (parcours final) : état des véhicules reçu, disponibilité renvoyée, confirmation lue ; webhooks des confirmations', async () => {
+  const cx = require('../src/connect');
+  const cleAvant = process.env.ARRIMO_MFA_ENCRYPTION_KEY; process.env.ARRIMO_MFA_ENCRYPTION_KEY = Buffer.alloc(32, 9).toString('base64');
+  try {
+    const sys = await cx.creerConnecteurSecours(pool, ids.ambA, 'Logiciel ambulancier fictif (parcours final)');
+    const sysCcs = await cx.creerConnecteurSecours(pool, ids.ccs, 'Logiciel de répartition fictif (parcours final)');
+    const connect = async (s0, methode, chemin, corps) => {
+      const brut = corps ? JSON.stringify(corps) : ''; const h = Date.now();
+      const r = await fetch(`${base}/api${chemin}`, { method: methode, headers: { 'Content-Type': 'application/json', 'X-Arrimo-Cle': s0.cle, 'X-Arrimo-Horodatage': String(h),
+        'X-Arrimo-Signature': cx.signer(s0.secret, h, methode, `/api${chemin.split('?')[0]}`, brut) }, body: corps ? brut : undefined });
+      return { statut: r.status, corps: await r.json().catch(() => null) };
+    };
+    let r = await connect(sys, 'POST', '/connect/v1/unites/12-40/etat', { etat: 'en_route' });
+    assert.strictEqual(r.statut, 200, JSON.stringify(r.corps)); assert.strictEqual(r.corps.etat, 'en_route');
+    assert.strictEqual((await connect(sysCcs, 'POST', '/connect/v1/unites/12-40/etat', { etat: 'disponible' })).statut, 403, 'le CCS n’agit pas sur les unités');
+    r = await connect(sysCcs, 'GET', '/connect/v1/vehicules');
+    assert.ok(r.corps.some((v) => v.numero === '12-40' && v.etat === 'en_route'), JSON.stringify(r.corps).slice(0, 200));
+    await appel('para', 'POST', `/secours/unites/${ids.u4}/position`, { latitude: 45.40, longitude: -71.89 });
+    r = await connect(sys, 'GET', '/connect/v1/disponibilite?unite_numero=12-40');
+    assert.strictEqual(r.statut, 200, JSON.stringify(r.corps)); assert.ok(r.corps.urgences.length && 'og' in r.corps);
+    r = await connect(sysCcs, 'GET', '/connect/v1/disponibilite?latitude=45.40&longitude=-71.89');
+    assert.ok(r.corps.urgences.every((h) => 'civieres_libres' in (h.urgence || { civieres_libres: null })));
+    // Webhook abonné aux préalertes : la confirmation de l'hôpital y est poussée (sans profil)
+    await pool.query("INSERT INTO webhooks (organisation_id, nom, url, secret, evenements) VALUES ($1, 'Fictif', 'https://exemple.invalid/h', 'x', '{prealerte}')", [ids.ambA]);
+    await pool.query("UPDATE prealertes SET statut = 'annulee' WHERE unite_id = $1 AND statut NOT IN ('cloturee', 'annulee', 'remplacee')", [ids.u4]);
+    const pa = await connect(sys, 'POST', '/connect/v1/prealertes', { unite_numero: '12-40', destination_id: ids.mb, priorite: 'urgente', categorie: 'medicale', delai_min: 10, cle_envoi: 'connect-final-0001' });
+    assert.strictEqual(pa.statut, 200, JSON.stringify(pa.corps));
+    await appel('tremblay', 'POST', `/secours/prealertes/${pa.corps.id}/reponse`, { etablissement_id: ids.mb, reponse: 'accepter' });
+    r = await connect(sys, 'GET', `/connect/v1/prealertes/${pa.corps.numero}/confirmation`);
+    assert.strictEqual(r.corps.confirmation.statut, 'acceptee');
+    const ev = (await pool.query("SELECT evenement FROM webhook_livraisons WHERE charge->>'numero' = $1 ORDER BY id", [pa.corps.numero])).rows.map((x) => x.evenement);
+    assert.ok(ev.includes('prealerte.acceptee') && (ev.includes('prealerte.civiere_reservee') || ev.includes('prealerte.sans_civiere')), ev.join(','));
+  } finally { if (cleAvant === undefined) delete process.env.ARRIMO_MFA_ENCRYPTION_KEY; else process.env.ARRIMO_MFA_ENCRYPTION_KEY = cleAvant; }
+});
+
 test('SH et connexions externes : organisation de secours et profils, modules un par un, FHIR R4, HL7 v2, webhooks signés ; client par client, secrets remis, révocables', async () => {
   const http = require('node:http');
   const avant = { cle: process.env.SH_API_KEY, local: process.env.ARRIMO_WEBHOOKS_LOCAL };

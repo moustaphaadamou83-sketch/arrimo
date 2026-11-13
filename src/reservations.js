@@ -21,6 +21,11 @@ const SEXES = ['F', 'M', 'X'];
 const SIGNES = ['douleur_thoracique', 'difficulte_respiratoire', 'deficit_neurologique', 'alteration_conscience', 'chute', 'traumatisme', 'saignement', 'fievre', 'douleur_abdominale', 'autre'];
 const delai = () => { const n = Number(process.env.ARRIMO_SECOURS_DELAI_REPONSE_S ?? 60); return Number.isInteger(n) && n >= 0 && n <= 600 ? n : 60; };
 const entier = (v) => { const n = Number(v); return Number.isSafeInteger(n) && n > 0 ? n : null; };
+/** Webhooks signés des clients concernés (hôpital, entreprise ambulancière) : numéro, statut de la réponse, civière ; jamais de profil. */
+async function webhook(c, paId, evenement, extra = {}) {
+  const p = (await c.query('SELECT id, numero, destination_id, organisation_id FROM prealertes WHERE id = $1', [paId])).rows[0];
+  if (p) await require('./webhooks').emettre(c, { etablissements: [p.destination_id], organisations: [p.organisation_id], evenement: `prealerte.${evenement}`, charge: { numero: p.numero, ...extra } });
+}
 const evenement = (c, paId, type, utilisateurId, detail = {}) => c.query('INSERT INTO prealerte_evenements (prealerte_id, type, detail, utilisateur_id) VALUES ($1, $2, $3, $4)',
   [paId, type, JSON.stringify(detail), utilisateurId || null]);
 
@@ -47,6 +52,7 @@ async function reserver(c, pa, utilisateurId) {
     ON CONFLICT (prealerte_id) DO UPDATE SET civiere_id = EXCLUDED.civiere_id, statut = EXCLUDED.statut, reservee_le = now(), liberee_le = NULL, version = reservations_civieres.version + 1
     RETURNING *`, [pa.id, pa.destination_id, cv ? cv.id : null, cv ? 'reservee' : 'sans_civiere'])).rows[0];
   await evenement(c, pa.id, cv ? 'civiere_reservee' : 'sans_civiere', utilisateurId, cv ? { civiere: cv.code } : {});
+  await webhook(c, pa.id, cv ? 'civiere_reservee' : 'sans_civiere', cv ? { civiere: cv.code } : {});
   await journaliser(c, { etablissementId: pa.destination_id, utilisateurId: utilisateurId || null, civiereId: cv ? cv.id : undefined,
     action: cv ? 'Civière réservée' : 'Aucune civière libre à réserver', detail: `${pa.numero}${cv ? ` · ${cv.code}` : ''}` });
   return r;
@@ -91,6 +97,7 @@ async function repondre(pool, u, paId, b) {
     [pa0.id, reponse === 'accepter' ? 'acceptee' : 'reorientee', reponse === 'reorienter' ? b.motif : null, u.id])).rows[0];
     if (reponse === 'accepter') await reserver(c, pa0, u.id); else await liberer(c, pa0.id, u.id, 'reorientee');
     await evenement(c, pa0.id, reponse === 'accepter' ? 'acceptee_hopital' : 'reorientee_hopital', u.id, { delai_reponse_s: n.delai_reponse_s, ...(n.motif ? { motif: n.motif } : {}) });
+    await webhook(c, pa0.id, reponse === 'accepter' ? 'acceptee' : 'reorientee', { delai_reponse_s: n.delai_reponse_s, ...(n.motif ? { motif: n.motif } : {}) });
     await journaliser(c, { etablissementId: pa0.destination_id, utilisateurId: u.id, action: reponse === 'accepter' ? 'Préalerte acceptée' : 'Préalerte réorientée',
       detail: `${pa0.numero} · ${n.delai_reponse_s} s${n.motif ? ` · ${n.motif}` : ''}` });
     return n;
@@ -109,6 +116,7 @@ async function echeances(pool) {
       const p = (await c.query('SELECT * FROM prealertes WHERE id = $1', [id])).rows[0];
       await c.query("UPDATE prealerte_confirmations SET statut = 'sans_reponse', delai_reponse_s = delai_s WHERE prealerte_id = $1", [id]);
       await evenement(c, id, 'sans_reponse_poursuite', null, { delai_s: cf.delai_s });
+      await webhook(c, id, 'sans_reponse', { delai_s: cf.delai_s });
       await journaliser(c, { etablissementId: p.destination_id, utilisateurId: null, action: 'Préalerte sans réponse : transport poursuivi', detail: `${p.numero} · ${cf.delai_s} s` });
       if (require('./prealertes').OUVERTES.includes(p.statut)) await reserver(c, p, null);
     }).catch((e) => console.error('Confirmation rapide :', e.code || e.message));

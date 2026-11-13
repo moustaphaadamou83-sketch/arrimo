@@ -6,7 +6,7 @@
   const OUVERTES = ['envoyee', 'recue', 'consultee', 'prise_en_compte', 'preparation', 'preparation_terminee', 'arrivee'];
   const COUL_PRIO = { immediate: '#DC2626', urgente: '#F59E0B', non_urgente: '#94A3B8' };
   const ls = { lire: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, ecrire: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch { /* indisponible */ } } };
-  const etatS = { donnees: null, vues: new Set(), carte: null, couche: null, affichage: ls.lire('arrimo-secours-affichage') === 'carte' ? 'carte' : 'liste' };
+  const etatS = { seuils: new Map(), donnees: null, vues: new Set(), carte: null, couche: null, affichage: ls.lire('arrimo-secours-affichage') === 'carte' ? 'carte' : 'liste' };
   const son = () => ls.lire('arrimo-secours-son') === '1';
   function bip() {
     try {
@@ -21,6 +21,59 @@
   };
   // Contraste AA : texte blanc sur rouge, texte foncé sur orange et gris
   const pastillePrio = (p) => `<span class="ch-etat" style="background:${COUL_PRIO[p.priorite]};color:${p.priorite === 'immediate' ? '#fff' : '#1F2937'}">${S(`prio_${p.priorite}`)}</span>`;
+  /* Parcours final (13 nov. 2026) : confirmation rapide, civière réservée, profil minimal, alertes de proximité */
+  const restant = (p) => (p.confirmation?.echeance ? Math.max(0, Math.round((new Date(p.confirmation.echeance).getTime() - Date.now()) / 1000)) : 0);
+  /** Minutes avant l'arrivée : temps de route calculé (corrigé du temps écoulé), sinon l'heure déclarée. */
+  const minutesAvant = (p) => {
+    if (p.eta?.minutes != null) return Math.max(0, Math.round(p.eta.minutes - (Date.now() - new Date(p.eta.le).getTime()) / 60000));
+    return p.heure_prevue ? Math.max(0, Math.round((new Date(p.heure_prevue).getTime() - Date.now()) / 60000)) : null;
+  };
+  function blocConfirmation(p) {
+    const c = p.confirmation; if (!c || !OUVERTES.includes(p.statut) || p.statut === 'arrivee') return '';
+    if (c.statut === 'en_attente') {
+      return `<div class="ls-confirm" role="alert" style="border:2px solid #F59E0B;border-radius:10px;padding:10px 12px;margin:8px 0;background:rgba(245,158,11,.08)">
+        <b>${S('cf_question')}</b> <span class="num" data-echeance="${esc(c.echeance)}">${restant(p)} s</span> <span class="note">${S('cf_aide', { n: c.delai_s })}</span>
+        <div class="actions" style="margin-top:8px"><button class="btn pri" type="button" data-ls-rep="accepter" data-id="${p.id}">${S('cf_accepter')}</button>
+        <button class="btn" type="button" data-ls-rep="reorienter" data-id="${p.id}">${S('cf_reorienter')}</button></div></div>`;
+    }
+    const txt = { acceptee: S('cf_acceptee', { s: c.delai_reponse_s ?? '—' }), sans_reponse: S('cf_sans_reponse', { s: c.delai_s }), avertie: S('cf_avertie'), reorientee: S('cf_reorientee', { motif: t(`liaison_secours.motif_${c.motif}`) }) }[c.statut];
+    return `<div class="note" style="margin:6px 0"><b>${txt}</b></div>`;
+  }
+  function blocReservation(p) {
+    const r = p.reservation; if (!r || !OUVERTES.includes(p.statut) && r.statut !== 'installee') return '';
+    const m = minutesAvant(p);
+    if (r.statut === 'reservee') {
+      const urgent = m != null && m < 5 && p.statut !== 'arrivee';
+      return `<div class="ls-civiere" style="margin:6px 0;padding:8px 12px;border-radius:10px;${urgent ? 'background:rgba(220,38,38,.08);border:2px solid #DC2626' : 'background:rgba(22,163,74,.08);border:1px solid #16A34A'}">
+        <b>${S('civiere_reservee', { code: r.civiere })}</b>${urgent ? ` · <b style="color:#DC2626">${S('civiere_prete')}</b>` : ` · <span class="note">${S('civiere_protegee')}</span>`}
+        ${p.statut === 'arrivee' ? `<div class="actions" style="margin-top:6px"><button class="btn pri" type="button" data-ls-installer="${p.id}">${S('installer', { code: r.civiere })}</button></div>` : ''}</div>`;
+    }
+    if (r.statut === 'sans_civiere') return `<div class="bandeau" role="alert" style="border-color:#DC2626"><b>${S('sans_civiere')}</b>${m != null && m < 5 ? ` · ${S('nettoyage_priorite')}` : ''}</div>`;
+    if (r.statut === 'installee') return `<div class="note" style="margin:6px 0"><b>${S('installe', { code: r.civiere })}</b> <button class="btn discret" type="button" data-ls-lit="1">${S('demander_lit')}</button></div>`;
+    return '';
+  }
+  function blocProfil(p) {
+    const f = p.profil; if (!f) return '';
+    const x = [f.tranche_age ? S('pf_age', { a: f.tranche_age }) : null, f.sexe ? S(`pf_sexe_${f.sexe}`) : null, ...(f.signes || []).map((sg) => S(`pf_signe_${sg}`))].filter(Boolean);
+    return `<div style="margin:6px 0"><span class="note">${S('pf_titre')}</span> ${x.map((y) => `<span class="ch-etat" style="background:var(--doux, #EEF6F7);color:var(--texte)">${y}</span>`).join(' ')}</div>`;
+  }
+  function blocProximite(p) {
+    const m = minutesAvant(p); if (m == null || !OUVERTES.includes(p.statut) || p.statut === 'arrivee' || m > 10) return '';
+    const seuil = m <= 2 ? 2 : m <= 5 ? 5 : 10;
+    return `<div class="bandeau" role="alert" style="border-color:${seuil <= 5 ? '#DC2626' : '#F59E0B'};font-size:1.1em"><b>${S('proche', { unite: p.unite, n: m })}</b></div>`;
+  }
+  /** Alertes sonores : nouvelle demande à confirmer, puis approche à 10, 5 et 2 min (une fois chacune). */
+  function alertesSonores(ouvertes) {
+    let sonner = false;
+    for (const p of ouvertes) {
+      const k = etatS.seuils.get(p.id) || new Set();
+      if (p.confirmation?.statut === 'en_attente' && !k.has('demande')) { k.add('demande'); sonner = true; }
+      const m = minutesAvant(p);
+      for (const s of [10, 5, 2]) if (m != null && m <= s && p.statut !== 'arrivee' && !k.has(s)) { k.add(s); sonner = sonner || etatS.donnees != null; }
+      etatS.seuils.set(p.id, k);
+    }
+    if (sonner) { bip(); setTimeout(bip, 450); }
+  }
   function carteP(p) {
     const a = p.actions || [];
     const boutons = a.filter((x) => x !== 'signaler_probleme').map((x) => `<button class="btn${['prendre_en_compte', 'confirmer_vehicule', 'confirmer_service'].includes(x) ? ' pri' : ''}" type="button" data-ls="${x}" data-id="${p.id}">${S(`act_${x}`)}</button>`).join('');
@@ -28,6 +81,7 @@
       <div><b class="num">${esc(p.numero)}</b> ${pastillePrio(p)} <span class="ch-etat">${S(`s_${p.statut}`)}</span></div>
       <div><b>${esc(p.organisation)}</b> · ${S('unite', { numero: p.unite })}${p.plaque ? ` · ${S('plaque', { plaque: p.plaque })}` : ''}</div>
       ${p.eta && OUVERTES.includes(p.statut) && p.statut !== 'arrivee' ? `<div class="ls-eta" style="font-size:1.15em;margin:4px 0"><b>${p.eta.minutes != null ? S('arrive_dans', { unite: p.unite, n: p.eta.minutes, km: p.eta.distance_km }) : S('arrive_km', { unite: p.unite, km: p.eta.distance_km })}</b> <span class="note">${S('eta_calcul', { heure: heureCourte(p.eta.le) })}</span></div>` : ''}
+      ${blocConfirmation(p)}${blocProximite(p)}${blocReservation(p)}${blocProfil(p)}
       ${p.transport ? `<div class="note"><b>${S('transport_lien', { ref: p.transport.resident_ref, origine: p.transport.origine, numero: p.transport.numero })}</b></div>` : ''}
       <div class="note">${S('categorie', { cat: t(`liaison_secours.cat_${p.categorie}`) })}${(p.equipage_noms || []).length ? ` · ${S('equipage', { noms: p.equipage_noms.join(', ') })}` : ''}</div>
       ${OUVERTES.includes(p.statut) && p.statut !== 'arrivee' ? `<div><b>${delai(p)}</b> · <span class="note">${p.position ? S('position_le', { heure: heureCourte(p.position.le) }) : S('sans_position')}</span></div>` : ''}
@@ -91,6 +145,7 @@
     // Nouvelle préalerte depuis le dernier affichage : son (si activé sur ce poste)
     const nouvelles = ouvertes.filter((p) => !etatS.vues.has(p.id));
     if (etatS.donnees && nouvelles.length && son()) bip();
+    alertesSonores(ouvertes);
     ouvertes.forEach((p) => etatS.vues.add(p.id));
     etatS.donnees = d;
     const e = etabCtx();
@@ -107,7 +162,23 @@
     const compteur = $('#n-secours'); if (compteur) { const n = ouvertes.filter((p) => !p.prise_en_compte_le).length; compteur.textContent = n; compteur.hidden = !n; }
     brancher(v);
   }
+  // Compte à rebours de la confirmation : seul le texte change chaque seconde
+  setInterval(() => document.querySelectorAll('#v-secours [data-echeance]').forEach((x) => { x.textContent = `${Math.max(0, Math.round((new Date(x.dataset.echeance).getTime() - Date.now()) / 1000))} s`; }), 1000);
   function brancher(v) {
+    v.querySelectorAll('[data-ls-rep]').forEach((b) => { b.onclick = () => {
+      const id = b.dataset.id;
+      if (b.dataset.lsRep === 'accepter') return agir(b, () => api('POST', `/secours/prealertes/${id}/reponse`, { etablissement_id: etat.ctx, reponse: 'accepter' }), t('liaison_secours.cf_ok'));
+      return modale(t('liaison_secours.cf_reorienter'), `<p class="note">${S('cf_reorienter_aide')}</p><div class="champ"><label class="lbl" for="ls-motif">${S('cf_motif')}</label>
+        <select id="ls-motif">${['delestage', 'scanner_indisponible', 'service_ferme', 'autre'].map((m) => `<option value="${m}">${S(`motif_${m}`)}</option>`).join('')}</select></div>`,
+      [{ label: t('general.annuler') }, { label: t('liaison_secours.cf_reorienter'), pri: true, run: async () => (await agir(null, () => api('POST', `/secours/prealertes/${id}/reponse`, { etablissement_id: etat.ctx, reponse: 'reorienter', motif: $('#ls-motif').value }), t('liaison_secours.cf_ok'))) !== null }]);
+    }; });
+    v.querySelectorAll('[data-ls-installer]').forEach((b) => { b.onclick = () => {
+      const p = etatS.donnees.prealertes.find((x) => String(x.id) === b.dataset.lsInstaller); const cfg = configCtx();
+      modale(t('liaison_secours.installer', { code: p.reservation.civiere }), `<p class="note">${S('installer_aide')}</p><div class="champ"><label class="lbl" for="ls-ref">${S('installer_ref')}</label>
+        <input id="ls-ref" maxlength="40" autocomplete="off" placeholder="${esc(cfg?.reference_exemple || 'P-00000')}" value="${esc(p.correspondance?.statut === 'confirmee' ? p.correspondance.fiches?.[0]?.reference || '' : '')}"></div>`,
+      [{ label: t('general.annuler') }, { label: t('general.confirmer'), pri: true, run: async () => (await agir(null, () => api('POST', `/secours/prealertes/${p.id}/installer`, { etablissement_id: etat.ctx, patient_ref: $('#ls-ref').value.trim() }), t('liaison_secours.installe_ok'))) !== null }]);
+    }; });
+    v.querySelectorAll('[data-ls-lit]').forEach((b) => { b.onclick = () => document.querySelector('#onglets button[data-v="urgence"]')?.click(); });
     v.querySelectorAll('[data-ls-cd]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/secours/prealertes/${b.dataset.id}/correspondance/confirmer`, { etablissement_id: etat.ctx, patient_id: Number(b.dataset.lsCd) }), t('liaison_secours.ok')); });
     v.querySelectorAll('[data-ls-urg]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', '/secours/urgence', { etablissement_id: etat.ctx, statut: b.dataset.lsUrg }), t('liaison_secours.ok')); });
     v.querySelectorAll('[data-ls-vue]').forEach((b) => { b.onclick = () => { etatS.affichage = b.dataset.lsVue; ls.ecrire('arrimo-secours-affichage', etatS.affichage); vueSecours(); }; });

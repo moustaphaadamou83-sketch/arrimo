@@ -91,7 +91,8 @@ const CHAMPS = `d.*, o.nom AS organisation, un.numero AS unite, un.plaque, eo.no
   ed.nom AS destination, ed.ville AS destination_ville, co.numero AS coordination, co.type AS coordination_type, co.statut AS coordination_statut,
   pref.categorie AS categorie_urgence, pref.hopital_prefere_id, hp.nom AS hopital_prefere, ev.etat AS etat_vehicule, ev.modifie_le AS etat_vehicule_le,
   (SELECT json_build_object('numero', p.numero, 'statut', p.statut, 'destination_id', p.destination_id, 'destination', e2.nom, 'heure_prevue', p.heure_prevue,
-     'arrivee_confirmee_le', p.arrivee_confirmee_le) FROM prealertes p JOIN etablissements e2 ON e2.id = p.destination_id
+     'arrivee_confirmee_le', p.arrivee_confirmee_le, 'eta_minutes', (SELECT ea.minutes FROM eta_prealertes ea WHERE ea.prealerte_id = p.id),
+     'eta_km', (SELECT ea.distance_km::float FROM eta_prealertes ea WHERE ea.prealerte_id = p.id)) FROM prealertes p JOIN etablissements e2 ON e2.id = p.destination_id
    WHERE p.demande_transport_id = d.id AND p.statut <> 'remplacee' ORDER BY p.id DESC LIMIT 1) AS prealerte`;
 const FROM = `FROM demandes_transport d JOIN organisations_secours o ON o.id = d.organisation_id LEFT JOIN unites_secours un ON un.id = d.unite_id
   JOIN etablissements eo ON eo.id = d.origine_id JOIN etablissements ed ON ed.id = d.destination_id JOIN coordinations co ON co.id = d.coordination_id
