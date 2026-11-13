@@ -36,7 +36,7 @@
       vehicules: 'Véhicules de la région', vehicules_aide: 'Consultation seulement : aucune attribution ni répartition dans Arrimo ; votre système de répartition reste la référence.',
       aucun_vehicule: 'Aucun véhicule.', non_declare: 'état non déclaré', maj: 'mis à jour à {heure}', maj_auto: 'automatique', sans_position: 'position non partagée',
       ev: { disponible: 'Disponible', en_route: 'En route', sur_place: 'Sur place', transport_hopital: 'Transport vers l’hôpital', a_l_hopital: 'À l’hôpital', hors_service: 'Hors service' },
-      tr_cat: 'type d’urgence : {cat}', tr_pref: 'hôpital souhaité : {h} (information, la destination reste votre décision)',
+      carte_amb: 'Urgences proches et trajet', tr_cat: 'type d’urgence : {cat}', tr_pref: 'hôpital souhaité : {h} (information, la destination reste votre décision)',
       prio: { immediate: 'Immédiate', urgente: 'Urgente', non_urgente: 'Non urgente' },
       cat: { medicale: 'Médicale', traumatologie: 'Traumatologie', cardiaque: 'Cardiaque', neurologique: 'Neurologique', respiratoire: 'Respiratoire', pediatrique: 'Pédiatrique',
         obstetrique: 'Obstétrique', sante_mentale: 'Santé mentale', autre: 'Autre' },
@@ -73,7 +73,7 @@
       vehicules: 'Vehicles in the region', vehicules_aide: 'View only: no assignment or dispatch in Arrimo; your dispatch system remains the reference.',
       aucun_vehicule: 'No vehicle.', non_declare: 'status not declared', maj: 'updated at {heure}', maj_auto: 'automatic', sans_position: 'position not shared',
       ev: { disponible: 'Available', en_route: 'En route', sur_place: 'On scene', transport_hopital: 'Transport to hospital', a_l_hopital: 'At hospital', hors_service: 'Out of service' },
-      tr_cat: 'emergency type: {cat}', tr_pref: 'preferred hospital: {h} (information only, the destination remains your decision)',
+      carte_amb: 'Nearby emergencies and route', tr_cat: 'emergency type: {cat}', tr_pref: 'preferred hospital: {h} (information only, the destination remains your decision)',
       prio: { immediate: 'Immediate', urgente: 'Urgent', non_urgente: 'Non-urgent' },
       cat: { medicale: 'Medical', traumatologie: 'Trauma', cardiaque: 'Cardiac', neurologique: 'Neurological', respiratoire: 'Respiratory', pediatrique: 'Pediatric',
         obstetrique: 'Obstetric', sante_mentale: 'Mental health', autre: 'Other' },
@@ -135,6 +135,7 @@
       etat.prealertes = p.prealertes; etat.destinations = d; etat.enLigne = true;
       etat.transports = await api('GET', '/secours/transports').catch(() => []);
       etat.vehicules = await api('GET', '/secours/vehicules').catch(() => []);
+      if (!etat.hebergements) etat.hebergements = await api('GET', '/secours/hebergements').catch(() => []);
       if (ROLES_AMB.includes(etat.moi.utilisateur.role)) etat.unites = await api('GET', '/secours/unites');
     } catch (e) { if (estReseau(e)) etat.enLigne = false; else etat.erreur = e.message; }
     rendre();
@@ -240,24 +241,38 @@
     const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = 'vendor/leaflet/leaflet.css'; document.head.appendChild(css);
     const js = document.createElement('script'); js.src = 'vendor/leaflet/leaflet.js'; js.onload = () => ok(window.L); js.onerror = ko; document.head.appendChild(js);
   }));
+  /* Cartes (carte commune ArrimoCarte) : CCS = toute la région ; ambulance = urgences proches et son trajet */
+  const etiqHopital = (h) => {
+    const d = h.statut_declare && !h.statut_declare.perime && h.statut_declare.statut !== 'ouvert' ? t('st.' + h.statut_declare.statut) : null;
+    return `${ArrimoCarte.court(h.nom)} · ${d || (h.urgence ? t(h.urgence.civieres_libres > 1 ? 'civieres' : 'civiere1', { n: h.urgence.civieres_libres }) : t('sans_donnee'))}`;
+  };
+  const hopitauxCarte = () => etat.destinations.map((h) => ({ ...h, niveau: ArrimoCarte.niveau(h), etiquette: etiqHopital(h),
+    details: [h.ville, h.urgence ? t(h.urgence.civieres_libres > 1 ? 'civieres' : 'civiere1', { n: h.urgence.civieres_libres }) : t('sans_donnee'),
+      h.statut_declare ? t('declare', { statut: t('st.' + h.statut_declare.statut), age: h.statut_declare.age_min }) : null, h.distance_km != null ? t('vol_oiseau', { km: h.distance_km }) : null] }));
+  function ambulanceCarte(v, pos) {
+    const p = etat.prealertes.find((x) => x.unite_id === v.id && OUVERTES.includes(x.statut));
+    const dest = etat.destinations.find((d) => d.id === (p?.destination_id ?? v.destination_id));
+    const mission = ['en_route', 'sur_place', 'transport_hopital'].includes(v.etat) || Boolean(p);
+    const min = p ? minutes(p.heure_prevue) : null;
+    const lettre = dest ? ArrimoCarte.lettre(dest.nom) : null;
+    return { numero: v.numero, latitude: pos?.latitude, longitude: pos?.longitude, mission,
+      etiquette: `${v.numero}${lettre && mission ? ` → ${lettre}${min != null && min > 0 ? ` · ${min} min` : ''}` : ` · ${v.etat ? t('ev.' + v.etat).toLowerCase() : t('non_declare')}`}`,
+      details: [v.plaque, v.etat ? t('ev.' + v.etat) : t('non_declare'), dest ? t('vers', { dest: dest.nom }) : null, p ? `${t('arrivee_prevue')} : ${eta(p)}` : null, v.modifie_le ? t('maj', { heure: heure(v.modifie_le) }) : null],
+      vers: p && dest ? { latitude: dest.latitude, longitude: dest.longitude } : null, minutes: min != null && min > 0 ? min : null };
+  }
   async function dessinerCarte() {
     const zone = document.getElementById('carte-region'); if (!zone) return;
-    const L = await chargerLeaflet();
-    if (carteRegion) { carteRegion.remove(); carteRegion = null; }
-    carteRegion = L.map(zone, { scrollWheelZoom: false });
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 15, attribution: '&copy; OpenStreetMap' }).addTo(carteRegion);
-    const pts = [];
-    for (const h of etat.destinations.filter((x) => x.latitude != null)) {
-      pts.push([h.latitude, h.longitude]);
-      L.circleMarker([h.latitude, h.longitude], { radius: 10, color: '#0E5E6F', weight: 3, fillColor: COUL[h.urgence?.niveau] || '#94A3B8', fillOpacity: 0.95 }).addTo(carteRegion).bindTooltip(esc(h.nom));
-    }
-    for (const v of etat.vehicules.filter((x) => x.position)) {
-      const pos = [v.position.latitude, v.position.longitude]; pts.push(pos);
-      const p = etat.prealertes.find((x) => x.unite_id === v.id && OUVERTES.includes(x.statut));
-      L.circleMarker(pos, { radius: 8, color: '#fff', weight: 2, fillColor: COUL_V[v.etat] || '#94A3B8', fillOpacity: 1 }).addTo(carteRegion)
-        .bindTooltip(`${esc(v.numero)} · ${esc(v.etat ? t('ev.' + v.etat) : t('non_declare'))}${v.destination ? ` → ${esc(v.destination)}` : ''}${p ? ` · ${esc(eta(p))}` : ''}`, { permanent: true, direction: 'right' });
-    }
-    if (pts.length > 1) carteRegion.fitBounds(pts, { padding: [30, 30], maxZoom: 12 }); else if (pts.length) carteRegion.setView(pts[0], 11);
+    await ArrimoCarte.dessiner(zone, { langue: L, hopitaux: hopitauxCarte(), hebergements: etat.hebergements || [],
+      ambulances: etat.vehicules.filter((v) => v.position).map((v) => ambulanceCarte(v, v.position)) });
+  }
+  async function dessinerCarteAmbulance(u) {
+    const zone = document.getElementById('carte-amb'); if (!zone) return;
+    const v = etat.vehicules.find((x) => x.id === u.id) || { id: u.id, numero: u.numero };
+    const pos = etat.position || v.position || u.position;
+    const p = etat.prealertes.find((x) => x.unite_id === u.id && OUVERTES.includes(x.statut));
+    // Urgences proches (les plus proches d'abord) et son propre trajet ; l'hôpital de destination est toujours montré
+    const hops = hopitauxCarte().filter((h, i) => i < 5 || (p && h.id === p.destination_id));
+    await ArrimoCarte.dessiner(zone, { langue: L, hopitaux: hops, ambulances: pos ? [ambulanceCarte(v, pos)] : [] });
   }
   function carteTransports(amb) {
     const u = uniteCourante();
@@ -293,7 +308,7 @@
     if (!amb) {
       const ouvertes = etat.prealertes.filter((p) => OUVERTES.includes(p.statut));
       // CCS simplifié (13 nov. 2026) : état des véhicules (carte et liste) et disponibilité des urgences ; aucune attribution
-      m.innerHTML = `${msg}<section class="carte-s"><h2>${t('carte')}</h2><div id="carte-region" style="height:380px;border-radius:12px"></div></section>${listeVehicules()}${alertes()}${urgences()}${ouvertes.length ? `<section class="carte-s"><h2>${t('ccs_en_cours')}</h2><p class="note">${t('ccs_aide')}</p>${ouvertes.map(ligneListe).join('')}</section>` : ''}`;
+      m.innerHTML = `${msg}<section class="carte-s"><h2>${t('carte')}</h2><div id="carte-region" style="height:min(60vh,440px)"></div></section>${listeVehicules()}${alertes()}${urgences()}${ouvertes.length ? `<section class="carte-s"><h2>${t('ccs_en_cours')}</h2><p class="note">${t('ccs_aide')}</p>${ouvertes.map(ligneListe).join('')}</section>` : ''}`;
       dessinerCarte().catch(() => {});
       return;
     }
@@ -303,9 +318,10 @@
     const enAttente = lireFile().some((x) => x.chemin === '/secours/prealertes' && Number(x.corps.unite_id) === u.id);
     const recentes = etat.prealertes.filter((p) => p.unite_id === u.id && !OUVERTES.includes(p.statut));
     const superviseur = etat.moi.utilisateur.role === 'superviseur_secours';
-    m.innerHTML = `${msg}${carteVehicule(u)}${enCours ? carteEnCours(enCours) : enAttente ? '' : formulaire(u)}${carteOg(true)}${carteTransports(true)}${positionCarte(u)}${urgences()}
+    m.innerHTML = `${msg}${carteVehicule(u)}${enCours ? carteEnCours(enCours) : enAttente ? '' : formulaire(u)}<section class="carte-s"><h2>${t('carte_amb')}</h2><div id="carte-amb" style="height:300px"></div></section>${carteOg(true)}${carteTransports(true)}${positionCarte(u)}${urgences()}
       ${superviseur ? `<section class="carte-s"><h2>${t('organisation')}</h2>${etat.prealertes.filter((p) => OUVERTES.includes(p.statut)).map(ligneListe).join('') || `<p class="note">${t('aucune')}</p>`}</section>` : ''}
       <section class="carte-s"><h2>${t('historique')}</h2>${recentes.length ? recentes.map(ligneListe).join('') : `<p class="note">${t('aucune')}</p>`}</section>`;
+    dessinerCarteAmbulance(u).catch(() => {});
   }
 
   async function agir(p, corps) {

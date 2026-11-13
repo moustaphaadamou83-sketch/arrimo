@@ -122,4 +122,14 @@ async function urgencesProches(pool, u, etabId) {
   }).sort((a, b) => (a.distance_km ?? 1e9) - (b.distance_km ?? 1e9) || a.nom.localeCompare(b.nom));
 }
 
-module.exports = { ETATS, fixer, definir, liste, urgencesProches };
+/** Établissements d'hébergement de la région (nom et position seulement) : symboles de la carte des secours. */
+async function hebergements(pool, u) {
+  const orgs = await organisationsDe(pool, u);
+  if (!orgs.length) throw new ErreurHttp(403, 'organisation_interdite');
+  return (await pool.query(`SELECT e.id, e.nom, e.ville, e.latitude, e.longitude FROM etablissements e JOIN config_pays c ON c.id = e.config_id
+    WHERE e.actif AND COALESCE(e.type_etablissement, 'hopital') <> 'hopital' AND e.latitude IS NOT NULL
+      AND (e.config_id = ANY($1) OR regexp_replace(c.code, '-CHSLD$', '') IN (SELECT code FROM config_pays WHERE id = ANY($1))) ORDER BY e.nom`,
+  [[...new Set(orgs.map((o) => o.config_id))]])).rows;
+}
+
+module.exports = { ETATS, fixer, definir, liste, urgencesProches, hebergements };

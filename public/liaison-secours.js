@@ -72,18 +72,14 @@
   }
   async function dessinerCarte(v, ouvertes) {
     const zone = v.querySelector('#ls-carte'); if (!zone) return;
-    const L = await chargerLeaflet();
-    if (etatS.carte) { etatS.carte.remove(); etatS.carte = null; }
-    etatS.carte = L.map(zone, { scrollWheelZoom: false });
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 15, attribution: '&copy; OpenStreetMap' }).addTo(etatS.carte);
-    const e = etabCtx(); const pts = [];
-    if (e?.latitude != null) { const h = [e.latitude, e.longitude]; pts.push(h); L.circleMarker(h, { radius: 11, color: '#0E5E6F', weight: 3, fillColor: '#0E5E6F', fillOpacity: 0.9 }).addTo(etatS.carte).bindTooltip(esc(e.nom)); }
-    for (const p of ouvertes.filter((x) => x.position)) {
-      const pos = [p.position.latitude, p.position.longitude]; pts.push(pos);
-      L.circleMarker(pos, { radius: 9, color: '#fff', weight: 2, fillColor: COUL_PRIO[p.priorite], fillOpacity: 1 }).addTo(etatS.carte)
-        .bindTooltip(`${esc(p.numero)} · ${esc(p.unite)} · ${delai(p)}`, { permanent: true, direction: 'right' });
-    }
-    if (pts.length > 1) etatS.carte.fitBounds(pts, { padding: [40, 40], maxZoom: 13 }); else if (pts.length) etatS.carte.setView(pts[0], 12);
+    const e = etat.moi.etablissements.find((x) => x.id === etat.ctx);
+    const n = (p) => (p.heure_prevue ? Math.round((new Date(p.heure_prevue).getTime() - Date.now()) / 60000) : null);
+    await ArrimoCarte.dessiner(zone, { langue: (document.documentElement.lang || 'fr').slice(0, 2),
+      hopitaux: e ? [{ nom: e.nom, latitude: e.latitude, longitude: e.longitude, moi: true, niveau: null, etiquette: ArrimoCarte.court(e.nom), details: [e.ville] }] : [],
+      ambulances: ouvertes.filter((p) => p.position).map((p) => ({ numero: p.unite, latitude: p.position.latitude, longitude: p.position.longitude, mission: true,
+        etiquette: `${p.unite}${n(p) != null && n(p) > 0 ? ` · ${t('liaison_secours.dans', { n: n(p) })}` : ''}`,
+        details: [p.numero, p.organisation, p.plaque, t(`liaison_secours.prio_${p.priorite}`), t(`liaison_secours.s_${p.statut}`)],
+        vers: e ? { latitude: e.latitude, longitude: e.longitude } : null, minutes: n(p) != null && n(p) > 0 ? n(p) : null })), legende: false });
   }
   async function vueSecours() {
     const v = $('#v-secours'); if (!v) return;

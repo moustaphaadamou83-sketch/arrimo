@@ -59,7 +59,6 @@
       [{ label: t('general.retour') }, { label: t('transports.annuler'), pri: true, run: async () => (await agir(null, () => api('POST', `/transports/${b.dataset.trAnnuler}/action`, { etablissement_id: etat.ctx, action: 'annuler', version: Number(b.dataset.version) }), t('transports.ok'))) !== null }]); });
   }
   /* Urgences proches (établissement d'hébergement) : capacités globales en carte et en liste, et suivi des transports de SES résidents. */
-  let carteUp = null;
   async function vueUrgences() {
     const v = $('#v-c-urgences');
     const [hops, trs] = await Promise.all([api('GET', `/urgences-proches?etablissement_id=${etat.ctx}`), api('GET', `/transports?etablissement_id=${etat.ctx}`)]);
@@ -76,21 +75,19 @@
       <div class="note">${T('suivi', { numero: d.numero, org: d.organisation, statut: t(`transports.s_${d.statut}`) })}${suivi(d)}</div></div></article>`).join('');
     v.innerHTML = `<div class="entete"><div><h2>${T('up_titre')}</h2><p>${T('up_intro')}</p></div></div>
       <div class="panneau-c"><h3>${T('up_suivi')}</h3><div class="liste">${lignesTr || `<p class="note">${T('up_suivi_aucun')}</p>`}</div></div>
-      <div class="panneau-c"><h3>${T('up_carte')}</h3><div id="carte-urgences" style="height:340px;border-radius:12px"></div></div>
+      <div class="panneau-c"><h3>${T('up_carte')}</h3><div id="carte-urgences" style="height:min(55vh,380px)"></div></div>
       <div class="panneau-c"><h3>${T('up_liste')}</h3><div class="liste">${hops.map(ligne).join('') || `<p class="note">${T('up_aucune')}</p>`}</div></div>`;
     try {
-      const L = await chargerLeaflet(); const zone = document.getElementById('carte-urgences'); if (!zone) return;
-      if (carteUp) { carteUp.remove(); carteUp = null; }
-      carteUp = L.map(zone, { scrollWheelZoom: false });
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 15, attribution: '&copy; OpenStreetMap' }).addTo(carteUp);
-      const ici = etat.moi.etablissements.find((e) => e.id === etat.ctx); const pts = [];
-      if (ici?.latitude != null) { pts.push([ici.latitude, ici.longitude]); L.circleMarker([ici.latitude, ici.longitude], { radius: 8, color: '#0E5E6F', weight: 3, fillColor: '#fff', fillOpacity: 1 }).addTo(carteUp).bindTooltip(esc(ici.nom)); }
-      for (const h of hops.filter((x) => x.latitude != null)) {
-        pts.push([h.latitude, h.longitude]);
-        L.circleMarker([h.latitude, h.longitude], { radius: 10, color: '#0E5E6F', weight: 2, fillColor: COUL[h.urgence?.niveau] || '#94A3B8', fillOpacity: 0.95 }).addTo(carteUp)
-          .bindTooltip(`${esc(h.nom)} · ${h.urgence ? esc(t('transports.up_civieres', { n: h.urgence.civieres_libres })) : esc(t('transports.up_sans'))}`);
-      }
-      if (pts.length > 1) carteUp.fitBounds(pts, { padding: [30, 30], maxZoom: 12 }); else if (pts.length) carteUp.setView(pts[0], 11);
+      const ici = etat.moi.etablissements.find((e) => e.id === etat.ctx);
+      const etiq = (h) => `${ArrimoCarte.court(h.nom)} · ${h.statut_declare && !h.statut_declare.perime && h.statut_declare.statut !== 'ouvert' ? t(`transports.up_st.${h.statut_declare.statut}`) : h.urgence ? t('transports.up_civieres', { n: h.urgence.civieres_libres }) : t('transports.up_sans')}`;
+      await ArrimoCarte.dessiner(document.getElementById('carte-urgences'), { langue: locale().slice(0, 2),
+        hebergements: ici ? [{ nom: ici.nom, latitude: ici.latitude, longitude: ici.longitude, details: [ici.ville] }] : [],
+        // Urgences les plus proches seulement : 6 sur la carte, étiquettes des 3 premières ; la liste complète reste dessous
+        cadrer: [...(ici?.latitude != null ? [[ici.latitude, ici.longitude]] : []), ...hops.slice(0, 3).filter((h) => h.latitude != null).map((h) => [h.latitude, h.longitude])],
+        hopitaux: hops.slice(0, 6).map((h, i) => ({ ...h, prio: i < 3 ? 1 : 3, niveau: ArrimoCarte.niveau(h), etiquette: etiq(h),
+          details: [h.ville, h.distance_km != null ? t('transports.up_km', { km: h.distance_km }) : null, h.urgence ? t('transports.up_civieres', { n: h.urgence.civieres_libres }) : t('transports.up_sans'),
+            h.services_ouverts?.length ? h.services_ouverts.map((c) => t(`transports.up_sv.${c}`)).join(', ') : null,
+            h.soins_intensifs ? t('transports.up_si', h.soins_intensifs) : null] })) });
     } catch { /* carte indisponible : la liste suffit */ }
   }
   window.ArrimoTransports = { bloc, brancher, vueUrgences };
