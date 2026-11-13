@@ -374,7 +374,9 @@ test('ERP SH dans le navigateur : parcours complet par les écrans, 3 largeurs',
       // Demande du site : affichée en texte, statut modifiable.
       await pool.query(`INSERT INTO sh_demandes_site(depot_id,type,pays,langue,nom,organisation,courriel,message) VALUES('00000000-0000-4000-8000-000000000001','demo','canada','fr','Personne fictive','Organisation fictive','p@exemple.invalid','<img src=x id=piege-xss> Message fictif') ON CONFLICT DO NOTHING`);
       await pool.query(`INSERT INTO sh_demandes_site(depot_id,type,pays_code,ville,langue,langue_contact,nom,organisation,courriel,telephone,message) VALUES('00000000-0000-4000-8000-000000000002','devis','SN','Ville fictive','fr','pt','Personne fictive deux','Organisation fictive deux','p2@exemple.invalid','+221771234567','Message fictif du formulaire mondial') ON CONFLICT DO NOTHING`);
-      await page.vue('demandes');await page.waitForSelector('[data-demande]');
+      await page.vue('demandes');await page.waitForSelector('[data-ligne]');
+      assert.equal(await page.locator('#onglets [data-v="demandes"] .compteur-onglet').textContent(),'2','compteur « à traiter » sur l’onglet');
+      for(const b of await page.locator('[data-ouvrir]').all())await b.click();await page.waitForSelector('[data-demande]');
       assert.match(await page.locator('[data-demande]',{hasText:'formulaire mondial'}).textContent(),/Sénégal · Ville fictive · contact en portugais/);
       assert.equal(await page.locator('[data-demande] a[href="tel:+221771234567"]').count(),1,'numéro international cliquable');
       assert.match(await page.locator('[data-demande] .demande-message',{hasText:'piege-xss'}).textContent(),/<img src=x id=piege-xss> Message fictif/);

@@ -259,6 +259,7 @@ async function afficherVue() {
     else await vueCompte(v);
   } catch (e) { toast(e.message, true); }
   traduireNoeuds(v);
+  if (etat.vue !== 'demandes' && ['administration', 'commercial'].includes(etat.moi.utilisateur.role) && typeof majCompteurDemandes === 'function') majCompteurDemandes();
   document.body.dataset.pret = '1';
   document.body.dataset.rendus = String(Number(document.body.dataset.rendus || 0) + 1);   // repère pour les tests d'interface
   if(typeof rafraichirPresence==='function')void rafraichirPresence();

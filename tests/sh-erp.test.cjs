@@ -1202,31 +1202,69 @@ test('demandes du site : dépôt réservé au serveur du site, écran limité au
     assert.strictEqual((await fetch(`${baseSh}/api/depot-site/demandes`, { headers: cle })).status, 401, 'la clé du site ne permet aucune lecture');
     for (const role of ['finance', 'implantation', 'formation', 'support']) assert.strictEqual(await statut(role, 'GET', '/demandes-site'), 403, role);
     assert.strictEqual(await statut(null, 'GET', '/demandes-site'), 401);
-    const [d] = await ok('commercial', 'GET', '/demandes-site');
-    assert.strictEqual(d.nom, 'Personne fictive');
-    assert.strictEqual((await ok('commercial', 'PUT', `/demandes-site/${d.id}`, { statut: 'en_cours' })).statut, 'en_cours');
+    const liste = async (q = '') => (await ok('commercial', 'GET', `/demandes-site${q}`)).demandes;
+    const [d] = await liste();
+    assert.strictEqual(d.nom, 'Personne fictive'); assert.strictEqual(d.statut, 'a_traiter'); assert.ok(d.consentement_le, 'date du consentement enregistrée');
+    // Prospect créé automatiquement : organisation, contact, demande rattachée, note d'historique ; accusé de réception en file
+    assert.ok(d.organisation_id && d.contact_id, 'prospect rattaché');
+    const org = await ok('commercial', 'GET', `/crm/organisations/${d.organisation_id}`);
+    assert.strictEqual(org.nom, 'Organisation fictive'); assert.strictEqual(org.etape, 'prospect'); assert.strictEqual(org.origine, 'site');
+    const accuses = (await pool.query("SELECT * FROM sh_demandes_courriels WHERE genre = 'accuse'")).rows;
+    assert.strictEqual(accuses.length, 1, 'un seul accusé (renvoi sans doublon)');
+    assert.ok(accuses[0].texte.includes('Nous avons bien reçu votre demande') && accuses[0].texte.includes('message automatique'));
+    for (const prive of ['Personne fictive', 'Organisation fictive', 'Message fictif']) assert.ok(!accuses[0].texte.includes(prive), `accusé sans ${prive}`);
+    const partis = []; courriel.definirTransport(async (m) => { partis.push(m); });
+    try { assert.deepStrictEqual(await require('../src/sh/demandes-crm').executer(pool, { env: envSh }), { actif: true, envoyes: 1, echecs: 0 }); } finally { courriel.definirTransport(null); }
+    assert.strictEqual(partis[0].a, 'personne@exemple.invalid');
+    // Même courriel : pas de nouveau prospect ni de second accusé dans les 24 h
+    await envoi({ ...demande, depot_id: crypto.randomUUID(), organisation: 'Autre nom fictif', telephone: '+15145550123' }, cle);
+    assert.strictEqual((await pool.query("SELECT count(*)::int n FROM sh_crm_contacts WHERE lower(courriel) = 'personne@exemple.invalid'")).rows[0].n, 1, 'pas de doublon de contact');
+    assert.strictEqual((await pool.query("SELECT telephone FROM sh_crm_contacts WHERE lower(courriel) = 'personne@exemple.invalid'")).rows[0].telephone, '+15145550123', 'fiche complétée');
+    assert.strictEqual((await pool.query("SELECT count(*)::int n FROM sh_demandes_courriels WHERE genre = 'accuse'")).rows[0].n, 1);
+    assert.strictEqual((await ok('commercial', 'GET', '/demandes-site/compteur')).a_traiter, 2);
+    // Statuts : rejet avec motif, archives, réponse, suppression réservée aux pourriels
     assert.strictEqual(await statut('commercial', 'PUT', `/demandes-site/${d.id}`, { statut: 'x' }), 400);
-    assert.strictEqual(await statut('commercial', 'DELETE', `/demandes-site/${d.id}`), 403, 'suppression réservée à l’administration');
+    assert.strictEqual(await statut('commercial', 'PUT', `/demandes-site/${d.id}`, { statut: 'rejetee' }), 400, 'motif obligatoire');
+    assert.strictEqual(await statut('admin', 'DELETE', `/demandes-site/${d.id}`), 409, 'une demande non rejetée comme pourriel ne se supprime pas');
+    assert.strictEqual(await statut('commercial', 'POST', `/demandes-site/${d.id}/repondre`, { sujet: 'x', texte: 'court' }), 400);
+    await ok('commercial', 'POST', `/demandes-site/${d.id}/repondre`, { sujet: 'Arrimo · Votre demande', texte: 'Bonjour,\n\nRéponse fictive.\n\nL’équipe Arrimo', marquer_traitee: true });
+    assert.strictEqual((await ok('commercial', 'GET', `/crm/organisations/${d.organisation_id}`)).etape, 'contacte', 'répondre fait passer le prospect à « contacté »');
+    assert.ok((await pool.query("SELECT 1 FROM sh_activites WHERE organisation_id = $1 AND type = 'courriel' AND contenu LIKE '%Réponse fictive%'", [d.organisation_id])).rowCount, 'réponse dans l’historique du contact');
+    assert.ok(!(await liste()).some((x) => x.id === d.id), 'traitée : sortie de la boîte d’arrivée');
+    assert.ok((await liste('?vue=archives')).some((x) => x.id === d.id), 'visible aux archives');
+    const [autre] = await liste();
+    await ok('commercial', 'POST', '/demandes-site/lot', { ids: [autre.id], action: 'rejeter', rejet_motif: 'pourriel' });
+    assert.strictEqual(await statut('commercial', 'POST', '/demandes-site/lot', { ids: [autre.id], action: 'rejeter' }), 400);
+    assert.strictEqual(await statut('commercial', 'DELETE', `/demandes-site/${autre.id}`), 403, 'suppression réservée à l’administration');
     const journal = (await pool.query("SELECT coalesce(string_agg(action||cible||coalesce(detail,''),' '),'') j FROM sh_journal WHERE action LIKE 'Demande%'")).rows[0].j;
     assert.ok(journal.includes(`Demande ${d.id}`) && !journal.includes('Personne fictive'), 'journal sans nom');
-    await ok('admin', 'DELETE', `/demandes-site/${d.id}`);
-    assert.strictEqual((await pool.query('SELECT count(*)::int n FROM sh_demandes_site')).rows[0].n, 0);
+    await ok('admin', 'DELETE', `/demandes-site/${autre.id}`);
+    // Étapes du prospect : perdu exige un motif ; gagné en fait un client
+    assert.strictEqual(await statut('commercial', 'PUT', `/crm/organisations/${d.organisation_id}/etape`, { etape: 'perdu' }), 400);
+    await ok('commercial', 'PUT', `/crm/organisations/${d.organisation_id}/etape`, { etape: 'demo_planifiee' });
+    assert.strictEqual((await ok('commercial', 'PUT', `/crm/organisations/${d.organisation_id}/etape`, { etape: 'gagne' })).type, 'client');
+    await pool.query('DELETE FROM sh_demandes_courriels'); await pool.query('DELETE FROM sh_demandes_site');
     const vieille = { ...demande, depot_id: crypto.randomUUID() }; const recente = { ...demande, depot_id: crypto.randomUUID() };
     await envoi(vieille, cle); await envoi(recente, cle);
     await pool.query("UPDATE sh_demandes_site SET recu_le = now() - interval '24 months 1 day', alerte_le = now() WHERE depot_id = $1", [vieille.depot_id]);
     await pool.query('UPDATE sh_demandes_site SET alerte_le = now() WHERE depot_id = $1', [recente.depot_id]);
     assert.strictEqual((await site.entretien(pool, envSh)).supprimees, 1);
-    assert.deepStrictEqual((await pool.query('SELECT depot_id FROM sh_demandes_site')).rows.map((x) => x.depot_id), [recente.depot_id]);    // Formulaire mondial : pays ISO, ville, langue de contact, téléphone E.164 ; un numéro non conforme est gardé et marqué à vérifier
-    const monde = { ...demande, depot_id: crypto.randomUUID(), pays: undefined, pays_code: 'SN', ville: 'Ville fictive', langue_contact: 'pt', telephone: '+221771234567' };
+    assert.deepStrictEqual((await pool.query('SELECT depot_id FROM sh_demandes_site')).rows.map((x) => x.depot_id), [recente.depot_id]);
+    // Formulaire mondial : pays ISO, ville, langue de contact, téléphone E.164 ; un numéro non conforme est gardé et marqué à vérifier
+    const monde = { ...demande, courriel: 'monde@exemple.invalid', depot_id: crypto.randomUUID(), pays: undefined, pays_code: 'SN', ville: 'Ville fictive', langue_contact: 'pt', telephone: '+221771234567', module_interet: 'secours' };
     assert.strictEqual((await envoi(monde, cle)).status, 200);
-    const douteux = { ...monde, depot_id: crypto.randomUUID(), pays_code: 'BE', telephone: '0470 12', langue_contact: 'es' };
+    const douteux = { ...monde, courriel: 'douteux@exemple.invalid', depot_id: crypto.randomUUID(), pays_code: 'BE', telephone: '0470 12', langue_contact: 'es', module_interet: undefined };
     assert.strictEqual((await envoi(douteux, cle)).status, 200, 'numéro douteux : demande gardée');
-    for (const mauvais of [{ pays_code: 'XX' }, { pays_code: 'sn' }, { langue_contact: 'klingon' }, { ville: 'x'.repeat(121) }]) assert.strictEqual((await envoi({ ...monde, depot_id: crypto.randomUUID(), ...mauvais }, cle)).status, 400, JSON.stringify(mauvais));
-    const sn = await ok('commercial', 'GET', '/demandes-site?pays=SN');
+    for (const mauvais of [{ pays_code: 'XX' }, { pays_code: 'sn' }, { langue_contact: 'klingon' }, { ville: 'x'.repeat(121) }, { module_interet: 'autre' }]) assert.strictEqual((await envoi({ ...monde, depot_id: crypto.randomUUID(), ...mauvais }, cle)).status, 400, JSON.stringify(mauvais));
+    const sn = await liste('?pays=SN');
     assert.deepStrictEqual(sn.map((x) => [x.pays_code, x.ville, x.langue_contact, x.telephone, x.telephone_a_verifier]), [['SN', 'Ville fictive', 'pt', '+221771234567', false]]);
-    assert.strictEqual((await ok('commercial', 'GET', '/demandes-site?pays=BE')).at(0).telephone_a_verifier, true);
-    assert.strictEqual((await ok('commercial', 'GET', '/demandes-site?langue=es')).length, 1);
-    assert.strictEqual((await ok('commercial', 'GET', '/demandes-site?ville=fictive')).length, 2);
+    assert.strictEqual((await liste('?pays=BE')).at(0).telephone_a_verifier, true);
+    assert.strictEqual((await liste('?langue=es')).length, 1);
+    assert.strictEqual((await liste('?ville=fictive')).length, 2);
+    assert.strictEqual((await liste('?module=secours')).length, 1);
+    assert.strictEqual((await liste('?recherche=douteux')).length, 1);
+    const accuseEs = (await pool.query("SELECT langue FROM sh_demandes_courriels WHERE destinataire = 'douteux@exemple.invalid'")).rows[0];
+    assert.strictEqual(accuseEs.langue, 'fr', 'langue de contact hors FR/EN : accusé dans la langue de la page');
   }
   delete envSh.SH_DEPOT_SITE_CLE_SHA256; delete envSh.SH_DEPOT_SITE_ALERTE;
   assert.strictEqual((await envoi(demande, { 'X-Depot-Cle': 'cle-depot-fictive' })).status, 404);

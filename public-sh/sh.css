@@ -117,3 +117,17 @@ table.compact { min-width: 0; }
 .modules-type legend { font-size: var(--t-note); text-transform: uppercase; letter-spacing: 0.05em; color: var(--texte-2-fond); }
 .modules-type .case { align-items: flex-start; }
 .module-a_venir, .module-etude { opacity: 0.75; }
+/* Demandes : compteur « à traiter » sur l'onglet, filtres et vue compacte */
+.compteur-onglet { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; margin-left: 6px; border-radius: 999px; background: #DC2626; color: #fff; font-size: 12px; font-weight: 700; }
+.filtres-demandes { flex-wrap: wrap; gap: 12px; align-items: end; }
+.filtres-demandes .champ { min-width: 160px; flex: 1 1 160px; }
+.demande-detail > td { background: var(--doux); }
+.prospects-colonnes { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 1200px) { .prospects-colonnes { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 800px) { .prospects-colonnes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .prospects-colonnes { grid-template-columns: 1fr; } }
+.prospects-colonnes .carte-prospect strong { overflow-wrap: anywhere; }
+.prospects-colonnes .colonne { background: var(--doux); border: 1px solid var(--bordure); border-radius: 12px; padding: 10px; min-height: 120px; display: grid; gap: 8px; align-content: start; }
+.prospects-colonnes .colonne.survol { outline: 2px dashed #159895; }
+.prospects-colonnes .carte-prospect { background: var(--carte); color: var(--texte); border: 1px solid var(--bordure); border-radius: 10px; padding: 10px; display: grid; gap: 6px; cursor: grab; }
+.prospects-colonnes .carte-prospect select { width: 100%; }

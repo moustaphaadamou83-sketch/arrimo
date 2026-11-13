@@ -117,6 +117,37 @@ async function vueAccueil(v) {
 }
 
 /* ---------------- CRM ---------------- */
+/* Suivi des prospects : étapes au niveau de l'organisation ; colonnes (glisser-déposer, ou liste déroulante au clavier) et liste. */
+const ETAPES_PROSPECT = { prospect: 'Prospect', contacte: 'Contacté', demo_planifiee: 'Démo planifiée', devis_envoye: 'Devis envoyé', gagne: 'Gagné', perdu: 'Perdu' };
+function blocProspects(orgs, modifiable) {
+  const vue = etat.vueProspects || 'colonnes';
+  const choixEtape = (o) => modifiable ? `<label class="lbl" for="etape-${o.id}">Étape</label><select id="etape-${o.id}" data-etape-org="${o.id}">${Object.entries(ETAPES_PROSPECT).map(([c, n]) => `<option value="${c}"${c === o.etape ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>` : esc(ETAPES_PROSPECT[o.etape] || o.etape);
+  const carte = (o) => `<article class="carte-prospect" draggable="${modifiable}" data-carte-org="${o.id}"><strong>${esc(o.nom)}</strong><span class="note">${esc([o.ville, o.pays_code].filter(Boolean).join(' · '))}${o.origine === 'site' ? ' · formulaire du site' : ''}</span>${o.perdu_motif ? `<span class="note">Motif : ${esc(o.perdu_motif)}</span>` : ''}${choixEtape(o)}</article>`;
+  const corps = vue === 'liste'
+    ? tableSH(['Organisation', 'Lieu', 'Origine', 'Étape', 'Depuis'], orgs.map((o) => `<tr><td>${esc(o.nom)}</td><td>${esc([o.ville, o.pays_code].filter(Boolean).join(' · '))}</td><td>${o.origine === 'site' ? 'Site' : 'Saisie'}</td><td>${choixEtape(o)}</td><td>${esc(o.etape_le ? new Date(o.etape_le).toLocaleDateString('fr-CA') : '')}</td></tr>`).join(''), 'Aucune organisation.')
+    : `<div class="prospects-colonnes">${Object.entries(ETAPES_PROSPECT).map(([c, n]) => { const l = orgs.filter((o) => o.etape === c); return `<section class="colonne" data-colonne-etape="${c}" aria-label="${esc(n)}"><h4>${esc(n)} <span class="note">${l.length}</span></h4>${l.map(carte).join('')}</section>`; }).join('')}</div>`;
+  return `<div class="ligne"><h3>Suivi des prospects</h3><div class="ligne serre">${bouton('Colonnes', 'pr-colonnes', vue === 'colonnes' ? 'btn pri' : 'btn')}${bouton('Liste', 'pr-liste', vue === 'liste' ? 'btn pri' : 'btn')}</div></div>
+    <p class="note">Prospect → Contacté → Démo planifiée → Devis envoyé → Gagné (devient client : créez ensuite son établissement et son projet depuis sa fiche) ou Perdu (motif demandé). Glissez une carte ou changez son étape.</p>${corps}`;
+}
+function brancherProspects(v, orgs) {
+  surAction(v, 'pr-colonnes', () => { etat.vueProspects = 'colonnes'; afficher(); });
+  surAction(v, 'pr-liste', () => { etat.vueProspects = 'liste'; afficher(); });
+  const changer = (id, etape) => {
+    const o = orgs.find((x) => String(x.id) === String(id)); if (!o || o.etape === etape) return;
+    if (etape === 'perdu') return modale(`Prospect perdu : ${o.nom}`, `<div class="champ"><label class="lbl" for="pr-motif">Motif</label><input id="pr-motif" maxlength="500"></div>`,
+      [{ label: 'Annuler', run: () => { afficher(); } }, { label: 'Enregistrer', dan: true, run: enregistrer(() => api('PUT', `/crm/organisations/${id}/etape`, { etape, motif: valeur('#pr-motif') }), 'Prospect marqué perdu.') }]);
+    if (etape === 'gagne') return modale(`Gagné : ${o.nom}`, '<p>L’organisation devient cliente. Créez ensuite son établissement (fiche de l’organisation) et son projet ; la facturation suit le contrat.</p>',
+      [{ label: 'Annuler', run: () => { afficher(); } }, { label: 'Confirmer', pri: true, run: enregistrer(() => api('PUT', `/crm/organisations/${id}/etape`, { etape }), 'Client gagné.') }]);
+    agir(null, () => api('PUT', `/crm/organisations/${id}/etape`, { etape }), `Étape : ${ETAPES_PROSPECT[etape]}.`);
+  };
+  v.querySelectorAll('[data-etape-org]').forEach((sel) => { sel.onchange = () => changer(sel.dataset.etapeOrg, sel.value); });
+  v.querySelectorAll('[data-carte-org]').forEach((c) => { c.ondragstart = (e) => { e.dataTransfer.setData('text/plain', c.dataset.carteOrg); }; });
+  v.querySelectorAll('[data-colonne-etape]').forEach((col) => {
+    col.ondragover = (e) => { e.preventDefault(); col.classList.add('survol'); };
+    col.ondragleave = () => col.classList.remove('survol');
+    col.ondrop = (e) => { e.preventDefault(); col.classList.remove('survol'); changer(e.dataTransfer.getData('text/plain'), col.dataset.colonneEtape); };
+  });
+}
 async function vueCRM(v) {
   const [orgs, opps, relances] = await Promise.all([api('GET', '/crm/organisations'), api('GET', '/crm/opportunites'), peut('commercial') ? api('GET', '/crm/activites?a_faire=1') : []]);
   const previsions = {};
@@ -135,9 +166,11 @@ async function vueCRM(v) {
   const lignesRel = relances.map((a) => `<tr><td>${a.en_retard ? etiquette('facture', 'en_retard') : ''} ${esc(a.titre)}</td><td>${esc(a.type)}</td><td>${esc(a.organisation || '—')}</td><td>${esc(a.responsable || '—')}</td><td>${esc(a.echeance ? quand(a.echeance) : '—')}</td><td>${bouton('Fait', 'rel-fait', 'btn', a.id)}</td></tr>`).join('');
   v.innerHTML = `<div class="entete"><div><h2>CRM</h2><p>${esc(pl('{n|# organisation|# organisations}', { n: orgs.length }))} · ${esc(pl('{n|# opportunité enregistrée|# opportunités enregistrées}', { n: opps.length }))}. ${esc(prevision)}</p></div>
     ${commercial ? `<div class="ligne serre">${bouton('Nouvelle organisation', 'org-nouvelle', 'btn pri')}${bouton('Nouvelle opportunité', 'opp-nouvelle')}</div>` : ''}</div>
-    <h3>Pipeline commercial</h3><div class="sh-kanban">${board}</div>
+    ${blocProspects(orgs, commercial)}
+    <h3>Opportunités (valeur et devis)</h3><div class="sh-kanban">${board}</div>
     ${commercial ? `<h3>Relances à faire</h3>${tableSH(['Relance', 'Type', 'Organisation', 'Responsable', 'Échéance', ''], lignesRel, 'Aucune relance en attente.')}` : ''}
     <h3>Organisations</h3>${tableSH(['Organisation', 'Type', 'Province', 'Contacts', 'Opportunités', 'Établissement'], lignesOrg)}`;
+  brancherProspects(v, orgs);
   const opp = (id) => opps.find((o) => String(o.id) === String(id));
   surAction(v, 'org-nouvelle', async () => {try{
     const refs=await referencesInternationales();

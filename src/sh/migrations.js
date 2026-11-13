@@ -88,7 +88,8 @@ async function migrerSh(pool, env = process.env) {
     const liaisonSecours=await require('./types-etablissement-migrations').migrerLiaisonSecours(c);
     const formationRetrait=await require('./formation-retrait-migrations').migrerFormationRetrait(c);
     const demandesMonde=await require('./demandes-monde-migrations').migrerDemandesMonde(c);
-    return { version: require('./demandes-monde-migrations').DEMANDES_MONDE_VERSION, appliquee: demandesMonde || formationRetrait || liaisonSecours || profilsPays || serveurs || typesAines || demandesSite || typesLocaux || productions || liaisonChsld || socle || erp || acces || projets || presence || perimetre || cycle || pilote || concurrence || liens || support || supportDroits || notificationsFinances || supportPagination || notificationsPerimetres || raccordementSupport || supportSla || supportPj || supportCourriels || supportCalendrier || preferences || fiscalite || change || apparence || parametres || financesProjets || tachesSuivi || projetsPilotage || competences || recherche || deploiement || collaborateurs || typesEtablissement };
+    const demandesCrm=await require('./demandes-crm-migrations').migrerDemandesCrm(c);
+    return { version: require('./demandes-crm-migrations').DEMANDES_CRM_VERSION, appliquee: demandesCrm || demandesMonde || formationRetrait || liaisonSecours || profilsPays || serveurs || typesAines || demandesSite || typesLocaux || productions || liaisonChsld || socle || erp || acces || projets || presence || perimetre || cycle || pilote || concurrence || liens || support || supportDroits || notificationsFinances || supportPagination || notificationsPerimetres || raccordementSupport || supportSla || supportPj || supportCourriels || supportCalendrier || preferences || fiscalite || change || apparence || parametres || financesProjets || tachesSuivi || projetsPilotage || competences || recherche || deploiement || collaborateurs || typesEtablissement };
   });
 }
 
