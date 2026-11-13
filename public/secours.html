@@ -60,6 +60,9 @@
   .secours .og-phrase { display: flex; gap: 8px; align-items: flex-start; background: rgba(21,152,149,.08); border-left: 4px solid #159895; border-radius: 8px; padding: 8px 10px; margin: 8px 0 10px; }
   .secours details.voir-carte { margin-top: 12px; } .secours details.voir-carte summary { display: inline-flex; align-items: center; min-height: 44px; font-size: 16px; cursor: pointer; list-style: none; }
   .secours details.voir-carte summary::-webkit-details-marker { display: none; }
+  .secours .tuiles-c { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+  .secours .tuile-c { background: var(--carte); border: 1px solid var(--bordure); border-radius: var(--rayon-carte); padding: 12px 14px; }
+  .secours .tuile-c .gros { color: var(--principal); }
   @media (max-width: 700px) {
     .secours table.classe thead { display: none; }
     .secours table.classe tr { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; padding: 10px 6px; border-bottom: 1px solid var(--bordure); }
