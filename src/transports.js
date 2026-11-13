@@ -55,6 +55,12 @@ async function demander(pool, u, coordinationId, b) {
   if (cle && !/^[A-Za-z0-9_-]{8,64}$/.test(cle)) throw new ErreurHttp(400, 'cle_idempotence_invalide');
   const heure = b.heure_souhaitee ? new Date(b.heure_souhaitee) : null;
   if (heure && Number.isNaN(heure.getTime())) throw new ErreurHttp(400, 'date_invalide');
+  // Type d'urgence et hôpital souhaité : information seulement (la destination reste décidée par l'équipage et les protocoles)
+  const categorie = b.categorie == null || b.categorie === '' ? null : String(b.categorie);
+  if (categorie && !pa.CATEGORIES.includes(categorie)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'categorie' });
+  const prefere = b.hopital_prefere_id == null || b.hopital_prefere_id === '' ? null : entier(b.hopital_prefere_id);
+  if (b.hopital_prefere_id != null && b.hopital_prefere_id !== '' && !prefere) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'hopital_prefere_id' });
+  if (prefere && !(await require('./vehicules').urgencesProches(pool, u, co0.origine_id)).some((h) => h.id === prefere)) throw new ErreurHttp(404, 'hopital_introuvable');
   return transaction(pool, async (c) => {
     const co = (await c.query('SELECT * FROM coordinations WHERE id = $1 FOR UPDATE', [co0.id])).rows[0];
     if (cle) {
@@ -70,7 +76,8 @@ async function demander(pool, u, coordinationId, b) {
     const d = (await c.query(`INSERT INTO demandes_transport (numero, coordination_id, organisation_id, origine_id, destination_id, resident_ref, heure_souhaitee, infos, cle_idempotence, cree_par)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
     [await numero(c), co.id, org.id, co.origine_id, co.destination_id, co.resident_ref, heure || co.retour_prevu_le || null, JSON.stringify(infos), cle, u.id])).rows[0];
-    await evenement(c, d, 'demandee', u, { organisation: org.nom });
+    if (categorie || prefere) await c.query('INSERT INTO demande_transport_preferences (demande_id, categorie, hopital_prefere_id) VALUES ($1, $2, $3)', [d.id, categorie, prefere]);
+    await evenement(c, d, 'demandee', u, { organisation: org.nom, ...(categorie ? { categorie } : {}), ...(prefere ? { hopital_prefere: prefere } : {}) });
     await journaliser(c, { etablissementId: co.origine_id, utilisateurId: u.id, action: 'Transport demandé', detail: `${d.numero} · ${co.numero} · ${org.nom}` });
     // L'établissement de destination est averti qu'un transport est demandé pour cette coordination
     await require('./services').notifier(c, co.destination_id, null, 'transport_demande', { numero: d.numero, coordination: co.numero, ref: co.resident_ref, org: org.nom });
@@ -80,9 +87,15 @@ async function demander(pool, u, coordinationId, b) {
 }
 
 const CHAMPS = `d.*, o.nom AS organisation, un.numero AS unite, un.plaque, eo.nom AS origine, eo.adresse AS origine_adresse, eo.ville AS origine_ville,
-  ed.nom AS destination, ed.ville AS destination_ville, co.numero AS coordination, co.type AS coordination_type, co.statut AS coordination_statut`;
+  ed.nom AS destination, ed.ville AS destination_ville, co.numero AS coordination, co.type AS coordination_type, co.statut AS coordination_statut,
+  pref.categorie AS categorie_urgence, pref.hopital_prefere_id, hp.nom AS hopital_prefere, ev.etat AS etat_vehicule, ev.modifie_le AS etat_vehicule_le,
+  (SELECT json_build_object('numero', p.numero, 'statut', p.statut, 'destination_id', p.destination_id, 'destination', e2.nom, 'heure_prevue', p.heure_prevue,
+     'arrivee_confirmee_le', p.arrivee_confirmee_le) FROM prealertes p JOIN etablissements e2 ON e2.id = p.destination_id
+   WHERE p.demande_transport_id = d.id AND p.statut <> 'remplacee' ORDER BY p.id DESC LIMIT 1) AS prealerte`;
 const FROM = `FROM demandes_transport d JOIN organisations_secours o ON o.id = d.organisation_id LEFT JOIN unites_secours un ON un.id = d.unite_id
-  JOIN etablissements eo ON eo.id = d.origine_id JOIN etablissements ed ON ed.id = d.destination_id JOIN coordinations co ON co.id = d.coordination_id`;
+  JOIN etablissements eo ON eo.id = d.origine_id JOIN etablissements ed ON ed.id = d.destination_id JOIN coordinations co ON co.id = d.coordination_id
+  LEFT JOIN demande_transport_preferences pref ON pref.demande_id = d.id LEFT JOIN etablissements hp ON hp.id = pref.hopital_prefere_id
+  LEFT JOIN etats_vehicules ev ON ev.unite_id = d.unite_id`;
 
 /** Demandes de transport visibles : ambulance (son organisation), établissement (origine ou destination), CCS (sa région, lecture). */
 async function liste(pool, u, q = {}) {
@@ -101,7 +114,9 @@ async function liste(pool, u, q = {}) {
   const rows = (await pool.query(`SELECT ${CHAMPS} ${FROM} WHERE ${filtre} AND (d.statut = ANY($2) OR d.modifie_le > now() - interval '24 hours')
     ORDER BY (d.statut = ANY($2)) DESC, d.heure_souhaitee NULLS LAST, d.id`, [...args, OUVERTES])).rows;
   const cote = pa.ROLES_AMBULANCE.includes(u.role) ? 'ambulance' : pa.ROLES_CCS.includes(u.role) ? 'ccs' : 'etablissement';
-  return rows.map((d) => ({ ...d, actions: actions(d, u, cote, q.etablissement_id) }));
+  // L'état du véhicule n'est montré que pendant ce transport (ou la préalerte qui le prolonge) : jamais une autre mission
+  const enCours = (d) => OUVERTES.includes(d.statut) || (d.prealerte && pa.OUVERTES.includes(d.prealerte.statut));
+  return rows.map((d) => ({ ...d, ...(enCours(d) ? {} : { etat_vehicule: null, etat_vehicule_le: null }), actions: actions(d, u, cote, q.etablissement_id) }));
 }
 function actions(d, u, cote, etabId) {
   if (!OUVERTES.includes(d.statut)) return [];

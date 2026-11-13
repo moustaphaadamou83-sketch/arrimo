@@ -6,6 +6,21 @@
   const OUVERTES = ['demandee', 'acceptee', 'en_route', 'pris_en_charge'];
   /** Emplacement réservé dans une carte de coordination (rempli après l'affichage). */
   const bloc = (c) => (['hospitalisation', 'retour'].includes(c.type) ? `<div class="tr-bloc" data-tr-co="${c.id}" data-tr-origine="${c.origine_id ?? ''}" data-tr-statut="${esc(c.statut)}"></div>` : '');
+  /** Suivi du transport d'un résident : véhicule, état, hôpital (décidé par l'équipage), heure prévue, arrivée confirmée. */
+  function suivi(d) {
+    const x = [];
+    if (d.unite) x.push(T('vehicule', { unite: d.unite, plaque: d.plaque ? t('transports.plaque', { plaque: d.plaque }) : '', etat: d.etat_vehicule ? t(`transports.ev.${d.etat_vehicule}`) : '—' }));
+    const pa = d.prealerte;
+    if (pa) {
+      x.push(T('vers', { dest: pa.destination }));
+      if (pa.arrivee_confirmee_le) x.push(T('arrivee_confirmee', { heure: heure(pa.arrivee_confirmee_le) }));
+      else if (pa.heure_prevue) x.push(T('eta', { heure: heure(pa.heure_prevue) }));
+    }
+    if (d.categorie_urgence) x.push(T('cat_info', { cat: t(`transports.cat.${d.categorie_urgence}`) }));
+    if (d.hopital_prefere) x.push(T('pref_info', { h: d.hopital_prefere }));
+    const autre = pa && pa.destination_id !== d.destination_id ? `<br><b>${T('autre_dest', { dest: pa.destination, coord: d.destination })}</b>` : '';
+    return x.length ? `<br>${x.join(' · ')}${autre}` : '';
+  }
   async function brancher(zone) {
     const places = [...zone.querySelectorAll('[data-tr-co]')]; if (!places.length || !etat.ctx) return;
     let liste;
@@ -17,23 +32,66 @@
       const origine = Number(p.dataset.trOrigine) === etat.ctx;
       const moduleActif = (etat.moi.etablissements.find((e) => e.id === etat.ctx)?.modules || {}).transport_ambulancier === true;
       const peutDemander = moduleActif && gerer && origine && ['envoyee', 'acceptee'].includes(p.dataset.trStatut) && !(d && OUVERTES.includes(d.statut));
-      p.innerHTML = `${d ? `<div class="note tr-suivi"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-ambulance"/></svg> ${T('suivi', { numero: d.numero, org: d.organisation, statut: t(`transports.s_${d.statut}`) })}${d.unite ? ` · ${T('unite', { unite: d.unite })}` : ''}${d.heure_souhaitee ? ` · ${T('heure', { heure: heure(d.heure_souhaitee) })}` : ''}
+      p.innerHTML = `${d ? `<div class="note tr-suivi"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-ambulance"/></svg> ${T('suivi', { numero: d.numero, org: d.organisation, statut: t(`transports.s_${d.statut}`) })}${d.heure_souhaitee ? ` · ${T('heure', { heure: heure(d.heure_souhaitee) })}` : ''}${suivi(d)}
           ${d.actions.includes('annuler') ? ` <button class="btn discret" type="button" data-tr-annuler="${d.id}" data-version="${d.version}">${T('annuler')}</button>` : ''}</div>` : ''}
         ${peutDemander ? `<div class="actions"><button class="btn" type="button" data-tr-demander="${coId}">${T('demander')}</button></div>` : ''}`;
     }
     zone.querySelectorAll('[data-tr-demander]').forEach((b) => { b.onclick = async () => {
       const orgs = await api('GET', `/transports/organisations?etablissement_id=${etat.ctx}`);
       if (!orgs.length) return toast(t('transports.aucune_org'), true);
+      // Établissement d'hébergement : type d'urgence et hôpital souhaité, à titre d'information
+      const hebergement = (etat.moi.etablissements.find((e) => e.id === etat.ctx)?.type_etablissement || 'hopital') !== 'hopital';
+      const hops = hebergement ? await api('GET', `/urgences-proches?etablissement_id=${etat.ctx}`).catch(() => []) : [];
+      const CATS = ['medicale', 'cardiaque', 'neurologique', 'traumatologie', 'respiratoire', 'sante_mentale', 'autre'];
       modale(t('transports.titre'), `<p class="note">${T('aide')}</p>
         <div class="champ"><label class="lbl" for="tr-org">${T('organisation')}</label><select id="tr-org">${orgs.map((o) => `<option value="${o.id}">${esc(o.nom)}</option>`).join('')}</select></div>
-        <div class="champ"><label class="lbl" for="tr-heure">${T('heure_souhaitee')}</label><input id="tr-heure" type="datetime-local"></div>`,
+        <div class="champ"><label class="lbl" for="tr-heure">${T('heure_souhaitee')}</label><input id="tr-heure" type="datetime-local"></div>
+        ${hebergement ? `<div class="champ"><label class="lbl" for="tr-cat">${T('categorie')}</label><select id="tr-cat"><option value="">—</option>${CATS.map((c) => `<option value="${c}">${T(`cat.${c}`)}</option>`).join('')}</select></div>
+        <div class="champ"><label class="lbl" for="tr-pref">${T('prefere')}</label><select id="tr-pref"><option value="">${T('sans_preference')}</option>${hops.map((h) => `<option value="${h.id}">${esc(h.nom)}${h.distance_km != null ? ` (${h.distance_km} km)` : ''}</option>`).join('')}</select></div>
+        <p class="note">${T('decision')}</p>` : ''}`,
       [{ label: t('general.annuler') }, { label: t('general.confirmer'), pri: true, run: async () => {
         const h = $('#tr-heure').value; const cle = `tr-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-        return (await agir(null, () => api('POST', `/coordinations/${b.dataset.trDemander}/transport`, { organisation_id: Number($('#tr-org').value), heure_souhaitee: h ? new Date(h).toISOString() : null, cle }), t('transports.ok'))) !== null;
+        return (await agir(null, () => api('POST', `/coordinations/${b.dataset.trDemander}/transport`, { organisation_id: Number($('#tr-org').value), heure_souhaitee: h ? new Date(h).toISOString() : null, cle,
+          ...(hebergement ? { categorie: $('#tr-cat').value || null, hopital_prefere_id: $('#tr-pref').value ? Number($('#tr-pref').value) : null } : {}) }), t('transports.ok'))) !== null;
       } }]);
     }; });
     zone.querySelectorAll('[data-tr-annuler]').forEach((b) => { b.onclick = () => modale(t('transports.annuler'), `<p>${T('confirmer_annuler')}</p>`,
       [{ label: t('general.retour') }, { label: t('transports.annuler'), pri: true, run: async () => (await agir(null, () => api('POST', `/transports/${b.dataset.trAnnuler}/action`, { etablissement_id: etat.ctx, action: 'annuler', version: Number(b.dataset.version) }), t('transports.ok'))) !== null }]); });
   }
-  window.ArrimoTransports = { bloc, brancher };
+  /* Urgences proches (établissement d'hébergement) : capacités globales en carte et en liste, et suivi des transports de SES résidents. */
+  let carteUp = null;
+  async function vueUrgences() {
+    const v = $('#v-c-urgences');
+    const [hops, trs] = await Promise.all([api('GET', `/urgences-proches?etablissement_id=${etat.ctx}`), api('GET', `/transports?etablissement_id=${etat.ctx}`)]);
+    const COUL = { vert: '#16A34A', jaune: '#F59E0B', orange: '#D97706', rouge: '#DC2626' };
+    const ligne = (h) => {
+      const sv = h.services_ouverts == null ? T('up_services_non') : h.services_ouverts.length ? h.services_ouverts.map((c) => T(`up_sv.${c}`)).join(', ') : T('up_aucun_service');
+      return `<article class="item" data-urgence="${h.id}"><div>
+        <div><span class="pt-niveau" style="display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px;background:${COUL[h.urgence?.niveau] || '#94A3B8'}" aria-hidden="true"></span><b>${esc(h.nom)}</b> <span class="note">${esc(h.ville || '')}${h.distance_km != null ? ` · ${T('up_km', { km: h.distance_km })}` : ''}</span></div>
+        <div>${h.urgence ? `${T('up_civieres', { n: h.urgence.civieres_libres })} · ${T(`up_niveau.${h.urgence.niveau}`)}` : T('up_sans')}${h.statut_declare ? ` · <b>${T('up_declare', { statut: t(`transports.up_st.${h.statut_declare.statut}`), age: h.statut_declare.age_min })}</b>${h.statut_declare.perime ? ` (${T('up_ancien')})` : ''}` : ''}</div>
+        <div class="note">${T('up_services')} : ${sv}</div>
+        ${h.soins_intensifs ? `<div class="note">${T('up_si', h.soins_intensifs)}</div>` : ''}</div></article>`;
+    };
+    const lignesTr = trs.filter((d) => d.origine_id === etat.ctx).map((d) => `<article class="item" data-transport="${d.id}"><div><div><b class="num">${esc(d.numero)}</b> · ${esc(d.resident_ref)} · ${esc(d.coordination)}</div>
+      <div class="note">${T('suivi', { numero: d.numero, org: d.organisation, statut: t(`transports.s_${d.statut}`) })}${suivi(d)}</div></div></article>`).join('');
+    v.innerHTML = `<div class="entete"><div><h2>${T('up_titre')}</h2><p>${T('up_intro')}</p></div></div>
+      <div class="panneau-c"><h3>${T('up_suivi')}</h3><div class="liste">${lignesTr || `<p class="note">${T('up_suivi_aucun')}</p>`}</div></div>
+      <div class="panneau-c"><h3>${T('up_carte')}</h3><div id="carte-urgences" style="height:340px;border-radius:12px"></div></div>
+      <div class="panneau-c"><h3>${T('up_liste')}</h3><div class="liste">${hops.map(ligne).join('') || `<p class="note">${T('up_aucune')}</p>`}</div></div>`;
+    try {
+      const L = await chargerLeaflet(); const zone = document.getElementById('carte-urgences'); if (!zone) return;
+      if (carteUp) { carteUp.remove(); carteUp = null; }
+      carteUp = L.map(zone, { scrollWheelZoom: false });
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 15, attribution: '&copy; OpenStreetMap' }).addTo(carteUp);
+      const ici = etat.moi.etablissements.find((e) => e.id === etat.ctx); const pts = [];
+      if (ici?.latitude != null) { pts.push([ici.latitude, ici.longitude]); L.circleMarker([ici.latitude, ici.longitude], { radius: 8, color: '#0E5E6F', weight: 3, fillColor: '#fff', fillOpacity: 1 }).addTo(carteUp).bindTooltip(esc(ici.nom)); }
+      for (const h of hops.filter((x) => x.latitude != null)) {
+        pts.push([h.latitude, h.longitude]);
+        L.circleMarker([h.latitude, h.longitude], { radius: 10, color: '#0E5E6F', weight: 2, fillColor: COUL[h.urgence?.niveau] || '#94A3B8', fillOpacity: 0.95 }).addTo(carteUp)
+          .bindTooltip(`${esc(h.nom)} · ${h.urgence ? esc(t('transports.up_civieres', { n: h.urgence.civieres_libres })) : esc(t('transports.up_sans'))}`);
+      }
+      if (pts.length > 1) carteUp.fitBounds(pts, { padding: [30, 30], maxZoom: 12 }); else if (pts.length) carteUp.setView(pts[0], 11);
+    } catch { /* carte indisponible : la liste suffit */ }
+  }
+  window.ArrimoTransports = { bloc, brancher, vueUrgences };
 })();

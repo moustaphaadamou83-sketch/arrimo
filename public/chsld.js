@@ -658,5 +658,5 @@
   }
 
   window.ArrimoChsld = { vues: { 'c-accueil': vueAccueil, 'c-residents': vueResidents, 'c-chambres': vueChambres, 'c-demandes': vueDemandes, 'c-admissions': vueAdmissions,
-    'c-taches': vueTaches, 'c-reseau': vueReseau, 'c-mouvements': vueMouvements, 'c-indicateurs': vueIndicateurs, liaison: vueLiaison } };
+    'c-taches': vueTaches, 'c-reseau': vueReseau, 'c-mouvements': vueMouvements, 'c-urgences': () => window.ArrimoTransports.vueUrgences(), 'c-indicateurs': vueIndicateurs, liaison: vueLiaison } };
 })();

@@ -603,14 +603,89 @@ test('parcours démo : malaise au CHSLD → transport → préalerte qui le prol
   // Avant la prise en charge : refusé (le transport n'a pas encore le résident)
   assert.strictEqual((await appel('para', 'POST', '/secours/prealertes', corps)).corps.code, 'transport_statut_incompatible');
   for (const a of [{ action: 'accepter', unite_id: ids.u1 }, { action: 'en_route' }, { action: 'pris_en_charge' }]) assert.strictEqual((await appel('para', 'POST', `/secours/transports/${dt.id}/action`, a)).statut, 200);
-  // Autre hôpital que la destination du transport : refusé
-  assert.strictEqual((await appel('para', 'POST', '/secours/prealertes', { ...corps, destination_id: ids.sl })).corps.code, 'transport_statut_incompatible');
   const pa = await appel('para', 'POST', '/secours/prealertes', corps);
   assert.strictEqual(pa.statut, 200, JSON.stringify(pa.corps)); assert.strictEqual(pa.corps.demande_transport_id, dt.id);
   const vue = (await appel('tremblay', 'GET', `/secours/prealertes/${pa.corps.id}?etablissement_id=${ids.mb}`)).corps;
   assert.deepStrictEqual(vue.transport, { numero: dt.numero, resident_ref: 'R-90002', origine: 'CHSLD fictif des Pins' });
   // L'ambulance d'une autre entreprise ne peut pas s'en servir
   assert.strictEqual((await appel('paraB', 'POST', '/secours/prealertes', { ...corps, unite_id: ids.u3 })).corps.code, 'transport_statut_incompatible');
+});
+
+test('état des véhicules : un geste de l’équipage, automatique à la préalerte et à l’arrivée confirmée ; CCS en lecture, sans attribution', async () => {
+  ids.u4 = (await pool.query("INSERT INTO unites_secours (organisation_id, numero, plaque) VALUES ($1, '12-40', 'FICT 040') RETURNING id", [ids.ambA])).rows[0].id;
+  // L'équipage change l'état en un geste ; valeurs fermées ; seulement pour une unité de son organisation
+  let r = await appel('para', 'POST', `/secours/unites/${ids.u4}/etat`, { etat: 'en_route' });
+  assert.strictEqual(r.statut, 200, JSON.stringify(r.corps)); assert.deepStrictEqual([r.corps.etat, r.corps.destination_id, r.corps.source], ['en_route', null, 'equipage']);
+  assert.strictEqual((await appel('para', 'POST', `/secours/unites/${ids.u4}/etat`, { etat: 'perdu' })).corps.code, 'etat_vehicule_invalide');
+  assert.strictEqual((await appel('paraB', 'POST', `/secours/unites/${ids.u4}/etat`, { etat: 'hors_service' })).statut, 404);
+  assert.strictEqual((await appel('ccs', 'POST', `/secours/unites/${ids.u4}/etat`, { etat: 'disponible' })).statut, 403, 'le CCS n’agit pas');
+  assert.strictEqual((await appel('tremblay', 'GET', '/secours/vehicules')).statut, 403);
+  r = await appel('para', 'POST', `/secours/unites/${ids.u4}/etat`, { etat: 'sur_place' }); assert.strictEqual(r.corps.etat, 'sur_place');
+  // Le CCS voit les véhicules de sa région (toutes entreprises), unité, plaque, état, heure ; aucune donnée de patient
+  const ccs = (await appel('ccs', 'GET', '/secours/vehicules')).corps;
+  const v4 = ccs.find((v) => v.id === ids.u4);
+  assert.deepStrictEqual([v4.numero, v4.plaque, v4.organisation, v4.etat], ['12-40', 'FICT 040', 'Ambulances fictives A', 'sur_place']); assert.ok(v4.modifie_le);
+  assert.ok(ccs.some((v) => v.numero === '20-01'), 'autre entreprise de la région');
+  assert.deepStrictEqual(Object.keys(v4).sort(), ['destination', 'destination_id', 'etat', 'id', 'modifie_le', 'numero', 'organisation', 'plaque', 'position', 'source', 'version']);
+  // Une entreprise ne voit que ses véhicules
+  assert.ok(!(await appel('paraB', 'GET', '/secours/vehicules')).corps.some((v) => v.id === ids.u4));
+  // Préalerte envoyée : « Transport vers l'hôpital » ; arrivée confirmée par l'hôpital : « À l'hôpital »
+  const pa = (await appel('para', 'POST', '/secours/prealertes', { unite_id: ids.u4, destination_id: ids.mb, priorite: 'urgente', categorie: 'cardiaque', delai_min: 9 })).corps;
+  let v = (await appel('ccs', 'GET', '/secours/vehicules')).corps.find((x) => x.id === ids.u4);
+  assert.deepStrictEqual([v.etat, v.destination, v.source], ['transport_hopital', 'Hôpital Mont-Bellevue', 'prealerte']);
+  r = await action('tremblay', pa, { etablissement_id: ids.mb, action: 'confirmer_vehicule', unite_numero: '12-40' });
+  assert.strictEqual(r.corps.correspond, true);
+  v = (await appel('ccs', 'GET', '/secours/vehicules')).corps.find((x) => x.id === ids.u4);
+  assert.deepStrictEqual([v.etat, v.destination, v.source], ['a_l_hopital', 'Hôpital Mont-Bellevue', 'arrivee_confirmee']);
+  assert.strictEqual((await action('tremblay', pa, { etablissement_id: ids.mb, action: 'confirmer_remise' })).statut, 200);
+  // Historique immuable
+  const h = (await pool.query('SELECT etat, source FROM etat_vehicule_evenements WHERE unite_id = $1 ORDER BY id', [ids.u4])).rows;
+  assert.deepStrictEqual(h.map((x) => x.etat), ['en_route', 'sur_place', 'transport_hopital', 'a_l_hopital']);
+  await assert.rejects(pool.query('DELETE FROM etat_vehicule_evenements'));
+  // Retour en service : la destination n'est pas gardée
+  r = await appel('para', 'POST', `/secours/unites/${ids.u4}/etat`, { etat: 'disponible' }); assert.deepStrictEqual([r.corps.etat, r.corps.destination_id], ['disponible', null]);
+});
+
+test('hébergement : urgences proches (capacités globales), type d’urgence et hôpital souhaité à titre d’information, suivi du transport de SES résidents', async () => {
+  const ch = (await pool.query("SELECT id FROM etablissements WHERE code = 'CH-T1'")).rows[0].id;
+  // Urgences proches : hôpitaux de la région, civières libres, statut déclaré, services ouverts, soins intensifs ; jamais de patient
+  const up = await appel('ch', 'GET', `/urgences-proches?etablissement_id=${ch}`);
+  assert.strictEqual(up.statut, 200, JSON.stringify(up.corps));
+  const mb = up.corps.find((x) => x.id === ids.mb);
+  assert.ok(mb && typeof mb.urgence.civieres_libres === 'number' && mb.distance_km != null);
+  assert.deepStrictEqual(Object.keys(mb).sort(), ['distance_km', 'id', 'latitude', 'liaison_secours', 'longitude', 'nom', 'services_ouverts', 'soins_intensifs', 'statut_declare', 'urgence', 'ville']);
+  assert.ok(!/patient_ref|P-\d{5}|R-\d{5}/.test(JSON.stringify(up.corps)), 'aucune référence de patient');
+  assert.strictEqual((await appel('tremblay', 'GET', `/urgences-proches?etablissement_id=${ids.mb}`)).statut, 403, 'réservé à l’hébergement');
+  assert.strictEqual((await appel('ch', 'GET', `/urgences-proches?etablissement_id=${ids.mb}`)).statut, 403, 'pas pour un autre établissement');
+  // Demande de transport : type d'urgence et hôpital souhaité, en liste fermée et dans la région
+  const r0 = (await pool.query(`INSERT INTO residents (etablissement_id, reference, prenom, nom, date_naissance, statut) VALUES ($1, 'R-90010', 'Prénom', 'Fictif-Dix', '1941-03-03', 'present') RETURNING id`, [ch])).rows[0].id;
+  const co = (await pool.query(`INSERT INTO coordinations (numero, type, resident_id, resident_ref, origine_id, destination_id, statut)
+    VALUES ('CO-90010', 'hospitalisation', $1, 'R-90010', $2, $3, 'envoyee') RETURNING id`, [r0, ch, ids.mb])).rows[0].id;
+  assert.strictEqual((await appel('ch', 'POST', `/coordinations/${co}/transport`, { organisation_id: ids.ambA, categorie: 'diagnostic libre' })).statut, 400);
+  assert.strictEqual((await appel('ch', 'POST', `/coordinations/${co}/transport`, { organisation_id: ids.ambA, hopital_prefere_id: 999999 })).corps.code, 'hopital_introuvable');
+  const dt = (await appel('ch', 'POST', `/coordinations/${co}/transport`, { organisation_id: ids.ambA, categorie: 'cardiaque', hopital_prefere_id: ids.sl })).corps;
+  assert.ok(dt.id, JSON.stringify(dt));
+  const vue = (await appel('para', 'GET', '/secours/transports')).corps.find((x) => x.id === dt.id);
+  assert.deepStrictEqual([vue.categorie_urgence, vue.hopital_prefere, vue.destination], ['cardiaque', 'CHU Saint-Laurent', 'Hôpital Mont-Bellevue']);
+  for (const a of [{ action: 'accepter', unite_id: ids.u4 }, { action: 'en_route' }, { action: 'pris_en_charge' }]) assert.strictEqual((await appel('para', 'POST', `/secours/transports/${dt.id}/action`, a)).statut, 200);
+  // L'équipage décide : préalerte vers un autre hôpital que celui de la coordination, inscrite à l'historique du transport
+  const pa = await appel('para', 'POST', '/secours/prealertes', { unite_id: ids.u4, destination_id: ids.sl, priorite: 'urgente', categorie: 'cardiaque', delai_min: 14, demande_transport_id: dt.id });
+  assert.strictEqual(pa.statut, 200, JSON.stringify(pa.corps));
+  // Le CHSLD suit SON transport : unité, plaque, état du véhicule, hôpital, heure prévue, puis arrivée confirmée
+  let suivi = (await appel('ch', 'GET', `/transports?etablissement_id=${ch}`)).corps;
+  let d = suivi.find((x) => x.id === dt.id);
+  assert.deepStrictEqual([d.unite, d.plaque, d.etat_vehicule, d.prealerte.destination, d.prealerte.destination_id], ['12-40', 'FICT 040', 'transport_hopital', 'CHU Saint-Laurent', ids.sl]);
+  assert.ok(d.prealerte.heure_prevue && !d.prealerte.arrivee_confirmee_le);
+  assert.ok(suivi.every((x) => x.origine_id === ch || x.destination_id === ch), 'seulement ses transports');
+  assert.ok(!JSON.stringify(suivi).includes('Fictif'), 'aucune identité');
+  assert.ok(!('priorite' in d.prealerte) && !('categorie' in d.prealerte), 'aucune donnée de l’intervention');
+  const f = (await appel('ch', 'GET', `/transports/${dt.id}?etablissement_id=${ch}`)).corps;
+  assert.deepStrictEqual(f.evenements.find((e) => e.type === 'prealerte').detail.autre_destination, true);
+  await action('bouchard', pa.corps, { etablissement_id: ids.sl, action: 'confirmer_vehicule', unite_numero: '12-40' });
+  d = (await appel('ch', 'GET', `/transports?etablissement_id=${ch}`)).corps.find((x) => x.id === dt.id);
+  assert.deepStrictEqual([d.etat_vehicule, Boolean(d.prealerte.arrivee_confirmee_le)], ['a_l_hopital', true]);
+  // Changement de destination : le suivi du transport suit la nouvelle préalerte
+  await action('bouchard', pa.corps, { etablissement_id: ids.sl, action: 'confirmer_remise' });
 });
 
 test('SH et connexions externes : organisation de secours et profils, modules un par un, FHIR R4, HL7 v2, webhooks signés ; client par client, secrets remis, révocables', async () => {

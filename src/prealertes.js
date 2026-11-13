@@ -14,6 +14,7 @@ const { transaction, ErreurHttp } = require('./db');
 const { peutAgirPour } = require('./auth');
 const { journaliser } = require('./regles');
 const TE = require('./types-etablissement');
+const vehicules = require('./vehicules');
 
 const PRIORITES = ['immediate', 'urgente', 'non_urgente'];
 const CATEGORIES = ['medicale', 'traumatologie', 'cardiaque', 'neurologique', 'respiratoire', 'pediatrique', 'obstetrique', 'sante_mentale', 'autre'];
@@ -113,7 +114,9 @@ async function creer(pool, u, b) {
     let transport = null;
     if (b.demande_transport_id != null) {
       transport = (await c.query('SELECT * FROM demandes_transport WHERE id = $1', [entier(b.demande_transport_id)])).rows[0];
-      if (!transport || transport.organisation_id !== unite.organisation_id || transport.statut !== 'pris_en_charge' || transport.destination_id !== dest.id) throw new ErreurHttp(409, 'transport_statut_incompatible');
+      // La destination reste décidée par l'équipage et les protocoles (13 nov. 2026) : un autre hôpital que celui de la coordination
+      // est accepté et inscrit à l'historique du transport ; l'établissement d'origine le voit dans son suivi.
+      if (!transport || transport.organisation_id !== unite.organisation_id || transport.statut !== 'pris_en_charge') throw new ErreurHttp(409, 'transport_statut_incompatible');
     }
     const ouverte = (await c.query(`SELECT numero FROM prealertes WHERE unite_id = $1 AND statut = ANY($2)`, [unite.id, OUVERTES])).rows[0];
     if (ouverte) throw new ErreurHttp(409, 'prealerte_deja_ouverte', { numero: ouverte.numero });
@@ -123,6 +126,11 @@ async function creer(pool, u, b) {
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
     [await numero(c), unite.organisation_id, unite.id, dest.id, priorite, categorie, equipage, heure, cle, u.id || null, mission, u.connecteur ? u.connecteur.id : null, transport ? transport.id : null])).rows[0];
     await evenement(c, pa, 'envoyee', u, { destination: dest.id, priorite, categorie, heure_prevue: heure });
+    if (transport) {
+      await c.query('INSERT INTO demande_transport_evenements (demande_id, type, detail, utilisateur_id) VALUES ($1, $2, $3, $4)',
+        [transport.id, 'prealerte', JSON.stringify({ prealerte: pa.numero, destination: dest.nom, autre_destination: transport.destination_id !== dest.id }), u.id || null]);
+    }
+    await vehicules.fixer(c, unite.id, 'transport_hopital', { destinationId: dest.id, source: 'prealerte', utilisateurId: u.id || null });
     const pr = await proposerService(c, pa);
     await journaliser(c, { etablissementId: dest.id, utilisateurId: u.id || null, action: 'Préalerte reçue', detail: `${pa.numero} · ${priorite}` });
     await notifier(c, dest.id, priorite === 'immediate' ? 'secours_prealerte_prioritaire' : 'secours_prealerte', pa, { priorite });
@@ -360,6 +368,7 @@ async function agir(pool, u, id, b) {
         }
         n = await maj("arrivee_confirmee_le = now(), statut = 'arrivee'");
         detail = { unite: attendue };
+        await vehicules.fixer(c, pa.unite_id, 'a_l_hopital', { destinationId: pa.destination_id, source: 'arrivee_confirmee', utilisateurId: u.id || null });
       } else if (a === 'confirmer_remise') {
         if (pa.statut !== 'arrivee') throw new ErreurHttp(409, 'prealerte_statut_incompatible');
         n = await maj("remise_le = now(), cloturee_le = now(), statut = 'cloturee'");
@@ -382,12 +391,13 @@ async function changerDestination(c, u, pa, b) {
   if (dest.id === pa.destination_id) throw new ErreurHttp(409, 'prealerte_statut_incompatible');
   const ancienne = (await c.query(`UPDATE prealertes SET statut = 'remplacee', version = version + 1, modifie_le = now() WHERE id = $1 RETURNING *`, [pa.id])).rows[0];
   const heure = lireHeure(b) || pa.heure_prevue;
-  const nv = (await c.query(`INSERT INTO prealertes (numero, organisation_id, unite_id, destination_id, priorite, categorie, equipage, heure_prevue, remplace_id, cree_par)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-  [await numero(c), pa.organisation_id, pa.unite_id, dest.id, pa.priorite, pa.categorie, pa.equipage, heure, pa.id, u.id || null])).rows[0];
+  const nv = (await c.query(`INSERT INTO prealertes (numero, organisation_id, unite_id, destination_id, priorite, categorie, equipage, heure_prevue, remplace_id, cree_par, demande_transport_id)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+  [await numero(c), pa.organisation_id, pa.unite_id, dest.id, pa.priorite, pa.categorie, pa.equipage, heure, pa.id, u.id || null, pa.demande_transport_id || null])).rows[0];
   await evenement(c, ancienne, 'destination_modifiee', u, { nouvelle: nv.numero, destination: dest.id });
   await evenement(c, nv, 'envoyee', u, { remplace: pa.numero, destination: dest.id, priorite: nv.priorite, categorie: nv.categorie, heure_prevue: heure });
   await proposerService(c, nv);
+  await vehicules.fixer(c, pa.unite_id, 'transport_hopital', { destinationId: dest.id, source: 'prealerte', utilisateurId: u.id || null });
   await journaliser(c, { etablissementId: pa.destination_id, utilisateurId: u.id || null, action: 'Destination de préalerte modifiée', detail: `${pa.numero} → ${nv.numero}` });
   await journaliser(c, { etablissementId: dest.id, utilisateurId: u.id || null, action: 'Préalerte reçue', detail: `${nv.numero} · ${nv.priorite}` });
   await notifier(c, pa.destination_id, 'secours_destination_modifiee', ancienne);

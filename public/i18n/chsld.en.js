@@ -3,7 +3,7 @@
   const d = (window.ARRIMO_I18N = window.ARRIMO_I18N || {}); d.en = d.en || {};
   d.en.chsld = {
     nav: { accueil: 'Home', residents: 'Residents', chambres: 'Rooms and beds', demandes: 'Placement requests', admissions: 'Admissions and discharges',
-      taches: 'Staff and tasks', reseau: 'CHSLD network', mouvements: 'Transfers and hospital stays', indicateurs: 'Indicators', hebergement: 'Accommodation', coordination: 'Coordination' },
+      taches: 'Staff and tasks', reseau: 'CHSLD network', mouvements: 'Transfers and hospital stays', urgences: 'Nearby emergencies', indicateurs: 'Indicators', hebergement: 'Accommodation', coordination: 'Coordination' },
     accueil: { a_nettoyer: "{n} room(s) to clean", nettoyes_jour: "{n} cleaned today", messages_familles: "{n} family message(s)", visites_familles: "{n} visit(s) to handle", situation: 'Facility overview', taux: 'Occupancy rate', capacites: 'Accommodation capacity', mouvements: 'Movements', raccourcis: 'Notifications and shortcuts', aucune_action: 'Nothing to handle right now.', titre: '{etab}', intro: 'Places, residents, movements and pending events, from recorded data.', places: 'Places',
       dotees: 'Places in service', libres: 'Available', reservees: 'Reserved (arrival planned)', occupees: 'Occupied', conservees: 'Held (resident in hospital or away)',
       preparation: 'Being prepared', bloquees: 'Blocked', residents: 'Residents', present: 'Present', hospitalise: 'In hospital', absent: 'Temporarily away',

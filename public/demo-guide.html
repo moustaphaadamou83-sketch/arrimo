@@ -28,29 +28,29 @@
 
 <section id="fr" lang="fr-CA">
 <h1>Scénario guidé : du malaise au CHSLD au retour du résident</h1>
-<p><b>Données fictives seulement.</b> Établissements de la démonstration existante (Hôpital Y, CHSLD des Érables), CCS et ambulances de la démo. Mot de passe : celui de la démonstration (jamais affiché ici). Ouvrez chaque compte dans une fenêtre séparée ; l'ambulance sur un téléphone (<code>/secours</code>).</p>
-<p>Arrimo complète le 911, les CCS et les protocoles : il ne choisit jamais une destination, un service ni une priorité clinique. Chaque étape est confirmée par une personne.</p>
+<p><b>Données fictives seulement.</b> Établissements existants de la démonstration (CHSLD des Érables, Hôpital B — Mont-Clair), « CCS de démonstration » et « Ambulances de démonstration » (unités DM-101 à DM-103). Mot de passe : celui de la démonstration (jamais affiché ici). Ouvrez chaque compte dans une fenêtre séparée ; l'ambulance sur un téléphone (<code>/secours</code>).</p>
+<p>Arrimo complète le 911, les CCS et les protocoles : il informe, il ne choisit jamais une destination, un service ni une priorité clinique. Chaque étape est confirmée par une personne. Aucune attribution ni répartition dans Arrimo.</p>
 <ol class="etapes">
-  <li><span class="qui">CHSLD des Érables · <code>coordination.erables@chsld.example.invalid</code></span>
-    <p>Un résident fait un malaise. Fiche du résident → « Départ vers l’hôpital » : Hôpital Y, identité vérifiée, transport « ambulance », accessibilité. Puis, sur la demande (« Mouvements »), « Demander un transport » → Ambulances du Nord.</p>
+  <li><span class="qui">CHSLD des Érables · <code>coordination.erables@chsld.example.invalid</code> → onglet « Urgences proches »</span>
+    <p>Carte et liste des urgences de la région : civières libres, statut déclaré, services ouverts (Urgence générale, Cardiologie, Neurologie/AVC, Traumatologie), lits de soins intensifs à titre d'information. Aucune donnée d'un autre patient.</p></li>
+  <li><span class="qui">CHSLD des Érables → fiche du résident</span>
+    <p>« Départ vers l’hôpital » : Hôpital B, identité vérifiée, transport « ambulance ». Dans « Transferts et hospitalisations », « Demander un transport » → Ambulances de démonstration, type d’urgence (ex. Cardiaque) et hôpital souhaité (facultatif) : information seulement, la destination reste décidée par l’équipage.</p>
     <p class="og">OG : « Où en est le transport de R-00001 ? »</p></li>
-  <li><span class="qui">CCS · <code>ccs@demo.arrimo</code> (web, <code>/secours</code>)</span>
-    <p>La demande de transport apparaît ; carte régionale et alertes de saturation (Hôpital X, déclaration ancienne). Consultation seulement : le système de répartition du CCS reste la référence.</p>
-    <p class="og">OG : « Demandes des établissements », « État des urgences de la région ».</p></li>
-  <li><span class="qui">Ambulance · <code>ambulance.a@demo.arrimo</code> (téléphone, <code>/secours</code>)</span>
-    <p>« Accepter avec l’unité 41-12 » → « En route vers le départ » → « Résident pris en charge » → « Transmettre la préalerte à Hôpital Y » : priorité, catégorie, délai, « Transmettre ». Activer « Partager la position » si souhaité.</p>
-    <p class="og">OG : « L’hôpital a-t-il confirmé la réception ? »</p></li>
+  <li><span class="qui">Ambulance · <code>ambulance.demo@demo.arrimo</code> (téléphone, <code>/secours</code>)</span>
+    <p>« État du véhicule » : un geste (Disponible, En route, Sur place…). « Accepter avec l’unité DM-101 » → « En route vers le départ » → « Résident pris en charge » → « Transmettre la préalerte » : hôpital (prérempli, modifiable par l’équipage), priorité, catégorie, délai. L’état passe seul à « Transport vers l’hôpital ».</p></li>
+  <li><span class="qui">CCS · <code>ccs.demo@demo.arrimo</code> (<code>/secours</code>)</span>
+    <p>Carte et liste des véhicules : unité, plaque, état, destination, heure de mise à jour ; disponibilité des urgences. Consultation seulement : le système de répartition reste la référence. Superviseur : <code>superviseur.demo@demo.arrimo</code> voit les préalertes de l’entreprise.</p></li>
   <li><span class="qui">CHSLD des Érables</span>
-    <p>« Confirmer le départ » de l’hospitalisation : le transport ne confirme jamais le départ à la place de l’établissement.</p></li>
-  <li><span class="qui">Hôpital Y · <code>hopital.y@demo.arrimo</code> → onglet « Liaison Secours »</span>
-    <p>La préalerte indique le résident et le CHSLD d’origine. « Accuser la préalerte » ; service proposé par OG (règle de l’hôpital) → « Confirmer le service » ; « Préparation en cours ». Démonstration seulement : « Rechercher le dossier » (système hospitalier simulé, fiches fictives).</p>
+    <p>Le suivi montre l’unité, la plaque, l’état du véhicule, l’hôpital choisi et l’heure d’arrivée prévue. « Confirmer le départ » de l’hospitalisation : le transport ne confirme jamais le départ à la place de l’établissement.</p></li>
+  <li><span class="qui">Hôpital B · <code>hopital.b@demo.arrimo</code> → onglet « Liaison Secours »</span>
+    <p>La préalerte indique le résident et le CHSLD d’origine. « Accuser la préalerte » ; service proposé par OG (règle de l’hôpital) → « Confirmer le service » ; « Préparation en cours » (salle concernée).</p>
     <p class="og">OG : « Quel service est potentiellement concerné ? »</p></li>
-  <li><span class="qui">Ambulance, puis Hôpital Y</span>
-    <p>Ambulance : « Signaler l’arrivée ». Hôpital : « Confirmer le véhicule arrivé » en saisissant 41-15 (autre véhicule : enregistré, la préalerte reste ouverte), puis 41-12 → « Confirmer la remise ». Ambulance : transport « Arrivé à destination ».</p></li>
-  <li><span class="qui">Hôpital Y → onglet « Liaison CHSLD et résidences »</span>
-    <p>« Confirmer l’arrivée » → « Orienter / admettre le patient » → urgence (civière libre). Onglet « Urgence » : la civière ; demande de lit ; onglet « Admissions » : attribuer un lit libre et compatible.</p></li>
-  <li><span class="qui">Hôpital Y, puis CHSLD des Érables</span>
-    <p>Hôpital : « Préparer le retour au CHSLD » (date). CHSLD : accepter, « Déclarer la chambre prête ». Hôpital : « Demander un transport » sur le retour ; l’ambulance l’effectue. Hôpital : « Confirmer le départ ». CHSLD : confirmer l’arrivée puis « Réintégrer dans sa chambre ».</p></li>
+  <li><span class="qui">Ambulance, puis Hôpital B</span>
+    <p>Ambulance : « Signaler l’arrivée ». Hôpital : « Confirmer le véhicule arrivé » en saisissant DM-101 : l’état passe à « À l’hôpital », le CHSLD voit « arrivée confirmée ». « Confirmer la remise ». Ambulance : transport « Arrivé à destination », puis « Disponible ».</p></li>
+  <li><span class="qui">Hôpital B → onglet « Liaison CHSLD et résidences »</span>
+    <p>« Confirmer l’arrivée » → « Orienter / admettre le patient » → urgence (civière libre), puis lit.</p></li>
+  <li><span class="qui">Hôpital B, puis CHSLD des Érables</span>
+    <p>Hôpital : « Préparer le retour au CHSLD ». CHSLD : accepter, « Déclarer la chambre prête ». Hôpital : « Demander un transport » sur le retour ; l’ambulance l’effectue. Hôpital : « Confirmer le départ ». CHSLD : confirmer l’arrivée puis « Réintégrer dans sa chambre ».</p></li>
   <li><span class="qui">CHSLD des Érables → fiche du résident → Proches</span>
     <p>Avis à la famille : message au proche autorisé, catégorie « Hospitalisation et retour » (« Retour confirmé ce jour »). Aucun détail clinique.</p></li>
 </ol>
@@ -60,16 +60,16 @@
 
 <section id="en" lang="en-CA">
 <h1>Guided scenario: from a resident’s malaise at the CHSLD to the return home</h1>
-<p><b>Fictitious data only.</b> Existing demo facilities (Hospital Y, CHSLD des Érables), demo CCS and ambulances. Password: the demo password (never shown here). Open each account in its own window; the ambulance on a phone (<code>/secours</code>).</p>
+<p><b>Fictitious data only.</b> Existing demo facilities (CHSLD des Érables, Hospital B — Mont-Clair), “demo CCS” and “demo ambulances” (units DM-101 to DM-103). Password: the demo password (never shown here). The ambulance on a phone (<code>/secours</code>). Arrimo informs; it never chooses a destination, and nothing is assigned or dispatched in Arrimo.</p>
 <ol class="etapes">
-  <li><span class="qui">CHSLD des Érables</span><p>Resident record → departure to the hospital (Hospital Y, identity verified, ambulance), then “Request a transport” on the request.</p></li>
-  <li><span class="qui">CCS (<code>/secours</code>)</span><p>Transport request, regional map, saturation alerts; view only.</p></li>
-  <li><span class="qui">Ambulance (phone)</span><p>Accept with unit 41-12 → on the way → resident picked up → “Send the pre-alert to Hospital Y”.</p></li>
-  <li><span class="qui">CHSLD</span><p>“Confirm departure” of the hospital stay.</p></li>
-  <li><span class="qui">Hospital Y → Emergency liaison</span><p>Acknowledge, confirm the department proposed by OG, preparation; demo only: simulated record search.</p></li>
-  <li><span class="qui">Ambulance, then Hospital Y</span><p>Report arrival; confirm the vehicle (another unit stays open), then 41-12 and handover.</p></li>
-  <li><span class="qui">Hospital Y → CHSLD liaison</span><p>Confirm arrival → direct to emergency (stretcher) → bed request → admission.</p></li>
-  <li><span class="qui">Hospital Y, then CHSLD</span><p>Prepare the return, room ready, return transport, departure, arrival, reinstatement.</p></li>
+  <li><span class="qui">CHSLD des Érables → Nearby emergencies</span><p>Map and list: free stretchers, declared status, open services, intensive care beds for information; no other patient data.</p></li>
+  <li><span class="qui">CHSLD</span><p>Departure to Hospital B, then “Request a transport” with emergency type and preferred hospital (information only).</p></li>
+  <li><span class="qui">Ambulance (<code>ambulance.demo@demo.arrimo</code>)</span><p>Vehicle status in one tap; accept with DM-101 → on the way → picked up → send the pre-alert (status becomes “Transport to hospital”).</p></li>
+  <li><span class="qui">CCS (<code>ccs.demo@demo.arrimo</code>)</span><p>Vehicles on the map and in the list with status, destination and update time; emergency availability; view only.</p></li>
+  <li><span class="qui">CHSLD</span><p>Tracking: unit, plate, vehicle status, hospital, expected arrival; confirm departure.</p></li>
+  <li><span class="qui">Hospital B → Emergency liaison</span><p>Acknowledge, confirm the department proposed by OG, preparation.</p></li>
+  <li><span class="qui">Ambulance, then Hospital B</span><p>Report arrival; confirm vehicle DM-101 (status “At hospital”, CHSLD sees “arrival confirmed”), handover.</p></li>
+  <li><span class="qui">Hospital B, then CHSLD</span><p>Admission, then return: room ready, return transport, departure, arrival, reinstatement.</p></li>
   <li><span class="qui">CHSLD → family</span><p>Message to the authorized family member, “Hospital stay and return” category; no clinical detail.</p></li>
 </ol>
 <p>Reset before each presentation: <code>reseau@demo.arrimo</code> → Administration → Demo → reset.</p>

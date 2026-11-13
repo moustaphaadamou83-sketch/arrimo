@@ -468,6 +468,12 @@ function creerApp(pool, options = {}) {
   api.get('/secours/destinations', route((req) => pa.destinations(pool, req.utilisateur, req.query)));
   api.post('/secours/og', route((req) => require('./og-secours').repondreSecours(pool, req.utilisateur, req.body.question, req.langue)));
   api.post('/secours/unites/:id/position', route((req) => pa.position(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
+  // État des véhicules (13 nov. 2026) : l'équipage le change, le CCS le consulte ; aucune attribution dans Arrimo
+  const vh = require('./vehicules');
+  api.get('/secours/vehicules', route((req) => vh.liste(pool, req.utilisateur)));
+  api.post('/secours/unites/:id/etat', route((req) => vh.definir(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
+  // Établissements d'hébergement : urgences proches (capacités globales seulement)
+  api.get('/urgences-proches', route((req) => vh.urgencesProches(pool, req.utilisateur, req.query.etablissement_id)));
   api.get('/coordinations', route((req) => ch.listeCoordinations(pool, req.utilisateur, E(req), { toutes: req.query.toutes === '1' })));
   api.post('/coordinations/:id/action', route((req) => ch.actionCoordination(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   api.get('/liaison-chsld/hopitaux', route(async (req) => { await require('./liaison-chsld').etabHopital(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id')); return (await ch.hopitauxLiaison(pool)).map((h) => ({ id: h.id, nom: h.nom })); }));

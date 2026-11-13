@@ -245,6 +245,7 @@ const MESSAGES = {
   transport_deja_demande: "Un transport est déjà demandé pour cette coordination ({numero}).",
   transport_introuvable: "Demande de transport introuvable.",
   transport_clos: "Cette demande de transport est close.",
+  etat_vehicule_invalide: "État de véhicule inconnu.",
   transport_statut_incompatible: "Cette étape n’est pas possible à ce stade du transport.",
   connect_signature_invalide: "Requête refusée : clé ou signature du système partenaire invalide.",
   connect_horodatage_expire: "Requête refusée : horodatage hors de la fenêtre de 5 minutes.",

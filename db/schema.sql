@@ -1509,3 +1509,43 @@ CREATE TABLE IF NOT EXISTS webhook_livraisons (
 CREATE INDEX IF NOT EXISTS webhook_livraisons_dues ON webhook_livraisons (prochain_essai) WHERE statut = 'a_envoyer';
 ALTER TABLE remises_secrets DROP CONSTRAINT IF EXISTS remises_secrets_genre_check;
 ALTER TABLE remises_secrets ADD CONSTRAINT remises_secrets_genre_check CHECK (genre IN ('connect', 'adt', 'webhook'));
+
+-- État des véhicules (décision de Moustafa, 13 nov. 2026) : le CCS voit l'état de ses ambulances, sans attribution ni répartition
+-- dans Arrimo. L'équipage le change en un geste ; il passe seul à « Transport vers l'hôpital » à l'envoi d'une préalerte et à
+-- « À l'hôpital » à l'arrivée confirmée par l'hôpital. Nouvelles tables seulement : aucune table existante n'est modifiée.
+CREATE TABLE IF NOT EXISTS etats_vehicules (
+  unite_id        int PRIMARY KEY REFERENCES unites_secours(id) ON DELETE CASCADE,
+  etat            text NOT NULL CHECK (etat IN ('disponible', 'en_route', 'sur_place', 'transport_hopital', 'a_l_hopital', 'hors_service')),
+  destination_id  int REFERENCES etablissements(id),
+  source          text NOT NULL DEFAULT 'equipage' CHECK (source IN ('equipage', 'prealerte', 'arrivee_confirmee')),
+  version         int NOT NULL DEFAULT 1,
+  modifie_par     int REFERENCES utilisateurs(id),
+  modifie_le      timestamptz NOT NULL DEFAULT now()
+);
+-- Historique des états : immuable, comme le journal
+CREATE TABLE IF NOT EXISTS etat_vehicule_evenements (
+  id              bigserial PRIMARY KEY,
+  unite_id        int NOT NULL REFERENCES unites_secours(id),
+  etat            text NOT NULL,
+  destination_id  int REFERENCES etablissements(id),
+  source          text NOT NULL,
+  utilisateur_id  int REFERENCES utilisateurs(id),
+  cree_le         timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS etat_vehicule_evenements_unite ON etat_vehicule_evenements (unite_id, id);
+DROP TRIGGER IF EXISTS etat_vehicule_evenements_pas_de_modif ON etat_vehicule_evenements;
+CREATE TRIGGER etat_vehicule_evenements_pas_de_modif BEFORE UPDATE OR DELETE ON etat_vehicule_evenements
+  FOR EACH ROW EXECUTE FUNCTION journal_immuable();
+DROP TRIGGER IF EXISTS etat_vehicule_evenements_pas_de_vidage ON etat_vehicule_evenements;
+CREATE TRIGGER etat_vehicule_evenements_pas_de_vidage BEFORE TRUNCATE ON etat_vehicule_evenements
+  FOR EACH STATEMENT EXECUTE FUNCTION journal_immuable();
+
+-- Demande de transport d'un établissement d'hébergement (13 nov. 2026) : type d'urgence (liste fermée des préalertes) et hôpital
+-- souhaité, à titre d'information seulement. La destination reste décidée par l'équipage et les protocoles : Arrimo informe.
+CREATE TABLE IF NOT EXISTS demande_transport_preferences (
+  demande_id          int PRIMARY KEY REFERENCES demandes_transport(id),
+  categorie           text CHECK (categorie IS NULL OR categorie IN ('medicale', 'traumatologie', 'cardiaque', 'neurologique', 'respiratoire',
+                        'pediatrique', 'obstetrique', 'sante_mentale', 'autre')),
+  hopital_prefere_id  int REFERENCES etablissements(id),
+  cree_le             timestamptz NOT NULL DEFAULT now()
+);
