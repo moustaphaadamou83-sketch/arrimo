@@ -18,7 +18,7 @@
       urgences: 'Urgences de la région', declare: 'Déclaré : {statut}, il y a {age} min', ancien: 'donnée ancienne',
       st: { ouvert: 'ouverte', capacite_limitee: 'capacité limitée', saturation: 'saturation', delestage: 'délestage' }, vol_oiseau: '{km} km à vol d’oiseau', civieres: '{n} civières libres', civiere1: '{n} civière libre', sans_donnee: 'aucune donnée d’urgence',
       position: 'Partager la position de l’unité', position_aide: 'Facultatif : améliore l’heure d’arrivée vue par l’hôpital. Conservée 24 h au plus.', position_on: 'Position partagée',
-      position_refus: 'Position non disponible sur cet appareil.', historique: 'Dernières 24 heures', aucune: 'Aucune préalerte.', organisation: 'Préalertes de l’organisation',
+      position_refus: 'Position non disponible sur cet appareil.', sans_position_court: 'position inconnue', historique: 'Dernières 24 heures', aucune: 'Aucune préalerte.', organisation: 'Préalertes de l’organisation',
       ccs_en_cours: 'Ambulances annoncées dans la région', carte: 'Carte régionale', alertes: 'Alertes de saturation', aucune_alerte: 'Aucune saturation déclarée ou mesurée.',
       alerte_niveau: 'urgence saturée (civières)', alerte_declare: 'déclaration « {statut} » il y a {age} min', ccs_aide: 'Consultation seulement : votre système de répartition reste la référence.',
       gardee: 'Réseau indisponible : préalerte gardée sur l’appareil, elle sera transmise automatiquement.', transmise: 'Préalerte transmise.', fait: 'Enregistré.',
@@ -36,7 +36,14 @@
       vehicules: 'Véhicules de la région', vehicules_aide: 'Consultation seulement : aucune attribution ni répartition dans Arrimo ; votre système de répartition reste la référence.',
       aucun_vehicule: 'Aucun véhicule.', non_declare: 'état non déclaré', maj: 'mis à jour à {heure}', maj_auto: 'automatique', sans_position: 'position non partagée',
       ev: { disponible: 'Disponible', en_route: 'En route', sur_place: 'Sur place', transport_hopital: 'Transport vers l’hôpital', a_l_hopital: 'À l’hôpital', hors_service: 'Hors service' },
-      carte_amb: 'Urgences proches et trajet', tr_cat: 'type d’urgence : {cat}', tr_pref: 'hôpital souhaité : {h} (information, la destination reste votre décision)',
+      carte_amb: 'Urgences proches et trajet', classees: 'Urgences classées', classees_aide: 'Depuis {depart} · position {heure}. Tri : disponibilité, puis temps de route.',
+      c_urgence: 'Urgence', c_temps: 'Temps de route', c_dist: 'Distance', c_civ: 'Civières libres', c_statut: 'Statut', c_services: 'Services ouverts',
+      og_meilleur: 'OG : meilleur choix', og_phrase: 'OG propose {nom} : {temps}, {civ} civières libres{services}. Information seulement : la destination reste décidée par l’équipage et les protocoles.',
+      vol: 'à vol d’oiseau', inconnu: 'inconnu', rang: ['Ouverte', 'Capacité limitée', 'Saturée', 'Inconnue'], sv_court: { urgence_generale: 'Gén.', cardiologie: 'Cardio', neurologie: 'AVC', traumatologie: 'Trauma' },
+      sans_position: 'Position inconnue : touchez « Actualiser la position ».', actualiser: 'Actualiser la position', position_prise: 'Position transmise à {heure}.', voir_carte: 'Voir sur la carte',
+      position_regle: 'Position prise par le téléphone à chaque changement d’état, à l’envoi de la préalerte, sur « Actualiser » et environ chaque minute pendant le transport ; conservée 24 h.',
+      depuis: 'Depuis', choisir_dest: 'Choisir', pres_de: 'près de {lieu}', il_y_a: 'il y a {n} min', arrive_dans: 'arrive dans {n} min ({km} km)', flotte: 'Ambulances', c_unite: 'Unité', c_plaque: 'Plaque', c_etat: 'État', c_lieu: 'Lieu actuel',
+      tr_cat: 'type d’urgence : {cat}', tr_pref: 'hôpital souhaité : {h} (information, la destination reste votre décision)',
       prio: { immediate: 'Immédiate', urgente: 'Urgente', non_urgente: 'Non urgente' },
       cat: { medicale: 'Médicale', traumatologie: 'Traumatologie', cardiaque: 'Cardiaque', neurologique: 'Neurologique', respiratoire: 'Respiratoire', pediatrique: 'Pédiatrique',
         obstetrique: 'Obstétrique', sante_mentale: 'Santé mentale', autre: 'Autre' },
@@ -55,7 +62,7 @@
       urgences: 'Emergency departments in the region', declare: 'Declared: {statut}, {age} min ago', ancien: 'stale data',
       st: { ouvert: 'open', capacite_limitee: 'limited capacity', saturation: 'saturation', delestage: 'diversion' }, vol_oiseau: '{km} km as the crow flies', civieres: '{n} free stretchers', civiere1: '{n} free stretcher', sans_donnee: 'no emergency data',
       position: 'Share the unit’s position', position_aide: 'Optional: improves the arrival time seen by the hospital. Kept 24 h at most.', position_on: 'Position shared',
-      position_refus: 'Position unavailable on this device.', historique: 'Last 24 hours', aucune: 'No pre-alert.', organisation: 'Organization pre-alerts',
+      position_refus: 'Position unavailable on this device.', sans_position_court: 'position unknown', historique: 'Last 24 hours', aucune: 'No pre-alert.', organisation: 'Organization pre-alerts',
       ccs_en_cours: 'Ambulances announced in the region', carte: 'Regional map', alertes: 'Saturation alerts', aucune_alerte: 'No saturation declared or measured.',
       alerte_niveau: 'emergency saturated (stretchers)', alerte_declare: '“{statut}” declared {age} min ago', ccs_aide: 'View only: your dispatch system remains the reference.',
       gardee: 'Network unavailable: pre-alert kept on the device; it will be sent automatically.', transmise: 'Pre-alert sent.', fait: 'Saved.',
@@ -73,7 +80,14 @@
       vehicules: 'Vehicles in the region', vehicules_aide: 'View only: no assignment or dispatch in Arrimo; your dispatch system remains the reference.',
       aucun_vehicule: 'No vehicle.', non_declare: 'status not declared', maj: 'updated at {heure}', maj_auto: 'automatic', sans_position: 'position not shared',
       ev: { disponible: 'Available', en_route: 'En route', sur_place: 'On scene', transport_hopital: 'Transport to hospital', a_l_hopital: 'At hospital', hors_service: 'Out of service' },
-      carte_amb: 'Nearby emergencies and route', tr_cat: 'emergency type: {cat}', tr_pref: 'preferred hospital: {h} (information only, the destination remains your decision)',
+      carte_amb: 'Nearby emergencies and route', classees: 'Ranked emergencies', classees_aide: 'From {depart} · position {heure}. Sorted by availability, then driving time.',
+      c_urgence: 'Emergency', c_temps: 'Driving time', c_dist: 'Distance', c_civ: 'Free stretchers', c_statut: 'Status', c_services: 'Open services',
+      og_meilleur: 'OG: best choice', og_phrase: 'OG suggests {nom}: {temps}, {civ} free stretchers{services}. Information only: the destination remains decided by the crew and protocols.',
+      vol: 'as the crow flies', inconnu: 'unknown', rang: ['Open', 'Limited capacity', 'Saturated', 'Unknown'], sv_court: { urgence_generale: 'Gen.', cardiologie: 'Cardio', neurologie: 'Stroke', traumatologie: 'Trauma' },
+      sans_position: 'Position unknown: tap “Refresh position”.', actualiser: 'Refresh position', position_prise: 'Position sent at {heure}.', voir_carte: 'Show on map',
+      position_regle: 'Position taken by the phone at each status change, when the pre-alert is sent, on “Refresh” and about every minute during transport; kept 24 h.',
+      depuis: 'From', choisir_dest: 'Choose', pres_de: 'near {lieu}', il_y_a: '{n} min ago', arrive_dans: 'arrives in {n} min ({km} km)', flotte: 'Ambulances', c_unite: 'Unit', c_plaque: 'Plate', c_etat: 'Status', c_lieu: 'Current location',
+      tr_cat: 'emergency type: {cat}', tr_pref: 'preferred hospital: {h} (information only, the destination remains your decision)',
       prio: { immediate: 'Immediate', urgente: 'Urgent', non_urgente: 'Non-urgent' },
       cat: { medicale: 'Medical', traumatologie: 'Trauma', cardiaque: 'Cardiac', neurologique: 'Neurological', respiratoire: 'Respiratory', pediatrique: 'Pediatric',
         obstetrique: 'Obstetric', sante_mentale: 'Mental health', autre: 'Other' },
@@ -93,6 +107,7 @@
   const OUVERTES = ['envoyee', 'recue', 'consultee', 'prise_en_compte', 'preparation', 'preparation_terminee', 'arrivee'];
   const ETAPES = ['envoyee', 'recue', 'consultee', 'prise_en_compte', 'preparation', 'preparation_terminee', 'arrivee'];
   const etat = { token: lire('arrimo-token'), moi: null, unites: [], vehicules: [], prealertes: [], transports: [], destinations: [], formulaire: { priorite: null, categorie: null, destination: null, delai: 10 },
+    classees: null, depart: lire('arrimo-ccs-depart') || null,
     enLigne: navigator.onLine, message: null, erreur: null, position: null, partage: lire('arrimo-secours-position') === '1', dernierEnvoiPos: 0, choixDest: false, og: null };
   const lireFile = () => { try { return JSON.parse(lire('arrimo-secours-file') || '[]'); } catch { return []; } };
   const ecrireFile = (f) => ecrire('arrimo-secours-file', f.length ? JSON.stringify(f) : null);
@@ -136,13 +151,26 @@
       etat.transports = await api('GET', '/secours/transports').catch(() => []);
       etat.vehicules = await api('GET', '/secours/vehicules').catch(() => []);
       if (!etat.hebergements) etat.hebergements = await api('GET', '/secours/hebergements').catch(() => []);
+      await chargerClassees();
       if (ROLES_AMB.includes(etat.moi.utilisateur.role)) etat.unites = await api('GET', '/secours/unites');
     } catch (e) { if (estReseau(e)) etat.enLigne = false; else etat.erreur = e.message; }
     rendre();
   }
+  /* Urgences classées : depuis la position de l'unité (ambulance) ou un départ choisi par le CCS (ambulance ou établissement) */
+  async function chargerClassees() {
+    const amb = ROLES_AMB.includes(etat.moi.utilisateur.role);
+    let q = null;
+    if (amb) { const u = uniteCourante(); if (u) q = `unite_id=${u.id}`; }
+    else {
+      const d = etat.depart || (etat.vehicules.find((v) => v.position) ? `u:${etat.vehicules.find((v) => v.position).id}` : etat.hebergements?.[0] ? `e:${etat.hebergements[0].id}` : null);
+      etat.depart = d; if (d) q = d.startsWith('u:') ? `unite_id=${d.slice(2)}` : `etablissement_id=${d.slice(2)}`;
+    }
+    etat.classees = q ? await api('GET', `/secours/urgences-classees?${q}`).catch(() => null) : null;
+  }
   const uniteCourante = () => etat.unites.find((u) => String(u.id) === String(lire('arrimo-secours-unite'))) || etat.unites[0];
   const minutes = (d) => (d ? Math.round((new Date(d).getTime() - Date.now()) / 60000) : null);
-  const heure = (d) => new Date(d).toLocaleTimeString(L === 'en' ? 'en-CA' : 'fr-CA', { hour: '2-digit', minute: '2-digit' });
+  // Heure du fuseau de la région de l'organisation (comme les écrans de l'hôpital), jamais celle de l'appareil
+  const heure = (d) => new Date(d).toLocaleTimeString(L === 'en' ? 'en-CA' : 'fr-CA', { hour: '2-digit', minute: '2-digit', timeZone: etat.moi?.organisations?.[0]?.fuseau || undefined });
   function eta(p) {
     const m = minutes(p.heure_prevue);
     if (m == null) return t('non_transmise');
@@ -212,9 +240,43 @@
     return `<section class="carte-s"><h2>${t('vehicules')}</h2><p class="note">${t('vehicules_aide')}</p>${l.length ? l.map((v) => `<div class="ligne-s" data-vehicule="${esc(v.numero)}"><div><strong>${esc(v.numero)}</strong>${v.plaque ? ` · ${esc(v.plaque)}` : ''} <span class="note">${esc(v.organisation)}</span><br>${pastilleV(v.etat)}${v.destination ? ` <span>${esc(t('vers', { dest: v.destination }))}</span>` : ''}</div>
       <div class="note">${v.modifie_le ? esc(t('maj', { heure: heure(v.modifie_le) })) : ''}${v.position ? '' : `${v.modifie_le ? ' · ' : ''}${t('sans_position')}`}</div></div>`).join('') : `<p class="note">${t('aucun_vehicule')}</p>`}</section>`;
   }
+  const COUL_RANG = ['#16A34A', '#F59E0B', '#DC2626', '#94A3B8'];
+  function tableauClasse(r, { choisir = false } = {}) {
+    if (!r) return `<p class="note">${t('aucune')}</p>`;
+    if (r.sans_position) return `<p class="bandeau">${t('sans_position')}</p>`;
+    const og = r.og;
+    const lignes = r.urgences.map((h) => {
+      const st = h.statut_declare && !h.statut_declare.perime ? t('st.' + h.statut_declare.statut) : TXT[L].rang[h.rang];
+      const meilleur = og && og.id === h.id;
+      return `<tr class="${meilleur ? 'meilleur' : ''}" data-dest-classee="${h.id}"><td data-l="${t('c_urgence')}"><strong>${esc(ArrimoCarte.court(h.nom))}</strong>${meilleur ? ` <span class="badge-og">${t('og_meilleur')}</span>` : ''}</td>
+        <td data-l="${t('c_temps')}" class="num">${h.temps_min != null ? `<strong>${h.temps_min} min</strong>` : '—'}</td>
+        <td data-l="${t('c_dist')}" class="num">${h.distance_km != null ? `${h.distance_km} km${h.source_distance === 'vol_oiseau' ? ` <span class="note">(${t('vol')})</span>` : ''}` : '—'}</td>
+        <td data-l="${t('c_civ')}" class="num">${h.urgence ? `<strong>${h.urgence.civieres_libres}</strong>` : '—'}</td>
+        <td data-l="${t('c_statut')}"><span class="pastille-r" style="background:${COUL_RANG[h.rang]};color:${h.rang === 1 ? '#1F2937' : '#fff'}">${esc(st)}</span></td>
+        <td data-l="${t('c_services')}">${h.services_ouverts?.length ? h.services_ouverts.map((c) => `<span class="puce">${t('sv_court.' + c)}</span>`).join(' ') : '—'}</td>
+        ${choisir ? `<td><button class="btn" type="button" data-choisir-dest="${h.id}">${t('choisir_dest')}</button></td>` : ''}</tr>`;
+    }).join('');
+    const phrase = og ? `<p class="og-phrase"><img src="og-robot.svg" alt="" width="22" height="22"> ${esc(t('og_phrase', { nom: ArrimoCarte.court(og.nom), temps: og.temps_min != null ? `${og.temps_min} min` : `${og.distance_km} km`, civ: og.civieres_libres ?? '—',
+      services: og.services_ouverts?.length ? ` · ${og.services_ouverts.map((c) => t('sv_court.' + c)).join(', ')}` : '' }))}</p>` : '';
+    return `${phrase}<table class="classe"><thead><tr><th>${t('c_urgence')}</th><th>${t('c_temps')}</th><th>${t('c_dist')}</th><th>${t('c_civ')}</th><th>${t('c_statut')}</th><th>${t('c_services')}</th>${choisir ? '<th></th>' : ''}</tr></thead><tbody>${lignes}</tbody></table>`;
+  }
+  const minAgo = (d) => Math.max(0, Math.round((Date.now() - new Date(d).getTime()) / 60000));
+  /** Lieu actuel d'une ambulance : établissement connu le plus proche de sa dernière position. */
+  function lieuActuel(v) {
+    if (!v.position) return t('sans_position_court');
+    const lieux = [...etat.destinations, ...(etat.hebergements || [])].filter((x) => x.latitude != null);
+    const d = (x) => Math.hypot(x.latitude - v.position.latitude, (x.longitude - v.position.longitude) * Math.cos(v.position.latitude * Math.PI / 180));
+    const pres = lieux.sort((a, b) => d(a) - d(b))[0];
+    return `${pres ? t('pres_de', { lieu: ArrimoCarte.court(pres.nom) }) : ''} · ${t('il_y_a', { n: minAgo(v.position.le) })}`;
+  }
+  function tableauFlotte() {
+    return `<section class="carte-s"><h2>${t('flotte')}</h2><p class="note">${t('vehicules_aide')}</p><table class="classe"><thead><tr><th>${t('c_unite')}</th><th>${t('c_plaque')}</th><th>${t('c_etat')}</th><th>${t('destination').split(' (')[0]}</th><th>${t('c_lieu')}</th></tr></thead><tbody>
+      ${etat.vehicules.map((v) => `<tr><td data-l="${t('c_unite')}"><strong>${esc(v.numero)}</strong></td><td data-l="${t('c_plaque')}">${esc(v.plaque || '—')}</td><td data-l="${t('c_etat')}">${pastilleV(v.etat)}</td>
+        <td data-l="${t('destination').split(' (')[0]}">${v.destination ? esc(ArrimoCarte.court(v.destination)) : '—'}</td><td data-l="${t('c_lieu')}">${esc(lieuActuel(v))}</td></tr>`).join('') || `<tr><td colspan="5">${t('aucun_vehicule')}</td></tr>`}</tbody></table></section>`;
+  }
   function positionCarte(u) {
-    return `<section class="carte-s"><label style="display:flex;gap:12px;align-items:center;margin:0"><input type="checkbox" id="partage" style="width:28px;height:28px"${etat.partage ? ' checked' : ''}> ${t('position')}</label>
-      <p class="note">${etat.partage && etat.position ? `${t('position_on')} · ${heure(etat.position.le)}` : t('position_aide')}</p></section>`;
+    return `<p style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 8px"><button class="btn" type="button" data-act="actualiser">${t('actualiser')}</button>
+      <span class="note">${etat.position ? esc(t('position_prise', { heure: heure(etat.position.le) })) : ''}</span></p><p class="note">${t('position_regle')}</p>`;
   }
   function carteOg(amb) {
     const qs = amb ? ['og_q_reception', 'og_q_manque', 'og_q_urgences', 'og_q_en_cours', 'og_q_transports'] : ['og_q_ccs_route', 'og_q_ccs_attente', 'og_q_urgences', 'og_q_transports'];
@@ -308,8 +370,15 @@
     if (!amb) {
       const ouvertes = etat.prealertes.filter((p) => OUVERTES.includes(p.statut));
       // CCS simplifié (13 nov. 2026) : état des véhicules (carte et liste) et disponibilité des urgences ; aucune attribution
-      m.innerHTML = `${msg}<section class="carte-s"><h2>${t('carte')}</h2><div id="carte-region" style="height:min(60vh,440px)"></div></section>${listeVehicules()}${alertes()}${urgences()}${ouvertes.length ? `<section class="carte-s"><h2>${t('ccs_en_cours')}</h2><p class="note">${t('ccs_aide')}</p>${ouvertes.map(ligneListe).join('')}</section>` : ''}`;
-      dessinerCarte().catch(() => {});
+      // CCS (13 nov. 2026, version simplifiée) : urgences classées depuis un départ, puis la flotte ; carte seulement sur demande
+      const opts = [...etat.vehicules.filter((v) => v.position).map((v) => [`u:${v.id}`, `${v.numero} · ${lieuActuel(v)}`]), ...(etat.hebergements || []).map((e) => [`e:${e.id}`, ArrimoCarte.court(e.nom)])];
+      const r = etat.classees;
+      m.innerHTML = `${msg}<p class="bandeau" style="border-color:#F59E0B"><strong>${t('ccs_aide')}</strong></p>
+        <section class="carte-s"><h2>${t('classees')}</h2><label for="depart">${t('depuis')}</label><select id="depart" style="min-height:48px;font-size:17px;max-width:100%">${opts.map(([v, l]) => `<option value="${v}"${v === etat.depart ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>
+          ${r?.depart ? `<p class="note">${esc(t('classees_aide', { depart: r.depart.nom || '', heure: r.depart.le ? heure(r.depart.le) : '—' }))}</p>` : ''}${tableauClasse(r)}
+          <details class="voir-carte"><summary class="btn">${t('voir_carte')}</summary><div id="carte-region" style="height:min(60vh,440px);margin-top:10px"></div></details></section>
+        ${tableauFlotte()}${ouvertes.length ? `<section class="carte-s"><h2>${t('ccs_en_cours')}</h2>${ouvertes.map(ligneListe).join('')}</section>` : ''}`;
+      const det = m.querySelector('.voir-carte'); if (det) det.addEventListener('toggle', () => { if (det.open) dessinerCarte().catch(() => {}); });
       return;
     }
     const u = uniteCourante();
@@ -318,10 +387,14 @@
     const enAttente = lireFile().some((x) => x.chemin === '/secours/prealertes' && Number(x.corps.unite_id) === u.id);
     const recentes = etat.prealertes.filter((p) => p.unite_id === u.id && !OUVERTES.includes(p.statut));
     const superviseur = etat.moi.utilisateur.role === 'superviseur_secours';
-    m.innerHTML = `${msg}${carteVehicule(u)}${enCours ? carteEnCours(enCours) : enAttente ? '' : formulaire(u)}<section class="carte-s"><h2>${t('carte_amb')}</h2><div id="carte-amb" style="height:300px"></div></section>${carteOg(true)}${carteTransports(true)}${positionCarte(u)}${urgences()}
+    const r = etat.classees;
+    m.innerHTML = `${msg}${carteVehicule(u)}${enCours ? carteEnCours(enCours) : ''}
+      <section class="carte-s"><h2>${t('classees')}</h2>${positionCarte(u)}${r?.depart ? `<p class="note">${esc(t('classees_aide', { depart: u.numero, heure: r.depart.le ? heure(r.depart.le) : '—' }))}</p>` : ''}${tableauClasse(r, { choisir: !enCours })}
+        <details class="voir-carte"><summary class="btn">${t('voir_carte')}</summary><div id="carte-amb" style="height:320px;margin-top:10px"></div></details></section>
+      ${enCours || enAttente ? '' : formulaire(u)}${carteTransports(true)}${carteOg(true)}
       ${superviseur ? `<section class="carte-s"><h2>${t('organisation')}</h2>${etat.prealertes.filter((p) => OUVERTES.includes(p.statut)).map(ligneListe).join('') || `<p class="note">${t('aucune')}</p>`}</section>` : ''}
       <section class="carte-s"><h2>${t('historique')}</h2>${recentes.length ? recentes.map(ligneListe).join('') : `<p class="note">${t('aucune')}</p>`}</section>`;
-    dessinerCarteAmbulance(u).catch(() => {});
+    const det = m.querySelector('.voir-carte'); if (det) det.addEventListener('toggle', () => { if (det.open) dessinerCarteAmbulance(u).catch(() => {}); });
   }
 
   async function agir(p, corps) {
@@ -351,10 +424,12 @@
     }
     if (b.id === 'sortir') { try { await api('POST', '/deconnexion'); } catch { /* session déjà close */ } ecrire('arrimo-token', null); location.replace('/'); return; }
     const u = uniteCourante(); const p = u && etat.prealertes.find((x) => x.unite_id === u.id && OUVERTES.includes(x.statut));
+    if (b.dataset.choisirDest) { etat.formulaire.destination = b.dataset.choisirDest; rendre(); document.querySelector('[data-choix="priorite"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+    if (b.dataset.act === 'actualiser') { await prendrePosition(); return charger(); }
     const zoneEtat = b.closest('[data-etat-v]');
     if (zoneEtat) {
       etat.erreur = null; etat.message = null;
-      try { const r = await envoyer(`/secours/unites/${zoneEtat.dataset.etatV}/etat`, { etat: b.dataset.v }, { garder: true }); if (r) etat.message = t('fait'); }
+      try { const r = await envoyer(`/secours/unites/${zoneEtat.dataset.etatV}/etat`, { etat: b.dataset.v }, { garder: true }); if (r) etat.message = t('fait'); await prendrePosition(); }
       catch (e) { etat.erreur = e.message; }
       return charger();
     }
@@ -373,6 +448,7 @@
     if (act === 'envoyer' && u) {
       const f = etat.formulaire; etat.erreur = null; etat.message = null;
       if (!f.destination || !f.priorite || !f.categorie) { etat.erreur = t('choisir'); rendre(); return; }
+      await prendrePosition();
       try {
         const r = await envoyer('/secours/prealertes', { unite_id: u.id, destination_id: Number(f.destination), priorite: f.priorite, categorie: f.categorie, delai_min: f.delai, cle: cle(), ...(f.transport ? { demande_transport_id: f.transport } : {}) }, { garder: true });
         if (r) { etat.message = t('transmise'); etat.formulaire = { priorite: null, categorie: null, destination: null, delai: 10 }; }
@@ -383,24 +459,25 @@
   document.addEventListener('submit', (ev) => { if (ev.target.id === 'og-form') { ev.preventDefault(); demanderOg($('#og-q').value.trim()); } });
   document.addEventListener('change', (ev) => {
     if (ev.target.id === 'unite') { ecrire('arrimo-secours-unite', ev.target.value); rendre(); }
-    if (ev.target.id === 'partage') { etat.partage = ev.target.checked; ecrire('arrimo-secours-position', etat.partage ? '1' : null); suivrePosition(); rendre(); }
+    if (ev.target.id === 'depart') { etat.depart = ev.target.value; ecrire('arrimo-ccs-depart', etat.depart); chargerClassees().then(rendre); }
   });
 
-  /* Position : seulement si l'équipe l'active ; envoyée toutes les 30 s au plus ; la préalerte fonctionne sans. */
-  let surveillance = null;
-  function suivrePosition() {
-    if (surveillance != null) { navigator.geolocation?.clearWatch(surveillance); surveillance = null; }
-    if (!etat.partage) return;
-    if (!navigator.geolocation) { etat.erreur = t('position_refus'); return; }
-    surveillance = navigator.geolocation.watchPosition(async (pos) => {
+  /* Position (13 nov. 2026) : prise par le téléphone à chaque changement d'état, à l'envoi de la préalerte, sur « Actualiser »
+     et environ chaque minute pendant le transport ; jamais de suivi continu. Conservée 24 h par le serveur. */
+  function prendrePosition() {
+    const u = uniteCourante();
+    if (!u || !navigator.geolocation) return Promise.resolve(null);
+    return new Promise((ok) => navigator.geolocation.getCurrentPosition(async (pos) => {
       etat.position = { latitude: pos.coords.latitude, longitude: pos.coords.longitude, le: Date.now() };
-      const u = uniteCourante();
-      if (!u || Date.now() - etat.dernierEnvoiPos < 30000) return;
-      etat.dernierEnvoiPos = Date.now();
-      try { await api('POST', `/secours/unites/${u.id}/position`, { latitude: pos.coords.latitude, longitude: pos.coords.longitude, precision_m: pos.coords.accuracy }); } catch { /* réessai au prochain point */ }
-      rendre();
-    }, () => { etat.erreur = t('position_refus'); rendre(); }, { enableHighAccuracy: true, maximumAge: 15000 });
+      try { await api('POST', `/secours/unites/${u.id}/position`, { latitude: pos.coords.latitude, longitude: pos.coords.longitude, precision_m: pos.coords.accuracy }); } catch { /* prochaine prise */ }
+      ok(etat.position);
+    }, () => { etat.erreur = t('position_refus'); ok(null); }, { enableHighAccuracy: true, maximumAge: 20000, timeout: 15000 }));
   }
+  const enTransport = () => {
+    const u = uniteCourante(); if (!u) return false;
+    const v = etat.vehicules.find((x) => x.id === u.id);
+    return etat.prealertes.some((p) => p.unite_id === u.id && OUVERTES.includes(p.statut) && p.statut !== 'arrivee') || ['en_route', 'transport_hopital'].includes(v?.etat);
+  };
 
   window.addEventListener('online', () => { etat.enLigne = true; viderFile(); });
   window.addEventListener('offline', () => { etat.enLigne = false; rendre(); });
@@ -411,8 +488,9 @@
     if (!etat.moi) { $('#contenu').innerHTML = `<p class="bandeau">${t('hors_ligne')}</p>`; setTimeout(demarrer, 10000); return; }
     if (![...ROLES_AMB, 'repartiteur'].includes(etat.moi.utilisateur.role)) { location.replace('/'); return; }
     window.ArrimoApparence?.definir(etat.moi.utilisateur.apparence || 'automatique');
-    suivrePosition();
     await viderFile(); await charger();
+    // Environ chaque minute pendant le transport
+    setInterval(() => { if (ROLES_AMB.includes(etat.moi.utilisateur.role) && enTransport()) prendrePosition().then(() => charger()); }, 60000);
     setInterval(() => { if (lireFile().length) viderFile(); else charger(); }, 15000);
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw-secours.js', { scope: '/secours' }).catch(() => {});
   }

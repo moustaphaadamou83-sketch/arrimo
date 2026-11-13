@@ -704,3 +704,23 @@ html.theme-bascule *, html.theme-bascule *::before, html.theme-bascule *::after 
 .ch-chrono li .note { font-weight: 400; }
 .ch-cases { border: 0; padding: 0; margin: var(--e2) 0; display: flex; flex-wrap: wrap; gap: 4px var(--e3); }
 .ch-cases legend { padding: 0; }
+
+/* Urgences classées (hébergement) : même présentation que l'écran Secours ; meilleur choix d'OG mis en évidence ; cartes sur téléphone */
+table.classe { width: 100%; border-collapse: collapse; }
+table.classe th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--texte-2, #64748B); border-bottom: 2px solid var(--bordure); padding: 8px 6px; }
+table.classe td { padding: 9px 6px; border-bottom: 1px solid var(--bordure); vertical-align: middle; }
+table.classe tr.meilleur td { background: rgba(21,152,149,.10); }
+table.classe tr.meilleur td:first-child { box-shadow: inset 4px 0 0 #159895; }
+.badge-og { display: inline-block; font-size: 12px; font-weight: 700; color: #fff; background: #159895; border-radius: 10px; padding: 2px 8px; margin-left: 4px; }
+.pastille-r { display: inline-block; border-radius: 12px; padding: 2px 10px; font-size: 13px; font-weight: 600; }
+.puce { display: inline-block; border: 1px solid var(--bordure); border-radius: 10px; padding: 1px 7px; font-size: 12px; margin: 1px 0; }
+.og-phrase { background: rgba(21,152,149,.08); border-left: 4px solid #159895; border-radius: 8px; padding: 8px 10px; margin: 6px 0 10px; }
+details.voir-carte { margin-top: 12px; } details.voir-carte summary { display: inline-flex; align-items: center; cursor: pointer; list-style: none; }
+details.voir-carte summary::-webkit-details-marker { display: none; }
+@media (max-width: 700px) {
+  table.classe thead { display: none; }
+  table.classe tr { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; padding: 8px 4px; border-bottom: 1px solid var(--bordure); }
+  table.classe td { border: 0; padding: 2px 0; }
+  table.classe td:first-child { grid-column: 1 / -1; }
+  table.classe td[data-l]:not(:first-child)::before { content: attr(data-l) " : "; color: var(--texte-2, #64748B); font-size: 12px; }
+}

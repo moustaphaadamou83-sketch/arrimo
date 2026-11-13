@@ -48,6 +48,25 @@
   .secours .bandeau { padding: 10px 14px; border-radius: 10px; background: var(--carte); border: 2px solid #F59E0B; }
   .secours label { display: block; font-weight: 600; margin: 12px 0 6px; }
   .secours input[type=number] { min-height: 56px; font-size: 20px; width: 120px; }
+  /* Tableaux « Urgences classées » et flotte : lisibles, le meilleur choix d'OG mis en évidence ; en cartes sur téléphone */
+  .secours table.classe { width: 100%; border-collapse: collapse; font-size: 16px; }
+  .secours table.classe th { text-align: left; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--texte-2, #64748B); border-bottom: 2px solid var(--bordure); padding: 8px 6px; }
+  .secours table.classe td { padding: 10px 6px; border-bottom: 1px solid var(--bordure); vertical-align: middle; }
+  .secours table.classe tr.meilleur td { background: rgba(21,152,149,.10); }
+  .secours table.classe tr.meilleur td:first-child { box-shadow: inset 4px 0 0 #159895; }
+  .secours .badge-og { display: inline-block; font-size: 12px; font-weight: 700; color: #fff; background: #159895; border-radius: 10px; padding: 2px 8px; margin-left: 4px; }
+  .secours .pastille-r { display: inline-block; border-radius: 12px; padding: 3px 10px; font-size: 14px; font-weight: 600; }
+  .secours .puce { display: inline-block; border: 1px solid var(--bordure); border-radius: 10px; padding: 1px 7px; font-size: 13px; margin: 1px 0; }
+  .secours .og-phrase { display: flex; gap: 8px; align-items: flex-start; background: rgba(21,152,149,.08); border-left: 4px solid #159895; border-radius: 8px; padding: 8px 10px; margin: 8px 0 10px; }
+  .secours details.voir-carte { margin-top: 12px; } .secours details.voir-carte summary { display: inline-flex; align-items: center; min-height: 44px; font-size: 16px; cursor: pointer; list-style: none; }
+  .secours details.voir-carte summary::-webkit-details-marker { display: none; }
+  @media (max-width: 700px) {
+    .secours table.classe thead { display: none; }
+    .secours table.classe tr { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; padding: 10px 6px; border-bottom: 1px solid var(--bordure); }
+    .secours table.classe td { border: 0; padding: 2px 0; }
+    .secours table.classe td:first-child { grid-column: 1 / -1; font-size: 17px; }
+    .secours table.classe td[data-l]:not(:first-child)::before { content: attr(data-l) " : "; color: var(--texte-2, #64748B); font-size: 13px; }
+  }
   @media (max-width: 600px) { .secours .gros { font-size: 24px; } }
 </style>
 </head>

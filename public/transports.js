@@ -62,33 +62,40 @@
   async function vueUrgences() {
     const v = $('#v-c-urgences');
     const [hops, trs] = await Promise.all([api('GET', `/urgences-proches?etablissement_id=${etat.ctx}`), api('GET', `/transports?etablissement_id=${etat.ctx}`)]);
-    const COUL = { vert: '#16A34A', jaune: '#F59E0B', orange: '#D97706', rouge: '#DC2626' };
+    const COUL_RANG = ['#16A34A', '#F59E0B', '#DC2626', '#94A3B8'];
+    const RANG = [T('up_rang_0'), T('up_rang_1'), T('up_rang_2'), T('up_rang_3')];
+    const classees = hops.filter((h) => h.temps_min != null || h.source_distance === 'osrm').slice(0, 8);
+    const liste = classees.length ? classees : hops.slice(0, 8);
+    const meilleur = liste.find((h) => h.rang < 2);
     const ligne = (h) => {
-      const sv = h.services_ouverts == null ? T('up_services_non') : h.services_ouverts.length ? h.services_ouverts.map((c) => T(`up_sv.${c}`)).join(', ') : T('up_aucun_service');
-      return `<article class="item" data-urgence="${h.id}"><div>
-        <div><span class="pt-niveau" style="display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px;background:${COUL[h.urgence?.niveau] || '#94A3B8'}" aria-hidden="true"></span><b>${esc(h.nom)}</b> <span class="note">${esc(h.ville || '')}${h.distance_km != null ? ` · ${T('up_km', { km: h.distance_km })}` : ''}</span></div>
-        <div>${h.urgence ? `${T('up_civieres', { n: h.urgence.civieres_libres })} · ${T(`up_niveau.${h.urgence.niveau}`)}` : T('up_sans')}${h.statut_declare ? ` · <b>${T('up_declare', { statut: t(`transports.up_st.${h.statut_declare.statut}`), age: h.statut_declare.age_min })}</b>${h.statut_declare.perime ? ` (${T('up_ancien')})` : ''}` : ''}</div>
-        <div class="note">${T('up_services')} : ${sv}</div>
-        ${h.soins_intensifs ? `<div class="note">${T('up_si', h.soins_intensifs)}</div>` : ''}</div></article>`;
+      const st = h.statut_declare && !h.statut_declare.perime ? T(`up_st.${h.statut_declare.statut}`) : RANG[h.rang ?? 3];
+      return `<tr data-urgence="${h.id}" class="${meilleur && meilleur.id === h.id ? 'meilleur' : ''}"><td data-l="${T('c_urgence')}"><b>${esc(ArrimoCarte.court(h.nom))}</b>${meilleur && meilleur.id === h.id ? ` <span class="badge-og">${T('og_meilleur')}</span>` : ''}</td>
+        <td data-l="${T('c_temps')}" class="num">${h.temps_min != null ? `<b>${h.temps_min} min</b>` : '—'}</td><td data-l="${T('c_dist')}" class="num">${h.distance_km != null ? `${h.distance_km} km` : '—'}</td>
+        <td data-l="${T('c_civ')}" class="num">${h.urgence ? `<b>${h.urgence.civieres_libres}</b>` : '—'}</td>
+        <td data-l="${T('c_statut')}"><span class="pastille-r" style="background:${COUL_RANG[h.rang ?? 3]};color:${h.rang === 1 ? '#1F2937' : '#fff'}">${st}</span></td>
+        <td data-l="${T('c_services')}">${h.services_ouverts?.length ? h.services_ouverts.map((c) => `<span class="puce">${T(`up_sv.${c}`)}</span>`).join(' ') : '—'}${h.soins_intensifs ? `<div class="note">${T('up_si', h.soins_intensifs)}</div>` : ''}</td></tr>`;
     };
     const lignesTr = trs.filter((d) => d.origine_id === etat.ctx).map((d) => `<article class="item" data-transport="${d.id}"><div><div><b class="num">${esc(d.numero)}</b> · ${esc(d.resident_ref)} · ${esc(d.coordination)}</div>
       <div class="note">${T('suivi', { numero: d.numero, org: d.organisation, statut: t(`transports.s_${d.statut}`) })}${suivi(d)}</div></div></article>`).join('');
     v.innerHTML = `<div class="entete"><div><h2>${T('up_titre')}</h2><p>${T('up_intro')}</p></div></div>
       <div class="panneau-c"><h3>${T('up_suivi')}</h3><div class="liste">${lignesTr || `<p class="note">${T('up_suivi_aucun')}</p>`}</div></div>
-      <div class="panneau-c"><h3>${T('up_carte')}</h3><div id="carte-urgences" style="height:min(55vh,380px)"></div></div>
-      <div class="panneau-c"><h3>${T('up_liste')}</h3><div class="liste">${hops.map(ligne).join('') || `<p class="note">${T('up_aucune')}</p>`}</div></div>`;
-    try {
-      const ici = etat.moi.etablissements.find((e) => e.id === etat.ctx);
-      const etiq = (h) => `${ArrimoCarte.court(h.nom)} · ${h.statut_declare && !h.statut_declare.perime && h.statut_declare.statut !== 'ouvert' ? t(`transports.up_st.${h.statut_declare.statut}`) : h.urgence ? t('transports.up_civieres', { n: h.urgence.civieres_libres }) : t('transports.up_sans')}`;
-      await ArrimoCarte.dessiner(document.getElementById('carte-urgences'), { langue: locale().slice(0, 2),
-        hebergements: ici ? [{ nom: ici.nom, latitude: ici.latitude, longitude: ici.longitude, details: [ici.ville] }] : [],
-        // Urgences les plus proches seulement : 6 sur la carte, étiquettes des 3 premières ; la liste complète reste dessous
-        cadrer: [...(ici?.latitude != null ? [[ici.latitude, ici.longitude]] : []), ...hops.slice(0, 3).filter((h) => h.latitude != null).map((h) => [h.latitude, h.longitude])],
-        hopitaux: hops.slice(0, 6).map((h, i) => ({ ...h, prio: i < 3 ? 1 : 3, niveau: ArrimoCarte.niveau(h), etiquette: etiq(h),
-          details: [h.ville, h.distance_km != null ? t('transports.up_km', { km: h.distance_km }) : null, h.urgence ? t('transports.up_civieres', { n: h.urgence.civieres_libres }) : t('transports.up_sans'),
-            h.services_ouverts?.length ? h.services_ouverts.map((c) => t(`transports.up_sv.${c}`)).join(', ') : null,
-            h.soins_intensifs ? t('transports.up_si', h.soins_intensifs) : null] })) });
-    } catch { /* carte indisponible : la liste suffit */ }
+      <div class="panneau-c"><h3>${T('up_classees')}</h3>
+        ${meilleur ? `<p class="og-phrase">${T('up_og', { nom: ArrimoCarte.court(meilleur.nom), temps: meilleur.temps_min != null ? `${meilleur.temps_min} min` : `${meilleur.distance_km} km`, civ: meilleur.urgence?.civieres_libres ?? '—' })}</p>` : ''}
+        <table class="classe"><thead><tr><th>${T('c_urgence')}</th><th>${T('c_temps')}</th><th>${T('c_dist')}</th><th>${T('c_civ')}</th><th>${T('c_statut')}</th><th>${T('c_services')}</th></tr></thead><tbody>${liste.map(ligne).join('') || `<tr><td colspan="6">${T('up_aucune')}</td></tr>`}</tbody></table>
+        <details class="voir-carte"><summary class="btn">${T('voir_carte')}</summary><div id="carte-urgences" style="height:min(55vh,380px);margin-top:10px"></div></details></div>`;
+    const det = v.querySelector('.voir-carte');
+    det.addEventListener('toggle', async () => {
+      if (!det.open) return;
+      try {
+        const ici = etat.moi.etablissements.find((e) => e.id === etat.ctx);
+        const etiq = (h) => `${ArrimoCarte.court(h.nom)} · ${h.urgence ? t('transports.up_civieres', { n: h.urgence.civieres_libres }) : t('transports.up_sans')}`;
+        await ArrimoCarte.dessiner(document.getElementById('carte-urgences'), { langue: locale().slice(0, 2),
+          hebergements: ici ? [{ nom: ici.nom, latitude: ici.latitude, longitude: ici.longitude, details: [ici.ville] }] : [],
+          cadrer: [...(ici?.latitude != null ? [[ici.latitude, ici.longitude]] : []), ...liste.slice(0, 3).filter((h) => h.latitude != null).map((h) => [h.latitude, h.longitude])],
+          hopitaux: liste.map((h, i) => ({ ...h, prio: i < 3 ? 1 : 3, niveau: ArrimoCarte.niveau(h), etiquette: etiq(h),
+            details: [h.ville, h.temps_min != null ? `${h.temps_min} min · ${h.distance_km} km` : null] })) });
+      } catch { /* carte indisponible : le tableau suffit */ }
+    });
   }
   window.ArrimoTransports = { bloc, brancher, vueUrgences };
 })();

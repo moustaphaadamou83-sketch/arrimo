@@ -97,6 +97,8 @@ window.ARRIMO_I18N.en = {
     ev: { disponible: 'available', en_route: 'en route', sur_place: 'on scene', transport_hopital: 'transport to hospital', a_l_hopital: 'at hospital', hors_service: 'out of service' },
     vehicule: 'vehicle {unite}{plaque}: {etat}', plaque: ' ({plaque})', vers: 'to {dest}', eta: 'expected arrival at {heure}', arrivee_confirmee: 'arrival confirmed by the hospital at {heure}',
     autre_dest: 'The crew chose {dest} (coordination: {coord}).', pref_info: 'Preferred: {h}', cat_info: 'Type: {cat}',
+    up_classees: 'Ranked emergencies (availability, then driving time from your facility)', up_og: 'OG suggests {nom}: {temps}, {civ} free stretchers. Information only: the destination remains decided by the crew and protocols.', og_meilleur: 'OG: best choice', voir_carte: 'Show on map',
+    c_urgence: 'Emergency', c_temps: 'Driving time', c_dist: 'Distance', c_civ: 'Free stretchers', c_statut: 'Status', c_services: 'Open services', up_rang_0: 'Open', up_rang_1: 'Limited capacity', up_rang_2: 'Saturated', up_rang_3: 'Unknown',
     up_titre: 'Nearby emergencies', up_intro: 'Overall emergency capacity in the region, to inform the transport request. No patient data; the destination remains decided by the crew and protocols.',
     up_carte: 'Map', up_liste: 'List', up_civieres: 'free stretchers: {n}', up_sans: 'no emergency data', up_km: '{km} km', up_declare: 'declared: {statut}, {age} min ago', up_ancien: 'old data',
     up_st: { ouvert: 'open', capacite_limitee: 'limited capacity', saturation: 'saturated', delestage: 'diversion' },
@@ -118,6 +120,7 @@ window.ARRIMO_I18N.en = {
     activer: 'Activate the organization', desactiver: 'Deactivate the organization',
   },
   liaison_secours: {
+    arrive_dans: '{unite} arrives in {n} min ({km} km)', arrive_km: '{unite} is {km} km away (as the crow flies)', eta_calcul: 'driving time computed at {heure}',
     transport_lien: 'Resident {ref} from {origine} (transport {numero}): also follow CHSLD liaison.',
     cd_titre: 'Hospital record', cd_simulation: 'SIMULATION — simulated hospital system, fictitious records (demonstration only)', cd_aucune_recherche: 'No search; the pre-alert continues with its temporary number.',
     cd_rechercher: 'Search the record', cd_confirmee: 'Match confirmed', cd_incertaine: 'Uncertain match: check and choose the record (never automatic).', cd_choisir: 'This is the record',

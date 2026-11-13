@@ -97,6 +97,8 @@ window.ARRIMO_I18N.fr = {
     ev: { disponible: 'disponible', en_route: 'en route', sur_place: 'sur place', transport_hopital: 'transport vers l’hôpital', a_l_hopital: 'à l’hôpital', hors_service: 'hors service' },
     vehicule: 'véhicule {unite}{plaque} : {etat}', plaque: ' ({plaque})', vers: 'vers {dest}', eta: 'arrivée prévue à {heure}', arrivee_confirmee: 'arrivée confirmée par l’hôpital à {heure}',
     autre_dest: 'L’équipage a choisi {dest} (coordination : {coord}).', pref_info: 'Souhaité : {h}', cat_info: 'Type : {cat}',
+    up_classees: 'Urgences classées (disponibilité, puis temps de route depuis votre établissement)', up_og: 'OG propose {nom} : {temps}, {civ} civières libres. Information seulement : la destination reste décidée par l’équipage et les protocoles.', og_meilleur: 'OG : meilleur choix', voir_carte: 'Voir sur la carte',
+    c_urgence: 'Urgence', c_temps: 'Temps de route', c_dist: 'Distance', c_civ: 'Civières libres', c_statut: 'Statut', c_services: 'Services ouverts', up_rang_0: 'Ouverte', up_rang_1: 'Capacité limitée', up_rang_2: 'Saturée', up_rang_3: 'Inconnue',
     up_titre: 'Urgences proches', up_intro: 'Capacités globales des urgences de la région, pour informer la demande de transport. Aucune donnée de patient ; la destination reste décidée par l’équipage et les protocoles.',
     up_carte: 'Carte', up_liste: 'Liste', up_civieres: 'civières libres : {n}', up_sans: 'aucune donnée d’urgence', up_km: '{km} km', up_declare: 'déclaré : {statut}, il y a {age} min', up_ancien: 'donnée ancienne',
     up_st: { ouvert: 'ouverte', capacite_limitee: 'capacité limitée', saturation: 'saturée', delestage: 'délestage' },
@@ -118,6 +120,7 @@ window.ARRIMO_I18N.fr = {
     activer: 'Activer l’organisation', desactiver: 'Désactiver l’organisation',
   },
   liaison_secours: {
+    arrive_dans: '{unite} arrive dans {n} min ({km} km)', arrive_km: '{unite} à {km} km (à vol d’oiseau)', eta_calcul: 'temps de route calculé à {heure}',
     transport_lien: 'Résident {ref} de {origine} (transport {numero}) : suivez aussi la Liaison CHSLD.',
     cd_titre: 'Dossier hospitalier', cd_simulation: 'SIMULATION — système hospitalier simulé, fiches fictives (démonstration seulement)', cd_aucune_recherche: 'Aucune recherche ; la préalerte continue avec son numéro temporaire.',
     cd_rechercher: 'Rechercher le dossier', cd_confirmee: 'Correspondance confirmée', cd_incertaine: 'Correspondance incertaine : vérifiez et choisissez la fiche (jamais automatique).', cd_choisir: 'C’est ce dossier',
