@@ -5,7 +5,7 @@ const TYPE_DEMANDE={demo:'Démonstration',devis:'Devis',contact:'Contact'};
 const PAYS_DEMANDE={canada:'Canada',europe:'Europe',afrique:'Afrique',autre:'Autre'};
 const LANGUE_CONTACT={fr:'français',en:'anglais',es:'espagnol',pt:'portugais',ar:'arabe',de:'allemand',it:'italien',zh:'chinois',ht:'créole haïtien',autre:'autre langue'};
 const MOTIF_REJET={pourriel:'Pourriel',hors_cible:'Hors cible',doublon:'Doublon',autre:'Autre'};
-const MODULE_INTERET={lits_urgence:'Lits et urgence',hebergement:'Hébergement',secours:'Secours',transferts:'Transferts',reseau:'Réseau et pilotage',integration:'Intégration',indecis:'Pas encore décidé'};
+const MODULE_INTERET={lits_urgence:'Lits et urgence',hebergement:'Hébergement',secours:'Secours',transferts:'Transferts',reseau:'Réseau et indicateurs',integration:'Intégration',indecis:'Pas encore décidé'};
 const ETAPE_CRM={prospect:'Prospect',contacte:'Contacté',demo_planifiee:'Démo planifiée',devis_envoye:'Devis envoyé',gagne:'Gagné',perdu:'Perdu'};
 const ENVOI_DEMANDE={en_attente:'en file',envoi:'envoi en cours',envoye:'envoyé',abandonne:'non distribué'};
 const nomPaysDemande=(c)=>{try{return new Intl.DisplayNames(['fr'],{type:'region'}).of(c)||c;}catch{return c;}};
