@@ -266,7 +266,7 @@ test('préparation : OG propose le service selon les règles de l’hôpital, l�
   // Synthèse d'OG : capacité de l'urgence (civières des tests précédents), priorité immédiate non prise en compte ; aucune donnée clinique
   // (la position de l'unité a été partagée il y a moins de 10 min dans le premier test)
   assert.deepStrictEqual(f.synthese.map((x) => x.code).sort(), ['capacite_urgence', 'immediate_non_prise_en_compte']);
-  assert.deepStrictEqual(f.synthese.find((x) => x.code === 'capacite_urgence'), { code: 'capacite_urgence', niveau: 'vert', civieres_libres: 2 });
+  assert.deepStrictEqual(f.synthese.find((x) => x.code === 'capacite_urgence'), { code: 'capacite_urgence', niveau: 'vert', civieres_libres: 1 });  // priorité immédiate : une des 2 civières est réservée aussitôt (parcours final)
   // L'ambulance ne voit ni la synthèse hospitalière ni d'information interne de l'hôpital
   const amb = (await appel('para', 'GET', `/secours/prealertes/${c.corps.id}`)).corps;
   assert.strictEqual(amb.synthese, undefined);
@@ -686,6 +686,69 @@ test('hébergement : urgences proches (capacités globales), type d’urgence et
   assert.deepStrictEqual([d.etat_vehicule, Boolean(d.prealerte.arrivee_confirmee_le)], ['a_l_hopital', true]);
   // Changement de destination : le suivi du transport suit la nouvelle préalerte
   await action('bouchard', pa.corps, { etablissement_id: ids.sl, action: 'confirmer_remise' });
+});
+
+test('parcours final : demande du CCS, confirmation rapide qui ne bloque jamais, civière réservée, arrivée et installation, profil en démo seulement', async () => {
+  const rs = require('../src/reservations');
+  const u5 = (await pool.query("INSERT INTO unites_secours (organisation_id, numero, plaque) VALUES ($1, '12-50', 'FICT 050') RETURNING id", [ids.ambA])).rows[0].id;
+  const u6 = (await pool.query("INSERT INTO unites_secours (organisation_id, numero, plaque) VALUES ($1, '12-60', 'FICT 060') RETURNING id", [ids.ambA])).rows[0].id;
+  await pool.query("INSERT INTO civieres (etablissement_id, code) VALUES ($1, 'RES-1'), ($1, 'RES-2')", [ids.sl]);
+  // Profil minimal : refusé hors démonstration
+  const profil = { tranche_age: '80+', sexe: 'F', signes: ['chute', 'douleur_thoracique'] };
+  assert.strictEqual((await appel('ccs', 'POST', '/secours/prealertes', { unite_id: u5, destination_id: ids.sl, priorite: 'urgente', categorie: 'cardiaque', delai_min: 12, profil })).corps.code, 'profil_reserve_demo');
+  const avant = process.env.ARRIMO_ENV; process.env.ARRIMO_ENV = 'demo';
+  let pa;
+  try {
+    assert.strictEqual((await appel('ccs', 'POST', '/secours/prealertes', { unite_id: u5, destination_id: ids.sl, priorite: 'urgente', categorie: 'cardiaque', profil: { signes: ['texte libre'] } })).statut, 400, 'listes fermées');
+    // Le CCS envoie la demande pour une unité de sa région (jamais d'une autre région)
+    const r = await appel('ccs', 'POST', '/secours/prealertes', { unite_id: u5, destination_id: ids.sl, priorite: 'urgente', categorie: 'cardiaque', delai_min: 12, profil });
+    assert.strictEqual(r.statut, 200, JSON.stringify(r.corps)); pa = r.corps;
+  } finally { if (avant == null) delete process.env.ARRIMO_ENV; else process.env.ARRIMO_ENV = avant; }
+  // L'hôpital voit le profil (listes fermées) et la demande en attente ; l'ambulance et le CCS voient la confirmation, jamais le profil
+  let h = (await appel('bouchard', 'GET', `/secours/prealertes?etablissement_id=${ids.sl}`)).corps.prealertes.find((x) => x.id === pa.id);
+  assert.deepStrictEqual(h.profil, { tranche_age: '80+', sexe: 'F', signes: ['chute', 'douleur_thoracique'] });
+  assert.strictEqual(h.confirmation.statut, 'en_attente'); assert.strictEqual(h.confirmation.delai_s, 60);
+  const vueAmb = (await appel('para', 'GET', '/secours/prealertes')).corps.prealertes.find((x) => x.id === pa.id);
+  assert.ok(vueAmb.confirmation && !vueAmb.profil, 'profil réservé à l’hôpital');
+  assert.ok(!(await pool.query("SELECT 1 FROM journal WHERE detail ILIKE '%80+%' OR detail ILIKE '%chute%'")).rowCount, 'aucun profil au journal');
+  // Réorienter exige un motif ; accepter réserve une civière, qui ne peut être donnée à un autre patient
+  assert.strictEqual((await appel('bouchard', 'POST', `/secours/prealertes/${pa.id}/reponse`, { etablissement_id: ids.sl, reponse: 'reorienter' })).corps.code, 'motif_requis_reorientation');
+  let rep = await appel('bouchard', 'POST', `/secours/prealertes/${pa.id}/reponse`, { etablissement_id: ids.sl, reponse: 'accepter' });
+  assert.strictEqual(rep.corps.statut, 'acceptee'); assert.ok(rep.corps.delai_reponse_s >= 0);
+  h = (await appel('bouchard', 'GET', `/secours/prealertes?etablissement_id=${ids.sl}`)).corps.prealertes.find((x) => x.id === pa.id);
+  assert.strictEqual(h.reservation.statut, 'reservee'); const civ = h.reservation.civiere_id;
+  const civCode = h.reservation.civiere;
+  const autre = await appel('bouchard', 'POST', `/civieres/${civ}/action`, { action: 'placer', patient_ref: 'P-77777' });
+  assert.strictEqual(autre.corps.code, 'civiere_reservee', JSON.stringify(autre.corps));
+  assert.strictEqual((await appel('bouchard', 'POST', `/secours/prealertes/${pa.id}/reponse`, { etablissement_id: ids.sl, reponse: 'accepter' })).corps.code, 'confirmation_close');
+  // Sans réponse dans le délai : acceptée, transport poursuivi, civière réservée
+  const pb = (await appel('para', 'POST', '/secours/prealertes', { unite_id: u6, destination_id: ids.sl, priorite: 'non_urgente', categorie: 'medicale', delai_min: 20 })).corps;
+  await pool.query("UPDATE prealerte_confirmations SET echeance = now() - interval '1 second' WHERE prealerte_id = $1", [pb.id]);
+  assert.ok(await rs.echeances(pool) >= 1);
+  const vb = (await appel('ccs', 'GET', '/secours/prealertes')).corps.prealertes.find((x) => x.id === pb.id);
+  assert.deepStrictEqual([vb.confirmation.statut, vb.reservation.statut], ['sans_reponse', 'reservee']);
+  assert.notStrictEqual(vb.reservation.civiere_id, civ, 'deux réservations, deux civières');
+  // Réorienter après coup : la réservation est libérée et OG propose une autre urgence ; rien n'est bloqué
+  rep = await appel('bouchard', 'POST', `/secours/prealertes/${pb.id}/reponse`, { etablissement_id: ids.sl, reponse: 'reorienter', motif: 'scanner_indisponible' });
+  assert.deepStrictEqual([rep.corps.statut, rep.corps.motif], ['reorientee', 'scanner_indisponible']);
+  await appel('para', 'POST', `/secours/unites/${u6}/position`, { latitude: 45.45, longitude: -73.6 });
+  const alt = (await appel('para', 'GET', `/secours/prealertes/${pb.id}/alternative`)).corps;
+  assert.ok(alt.urgences.every((x) => x.id !== ids.sl)); assert.strictEqual(alt.og.id, ids.mb);
+  assert.ok((await pool.query("SELECT 1 FROM journal WHERE action = 'Préalerte réorientée' AND detail LIKE $1", [`${pb.numero}%scanner_indisponible`])).rowCount, 'motif et délai au journal');
+  // Priorité immédiate : aucune attente, hôpital averti, civière réservée aussitôt
+  await action('para', pb, { action: 'annuler' });
+  const pc = (await appel('para', 'POST', '/secours/prealertes', { unite_id: u6, destination_id: ids.mb, priorite: 'immediate', categorie: 'traumatologie', delai_min: 5 })).corps;
+  const vc = (await appel('tremblay', 'GET', `/secours/prealertes?etablissement_id=${ids.mb}`)).corps.prealertes.find((x) => x.id === pc.id);
+  assert.strictEqual(vc.confirmation.statut, 'avertie'); assert.ok(['reservee', 'sans_civiere'].includes(vc.reservation.statut));
+  // Arrivée : bon véhicule, patient installé sur la civière réservée (référence patient), puis la civière est occupée
+  await action('bouchard', pa, { etablissement_id: ids.sl, action: 'confirmer_vehicule', unite_numero: '12-50' });
+  const inst = await appel('bouchard', 'POST', `/secours/prealertes/${pa.id}/installer`, { etablissement_id: ids.sl, patient_ref: 'P-50001' });
+  assert.strictEqual(inst.statut, 200, JSON.stringify(inst.corps)); assert.deepStrictEqual([inst.corps.civiere, inst.corps.patient_ref], [civCode, 'P-50001']);
+  assert.strictEqual((await pool.query('SELECT etat FROM civieres WHERE id = $1', [civ])).rows[0].etat, 'occupee');
+  const hist = (await appel('bouchard', 'GET', `/secours/prealertes/${pa.id}?etablissement_id=${ids.sl}`)).corps.evenements.map((e) => e.type);
+  for (const t of ['envoyee', 'acceptee_hopital', 'civiere_reservee', 'patient_installe']) assert.ok(hist.includes(t), t);
+  // Flux en direct : réservé aux comptes connectés
+  assert.strictEqual((await fetch(`${base}/api/flux`)).status, 401);
 });
 
 test('SH et connexions externes : organisation de secours et profils, modules un par un, FHIR R4, HL7 v2, webhooks signés ; client par client, secrets remis, révocables', async () => {

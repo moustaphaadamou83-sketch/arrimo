@@ -30,6 +30,7 @@ async function fixer(c, uniteId, etat, { destinationId = null, source = 'equipag
   [uniteId, etat, dest, source, utilisateurId])).rows[0];
   await c.query('INSERT INTO etat_vehicule_evenements (unite_id, etat, destination_id, source, utilisateur_id) VALUES ($1, $2, $3, $4, $5)',
     [uniteId, etat, dest, source, utilisateurId]);
+  require('./flux').signaler();
   return r;
 }
 

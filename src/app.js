@@ -478,6 +478,11 @@ function creerApp(pool, options = {}) {
   const vh = require('./vehicules');
   api.get('/secours/vehicules', route((req) => vh.liste(pool, req.utilisateur)));
   api.get('/secours/hebergements', route((req) => vh.hebergements(pool, req.utilisateur)));
+  const rs = require('./reservations');
+  api.post('/secours/prealertes/:id/reponse', route((req) => rs.repondre(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
+  api.post('/secours/prealertes/:id/installer', route((req) => rs.installer(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
+  api.get('/secours/prealertes/:id/alternative', route((req) => rs.alternative(pool, req.utilisateur, entier(req.params.id, 'id'))));
+  api.get('/secours/listes', route(() => ({ motifs: rs.MOTIFS, tranches: rs.TRANCHES, sexes: rs.SEXES, signes: rs.SIGNES, delai_s: rs.delai(), profil: require('./environnement').estDemo() })));
   api.get('/secours/urgences-classees', route((req) => vh.urgencesClassees(pool, req.utilisateur, req.query)));
   api.post('/secours/unites/:id/etat', route((req) => vh.definir(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   // Établissements d'hébergement : urgences proches (capacités globales seulement)
@@ -607,6 +612,8 @@ function creerApp(pool, options = {}) {
     return r;
   }));
 
+  // Mise à jour en direct (SSE) : hors du routeur API pour ne pas retenir la remise à zéro de la démo
+  app.get('/api/flux', exigerSession(pool), (req, res) => require('./flux').brancher(req, res));
   app.use('/api', api);
 
   // Erreurs : message clair pour l'utilisateur, détail technique seulement dans les journaux du serveur

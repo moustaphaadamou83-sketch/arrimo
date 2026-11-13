@@ -1560,3 +1560,40 @@ CREATE TABLE IF NOT EXISTS eta_prealertes (
   position_le   timestamptz NOT NULL,
   calcule_le    timestamptz NOT NULL DEFAULT now()
 );
+
+-- Parcours final du préhospitalier (décision de Moustafa, 13 nov. 2026) : demande de réservation de civière, confirmation rapide
+-- de l'hôpital qui ne bloque JAMAIS un transport, civière réservée, arrivée sur la civière réservée. Nouvelles tables seulement.
+-- Confirmation rapide : 60 s par défaut (ARRIMO_SECOURS_DELAI_REPONSE_S) ; sans réponse = acceptée ; priorité immédiate = hôpital averti, aucune attente.
+CREATE TABLE IF NOT EXISTS prealerte_confirmations (
+  prealerte_id      int PRIMARY KEY REFERENCES prealertes(id),
+  statut            text NOT NULL CHECK (statut IN ('en_attente', 'acceptee', 'reorientee', 'sans_reponse', 'avertie')),
+  delai_s           int  NOT NULL CHECK (delai_s BETWEEN 0 AND 600),
+  echeance          timestamptz NOT NULL,
+  motif             text CHECK (motif IS NULL OR motif IN ('delestage', 'scanner_indisponible', 'service_ferme', 'autre')),
+  repondu_le        timestamptz,
+  repondu_par       int REFERENCES utilisateurs(id),
+  delai_reponse_s   int,
+  cree_le           timestamptz NOT NULL DEFAULT now()
+);
+-- Civière réservée pour une préalerte : la civière reste « libre » dans son état, mais ne peut être donnée à un autre patient
+-- (refus dans src/regles.js) et n'est plus comptée comme libre. Installation du patient à l'arrivée, puis admission en lit.
+CREATE TABLE IF NOT EXISTS reservations_civieres (
+  prealerte_id   int PRIMARY KEY REFERENCES prealertes(id),
+  etablissement_id int NOT NULL REFERENCES etablissements(id),
+  civiere_id     int REFERENCES civieres(id),
+  statut         text NOT NULL CHECK (statut IN ('reservee', 'sans_civiere', 'installee', 'liberee')),
+  reservee_le    timestamptz NOT NULL DEFAULT now(),
+  installee_le   timestamptz,
+  liberee_le     timestamptz,
+  version        int NOT NULL DEFAULT 1
+);
+CREATE UNIQUE INDEX IF NOT EXISTS reservations_civiere_active ON reservations_civieres (civiere_id) WHERE statut = 'reservee';
+-- Profil minimal transmis à l'hôpital (démonstration seulement, décision du 6 nov. 2026) : listes fermées, jamais de nom ni de texte libre ;
+-- jamais dans le journal, les notifications, ni pour l'entretien.
+CREATE TABLE IF NOT EXISTS prealerte_profils (
+  prealerte_id  int PRIMARY KEY REFERENCES prealertes(id),
+  tranche_age   text CHECK (tranche_age IS NULL OR tranche_age IN ('0-17', '18-39', '40-64', '65-79', '80+')),
+  sexe          text CHECK (sexe IS NULL OR sexe IN ('F', 'M', 'X')),
+  signes        text[] NOT NULL DEFAULT '{}',
+  cree_le       timestamptz NOT NULL DEFAULT now()
+);

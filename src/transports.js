@@ -82,6 +82,7 @@ async function demander(pool, u, coordinationId, b) {
     // L'établissement de destination est averti qu'un transport est demandé pour cette coordination
     await require('./services').notifier(c, co.destination_id, null, 'transport_demande', { numero: d.numero, coordination: co.numero, ref: co.resident_ref, org: org.nom });
     await emettre(c, d, 'transport.demandee');
+    require('./flux').signaler();
     return d;
   });
 }
@@ -166,6 +167,7 @@ async function agir(pool, u, id, b) {
     }
     await evenement(c, n, a, u, detail);
     await emettre(c, n, `transport.${a}`);
+    require('./flux').signaler();
     const co = (await c.query('SELECT numero FROM coordinations WHERE id = $1', [n.coordination_id])).rows[0];
     for (const etab of [n.origine_id, n.destination_id]) {
       await journaliser(c, { etablissementId: etab, utilisateurId: u.id || null, action: ACTIONS_JOURNAL[a], detail: `${n.numero} · ${co.numero}` });

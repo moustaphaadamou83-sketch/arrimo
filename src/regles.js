@@ -210,6 +210,14 @@ async function changerEtatCiviere(client, pool, utilisateurId, civiereId, nouvea
     refuser(409, `Transition interdite : ${ETATS_CIVIERE[cv.etat]} → ${ETATS_CIVIERE[nouveau]}`,
       'transition_interdite', { code: cv.code, de_etat: cv.etat, vers_etat: nouveau });
   }
+  // Civière réservée pour une ambulance (préalerte confirmée) : jamais donnée à un autre patient ni retirée du service
+  if (cv.etat === 'libre' && ['occupee', 'indispo'].includes(nouveau)) {
+    const res = (await client.query(`SELECT r.prealerte_id, p.numero FROM reservations_civieres r JOIN prealertes p ON p.id = r.prealerte_id
+      WHERE r.civiere_id = $1 AND r.statut = 'reservee'`, [cv.id])).rows[0];
+    if (res && opts.reservationPrealerte !== res.prealerte_id) {
+      refuser(409, `Civière réservée pour la préalerte ${res.numero}`, 'civiere_reservee', { code: cv.code, numero: res.numero });
+    }
+  }
   // Un patient qui attend encore un lit ne quitte pas sa civière sans que sa demande soit réglée
   if (cv.etat === 'occupee' && !opts.depuisDemande) {
     const d = await client.query(`SELECT id FROM demandes_admission WHERE civiere_id = $1 AND statut IN ('attente', 'assignee')`, [cv.id]);

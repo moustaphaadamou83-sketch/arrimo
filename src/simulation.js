@@ -31,6 +31,8 @@ async function simuler(pool) {
         AND NOT EXISTS (SELECT 1 FROM utilisateur_etablissements ue WHERE ue.etablissement_id = e.id)
       GROUP BY e.id`, [Object.keys(cibles)]);
   let changements = 0;
+  const codes = etabs.map((x) => x.code).sort();
+  const roles = new Map(codes.map((c, i) => [c, i === 0 ? 'saturee' : i <= 2 ? 'limitee' : 'normale']));
   for (const e of etabs) {
     const cible = typeof cibles[e.code] === 'object' ? cibles[e.code] : { lits: cibles[e.code] };
     const occ = e.dotes ? (e.dotes - e.libres) / e.dotes : 0;
@@ -52,11 +54,26 @@ async function simuler(pool) {
       })) changements += 1;
     }
     // 3. Urgence : un patient arrive sur civière, ou en part (sans demande de lit en cours) ; civières nettoyées
-    const civ = (await pool.query(`SELECT count(*) FILTER (WHERE etat = 'occupee')::int AS occ FROM civieres WHERE etablissement_id = $1`, [e.id])).rows[0];
+    const civ = (await pool.query(`SELECT count(*) FILTER (WHERE etat = 'occupee')::int AS occ, count(*) FILTER (WHERE etat <> 'indispo')::int AS total FROM civieres WHERE etablissement_id = $1`, [e.id])).rows[0];
     const civNet = (await pool.query(`SELECT id FROM civieres WHERE etablissement_id = $1 AND etat = 'nettoyage' AND etat_depuis < now() - interval '10 minutes' LIMIT 1`, [e.id])).rows[0];
     if (civNet && await tenter(pool, (c) => changerEtatCiviere(c, pool, null, civNet.id, 'libre', { detail: DETAIL }))) changements += 1;
-    const civCible = cible.civ ?? civ.occ;
-    if (civ.occ < civCible || (civ.occ === civCible && Math.random() < 0.5)) {
+    // Réseau réaliste (décision de Moustafa, 13 nov. 2026) : la plupart des urgences gardent des civières libres (40 % environ),
+    // deux sont en capacité limitée (une civière libre) et une seule est saturée. Rôle fixe par ordre des codes : stable d'un tour à l'autre.
+    const role = roles.get(e.code);
+    const civCible = role === 'saturee' ? civ.total : role === 'limitee' ? Math.max(0, civ.total - 1) : Math.max(0, Math.min(Math.round(civ.total * 0.6), civ.total - 2));
+    // Écart important (démo remise à niveau) : jusqu'à 3 mouvements par tour pour converger vite
+    const pas = Math.min(3, Math.max(1, Math.abs(civ.occ - civCible)));
+    for (let k = 1; k < pas; k += 1) {
+      if (civ.occ > civCible) {
+        const part = (await pool.query(`SELECT cv.id FROM civieres cv WHERE cv.etablissement_id = $1 AND cv.etat = 'occupee'
+          AND NOT EXISTS (SELECT 1 FROM demandes_admission d WHERE d.civiere_id = cv.id AND d.statut IN ('attente', 'assignee')) ORDER BY cv.arrivee_le LIMIT 1`, [e.id])).rows[0];
+        if (part && await tenter(pool, (c) => changerEtatCiviere(c, pool, null, part.id, 'nettoyage', { detail: DETAIL }))) changements += 1;
+      } else {
+        const libre = (await pool.query(`SELECT id FROM civieres WHERE etablissement_id = $1 AND etat = 'libre' ORDER BY categorie DESC, code LIMIT 1`, [e.id])).rows[0];
+        if (libre && await tenter(pool, (c) => changerEtatCiviere(c, pool, null, libre.id, 'occupee', { patientRef: reference(), detail: DETAIL }))) changements += 1;
+      }
+    }
+    if (civ.occ < civCible || (civ.occ === civCible && Math.random() < 0.3 && civ.occ < civ.total - 2 && role !== 'saturee')) {
       const libre = (await pool.query(`SELECT id FROM civieres WHERE etablissement_id = $1 AND etat = 'libre' ORDER BY categorie DESC, code LIMIT 1`, [e.id])).rows[0];
       if (libre && await tenter(pool, (c) => changerEtatCiviere(c, pool, null, libre.id, 'occupee', { patientRef: reference(), detail: DETAIL }))) changements += 1;
     } else {

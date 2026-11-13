@@ -33,6 +33,12 @@ async function organisationsDe(db, u) {
   return (await db.query(`SELECT o.id, o.type, o.profils, o.config_id FROM utilisateur_organisations uo JOIN organisations_secours o ON o.id = uo.organisation_id
     WHERE uo.utilisateur_id = $1 AND o.actif`, [u.id])).rows;
 }
+/** Entreprises ambulancières de la région d'un CCS (même profil de pays). */
+async function organisationsAmbulanceRegion(db, u) {
+  const cfg = (await organisationsDe(db, u)).filter((o) => (o.profils || []).includes('ccs')).map((o) => o.config_id);
+  if (!cfg.length) throw new ErreurHttp(403, 'organisation_interdite');
+  return (await db.query("SELECT id, type, profils, config_id FROM organisations_secours WHERE actif AND 'ambulance' = ANY(profils) AND config_id = ANY($1)", [cfg])).rows;
+}
 async function exigerAmbulance(db, u) {
   if (!ROLES_AMBULANCE.includes(u.role)) throw new ErreurHttp(403, 'role_insuffisant');
   const orgs = (await organisationsDe(db, u)).filter((o) => (o.profils || []).includes('ambulance'));
@@ -96,7 +102,8 @@ async function numero(c) { return `PA-${String((await c.query("SELECT nextval('p
 
 /** Préalerte transmise par une équipe ambulancière. `cle` : identifiant d'envoi du poste (renvoi après coupure = même préalerte). */
 async function creer(pool, u, b) {
-  const orgs = await exigerAmbulance(pool, u);
+  // CCS (parcours final, 13 nov. 2026) : demande de réservation pour une unité d'une entreprise de sa région ; ambulance : son organisation
+  const orgs = ROLES_CCS.includes(u.role) ? await organisationsAmbulanceRegion(pool, u) : await exigerAmbulance(pool, u);
   const priorite = String(b.priorite || ''); const categorie = String(b.categorie || '');
   if (!PRIORITES.includes(priorite) || !CATEGORIES.includes(categorie)) throw new ErreurHttp(400, 'prealerte_invalide');
   const cle = b.cle == null || b.cle === '' ? null : String(b.cle);
@@ -120,7 +127,7 @@ async function creer(pool, u, b) {
     }
     const ouverte = (await c.query(`SELECT numero FROM prealertes WHERE unite_id = $1 AND statut = ANY($2)`, [unite.id, OUVERTES])).rows[0];
     if (ouverte) throw new ErreurHttp(409, 'prealerte_deja_ouverte', { numero: ouverte.numero });
-    const equipage = await lireEquipage(c, b.equipage, unite.organisation_id, u);
+    const equipage = ROLES_CCS.includes(u.role) ? [] : await lireEquipage(c, b.equipage, unite.organisation_id, u);
     const mission = b.mission_externe == null || b.mission_externe === '' ? null : String(b.mission_externe).slice(0, 64);
     const pa = (await c.query(`INSERT INTO prealertes (numero, organisation_id, unite_id, destination_id, priorite, categorie, equipage, heure_prevue, cle_idempotence, cree_par, mission_externe, connecteur_id, demande_transport_id)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
@@ -132,6 +139,7 @@ async function creer(pool, u, b) {
     }
     await vehicules.fixer(c, unite.id, 'transport_hopital', { destinationId: dest.id, source: 'prealerte', utilisateurId: u.id || null });
     const pr = await proposerService(c, pa);
+    await require('./reservations').ouvrir(c, pa, u, b.profil);
     await journaliser(c, { etablissementId: dest.id, utilisateurId: u.id || null, action: 'Préalerte reçue', detail: `${pa.numero} · ${priorite}` });
     await notifier(c, dest.id, priorite === 'immediate' ? 'secours_prealerte_prioritaire' : 'secours_prealerte', pa, { priorite });
     await emettre(c, pr, 'prealerte.envoyee');
@@ -182,9 +190,10 @@ async function liste(pool, u, q = {}) {
   const urg = ROLES_HOPITAL.includes(u.role) ? await urgenceAvecDeclaration(pool, args[0]) : null;
   const cs = require('./correspondance-simulee');
   const out = [];
+  const rv = await require('./reservations').vue(pool, rows.map((p) => p.id), { hopital: ROLES_HOPITAL.includes(u.role) });
   for (const p of rows) {
-    out.push(ROLES_HOPITAL.includes(u.role) ? { ...sansCorrespondance(p), actions: actions(p, u), etat_preparation: etatPreparation(p), synthese: synthese(p, urg), correspondance: await cs.pourHopital(pool, p) }
-      : { ...sansCorrespondance(p), actions: actions(p, u), etat_preparation: etatPreparation(p) });
+    out.push(ROLES_HOPITAL.includes(u.role) ? { ...sansCorrespondance(p), ...rv.get(p.id), actions: actions(p, u), etat_preparation: etatPreparation(p), synthese: synthese(p, urg), correspondance: await cs.pourHopital(pool, p) }
+      : { ...sansCorrespondance(p), ...rv.get(p.id), actions: actions(p, u), etat_preparation: etatPreparation(p) });
   }
   return { prealertes: out, priorites: PRIORITES, categories: CATEGORIES };
 }
@@ -206,7 +215,7 @@ async function fiche(pool, u, id, q = {}) {
     WHERE ev.prealerte_id = $1 ORDER BY ev.id`, [pa0.id])).rows;
   const urg = ROLES_HOPITAL.includes(u.role) ? await urgenceAvecDeclaration(pool, p.destination_id) : null;
   const hop = ROLES_HOPITAL.includes(u.role);
-  return { ...sansCorrespondance(p), actions: actions(p, u), etat_preparation: etatPreparation(p),
+  return { ...sansCorrespondance(p), ...(await require('./reservations').vue(pool, [p.id], { hopital: hop })).get(p.id), actions: actions(p, u), etat_preparation: etatPreparation(p),
     ...(hop ? { synthese: synthese(p, urg), correspondance: await require('./correspondance-simulee').pourHopital(pool, p) } : {}), evenements };
 }
 async function exigerVisibilite(db, u, pa, etabId) {
@@ -332,6 +341,7 @@ async function agir(pool, u, id, b) {
         await notifier(c, pa.destination_id, 'secours_arrivee', n);
       } else if (a === 'annuler') {
         n = await maj("statut = 'annulee'");
+        await require('./reservations').liberer(c, pa.id, u.id || null, 'annulee');
         await notifier(c, pa.destination_id, 'secours_annulee', n);
       } else if (a === 'changer_destination') {
         return changerDestination(c, u, pa, b);
@@ -373,6 +383,7 @@ async function agir(pool, u, id, b) {
       } else if (a === 'confirmer_remise') {
         if (pa.statut !== 'arrivee') throw new ErreurHttp(409, 'prealerte_statut_incompatible');
         n = await maj("remise_le = now(), cloturee_le = now(), statut = 'cloturee'");
+        await require('./reservations').liberer(c, pa.id, u.id || null, 'remise_sans_installation');
       } else if (a === 'signaler_probleme') {
         const motif = String(b.probleme || '');
         if (!PROBLEMES.includes(motif)) throw new ErreurHttp(400, 'prealerte_invalide');
@@ -384,7 +395,7 @@ async function agir(pool, u, id, b) {
     await emettre(c, n, `prealerte.${a}`);
     await journaliser(c, { etablissementId: n.destination_id, utilisateurId: u.id || null, action: ACTIONS_JOURNAL[a] || 'Préalerte mise à jour', detail: n.numero });
     return { ...n, correspond: a === 'confirmer_vehicule' ? true : undefined };
-  });
+  }).finally(() => require('./flux').signaler());
 }
 /** Changement de destination décidé par les professionnels : l'ancienne est conservée (remplacée), la nouvelle est transmise. */
 async function changerDestination(c, u, pa, b) {
@@ -398,6 +409,8 @@ async function changerDestination(c, u, pa, b) {
   await evenement(c, ancienne, 'destination_modifiee', u, { nouvelle: nv.numero, destination: dest.id });
   await evenement(c, nv, 'envoyee', u, { remplace: pa.numero, destination: dest.id, priorite: nv.priorite, categorie: nv.categorie, heure_prevue: heure });
   await proposerService(c, nv);
+  await require('./reservations').liberer(c, pa.id, u.id || null, 'destination_modifiee');
+  await require('./reservations').ouvrir(c, nv, u, null);
   await vehicules.fixer(c, pa.unite_id, 'transport_hopital', { destinationId: dest.id, source: 'prealerte', utilisateurId: u.id || null });
   await journaliser(c, { etablissementId: pa.destination_id, utilisateurId: u.id || null, action: 'Destination de préalerte modifiée', detail: `${pa.numero} → ${nv.numero}` });
   await journaliser(c, { etablissementId: dest.id, utilisateurId: u.id || null, action: 'Préalerte reçue', detail: `${nv.numero} · ${nv.priorite}` });
@@ -488,6 +501,7 @@ async function position(pool, u, uniteId, b) {
   const precision = b.precision_m == null ? null : Math.max(0, Math.round(Number(b.precision_m)) || 0);
   await pool.query('INSERT INTO positions_unites (unite_id, latitude, longitude, precision_m) VALUES ($1, $2, $3, $4)', [un.id, lat, lon, precision]);
   const eta = await recalculerEta(pool, un.id, { latitude: lat, longitude: lon });
+  require('./flux').signaler();
   return { enregistree: true, ...(eta ? { eta } : {}) };
 }
 /**
@@ -513,4 +527,4 @@ async function purgerPositions(pool) {
   return (await pool.query("DELETE FROM positions_unites WHERE enregistree_le < now() - interval '24 hours'")).rowCount;
 }
 
-module.exports = { recalculerEta, creer, liste, fiche, agir, unites, destinations, declarerUrgence, statutUrgence, declaration, servicesHopital, etatPreparation, synthese, position, purgerPositions, PRIORITES, CATEGORIES, OUVERTES, ROLES_SECOURS, ROLES_AMBULANCE, ROLES_CCS };
+module.exports = { exigerVisibilite, recalculerEta, creer, liste, fiche, agir, unites, destinations, declarerUrgence, statutUrgence, declaration, servicesHopital, etatPreparation, synthese, position, purgerPositions, PRIORITES, CATEGORIES, OUVERTES, ROLES_SECOURS, ROLES_AMBULANCE, ROLES_CCS };

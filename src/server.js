@@ -46,6 +46,8 @@ setInterval(() => require('./webhooks').envoyer(pool).catch((e) => console.error
 // Remises de secrets expirées : contenu chiffré effacé
 setInterval(() => require('./remises').purger(pool).catch((e) => console.error('Remises de secrets :', e.code || e.name)), 60 * 60000).unref();
 // Positions des unités de secours : conservées 24 h au plus
+// Confirmation rapide des préalertes : sans réponse dans le délai, la demande est acceptée et la civière réservée
+setInterval(() => require('./reservations').echeances(pool).catch((e) => console.error('Confirmation rapide :', e.code || e.name)), 5000).unref();
 setInterval(() => require('./prealertes').purgerPositions(pool).catch((e) => console.error('Positions des unités :', e.code || e.name)), 60 * 60000).unref();
 setInterval(() => require('./portail-notifications').envoyer(pool).catch((e) => console.error('Notifications du portail :', e.code || e.name)), 60000).unref();
 
