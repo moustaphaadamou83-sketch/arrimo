@@ -748,7 +748,7 @@ test('parcours final : demande du CCS, confirmation rapide qui ne bloque jamais,
   const hist = (await appel('bouchard', 'GET', `/secours/prealertes/${pa.id}?etablissement_id=${ids.sl}`)).corps.evenements.map((e) => e.type);
   for (const t of ['envoyee', 'acceptee_hopital', 'civiere_reservee', 'patient_installe']) assert.ok(hist.includes(t), t);
   // Flux en direct : réservé aux comptes connectés
-  assert.strictEqual((await fetch(`${base}/api/flux`)).status, 401);
+  assert.strictEqual((await fetch(`${base}/api/flux`)).status, 204, 'sans session : rien n’est diffusé');
 });
 
 test('Arrimo Connect v1 (parcours final) : état des véhicules reçu, disponibilité renvoyée, confirmation lue ; webhooks des confirmations', async () => {

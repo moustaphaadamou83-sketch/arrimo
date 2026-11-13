@@ -19,7 +19,7 @@ function signaler() {
 }
 
 function brancher(req, res) {
-  if (!ROLES.includes(req.utilisateur.role)) { res.status(403).json({ code: 'role_insuffisant' }); return; }
+  if (!ROLES.includes(req.utilisateur.role)) { res.status(204).end(); return; }
   res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
   res.write('retry: 5000\n\n');
   const envoyer = (t) => res.write(`event: secours\ndata: ${t}\n\n`);

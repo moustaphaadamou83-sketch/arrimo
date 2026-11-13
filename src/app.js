@@ -613,7 +613,9 @@ function creerApp(pool, options = {}) {
   }));
 
   // Mise à jour en direct (SSE) : hors du routeur API pour ne pas retenir la remise à zéro de la démo
-  app.get('/api/flux', exigerSession(pool), (req, res) => require('./flux').brancher(req, res));
+  // Session absente ou expirée (démo remise à zéro…) : 204 sans contenu, l'écran cesse d'écouter sans erreur affichée
+  const sessionFlux = exigerSession(pool);
+  app.get('/api/flux', (req, res) => sessionFlux(req, res, (err) => (err ? res.status(204).end() : require('./flux').brancher(req, res))));
   app.use('/api', api);
 
   // Erreurs : message clair pour l'utilisateur, détail technique seulement dans les journaux du serveur

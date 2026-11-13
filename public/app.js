@@ -642,10 +642,13 @@ setInterval(() => {
 // Mise à jour en direct (SSE) des écrans du préhospitalier : Liaison Secours, urgences proches et suivi des transports, urgence
 let fluxApp = null;
 setInterval(() => {
+  // Nouvelle session (reconnexion, autre compte) : un nouveau flux ; l'ancien s'arrête
+  if (fluxApp && (fluxApp.fini || fluxApp.jeton !== etat.token)) { fluxApp.arreter(); fluxApp = null; }
   if (etat.token && etat.moi && !fluxApp && window.ArrimoFlux) {
     fluxApp = window.ArrimoFlux.ecouter(() => etat.token, () => {
       if ($('#modale').hidden && document.visibilityState === 'visible' && ['secours', 'c-urgences', 'c-mouvements', 'liaison', 'urgence'].includes(etat.vue)) rafraichir();
     });
+    fluxApp.jeton = etat.token;
   }
   if (!etat.token && fluxApp) { fluxApp.arreter(); fluxApp = null; }
 }, 2000);

@@ -4,12 +4,13 @@
 (() => {
   function ecouter(jeton, surSignal) {
     let arret = false; let attente = 2000; let controle = null;
+    const etat = { fini: false, arreter() { arret = true; controle?.abort(); } };
     async function boucle() {
       while (!arret) {
         try {
           controle = new AbortController();
           const r = await fetch('/api/flux', { headers: { Authorization: `Bearer ${jeton()}` }, signal: controle.signal, cache: 'no-store' });
-          if (r.status === 401 || r.status === 403) return;
+          if (r.status === 204 || r.status === 401 || r.status === 403) { etat.fini = true; return; }
           if (!r.ok || !r.body) throw new Error('flux');
           attente = 2000;
           const lecteur = r.body.getReader(); const dec = new TextDecoder(); let tampon = '';
@@ -29,7 +30,7 @@
       }
     }
     boucle();
-    return { arreter() { arret = true; controle?.abort(); } };
+    return etat;
   }
   window.ArrimoFlux = { ecouter };
 })();
