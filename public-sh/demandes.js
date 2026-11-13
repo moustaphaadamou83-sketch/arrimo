@@ -55,7 +55,7 @@ async function vueDemandes(v){
       ${choix('dm-langue','Langue',Object.entries(LANGUE_CONTACT),f.langue,'Toutes')}${choix('dm-type','Type d’organisation',r.types_organisation.map(t=>[t,t]),f.type_organisation)}${choix('dm-module','Module',Object.entries(MODULE_INTERET),f.module)}
     </div>
     <div class="ligne serre actions-groupees"><span class="note" id="dm-choisies">Aucune demande choisie</span>${f.vue==='a_traiter'?bouton('Marquer traitées','dm-lot-traiter')+bouton('Rejeter','dm-lot-rejeter'):''}${bouton('Attribuer','dm-lot-attribuer')}</div>
-    ${tableSH(['','Demande','Reçue','Type','Organisation','Pays et ville','Langue','Statut'],lignes,f.vue==='a_traiter'?'Aucune demande à traiter.':'Aucune demande archivée.')}
+    <div class="demandes-compactes">${tableSH(['','Demande','Reçue','Type','Organisation','Pays et ville','Langue','Statut'],lignes,f.vue==='a_traiter'?'Aucune demande à traiter.':'Aucune demande archivée.')}</div>
     <div class="ligne serre pagination"><span class="note">${esc(pl('{n|aucune demande|# demande|# demandes}',{n:r.total}))} · page ${esc(r.page)} sur ${esc(pages)}</span>${r.page>1?bouton('Page précédente','dm-prec'):''}${r.page<pages?bouton('Page suivante','dm-suiv'):''}</div>`;
   majCompteurDemandes();
   const recharger=(maj)=>{Object.assign(f,maj,maj.page?{}:{page:1});afficher();};

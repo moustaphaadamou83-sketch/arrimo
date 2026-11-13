@@ -131,3 +131,16 @@ table.compact { min-width: 0; }
 .prospects-colonnes .colonne.survol { outline: 2px dashed #159895; }
 .prospects-colonnes .carte-prospect { background: var(--carte); color: var(--texte); border: 1px solid var(--bordure); border-radius: 10px; padding: 10px; display: grid; gap: 6px; cursor: grab; }
 .prospects-colonnes .carte-prospect select { width: 100%; }
+@media (max-width: 700px) {
+  .demandes-compactes table, .demandes-compactes tbody, .demandes-compactes tr, .demandes-compactes td { display: block; width: auto; }
+  .demandes-compactes thead { display: none; }
+  .demandes-compactes tr[data-ligne] { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; padding: 10px 12px; border-bottom: 1px solid var(--bordure); }
+  .demandes-compactes tr[data-ligne] td { padding: 0; border: 0; grid-column: 2; }
+  .demandes-compactes tr[data-ligne] td:first-child { grid-column: 1; grid-row: 1 / span 7; }
+  .demandes-compactes .demande-detail[hidden] { display: none; }
+  .demandes-compactes .demande-detail > td { padding: 8px; }
+  .demandes-compactes .tableau { overflow-x: visible; }
+  .demandes-compactes table { min-width: 0 !important; }
+  .demandes-compactes .demande-detail .ligne { flex-wrap: wrap; }
+  .demandes-compactes .demande-detail p, .demandes-compactes .demande-detail div { overflow-wrap: anywhere; min-width: 0; }
+}
