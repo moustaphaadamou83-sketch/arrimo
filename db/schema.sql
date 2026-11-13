@@ -1549,3 +1549,14 @@ CREATE TABLE IF NOT EXISTS demande_transport_preferences (
   hopital_prefere_id  int REFERENCES etablissements(id),
   cree_le             timestamptz NOT NULL DEFAULT now()
 );
+
+-- Heure d'arrivée calculée (13 nov. 2026) : recalculée par le routeur (OSRM) à chaque position transmise par l'équipage
+-- (changement d'état, préalerte, « Actualiser », environ chaque minute pendant le transport). Positions conservées 24 h.
+CREATE TABLE IF NOT EXISTS eta_prealertes (
+  prealerte_id  int PRIMARY KEY REFERENCES prealertes(id),
+  minutes       int CHECK (minutes IS NULL OR minutes >= 0),
+  distance_km   numeric(7,1) CHECK (distance_km IS NULL OR distance_km >= 0),
+  source        text NOT NULL CHECK (source IN ('osrm', 'vol_oiseau')),
+  position_le   timestamptz NOT NULL,
+  calcule_le    timestamptz NOT NULL DEFAULT now()
+);

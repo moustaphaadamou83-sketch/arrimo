@@ -153,7 +153,8 @@ const CHAMPS = (k) => `p.*, o.nom AS organisation, un.numero AS unite, un.plaque
   (SELECT nom FROM services WHERE id = p.service_propose_id) AS service_propose, (SELECT nom FROM services WHERE id = p.service_confirme_id) AS service_confirme,
   (SELECT COALESCE(json_agg(us.nom ORDER BY us.nom), '[]') FROM utilisateurs us WHERE us.id = ANY(p.equipage)) AS equipage_noms,
   (SELECT json_build_object('latitude', pu.latitude, 'longitude', pu.longitude, 'precision_m', pu.precision_m, 'le', pu.enregistree_le)
-     FROM positions_unites pu WHERE pu.unite_id = p.unite_id AND p.statut = ANY($${k}) ORDER BY pu.enregistree_le DESC LIMIT 1) AS position`;
+     FROM positions_unites pu WHERE pu.unite_id = p.unite_id AND p.statut = ANY($${k}) ORDER BY pu.enregistree_le DESC LIMIT 1) AS position,
+  (SELECT json_build_object('minutes', ea.minutes, 'distance_km', ea.distance_km::float, 'source', ea.source, 'le', ea.calcule_le) FROM eta_prealertes ea WHERE ea.prealerte_id = p.id) AS eta`;
 const FROM = 'FROM prealertes p JOIN organisations_secours o ON o.id = p.organisation_id JOIN unites_secours un ON un.id = p.unite_id JOIN etablissements e ON e.id = p.destination_id';
 /** Préalertes visibles : ouvertes et celles des dernières 24 h. Pour l'hôpital, la première lecture vaut confirmation technique. */
 async function liste(pool, u, q = {}) {
@@ -486,11 +487,30 @@ async function position(pool, u, uniteId, b) {
   if (!(lat >= -90 && lat <= 90) || !(lon >= -180 && lon <= 180) || b.latitude == null || b.longitude == null) throw new ErreurHttp(400, 'position_invalide');
   const precision = b.precision_m == null ? null : Math.max(0, Math.round(Number(b.precision_m)) || 0);
   await pool.query('INSERT INTO positions_unites (unite_id, latitude, longitude, precision_m) VALUES ($1, $2, $3, $4)', [un.id, lat, lon, precision]);
-  return { enregistree: true };
+  const eta = await recalculerEta(pool, un.id, { latitude: lat, longitude: lon });
+  return { enregistree: true, ...(eta ? { eta } : {}) };
+}
+/**
+ * Heure d'arrivée de la préalerte ouverte de l'unité, depuis la position transmise : temps de route OSRM, sinon distance à vol d'oiseau
+ * (minutes inconnues). L'hôpital voit « DM-xxx arrive dans X min (Y km) ». Jamais une décision : une information.
+ */
+async function recalculerEta(pool, uniteId, pos) {
+  const pa = (await pool.query(`SELECT p.id, e.latitude, e.longitude FROM prealertes p JOIN etablissements e ON e.id = p.destination_id
+    WHERE p.unite_id = $1 AND p.statut = ANY($2) AND p.statut <> 'arrivee'`, [uniteId, OUVERTES])).rows[0];
+  if (!pa || pa.latitude == null) return null;
+  let r = null; let source = 'osrm';
+  try { r = await require('./routage').itineraire(pos, pa); } catch { source = 'vol_oiseau'; }
+  const km = r ? r.distance_km : (() => { const x = (v) => v * Math.PI / 180; const a = Math.sin(x(pa.latitude - pos.latitude) / 2) ** 2 + Math.cos(x(pos.latitude)) * Math.cos(x(pa.latitude)) * Math.sin(x(pa.longitude - pos.longitude) / 2) ** 2; return Math.round(6371 * 2 * Math.asin(Math.sqrt(a)) * 10) / 10; })();
+  const eta = (await pool.query(`INSERT INTO eta_prealertes (prealerte_id, minutes, distance_km, source, position_le) VALUES ($1, $2, $3, $4, now())
+    ON CONFLICT (prealerte_id) DO UPDATE SET minutes = EXCLUDED.minutes, distance_km = EXCLUDED.distance_km, source = EXCLUDED.source, position_le = EXCLUDED.position_le, calcule_le = now()
+    RETURNING minutes, distance_km::float AS distance_km, source, calcule_le`, [pa.id, r ? r.duree_min : null, km, source])).rows[0];
+  // Heure d'arrivée prévue mise à jour d'après le temps de route (l'équipage peut toujours la corriger)
+  if (r) await pool.query("UPDATE prealertes SET heure_prevue = now() + make_interval(mins => $2), modifie_le = now() WHERE id = $1", [pa.id, r.duree_min]);
+  return eta;
 }
 /** Positions conservées 24 h au plus. */
 async function purgerPositions(pool) {
   return (await pool.query("DELETE FROM positions_unites WHERE enregistree_le < now() - interval '24 hours'")).rowCount;
 }
 
-module.exports = { creer, liste, fiche, agir, unites, destinations, declarerUrgence, statutUrgence, declaration, servicesHopital, etatPreparation, synthese, position, purgerPositions, PRIORITES, CATEGORIES, OUVERTES, ROLES_SECOURS, ROLES_AMBULANCE, ROLES_CCS };
+module.exports = { recalculerEta, creer, liste, fiche, agir, unites, destinations, declarerUrgence, statutUrgence, declaration, servicesHopital, etatPreparation, synthese, position, purgerPositions, PRIORITES, CATEGORIES, OUVERTES, ROLES_SECOURS, ROLES_AMBULANCE, ROLES_CCS };

@@ -455,7 +455,13 @@ function creerApp(pool, options = {}) {
   /* ---------- Préhospitalier : préalertes (Liaison Secours), unités, positions ---------- */
   const pa = require('./prealertes');
   api.get('/secours/prealertes', route((req) => pa.liste(pool, req.utilisateur, req.query)));
-  api.post('/secours/prealertes', route((req) => pa.creer(pool, req.utilisateur, req.body)));
+  api.post('/secours/prealertes', route(async (req) => {
+    const r = await pa.creer(pool, req.utilisateur, req.body);
+    // Heure d'arrivée calculée depuis la dernière position de l'unité (prise par le téléphone juste avant l'envoi)
+    const pos = (await pool.query("SELECT latitude, longitude FROM positions_unites WHERE unite_id = $1 AND enregistree_le > now() - interval '10 minutes' ORDER BY enregistree_le DESC LIMIT 1", [r.unite_id])).rows[0];
+    if (pos && !r.rejoue) r.eta = await pa.recalculerEta(pool, r.unite_id, pos).catch(() => null);
+    return r;
+  }));
   api.get('/secours/prealertes/:id', route((req) => pa.fiche(pool, req.utilisateur, entier(req.params.id, 'id'), req.query)));
   api.post('/secours/prealertes/:id/action', route((req) => pa.agir(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   api.get('/secours/unites', route((req) => pa.unites(pool, req.utilisateur)));
@@ -472,6 +478,7 @@ function creerApp(pool, options = {}) {
   const vh = require('./vehicules');
   api.get('/secours/vehicules', route((req) => vh.liste(pool, req.utilisateur)));
   api.get('/secours/hebergements', route((req) => vh.hebergements(pool, req.utilisateur)));
+  api.get('/secours/urgences-classees', route((req) => vh.urgencesClassees(pool, req.utilisateur, req.query)));
   api.post('/secours/unites/:id/etat', route((req) => vh.definir(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   // Établissements d'hébergement : urgences proches (capacités globales seulement)
   api.get('/urgences-proches', route((req) => vh.urgencesProches(pool, req.utilisateur, req.query.etablissement_id)));

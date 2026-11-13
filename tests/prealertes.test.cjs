@@ -653,7 +653,7 @@ test('hébergement : urgences proches (capacités globales), type d’urgence et
   assert.strictEqual(up.statut, 200, JSON.stringify(up.corps));
   const mb = up.corps.find((x) => x.id === ids.mb);
   assert.ok(mb && typeof mb.urgence.civieres_libres === 'number' && mb.distance_km != null);
-  assert.deepStrictEqual(Object.keys(mb).sort(), ['distance_km', 'id', 'latitude', 'liaison_secours', 'longitude', 'nom', 'services_ouverts', 'soins_intensifs', 'statut_declare', 'urgence', 'ville']);
+  assert.deepStrictEqual(Object.keys(mb).sort(), ['distance_km', 'id', 'latitude', 'liaison_secours', 'longitude', 'nom', 'rang', 'services_ouverts', 'soins_intensifs', 'source_distance', 'statut_declare', 'temps_min', 'urgence', 'ville']);
   assert.ok(!/patient_ref|P-\d{5}|R-\d{5}/.test(JSON.stringify(up.corps)), 'aucune référence de patient');
   assert.strictEqual((await appel('tremblay', 'GET', `/urgences-proches?etablissement_id=${ids.mb}`)).statut, 403, 'réservé à l’hébergement');
   assert.strictEqual((await appel('ch', 'GET', `/urgences-proches?etablissement_id=${ids.mb}`)).statut, 403, 'pas pour un autre établissement');

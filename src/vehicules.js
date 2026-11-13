@@ -87,22 +87,8 @@ const km = (a, b) => {
   return Math.round(6371 * 2 * Math.asin(Math.sqrt(h)) * 10) / 10;
 };
 
-/**
- * Urgences proches pour un établissement d'hébergement (module Liaison Établissements actif) : capacités globales seulement.
- * Jamais de référence patient, de civière nominative ni de donnée clinique.
- */
-async function urgencesProches(pool, u, etabId) {
-  const id = entier(etabId); if (!id) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'etablissement_id' });
-  exigerEtablissement(u, id);
-  if (!ROLES_ETAB.includes(u.role)) throw new ErreurHttp(403, 'role_insuffisant');
-  const ici = (await pool.query('SELECT id, latitude, longitude, type_etablissement, modules FROM etablissements WHERE id = $1 AND actif', [id])).rows[0];
-  if (!ici) throw new ErreurHttp(404, 'etab_introuvable');
-  if ((ici.type_etablissement || 'hopital') === 'hopital') throw new ErreurHttp(403, 'role_insuffisant');
-  if (!TE.moduleActif(ici, 'transport_ambulancier')) throw new ErreurHttp(403, 'module_desactive', { module: 'transport_ambulancier' });
-  const hop = (await pool.query(`SELECT e.id, e.nom, e.ville, e.latitude, e.longitude, e.modules, e.type_etablissement,
-      e.urgence_statut_declare, e.urgence_statut_le, c.disponibilite_fraicheur_min, c.seuil_civieres_jaune, c.seuil_civieres_orange, c.seuil_civieres_rouge
-    FROM etablissements e JOIN config_pays c ON c.id = e.config_id WHERE e.actif AND e.config_id = ANY($1) AND COALESCE(e.type_etablissement, 'hopital') = 'hopital'`,
-  [await configsRegion(pool, id)])).rows;
+/** Capacités des urgences (tenues à jour par chaque hôpital dans Arrimo) : civières, statut déclaré, services ouverts, soins intensifs. */
+async function capacites(pool, hop) {
   const ids = hop.map((e) => e.id);
   const cv = require('./civieres'); const pa = require('./prealertes');
   const stats = await cv.statsUrgence(pool, ids);
@@ -112,14 +98,90 @@ async function urgencesProches(pool, u, etabId) {
     GROUP BY l.etablissement_id`, [ids])).rows;
   return hop.map((e) => {
     const st = stats.get(e.id);
-    const sv = services.filter((s) => s.etablissement_id === e.id);
-    const ouverts = sv.length ? SERVICES_URGENCE.filter(([, cat]) => sv.some((s) => (cat ? (s.attributs?.categories_secours || []).includes(cat) : s.attributs?.secours_defaut === true))).map(([code]) => code) : null;
+    const sv = services.filter((x) => x.etablissement_id === e.id);
+    const ouverts = sv.length ? SERVICES_URGENCE.filter(([, cat]) => sv.some((x) => (cat ? (x.attributs?.categories_secours || []).includes(cat) : x.attributs?.secours_defaut === true))).map(([code]) => code) : null;
     const lits = si.find((x) => x.etablissement_id === e.id);
-    return { id: e.id, nom: e.nom, ville: e.ville, latitude: e.latitude, longitude: e.longitude, distance_km: km(ici, e),
+    return { id: e.id, nom: e.nom, ville: e.ville, latitude: e.latitude, longitude: e.longitude,
       liaison_secours: TE.moduleActif(e, 'liaison_secours'),
       urgence: st ? { niveau: cv.niveauCivieres(st, e), civieres_libres: st.libres } : null,
       statut_declare: pa.declaration(e), services_ouverts: ouverts, soins_intensifs: lits ? { libres: lits.libres, total: lits.total } : null };
-  }).sort((a, b) => (a.distance_km ?? 1e9) - (b.distance_km ?? 1e9) || a.nom.localeCompare(b.nom));
+  });
+}
+const SQL_HOPITAUX = `SELECT e.id, e.nom, e.ville, e.latitude, e.longitude, e.modules, e.type_etablissement,
+    e.urgence_statut_declare, e.urgence_statut_le, c.disponibilite_fraicheur_min, c.seuil_civieres_jaune, c.seuil_civieres_orange, c.seuil_civieres_rouge
+  FROM etablissements e JOIN config_pays c ON c.id = e.config_id WHERE e.actif AND e.config_id = ANY($1) AND COALESCE(e.type_etablissement, 'hopital') = 'hopital'`;
+// Disponibilité : 0 disponible, 1 capacité limitée ou tendue, 2 saturation ou délestage, 3 inconnue
+function rangDisponibilite(h) {
+  const d = h.statut_declare && !h.statut_declare.perime ? h.statut_declare.statut : null;
+  if (d === 'saturation' || d === 'delestage' || h.urgence?.niveau === 'rouge' || h.urgence?.civieres_libres === 0) return 2;
+  if (d === 'capacite_limitee' || ['jaune', 'orange'].includes(h.urgence?.niveau)) return 1;
+  return h.urgence || d ? 0 : 3;
+}
+/**
+ * Classement des urgences depuis un point de départ : temps de route OSRM (distance à vol d'oiseau si le routeur ne répond pas),
+ * tri par disponibilité puis temps de route. Le premier est le « meilleur choix » signalé par OG : une information, jamais une décision.
+ */
+async function classer(hops, depart) {
+  let routes = null; let source = 'osrm';
+  try { routes = (await require('./routage').matrice(depart, hops.filter((h) => h.latitude != null))).routes; } catch { routes = null; source = 'vol_oiseau'; }
+  const avecCoord = hops.filter((h) => h.latitude != null);
+  const lignes = hops.map((h) => {
+    const r = routes ? routes[avecCoord.indexOf(h)] : null;
+    return { ...h, temps_min: r ? r.duree_min : null, distance_km: r ? r.distance_km : km(depart, h), source_distance: r ? 'osrm' : 'vol_oiseau', rang: rangDisponibilite(h) };
+  }).sort((a, b) => a.rang - b.rang || (a.temps_min ?? 1e6) - (b.temps_min ?? 1e6) || (a.distance_km ?? 1e9) - (b.distance_km ?? 1e9) || a.nom.localeCompare(b.nom));
+  const meilleur = lignes.find((l) => l.rang < 2) || null;
+  return { depart: { latitude: depart.latitude, longitude: depart.longitude, le: depart.le || null, nom: depart.nom || null }, source, urgences: lignes,
+    og: meilleur ? { id: meilleur.id, nom: meilleur.nom, temps_min: meilleur.temps_min, distance_km: meilleur.distance_km, civieres_libres: meilleur.urgence?.civieres_libres ?? null,
+      services_ouverts: meilleur.services_ouverts } : null };
+}
+
+/**
+ * Urgences proches pour un établissement d'hébergement (module Liaison Établissements actif) : capacités globales seulement,
+ * classées depuis l'établissement. Jamais de référence patient, de civière nominative ni de donnée clinique.
+ */
+async function urgencesProches(pool, u, etabId) {
+  const id = entier(etabId); if (!id) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'etablissement_id' });
+  exigerEtablissement(u, id);
+  if (!ROLES_ETAB.includes(u.role)) throw new ErreurHttp(403, 'role_insuffisant');
+  const ici = (await pool.query('SELECT id, nom, latitude, longitude, type_etablissement, modules FROM etablissements WHERE id = $1 AND actif', [id])).rows[0];
+  if (!ici) throw new ErreurHttp(404, 'etab_introuvable');
+  if ((ici.type_etablissement || 'hopital') === 'hopital') throw new ErreurHttp(403, 'role_insuffisant');
+  if (!TE.moduleActif(ici, 'transport_ambulancier')) throw new ErreurHttp(403, 'module_desactive', { module: 'transport_ambulancier' });
+  const hops = await capacites(pool, (await pool.query(SQL_HOPITAUX, [await configsRegion(pool, id)])).rows);
+  // Les 8 plus proches à vol d'oiseau sont classées par le routeur (requête légère) ; les autres suivent
+  const proches = hops.map((h) => ({ ...h, vol: km(ici, h) })).sort((a, b) => (a.vol ?? 1e9) - (b.vol ?? 1e9));
+  const c = await classer(proches.slice(0, 8).map(({ vol, ...h }) => h), ici);
+  const reste = proches.slice(8).map(({ vol, ...h }) => ({ ...h, distance_km: vol, temps_min: null, source_distance: 'vol_oiseau', rang: rangDisponibilite(h) }));
+  return [...c.urgences, ...reste];
+}
+
+/** Point de départ d'un classement pour les secours : une unité (dernière position, 24 h) ou un établissement d'hébergement de la région. */
+async function urgencesClassees(pool, u, q = {}) {
+  const orgs = await organisationsDe(pool, u);
+  const ambulance = ROLES_AMBULANCE.includes(u.role); const ccs = u.role === 'repartiteur';
+  if (!ambulance && !ccs) throw new ErreurHttp(403, 'role_insuffisant');
+  const voit = ambulance ? orgs.filter((o) => o.profils.includes('ambulance')) : orgs.filter((o) => o.profils.includes('ccs'));
+  if (!voit.length) throw new ErreurHttp(403, 'organisation_interdite');
+  const cfgs = [...new Set(voit.map((o) => o.config_id))];
+  let depart = null;
+  if (q.unite_id) {
+    const un = (await pool.query(`SELECT un.id, un.numero, un.organisation_id, o.config_id, o.profils FROM unites_secours un JOIN organisations_secours o ON o.id = un.organisation_id
+      WHERE un.id = $1 AND un.actif`, [entier(q.unite_id)])).rows[0];
+    if (!un || (ambulance ? !voit.some((o) => o.id === un.organisation_id) : !cfgs.includes(un.config_id))) throw new ErreurHttp(404, 'unite_introuvable');
+    const pos = (await pool.query(`SELECT latitude, longitude, enregistree_le AS le FROM positions_unites WHERE unite_id = $1 AND enregistree_le > now() - interval '24 hours'
+      ORDER BY enregistree_le DESC LIMIT 1`, [un.id])).rows[0];
+    if (!pos) return { depart: null, sans_position: true, urgences: [], og: null };
+    depart = { ...pos, nom: un.numero };
+  } else if (q.etablissement_id) {
+    const e = (await pool.query(`SELECT e.id, e.nom, e.latitude, e.longitude FROM etablissements e JOIN config_pays c ON c.id = e.config_id WHERE e.id = $1 AND e.actif
+      AND COALESCE(e.type_etablissement, 'hopital') <> 'hopital' AND (e.config_id = ANY($2) OR regexp_replace(c.code, '-CHSLD$', '') IN (SELECT code FROM config_pays WHERE id = ANY($2)))`,
+    [entier(q.etablissement_id), cfgs])).rows[0];
+    if (!e) throw new ErreurHttp(404, 'etab_introuvable');
+    depart = e;
+  } else throw new ErreurHttp(400, 'parametre_invalide', { nom: 'unite_id' });
+  // Hôpitaux qui reçoivent les préalertes (Liaison Secours actif) dans la région
+  const hops = (await pool.query(SQL_HOPITAUX, [cfgs])).rows.filter((e) => TE.moduleActif(e, 'liaison_secours'));
+  return classer(await capacites(pool, hops), depart);
 }
 
 /** Établissements d'hébergement de la région (nom et position seulement) : symboles de la carte des secours. */
@@ -132,4 +194,4 @@ async function hebergements(pool, u) {
   [[...new Set(orgs.map((o) => o.config_id))]])).rows;
 }
 
-module.exports = { ETATS, fixer, definir, liste, urgencesProches, hebergements };
+module.exports = { ETATS, fixer, definir, liste, urgencesProches, urgencesClassees, hebergements, classer, rangDisponibilite };
