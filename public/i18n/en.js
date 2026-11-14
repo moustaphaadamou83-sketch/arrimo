@@ -121,6 +121,7 @@ window.ARRIMO_I18N.en = {
     activer: 'Activate the organization', desactiver: 'Deactivate the organization',
   },
   liaison_secours: {
+    alerte_globale: 'Ambulance {unite} announced ({numero}): confirm in Emergency liaison', alerte_immediate: 'Immediate priority: {unite} is coming ({numero})', alerte_ouvrir: 'Open Emergency liaison',
     cf_question: 'Ambulance announced: do you confirm?', cf_aide: 'Without an answer within {n} s, the request is accepted and the transport continues.', cf_accepter: 'Accepted, we are expecting you', cf_reorienter: 'Redirect',
     cf_reorienter_aide: 'The crew and protocols decide: OG immediately suggests another emergency to the ambulance and the CCS. The transport is never blocked.', cf_motif: 'Reason', cf_ok: 'Answer sent.',
     cf_acceptee: 'Accepted in {s} s: we are expecting them.', cf_sans_reponse: 'No answer within {s} s: accepted, transport continued.', cf_avertie: 'Immediate priority: hospital notified, no waiting.', cf_reorientee: 'Redirected ({motif}).',

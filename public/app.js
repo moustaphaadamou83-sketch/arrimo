@@ -639,6 +639,8 @@ setInterval(() => {
     && !$('#v-support').contains(document.activeElement)) rafraichir();
 }, 30000);
 
+// Alerte Liaison Secours sur tous les onglets : relecture lente en secours du direct
+setInterval(() => { if (etat.token && etat.moi) window.ArrimoSecours?.veille?.(); }, 30000);
 // Mise à jour en direct (SSE) des écrans du préhospitalier : Liaison Secours, urgences proches et suivi des transports, urgence
 let fluxApp = null;
 setInterval(() => {
@@ -646,6 +648,7 @@ setInterval(() => {
   if (fluxApp && (fluxApp.fini || fluxApp.jeton !== etat.token)) { fluxApp.arreter(); fluxApp = null; }
   if (etat.token && etat.moi && !fluxApp && window.ArrimoFlux) {
     fluxApp = window.ArrimoFlux.ecouter(() => etat.token, () => {
+      window.ArrimoSecours?.veille?.();
       if ($('#modale').hidden && document.visibilityState === 'visible' && ['secours', 'c-urgences', 'c-mouvements', 'liaison', 'urgence'].includes(etat.vue)) rafraichir();
     });
     fluxApp.jeton = etat.token;

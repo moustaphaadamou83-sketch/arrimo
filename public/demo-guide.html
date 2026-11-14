@@ -39,9 +39,10 @@
   <li><span class="qui">Ambulance · <code>ambulance.demo@demo.arrimo</code> (téléphone, <code>/secours</code>)</span>
     <p>« État du véhicule » : un geste (Disponible, En route, Sur place…). « Accepter avec l’unité DM-101 » → « En route vers le départ » → « Résident pris en charge » → « Transmettre la préalerte » : hôpital (prérempli, modifiable par l’équipage), priorité, catégorie, délai. L’état passe seul à « Transport vers l’hôpital ».</p></li>
   <li><span class="qui">CCS · <code>ccs.demo@demo.arrimo</code> (<code>/secours</code>)</span>
+    <p><b>Avant la première position d’une ambulance</b>, choisissez « CHSLD des Érables » dans « Depuis » : le classement se calcule depuis cet établissement. Les unités qui ont déjà une préalerte ouverte sont grisées dans la demande.</p>
     <p>« Urgences classées » depuis DM-101 (temps de route OSRM, civières libres, statut, services ; meilleur choix d’OG). « Demander une civière » sur l’Hôpital B : unité, priorité, catégorie, délai, profil fictif (tranche d’âge, sexe, signes). Dessous : les ambulances (état, destination, lieu actuel). Aucune attribution dans Arrimo.</p></li>
   <li><span class="qui">Hôpital B · <code>hopital.b@demo.arrimo</code> → « Liaison Secours »</span>
-    <p>Alerte sonore et compte à rebours de 60 s : « Accepté, on vous attend » ou « Réorienter » (motif). Sans réponse : acceptée, le transport continue ; priorité immédiate : averti, sans attente. Une civière est réservée : elle ne peut être donnée à un autre patient. Le CCS et l’ambulance voient la réponse en direct ; après une réorientation, OG propose une autre urgence.</p></li>
+    <p>L’alerte sonne et un bandeau rouge s’affiche <b>quel que soit l’onglet ouvert</b> ; un appui ouvre « Liaison Secours ». Alerte sonore et compte à rebours de 60 s : « Accepté, on vous attend » ou « Réorienter » (motif). Sans réponse : acceptée, le transport continue ; priorité immédiate : averti, sans attente. Une civière est réservée : elle ne peut être donnée à un autre patient. Le CCS et l’ambulance voient la réponse en direct ; après une réorientation, OG propose une autre urgence.</p></li>
   <li><span class="qui">CHSLD des Érables</span>
     <p>Le suivi montre l’unité, la plaque, l’état du véhicule, l’hôpital choisi et l’heure d’arrivée prévue. « Confirmer le départ » de l’hospitalisation : le transport ne confirme jamais le départ à la place de l’établissement.</p></li>
   <li><span class="qui">Hôpital B · <code>hopital.b@demo.arrimo</code> → onglet « Liaison Secours »</span>
@@ -67,7 +68,7 @@
   <li><span class="qui">CHSLD des Érables → Nearby emergencies</span><p>Map and list: free stretchers, declared status, open services, intensive care beds for information; no other patient data.</p></li>
   <li><span class="qui">CHSLD</span><p>Departure to Hospital B, then “Request a transport” with emergency type and preferred hospital (information only).</p></li>
   <li><span class="qui">Ambulance (<code>ambulance.demo@demo.arrimo</code>)</span><p>Vehicle status in one tap; accept with DM-101 → on the way → picked up → send the pre-alert (status becomes “Transport to hospital”).</p></li>
-  <li><span class="qui">CCS (<code>ccs.demo@demo.arrimo</code>)</span><p>Vehicles on the map and in the list with status, destination and update time; emergency availability; view only.</p></li>
+  <li><span class="qui">CCS (<code>ccs.demo@demo.arrimo</code>)</span><p>Before an ambulance’s first position, choose “CHSLD des Érables” in “From”. Vehicles on the map and in the list with status, destination and update time; emergency availability; view only.</p></li>
   <li><span class="qui">CHSLD</span><p>Tracking: unit, plate, vehicle status, hospital, expected arrival; confirm departure.</p></li>
   <li><span class="qui">Hospital B → Emergency liaison</span><p>Acknowledge, confirm the department proposed by OG, preparation.</p></li>
   <li><span class="qui">Ambulance, then Hospital B</span><p>Report arrival; confirm vehicle DM-101 (status “At hospital”, CHSLD sees “arrival confirmed”), handover.</p></li>

@@ -138,6 +138,7 @@
   }
   async function vueSecours() {
     const v = $('#v-secours'); if (!v) return;
+    document.getElementById('alerte-secours')?.remove();
     let d; let urg = null;
     try { [d, urg] = await Promise.all([api('GET', `/secours/prealertes?etablissement_id=${etat.ctx}`), api('GET', `/secours/urgence?etablissement_id=${etat.ctx}`).catch(() => null)]); }
     catch (e) { v.innerHTML = `<p class="note">${esc(e.message)}</p>`; return; }
@@ -147,6 +148,10 @@
     if (etatS.donnees && nouvelles.length && son()) bip();
     alertesSonores(ouvertes);
     ouvertes.forEach((p) => etatS.vues.add(p.id));
+    // Point 2 : rien n'est redessiné si les données n'ont pas changé (un appui en cours n'est jamais perdu)
+    const sig = JSON.stringify([d, urg, etatS.affichage, son(), etat.ctx]);
+    if (sig === etatS.signature && v.innerHTML) { etatS.donnees = d; return; }
+    etatS.signature = sig;
     etatS.donnees = d;
     const e = etabCtx();
     v.innerHTML = `<div class="entete"><div><h2>${S('titre', { etab: e?.nom || '' })}</h2><p>${S('intro')}</p></div>
@@ -273,5 +278,29 @@
     }; });
     corps.querySelectorAll('[data-so-actif]').forEach((b) => { b.onclick = () => agir(b, () => api('PUT', `/admin/secours/organisations/${b.dataset.soActif}`, { actif: b.dataset.actif === 'true' }), t('liaison_secours.ok')); });
   }
-  window.ArrimoSecours = { vues: { secours: vueSecours }, admin };
+  /* Alerte sur tous les onglets (point 6, 14 nov. 2026) : une demande à confirmer ou une priorité immédiate fait sonner le poste
+     et affiche un bandeau, même si l'équipe est sur un autre écran ; un appui ouvre « Liaison Secours ». */
+  const dejaAlertees = new Set(); let premiereVeille = true;
+  async function veille() {
+    if (!etat.moi || !etat.ctx) return;
+    const e = etat.moi.etablissements.find((x) => x.id === etat.ctx);
+    if (!e || (e.type_etablissement || 'hopital') !== 'hopital' || (e.modules || {}).liaison_secours !== true) return;
+    if (!['coordonnateur', 'gestionnaire', 'admin_etab', 'equipe_soins'].includes(etat.moi.utilisateur.role)) return;
+    const d = await api('GET', `/secours/prealertes?etablissement_id=${etat.ctx}`).catch(() => null); if (!d) return;
+    const ouvertes = d.prealertes.filter((p) => OUVERTES.includes(p.statut));
+    const compteur = $('#n-secours'); if (compteur) { const n = ouvertes.filter((p) => !p.prise_en_compte_le || p.confirmation?.statut === 'en_attente').length; compteur.textContent = n; compteur.hidden = !n; }
+    const nouvelles = ouvertes.filter((p) => ['en_attente', 'avertie'].includes(p.confirmation?.statut) && !dejaAlertees.has(p.id));
+    nouvelles.forEach((p) => dejaAlertees.add(p.id));
+    if (premiereVeille) { premiereVeille = false; if (etat.vue === 'secours') return; }
+    if (!nouvelles.length || etat.vue === 'secours') return;
+    bip(); setTimeout(bip, 450);
+    let b = document.getElementById('alerte-secours');
+    if (!b) { b = document.createElement('div'); b.id = 'alerte-secours'; b.setAttribute('role', 'alert'); document.body.appendChild(b); }
+    const p = nouvelles[0];
+    b.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);top:12px;z-index:3000;max-width:min(92vw,640px);background:#DC2626;color:#fff;border-radius:12px;padding:12px 16px;box-shadow:0 8px 24px rgba(0,0,0,.25);display:flex;gap:12px;align-items:center;flex-wrap:wrap';
+    b.innerHTML = `<b>${S(p.confirmation.statut === 'avertie' ? 'alerte_immediate' : 'alerte_globale', { unite: p.unite, numero: p.numero })}</b>
+      <button type="button" class="btn" style="background:#fff;color:#991B1B;border:0" id="alerte-secours-ouvrir">${S('alerte_ouvrir')}</button>`;
+    document.getElementById('alerte-secours-ouvrir').onclick = () => { b.remove(); document.querySelector('#onglets button[data-v="secours"]')?.click(); };
+  }
+  window.ArrimoSecours = { vues: { secours: vueSecours }, admin, veille };
 })();

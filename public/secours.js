@@ -46,7 +46,7 @@
       motif: { delestage: 'délestage', scanner_indisponible: 'scanner indisponible', service_ferme: 'service fermé', autre: 'autre' },
       res: { reservee: 'civière {c} réservée', sans_civiere: 'aucune civière libre', installee: 'patient installé sur {c}', liberee: 'réservation libérée' },
       og_autre: 'OG propose {nom} : {temps}, {civ} civières libres. Décision de l’équipage et des protocoles.', transmettre_a: 'Transmettre la préalerte à {nom}',
-      fermer: 'Fermer', demander_civ: 'Demander une civière', demande_titre: 'Demande de réservation de civière · {nom}', demande_aide: 'Patient qui arrive : profil minimal, aucun nom. L’hôpital confirme en un clic ; sans réponse en {n} s, la demande est acceptée.',
+      unite_occupee: 'préalerte {numero} en cours vers {dest}', fermer: 'Fermer', demander_civ: 'Demander une civière', demande_titre: 'Demande de réservation de civière · {nom}', demande_aide: 'Patient qui arrive : profil minimal, aucun nom. L’hôpital confirme en un clic ; sans réponse en {n} s, la demande est acceptée.',
       unite_transport: 'Unité qui transporte', profil: 'Profil (fictif, démonstration seulement)', tranche: 'Tranche d’âge', sexe: 'Sexe', signes: 'Signes principaux (4 au plus)',
       sexes: { F: 'Femme', M: 'Homme', X: 'Autre' }, envoyer_demande: 'Envoyer la demande', demande_envoyee: 'Demande envoyée à l’hôpital.',
       sg: { douleur_thoracique: 'Douleur thoracique', difficulte_respiratoire: 'Difficulté respiratoire', deficit_neurologique: 'Déficit neurologique', alteration_conscience: 'Altération de la conscience', chute: 'Chute', traumatisme: 'Traumatisme', saignement: 'Saignement', fievre: 'Fièvre', douleur_abdominale: 'Douleur abdominale', autre: 'Autre' },
@@ -105,7 +105,7 @@
       motif: { delestage: 'diversion', scanner_indisponible: 'CT scanner unavailable', service_ferme: 'department closed', autre: 'other' },
       res: { reservee: 'stretcher {c} reserved', sans_civiere: 'no free stretcher', installee: 'patient placed on {c}', liberee: 'reservation released' },
       og_autre: 'OG suggests {nom}: {temps}, {civ} free stretchers. The crew and protocols decide.', transmettre_a: 'Send the pre-alert to {nom}',
-      fermer: 'Close', demander_civ: 'Request a stretcher', demande_titre: 'Stretcher reservation request · {nom}', demande_aide: 'Incoming patient: minimal profile, no name. The hospital confirms in one click; without an answer within {n} s, the request is accepted.',
+      unite_occupee: 'pre-alert {numero} in progress to {dest}', fermer: 'Close', demander_civ: 'Request a stretcher', demande_titre: 'Stretcher reservation request · {nom}', demande_aide: 'Incoming patient: minimal profile, no name. The hospital confirms in one click; without an answer within {n} s, the request is accepted.',
       unite_transport: 'Transporting unit', profil: 'Profile (fictitious, demonstration only)', tranche: 'Age group', sexe: 'Sex', signes: 'Main signs (4 at most)',
       sexes: { F: 'Female', M: 'Male', X: 'Other' }, envoyer_demande: 'Send the request', demande_envoyee: 'Request sent to the hospital.',
       sg: { douleur_thoracique: 'Chest pain', difficulte_respiratoire: 'Breathing difficulty', deficit_neurologique: 'Neurological deficit', alteration_conscience: 'Altered consciousness', chute: 'Fall', traumatisme: 'Trauma', saignement: 'Bleeding', fievre: 'Fever', douleur_abdominale: 'Abdominal pain', autre: 'Other' },
@@ -184,7 +184,18 @@
       await chargerClassees();
       if (ROLES_AMB.includes(etat.moi.utilisateur.role)) etat.unites = await api('GET', '/secours/unites');
     } catch (e) { if (estReseau(e)) etat.enLigne = false; else etat.erreur = e.message; }
-    rendre();
+    rendreSiChange();
+  }
+  /* Point 2 (14 nov. 2026) : l'écran ne se redessine que si les données affichées ont changé, et jamais pendant un appui
+     (moins d'une seconde) : un geste n'est plus perdu quand un signal en direct arrive. */
+  let derniereSignature = null; let dernierAppui = 0; let renduDiffere = null;
+  document.addEventListener('pointerdown', () => { dernierAppui = Date.now(); }, true);
+  function rendreSiChange() {
+    const sig = JSON.stringify([etat.prealertes, etat.vehicules, etat.transports, etat.destinations, etat.classees, etat.unites, etat.erreur, etat.message, etat.enLigne, L, etat.onglet, etat.alternatives]);
+    if (sig === derniereSignature) { enTete(); return; }
+    const attente = 1000 - (Date.now() - dernierAppui);
+    if (attente > 0) { clearTimeout(renduDiffere); renduDiffere = setTimeout(rendreSiChange, attente); return; }
+    derniereSignature = sig; rendre();
   }
   /* Urgences classées : depuis la position de l'unité (ambulance) ou un départ choisi par le CCS (ambulance ou établissement) */
   async function chargerClassees() {
@@ -269,7 +280,11 @@
     const signes = d.signes || [];
     return `<section class="carte-s" id="demande-ccs" style="border:2px solid #159895"><h2>${esc(t('demande_titre', { nom: ArrimoCarte.court(h.nom) }))}</h2>
       <p class="note">${esc(t('demande_aide', { n: L2.delai_s ?? 60 }))}</p>
-      <label>${t('unite_transport')}</label>${choix('d-unite', etat.vehicules.map((v) => String(v.id)), (v) => { const x = etat.vehicules.find((y) => String(y.id) === v); return `${x.numero} · ${x.etat ? t('ev.' + x.etat) : t('non_declare')}`; }, d.unite)}
+      <label>${t('unite_transport')}</label><div class="grille choix" data-choix="d-unite">${etat.vehicules.map((x) => {
+        // Point 5 : une unité qui a déjà une préalerte ouverte est grisée (une seule préalerte ouverte par unité)
+        const pa = etat.prealertes.find((p) => p.unite_id === x.id && OUVERTES.includes(p.statut));
+        return `<button type="button" data-v="${x.id}" aria-pressed="${String(d.unite) === String(x.id)}"${pa ? ' disabled style="opacity:.55;cursor:not-allowed"' : ''}>${esc(x.numero)} · ${esc(pa ? t('unite_occupee', { numero: pa.numero, dest: ArrimoCarte.court(pa.destination) }) : x.etat ? t('ev.' + x.etat) : t('non_declare'))}</button>`;
+      }).join('')}</div>
       <label>${t('priorite')}</label>${choix('d-priorite', ['immediate', 'urgente', 'non_urgente'], (v) => t('prio.' + v), d.priorite)}
       <label>${t('categorie')}</label>${choix('d-categorie', Object.keys(TXT.fr.cat), (v) => t('cat.' + v), d.categorie)}
       <label>${t('delai')}</label>${choix('d-delai', ['5', '10', '15', '20', '30'], (v) => v, String(d.delai))}
@@ -552,7 +567,8 @@
     const u = uniteCourante(); const p = u && etat.prealertes.find((x) => x.unite_id === u.id && OUVERTES.includes(x.statut));
     if (b.dataset.demander) {
       const h = etat.classees?.urgences?.find((x) => String(x.id) === b.dataset.demander);
-      const v = etat.depart?.startsWith('u:') ? etat.depart.slice(2) : null;
+      const v0 = etat.depart?.startsWith('u:') ? etat.depart.slice(2) : null;
+      const v = v0 && !etat.prealertes.some((p) => String(p.unite_id) === v0 && OUVERTES.includes(p.statut)) ? v0 : null;
       etat.onglet = 'regional'; etat.demande = { destination: Number(b.dataset.demander), unite: v, priorite: null, categorie: null, delai: Math.min(30, Math.max(5, Math.round((h?.temps_min || 10) / 5) * 5)), signes: [] };
       rendre(); document.getElementById('demande-ccs')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return;
     }

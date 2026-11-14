@@ -718,9 +718,10 @@ table.classe tr.meilleur td:first-child { box-shadow: inset 4px 0 0 #159895; }
 details.voir-carte { margin-top: 12px; } details.voir-carte summary { display: inline-flex; align-items: center; cursor: pointer; list-style: none; }
 details.voir-carte summary::-webkit-details-marker { display: none; }
 @media (max-width: 700px) {
+  table.classe, table.classe tbody { display: block; width: 100%; }
   table.classe thead { display: none; }
-  table.classe tr { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; padding: 8px 4px; border-bottom: 1px solid var(--bordure); }
-  table.classe td { border: 0; padding: 2px 0; }
+  table.classe tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2px 10px; padding: 8px 4px; border-bottom: 1px solid var(--bordure); }
+  table.classe td { border: 0; padding: 2px 0; min-width: 0; overflow-wrap: anywhere; }
   table.classe td:first-child { grid-column: 1 / -1; }
   table.classe td[data-l]:not(:first-child)::before { content: attr(data-l) " : "; color: var(--texte-2, #64748B); font-size: 12px; }
 }

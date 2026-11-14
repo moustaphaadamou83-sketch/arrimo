@@ -63,10 +63,16 @@
   .secours .tuiles-c { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
   .secours .tuile-c { background: var(--carte); border: 1px solid var(--bordure); border-radius: var(--rayon-carte); padding: 12px 14px; }
   .secours .tuile-c .gros { color: var(--principal); }
+  /* Jamais de défilement horizontal : la page reste à la largeur de l'écran (sinon le téléphone dézoome et les appuis tombent à côté) */
+  html, body.secours { max-width: 100%; overflow-x: hidden; }
+  .secours main, .secours .carte-s { min-width: 0; max-width: 100%; }
   @media (max-width: 700px) {
+    .secours table.classe, .secours table.classe tbody { display: block; width: 100%; }
     .secours table.classe thead { display: none; }
-    .secours table.classe tr { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; padding: 10px 6px; border-bottom: 1px solid var(--bordure); }
-    .secours table.classe td { border: 0; padding: 2px 0; }
+    .secours table.classe tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2px 10px; padding: 10px 6px; border-bottom: 1px solid var(--bordure); }
+    .secours table.classe td { border: 0; padding: 2px 0; min-width: 0; overflow-wrap: anywhere; }
+    .secours table.classe td:not([data-l]) { grid-column: 1 / -1; }
+    .secours table.classe td:not([data-l]) .btn { width: 100%; }
     .secours table.classe td:first-child { grid-column: 1 / -1; font-size: 17px; }
     .secours table.classe td[data-l]:not(:first-child)::before { content: attr(data-l) " : "; color: var(--texte-2, #64748B); font-size: 13px; }
   }

@@ -573,9 +573,14 @@
   }
   async function vueLiaison() {
     const v = $('#v-liaison'); if (!v) return;
-    const onglet = ONGLETS_LIAISON.includes(etat.liaisonOnglet) ? etat.liaisonOnglet : 'arrivees';
     let d;
     try { d = await api('GET', `/liaison-chsld?etablissement_id=${ctx()}`); } catch (e) { v.innerHTML = `<p class="note">${esc(e.message)}</p>`; return; }
+    // Point 3 (14 nov. 2026) : après une action, la fiche est suivie dans le sous-onglet où elle se trouve maintenant
+    // Suivie pendant 8 s après l'action : le temps que la réponse du serveur arrive, même si un rafraîchissement passe avant
+    const suivie = etat.liaisonSuivre && Date.now() - etat.liaisonSuivreLe < 8000 ? etat.liaisonSuivre : null;
+    const ongletSuivi = suivie ? ONGLETS_LIAISON.find((o) => d[o].some((x) => String(x.id) === String(suivie) || String(x.retour?.id) === String(suivie))) : null;
+    if (ongletSuivi) etat.liaisonOnglet = ongletSuivi;
+    const onglet = ONGLETS_LIAISON.includes(etat.liaisonOnglet) ? etat.liaisonOnglet : 'arrivees';
     const n = Object.fromEntries(ONGLETS_LIAISON.map((o) => [o, d[o].length]));
     const liste = d[onglet];
     etat.liaisonFiches = Object.fromEntries(ONGLETS_LIAISON.flatMap((o) => d[o]).map((x) => [x.id, x]));
@@ -585,6 +590,10 @@
       <div class="panneau-c"><p class="note">${L(`aide_${onglet}`)}</p><div class="liste">${liste.map(carteLiaison).join('') || `<p class="note">${L(`aucun_${onglet}`)}</p>`}</div></div>`;
     v.querySelectorAll('[data-li-onglet]').forEach((b) => { b.onclick = () => { etat.liaisonOnglet = b.dataset.liOnglet; vueLiaison(); }; });
     brancherLiaison(v);
+    if (ongletSuivi) {
+      const carte = v.querySelector(`[data-coordination="${suivie}"]`) || v.querySelector(`.li-carte [data-id="${suivie}"]`)?.closest('.li-carte');
+      if (carte) { carte.style.outline = '3px solid #57C5B6'; carte.style.outlineOffset = '2px'; carte.scrollIntoView({ block: 'center' }); setTimeout(() => { carte.style.outline = ''; }, 4000); }
+    }
   }
   function brancherLiaison(v) {
     window.ArrimoTransports?.brancher(v);
@@ -592,6 +601,7 @@
     v.querySelectorAll('[data-li-eval]').forEach((b) => { b.onclick = () => agir(null, async () => { const e = await api('GET', `/coordinations/${b.dataset.liEval}/evaluation?etablissement_id=${ctx()}`); modale(C('evaluation.titre'), `<p class="note">${C('evaluation.aide')}</p>${evalHTML(e)}`, [{ label: t('general.fermer') }]); }); });
     v.querySelectorAll('[data-li]').forEach((b) => { b.onclick = async () => {
       const id = b.dataset.id, version = Number(b.dataset.version), a = b.dataset.li, numero = b.dataset.num;
+      etat.liaisonSuivre = b.closest('[data-coordination]')?.dataset.coordination || id; etat.liaisonSuivreLe = Date.now();
       const action = (corps) => api('POST', `/coordinations/${id}/action`, { etablissement_id: ctx(), version, action: a, ...corps });
       if (a === 'retour') return modale(L('action_retour'), `<p class="note">${L('retour_aide')}</p>${champ('li-date', C('actions.retour_prevu'), '', 'type="datetime-local"')}${champ('li-motif', C('actions.motif_admin'), '', 'maxlength="200"')}`,
         [{ label: t('general.annuler') }, { label: t('general.confirmer'), pri: true, run: async () => (await agir(null, () => api('POST', `/coordinations/${id}/retour`, { retour_prevu_le: $('#li-date').value, motif_admin: $('#li-motif').value }), ok)) !== null || false }]);
