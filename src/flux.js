@@ -15,7 +15,7 @@ let attente = null;
 /** Signale un changement (regroupé sur 300 ms pour ne pas multiplier les relectures). */
 function signaler() {
   if (attente) return;
-  attente = setTimeout(() => { attente = null; bus.emit('secours', Date.now()); }, 300);
+  attente = setTimeout(() => { attente = null; bus.emit('secours', Date.now()); }, 300); attente.unref?.();
 }
 
 function brancher(req, res) {
@@ -23,9 +23,11 @@ function brancher(req, res) {
   res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
   res.write('retry: 5000\n\n');
   const envoyer = (t) => res.write(`event: secours\ndata: ${t}\n\n`);
-  const veille = setInterval(() => res.write(': veille\n\n'), 25000);
+  // Minuterie de maintien qui ne retient jamais l'arrêt du processus ; nettoyage à la fermeture de la réponse ou de la connexion
+  const veille = setInterval(() => res.write(': veille\n\n'), 25000); veille.unref?.();
   bus.on('secours', envoyer);
-  req.on('close', () => { clearInterval(veille); bus.off('secours', envoyer); });
+  const fin = () => { clearInterval(veille); bus.off('secours', envoyer); };
+  res.on('close', fin); req.on('close', fin);
 }
 
 module.exports = { signaler, brancher, bus };

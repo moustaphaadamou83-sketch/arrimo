@@ -297,10 +297,14 @@
     let b = document.getElementById('alerte-secours');
     if (!b) { b = document.createElement('div'); b.id = 'alerte-secours'; b.setAttribute('role', 'alert'); document.body.appendChild(b); }
     const p = nouvelles[0];
-    b.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);top:12px;z-index:3000;max-width:min(92vw,640px);background:#DC2626;color:#fff;border-radius:12px;padding:12px 16px;box-shadow:0 8px 24px rgba(0,0,0,.25);display:flex;gap:12px;align-items:center;flex-wrap:wrap';
-    b.innerHTML = `<b>${S(p.confirmation.statut === 'avertie' ? 'alerte_immediate' : 'alerte_globale', { unite: p.unite, numero: p.numero })}</b>
-      <button type="button" class="btn" style="background:#fff;color:#991B1B;border:0" id="alerte-secours-ouvrir">${S('alerte_ouvrir')}</button>`;
+    // Encadré discret en bas à droite (ne masque pas l'écran en cours), refermable, disparaît seul après 20 s ; bip et compteur restent
+    b.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:3000;max-width:min(92vw,420px);background:#DC2626;color:#fff;border-radius:12px;padding:10px 14px;box-shadow:0 8px 24px rgba(0,0,0,.25);display:flex;gap:10px;align-items:center;flex-wrap:wrap';
+    b.innerHTML = `<b style="flex:1 1 200px">${S(p.confirmation.statut === 'avertie' ? 'alerte_immediate' : 'alerte_globale', { unite: p.unite, numero: p.numero })}</b>
+      <button type="button" class="btn" style="background:#fff;color:#991B1B;border:0" id="alerte-secours-ouvrir">${S('alerte_ouvrir')}</button>
+      <button type="button" class="btn discret" style="color:#fff" id="alerte-secours-fermer" aria-label="${S('alerte_fermer')}">✕</button>`;
     document.getElementById('alerte-secours-ouvrir').onclick = () => { b.remove(); document.querySelector('#onglets button[data-v="secours"]')?.click(); };
+    document.getElementById('alerte-secours-fermer').onclick = () => b.remove();
+    clearTimeout(veille.minuteur); veille.minuteur = setTimeout(() => b.remove(), 20000);
   }
   window.ArrimoSecours = { vues: { secours: vueSecours }, admin, veille };
 })();

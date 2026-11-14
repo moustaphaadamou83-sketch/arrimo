@@ -121,6 +121,7 @@ window.ARRIMO_I18N.fr = {
     activer: 'Activer l’organisation', desactiver: 'Désactiver l’organisation',
   },
   liaison_secours: {
+    alerte_fermer: 'Fermer l’alerte',
     alerte_globale: 'Ambulance {unite} annoncée ({numero}) : confirmez dans Liaison Secours', alerte_immediate: 'Priorité immédiate : {unite} arrive ({numero})', alerte_ouvrir: 'Ouvrir Liaison Secours',
     cf_question: 'Ambulance annoncée : confirmez-vous ?', cf_aide: 'Sans réponse dans {n} s, la demande est acceptée et le transport continue.', cf_accepter: 'Accepté, on vous attend', cf_reorienter: 'Réorienter',
     cf_reorienter_aide: 'L’équipage et les protocoles décident : OG propose aussitôt une autre urgence à l’ambulance et au CCS. Le transport n’est jamais bloqué.', cf_motif: 'Motif', cf_ok: 'Réponse transmise.',
