@@ -15,6 +15,17 @@ const AJOUTS_CATALOGUE_SH = new Set(['comptes', 'documents', 'support', 'journal
   'liaison_secours', 'transport_ambulancier', 'profil_ccs', 'profil_ambulance',
   // Migration 38 : module hospitalier Liaison CHSLD (une ligne ajoutée, aucune ligne existante modifiée)
   'liaison_chsld']);
+// Seconde exception, liste fermée : renommages de valeurs voulus par une migration SH. L'empreinte « avant » est calculée
+// avec la valeur renommée ; toute autre différence (autre colonne, autre valeur, ligne ajoutée ou retirée) reste refusée.
+// Migration 48 (13 nov. 2026, demandes du site reliées au CRM) : statuts « nouvelle » et « en_cours » → « a_traiter ».
+const RENOMMAGES_SH = { sh_demandes_site: { statut: { nouvelle: 'a_traiter', en_cours: 'a_traiter' } } };
+const litteral = (x) => `'${String(x).replaceAll("'", "''")}'`;
+function expression(t, col, renommages) {
+  const r = renommages?.[t]?.[col];
+  if (!r) return ident(col);
+  if (!Object.keys(r).length) return `${ident(col)}::text AS ${ident(col)}`;
+  return `CASE ${ident(col)}::text ${Object.entries(r).map(([a, b]) => `WHEN ${litteral(a)} THEN ${litteral(b)}`).join(' ')} ELSE ${ident(col)}::text END AS ${ident(col)}`;
+}
 async function lignesCatalogue(c, cols) {
   const r = await c.query(`SELECT code, row_to_json(x)::text AS ligne FROM (SELECT ${cols.map(ident).join(',')} FROM public.sh_modules_catalogue) x`);
   return new Map(r.rows.map((x) => [x.code, x.ligne]));
@@ -34,11 +45,11 @@ async function colonnes(c) {
     WHERE table_schema='public' AND table_name IN (SELECT tablename FROM pg_tables WHERE schemaname='public') GROUP BY table_name ORDER BY table_name`);
   return Object.fromEntries(r.rows.map((x) => [x.table_name, x.cols]));
 }
-async function empreintes(c, cols) {
+async function empreintes(c, cols, renommages = null) {
   const r = {};
   for (const [t, cs] of Object.entries(cols)) {
     r[t] = (await c.query(`SELECT count(*)::text AS n, md5(coalesce(string_agg(md5(row_to_json(x)::text),'' ORDER BY md5(row_to_json(x)::text)),'')) AS hash
-      FROM (SELECT ${cs.map(ident).join(',')} FROM public.${ident(t)}) x`)).rows[0];
+      FROM (SELECT ${cs.map((col) => renommages?.[t]?.[col] ? expression(t, col, renommages) : ident(col)).join(',')} FROM public.${ident(t)}) x`)).rows[0];
   }
   return r;
 }
@@ -48,7 +59,9 @@ async function migration(c, p) {
   const catalogue = p.type === 'sh' && cols.sh_modules_catalogue?.includes('code') ? cols.sh_modules_catalogue : null;
   const metier = Object.fromEntries(Object.entries(cols).filter(([t]) => t !== 'sh_migrations' && !(catalogue && t === 'sh_modules_catalogue')));
   for (const t of Object.keys(cols)) await c.query(`LOCK TABLE public.${ident(t)} IN SHARE ROW EXCLUSIVE MODE`);
-  const avant = await empreintes(c, metier);
+  // Avant : valeurs renommées projetées ; après : la colonne renommée est relue en texte pour comparer à type égal.
+  const renommages = p.type === 'sh' ? RENOMMAGES_SH : null;
+  const avant = await empreintes(c, metier, renommages);
   const catalogueAvant = catalogue ? await lignesCatalogue(c, catalogue) : null;
   const sequences = (await c.query("SELECT sequencename,last_value::text FROM pg_sequences WHERE schemaname='public' ORDER BY sequencename")).rows;
   if (p.type === 'sh') {
@@ -62,7 +75,8 @@ async function migration(c, p) {
   } else {
     for (const f of ['20261025-priorites.sql','20261025-simulation.sql']) await c.query(fs.readFileSync(path.join(p.code,'db/migrations',f),'utf8'));
   }
-  assert.deepEqual(await empreintes(c, metier), avant, 'Données existantes modifiées : publication refusée');
+  const identite = renommages && Object.fromEntries(Object.entries(renommages).map(([t, cs]) => [t, Object.fromEntries(Object.keys(cs).map((k) => [k, {}]))]));
+  assert.deepEqual(await empreintes(c, metier, identite), avant, 'Données existantes modifiées : publication refusée');
   const ajouts = [];
   if (catalogue) {
     const apres = await lignesCatalogue(c, catalogue);
@@ -253,4 +267,4 @@ if(require.main===module){
   Promise.resolve().then(()=>main(JSON.parse(input))).then(r=>process.stdout.write(JSON.stringify(r))).catch(e=>{console.error('CONTROLE_ECHOUE '+(e.code||e.name||'erreur'));process.exitCode=1;});
  });
 }
-module.exports={verifierCible,copie,AJOUTS_CATALOGUE_SH};
+module.exports={verifierCible,copie,AJOUTS_CATALOGUE_SH,RENOMMAGES_SH,expression};
