@@ -161,6 +161,14 @@ async function agir(pool, u, id, b) {
         const motif = MOTIFS.includes(b.motif) ? b.motif : 'autre';
         n = await maj("statut = 'refusee', motif_refus = $2", [motif]); detail = { motif };
       } else n = await maj(`statut = '${a}', ${a}_le = now()`);
+      // État du véhicule suivi automatiquement à chaque étape (16 nov. 2026) : le CCS, l'hôpital et l'établissement voient le même statut
+      const fixer = require('./vehicules').fixer;
+      if (a === 'en_route' && n.unite_id) await fixer(c, n.unite_id, 'en_route', { source: 'transport', utilisateurId: u.id || null });
+      if (a === 'pris_en_charge' && n.unite_id) await fixer(c, n.unite_id, 'transport_hopital', { destinationId: n.destination_id, source: 'transport', utilisateurId: u.id || null });
+      // Patient remis à destination : l'ambulance redevient disponible, sauf si une préalerte est encore ouverte (l'hôpital la clôt à la remise)
+      if (a === 'arrivee' && n.unite_id && !(await c.query(`SELECT 1 FROM prealertes WHERE unite_id = $1 AND statut NOT IN ('cloturee', 'annulee', 'remplacee')`, [n.unite_id])).rowCount) {
+        await fixer(c, n.unite_id, 'disponible', { source: 'transport_termine', utilisateurId: u.id || null });
+      }
     } else {
       if (a !== 'annuler') throw new ErreurHttp(400, 'action_inconnue');
       if (d.statut === 'pris_en_charge') throw new ErreurHttp(409, 'transport_statut_incompatible');

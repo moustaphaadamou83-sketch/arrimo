@@ -94,7 +94,7 @@ window.ARRIMO_I18N.en = {
     categorie: 'Emergency type (optional)', prefere: 'Preferred hospital (optional)', sans_preference: 'No preference',
     decision: 'Information only: the destination remains decided by the crew and protocols. Arrimo informs, it does not decide.',
     cat: { medicale: 'Medical', traumatologie: 'Trauma', cardiaque: 'Cardiac', neurologique: 'Neurological', respiratoire: 'Respiratory', pediatrique: 'Pediatric', obstetrique: 'Obstetric', sante_mentale: 'Mental health', autre: 'Other' },
-    ev: { disponible: 'available', en_route: 'en route', sur_place: 'on scene', transport_hopital: 'transport to hospital', a_l_hopital: 'at hospital', hors_service: 'out of service' },
+    ev: { disponible: 'available', en_route: 'en route', sur_place: 'on scene', transport_hopital: 'patient transport', a_l_hopital: 'at hospital', hors_service: 'out of service' },
     vehicule: 'vehicle {unite}{plaque}: {etat}', plaque: ' ({plaque})', vers: 'to {dest}', eta: 'expected arrival at {heure}', arrivee_confirmee: 'arrival confirmed by the hospital at {heure}',
     autre_dest: 'The crew chose {dest} (coordination: {coord}).', pref_info: 'Preferred: {h}', cat_info: 'Type: {cat}',
     up_classees: 'Ranked emergencies (availability, then driving time from your facility)', up_og: 'OG suggests {nom}: {temps}, {civ} free stretchers. Information only: the destination remains decided by the crew and protocols.', og_meilleur: 'OG: best choice', voir_carte: 'Show on map',

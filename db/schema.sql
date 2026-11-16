@@ -1540,6 +1540,10 @@ CREATE TABLE IF NOT EXISTS etat_vehicule_evenements (
   cree_le         timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS etat_vehicule_evenements_unite ON etat_vehicule_evenements (unite_id, id);
+-- 16 nov. 2026 : l'état suit aussi les étapes du transport et revient à « Disponible » à la remise (rejouable)
+ALTER TABLE etats_vehicules DROP CONSTRAINT IF EXISTS etats_vehicules_source_check;
+ALTER TABLE etats_vehicules ADD CONSTRAINT etats_vehicules_source_check
+  CHECK (source IN ('equipage', 'prealerte', 'arrivee_confirmee', 'transport', 'transport_termine', 'remise', 'mission_ccs'));
 DROP TRIGGER IF EXISTS etat_vehicule_evenements_pas_de_modif ON etat_vehicule_evenements;
 CREATE TRIGGER etat_vehicule_evenements_pas_de_modif BEFORE UPDATE OR DELETE ON etat_vehicule_evenements
   FOR EACH ROW EXECUTE FUNCTION journal_immuable();

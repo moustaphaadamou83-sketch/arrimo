@@ -384,6 +384,8 @@ async function agir(pool, u, id, b) {
         if (pa.statut !== 'arrivee') throw new ErreurHttp(409, 'prealerte_statut_incompatible');
         n = await maj("remise_le = now(), cloturee_le = now(), statut = 'cloturee'");
         await require('./reservations').liberer(c, pa.id, u.id || null, 'remise_sans_installation');
+        // Patient reçu par l'urgence : l'ambulance redevient disponible d'elle-même (décision de Moustafa, 16 nov. 2026)
+        await vehicules.fixer(c, pa.unite_id, 'disponible', { source: 'remise', utilisateurId: u.id || null });
       } else if (a === 'signaler_probleme') {
         const motif = String(b.probleme || '');
         if (!PROBLEMES.includes(motif)) throw new ErreurHttp(400, 'prealerte_invalide');

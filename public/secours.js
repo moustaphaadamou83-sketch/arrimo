@@ -35,7 +35,7 @@
       vehicule: 'État du véhicule', vehicule_aide: 'Un geste suffit ; le CCS le voit. Il passe seul à « Transport vers l’hôpital » à l’envoi d’une préalerte et à « À l’hôpital » à l’arrivée confirmée.',
       vehicules: 'Véhicules de la région', vehicules_aide: 'Consultation seulement : aucune attribution ni répartition dans Arrimo ; votre système de répartition reste la référence.',
       aucun_vehicule: 'Aucun véhicule.', non_declare: 'état non déclaré', maj: 'mis à jour à {heure}', maj_auto: 'automatique', sans_position: 'position non partagée',
-      ev: { disponible: 'Disponible', en_route: 'En route', sur_place: 'Sur place', transport_hopital: 'Transport vers l’hôpital', a_l_hopital: 'À l’hôpital', hors_service: 'Hors service' },
+      ev: { disponible: 'Disponible', en_route: 'En route', sur_place: 'Sur place', transport_hopital: 'Transport du patient', a_l_hopital: 'À l’hôpital', hors_service: 'Hors service' },
       carte_amb: 'Urgences proches et trajet', classees: 'Urgences classées', classees_aide: 'Depuis {depart} · position {heure}. Tri : disponibilité, puis temps de route.',
       c_urgence: 'Urgence', c_temps: 'Temps de route', c_dist: 'Distance', c_civ: 'Civières libres', c_statut: 'Statut', c_services: 'Services ouverts',
       og_meilleur: 'OG : meilleur choix', og_phrase: 'OG propose {nom} : {temps}, {civ} civières libres{services}. Information seulement : la destination reste décidée par l’équipage et les protocoles.',
@@ -57,7 +57,7 @@
       ccs_consult: 'Consultation seulement.', ccs_consult_suite: 'Votre système de répartition reste la référence : Arrimo affiche la capacité des urgences et l’état des véhicules, il n’attribue aucune mission.', depuis_attente: 'Depuis (en attendant la position de l’unité)', k_urgences: 'urgences de la région', k_sat: 'aucune urgence saturée', k_sat_noms: 'en saturation ({noms})', k_civ: 'civières libres au total',
       k_mission: 'ambulances en mission', k_pa: 'préalertes en cours', og_sat: 'Saturation : {noms}.', og_aucune_sat: 'Aucune urgence saturée.', og_libre: '{nom} garde le plus de civières libres ({n}) ; préalertes en route vers elle : {vers}.',
       og_pa: 'Préalertes en cours dans la région : {n}.', demandes_etab: 'Demandes des établissements', c_origine: 'Origine', c_type: 'Type', c_transport: 'Transport',
-      depuis: 'Depuis', choisir_dest: 'Choisir', pres_de: 'près de {lieu}', il_y_a: 'il y a {n} min', arrive_dans: 'arrive dans {n} min ({km} km)', flotte: 'Ambulances', c_unite: 'Unité', c_plaque: 'Plaque', c_etat: 'État', c_lieu: 'Lieu actuel',
+      depuis: 'Depuis', choisir_dest: 'Choisir', pres_de: 'près de {lieu}', il_y_a: 'il y a {n} min', arrive_dans: 'arrive dans {n} min ({km} km)', flotte: 'Ambulances', c_mission: 'Mission en cours', c_unite: 'Unité', c_plaque: 'Plaque', c_etat: 'État', c_lieu: 'Lieu actuel',
       tr_cat: 'type d’urgence : {cat}', tr_pref: 'hôpital souhaité : {h} (information, la destination reste votre décision)',
       prio: { immediate: 'Immédiate', urgente: 'Urgente', non_urgente: 'Non urgente' },
       cat: { medicale: 'Médicale', traumatologie: 'Traumatologie', cardiaque: 'Cardiaque', neurologique: 'Neurologique', respiratoire: 'Respiratoire', pediatrique: 'Pédiatrique',
@@ -94,7 +94,7 @@
       vehicule: 'Vehicle status', vehicule_aide: 'One tap is enough; the CCS sees it. It switches automatically to “Transport to hospital” when a pre-alert is sent and to “At hospital” when arrival is confirmed.',
       vehicules: 'Vehicles in the region', vehicules_aide: 'View only: no assignment or dispatch in Arrimo; your dispatch system remains the reference.',
       aucun_vehicule: 'No vehicle.', non_declare: 'status not declared', maj: 'updated at {heure}', maj_auto: 'automatic', sans_position: 'position not shared',
-      ev: { disponible: 'Available', en_route: 'En route', sur_place: 'On scene', transport_hopital: 'Transport to hospital', a_l_hopital: 'At hospital', hors_service: 'Out of service' },
+      ev: { disponible: 'Available', en_route: 'En route', sur_place: 'On scene', transport_hopital: 'Patient transport', a_l_hopital: 'At hospital', hors_service: 'Out of service' },
       carte_amb: 'Nearby emergencies and route', classees: 'Ranked emergencies', classees_aide: 'From {depart} · position {heure}. Sorted by availability, then driving time.',
       c_urgence: 'Emergency', c_temps: 'Driving time', c_dist: 'Distance', c_civ: 'Free stretchers', c_statut: 'Status', c_services: 'Open services',
       og_meilleur: 'OG: best choice', og_phrase: 'OG suggests {nom}: {temps}, {civ} free stretchers{services}. Information only: the destination remains decided by the crew and protocols.',
@@ -116,7 +116,7 @@
       ccs_consult: 'View only.', ccs_consult_suite: 'Your dispatch system remains the reference: Arrimo shows emergency capacity and vehicle status; it assigns no mission.', depuis_attente: 'From (until the unit position is sent)', k_urgences: 'emergencies in the region', k_sat: 'no saturated emergency', k_sat_noms: 'saturated ({noms})', k_civ: 'free stretchers in total',
       k_mission: 'ambulances on a mission', k_pa: 'pre-alerts in progress', og_sat: 'Saturation: {noms}.', og_aucune_sat: 'No saturated emergency.', og_libre: '{nom} keeps the most free stretchers ({n}); pre-alerts on the way to it: {vers}.',
       og_pa: 'Pre-alerts in progress in the region: {n}.', demandes_etab: 'Requests from facilities', c_origine: 'Origin', c_type: 'Type', c_transport: 'Transport',
-      depuis: 'From', choisir_dest: 'Choose', pres_de: 'near {lieu}', il_y_a: '{n} min ago', arrive_dans: 'arrives in {n} min ({km} km)', flotte: 'Ambulances', c_unite: 'Unit', c_plaque: 'Plate', c_etat: 'Status', c_lieu: 'Current location',
+      depuis: 'From', choisir_dest: 'Choose', pres_de: 'near {lieu}', il_y_a: '{n} min ago', arrive_dans: 'arrives in {n} min ({km} km)', flotte: 'Ambulances', c_mission: 'Current mission', c_unite: 'Unit', c_plaque: 'Plate', c_etat: 'Status', c_lieu: 'Current location',
       tr_cat: 'emergency type: {cat}', tr_pref: 'preferred hospital: {h} (information only, the destination remains your decision)',
       prio: { immediate: 'Immediate', urgente: 'Urgent', non_urgente: 'Non-urgent' },
       cat: { medicale: 'Medical', traumatologie: 'Trauma', cardiaque: 'Cardiac', neurologique: 'Neurological', respiratoire: 'Respiratory', pediatrique: 'Pediatric',
@@ -395,9 +395,10 @@
         <td data-l="${t('c_transport')}">${d.unite ? `${esc(d.unite)} · ` : ''}${esc(t('trs.' + d.statut))}</td></tr>`).join('')}</tbody></table>` : `<p class="note">${t('tr_aucune')}</p>`}</section>`;
   }
   function tableauFlotte() {
-    return `<section class="carte-s"><h2>${t('flotte')}</h2><p class="note">${t('vehicules_aide')}</p><table class="classe"><thead><tr><th>${t('c_unite')}</th><th>${t('c_plaque')}</th><th>${t('c_etat')}</th><th>${t('destination').split(' (')[0]}</th><th>${t('c_lieu')}</th></tr></thead><tbody>
-      ${etat.vehicules.map((v) => `<tr><td data-l="${t('c_unite')}"><strong>${esc(v.numero)}</strong></td><td data-l="${t('c_plaque')}">${esc(v.plaque || '—')}</td><td data-l="${t('c_etat')}">${pastilleV(v.etat)}</td>
-        <td data-l="${t('destination').split(' (')[0]}">${v.destination ? esc(ArrimoCarte.court(v.destination)) : '—'}</td><td data-l="${t('c_lieu')}">${esc(lieuActuel(v))}</td></tr>`).join('') || `<tr><td colspan="5">${t('aucun_vehicule')}</td></tr>`}</tbody></table></section>`;
+    return `<section class="carte-s"><h2>${t('flotte')}</h2><p class="note">${t('vehicules_aide')}</p><table class="classe"><thead><tr><th>${t('c_unite')}</th><th>${t('c_plaque')}</th><th>${t('c_etat')}</th><th>${t('c_mission')}</th><th>${t('destination').split(' (')[0]}</th><th>${t('c_lieu')}</th></tr></thead><tbody>
+      ${etat.vehicules.map((v) => `<tr data-vehicule="${esc(v.numero)}"><td data-l="${t('c_unite')}"><strong>${esc(v.numero)}</strong></td><td data-l="${t('c_plaque')}">${esc(v.plaque || '—')}</td><td data-l="${t('c_etat')}">${pastilleV(v.etat)}</td>
+        <td data-l="${t('c_mission')}">${v.mission ? `${esc(v.mission.numero)} · ${esc(v.mission.type === 'prealerte' ? t('e_' + v.mission.statut) : t('trs.' + v.mission.statut))}` : '—'}</td>
+        <td data-l="${t('destination').split(' (')[0]}">${v.destination ? esc(ArrimoCarte.court(v.destination)) : '—'}</td><td data-l="${t('c_lieu')}">${esc(lieuActuel(v))}</td></tr>`).join('') || `<tr><td colspan="6">${t('aucun_vehicule')}</td></tr>`}</tbody></table></section>`;
   }
   function positionCarte(u) {
     return `<p style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 8px"><button class="btn" type="button" data-act="actualiser">${t('actualiser')}</button>

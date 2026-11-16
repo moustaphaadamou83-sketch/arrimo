@@ -94,7 +94,7 @@ window.ARRIMO_I18N.fr = {
     categorie: 'Type d’urgence (facultatif)', prefere: 'Hôpital souhaité (facultatif)', sans_preference: 'Aucune préférence',
     decision: 'Information seulement : la destination reste décidée par l’équipage et les protocoles. Arrimo informe, il ne décide pas.',
     cat: { medicale: 'Médicale', traumatologie: 'Traumatologie', cardiaque: 'Cardiaque', neurologique: 'Neurologique', respiratoire: 'Respiratoire', pediatrique: 'Pédiatrique', obstetrique: 'Obstétrique', sante_mentale: 'Santé mentale', autre: 'Autre' },
-    ev: { disponible: 'disponible', en_route: 'en route', sur_place: 'sur place', transport_hopital: 'transport vers l’hôpital', a_l_hopital: 'à l’hôpital', hors_service: 'hors service' },
+    ev: { disponible: 'disponible', en_route: 'en route', sur_place: 'sur place', transport_hopital: 'transport du patient', a_l_hopital: 'à l’hôpital', hors_service: 'hors service' },
     vehicule: 'véhicule {unite}{plaque} : {etat}', plaque: ' ({plaque})', vers: 'vers {dest}', eta: 'arrivée prévue à {heure}', arrivee_confirmee: 'arrivée confirmée par l’hôpital à {heure}',
     autre_dest: 'L’équipage a choisi {dest} (coordination : {coord}).', pref_info: 'Souhaité : {h}', cat_info: 'Type : {cat}',
     up_classees: 'Urgences classées (disponibilité, puis temps de route depuis votre établissement)', up_og: 'OG propose {nom} : {temps}, {civ} civières libres. Information seulement : la destination reste décidée par l’équipage et les protocoles.', og_meilleur: 'OG : meilleur choix', voir_carte: 'Voir sur la carte',
