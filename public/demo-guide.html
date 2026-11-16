@@ -27,7 +27,27 @@
 <nav><a href="#fr">Français</a><a href="#en">English</a></nav>
 
 <section id="fr" lang="fr-CA">
-<h1>Scénario guidé : du malaise au CHSLD au retour du résident</h1>
+<h1>Parcours principal : sortie d’un patient NSA, retour d’un résident, famille, lits</h1>
+<p><b>Données fictives seulement.</b> Deux fenêtres : Hôpital B (<code>hopital.b@demo.arrimo</code>) et CHSLD des Érables (<code>coordination.erables@chsld.example.invalid</code>) ; Arrimo Famille sur un téléphone (<code>/proches</code>, <code>marie.dupont@example.invalid</code>). Mot de passe : celui de la démonstration.</p>
+<ol class="etapes">
+  <li><span class="qui">Hôpital B → onglet « Lits »</span>
+    <p>Le tableau des lits : occupés, libres, fermés faute de personnel. Onglet « NSA » : taux comparé à la cible de 8 %, trois patients qui attendent une autre ressource.</p></li>
+  <li><span class="qui">Hôpital B → « NSA » → « Orienter vers un CHSLD »</span>
+    <p>Les CHSLD sont proposés du plus proche au plus loin, avec leurs places libres. Choisir le CHSLD des Érables, cocher les documents transmis, « Transmettre la demande ». Aucune donnée clinique ; le CHSLD décide de la place.</p></li>
+  <li><span class="qui">CHSLD des Érables → « Demandes d’hébergement »</span>
+    <p>La demande arrive (« Patient NSA de Hôpital B »). « Passer en vérification », « Proposer une place » (elle est réservée), « Accepter ».</p></li>
+  <li><span class="qui">Hôpital B → « NSA » → « Sorties vers les CHSLD »</span>
+    <p>« Confirmer le départ » : le lit part au nettoyage, le tableau des lits suit. Le CHSLD ne peut pas confirmer l’arrivée avant ce départ.</p></li>
+  <li><span class="qui">CHSLD des Érables → « Admissions et sorties »</span>
+    <p>« Confirmer l’arrivée » : le résident est admis ; l’Hôpital B voit « Arrivé au CHSLD ».</p></li>
+  <li><span class="qui">Hôpital B → « Liaison CHSLD et résidences » → Jean Dupont (R-00001), hospitalisé</span>
+    <p>« Préparer le retour au CHSLD ». CHSLD → « Transferts et hospitalisations » : « Accepter ». Puis « Personnel et tâches » : terminer « Préparer la chambre pour le retour de R-00001 » ; la chambre est alors déclarée prête d’elle-même.</p></li>
+  <li><span class="qui">Hôpital B, puis CHSLD des Érables</span>
+    <p>Hôpital : « Confirmer le départ » (le lit part au nettoyage). CHSLD : « Confirmer l’arrivée », puis « Réintégrer dans sa chambre ».</p></li>
+  <li><span class="qui">CHSLD des Érables → fiche de Jean Dupont → Proches → Marie</span>
+    <p>Avis à la famille, catégorie « Mouvements » : « Retour confirmé ce jour ». Sur le téléphone, Arrimo Famille montre le message et les étapes du retour, sans aucun détail clinique.</p></li>
+</ol>
+<h2>Second temps : préhospitalier (du malaise au CHSLD au retour du résident)</h2>
 <p><b>Données fictives seulement.</b> Établissements existants de la démonstration (CHSLD des Érables, Hôpital B — Mont-Clair), « CCS de démonstration » et « Ambulances de démonstration » (unités DM-101 à DM-103). Mot de passe : celui de la démonstration (jamais affiché ici). Ouvrez chaque compte dans une fenêtre séparée ; l'ambulance sur un téléphone (<code>/secours</code>).</p>
 <p>Arrimo complète le 911, les CCS et les protocoles : il informe, il ne choisit jamais une destination, un service ni une priorité clinique. Chaque étape est confirmée par une personne. Aucune attribution ni répartition dans Arrimo.</p>
 <ol class="etapes">
@@ -53,16 +73,28 @@
   <li><span class="qui">Hôpital B → onglet « Liaison CHSLD et résidences »</span>
     <p>« Confirmer l’arrivée » → « Orienter / admettre le patient » → urgence (civière libre), puis lit.</p></li>
   <li><span class="qui">Hôpital B, puis CHSLD des Érables</span>
-    <p>Hôpital : « Préparer le retour au CHSLD ». CHSLD : accepter, « Déclarer la chambre prête ». Hôpital : « Demander un transport » sur le retour ; l’ambulance l’effectue. Hôpital : « Confirmer le départ ». CHSLD : confirmer l’arrivée puis « Réintégrer dans sa chambre ».</p></li>
+    <p>Hôpital : « Préparer le retour au CHSLD ». CHSLD : accepter, puis terminer la tâche de préparation de la chambre (« Personnel et tâches ») : la chambre est déclarée prête d’elle-même. Hôpital : « Demander un transport » sur le retour ; l’ambulance l’effectue. Hôpital : « Confirmer le départ ». CHSLD : confirmer l’arrivée puis « Réintégrer dans sa chambre ».</p></li>
   <li><span class="qui">CHSLD des Érables → fiche du résident → Proches</span>
-    <p>Avis à la famille : message au proche autorisé, catégorie « Hospitalisation et retour » (« Retour confirmé ce jour »). Aucun détail clinique.</p></li>
+    <p>Avis à la famille : message au proche autorisé, catégorie « Mouvements » (« Retour confirmé ce jour »). Aucun détail clinique.</p></li>
 </ol>
 <h2>Remettre la démo à zéro</h2>
 <p>Avant chaque présentation : compte <code>reseau@demo.arrimo</code> → Administration → Démo → « Remettre la démo à zéro » (ou, sur le serveur de démonstration seulement, <code>npm run demo:reset</code>). Les CHSLD et la RPA de démonstration se recréent depuis SH (« démonstration en un clic »).</p>
 </section>
 
 <section id="en" lang="en-CA">
-<h1>Guided scenario: from a resident’s malaise at the CHSLD to the return home</h1>
+<h1>Main scenario: ALC patient discharge, resident return, family, beds</h1>
+<p><b>Fictitious data only.</b> Two windows: Hospital B (<code>hopital.b@demo.arrimo</code>) and CHSLD des Érables (<code>coordination.erables@chsld.example.invalid</code>); Arrimo Family on a phone (<code>/proches</code>, <code>marie.dupont@example.invalid</code>).</p>
+<ol class="etapes">
+  <li><span class="qui">Hospital B → Beds, then ALC</span><p>Bed board (occupied, free, closed for lack of staff); ALC rate against the 8% target, three patients waiting.</p></li>
+  <li><span class="qui">Hospital B → ALC → “Refer to a CHSLD”</span><p>CHSLDs nearest first with free rooms; choose CHSLD des Érables, documents, “Send the request”. No clinical data; the CHSLD decides on the room.</p></li>
+  <li><span class="qui">CHSLD des Érables → Placement requests</span><p>Verify, offer a room (reserved), accept.</p></li>
+  <li><span class="qui">Hospital B → ALC → Discharges to CHSLDs</span><p>“Confirm departure”: the bed goes to cleaning. The CHSLD cannot confirm the arrival before.</p></li>
+  <li><span class="qui">CHSLD des Érables → Admissions and discharges</span><p>“Confirm arrival”; Hospital B sees “Arrived at the CHSLD”.</p></li>
+  <li><span class="qui">Hospital B → CHSLD liaison → Jean Dupont (R-00001)</span><p>Prepare the return; CHSLD accepts, completes the room preparation task (Staff and tasks): the room is ready automatically.</p></li>
+  <li><span class="qui">Hospital B, then CHSLD</span><p>Confirm departure; confirm arrival; reinstate in his room.</p></li>
+  <li><span class="qui">CHSLD → Jean Dupont → Family → Marie</span><p>Message, “Movements” category: “Return confirmed today”. Arrimo Family shows the message and the return steps, no clinical detail.</p></li>
+</ol>
+<h2>Second part: pre-hospital (from a resident’s malaise at the CHSLD to the return home)</h2>
 <p><b>Fictitious data only.</b> Existing demo facilities (CHSLD des Érables, Hospital B — Mont-Clair), “demo CCS” and “demo ambulances” (units DM-101 to DM-103). Password: the demo password (never shown here). The ambulance on a phone (<code>/secours</code>). Arrimo informs; it never chooses a destination, and nothing is assigned or dispatched in Arrimo.</p>
 <ol class="etapes">
   <li><span class="qui">CHSLD des Érables → Nearby emergencies</span><p>Map and list: free stretchers, declared status, open services, intensive care beds for information; no other patient data.</p></li>
@@ -73,7 +105,7 @@
   <li><span class="qui">Hospital B → Emergency liaison</span><p>Acknowledge, confirm the department proposed by OG, preparation.</p></li>
   <li><span class="qui">Ambulance, then Hospital B</span><p>Report arrival; confirm vehicle DM-101 (status “At hospital”, CHSLD sees “arrival confirmed”), handover.</p></li>
   <li><span class="qui">Hospital B, then CHSLD</span><p>Admission, then return: room ready, return transport, departure, arrival, reinstatement.</p></li>
-  <li><span class="qui">CHSLD → family</span><p>Message to the authorized family member, “Hospital stay and return” category; no clinical detail.</p></li>
+  <li><span class="qui">CHSLD → family</span><p>Message to the authorized family member, “Movements” category; no clinical detail.</p></li>
 </ol>
 <p>Reset before each presentation: <code>reseau@demo.arrimo</code> → Administration → Demo → reset.</p>
 </section>
