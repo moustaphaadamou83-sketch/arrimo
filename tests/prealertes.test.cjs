@@ -912,3 +912,57 @@ test('intégration : page publique et réponse d’OG sur le DSN (complément, j
   const autre = (await appel('tremblay', 'POST', '/assistant', { etablissement_id: ids.mb, question: 'Combien de lits libres en médecine ?' })).corps;
   assert.ok(!(autre.intentions || []).includes('integration'));
 });
+
+test('mission proposée par le CCS : Arrimo transmet, le CCS décide, l’équipage accepte ou refuse ; même statut partout ; position en « Disponible », jamais hors service', async () => {
+  const u7 = (await pool.query("INSERT INTO unites_secours (organisation_id, numero, plaque) VALUES ($1, '12-70', 'FICT 070') RETURNING id", [ids.ambA])).rows[0].id;
+  const u8 = (await pool.query("INSERT INTO unites_secours (organisation_id, numero, plaque) VALUES ($1, '12-80', 'FICT 080') RETURNING id", [ids.ambA])).rows[0].id;
+  const vu = async (id) => (await appel('ccs', 'GET', '/secours/vehicules')).corps.find((x) => x.id === id);
+  // Position transmise en « Disponible » : visible du CCS ; hors service : jamais montrée
+  await appel('para', 'POST', `/secours/unites/${u7}/position`, { latitude: 45.40, longitude: -71.89 });
+  assert.ok((await vu(u7)).position, 'position d’une ambulance disponible visible du CCS');
+  await appel('para', 'POST', `/secours/unites/${u8}/etat`, { etat: 'hors_service' });
+  await appel('para', 'POST', `/secours/unites/${u8}/position`, { latitude: 45.41, longitude: -71.88 });
+  assert.strictEqual((await vu(u8)).position, null, 'jamais la position d’une ambulance hors service');
+  // Refus : rôle, données, unité non disponible
+  const corps = { unite_id: u7, lieu: '120, rue des Érables, Val-des-Pins', priorite: 'urgente', categorie: 'cardiaque' };
+  assert.strictEqual((await appel('para', 'POST', '/secours/missions', corps)).statut, 403, 'l’équipage ne se propose pas de mission');
+  assert.strictEqual((await appel('ccs', 'POST', '/secours/missions', { ...corps, lieu: '  ' })).corps.code, 'mission_lieu_requis');
+  assert.strictEqual((await appel('ccs', 'POST', '/secours/missions', { ...corps, categorie: 'douleur thoracique' })).corps.code, 'mission_invalide');
+  assert.strictEqual((await appel('ccs', 'POST', '/secours/missions', { ...corps, unite_id: u8 })).corps.code, 'unite_non_disponible');
+  // 1. Le CCS transmet ; une seule mission ouverte par unité
+  const m = (await appel('ccs', 'POST', '/secours/missions', corps)).corps;
+  assert.match(m.numero, /^MI-\d{6}$/); assert.strictEqual(m.statut, 'proposee');
+  assert.strictEqual((await appel('ccs', 'POST', '/secours/missions', corps)).corps.code, 'unite_deja_sollicitee');
+  let v = await vu(u7); assert.deepStrictEqual([v.etat || 'disponible', v.mission.type, v.mission.statut], ['disponible', 'mission', 'proposee']);
+  // L'autre organisation ne la voit pas et ne peut pas y répondre
+  assert.ok(!(await appel('paraB', 'GET', '/secours/missions')).corps.some((x) => x.id === m.id));
+  assert.strictEqual((await appel('paraB', 'POST', `/secours/missions/${m.id}/action`, { action: 'accepter' })).statut, 404);
+  assert.strictEqual((await appel('ccs', 'POST', `/secours/missions/${m.id}/action`, { action: 'accepter' })).corps.code, 'action_inconnue', 'le CCS ne répond pas à la place de l’équipage');
+  // 2. L'équipage accepte : « En route » partout ; puis sur place
+  const mAmb = (await appel('para', 'GET', '/secours/missions')).corps.find((x) => x.id === m.id);
+  assert.strictEqual(mAmb.lieu, corps.lieu);
+  let r = await appel('para', 'POST', `/secours/missions/${m.id}/action`, { action: 'accepter', version: mAmb.version });
+  assert.strictEqual(r.corps.statut, 'acceptee');
+  v = await vu(u7); assert.deepStrictEqual([v.etat, v.source, v.mission.statut], ['en_route', 'mission_ccs', 'acceptee']);
+  r = await appel('para', 'POST', `/secours/missions/${m.id}/action`, { action: 'sur_place' });
+  assert.strictEqual((await vu(u7)).etat, 'sur_place');
+  // 3. Patient à transporter : la préalerte prolonge la mission, qui se termine ; l'état devient « Transport du patient »
+  const pa = (await appel('para', 'POST', '/secours/prealertes', { unite_id: u7, destination_id: ids.mb, priorite: 'urgente', categorie: 'cardiaque', delai_min: 12 })).corps;
+  assert.ok(pa.numero);
+  v = await vu(u7); assert.deepStrictEqual([v.etat, v.mission.type], ['transport_hopital', 'prealerte']);
+  assert.strictEqual((await pool.query('SELECT statut FROM missions_ccs WHERE id = $1', [m.id])).rows[0].statut, 'terminee');
+  await appel('para', 'POST', `/secours/prealertes/${pa.id}/action`, { action: 'annuler', motif: 'autre' }).catch(() => {});
+  // 4. Refus par l'équipage et annulation par le CCS : l'unité reste ou redevient disponible
+  await appel('para', 'POST', `/secours/unites/${u7}/etat`, { etat: 'disponible' });
+  const m2 = (await appel('ccs', 'POST', '/secours/missions', corps)).corps;
+  r = await appel('para', 'POST', `/secours/missions/${m2.id}/action`, { action: 'refuser', motif: 'hors_secteur' });
+  assert.deepStrictEqual([r.corps.statut, r.corps.motif_refus], ['refusee', 'hors_secteur']);
+  assert.strictEqual((await vu(u7)).etat, 'disponible');
+  const m3 = (await appel('ccs', 'POST', '/secours/missions', corps)).corps;
+  await appel('para', 'POST', `/secours/missions/${m3.id}/action`, { action: 'accepter' });
+  r = await appel('ccs', 'POST', `/secours/missions/${m3.id}/action`, { action: 'annuler' });
+  assert.strictEqual(r.corps.statut, 'annulee');
+  v = await vu(u7); assert.deepStrictEqual([v.etat, v.mission], ['disponible', null]);
+  // Historique immuable
+  await assert.rejects(pool.query('DELETE FROM mission_ccs_evenements'));
+});

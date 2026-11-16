@@ -33,7 +33,7 @@
       acc: { fauteuil: 'fauteuil roulant', deambulateur: 'déambulateur', leve_personne: 'lève-personne', lit_electrique: 'lit électrique', malentendant: 'malentendant', malvoyant: 'malvoyant' },
       accompagnateur: 'accompagnateur', langue: 'langue : {l}',
       vehicule: 'État du véhicule', vehicule_aide: 'Un geste suffit ; le CCS le voit. Il passe seul à « Transport vers l’hôpital » à l’envoi d’une préalerte et à « À l’hôpital » à l’arrivée confirmée.',
-      vehicules: 'Véhicules de la région', vehicules_aide: 'Consultation seulement : aucune attribution ni répartition dans Arrimo ; votre système de répartition reste la référence.',
+      vehicules: 'Véhicules de la région', vehicules_aide: 'Arrimo transmet, le CCS décide : proposez une mission à une unité disponible, l’équipage accepte ou refuse. Votre système de répartition reste la référence.',
       aucun_vehicule: 'Aucun véhicule.', non_declare: 'état non déclaré', maj: 'mis à jour à {heure}', maj_auto: 'automatique', sans_position: 'position non partagée',
       ev: { disponible: 'Disponible', en_route: 'En route', sur_place: 'Sur place', transport_hopital: 'Transport du patient', a_l_hopital: 'À l’hôpital', hors_service: 'Hors service' },
       carte_amb: 'Urgences proches et trajet', classees: 'Urgences classées', classees_aide: 'Depuis {depart} · position {heure}. Tri : disponibilité, puis temps de route.',
@@ -41,7 +41,7 @@
       og_meilleur: 'OG : meilleur choix', og_phrase: 'OG propose {nom} : {temps}, {civ} civières libres{services}. Information seulement : la destination reste décidée par l’équipage et les protocoles.',
       vol: 'à vol d’oiseau', inconnu: 'inconnu', rang: ['Ouverte', 'Capacité limitée', 'Saturée', 'Inconnue'], sv_court: { urgence_generale: 'Gén.', cardiologie: 'Cardio', neurologie: 'AVC', traumatologie: 'Trauma' },
       sans_position: 'Position inconnue : touchez « Actualiser la position ».', actualiser: 'Actualiser la position', position_prise: 'Position transmise à {heure}.', voir_carte: 'Voir sur la carte',
-      position_regle: 'Position prise par le téléphone à chaque changement d’état, à l’envoi de la préalerte, sur « Actualiser » et environ chaque minute pendant le transport ; conservée 24 h.',
+      position_regle: 'Position prise par le téléphone à chaque changement d’état, à l’envoi de la préalerte, sur « Actualiser », environ chaque minute pendant le transport et toutes les 2 minutes en « Disponible » (jamais hors service) ; conservée 24 h.',
       cf: { en_attente: 'En attente de l’hôpital', acceptee: 'Accepté, on vous attend', sans_reponse: 'Sans réponse : acceptée, poursuite', avertie: 'Priorité immédiate : hôpital averti', reorientee: 'Réorienté' },
       motif: { delestage: 'délestage', scanner_indisponible: 'scanner indisponible', service_ferme: 'service fermé', autre: 'autre' },
       res: { reservee: 'civière {c} réservée', sans_civiere: 'aucune civière libre', installee: 'patient installé sur {c}', liberee: 'réservation libérée' },
@@ -57,6 +57,15 @@
       ccs_consult: 'Consultation seulement.', ccs_consult_suite: 'Votre système de répartition reste la référence : Arrimo affiche la capacité des urgences et l’état des véhicules, il n’attribue aucune mission.', depuis_attente: 'Depuis (en attendant la position de l’unité)', k_urgences: 'urgences de la région', k_sat: 'aucune urgence saturée', k_sat_noms: 'en saturation ({noms})', k_civ: 'civières libres au total',
       k_mission: 'ambulances en mission', k_pa: 'préalertes en cours', og_sat: 'Saturation : {noms}.', og_aucune_sat: 'Aucune urgence saturée.', og_libre: '{nom} garde le plus de civières libres ({n}) ; préalertes en route vers elle : {vers}.',
       og_pa: 'Préalertes en cours dans la région : {n}.', demandes_etab: 'Demandes des établissements', c_origine: 'Origine', c_type: 'Type', c_transport: 'Transport',
+      mi_titre: 'Proposer une mission', mi_aide: 'Choisissez une unité disponible ; l’équipage reçoit une alerte et accepte ou refuse. Lieu : adresse ou repère, jamais un nom.',
+      mi_lieu: 'Lieu de l’intervention', mi_lieu_ex: 'ex. 120, rue des Érables, Val-des-Pins', mi_proposer: 'Transmettre la mission', mi_aucune_dispo: 'Aucune unité disponible pour le moment.',
+      mi_num: 'Mission', mi_annuler: 'Annuler', mi_envoyee: 'Mission {numero} transmise à {unite}.', mi_recue: 'Mission proposée par le CCS · {numero}', mi_par_ccs: 'Proposée par le CCS',
+      mi_accepter: 'Accepter', mi_refuser: 'Refuser', mi_sur_place: 'Sur place', mi_terminer: 'Terminer sans transport',
+      mi_suite: 'Patient à transporter : « Transmettre la préalerte » ci-dessous ; la mission se termine d’elle-même.', mi_confirmer_refus: 'Refuser cette mission ? Le CCS en est averti.',
+      mi_confirmer_annuler: 'Annuler cette mission ? L’équipage en est averti.', mi_ok_accepter: 'Mission acceptée : état « En route ».', mi_ok_refuser: 'Mission refusée.', mi_ok_sur_place: 'Sur place.',
+      mi_ok_terminer: 'Mission terminée : état « Disponible ».', mi_ok_annuler: 'Mission annulée.',
+      mi: { proposee: 'proposée, réponse attendue', acceptee: 'acceptée, en route', refusee: 'refusée', sur_place: 'sur place', terminee: 'terminée', annulee: 'annulée par le CCS', en_route: 'en route', pris_en_charge: 'patient à bord', demandee: 'à accepter', arrivee: 'arrivée' },
+      mi_motif: { deja_en_mission: 'déjà en mission', hors_secteur: 'hors secteur', equipage_indisponible: 'équipage indisponible', autre: 'autre' },
       depuis: 'Depuis', choisir_dest: 'Choisir', pres_de: 'près de {lieu}', il_y_a: 'il y a {n} min', arrive_dans: 'arrive dans {n} min ({km} km)', flotte: 'Ambulances', c_mission: 'Mission en cours', c_unite: 'Unité', c_plaque: 'Plaque', c_etat: 'État', c_lieu: 'Lieu actuel',
       tr_cat: 'type d’urgence : {cat}', tr_pref: 'hôpital souhaité : {h} (information, la destination reste votre décision)',
       prio: { immediate: 'Immédiate', urgente: 'Urgente', non_urgente: 'Non urgente' },
@@ -92,7 +101,7 @@
       acc: { fauteuil: 'wheelchair', deambulateur: 'walker', leve_personne: 'patient lift', lit_electrique: 'electric bed', malentendant: 'hard of hearing', malvoyant: 'visually impaired' },
       accompagnateur: 'escort', langue: 'language: {l}',
       vehicule: 'Vehicle status', vehicule_aide: 'One tap is enough; the CCS sees it. It switches automatically to “Transport to hospital” when a pre-alert is sent and to “At hospital” when arrival is confirmed.',
-      vehicules: 'Vehicles in the region', vehicules_aide: 'View only: no assignment or dispatch in Arrimo; your dispatch system remains the reference.',
+      vehicules: 'Vehicles in the region', vehicules_aide: 'Arrimo relays, the CCS decides: offer a mission to an available unit; the crew accepts or declines. Your dispatch system remains the reference.',
       aucun_vehicule: 'No vehicle.', non_declare: 'status not declared', maj: 'updated at {heure}', maj_auto: 'automatic', sans_position: 'position not shared',
       ev: { disponible: 'Available', en_route: 'En route', sur_place: 'On scene', transport_hopital: 'Patient transport', a_l_hopital: 'At hospital', hors_service: 'Out of service' },
       carte_amb: 'Nearby emergencies and route', classees: 'Ranked emergencies', classees_aide: 'From {depart} · position {heure}. Sorted by availability, then driving time.',
@@ -100,7 +109,7 @@
       og_meilleur: 'OG: best choice', og_phrase: 'OG suggests {nom}: {temps}, {civ} free stretchers{services}. Information only: the destination remains decided by the crew and protocols.',
       vol: 'as the crow flies', inconnu: 'unknown', rang: ['Open', 'Limited capacity', 'Saturated', 'Unknown'], sv_court: { urgence_generale: 'Gen.', cardiologie: 'Cardio', neurologie: 'Stroke', traumatologie: 'Trauma' },
       sans_position: 'Position unknown: tap “Refresh position”.', actualiser: 'Refresh position', position_prise: 'Position sent at {heure}.', voir_carte: 'Show on map',
-      position_regle: 'Position taken by the phone at each status change, when the pre-alert is sent, on “Refresh” and about every minute during transport; kept 24 h.',
+      position_regle: 'Position taken by the phone at each status change, when the pre-alert is sent, on “Refresh”, about every minute during transport and every 2 minutes when “Available” (never out of service); kept 24 h.',
       cf: { en_attente: 'Waiting for the hospital', acceptee: 'Accepted, we are expecting you', sans_reponse: 'No answer: accepted, continuing', avertie: 'Immediate priority: hospital notified', reorientee: 'Redirected' },
       motif: { delestage: 'diversion', scanner_indisponible: 'CT scanner unavailable', service_ferme: 'department closed', autre: 'other' },
       res: { reservee: 'stretcher {c} reserved', sans_civiere: 'no free stretcher', installee: 'patient placed on {c}', liberee: 'reservation released' },
@@ -116,6 +125,15 @@
       ccs_consult: 'View only.', ccs_consult_suite: 'Your dispatch system remains the reference: Arrimo shows emergency capacity and vehicle status; it assigns no mission.', depuis_attente: 'From (until the unit position is sent)', k_urgences: 'emergencies in the region', k_sat: 'no saturated emergency', k_sat_noms: 'saturated ({noms})', k_civ: 'free stretchers in total',
       k_mission: 'ambulances on a mission', k_pa: 'pre-alerts in progress', og_sat: 'Saturation: {noms}.', og_aucune_sat: 'No saturated emergency.', og_libre: '{nom} keeps the most free stretchers ({n}); pre-alerts on the way to it: {vers}.',
       og_pa: 'Pre-alerts in progress in the region: {n}.', demandes_etab: 'Requests from facilities', c_origine: 'Origin', c_type: 'Type', c_transport: 'Transport',
+      mi_titre: 'Offer a mission', mi_aide: 'Choose an available unit; the crew gets an alert and accepts or declines. Location: address or landmark, never a name.',
+      mi_lieu: 'Incident location', mi_lieu_ex: 'e.g. 120 rue des Érables, Val-des-Pins', mi_proposer: 'Send the mission', mi_aucune_dispo: 'No unit available at the moment.',
+      mi_num: 'Mission', mi_annuler: 'Cancel', mi_envoyee: 'Mission {numero} sent to {unite}.', mi_recue: 'Mission offered by the CCS · {numero}', mi_par_ccs: 'Offered by the CCS',
+      mi_accepter: 'Accept', mi_refuser: 'Decline', mi_sur_place: 'On scene', mi_terminer: 'End without transport',
+      mi_suite: 'Patient to transport: “Send the pre-alert” below; the mission ends by itself.', mi_confirmer_refus: 'Decline this mission? The CCS is notified.',
+      mi_confirmer_annuler: 'Cancel this mission? The crew is notified.', mi_ok_accepter: 'Mission accepted: status “En route”.', mi_ok_refuser: 'Mission declined.', mi_ok_sur_place: 'On scene.',
+      mi_ok_terminer: 'Mission ended: status “Available”.', mi_ok_annuler: 'Mission cancelled.',
+      mi: { proposee: 'offered, awaiting reply', acceptee: 'accepted, en route', refusee: 'declined', sur_place: 'on scene', terminee: 'ended', annulee: 'cancelled by the CCS', en_route: 'en route', pris_en_charge: 'patient on board', demandee: 'to accept', arrivee: 'arrived' },
+      mi_motif: { deja_en_mission: 'already on a mission', hors_secteur: 'out of area', equipage_indisponible: 'crew unavailable', autre: 'other' },
       depuis: 'From', choisir_dest: 'Choose', pres_de: 'near {lieu}', il_y_a: '{n} min ago', arrive_dans: 'arrives in {n} min ({km} km)', flotte: 'Ambulances', c_mission: 'Current mission', c_unite: 'Unit', c_plaque: 'Plate', c_etat: 'Status', c_lieu: 'Current location',
       tr_cat: 'emergency type: {cat}', tr_pref: 'preferred hospital: {h} (information only, the destination remains your decision)',
       prio: { immediate: 'Immediate', urgente: 'Urgent', non_urgente: 'Non-urgent' },
@@ -180,6 +198,11 @@
       etat.prealertes = p.prealertes; etat.destinations = d; etat.enLigne = true;
       etat.transports = await api('GET', '/secours/transports').catch(() => []);
       etat.vehicules = await api('GET', '/secours/vehicules').catch(() => []);
+      const avant = new Set((etat.missions || []).map((m) => m.id));
+      etat.missions = await api('GET', '/secours/missions').catch(() => []);
+      // Nouvelle mission proposée à l'équipage : alerte sonore (une fois)
+      if (ROLES_AMB.includes(etat.moi.utilisateur.role) && etat.missionsVues && etat.missions.some((m) => m.statut === 'proposee' && !avant.has(m.id))) bipMission();
+      etat.missionsVues = true;
       if (!etat.hebergements) etat.hebergements = await api('GET', '/secours/hebergements').catch(() => []);
       await chargerClassees();
       if (ROLES_AMB.includes(etat.moi.utilisateur.role)) etat.unites = await api('GET', '/secours/unites');
@@ -394,6 +417,36 @@
       ${l.map((d) => `<tr><td data-l="${t('c_origine')}"><strong>${esc(ArrimoCarte.court(d.origine))}</strong> · ${esc(d.resident_ref)}</td><td data-l="${t('c_type')}">${d.categorie_urgence ? esc(t('cat.' + d.categorie_urgence)) : '—'}</td>
         <td data-l="${t('c_transport')}">${d.unite ? `${esc(d.unite)} · ` : ''}${esc(t('trs.' + d.statut))}</td></tr>`).join('')}</tbody></table>` : `<p class="note">${t('tr_aucune')}</p>`}</section>`;
   }
+  function bipMission() {
+    try { const ac = new (window.AudioContext || window.webkitAudioContext)(); [0, 0.45].forEach((d) => { const o = ac.createOscillator(); const g = ac.createGain();
+      o.frequency.value = 880; g.gain.value = 0.15; o.connect(g); g.connect(ac.destination); o.start(ac.currentTime + d); o.stop(ac.currentTime + d + 0.3); }); } catch { /* son bloqué */ }
+  }
+  const libMission = (m) => `${esc(m.numero)} · ${esc(t('mi.' + m.statut))}`;
+  /* Mission proposée par le CCS (16 nov. 2026) : Arrimo transmet, le CCS décide, l'équipage accepte ou refuse */
+  function missionsCcs() {
+    const libres = etat.vehicules.filter((v) => (v.etat || 'disponible') === 'disponible' && !v.mission);
+    const f = etat.mission || {};
+    const liste = etat.missions || [];
+    return `<section class="carte-s" id="missions-ccs"><h2>${t('mi_titre')}</h2><p class="note">${t('mi_aide')}</p>
+      ${libres.length ? `<div class="grille-f"><label for="mi-unite">${t('c_unite')}</label><select id="mi-unite" style="min-height:48px;font-size:17px;max-width:100%"><option value="">—</option>${libres.map((v) => `<option value="${v.id}"${String(v.id) === String(f.unite || '') ? ' selected' : ''}>${esc(v.numero)} · ${esc(lieuActuel(v))}</option>`).join('')}</select>
+        <label for="mi-lieu">${t('mi_lieu')}</label><input id="mi-lieu" maxlength="120" autocomplete="off" value="${esc(f.lieu || '')}" placeholder="${t('mi_lieu_ex')}" style="min-height:48px;font-size:17px">
+        <label for="mi-prio">${t('priorite')}</label><select id="mi-prio" style="min-height:48px;font-size:17px">${['immediate', 'urgente', 'non_urgente'].map((x) => `<option value="${x}"${f.priorite === x ? ' selected' : ''}>${esc(t('prio.' + x))}</option>`).join('')}</select>
+        <label for="mi-cat">${t('categorie')}</label><select id="mi-cat" style="min-height:48px;font-size:17px">${Object.keys(TXT[L].cat).map((x) => `<option value="${x}"${f.categorie === x ? ' selected' : ''}>${esc(t('cat.' + x))}</option>`).join('')}</select>
+        <button class="btn pri" type="button" data-act="proposer-mission" style="margin-top:10px">${t('mi_proposer')}</button></div>` : `<p class="note">${t('mi_aucune_dispo')}</p>`}
+      ${liste.length ? `<table class="classe" style="margin-top:12px"><thead><tr><th>${t('mi_num')}</th><th>${t('c_unite')}</th><th>${t('mi_lieu')}</th><th>${t('c_etat')}</th><th></th></tr></thead><tbody>
+        ${liste.map((m) => `<tr data-mission="${esc(m.numero)}"><td data-l="${t('mi_num')}"><strong>${esc(m.numero)}</strong> · ${esc(t('prio.' + m.priorite))}</td><td data-l="${t('c_unite')}">${esc(m.unite)}</td><td data-l="${t('mi_lieu')}">${esc(m.lieu)}</td>
+          <td data-l="${t('c_etat')}">${esc(t('mi.' + m.statut))}${m.motif_refus ? ` (${esc(t('mi_motif.' + m.motif_refus))})` : ''}</td>
+          <td>${['proposee', 'acceptee', 'sur_place'].includes(m.statut) ? `<button class="btn" type="button" data-mi="annuler" data-id="${m.id}" data-version="${m.version}">${t('mi_annuler')}</button>` : ''}</td></tr>`).join('')}</tbody></table>` : ''}</section>`;
+  }
+  function carteMissionAmb(u) {
+    const m = (etat.missions || []).find((x) => x.unite_id === u.id && ['proposee', 'acceptee', 'sur_place'].includes(x.statut));
+    if (!m) return '';
+    const btn = (a, pri = false) => `<button class="btn${pri ? ' pri' : ''}" type="button" data-mi="${a}" data-id="${m.id}" data-version="${m.version}" style="min-height:52px;font-size:18px">${t('mi_' + a)}</button>`;
+    return `<section class="carte-s" id="mission-ccs" style="border:2px solid ${m.statut === 'proposee' ? '#DC2626' : '#2563EB'}"><h2>${t('mi_recue', { numero: m.numero })}</h2>
+      <p style="font-size:18px"><strong>${esc(m.lieu)}</strong><br>${esc(t('prio.' + m.priorite))} · ${esc(t('cat.' + m.categorie))}</p><p class="note">${t('mi_par_ccs')} · ${esc(t('mi.' + m.statut))}</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">${m.statut === 'proposee' ? `${btn('accepter', true)}${btn('refuser')}` : `${m.statut === 'acceptee' ? btn('sur_place', true) : ''}${btn('terminer')}`}</div>
+      ${m.statut !== 'proposee' ? `<p class="note">${t('mi_suite')}</p>` : ''}</section>`;
+  }
   function tableauFlotte() {
     return `<section class="carte-s"><h2>${t('flotte')}</h2><p class="note">${t('vehicules_aide')}</p><table class="classe"><thead><tr><th>${t('c_unite')}</th><th>${t('c_plaque')}</th><th>${t('c_etat')}</th><th>${t('c_mission')}</th><th>${t('destination').split(' (')[0]}</th><th>${t('c_lieu')}</th></tr></thead><tbody>
       ${etat.vehicules.map((v) => `<tr data-vehicule="${esc(v.numero)}"><td data-l="${t('c_unite')}"><strong>${esc(v.numero)}</strong></td><td data-l="${t('c_plaque')}">${esc(v.plaque || '—')}</td><td data-l="${t('c_etat')}">${pastilleV(v.etat)}</td>
@@ -507,7 +560,7 @@
             ${r?.depart ? `<p class="note">${esc(r.depart.le ? t('classees_aide', { depart: r.depart.nom || '', heure: heure(r.depart.le) }) : t('classees_aide_lieu', { depart: ArrimoCarte.court(r.depart.nom || '') }))}</p>` : ''}${tableauClasse(r, { demander: true })}
             <details class="voir-carte"><summary class="btn">${t('voir_carte')}</summary><div id="carte-region" style="height:min(60vh,440px);margin-top:10px"></div></details></section>
           ${formulaireDemande()}`,
-        flotte: `${tableauFlotte()}`,
+        flotte: `${missionsCcs()}${tableauFlotte()}`,
         prealertes: `<section class="carte-s"><h2>${t('ccs_en_cours')}</h2>${etat.prealertes.filter((p) => OUVERTES.includes(p.statut)).map(ligneListe).join('') || `<p class="note">${t('aucune')}</p>`}</section>`,
         demandes: demandesEtablissements(),
         historique: `<section class="carte-s"><h2>${t('historique')}</h2>${fermees.map(ligneListe).join('') || `<p class="note">${t('aucune')}</p>`}</section>`,
@@ -525,7 +578,7 @@
     const superviseur = etat.moi.utilisateur.role === 'superviseur_secours';
     const r = etat.classees; const o = ongletCourant(true);
     const sections = {
-      mission: `${carteVehicule(u)}${enCours ? carteEnCours(enCours) : enAttente ? '' : formulaire(u)}`,
+      mission: `${carteMissionAmb(u)}${carteVehicule(u)}${enCours ? carteEnCours(enCours) : enAttente ? '' : formulaire(u)}`,
       urgences: `<section class="carte-s"><h2>${t('classees')}</h2>${positionCarte(u)}
         ${r?.depuis_etab ? `<label for="depart-amb">${t('depuis_attente')}</label><select id="depart-amb" style="min-height:48px;font-size:17px;max-width:100%">${(etat.hebergements || []).map((e) => `<option value="e:${e.id}"${`e:${e.id}` === etat.departAmb ? ' selected' : ''}>${esc(ArrimoCarte.court(e.nom))}</option>`).join('')}</select>` : ''}
         ${r?.depart ? `<p class="note">${esc(r.depart.le ? t('classees_aide', { depart: u.numero, heure: heure(r.depart.le) }) : t('classees_aide_lieu', { depart: ArrimoCarte.court(r.depart.nom || '') }))}</p>` : ''}${tableauClasse(r, { choisir: !enCours })}
@@ -561,6 +614,22 @@
       if (a === 'refuser' && !confirm(t('tr_confirmer_refus'))) return;
       etat.erreur = null; etat.message = null;
       try { await api('POST', `/secours/transports/${b.dataset.id}/action`, { action: a, version: Number(b.dataset.version), ...(a === 'accepter' ? { unite_id: u0.id } : {}), ...(a === 'refuser' ? { motif: 'aucune_unite' } : {}) }); etat.message = t('fait'); }
+      catch (e) { etat.erreur = estReseau(e) ? t('hors_ligne') : e.message; }
+      return charger();
+    }
+    if (b.dataset.act === 'proposer-mission') {
+      const corps = { unite_id: Number(document.getElementById('mi-unite')?.value), lieu: document.getElementById('mi-lieu')?.value.trim(), priorite: document.getElementById('mi-prio')?.value, categorie: document.getElementById('mi-cat')?.value };
+      etat.erreur = null; etat.message = null;
+      if (!corps.unite_id || !corps.lieu) { etat.erreur = t('choisir'); rendre(); return; }
+      try { const m = await api('POST', '/secours/missions', corps); etat.mission = null; etat.message = t('mi_envoyee', { numero: m.numero, unite: m.unite }); } catch (e) { etat.erreur = e.message; }
+      return charger();
+    }
+    if (b.dataset.mi) {
+      const a = b.dataset.mi; let motif;
+      if (a === 'refuser') { if (!confirm(t('mi_confirmer_refus'))) return; motif = 'equipage_indisponible'; }
+      if (a === 'annuler' && !confirm(t('mi_confirmer_annuler'))) return;
+      etat.erreur = null; etat.message = null;
+      try { await api('POST', `/secours/missions/${b.dataset.id}/action`, { action: a, version: Number(b.dataset.version), ...(motif ? { motif } : {}) }); etat.message = t('mi_ok_' + a); if (a !== 'refuser' && a !== 'annuler') prendrePosition(); }
       catch (e) { etat.erreur = estReseau(e) ? t('hors_ligne') : e.message; }
       return charger();
     }
@@ -635,6 +704,7 @@
   document.addEventListener('change', (ev) => {
     if (ev.target.id === 'unite') { ecrire('arrimo-secours-unite', ev.target.value); rendre(); }
     if (ev.target.id === 'depart-amb') { etat.departAmb = ev.target.value; ecrire('arrimo-amb-depart', ev.target.value); chargerClassees().then(rendre); }
+    if (['mi-unite', 'mi-prio', 'mi-cat', 'mi-lieu'].includes(ev.target.id)) { etat.mission = { ...(etat.mission || {}), unite: document.getElementById('mi-unite')?.value, priorite: document.getElementById('mi-prio')?.value, categorie: document.getElementById('mi-cat')?.value, lieu: document.getElementById('mi-lieu')?.value }; }
     if (ev.target.id === 'depart') { etat.depart = ev.target.value; ecrire('arrimo-ccs-depart', etat.depart); chargerClassees().then(rendre); }
   });
 
@@ -671,6 +741,9 @@
     setInterval(() => document.querySelectorAll('[data-echeance]').forEach((x) => { x.textContent = `${Math.max(0, Math.round((new Date(x.dataset.echeance).getTime() - Date.now()) / 1000))} s`; }), 1000);
     // Environ chaque minute pendant le transport
     setInterval(() => { if (ROLES_AMB.includes(etat.moi.utilisateur.role) && enTransport()) prendrePosition().then(() => charger()); }, 60000);
+    // Décision du 16 nov. 2026 : le CCS voit aussi la position d'une ambulance « Disponible » (jamais hors service), pour lui proposer une mission
+    setInterval(() => { if (!ROLES_AMB.includes(etat.moi.utilisateur.role) || enTransport()) return; const u = uniteCourante(); const v = u && etat.vehicules.find((x) => x.id === u.id);
+      if (v && (v.etat || 'disponible') === 'disponible') prendrePosition(); }, 120000);
     setInterval(() => { if (lireFile().length) viderFile(); else charger(); }, 60000);
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw-secours.js', { scope: '/secours' }).catch(() => {});
   }

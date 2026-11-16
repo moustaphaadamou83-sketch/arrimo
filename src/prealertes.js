@@ -138,6 +138,10 @@ async function creer(pool, u, b) {
         [transport.id, 'prealerte', JSON.stringify({ prealerte: pa.numero, destination: dest.nom, autre_destination: transport.destination_id !== dest.id }), u.id || null]);
     }
     await vehicules.fixer(c, unite.id, 'transport_hopital', { destinationId: dest.id, source: 'prealerte', utilisateurId: u.id || null });
+    // Mission proposée par le CCS et acceptée : la préalerte la prolonge (transport vers l'hôpital), la mission est terminée
+    for (const mi of (await c.query(`UPDATE missions_ccs SET statut = 'terminee', version = version + 1, modifie_le = now() WHERE unite_id = $1 AND statut IN ('acceptee', 'sur_place') RETURNING id`, [unite.id])).rows) {
+      await c.query('INSERT INTO mission_ccs_evenements (mission_id, statut, utilisateur_id, detail) VALUES ($1, $2, $3, $4)', [mi.id, 'terminee', u.id || null, 'prealerte']);
+    }
     const pr = await proposerService(c, pa);
     await require('./reservations').ouvrir(c, pa, u, b.profil);
     await journaliser(c, { etablissementId: dest.id, utilisateurId: u.id || null, action: 'Préalerte reçue', detail: `${pa.numero} · ${priorite}` });

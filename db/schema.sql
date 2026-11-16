@@ -1544,6 +1544,36 @@ CREATE INDEX IF NOT EXISTS etat_vehicule_evenements_unite ON etat_vehicule_evene
 ALTER TABLE etats_vehicules DROP CONSTRAINT IF EXISTS etats_vehicules_source_check;
 ALTER TABLE etats_vehicules ADD CONSTRAINT etats_vehicules_source_check
   CHECK (source IN ('equipage', 'prealerte', 'arrivee_confirmee', 'transport', 'transport_termine', 'remise', 'mission_ccs'));
+-- Mission proposée par le CCS (16 nov. 2026) : « Arrimo transmet, le CCS décide » ; l'équipage accepte ou refuse.
+-- Lieu = adresse ou repère, jamais un nom ; aucune donnée clinique (priorité et catégorie en listes fermées).
+CREATE SEQUENCE IF NOT EXISTS mission_ccs_seq;
+CREATE TABLE IF NOT EXISTS missions_ccs (
+  id                  serial PRIMARY KEY,
+  numero              text NOT NULL UNIQUE,
+  unite_id            int  NOT NULL REFERENCES unites_secours(id),
+  organisation_ccs_id int  REFERENCES organisations_secours(id),
+  lieu                text NOT NULL CHECK (length(lieu) BETWEEN 1 AND 120),
+  priorite            text NOT NULL CHECK (priorite IN ('immediate', 'urgente', 'non_urgente')),
+  categorie           text NOT NULL,
+  statut              text NOT NULL DEFAULT 'proposee' CHECK (statut IN ('proposee', 'acceptee', 'refusee', 'sur_place', 'terminee', 'annulee')),
+  motif_refus         text CHECK (motif_refus IN ('deja_en_mission', 'hors_secteur', 'equipage_indisponible', 'autre')),
+  version             int  NOT NULL DEFAULT 1,
+  cree_par            int  REFERENCES utilisateurs(id),
+  cree_le             timestamptz NOT NULL DEFAULT now(),
+  modifie_le          timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS missions_ccs_une_ouverte ON missions_ccs (unite_id) WHERE statut IN ('proposee', 'acceptee', 'sur_place');
+CREATE TABLE IF NOT EXISTS mission_ccs_evenements (
+  id             bigserial PRIMARY KEY,
+  mission_id     int  NOT NULL REFERENCES missions_ccs(id),
+  statut         text NOT NULL,
+  detail         text,
+  utilisateur_id int  REFERENCES utilisateurs(id),
+  cree_le        timestamptz NOT NULL DEFAULT now()
+);
+DROP TRIGGER IF EXISTS mission_ccs_evenements_pas_de_modif ON mission_ccs_evenements;
+CREATE TRIGGER mission_ccs_evenements_pas_de_modif BEFORE UPDATE OR DELETE ON mission_ccs_evenements
+  FOR EACH ROW EXECUTE FUNCTION journal_immuable();
 DROP TRIGGER IF EXISTS etat_vehicule_evenements_pas_de_modif ON etat_vehicule_evenements;
 CREATE TRIGGER etat_vehicule_evenements_pas_de_modif BEFORE UPDATE OR DELETE ON etat_vehicule_evenements
   FOR EACH ROW EXECUTE FUNCTION journal_immuable();

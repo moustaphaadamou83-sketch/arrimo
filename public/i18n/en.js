@@ -625,6 +625,12 @@ window.ARRIMO_I18N.en = {
   },
   // Messages d'erreur du serveur, par code (src/erreurs.js)
   erreurs: {
+    mission_lieu_requis: 'Enter the incident location (address or landmark, never a name).',
+    mission_invalide: 'Invalid priority or category.',
+    unite_non_disponible: 'Unit {unite} is not available.',
+    unite_deja_sollicitee: 'A mission is already offered or in progress for unit {unite}.',
+    mission_introuvable: 'Mission not found.',
+    mission_statut_incompatible: 'This action is no longer possible at this stage of the mission.',
     chambre_en_preparation: 'Room {code} is still being prepared: complete the preparation task (Staff and tasks tab or the housekeeping account); the room is then declared ready automatically.',
     patient_non_nsa: 'The patient in bed {code} is not designated ALC.',
     orientation_chsld_deja_faite: 'A request is already in progress for this patient ({numero}, {chsld}).',

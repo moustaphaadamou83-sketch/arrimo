@@ -72,11 +72,13 @@ async function liste(pool, u) {
   return (await pool.query(`SELECT un.id, un.numero, un.plaque, o.nom AS organisation, ev.etat, ev.source, ev.version, ev.modifie_le,
       ev.destination_id, e.nom AS destination,
       (SELECT json_build_object('latitude', pu.latitude, 'longitude', pu.longitude, 'le', pu.enregistree_le) FROM positions_unites pu
-        WHERE pu.unite_id = un.id AND pu.enregistree_le > now() - interval '30 minutes' ORDER BY pu.enregistree_le DESC LIMIT 1) AS position,
+        WHERE pu.unite_id = un.id AND pu.enregistree_le > now() - interval '30 minutes' AND COALESCE(ev.etat, 'disponible') <> 'hors_service'
+        ORDER BY pu.enregistree_le DESC LIMIT 1) AS position,
       -- Mission en cours de l'unité (préalerte ouverte, sinon transport ouvert) : même statut sur tous les écrans
       (SELECT json_build_object('type', m.type, 'numero', m.numero, 'statut', m.statut) FROM (
           SELECT 'prealerte' AS type, p.numero, p.statut, p.modifie_le FROM prealertes p WHERE p.unite_id = un.id AND p.statut NOT IN ('cloturee', 'annulee', 'remplacee')
           UNION ALL SELECT 'transport', d.numero, d.statut, d.modifie_le FROM demandes_transport d WHERE d.unite_id = un.id AND d.statut IN ('acceptee', 'en_route', 'pris_en_charge')
+          UNION ALL SELECT 'mission', mi.numero, mi.statut, mi.modifie_le FROM missions_ccs mi WHERE mi.unite_id = un.id AND mi.statut IN ('proposee', 'acceptee', 'sur_place')
         ) m ORDER BY m.modifie_le DESC LIMIT 1) AS mission
     FROM unites_secours un JOIN organisations_secours o ON o.id = un.organisation_id
     LEFT JOIN etats_vehicules ev ON ev.unite_id = un.id LEFT JOIN etablissements e ON e.id = ev.destination_id

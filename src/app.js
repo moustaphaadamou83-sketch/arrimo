@@ -491,6 +491,11 @@ function creerApp(pool, options = {}) {
   api.get('/secours/listes', route(() => ({ motifs: rs.MOTIFS, tranches: rs.TRANCHES, sexes: rs.SEXES, signes: rs.SIGNES, delai_s: rs.delai(), profil: require('./environnement').estDemo() })));
   api.get('/secours/urgences-classees', route((req) => vh.urgencesClassees(pool, req.utilisateur, req.query)));
   api.post('/secours/unites/:id/etat', route((req) => vh.definir(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
+  // Missions proposées par le CCS, acceptées ou refusées par l'équipage (16 nov. 2026)
+  const mc = require('./missions-ccs');
+  api.get('/secours/missions', route((req) => mc.liste(pool, req.utilisateur)));
+  api.post('/secours/missions', route((req) => mc.proposer(pool, req.utilisateur, req.body)));
+  api.post('/secours/missions/:id/action', route((req) => mc.agir(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   // Établissements d'hébergement : urgences proches (capacités globales seulement)
   api.get('/urgences-proches', route((req) => vh.urgencesProches(pool, req.utilisateur, req.query.etablissement_id)));
   api.get('/coordinations', route((req) => ch.listeCoordinations(pool, req.utilisateur, E(req), { toutes: req.query.toutes === '1' })));
