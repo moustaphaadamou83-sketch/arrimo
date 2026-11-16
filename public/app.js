@@ -2060,8 +2060,22 @@ async function vueNettoyage() {
 /* ---------------- NSA ---------------- */
 async function vueNsa() {
   const v = $('#v-nsa');
-  const n = await api('GET', `/nsa?etablissement_id=${etat.ctx}`);
+  // Sorties vers les CHSLD : absentes si l'hôpital n'a pas la Liaison CHSLD (la liste NSA reste affichée)
+  const [n, sorties] = await Promise.all([api('GET', `/nsa?etablissement_id=${etat.ctx}`), api('GET', `/nsa/orientations-chsld?etablissement_id=${etat.ctx}`).catch(() => null)]);
   const S = (k, vars) => esc(t(`nsa.${k}`, vars));
+  const CLOS_DH = ['admise', 'refusee', 'annulee'];
+  const enCours = new Map((sorties || []).filter((o) => !CLOS_DH.includes(o.statut)).map((o) => [`${o.lit}|${o.patient_ref}`, o]));
+  const etapeSortie = (o) => {
+    if (o.statut === 'admise') return S('sortie_arrivee', { quand: o.arrivee_le ? heure(o.arrivee_le) : '' });
+    if (o.depart_hopital_le) return S('sortie_partie', { quand: heure(o.depart_hopital_le) });
+    if (o.statut === 'acceptee') return S('sortie_acceptee');
+    if (['refusee', 'annulee'].includes(o.statut)) return S('sortie_close');
+    return S('sortie_attente');
+  };
+  const sectionSorties = sorties && sorties.length ? `<h3>${S('sorties_titre')}</h3><p class="note">${S('sorties_aide')}</p><div class="liste">${sorties.map((o) => `<div class="item" data-sortie="${esc(o.numero)}"><div>
+      <b class="num">${esc(o.numero)}</b> · ${S('lit')} <span class="num">${esc(o.lit || '—')}</span> · <span class="num">${esc(o.patient_ref)}</span> → ${esc(o.chsld)}
+      <div><span class="badge">${esc(t(`chsld.demande_statut.${o.statut}`))}</span> · ${etapeSortie(o)}</div></div>
+      ${o.statut === 'acceptee' && !o.depart_hopital_le ? `<div class="actions"><button class="btn pri" data-depart-chsld="${o.id}" data-version="${o.version}" data-num="${esc(o.numero)}">${S('confirmer_depart')}</button></div>` : ''}</div>`).join('')}</div>` : '';
   v.innerHTML = `<div class="entete"><div><h2>${S('titre', { etab: etabCtx().nom })}</h2><p>${S('intro')}</p></div></div>
     <div class="tuiles">
       ${tuile({ lbl: t('nsa.taux'), val: pct(n.taux), etat: etatSeuil(n.taux, n.cible, n.cible * 1.5), note: S('cible', { n: pct(n.cible) }) })}
@@ -2071,10 +2085,12 @@ async function vueNsa() {
     <div class="ligne filtres-nsa"><div class="champ"><label class="lbl" for="n-recherche">${S('rechercher')}</label><input id="n-recherche" type="search" autocomplete="off" value="${esc(etat.nsaRecherche || '')}"></div>
       <div class="champ"><label class="lbl" for="n-filtre">${S('filtre_orientation')}</label><select id="n-filtre"><option value="">${S('toutes')}</option>${options('orientations', ORIENTATIONS, etat.nsaOrientation || '')}</select></div>
       <span class="note" id="n-compte"></span></div>
+    ${sectionSorties}
     <div class="tableau"><table><thead><tr><th>${S('lit')}</th><th>${S('unite')}</th><th>${S('patient')}</th><th>${S('depuis')}</th><th>${S('orientation')}</th><th></th></tr></thead><tbody>${[...n.lits].sort((a, b) => b.jours - a.jours).map((l) => `<tr data-nsa-ligne="${esc(`${l.code} ${l.unite} ${l.patient_ref}`.toLowerCase())}" data-nsa-orient="${esc(l.nsa_orientation || '')}">
       <td class="num">${esc(l.code)}</td><td class="donnee">${esc(l.unite)}</td><td class="num">${esc(l.patient_ref)}</td><td class="num">${S('jours', { n: l.jours })}${l.jours >= 30 ? ' <span class="pt pt-attention" aria-hidden="true"></span>' : ''}</td>
       <td><select data-orient="${l.id}" aria-label="${S('orientation')}">${options('orientations', ORIENTATIONS, l.nsa_orientation)}</select></td>
-      <td><div class="ligne serre"><button class="btn" type="button" data-nsa-detail="${l.id}">${S('details')}</button><button class="btn" data-retirer="${l.id}">${S('retirer')}</button></div></td></tr>`).join('') || `<tr><td colspan="6" class="muted">${S('aucun')}</td></tr>`}</tbody></table></div>`;
+      <td><div class="ligne serre">${sorties === null ? '' : enCours.has(`${l.code}|${l.patient_ref}`) ? `<span class="badge">${S('vers_chsld', { chsld: enCours.get(`${l.code}|${l.patient_ref}`).chsld })}</span>`
+        : `<button class="btn pri" type="button" data-vers-chsld="${l.id}" data-code="${esc(l.code)}">${S('orienter_chsld')}</button>`}<button class="btn" type="button" data-nsa-detail="${l.id}">${S('details')}</button><button class="btn" data-retirer="${l.id}">${S('retirer')}</button></div></td></tr>`).join('') || `<tr><td colspan="6" class="muted">${S('aucun')}</td></tr>`}</tbody></table></div>`;
   const filtrer = () => {
     etat.nsaRecherche = $('#n-recherche').value; etat.nsaOrientation = $('#n-filtre').value;
     const q = etat.nsaRecherche.trim().toLowerCase(); let vus = 0;
@@ -2088,6 +2104,27 @@ async function vueNsa() {
   $('#n-recherche').oninput = filtrer; $('#n-filtre').onchange = filtrer; filtrer();
   v.querySelectorAll('[data-orient]').forEach((sel) => { sel.onchange = () => agir(sel, () => api('PUT', `/lits/${sel.dataset.orient}/nsa`, { orientation: sel.value }), t('nsa.orient_ok')); });
   v.querySelectorAll('[data-retirer]').forEach((b) => { b.onclick = () => agir(b, () => api('DELETE', `/lits/${b.dataset.retirer}/nsa`), t('nsa.retire_ok')); });
+  v.querySelectorAll('[data-vers-chsld]').forEach((b) => { b.onclick = () => orienterVersChsld(Number(b.dataset.versChsld), b.dataset.code); });
+  v.querySelectorAll('[data-depart-chsld]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/nsa/orientations-chsld/${b.dataset.departChsld}/depart`, { version: Number(b.dataset.version) }), t('nsa.depart_ok', { numero: b.dataset.num })); });
+}
+
+/** « Orienter vers un CHSLD » : CHSLD du plus proche au plus loin, documents transmis ; l'humain choisit, le CHSLD décide de la place. */
+async function orienterVersChsld(litId, code) {
+  const S = (k, vars) => esc(t(`nsa.${k}`, vars));
+  let dest;
+  try { dest = await api('GET', `/nsa/chsld?etablissement_id=${etat.ctx}`); } catch (e) { toast(e.message, true); return; }
+  const DOCS = ['formulaire_mecanisme', 'identite', 'carte_assurance_maladie', 'mandat_representant', 'consentement_hebergement'];
+  modale(t('nsa.orienter_titre', { lit: code }), dest.length ? `<p class="note">${S('orienter_aide')}</p>
+      <label class="lbl" for="oc-chsld">${S('chsld')}</label><select id="oc-chsld">${dest.map((d) => `<option value="${d.id}">${esc(d.nom)} · ${S('chsld_option', { km: d.distance_km, n: d.places_libres })}</option>`).join('')}</select>
+      <label class="lbl" for="oc-arrivee">${S('arrivee_souhaitee')}</label><input id="oc-arrivee" type="date">
+      <p class="lbl">${S('documents_transmis')}</p><div class="cases">${DOCS.map((x) => `<label class="case"><input type="checkbox" data-oc-doc value="${x}" checked> ${esc(t(`chsld.document.${x}`))}</label>`).join('')}</div>
+      <details><summary>${S('identite_titre')}</summary><p class="note">${S('identite_aide')}</p>
+        <div class="ligne"><input id="oc-prenom" placeholder="${S('prenom')}" aria-label="${S('prenom')}"><input id="oc-nom" placeholder="${S('nom')}" aria-label="${S('nom')}"><input id="oc-dn" type="date" aria-label="${S('date_naissance')}"></div></details>`
+    : `<p>${S('aucun_chsld')}</p>`,
+  [{ label: t('general.annuler') }, ...(dest.length ? [{ label: t('nsa.orienter_envoyer'), pri: true, run: async () => (await agir(null, () => api('POST', `/nsa/lits/${litId}/orienter-chsld`, {
+    chsld_id: Number($('#oc-chsld').value), arrivee_souhaitee: $('#oc-arrivee').value || null, documents: [...document.querySelectorAll('[data-oc-doc]:checked')].map((x) => x.value),
+    prenom: $('#oc-prenom').value || undefined, nom: $('#oc-nom').value || undefined, date_naissance: $('#oc-dn').value || undefined,
+  }), (r) => t('nsa.orienter_ok', { numero: r.numero, chsld: r.chsld }))) !== null || false }] : [])]);
 }
 
 /** Panneau de détails d'un lit ALC : informations existantes et événements du journal depuis le début du séjour. */

@@ -462,6 +462,15 @@ window.ARRIMO_I18N.en = {
     taux: 'ALC rate', cible: 'target: {n} of occupied beds', patients: 'ALC patients', sur_occupes: 'of {n|# occupied bed|# occupied beds}', jours_lits: 'ALC bed-days',
     cumul: 'total of current waits', orientations: 'Destinations', lit: 'Bed', unite: 'Unit', patient: 'Patient', depuis: 'Since', orientation: 'Destination',
     jours: '{n|# day|# days}', retirer: 'Remove', aucun: 'No ALC patients.', orient_ok: 'Destination updated.', retire_ok: 'ALC status removed.',
+    orienter_chsld: 'Refer to a CHSLD', vers_chsld: 'Request in progress · {chsld}', orienter_titre: 'Bed {lit} · Refer to a CHSLD',
+    orienter_aide: 'A placement request is sent to the chosen CHSLD, which decides on the room. Nearest first. No clinical data is sent.',
+    chsld: 'CHSLD', chsld_option: '{km} km · {n|# free room|# free rooms}', arrivee_souhaitee: 'Requested arrival', documents_transmis: 'Documents sent',
+    identite_titre: 'Identification record (if the hospital has none)', identite_aide: 'Fictitious data only. Without a record at the hospital, these three fields are required.',
+    prenom: 'First name', nom: 'Last name', date_naissance: 'Date of birth', aucun_chsld: 'No CHSLD is receiving placement requests at the moment.',
+    orienter_envoyer: 'Send the request', orienter_ok: 'Request {numero} sent to {chsld}.',
+    sorties_titre: 'Discharges to CHSLDs', sorties_aide: 'The CHSLD offers and accepts a room; the hospital confirms the departure; the CHSLD confirms the arrival. The bed goes to cleaning at departure.',
+    sortie_attente: 'Being processed by the CHSLD', sortie_acceptee: 'Room accepted: confirm the departure when the patient leaves the hospital', sortie_partie: 'Left on {quand} · arrival to be confirmed by the CHSLD',
+    sortie_arrivee: 'Arrived at the CHSLD on {quand}', sortie_close: 'Request closed', confirmer_depart: 'Confirm departure', depart_ok: 'Departure confirmed ({numero}): the bed goes to cleaning.',
   },
   indicateurs: {
     ensemble: 'Overview', flux: 'Patient flow', performance: 'Operational performance',
@@ -616,6 +625,12 @@ window.ARRIMO_I18N.en = {
   },
   // Messages d'erreur du serveur, par code (src/erreurs.js)
   erreurs: {
+    chambre_en_preparation: 'Room {code} is still being prepared: complete the preparation task (Staff and tasks tab or the housekeeping account); the room is then declared ready automatically.',
+    patient_non_nsa: 'The patient in bed {code} is not designated ALC.',
+    orientation_chsld_deja_faite: 'A request is already in progress for this patient ({numero}, {chsld}).',
+    chsld_introuvable: 'CHSLD not found or not receiving placement requests.',
+    place_non_acceptee: 'The CHSLD has not accepted the room yet: the departure cannot be confirmed.',
+    depart_hopital_non_confirme: 'The hospital has not confirmed the patient’s departure yet ({numero}).',
     support_indisponible:'The support portal is unavailable. Try again later.',
     support_ticket_introuvable:'Ticket not found.',
     support_ticket_ferme:'This ticket is closed. Create a new request.',

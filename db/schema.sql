@@ -896,6 +896,13 @@ CREATE TABLE IF NOT EXISTS demande_hebergement_etapes (
   par                int REFERENCES utilisateurs(id),
   date               timestamptz NOT NULL DEFAULT now()
 );
+-- Sortie d'un patient NSA de l'hôpital vers un CHSLD (16 nov. 2026) : hôpital d'origine, son lit, départ confirmé par l'hôpital
+ALTER TABLE demandes_hebergement ADD COLUMN IF NOT EXISTS hopital_id int REFERENCES etablissements(id);
+ALTER TABLE demandes_hebergement ADD COLUMN IF NOT EXISTS hopital_lit_id int REFERENCES lits(id);
+ALTER TABLE demandes_hebergement ADD COLUMN IF NOT EXISTS depart_hopital_le timestamptz;
+CREATE UNIQUE INDEX IF NOT EXISTS demandes_hebergement_lit_hopital_ouvert ON demandes_hebergement (hopital_lit_id, reference_externe)
+  WHERE hopital_lit_id IS NOT NULL AND statut NOT IN ('admise', 'refusee', 'annulee');
+CREATE INDEX IF NOT EXISTS demandes_hebergement_hopital ON demandes_hebergement (hopital_id) WHERE hopital_id IS NOT NULL;
 
 -- Coordination entre établissements : hospitalisation d'un résident, retour de l'hôpital, transfert inter-CHSLD.
 -- Les autres établissements ne voient que la référence du résident (jamais son nom), comme les vues réseau.

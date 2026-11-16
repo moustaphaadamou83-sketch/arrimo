@@ -100,6 +100,15 @@ async function etatReintegration(db, residentId) {
   return { lit, attribuee, conservee: attribuee && ['hospitalise', 'retour_a_reintegrer'].includes(r.statut), propre: ['propre', 'termine'].includes(lit.entretien), taches,
     pret: raisons.length === 0, raisons, bloquante: raisons.some((x) => x !== 'preparation_en_cours') };
 }
+/**
+ * Place prête pour la réintégration. Seule la préparation reste à faire : message clair (terminer la tâche de préparation,
+ * la chambre est alors déclarée prête d'elle-même) ; tout autre blocage demande la décision d'un responsable.
+ */
+function exigerReintegrationPrete(ri) {
+  if (ri.pret) return;
+  if (ri.raisons.length === 1 && ri.raisons[0] === 'preparation_en_cours') throw new ErreurHttp(409, 'chambre_en_preparation', { code: ri.lit?.code || '' });
+  throw new ErreurHttp(409, 'reintegration_bloquee', { raisons: ri.raisons.join(', ') });
+}
 /** Entretien d'une place, indépendant de son attribution : suit les tâches d'entretien et de préparation liées au lit. */
 async function majEntretien(c, litId, statut, u) {
   if (!litId) return;
@@ -352,11 +361,15 @@ async function confirmerArrivee(pool, u, residentId, b) {
   return transaction(pool, async (c) => {
     const r = await verrouResident(c, residentId); versionAttendue(r, b.version);
     if (r.statut !== 'preadmission' || !r.lit_id) throw new ErreurHttp(409, 'resident_statut_incompatible');
+    // Patient NSA venant d'un hôpital : l'arrivée suit le départ confirmé par l'hôpital, jamais l'inverse
+    const venu = (await c.query(`SELECT * FROM demandes_hebergement WHERE resident_id = $1 AND hopital_id IS NOT NULL AND statut IN ('place_proposee', 'acceptee') FOR UPDATE`, [r.id])).rows[0];
+    if (venu && !venu.depart_hopital_le) throw new ErreurHttp(409, 'depart_hopital_non_confirme', { numero: venu.numero });
     await exigerChambrePrete(c, r.lit_id);
     const l = await changerEtat(c, pool, u.id, r.lit_id, 'occupe', { detail: `Arrivée de ${r.reference}` });
     const n = (await c.query(`UPDATE residents SET statut = 'present', admis_le = now(), version = version + 1, modifie_le = now() WHERE id = $1 RETURNING *`, [r.id])).rows[0];
     await mouvement(c, n, 'admission', u, { vers: l.id, detail: `Arrivée confirmée · ${l.code}` });
-    await c.query(`UPDATE demandes_hebergement SET statut = 'admise', version = version + 1, modifie_le = now() WHERE resident_id = $1 AND statut IN ('place_proposee', 'acceptee')`, [r.id]);
+    const admises = (await c.query(`UPDATE demandes_hebergement SET statut = 'admise', version = version + 1, modifie_le = now() WHERE resident_id = $1 AND statut IN ('place_proposee', 'acceptee') RETURNING *`, [r.id])).rows;
+    for (const d of admises) await require('./nsa-chsld').avertirHopital(c, d, 'admise');
     await journalChsld(c, e.id, u, 'Admission', `${r.reference} · ${l.code}`);
     return n;
   });
@@ -415,8 +428,9 @@ async function absence(pool, u, residentId, b) {
 /* ------------------------------------------------------------------ demandes d'hébergement */
 async function listeDemandes(pool, u, etabId, q = {}) {
   const e = await etabChsld(pool, u, etabId, { module: 'demandes_hebergement' });
-  return (await pool.query(`SELECT d.*, t.nom AS type_nom, r.reference AS resident_ref, l.code AS lit_propose
+  return (await pool.query(`SELECT d.*, t.nom AS type_nom, r.reference AS resident_ref, l.code AS lit_propose, h.nom AS hopital_nom
     FROM demandes_hebergement d LEFT JOIN types_unite t ON t.id = d.type_id LEFT JOIN residents r ON r.id = d.resident_id LEFT JOIN lits l ON l.id = d.lit_propose_id
+    LEFT JOIN etablissements h ON h.id = d.hopital_id
     WHERE d.etablissement_id = $1 ${q.toutes ? '' : "AND d.statut NOT IN ('admise', 'refusee', 'annulee')"} ORDER BY d.cree_le`, [e.id])).rows;
 }
 async function creerDemande(pool, u, b) {
@@ -484,6 +498,7 @@ async function actionDemande(pool, u, id, b) {
       [id, statut, JSON.stringify(documents), residentId, litId])).rows[0];
     await c.query('INSERT INTO demande_hebergement_etapes (demande_id, statut, detail, par) VALUES ($1, $2, $3, $4)', [id, statut, detail, u.id]);
     await journalChsld(c, e.id, u, 'Demande d’hébergement', `${d.numero} · ${statut}`);
+    if (statut !== d.statut) await require('./nsa-chsld').avertirHopital(c, d, statut);
     return n;
   });
 }
@@ -710,7 +725,7 @@ async function actionCoordination(pool, u, id, b) {
       // Vérification de la place par le CHSLD, relue à la réintégration : elle ne vaut que si tout est prêt
       if (!['acceptee', 'en_cours', 'recue'].includes(co.statut) || co.chambre_verifiee_le) throw new ErreurHttp(409, 'coordination_statut_incompatible');
       const ri = await etatReintegration(c, r.id);
-      if (!ri.pret) throw new ErreurHttp(409, 'reintegration_bloquee', { raisons: ri.raisons.join(', ') });
+      exigerReintegrationPrete(ri);
       n = (await c.query('UPDATE coordinations SET chambre_verifiee_le = now(), version = version + 1, modifie_le = now() WHERE id = $1 RETURNING *', [co.id])).rows[0];
     } else if (t === 'retour' && cote === 'destination' && a === 'confirmer_arrivee') {
       if (co.statut !== 'en_cours') throw new ErreurHttp(409, 'coordination_statut_incompatible');
@@ -727,7 +742,7 @@ async function actionCoordination(pool, u, id, b) {
       if (b.conditions_accueil !== true) throw new ErreurHttp(400, 'conditions_accueil_a_confirmer');
       if (!co.chambre_verifiee_le) throw new ErreurHttp(409, 'chambre_a_verifier');
       const ri = await etatReintegration(c, r.id);
-      if (!ri.pret) throw new ErreurHttp(409, 'reintegration_bloquee', { raisons: ri.raisons.join(', ') });
+      exigerReintegrationPrete(ri);
       if (ri.lit.etat === 'reserve') await changerEtat(c, pool, u.id, r.lit_id, 'occupe', { detail: `Réintégration de ${r.reference}` });
       await c.query(`UPDATE residents SET statut = 'present', version = version + 1, modifie_le = now() WHERE id = $1`, [r.id]);
       n = (await c.query('UPDATE coordinations SET reintegree_le = now(), cloturee_le = now(), version = version + 1, modifie_le = now() WHERE id = $1 RETURNING *', [co.id])).rows[0];

@@ -365,6 +365,12 @@ function creerApp(pool, options = {}) {
     await s.exigerModule(pool, d.etablissement_id, 'nsa');
     return d;
   }));
+  // Sortie d'un patient NSA vers un CHSLD (16 nov. 2026) : demande d'hébergement transmise, départ confirmé par l'hôpital
+  const nc = require('./nsa-chsld');
+  api.get('/nsa/chsld', route((req) => nc.destinations(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
+  api.get('/nsa/orientations-chsld', route((req) => nc.liste(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
+  api.post('/nsa/lits/:id/orienter-chsld', route((req) => nc.orienter(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
+  api.post('/nsa/orientations-chsld/:id/depart', route((req) => nc.confirmerDepart(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   api.get('/nsa', route(async (req) => {
     const etab = entier(req.query.etablissement_id, 'etablissement_id');
     await s.exigerModule(pool, etab, 'nsa');

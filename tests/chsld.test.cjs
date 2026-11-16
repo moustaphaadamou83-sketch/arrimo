@@ -490,6 +490,75 @@ test('Liaison CHSLD : défaut reproduit puis parcours complet Érables → Hôpi
   RESULTATS.liaison.parcours.push(`Érables → B : ${fiche.etapes.map((e) => e.statut).join(' → ')}`);
 });
 
+test('Sortie NSA : Hôpital B → CHSLD des Érables (demande, place, acceptation, départ, nettoyage, arrivée) ; refus et aucune identité hors du CHSLD', async () => {
+  // Patient NSA fictif de l'Hôpital B, sans fiche d'identification à l'hôpital
+  const lit = (await poolPilote.query(`SELECT l.id, l.code, l.patient_ref FROM lits l WHERE l.etablissement_id = $1 AND l.etat = 'occupe' AND l.nsa_depuis IS NULL
+    AND NOT EXISTS (SELECT 1 FROM patients p WHERE p.etablissement_id = l.etablissement_id AND p.reference = l.patient_ref) ORDER BY l.id LIMIT 1`, [L.B])).rows[0];
+  assert.ok(lit, 'un lit occupé à l’Hôpital B');
+  await api('b', 'POST', `/lits/${lit.id}/nsa`, { orientation: 'readaptation' });
+  // CHSLD proposés du plus proche au plus loin ; jamais un hôpital
+  const dest = await api('b', 'GET', `/nsa/chsld?etablissement_id=${L.B}`);
+  assert.ok(dest.some((d) => d.id === ids.era) && dest.some((d) => d.id === ids.stl));
+  assert.ok(dest.every((d, i) => i === 0 || dest[i - 1].distance_km <= d.distance_km), 'proximité d’abord');
+  assert.ok(dest.every((d) => /CHSLD/.test(d.nom) && Number.isInteger(d.places_libres)));
+  // Refus : lit non NSA, autre établissement, rôle CHSLD, identité absente
+  const autre = (await poolPilote.query(`SELECT id FROM lits WHERE etablissement_id = $1 AND etat = 'occupe' AND nsa_depuis IS NULL AND id <> $2 LIMIT 1`, [L.B, lit.id])).rows[0];
+  await refuse('b', 'POST', `/nsa/lits/${autre.id}/orienter-chsld`, { chsld_id: ids.era, prenom: 'Lucien', nom: 'Nsaterre', date_naissance: '1938-04-02' }, 409, 'patient_non_nsa');
+  await refuse('a', 'POST', `/nsa/lits/${lit.id}/orienter-chsld`, { chsld_id: ids.era }, 403);
+  await refuse('era', 'POST', `/nsa/lits/${lit.id}/orienter-chsld`, { chsld_id: ids.era }, 403);
+  await refuse('b', 'POST', `/nsa/lits/${lit.id}/orienter-chsld`, { chsld_id: L.A, prenom: 'Lucien', nom: 'Nsaterre', date_naissance: '1938-04-02' }, 404, 'chsld_introuvable');
+  await refuse('b', 'POST', `/nsa/lits/${lit.id}/orienter-chsld`, { chsld_id: ids.era }, 400, 'resident_identite_requise');
+  // 1. L'hôpital transmet la demande (documents complets → « reçue ») ; orientation NSA passe à « CHSLD » ; pas de doublon
+  const docs = ['formulaire_mecanisme', 'identite', 'carte_assurance_maladie', 'mandat_representant', 'consentement_hebergement'];
+  const dh = await api('b', 'POST', `/nsa/lits/${lit.id}/orienter-chsld`, { chsld_id: ids.era, prenom: 'Lucien', nom: 'Nsaterre', date_naissance: '1938-04-02', documents: docs });
+  assert.strictEqual(dh.statut, 'recue'); assert.match(dh.numero, /^DH-\d{5}$/);
+  assert.strictEqual((await poolPilote.query('SELECT nsa_orientation FROM lits WHERE id = $1', [lit.id])).rows[0].nsa_orientation, 'chsld');
+  await refuse('b', 'POST', `/nsa/lits/${lit.id}/orienter-chsld`, { chsld_id: ids.stl, prenom: 'Lucien', nom: 'Nsaterre', date_naissance: '1938-04-02' }, 409, 'orientation_chsld_deja_faite');
+  // 2. Le CHSLD la voit dans ses demandes (avec l'hôpital d'origine) et reçoit un avis sans identité
+  let dEra = (await api('era', 'GET', `/chsld/demandes?etablissement_id=${ids.era}`)).find((x) => x.id === dh.id);
+  assert.ok(dEra && dEra.provenance === 'hopital' && dEra.hopital_nom === 'Hôpital B — Mont-Clair' && dEra.reference_externe === lit.patient_ref);
+  const avis = (await notifs('era', ids.era)).find((n) => n.code === 'nsa_demande' && n.vars.numero === dh.numero);
+  assert.ok(avis && !/Lucien|Nsaterre/.test(JSON.stringify(avis)), 'avis au CHSLD sans identité');
+  // 3. Départ refusé tant que la place n'est pas acceptée
+  let sorties = await api('b', 'GET', `/nsa/orientations-chsld?etablissement_id=${L.B}`);
+  let s = sorties.find((x) => x.id === dh.id);
+  assert.ok(s && s.chsld === 'CHSLD 1 — des Érables' && s.lit === lit.code && s.patient_present === true);
+  assert.ok(!/Lucien|Nsaterre|1938/.test(JSON.stringify(sorties)), 'l’hôpital ne reçoit que la référence');
+  await refuse('b', 'POST', `/nsa/orientations-chsld/${dh.id}/depart`, { version: s.version }, 409, 'place_non_acceptee');
+  // 4. Le CHSLD vérifie, propose une place (réservée), accepte ; l'hôpital est averti à chaque étape
+  dEra = await api('era', 'POST', `/chsld/demandes/${dh.id}/action`, { action: 'verifier', version: dEra.version });
+  const place = (await poolPilote.query(`SELECT id, version FROM lits WHERE etablissement_id = $1 AND etat = 'libre' AND actif ORDER BY id LIMIT 1`, [ids.era])).rows[0];
+  dEra = await api('era', 'POST', `/chsld/demandes/${dh.id}/action`, { action: 'proposer_place', version: dEra.version, lit_id: place.id, version_lit: place.version });
+  assert.strictEqual(dEra.statut, 'place_proposee');
+  dEra = await api('era', 'POST', `/chsld/demandes/${dh.id}/action`, { action: 'accepter', version: dEra.version });
+  const nb = await notifs('b', L.B);
+  assert.ok(['nsa_place_proposee', 'nsa_acceptee'].every((c) => nb.some((n) => n.code === c && n.vars.numero === dh.numero)), 'hôpital averti');
+  // 5. Le CHSLD ne peut pas confirmer l'arrivée avant le départ confirmé par l'hôpital
+  let res = (await api('era', 'GET', `/chsld/residents/${dEra.resident_id}`)).resident;
+  assert.strictEqual(res.statut, 'preadmission');
+  await refuse('era', 'POST', `/chsld/residents/${res.id}/arrivee`, { version: res.version }, 409, 'depart_hopital_non_confirme');
+  // 6. Départ confirmé par l'hôpital : le lit part au nettoyage (tableau des lits), le statut NSA prend fin ; second clic sans effet
+  s = (await api('b', 'GET', `/nsa/orientations-chsld?etablissement_id=${L.B}`)).find((x) => x.id === dh.id);
+  await refuse('era', 'POST', `/nsa/orientations-chsld/${dh.id}/depart`, { version: s.version }, 403);
+  await api('b', 'POST', `/nsa/orientations-chsld/${dh.id}/depart`, { version: s.version });
+  const apres = (await poolPilote.query('SELECT etat, patient_ref, nsa_depuis FROM lits WHERE id = $1', [lit.id])).rows[0];
+  assert.deepStrictEqual([apres.etat, apres.patient_ref, apres.nsa_depuis], ['nettoyage', null, null]);
+  assert.strictEqual((await api('b', 'POST', `/nsa/orientations-chsld/${dh.id}/depart`, {})).deja_confirme, true);
+  assert.ok(!(await api('b', 'GET', `/nsa?etablissement_id=${L.B}`)).lits.some((l) => l.id === lit.id), 'plus dans la liste NSA');
+  assert.ok((await notifs('era', ids.era)).some((n) => n.code === 'nsa_depart' && n.vars.numero === dh.numero));
+  // 7. Le CHSLD confirme l'arrivée : résident présent, demande admise, l'hôpital le voit
+  res = (await api('era', 'GET', `/chsld/residents/${res.id}`)).resident;
+  res = await api('era', 'POST', `/chsld/residents/${res.id}/arrivee`, { version: res.version });
+  assert.strictEqual(res.statut, 'present');
+  assert.strictEqual((await poolPilote.query('SELECT etat FROM lits WHERE id = $1', [place.id])).rows[0].etat, 'occupe');
+  s = (await api('b', 'GET', `/nsa/orientations-chsld?etablissement_id=${L.B}`)).find((x) => x.id === dh.id);
+  assert.ok(s.statut === 'admise' && s.depart_hopital_le && s.arrivee_le && s.patient_present === false);
+  assert.ok((await notifs('b', L.B)).some((n) => n.code === 'nsa_admise' && n.vars.numero === dh.numero));
+  // Journal de l'hôpital et notifications : jamais l'identité
+  const fuites = (await poolPilote.query(`SELECT detail FROM journal WHERE detail ~ 'Lucien|Nsaterre' UNION ALL SELECT message FROM notifications WHERE message ~ 'Lucien|Nsaterre'`)).rows;
+  assert.deepStrictEqual(fuites, [], 'aucune identité dans le journal ni les notifications');
+});
+
 test('Liaison CHSLD : Érables → A et Saint-Laurent → C, accueil à l’urgence, refus, annulation, envois simultanés, mauvais hôpital, permissions', async () => {
   // Érables → Hôpital A : orientation vers l'urgence décidée par le personnel, puis retour
   const r1 = await residentPresent('era', ids.era, [p.dupont]);
@@ -851,7 +920,7 @@ test('parcours final : CHSLD A → Hôpital B → CHSLD A, formulaire, orientati
   assert.ok((await notifs('b', L.B)).some((n) => n.code === 'chsld_arrivee_anticipee' && n.vars.numero === ret.numero));
   ret = await act('era', ids.era, ret.id, { action: 'accepter', version: ret.version });
   // Chambre non prête : vérification refusée tant que la préparation n'est pas terminée
-  await refAct('era', ids.era, ret.id, { action: 'verifier_chambre', version: ret.version }, 409, 'reintegration_bloquee');
+  await refAct('era', ids.era, ret.id, { action: 'verifier_chambre', version: ret.version }, 409, 'chambre_en_preparation');
   await refAct('era_soins', ids.era, ret.id, { action: 'verifier_chambre', version: ret.version }, 403, 'role_insuffisant');
   const litResident = (await api('era', 'GET', `/chsld/residents/${x.id}`)).resident.lit_id;
   // D. Entretien : confirme son intervention sans dossier ni tableau de bord ; propre ne libère jamais la place
@@ -886,7 +955,7 @@ test('parcours final : CHSLD A → Hôpital B → CHSLD A, formulaire, orientati
   assert.match((await ogQ('b', L.B, `Où en est ${x.reference} ?`)).reponse, /arrivé au CHSLD, réintégration à confirmer|retour/i);
   // Conditions de réintégration : chambre redevenue non prête, identité, conditions d'accueil, rôle
   const tard = await api('era', 'POST', '/chsld/taches', { etablissement_id: ids.era, type: 'entretien', titre: 'Nettoyage avant retour', lit_id: litResident, assigne_role: 'entretien' });
-  await refAct('era', ids.era, ret.id, { action: 'reintegrer', identite_verifiee: true, conditions_accueil: true, version: ret.version }, 409, 'reintegration_bloquee');
+  await refAct('era', ids.era, ret.id, { action: 'reintegrer', identite_verifiee: true, conditions_accueil: true, version: ret.version }, 409, 'chambre_en_preparation');
   await api('era_entretien', 'POST', `/chsld/taches/${tard.id}/statut`, { statut: 'faite', version: tard.version });
   await refAct('era', ids.era, ret.id, { action: 'reintegrer', conditions_accueil: true, version: ret.version }, 400, 'identite_a_verifier');
   await refAct('era', ids.era, ret.id, { action: 'reintegrer', identite_verifiee: true, version: ret.version }, 400, 'conditions_accueil_a_confirmer');
