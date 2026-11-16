@@ -559,6 +559,79 @@ test('Sortie NSA : Hôpital B → CHSLD des Érables (demande, place, acceptatio
   assert.deepStrictEqual(fuites, [], 'aucune identité dans le journal ni les notifications');
 });
 
+test('Arrimo Continuité : parcours en six étapes, responsable, confirmation, alerte d’étape bloquée ; noms au CHSLD seulement ; jamais l’entretien', async () => {
+  const x = await residentPresent('era', ids.era);
+  const v = (await api('era', 'GET', `/chsld/residents/${x.id}`)).resident;
+  const co = await api('era', 'POST', `/chsld/residents/${x.id}/hospitalisation`, { hopital_id: L.B, identite_verifiee: true, version: v.version });
+  // Demande transmise il y a 40 min, jamais accusée par l'hôpital : étape 1 signalée
+  await poolPilote.query("UPDATE coordinations SET cree_le = now() - interval '40 minutes' WHERE id = $1", [co.id]);
+  let d = await api('era', 'GET', `/continuite?etablissement_id=${ids.era}`);
+  let p = d.parcours.find((y) => y.numero === co.numero);
+  assert.ok(p, 'parcours visible au CHSLD d’origine');
+  assert.deepStrictEqual(p.etapes.map((e) => e.code), ['demande', 'ambulance', 'preparation', 'admission', 'retour', 'cloture']);
+  assert.strictEqual(p.etapes[0].responsable, 'CHSLD 1 — des Érables'); assert.strictEqual(p.etapes[0].attente, 'Hôpital B — Mont-Clair');
+  assert.ok(p.bloquee && p.etapes[0].bloquee && p.etapes[0].attente_min >= 40, JSON.stringify(p.etapes[0]));
+  assert.ok(d.resume.bloques >= 1);
+  assert.strictEqual(p.nom, v.nom, 'le CHSLD voit le nom de son résident');
+  // L'hôpital voit le même parcours, sans nom
+  d = await api('b', 'GET', `/continuite?etablissement_id=${L.B}`);
+  p = d.parcours.find((y) => y.numero === co.numero);
+  assert.ok(p && !p.nom && !p.prenom && p.resident_ref === v.reference);
+  assert.ok(!JSON.stringify(d).includes(v.nom), 'aucun nom de résident à l’hôpital');
+  // Un autre hôpital ne le voit pas ; l'entretien jamais
+  assert.ok(!(await api('a', 'GET', `/continuite?etablissement_id=${L.A}`)).parcours.some((y) => y.numero === co.numero));
+  await refuse('era_entretien', 'GET', `/continuite?etablissement_id=${ids.era}`, null, 403);
+  // L'hôpital accuse réception : la confirmation apparaît, l'alerte de l'étape 1 tombe
+  const f = (await api('b', 'GET', `/liaison-chsld?etablissement_id=${L.B}`)).arrivees.find((y) => y.id === co.id);
+  await api('b', 'POST', `/coordinations/${co.id}/action`, { etablissement_id: L.B, action: 'accuser_reception', version: f.version });
+  p = (await api('era', 'GET', `/continuite?etablissement_id=${ids.era}`)).parcours.find((y) => y.numero === co.numero);
+  assert.ok(p.etapes[0].confirme_le && !p.etapes[0].bloquee);
+  assert.ok(p.chronologie.length >= 2 && p.chronologie.every((c) => !JSON.stringify(c).includes(v.nom)));
+  // Ménage : demande annulée par le CHSLD
+  const c2 = await coDe('era', ids.era, co.id);
+  await api('era', 'POST', `/coordinations/${co.id}/action`, { etablissement_id: ids.era, action: 'annuler', version: c2.version });
+});
+
+test('référence automatique partout et recherche unique (référence, prénom, nom) dans l’établissement seulement ; jamais l’entretien', async () => {
+  const cfgRegex = /^P-\d{5}$/;
+  // Réservation d'un lit sans référence : créée automatiquement, jamais deux fois la même
+  const libres = (await poolPilote.query(`SELECT id, version FROM lits WHERE etablissement_id = $1 AND etat = 'libre' AND actif ORDER BY id LIMIT 2`, [L.B])).rows;
+  const l1 = await api('b', 'POST', `/lits/${libres[0].id}/action`, { action: 'reserver', version: libres[0].version });
+  const l2 = await api('b', 'POST', `/lits/${libres[1].id}/action`, { action: 'reserver', version: libres[1].version, patient_ref: '' });
+  assert.match(l1.patient_ref, cfgRegex); assert.match(l2.patient_ref, cfgRegex); assert.notStrictEqual(l1.patient_ref, l2.patient_ref);
+  // Une référence saisie mais invalide reste refusée
+  const l3 = (await poolPilote.query(`SELECT id, version FROM lits WHERE etablissement_id = $1 AND etat = 'libre' AND actif ORDER BY id LIMIT 1`, [L.B])).rows[0];
+  await refuse('b', 'POST', `/lits/${l3.id}/action`, { action: 'reserver', version: l3.version, patient_ref: 'Jean' }, 400, 'reference_invalide');
+  // Demande d'admission sans référence
+  const typeId = (await poolPilote.query(`SELECT t.id FROM types_unite t JOIN etablissements e ON e.config_id = t.config_id WHERE e.id = $1 ORDER BY t.ordre LIMIT 1`, [L.B])).rows[0].id;
+  const adm = await api('b', 'POST', '/admissions', { etablissement_id: L.B, type_id: typeId });
+  assert.match(adm.patient_ref, cfgRegex);
+  // Recherche par nom (fiche fictive) : trouvée avec son lit ; sans accents ; jamais dans un autre établissement
+  const p = await api('b', 'POST', '/patients', { etablissement_id: L.B, prenom: 'Hélène', nom: 'Côté-Recherche', date_naissance: '1944-05-06' });
+  const lib = (await poolPilote.query(`SELECT id, version FROM lits WHERE etablissement_id = $1 AND etat = 'libre' AND actif ORDER BY id LIMIT 1`, [L.B])).rows[0];
+  await api('b', 'POST', `/lits/${lib.id}/action`, { action: 'reserver', version: lib.version, patient_ref: p.reference });
+  let r = await api('b', 'GET', `/recherche-personnes?etablissement_id=${L.B}&q=${encodeURIComponent('helene cote')}`);
+  const trouve = r.resultats.find((x) => x.reference === p.reference);
+  assert.ok(trouve && trouve.type === 'lit' && trouve.nom === 'Côté-Recherche' && trouve.onglet === 'lits', JSON.stringify(r));
+  r = await api('b', 'GET', `/recherche-personnes?etablissement_id=${L.B}&q=${p.reference}`);
+  assert.ok(r.resultats.some((x) => x.reference === p.reference));
+  assert.ok(!(await api('a', 'GET', `/recherche-personnes?etablissement_id=${L.A}&q=Recherche`)).resultats.some((x) => x.reference === p.reference), 'jamais dans un autre établissement');
+  await refuse('a', 'GET', `/recherche-personnes?etablissement_id=${L.B}&q=Recherche`, null, 403);
+  await refuse('b', 'GET', `/recherche-personnes?etablissement_id=${L.B}&q=a`, null, 400, 'recherche_trop_courte');
+  // CHSLD : résidents par nom ; l'entretien ne cherche jamais
+  r = await api('era', 'GET', `/recherche-personnes?etablissement_id=${ids.era}&q=Dupont`);
+  assert.ok(r.resultats.some((x) => x.type === 'resident' && x.nom === 'Dupont' && x.onglet === 'c-residents'));
+  await refuse('era_entretien', 'GET', `/recherche-personnes?etablissement_id=${ids.era}&q=Dupont`, null, 403);
+  // Le journal ne garde jamais le texte cherché
+  assert.deepStrictEqual((await poolPilote.query(`SELECT 1 FROM journal WHERE action = 'Recherche' AND detail ~* 'helene|cote|dupont'`)).rows, []);
+  // Ménage : lits réservés libérés, demande annulée (les tests suivants ont besoin de lits libres à l'Hôpital B)
+  for (const id of [l1.id, l2.id, lib.id]) {
+    const v = (await poolPilote.query('SELECT version FROM lits WHERE id = $1', [id])).rows[0].version;
+    await api('b', 'POST', `/lits/${id}/action`, { action: 'annuler', version: v });
+  }
+  await api('b', 'POST', `/admissions/${adm.id}/annuler`, {});
+});
+
 test('Liaison CHSLD : Érables → A et Saint-Laurent → C, accueil à l’urgence, refus, annulation, envois simultanés, mauvais hôpital, permissions', async () => {
   // Érables → Hôpital A : orientation vers l'urgence décidée par le personnel, puis retour
   const r1 = await residentPresent('era', ids.era, [p.dupont]);

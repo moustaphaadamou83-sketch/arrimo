@@ -170,7 +170,8 @@ async function situation(pool, p) {
   const s = { mis_a_jour_le: maj };
   const parcoursDe = async () => {
     const cos = (await pool.query(`SELECT c.id, c.liee_id, c.type, c.statut, c.cree_le, c.arrivee_le, c.retour_prevu_le, c.reintegree_le, c.cloturee_le, d.nom AS destination,
-        (SELECT max(x.date) FROM coordination_etapes x WHERE x.coordination_id = c.id AND x.statut = 'en_cours') AS depart_le
+        (SELECT max(x.date) FROM coordination_etapes x WHERE x.coordination_id = c.id AND x.statut = 'en_cours') AS depart_le,
+        (SELECT max(t.pris_en_charge_le) FROM demandes_transport t WHERE t.coordination_id = c.id) AS ambulance_le
       FROM coordinations c JOIN etablissements d ON d.id = c.destination_id WHERE c.resident_id = $1 AND c.type IN ('hospitalisation', 'transfert_hopital', 'retour') ORDER BY c.cree_le DESC, c.id DESC LIMIT 12`, [p.resident_id])).rows;
     const hosp = cos.find((c) => c.type === 'hospitalisation') || null;
     // Séjour arrivé par transfert d'un autre hôpital : le parcours commence à la première hospitalisation de la chaîne
@@ -184,7 +185,7 @@ async function situation(pool, p) {
     const h = h0 && debut && h0.id === hosp?.id ? debut : h0;
     const pas = (code, date) => ({ code, date: date || null, fait: !!date });
     const accepte = ret && ['acceptee', 'en_cours', 'recue'].includes(ret.statut);
-    return [pas('transfert_preparation', h?.cree_le), pas('depart_confirme', h?.depart_le), pas('hospitalisation_en_cours', h?.arrivee_le),
+    return [pas('transfert_preparation', h?.cree_le), pas('depart_confirme', h?.depart_le), ...(h?.ambulance_le ? [pas('ambulance_en_route', h.ambulance_le)] : []), pas('hospitalisation_en_cours', h?.arrivee_le),
       pas('retour_prevu', accepte ? ret.retour_prevu_le : null), pas('arrivee_confirmee', ret?.arrivee_le), pas('reintegre', ret?.reintegree_le)];
   };
   if (r.statut === 'hospitalise') {

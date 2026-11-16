@@ -40,7 +40,7 @@ window.ARRIMO_I18N.en = {
     "attestation_habilitation": "I verified professional authorization and confirm the requested grant or revocation.",
     "creation": "This indication does not validate a priority. Then use “Validate priority” with an authorized account."
 },
-  general: {
+  general: { ref_auto: 'Automatic if left empty (e.g. {exemple})', 
     annuler: 'Cancel', fermer: 'Close', retour: 'Back', enregistrer: 'Save', confirmer: 'Confirm', copier: 'Copy', copie: 'Copied.',
     copier_manuel: 'Select the text to copy it.', fait: 'Done.', aucun: 'None', aucune: 'None', jamais: 'Never', systeme: 'System',
     erreur_http: 'Error {statut}', minutes: '{n} min', heures: '{h} h', heures_min: '{h} h {m}', jours: '{n|# day|# days}', km: '{n} km',
@@ -79,7 +79,7 @@ window.ARRIMO_I18N.en = {
     ciel_degage: 'Clear', ciel_nuageux: 'Partly cloudy', ciel_couvert: 'Overcast', ciel_brouillard: 'Fog', ciel_bruine: 'Drizzle',
     ciel_pluie: 'Rain', ciel_neige: 'Snow', ciel_orage: 'Thunderstorm',
   },
-  onglets: {
+  onglets: { continuite: 'Trail', 
     patients: 'Patients', 
     vigilance: 'Discharges & alerts',
     national: 'National',
@@ -453,6 +453,21 @@ window.ARRIMO_I18N.en = {
     demande_lit: 'Bed request ({type}) · {statut}', demande_attente: 'waiting', demande_assignee: 'bed assigned', demande_admise: 'admitted', demande_annulee: 'cancelled', demande_transferee: 'transferred',
     transfert: 'Transfer {numero} · {origine} → {destination} · {statut}', passage_ouvert: 'Visit opened.', passage_clos: 'Visit closed.',
     dossier_existant: 'Existing record', utiliser_dossier: 'Arrival for this patient',
+  },
+  recherche: {
+    titre: 'Find a patient or resident', aide: 'By reference, first name or last name, in this facility only. Names never leave the facility that entered them.',
+    champ: 'Reference, first or last name', exemple: 'e.g. P-01005 or Tremblay', aucun: 'No result in this facility.',
+    production: 'Outside the demo, search is by reference only.', onglet_absent: 'This module is not open for this account.', nsa: 'ALC',
+    t_lit: 'Bed', t_civiere: 'Emergency stretcher', t_liaison: 'Liaison in progress', t_patient: 'Record (no location)', t_resident: 'Resident', t_demande: 'Placement request',
+  },
+  continuite: {
+    titre: 'Arrimo Trail · resident journeys', intro: 'Each resident’s full journey between the CHSLD, the ambulance and the hospital: six steps, one owner per step, confirmations received and an alert when a step waits too long. Read only: each action stays in its module.',
+    ouverts: 'Journeys in progress', bloques: 'Steps waiting too long', aucun: 'No journey in progress.', clos: 'Completed journeys (last 48 hours)', tous: 'Also show older ones',
+    s_demande: 'CHSLD request', s_ambulance: 'Ambulance pick-up', s_preparation: 'Hospital preparation', s_admission: 'Arrival and admission', s_retour: 'Return preparation', s_cloture: 'Return transport and closure',
+    e_fait: 'Done', e_en_cours: 'In progress', e_a_venir: 'Upcoming', e_sans_objet: 'Not applicable', e_bloquee: 'Waiting too long',
+    responsable: 'Owner', attend: 'waiting for: {qui}', fait_le: 'done on {d}', depuis: 'since {d} ({min})', confirme: 'receipt confirmed on {d}',
+    alerte: 'Step “{etape}” waiting for {min} — follow up with: {qui}.', chronologie: 'Timeline ({n} events)',
+    src_aller: 'CHSLD liaison', src_retour: 'Return', src_transport: 'Transport', src_prealerte: 'Pre-alert',
   },
   nsa: {
     details: 'Details', detail_titre: 'Bed {lit} · ALC', depuis_le: 'ALC since', statut: 'Status', statut_long: 'Extended stay (30 days or more)',

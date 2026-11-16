@@ -40,7 +40,7 @@ window.ARRIMO_I18N.fr = {
     "attestation_habilitation": "J’ai vérifié l’habilitation professionnelle et je confirme l’attribution ou le retrait demandé.",
     "creation": "Cette indication ne valide aucune priorité. Utilisez ensuite « Valider la priorité » avec un compte habilité."
 },
-  general: {
+  general: { ref_auto: 'Automatique si vide (ex. {exemple})', 
     annuler: 'Annuler', fermer: 'Fermer', retour: 'Retour', enregistrer: 'Enregistrer', confirmer: 'Confirmer', copier: 'Copier', copie: 'Copié.',
     copier_manuel: 'Sélectionnez le texte pour le copier.', fait: 'Fait.', aucun: 'Aucun', aucune: 'Aucune', jamais: 'Jamais', systeme: 'Système',
     erreur_http: 'Erreur {statut}', minutes: '{n} min', heures: '{h} h', heures_min: '{h} h {m}', jours: '{n|# jour|# jours}', km: '{n} km',
@@ -79,7 +79,7 @@ window.ARRIMO_I18N.fr = {
     ciel_degage: 'Dégagé', ciel_nuageux: 'Partiellement nuageux', ciel_couvert: 'Couvert', ciel_brouillard: 'Brouillard', ciel_bruine: 'Bruine',
     ciel_pluie: 'Pluie', ciel_neige: 'Neige', ciel_orage: 'Orage',
   },
-  onglets: {
+  onglets: { continuite: 'Sillage', 
     patients: 'Patients', 
     vigilance: 'Congés et alertes',
     national: 'National',
@@ -454,6 +454,21 @@ window.ARRIMO_I18N.fr = {
     demande_lit: 'Demande de lit ({type}) · {statut}', demande_attente: 'en attente', demande_assignee: 'lit assigné', demande_admise: 'admise', demande_annulee: 'annulée', demande_transferee: 'transférée',
     transfert: 'Transfert {numero} · {origine} → {destination} · {statut}', passage_ouvert: 'Passage ouvert.', passage_clos: 'Passage clos.',
     dossier_existant: 'Dossier existant', utiliser_dossier: 'Arrivée pour ce patient',
+  },
+  recherche: {
+    titre: 'Rechercher un patient ou un résident', aide: 'Par référence, prénom ou nom, dans cet établissement seulement. Les noms ne quittent jamais l’établissement qui les a saisis.',
+    champ: 'Référence, prénom ou nom', exemple: 'ex. P-01005 ou Tremblay', aucun: 'Aucun résultat dans cet établissement.',
+    production: 'Hors démonstration, la recherche se fait par référence seulement.', onglet_absent: 'Ce module n’est pas ouvert pour ce compte.', nsa: 'NSA',
+    t_lit: 'Lit', t_civiere: 'Civière de l’urgence', t_liaison: 'Liaison en cours', t_patient: 'Fiche (aucun emplacement)', t_resident: 'Résident', t_demande: 'Demande d’hébergement',
+  },
+  continuite: {
+    titre: 'Arrimo Sillage · parcours des résidents', intro: 'Le parcours complet de chaque résident entre le CHSLD, l’ambulance et l’hôpital : six étapes, un responsable par étape, les confirmations reçues et une alerte quand une étape attend trop longtemps. Lecture seule : chaque action reste dans son module.',
+    ouverts: 'Parcours en cours', bloques: 'Étapes en attente trop longtemps', aucun: 'Aucun parcours en cours.', clos: 'Parcours terminés (48 dernières heures)', tous: 'Afficher aussi les plus anciens',
+    s_demande: 'Demande du CHSLD', s_ambulance: 'Prise en charge ambulancière', s_preparation: 'Préparation hospitalière', s_admission: 'Arrivée et admission', s_retour: 'Préparation du retour', s_cloture: 'Transport retour et clôture',
+    e_fait: 'Fait', e_en_cours: 'En cours', e_a_venir: 'À venir', e_sans_objet: 'Sans objet', e_bloquee: 'En attente trop longtemps',
+    responsable: 'Responsable', attend: 'attend : {qui}', fait_le: 'fait le {d}', depuis: 'depuis {d} ({min})', confirme: 'réception confirmée le {d}',
+    alerte: 'Étape « {etape} » en attente depuis {min} — à relancer : {qui}.', chronologie: 'Chronologie ({n} événements)',
+    src_aller: 'Liaison CHSLD', src_retour: 'Retour', src_transport: 'Transport', src_prealerte: 'Préalerte',
   },
   nsa: {
     details: 'Détails', detail_titre: 'Lit {lit} · ALC', depuis_le: 'En ALC depuis', statut: 'Statut', statut_long: 'Séjour prolongé (30 jours ou plus)',

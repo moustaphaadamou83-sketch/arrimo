@@ -212,6 +212,11 @@ async function briefing(pool, utilisateur, etabId) {
 
   // Regroupement : dès deux recommandations du même genre, une seule ligne avec la liste dépliable de ses éléments
   const groupes = new Map();
+  // Arrimo Continuité : étapes de parcours en attente trop longtemps (signalées, jamais décidées)
+  for (const x of await require('./continuite').enAttente(pool, utilisateur, etabId).catch(() => [])) {
+    ajouter(2, tr(L, 'r_continuite', { ref: x.resident_ref, etape: tr(L, `ct_${x.etape}`), min: duree(L, x.minutes) }), tr(L, 'r_continuite_raison', { qui: x.attente || '', numero: x.numero }),
+      null, 'continuite', tr(L, 'r_continuite', { ref: x.resident_ref, etape: tr(L, `ct_${x.etape}`), min: duree(L, x.minutes) }));
+  }
   for (const r of recos) if (r.groupe) groupes.set(r.groupe, [...(groupes.get(r.groupe) || []), r]);
   for (const [g, items] of groupes) {
     if (items.length < 2) continue;

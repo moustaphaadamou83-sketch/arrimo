@@ -1152,7 +1152,7 @@ async function orienter(c, pool, u, co, b) {
   const s = require('./services'); const t = require('./terrain'); const { changerEtatCiviere } = require('./regles');
   const etab = await s.etablissement(c, co.destination_id);
   s.exigerActif(etab);
-  const ref = correction ? co.patient_ref_hopital : String(b.patient_ref || '').trim();
+  const ref = correction ? co.patient_ref_hopital : (String(b.patient_ref || '').trim() || await require('./regles').referenceAuto(c, etab.config.reference_exemple, etab.config.reference_regex));
   if (!new RegExp(etab.config.reference_regex).test(ref)) throw new ErreurHttp(400, 'reference_invalide', { exemple: etab.config.reference_exemple });
   if (!correction) await exigerPatientLibre(c, etab.id, ref, co.id);
   let demandeId = null, civiereId = co.civiere_id || null, emplacement = null, serviceRetenu = co.service_retenu_id || null;

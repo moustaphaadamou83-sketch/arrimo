@@ -52,6 +52,18 @@ async function journaliserRefus(pool, v) {
  * Change l'état d'un lit dans la transaction `client`.
  * opts : versionAttendue, patientRef, detail, transfertId, depuisTransfert
  */
+/**
+ * Référence patient créée automatiquement (16 nov. 2026) : même format que l'exemple du profil de pays (« P-00000 » → « P-01009 »),
+ * numérotation commune aux fiches (séquence patient_seq) : jamais deux fois la même. Aucune information sur le patient.
+ */
+async function referenceAuto(db, exemple, regex) {
+  const m = String(exemple || '').match(/^(.*?)(\d+)$/);
+  if (!m) throw new ErreurHttp(400, 'reference_invalide', { exemple });
+  const n = (await db.query("SELECT nextval('patient_seq')::text AS n")).rows[0].n;
+  const ref = m[1] + n.padStart(m[2].length, '0');
+  if (regex && !new RegExp(regex).test(ref)) throw new ErreurHttp(400, 'reference_invalide', { exemple });
+  return ref;
+}
 async function changerEtat(client, pool, utilisateurId, litId, nouveau, opts = {}) {
   if (!ETATS[nouveau]) throw new ErreurHttp(400, 'etat_inconnu');
   let lit;
@@ -108,7 +120,8 @@ async function changerEtat(client, pool, utilisateurId, litId, nouveau, opts = {
   }
   let patientRef = null;
   if (nouveau === 'reserve') {
-    patientRef = String(opts.patientRef || '').trim();
+    // Référence absente : créée automatiquement (décision de Moustafa, 16 nov. 2026)
+    patientRef = String(opts.patientRef || '').trim() || await referenceAuto(client, lit.reference_exemple, lit.reference_regex);
     if (!new RegExp(lit.reference_regex).test(patientRef)) {
       throw new ErreurHttp(400, 'reference_invalide', { exemple: lit.reference_exemple });
     }
@@ -227,7 +240,7 @@ async function changerEtatCiviere(client, pool, utilisateurId, civiereId, nouvea
   if (nouveau === 'indispo' && !MOTIFS.includes(opts.motif)) throw new ErreurHttp(400, 'motif_requis');
   let patientRef = null;
   if (nouveau === 'occupee') {
-    patientRef = String(opts.patientRef || '').trim();
+    patientRef = String(opts.patientRef || '').trim() || await referenceAuto(client, cv.reference_exemple, cv.reference_regex);
     if (!new RegExp(cv.reference_regex).test(patientRef)) {
       throw new ErreurHttp(400, 'reference_invalide', { exemple: cv.reference_exemple });
     }
@@ -253,7 +266,7 @@ async function changerEtatCiviere(client, pool, utilisateurId, civiereId, nouvea
   return rows[0];
 }
 
-module.exports = {
+module.exports = { referenceAuto,
   ETATS, TRANSITIONS, ACTIONS_LIT, DETAIL_ACTION, changerEtat, journaliser, journaliserRefus,
   ETATS_CIVIERE, TRANSITIONS_CIVIERE, ACTIONS_CIVIERE, DETAIL_CIVIERE, changerEtatCiviere,
 };

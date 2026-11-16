@@ -537,6 +537,7 @@ async function demarrer() {
   appliquerModules();
   appliquerDisposition(disposition()); majInfosLieu(); majMeteo(true); chargerNomOg();
   $('#b-notif').hidden = entretien;
+  $('#b-recherche').hidden = entretien;
   if (entretien) etat.vue = 'nettoyage';
   document.querySelectorAll('#onglets button').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.v === etat.vue)));
   document.querySelectorAll('.contenu > section').forEach((sec) => { sec.hidden = sec.id !== `v-${etat.vue}`; });
@@ -619,7 +620,7 @@ async function rafraichir() {
     await Promise.all([e ? majCompteurs() : null, ({
       copilote: vueCopilote, reseau: vueReseau, national: vueNational, lits: vueLits, urgence: vueUrgence, admissions: vueAdmissions, transferts: vueTransferts,
       nettoyage: vueNettoyage, vigilance: vueVigilance, nsa: vueNsa, indicateurs: vueIndicateurs, journal: vueJournal, params: vueParams,
-      admin: vueAdmin, compte: vueCompte, support:vueSupportClient, patients: vuePatients, ...(window.ArrimoChsld?.vues || {}), ...(window.ArrimoSecours?.vues || {}),
+      admin: vueAdmin, compte: vueCompte, support:vueSupportClient, patients: vuePatients, continuite: vueContinuite, ...(window.ArrimoChsld?.vues || {}), ...(window.ArrimoSecours?.vues || {}),
     })[etat.vue]()]);
     poserMenuParametres();
     majInfosLieu();
@@ -715,6 +716,54 @@ async function majCompteurs() {
   $('#n-tr').textContent = trs.filter((x) => !['recu', 'refuse'].includes(x.statut)).length;
   etat.notifs = notifs;
 }
+/* ---------------- Arrimo Sillage (16 nov. 2026) : un parcours, six étapes, un responsable par étape ---------------- */
+async function vueContinuite() {
+  const v = $('#v-continuite');
+  const d = await api('GET', `/continuite?etablissement_id=${etat.ctx}${etat.continuiteTous ? '&tous=1' : ''}`);
+  const K = (k, x) => esc(t(`continuite.${k}`, x));
+  const dateC = (x) => (x ? heure(x) : '');
+  const pastilleE = (s) => `<span class="badge ct-${s.bloquee ? 'bloquee' : s.etat}">${K(s.bloquee ? 'e_bloquee' : `e_${s.etat}`)}</span>`;
+  const carte = (p) => `<article class="panneau-c ct-parcours${p.bloquee ? ' ct-alerte' : ''}" data-parcours="${esc(p.numero)}">
+    <div class="entete-panneau"><h3><span class="num">${esc(p.resident_ref)}</span>${p.prenom ? ` · ${esc(p.prenom)} ${esc(p.nom)}` : ''} · ${esc(p.origine)} → ${esc(p.hopital)}</h3>
+      <span class="note">${esc(p.numero)}${p.transport ? ` · ${esc(p.transport)}` : ''}${p.prealerte ? ` · ${esc(p.prealerte)}` : ''}${p.unite ? ` · ${esc(p.unite)}` : ''}${p.retour ? ` · ${esc(p.retour)}` : ''}</span></div>
+    ${p.bloquee ? `<p class="ct-msg" role="alert">${K('alerte', { etape: t(`continuite.s_${p.etapes.find((s) => s.bloquee).code}`), min: duree(p.etapes.find((s) => s.bloquee).attente_min), qui: p.etapes.find((s) => s.bloquee).attente || '' })}</p>` : ''}
+    <ol class="ct-etapes">${p.etapes.map((s, i) => `<li class="ct-${s.bloquee ? 'bloquee' : s.etat}"><div><b>${i + 1}. ${K(`s_${s.code}`)}</b> ${pastilleE(s)}</div>
+      <div class="note">${K('responsable')} : ${esc(s.responsable || '—')}${s.etat === 'en_cours' && s.attente ? ` · ${K('attend', { qui: s.attente })}` : ''}</div>
+      <div class="note">${s.fait_le ? K('fait_le', { d: dateC(s.fait_le) }) : s.depuis ? K('depuis', { d: dateC(s.depuis), min: duree(s.attente_min) }) : ''}${s.confirme_le ? ` · ${K('confirme', { d: dateC(s.confirme_le) })}` : ''}</div></li>`).join('')}</ol>
+    <details><summary>${K('chronologie', { n: p.chronologie.length })}</summary><ul class="liste-simple">${p.chronologie.map((c) => `<li><span class="num">${esc(dateC(c.date))}</span> · ${K(`src_${c.source}`)} · ${esc(c.code.replaceAll('_', ' '))}${c.par ? ` <span class="note">(${esc(c.par)})</span>` : ''}</li>`).join('')}</ul></details></article>`;
+  const ouverts = d.parcours.filter((p) => !p.clos); const clos = d.parcours.filter((p) => p.clos);
+  v.innerHTML = `<div class="entete"><div><h2>${K('titre')}</h2><p>${K('intro')}</p></div>
+      <label class="case"><input type="checkbox" id="ct-tous"${etat.continuiteTous ? ' checked' : ''}> ${K('tous')}</label></div>
+    <div class="tuiles">${tuile({ lbl: t('continuite.ouverts'), val: nb(d.resume.ouverts) })}${tuile({ lbl: t('continuite.bloques'), val: nb(d.resume.bloques), etat: d.resume.bloques ? 'critique' : null })}</div>
+    ${ouverts.length ? ouverts.sort((a, b) => Number(b.bloquee) - Number(a.bloquee)).map(carte).join('') : `<p class="vide">${K('aucun')}</p>`}
+    ${clos.length ? `<h3>${K('clos')}</h3>${clos.map(carte).join('')}` : ''}`;
+  $('#ct-tous').onchange = (ev) => { etat.continuiteTous = ev.target.checked; vueContinuite(); };
+}
+
+/* ---------------- Recherche unique (16 nov. 2026) : référence, prénom ou nom, dans l'établissement choisi ---------------- */
+$('#b-recherche').onclick = () => {
+  const R = (k, v) => esc(t(`recherche.${k}`, v));
+  modale(t('recherche.titre'), `<p class="note">${R('aide')}</p><div class="champ"><label class="lbl" for="r-q">${R('champ')}</label>
+    <input id="r-q" type="search" autocomplete="off" maxlength="80" placeholder="${R('exemple')}"></div><div id="r-res" aria-live="polite"></div>`, [{ label: t('general.fermer') }]);
+  let minuterie = null; let n = 0;
+  const lancer = async () => {
+    const q = $('#r-q').value.trim(); const zone = $('#r-res'); const moi = ++n;
+    if (q.length < 2) { zone.innerHTML = ''; return; }
+    let r; try { r = await api('GET', `/recherche-personnes?etablissement_id=${etat.ctx}&q=${encodeURIComponent(q)}`); } catch (e) { zone.innerHTML = `<p class="erreur">${esc(e.message)}</p>`; return; }
+    if (moi !== n) return;
+    zone.innerHTML = r.resultats.length ? `<ul class="liste-simple" id="r-liste">${r.resultats.map((x, i) => `<li><button class="btn" type="button" data-r="${i}" style="width:100%;text-align:left;justify-content:flex-start">
+      <span><b class="num">${esc(x.reference)}</b>${x.prenom ? ` · ${esc(x.prenom)} ${esc(x.nom)}${x.date_naissance ? ` <span class="note">(${esc(x.date_naissance)})</span>` : ''}` : ''}
+      <br><span class="note">${esc(t(`recherche.t_${x.type}`))}${x.lieu ? ` · ${esc(x.lieu)}` : ''}${x.numero ? ` · ${esc(x.numero)}` : ''}${x.nsa ? ` · ${esc(t('recherche.nsa'))}` : ''}</span></span></button></li>`).join('')}</ul>`
+      : `<p class="muted">${R('aucun')}</p>${r.noms ? '' : `<p class="note">${R('production')}</p>`}`;
+    zone.querySelectorAll('[data-r]').forEach((b) => { b.onclick = () => {
+      const x = r.resultats[Number(b.dataset.r)]; $('#modale').hidden = true;
+      if (x.onglet === 'nsa') etat.nsaRecherche = x.reference;
+      const bouton = document.querySelector(`#onglets button[data-v="${x.onglet}"]`);
+      if (bouton && !bouton.hidden) bouton.click(); else toast(t('recherche.onglet_absent'), true);
+    }; });
+  };
+  $('#r-q').oninput = () => { clearTimeout(minuterie); minuterie = setTimeout(lancer, 250); };
+};
 $('#b-notif').onclick = async () => {
   const p = $('#panneau-notif');
   if (!p.hidden) { p.hidden = true; return; }
@@ -953,7 +1002,7 @@ function transfererIci(x) {
   const types = cfg.types.filter((ty) => x.unites.some((u) => u.type_id === ty.id && u.libres > 0));
   modale(t('national.transfert_titre', { etab: x.nom }), `<p class="note">${esc(t('national.route', { km: x.distance_km, duree: duree(x.minutes_route) }))}</p>
     <div class="champ"><label class="lbl" for="m-ntype">${esc(t('national.type'))}</label><select id="m-ntype">${types.map((ty) => `<option value="${ty.id}"${String(ty.id) === String(F.type_id) ? ' selected' : ''}>${esc(nomType(ty))}</option>`).join('')}</select></div>
-    <div class="champ"><label class="lbl" for="m-npat">${esc(t('reseau.ref_patient'))}</label><input id="m-npat" placeholder="${esc(cfg.reference_exemple)}" autocomplete="off"></div>
+    <div class="champ"><label class="lbl" for="m-npat">${esc(t('reseau.ref_patient'))}</label><input id="m-npat" placeholder="${esc(t('general.ref_auto', { exemple: cfg.reference_exemple }))}" autocomplete="off"></div>
     <div class="cases">${casesBesoins('data-mnbesoin', F.besoins)}<label class="case"><input type="checkbox" id="m-nurg"> ${esc(t('reseau.urgent'))}</label></div>
     <p class="note">${esc(t('national.transfert_aide'))}</p>`,
   [{ label: t('general.annuler') }, { label: t('national.demander'), pri: true, run: async () => {
@@ -980,7 +1029,7 @@ function brancherActionsLit(racine) {
       const code = b.dataset.code || '';
       const cfg = configCtx();
       if (action === 'reserver') {
-        modale(t('lits.reserver_titre', { code }), `<div class="champ"><label class="lbl" for="m-pat">${esc(t('reseau.ref_patient'))}</label><input id="m-pat" placeholder="${esc(cfg.reference_exemple)}" autocomplete="off"></div>
+        modale(t('lits.reserver_titre', { code }), `<div class="champ"><label class="lbl" for="m-pat">${esc(t('reseau.ref_patient'))}</label><input id="m-pat" placeholder="${esc(t('general.ref_auto', { exemple: cfg.reference_exemple }))}" autocomplete="off"></div>
           <p class="note">${esc(t('lits.ref_seulement'))}</p>`,
         [{ label: t('general.annuler') }, { label: t('actions_lit.reserver'), pri: true, run: async () => (await agir(null, () => api('POST', `/lits/${id}/action`, { action, version, patient_ref: $('#m-pat').value.trim() }), t('lits.reserve_ok', { code }))) !== null || false }]);
         return;
@@ -1556,7 +1605,7 @@ async function vueUrgence() {
       const c = civieres.find((x) => x.id === id);
       const post = (corps, msg) => agir(null, () => api('POST', `/civieres/${id}/action`, { version, ...corps }), msg);
       if (a === 'placer') {
-        modale(t('urgence.placer_titre', { code }), `<div class="champ"><label class="lbl" for="m-pat">${esc(t('reseau.ref_patient'))}</label><input id="m-pat" placeholder="${esc(cfg.reference_exemple)}" autocomplete="off"></div>
+        modale(t('urgence.placer_titre', { code }), `<div class="champ"><label class="lbl" for="m-pat">${esc(t('reseau.ref_patient'))}</label><input id="m-pat" placeholder="${esc(t('general.ref_auto', { exemple: cfg.reference_exemple }))}" autocomplete="off"></div>
           <p class="note">${esc(t('lits.ref_seulement'))}</p>`,
         [{ label: t('general.annuler') }, { label: t('urgence.a_placer'), pri: true, run: async () => (await post({ action: 'placer', patient_ref: $('#m-pat').value.trim() }, t('urgence.place_ok', { code }))) !== null || false }]);
         return;
@@ -1883,7 +1932,7 @@ async function vueAdmissions() {
     <div class="deux"><div class="pile"><div class="panneau-c"><h3>${A('nouvelle')}</h3>
       <div class="ligne"><div class="champ"><label class="lbl" for="a-type">${A('type_unite')}</label><select id="a-type">${typesEtab(cfg).map((x) => `<option value="${x.id}">${esc(nomType(x))}</option>`).join('')}</select></div>
       <div class="champ"><label class="lbl" for="a-age">${esc(t('fin.groupe_age'))}</label><select id="a-age"><option value="">${esc(t('fin.age_selon_type'))}</option>${GROUPES_AGE.map((g) => `<option value="${g}">${esc(t(`fin.age_${g}`))}</option>`).join('')}</select></div>
-      <div class="champ"><label class="lbl" for="a-ref">${A('ref_patient')}</label><input id="a-ref" placeholder="${esc(cfg.reference_exemple)}" autocomplete="off"></div></div>
+      <div class="champ"><label class="lbl" for="a-ref">${A('ref_patient')}</label><input id="a-ref" placeholder="${esc(t('general.ref_auto', { exemple: cfg.reference_exemple }))}" autocomplete="off"></div></div>
       ${sansDemande.length ? `<div class="champ"><label class="lbl" for="a-civ">${A('civiere')}</label><select id="a-civ"><option value="">${A('sans_civiere')}</option>${sansDemande.map((c) => `<option value="${c.id}" data-ref="${esc(c.patient_ref)}">${esc(c.code)} · ${esc(c.patient_ref)} · ${esc(t('urgence.depuis_h', { duree: duree(c.heures * 60) }))}</option>`).join('')}</select></div>` : ''}
       <div class="ligne"><div class="champ"><label class="lbl" for="a-prio">${A('priorite')}</label><select id="a-prio">${options('priorites_adm', ['p1', 'p2', 'p3'], 'p2')}</select></div>
       <div class="champ"><label class="lbl" for="a-prov">${A('provenance')}</label><select id="a-prov">${options('provenances', ['urgence', 'bloc', 'externe', 'autre'])}</select></div></div>

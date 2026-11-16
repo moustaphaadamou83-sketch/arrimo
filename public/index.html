@@ -102,6 +102,7 @@
         </label>
         <div class="bascule-langue" role="group" data-i18n-attr="aria-label:langue.choisir"><button type="button" class="barre-btn" data-langue-choix="fr" data-i18n-attr="aria-label:langue.vers_fr;title:langue.vers_fr">FR</button><button type="button" class="barre-btn" data-langue-choix="en" data-i18n-attr="aria-label:langue.vers_en;title:langue.vers_en">EN</button></div>
         <button class="btn icone barre-btn" id="b-disposition" type="button" data-i18n-attr="aria-label:disposition.basculer;title:disposition.basculer"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-panel-left"/></svg></button>
+        <button class="btn icone barre-btn" id="b-recherche" type="button" data-i18n-attr="aria-label:recherche.titre;title:recherche.titre"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-search"/></svg></button>
         <button class="btn icone barre-btn" id="b-theme" type="button" data-i18n-attr="aria-label:apparence.basculer;title:apparence.basculer"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-sun-moon"/></svg></button>
         <button class="btn icone barre-btn" id="b-notif" aria-label="Notifications" title="Notifications" data-i18n-attr="aria-label:barre.notifications;title:barre.notifications">
           <svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-bell"/></svg>
@@ -138,6 +139,7 @@
       <button role="tab" data-type="hopital" data-v="transferts" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-ambulance"/></svg><span data-i18n="onglets.transferts"></span> <span class="n" id="n-tr">0</span></button>
       <button role="tab" data-type="hopital" data-module-optionnel="liaison_secours" data-v="secours" aria-selected="false" hidden><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-siren"/></svg><span data-i18n="onglets.secours"></span> <span class="n" id="n-secours" hidden>0</span></button>
       <button role="tab" data-type="hopital" data-module="liaison_chsld" data-v="liaison" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-house"/></svg><span data-i18n="onglets.liaison"></span></button>
+      <button role="tab" data-type="hopital" data-v="continuite" aria-selected="false" hidden><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-arrow-right-left"/></svg><span data-i18n="onglets.continuite"></span></button>
       <button role="tab" data-v="nettoyage" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-spray-can"/></svg><span data-i18n="onglets.nettoyage"></span> <span class="n" id="n-net">0</span></button>
       <button role="tab" data-type="hopital" data-v="vigilance" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-clock"/></svg><span data-i18n="onglets.vigilance"></span> <span class="n" id="n-vig" hidden>0</span></button>
       <span class="onglets-groupe" data-type="hopital" aria-hidden="true" data-i18n="nav.pilotage">Pilotage</span>
@@ -155,6 +157,7 @@
       <button role="tab" data-type="chsld" data-module="taches" data-v="c-taches" aria-selected="false" hidden><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-clipboard-check"/></svg><span data-i18n="chsld.nav.taches"></span></button>
       <button role="tab" data-type="chsld" data-module="reseau_chsld" data-v="c-reseau" aria-selected="false" hidden><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-network"/></svg><span data-i18n="chsld.nav.reseau"></span></button>
       <button role="tab" data-type="chsld" data-module="hospitalisations" data-v="c-mouvements" aria-selected="false" hidden><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-ambulance"/></svg><span data-i18n="chsld.nav.mouvements"></span></button>
+      <button role="tab" data-type="chsld" data-module="hospitalisations" data-v="continuite" aria-selected="false" hidden><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-arrow-right-left"/></svg><span data-i18n="onglets.continuite"></span></button>
       <button role="tab" data-type="chsld" data-module-optionnel="transport_ambulancier" data-v="c-urgences" aria-selected="false" hidden><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-ambulance"/></svg><span data-i18n="chsld.nav.urgences"></span></button>
       <button role="tab" data-type="chsld" data-v="c-indicateurs" aria-selected="false" hidden><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-chart-column"/></svg><span data-i18n="chsld.nav.indicateurs"></span></button>
       <span class="onglets-groupe" aria-hidden="true" data-i18n="nav.gestion">Gestion</span>
@@ -178,6 +181,7 @@
     <section id="v-transferts" hidden></section>
     <section id="v-secours" hidden></section>
     <section id="v-liaison" hidden></section>
+    <section id="v-continuite" hidden></section>
     <section id="v-vigilance" hidden></section>
     <section id="v-nettoyage" hidden></section>
     <section id="v-nsa" hidden></section>

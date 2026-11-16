@@ -180,7 +180,7 @@
     v.querySelectorAll('[data-ls-installer]').forEach((b) => { b.onclick = () => {
       const p = etatS.donnees.prealertes.find((x) => String(x.id) === b.dataset.lsInstaller); const cfg = configCtx();
       modale(t('liaison_secours.installer', { code: p.reservation.civiere }), `<p class="note">${S('installer_aide')}</p><div class="champ"><label class="lbl" for="ls-ref">${S('installer_ref')}</label>
-        <input id="ls-ref" maxlength="40" autocomplete="off" placeholder="${esc(cfg?.reference_exemple || 'P-00000')}" value="${esc(p.correspondance?.statut === 'confirmee' ? p.correspondance.fiches?.[0]?.reference || '' : '')}"></div>`,
+        <input id="ls-ref" maxlength="40" autocomplete="off" placeholder="${esc(t('general.ref_auto', { exemple: cfg?.reference_exemple || 'P-00000' }))}" value="${esc(p.correspondance?.statut === 'confirmee' ? p.correspondance.fiches?.[0]?.reference || '' : '')}"></div>`,
       [{ label: t('general.annuler') }, { label: t('general.confirmer'), pri: true, run: async () => (await agir(null, () => api('POST', `/secours/prealertes/${p.id}/installer`, { etablissement_id: etat.ctx, patient_ref: $('#ls-ref').value.trim() }), t('liaison_secours.installe_ok'))) !== null }]);
     }; });
     v.querySelectorAll('[data-ls-lit]').forEach((b) => { b.onclick = () => document.querySelector('#onglets button[data-v="urgence"]')?.click(); });

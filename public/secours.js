@@ -32,7 +32,7 @@
       trs: { demandee: 'à accepter', acceptee: 'acceptée', en_route: 'en route', pris_en_charge: 'résident pris en charge', arrivee: 'arrivée', refusee: 'refusée', annulee: 'annulée par l’établissement' },
       acc: { fauteuil: 'fauteuil roulant', deambulateur: 'déambulateur', leve_personne: 'lève-personne', lit_electrique: 'lit électrique', malentendant: 'malentendant', malvoyant: 'malvoyant' },
       accompagnateur: 'accompagnateur', langue: 'langue : {l}',
-      vehicule: 'État du véhicule', vehicule_aide: 'Un geste suffit ; le CCS le voit. Il passe seul à « Transport vers l’hôpital » à l’envoi d’une préalerte et à « À l’hôpital » à l’arrivée confirmée.',
+      vehicule: 'État du véhicule', vehicule_aide: 'Un geste suffit ; le CCS le voit. Il passe seul à « Transport du patient » à l’envoi d’une préalerte et à « À l’hôpital » à l’arrivée confirmée.',
       vehicules: 'Véhicules de la région', vehicules_aide: 'Arrimo transmet, le CCS décide : proposez une mission à une unité disponible, l’équipage accepte ou refuse. Votre système de répartition reste la référence.',
       aucun_vehicule: 'Aucun véhicule.', non_declare: 'état non déclaré', maj: 'mis à jour à {heure}', maj_auto: 'automatique', sans_position: 'position non partagée',
       ev: { disponible: 'Disponible', en_route: 'En route', sur_place: 'Sur place', transport_hopital: 'Transport du patient', a_l_hopital: 'À l’hôpital', hors_service: 'Hors service' },
@@ -100,7 +100,7 @@
       trs: { demandee: 'to accept', acceptee: 'accepted', en_route: 'on the way', pris_en_charge: 'resident picked up', arrivee: 'arrived', refusee: 'declined', annulee: 'cancelled by the facility' },
       acc: { fauteuil: 'wheelchair', deambulateur: 'walker', leve_personne: 'patient lift', lit_electrique: 'electric bed', malentendant: 'hard of hearing', malvoyant: 'visually impaired' },
       accompagnateur: 'escort', langue: 'language: {l}',
-      vehicule: 'Vehicle status', vehicule_aide: 'One tap is enough; the CCS sees it. It switches automatically to “Transport to hospital” when a pre-alert is sent and to “At hospital” when arrival is confirmed.',
+      vehicule: 'Vehicle status', vehicule_aide: 'One tap is enough; the CCS sees it. It switches automatically to “Patient transport” when a pre-alert is sent and to “At hospital” when arrival is confirmed.',
       vehicules: 'Vehicles in the region', vehicules_aide: 'Arrimo relays, the CCS decides: offer a mission to an available unit; the crew accepts or declines. Your dispatch system remains the reference.',
       aucun_vehicule: 'No vehicle.', non_declare: 'status not declared', maj: 'updated at {heure}', maj_auto: 'automatic', sans_position: 'position not shared',
       ev: { disponible: 'Available', en_route: 'En route', sur_place: 'On scene', transport_hopital: 'Patient transport', a_l_hopital: 'At hospital', hors_service: 'Out of service' },
@@ -428,8 +428,8 @@
     const f = etat.mission || {};
     const liste = etat.missions || [];
     return `<section class="carte-s" id="missions-ccs"><h2>${t('mi_titre')}</h2><p class="note">${t('mi_aide')}</p>
-      ${libres.length ? `<div class="grille-f"><label for="mi-unite">${t('c_unite')}</label><select id="mi-unite" style="min-height:48px;font-size:17px;max-width:100%"><option value="">—</option>${libres.map((v) => `<option value="${v.id}"${String(v.id) === String(f.unite || '') ? ' selected' : ''}>${esc(v.numero)} · ${esc(lieuActuel(v))}</option>`).join('')}</select>
-        <label for="mi-lieu">${t('mi_lieu')}</label><input id="mi-lieu" maxlength="120" autocomplete="off" value="${esc(f.lieu || '')}" placeholder="${t('mi_lieu_ex')}" style="min-height:48px;font-size:17px">
+      ${libres.length ? `<div style="display:grid;gap:6px;max-width:560px"><label for="mi-unite">${t('c_unite')}</label><select id="mi-unite" style="min-height:48px;font-size:17px;max-width:100%"><option value="">—</option>${libres.map((v) => `<option value="${v.id}"${String(v.id) === String(f.unite || '') ? ' selected' : ''}>${esc(v.numero)} · ${esc(lieuActuel(v))}</option>`).join('')}</select>
+        <label for="mi-lieu">${t('mi_lieu')}</label><input id="mi-lieu" maxlength="120" autocomplete="off" value="${esc(f.lieu || '')}" placeholder="${t('mi_lieu_ex')}" style="min-height:48px;font-size:17px;width:100%">
         <label for="mi-prio">${t('priorite')}</label><select id="mi-prio" style="min-height:48px;font-size:17px">${['immediate', 'urgente', 'non_urgente'].map((x) => `<option value="${x}"${f.priorite === x ? ' selected' : ''}>${esc(t('prio.' + x))}</option>`).join('')}</select>
         <label for="mi-cat">${t('categorie')}</label><select id="mi-cat" style="min-height:48px;font-size:17px">${Object.keys(TXT[L].cat).map((x) => `<option value="${x}"${f.categorie === x ? ' selected' : ''}>${esc(t('cat.' + x))}</option>`).join('')}</select>
         <button class="btn pri" type="button" data-act="proposer-mission" style="margin-top:10px">${t('mi_proposer')}</button></div>` : `<p class="note">${t('mi_aucune_dispo')}</p>`}
@@ -450,7 +450,7 @@
   function tableauFlotte() {
     return `<section class="carte-s"><h2>${t('flotte')}</h2><p class="note">${t('vehicules_aide')}</p><table class="classe"><thead><tr><th>${t('c_unite')}</th><th>${t('c_plaque')}</th><th>${t('c_etat')}</th><th>${t('c_mission')}</th><th>${t('destination').split(' (')[0]}</th><th>${t('c_lieu')}</th></tr></thead><tbody>
       ${etat.vehicules.map((v) => `<tr data-vehicule="${esc(v.numero)}"><td data-l="${t('c_unite')}"><strong>${esc(v.numero)}</strong></td><td data-l="${t('c_plaque')}">${esc(v.plaque || '—')}</td><td data-l="${t('c_etat')}">${pastilleV(v.etat)}</td>
-        <td data-l="${t('c_mission')}">${v.mission ? `${esc(v.mission.numero)} · ${esc(v.mission.type === 'prealerte' ? t('e_' + v.mission.statut) : t('trs.' + v.mission.statut))}` : '—'}</td>
+        <td data-l="${t('c_mission')}">${v.mission ? `${esc(v.mission.numero)} · ${esc(v.mission.type === 'prealerte' ? t('e_' + v.mission.statut) : v.mission.type === 'mission' ? t('mi.' + v.mission.statut) : t('trs.' + v.mission.statut))}` : '—'}</td>
         <td data-l="${t('destination').split(' (')[0]}">${v.destination ? esc(ArrimoCarte.court(v.destination)) : '—'}</td><td data-l="${t('c_lieu')}">${esc(lieuActuel(v))}</td></tr>`).join('') || `<tr><td colspan="6">${t('aucun_vehicule')}</td></tr>`}</tbody></table></section>`;
   }
   function positionCarte(u) {
@@ -629,7 +629,7 @@
       if (a === 'refuser') { if (!confirm(t('mi_confirmer_refus'))) return; motif = 'equipage_indisponible'; }
       if (a === 'annuler' && !confirm(t('mi_confirmer_annuler'))) return;
       etat.erreur = null; etat.message = null;
-      try { await api('POST', `/secours/missions/${b.dataset.id}/action`, { action: a, version: Number(b.dataset.version), ...(motif ? { motif } : {}) }); etat.message = t('mi_ok_' + a); if (a !== 'refuser' && a !== 'annuler') prendrePosition(); }
+      try { await api('POST', `/secours/missions/${b.dataset.id}/action`, { action: a, ...(motif ? { motif } : {}) }); etat.message = t('mi_ok_' + a); if (a !== 'refuser' && a !== 'annuler') prendrePosition(); }
       catch (e) { etat.erreur = estReseau(e) ? t('hors_ligne') : e.message; }
       return charger();
     }

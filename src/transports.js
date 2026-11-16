@@ -177,7 +177,9 @@ async function agir(pool, u, id, b) {
     await evenement(c, n, a, u, detail);
     await emettre(c, n, `transport.${a}`);
     require('./flux').signaler();
-    const co = (await c.query('SELECT numero FROM coordinations WHERE id = $1', [n.coordination_id])).rows[0];
+    const co = (await c.query('SELECT numero, resident_id FROM coordinations WHERE id = $1', [n.coordination_id])).rows[0];
+    // Arrimo Famille : le proche autorisé (mouvements) est avisé quand le résident est pris en charge et quand il arrive (sans détail)
+    if (cote === 'ambulance' && ['pris_en_charge', 'arrivee'].includes(a)) await require('./portail-notifications').signaler(c, co.resident_id, 'mouvements');
     for (const etab of [n.origine_id, n.destination_id]) {
       await journaliser(c, { etablissementId: etab, utilisateurId: u.id || null, action: ACTIONS_JOURNAL[a], detail: `${n.numero} · ${co.numero}` });
     }

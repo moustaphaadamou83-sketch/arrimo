@@ -725,3 +725,16 @@ details.voir-carte summary::-webkit-details-marker { display: none; }
   table.classe td:first-child { grid-column: 1 / -1; }
   table.classe td[data-l]:not(:first-child)::before { content: attr(data-l) " : "; color: var(--texte-2, #64748B); font-size: 12px; }
 }
+
+/* Arrimo Continuité (16 nov. 2026) : étapes du parcours ; couleurs de statut seulement */
+.ct-parcours { margin-bottom: 14px; }
+.ct-alerte { border-left: 4px solid #DC2626; }
+.ct-msg { color: #DC2626; font-weight: 600; margin: 4px 0 8px; }
+.ct-etapes { list-style: none; padding: 0; margin: 8px 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
+.ct-etapes li { border: 1px solid var(--bordure, #E2E8F0); border-radius: 10px; padding: 8px 10px; border-top-width: 4px; min-width: 0; overflow-wrap: anywhere; }
+.ct-etapes li.ct-fait { border-top-color: #16A34A; }
+.ct-etapes li.ct-en_cours { border-top-color: #2563EB; }
+.ct-etapes li.ct-bloquee { border-top-color: #DC2626; }
+.ct-etapes li.ct-a_venir, .ct-etapes li.ct-sans_objet { border-top-color: #94A3B8; opacity: .85; }
+.badge.ct-fait { background: #DCFCE7; color: #166534; } .badge.ct-en_cours { background: #DBEAFE; color: #1E40AF; }
+.badge.ct-bloquee { background: #FEE2E2; color: #991B1B; } .badge.ct-a_venir, .badge.ct-sans_objet { background: #F1F5F9; color: #475569; }

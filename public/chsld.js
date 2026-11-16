@@ -624,7 +624,7 @@
         const optionsLit = () => [['', L('sans_lit')], ...em.lits.map((x) => [x.id, `${x.unite} · ${x.code} · ${C('residents.chambre')} ${x.chambre}${x.compatibilite === 'a_verifier' ? ` · ${L(`justif_${x.justification}`)}` : ''}`])];
         modale(L('action_orienter'), `<p class="note">${L('orienter_aide')}</p>${transmis(fiche || {})}
           ${sel('li-orientation', L('orientation'), [['admission', L('orientation_admission')], ...(em.urgence_active && !dejaCiviere ? [['urgence', L('orientation_urgence')]] : [])])}
-          ${dejaCiviere ? `<p class="note">${L('episode')} <span class="num">${esc(fiche.patient_ref_hopital)}</span></p>` : champ('li-ref', L('reference_hopital', { exemple: em.reference_exemple }), '', `maxlength="40" autocomplete="off" placeholder="${esc(em.reference_exemple)}"`)}
+          ${dejaCiviere ? `<p class="note">${L('episode')} <span class="num">${esc(fiche.patient_ref_hopital)}</span></p>` : champ('li-ref', L('reference_hopital', { exemple: em.reference_exemple }), '', `maxlength="40" autocomplete="off" placeholder="${esc(t('general.ref_auto', { exemple: em.reference_exemple }))}"`)}
           <div id="li-admission">${sel('li-type', L('service_retenu'), em.services.map((ty) => [ty.id, nomType(ty)]), em.type_id)}
             <fieldset class="ch-cases"><legend class="lbl">${L('besoins_lit')}</legend>${BES.map((k) => `<label class="case"><input type="checkbox" data-li-besoin="${k}"> ${esc(t(`besoins.${k}`))}</label>`).join('')}</fieldset>
             <div id="li-lit-zone">${sel('li-lit', L('lit_compatible', { n: em.lits.length }), optionsLit())}</div></div>

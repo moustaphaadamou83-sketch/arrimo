@@ -170,7 +170,7 @@ async function creerDemande(pool, utilisateur, b, client = null) {
   const civiereId = b.civiere_id ? Number(b.civiere_id) : null;
   if (b.civiere_id && !Number.isInteger(civiereId)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'civiere_id' });
   const civiere = civiereId ? await cv.civierePourDemande(db, etabId, civiereId, String(b.patient_ref || '').trim() || null) : null;
-  const ref = civiere ? civiere.patient_ref : String(b.patient_ref || '').trim();
+  const ref = civiere ? civiere.patient_ref : (String(b.patient_ref || '').trim() || await require('./regles').referenceAuto(db, etab.config.reference_exemple, etab.config.reference_regex));
   if (!new RegExp(etab.config.reference_regex).test(ref)) {
     throw new ErreurHttp(400, 'reference_invalide', { exemple: etab.config.reference_exemple });
   }

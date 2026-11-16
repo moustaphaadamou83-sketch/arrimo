@@ -605,6 +605,10 @@ function creerApp(pool, options = {}) {
 
   /* ---------- journal, notifications ---------- */
   api.get('/journal', route((req) => s.lireJournal(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'), req.query)));
+  // Arrimo Continuité : parcours complet CHSLD → ambulance → hôpital → retour, lecture seule (16 nov. 2026)
+  api.get('/continuite', route((req) => require('./continuite').liste(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'), { tous: req.query.tous === '1' })));
+  // Recherche unique par référence, prénom ou nom, dans l'établissement choisi (16 nov. 2026)
+  api.get('/recherche-personnes', route((req) => require('./recherche').rechercher(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'), req.query.q)));
   api.get('/notifications', route((req) => s.lireNotifications(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   api.post('/notifications/lues', route(async (req) => {
     const etab = entier(req.body.etablissement_id, 'etablissement_id');
