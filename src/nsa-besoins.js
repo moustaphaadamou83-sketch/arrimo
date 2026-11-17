@@ -59,7 +59,7 @@ function valider(b) {
   if (muni !== null && !MUNICIPALITE.test(muni)) throw new ErreurHttp(400, 'municipalite_invalide');
   const prefs = Array.isArray(b.preferences) ? b.preferences.map(Number) : [];
   if (!Array.isArray(b.preferences ?? []) || prefs.length > 3 || prefs.some((x) => !Number.isInteger(x) || x <= 0) || new Set(prefs).size !== prefs.length) {
-    throw new ErreurHttp(400, 'preference_invalide');
+    throw new ErreurHttp(400, 'preferences_milieux_invalides');
   }
   return { codes, sexe, langue, muni, prefs };
 }
@@ -70,7 +70,7 @@ async function modifier(pool, u, litId, b = {}) {
     const { lit, ep } = await episode(c, u, litId, { verrou: true });
     if (v.prefs.length) {
       const ok = (await c.query(`SELECT count(*)::int n FROM etablissements WHERE id = ANY($1) AND type_etablissement = 'chsld' AND actif`, [v.prefs])).rows[0].n;
-      if (ok !== v.prefs.length) throw new ErreurHttp(400, 'preference_invalide');
+      if (ok !== v.prefs.length) throw new ErreurHttp(400, 'preferences_milieux_invalides');
     }
     const actuel = (await c.query('SELECT version FROM nsa_besoins WHERE episode_id = $1 FOR UPDATE', [ep.id])).rows[0];
     if (b.version != null && Number(b.version) !== (actuel?.version ?? 0)) throw new ErreurHttp(409, 'version_perimee');
@@ -87,4 +87,4 @@ async function modifier(pool, u, litId, b = {}) {
   });
 }
 
-module.exports = { lire, modifier, milieux, CODES };
+module.exports = { lire, modifier, milieux, episode, CODES };

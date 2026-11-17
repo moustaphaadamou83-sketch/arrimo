@@ -356,6 +356,45 @@
           ${gerer() && p.etat === 'libre' ? `<div class="actions"><button class="btn" data-conf="${p.id}">${C('chambres.confirmer')}</button></div>` : ''}</div>`).join('')}</div>`; }).join('')}`;
     v.querySelectorAll('[data-res]').forEach((b) => { b.onclick = () => { etat.chResident = Number(b.dataset.res); allerA('c-residents'); }; });
     v.querySelectorAll('[data-conf]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/lits/${b.dataset.conf}/confirmer-disponibilite`), t('chsld.actions.ok')); });
+    if (role() !== 'entretien') await panneauHebergement(v, places);
+  }
+
+  /* ------------------------------------------------------------------ Profil d'hébergement et places à venir (parcours NSA, lot B) */
+  /* Ce que le milieu peut offrir et les départs prévus : les hôpitaux y trouvent des places compatibles. Aucune donnée de patient. */
+  async function panneauHebergement(v, places) {
+    const H = (k, x) => C(`hebergement.${k}`, x);
+    const [p, avenir] = await Promise.all([api('GET', `/hebergement/profil?etablissement_id=${ctx()}`).catch(() => null), api('GET', `/hebergement/places-a-venir?etablissement_id=${ctx()}`).catch(() => null)]);
+    if (!p) return;
+    const g = gerer(); const dis = g ? '' : ' disabled';
+    const cases = (nom, valeurs, choisis, lib) => `<fieldset class="cases"><legend class="lbl">${lib}</legend>${valeurs.map(([val, l]) => `<label class="case"><input type="checkbox" data-${nom} value="${val}"${choisis.includes(val) ? ' checked' : ''}${dis}> ${esc(l)}</label>`).join('')}</fieldset>`;
+    const choix = (id, lib, valeurs, choisi) => `<div class="champ"><label class="lbl" for="${id}">${lib}</label><select id="${id}"${dis}>${valeurs.map(([val, l]) => `<option value="${val}"${val === choisi ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>`;
+    const libres = places.filter((x) => x.etat !== 'indispo');
+    const auj = new Date().toISOString().slice(0, 10); const max = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10);
+    v.insertAdjacentHTML('beforeend', `<div class="grille" id="ch-hebergement">
+      <section class="panneau-c"><h3>${H('profil_titre')}</h3><p class="note">${H('profil_aide')}</p>${p.declare ? '' : `<p class="note"><b>${H('non_declare')}</b></p>`}
+        <div class="ligne">${choix('hb-statut', H('statut'), ['public', 'conventionne', 'prive'].map((x) => [x, t(`chsld.hebergement.statut_${x}`)]), p.statut_ressource)}
+        ${choix('hb-circuit', H('circuit'), ['mecanisme_acces', 'direct'].map((x) => [x, t(`chsld.hebergement.circuit_${x}`)]), p.circuit)}</div>
+        ${cases('hb-cap', p.capacites_possibles.map((x) => [x, t(`besoins_nsa.${x}`)]), p.capacites, H('capacites'))}
+        <div class="ligne">${choix('hb-sexes', H('sexes'), ['mixte', 'F', 'M'].map((x) => [x, t(`chsld.hebergement.sexes_${x}`)]), p.sexes)}
+        <div class="champ"><label class="lbl" for="hb-delai">${H('delai')}</label><input id="hb-delai" type="number" inputmode="numeric" min="0" max="90" step="1" value="${p.delai_admission_jours}"${dis}></div></div>
+        ${cases('hb-langue', ['fr', 'en', 'autre'].map((x) => [x, t(`chsld.hebergement.langue_${x}`)]), p.langues, H('langues'))}
+        <label class="case"><input type="checkbox" id="hb-transitoire"${p.accepte_transitoire ? ' checked' : ''}${dis}> ${H('transitoire')}</label>
+        ${g ? `<div class="actions"><button class="btn pri" type="button" id="hb-enregistrer">${H('enregistrer')}</button></div>` : ''}</section>
+      <section class="panneau-c"><h3>${H('avenir_titre')}</h3><p class="note">${H('avenir_aide')}</p>
+        ${avenir && avenir.length ? `<div class="liste">${avenir.map((a) => `<div class="item"><div><b class="num">${esc(jour(a.date_prevue))}</b> · ${H(`certitude_${a.certitude}`)}${a.lit ? ` · <span class="num">${esc(a.lit)}</span>` : ''}${a.expiree ? ` <span class="badge">${H('expiree')}</span>` : ''}</div>
+          ${g ? `<div class="actions"><button class="btn" type="button" data-pav="${a.id}" data-st="liberee" data-version="${a.version}">${H('liberee')}</button><button class="btn" type="button" data-pav="${a.id}" data-st="annulee" data-version="${a.version}">${H('annuler')}</button></div>` : ''}</div>`).join('')}</div>`
+          : `<p class="vide">${H('aucune')}</p>`}
+        ${g ? `<div class="ligne"><div class="champ"><label class="lbl" for="pav-date">${H('date')}</label><input id="pav-date" type="date" min="${auj}" max="${max}" value="${auj}"></div>
+          ${choix('pav-cert', H('certitude'), ['probable', 'confirmee'].map((x) => [x, t(`chsld.hebergement.certitude_${x}`)]), 'probable')}
+          ${choix('pav-lit', H('lit'), [['', t('chsld.hebergement.lit_aucun')], ...libres.map((x) => [String(x.id), `${x.unite} · ${x.code}`])], '')}</div>
+          <div class="actions"><button class="btn" type="button" id="pav-ajouter">${H('ajouter')}</button></div>` : ''}</section></div>`);
+    const coches = (nom) => [...document.querySelectorAll(`[data-${nom}]:checked`)].map((x) => x.value);
+    const en = $('#hb-enregistrer');
+    if (en) en.onclick = () => agir(en, () => api('PUT', '/hebergement/profil', { etablissement_id: ctx(), version: p.version, statut_ressource: $('#hb-statut').value, circuit: $('#hb-circuit').value,
+      capacites: coches('hb-cap'), sexes: $('#hb-sexes').value, langues: coches('hb-langue'), delai_admission_jours: Number($('#hb-delai').value), accepte_transitoire: $('#hb-transitoire').checked }), t('chsld.hebergement.profil_ok'));
+    const aj = $('#pav-ajouter');
+    if (aj) aj.onclick = () => agir(aj, () => api('POST', '/hebergement/places-a-venir', { etablissement_id: ctx(), date_prevue: $('#pav-date').value, certitude: $('#pav-cert').value, lit_id: Number($('#pav-lit').value) || null }), t('chsld.hebergement.ajoutee'));
+    v.querySelectorAll('[data-pav]').forEach((b) => { b.onclick = () => agir(b, () => api('PUT', `/hebergement/places-a-venir/${b.dataset.pav}`, { statut: b.dataset.st, version: Number(b.dataset.version) }), t('chsld.hebergement.maj')); });
   }
 
   /* ------------------------------------------------------------------ Demandes d'hébergement */

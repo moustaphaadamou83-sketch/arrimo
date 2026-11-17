@@ -1716,3 +1716,54 @@ CREATE TRIGGER lits_nsa_episode AFTER INSERT OR UPDATE OF nsa_depuis, nsa_orient
 INSERT INTO nsa_episodes (etablissement_id, lit_id, patient_ref, debut_le, orientation)
 SELECT l.etablissement_id, l.id, l.patient_ref, l.nsa_depuis, l.nsa_orientation FROM lits l
  WHERE l.nsa_depuis IS NOT NULL AND NOT EXISTS (SELECT 1 FROM nsa_episodes e WHERE e.lit_id = l.id AND e.statut = 'actif');
+
+-- =====================================================================================================
+-- Parcours NSA vers l'hébergement, lot B (17 nov. 2026) : capacités déclarées par les ressources, places à venir,
+-- poids du classement réglables par établissement. Arrimo propose des places compatibles et explique pourquoi ; l'équipe choisit.
+-- Aucune donnée de patient dans ces tables.
+-- =====================================================================================================
+CREATE TABLE IF NOT EXISTS ressource_profils (
+  etablissement_id   int PRIMARY KEY REFERENCES etablissements(id),
+  statut_ressource   text NOT NULL DEFAULT 'public' CHECK (statut_ressource IN ('public', 'conventionne', 'prive')),
+  circuit            text NOT NULL DEFAULT 'mecanisme_acces' CHECK (circuit IN ('mecanisme_acces', 'direct')),
+  capacites          text[] NOT NULL DEFAULT '{}' CHECK (capacites <@ ARRAY['marchette', 'fauteuil', 'leve_personne', 'unite_securisee', 'oxygene', 'soins_particuliers']::text[]),
+  sexes              text NOT NULL DEFAULT 'mixte' CHECK (sexes IN ('mixte', 'F', 'M')),
+  langues            text[] NOT NULL DEFAULT '{fr}' CHECK (langues <@ ARRAY['fr', 'en', 'autre']::text[]),
+  delai_admission_jours int NOT NULL DEFAULT 0 CHECK (delai_admission_jours BETWEEN 0 AND 90),
+  accepte_transitoire boolean NOT NULL DEFAULT false,
+  version            int NOT NULL DEFAULT 1,
+  modifie_par        int REFERENCES utilisateurs(id),
+  modifie_le         timestamptz NOT NULL DEFAULT now()
+);
+
+-- Places qui vont se libérer (départ prévu), déclarées par la ressource ; sans identité ni motif clinique.
+-- Ignorées automatiquement le lendemain de la date prévue si elles n'ont pas été mises à jour.
+CREATE TABLE IF NOT EXISTS places_a_venir (
+  id                 serial PRIMARY KEY,
+  etablissement_id   int NOT NULL REFERENCES etablissements(id),
+  lit_id             int REFERENCES lits(id),
+  date_prevue        date NOT NULL,
+  certitude          text NOT NULL DEFAULT 'probable' CHECK (certitude IN ('confirmee', 'probable')),
+  statut             text NOT NULL DEFAULT 'ouverte' CHECK (statut IN ('ouverte', 'liberee', 'annulee')),
+  version            int NOT NULL DEFAULT 1,
+  cree_par           int REFERENCES utilisateurs(id),
+  cree_le            timestamptz NOT NULL DEFAULT now(),
+  modifie_le         timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS places_a_venir_etab ON places_a_venir (etablissement_id, statut, date_prevue);
+
+-- Poids du classement des places (total 100, contrôlé), par établissement demandeur ; absent = barème par défaut
+CREATE TABLE IF NOT EXISTS nsa_poids (
+  etablissement_id   int PRIMARY KEY REFERENCES etablissements(id),
+  preference         int NOT NULL CHECK (preference BETWEEN 0 AND 100),
+  proximite          int NOT NULL CHECK (proximite BETWEEN 0 AND 100),
+  delai              int NOT NULL CHECK (delai BETWEEN 0 AND 100),
+  langue             int NOT NULL CHECK (langue BETWEEN 0 AND 100),
+  reactivite         int NOT NULL CHECK (reactivite BETWEEN 0 AND 100),
+  penalite_refus     int NOT NULL DEFAULT 10 CHECK (penalite_refus BETWEEN 0 AND 50),
+  horizon_jours      int NOT NULL DEFAULT 14 CHECK (horizon_jours BETWEEN 1 AND 60),
+  version            int NOT NULL DEFAULT 1,
+  modifie_par        int REFERENCES utilisateurs(id),
+  modifie_le         timestamptz NOT NULL DEFAULT now(),
+  CHECK (preference + proximite + delai + langue + reactivite = 100)
+);

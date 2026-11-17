@@ -22,6 +22,8 @@
 
 **Besoins NSA (mesures en place, lot A) :** listes fermées vérifiées par la base et par l'API, aucun texte libre ; lecture et modification réservées à l'équipe et à la coordination de l'hôpital (jamais l'entretien, jamais un autre établissement) ; le journal note « Besoins NSA mis à jour » sans le contenu ; aucune notification ; absents de la liste NSA, du détail NSA et d'OG. Prochain lot : transmission à la seule ressource destinataire d'une demande. Prouvé par `tests/api.test.js` (« NSA lot A : besoins en catégories… »).
 
+**Lot B (17 nov. 2026) :** les profils des ressources et les places à venir ne contiennent aucune donnée de patient. Les places compatibles ne sont consultables que par l'équipe de l'hôpital du patient ; la réponse dit « besoins couverts » sans les nommer, et rien n'est transmis aux ressources avant une demande envoyée par un humain.
+
 **Journaux immuables :** ils ne peuvent pas être effacés. Il faut donc concilier cette règle avec les durées de conservation et le droit de rectification ; c'est à trancher avec l'avocat.
 
 ## 2. Services externes

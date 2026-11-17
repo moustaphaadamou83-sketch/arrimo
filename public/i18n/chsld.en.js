@@ -2,6 +2,13 @@
 (function () {
   const d = (window.ARRIMO_I18N = window.ARRIMO_I18N || {}); d.en = d.en || {};
   d.en.chsld = {
+    hebergement: { profil_titre: 'Care profile', profil_aide: 'What your setting can offer. Hospitals only see compatible places; no patient data here.',
+      statut: 'Status', statut_public: 'Public', statut_conventionne: 'Private subsidized', statut_prive: 'Private', circuit: 'Admission', circuit_mecanisme_acces: 'Through the access mechanism', circuit_direct: 'Direct (contract or lease)',
+      capacites: 'Capabilities', sexes: 'Rooms', sexes_mixte: 'Mixed', sexes_F: 'Women only', sexes_M: 'Men only', langues: 'Languages offered', langue_fr: 'French', langue_en: 'English', langue_autre: 'Other',
+      delai: 'Admission delay (days)', transitoire: 'Accepts interim placements', enregistrer: 'Save the profile', profil_ok: 'Care profile saved.', non_declare: 'Profile not declared yet: without declared capabilities, your setting is only suggested for patients with no particular need.',
+      avenir_titre: 'Expected places', avenir_aide: 'Planned departures: the place will show as “expected” to hospitals. Ignored the day after the date unless updated.',
+      date: 'Expected date', certitude: 'Certainty', certitude_confirmee: 'Confirmed', certitude_probable: 'Likely', lit: 'Place (optional)', lit_aucun: 'Not specified', ajouter: 'Add',
+      liberee: 'Freed', annuler: 'Cancel', aucune: 'No expected place declared.', expiree: 'date passed', ajoutee: 'Expected place added.', maj: 'Expected place updated.' },
     nav: { accueil: 'Home', residents: 'Residents', chambres: 'Rooms and beds', demandes: 'Placement requests', admissions: 'Admissions and discharges',
       taches: 'Staff and tasks', reseau: 'CHSLD network', mouvements: 'Transfers and hospital stays', urgences: 'Nearby emergencies', indicateurs: 'Indicators', hebergement: 'Accommodation', coordination: 'Coordination' },
     accueil: { a_nettoyer: "{n} room(s) to clean", nettoyes_jour: "{n} cleaned today", messages_familles: "{n} family message(s)", visites_familles: "{n} visit(s) to handle", situation: 'Facility overview', taux: 'Occupancy rate', capacites: 'Accommodation capacity', mouvements: 'Movements', raccourcis: 'Notifications and shortcuts', aucune_action: 'Nothing to handle right now.', titre: '{etab}', intro: 'Places, residents, movements and pending events, from recorded data.', places: 'Places',

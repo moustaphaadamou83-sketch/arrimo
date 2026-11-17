@@ -1359,6 +1359,29 @@ function poserMenuParametres() {
   v.querySelectorAll('[data-param-nav]').forEach((b) => { b.onclick = () => ouvrirParametre(b.dataset.paramNav); });
 }
 
+/** Poids du classement des places NSA (total 100), réglables par l'administration de l'établissement, sans code. */
+async function panneauPoidsNsa(z, admin) {
+  const P = (k, vars) => esc(t(`params.${k}`, vars));
+  let p;
+  try { p = await api('GET', `/nsa/poids?etablissement_id=${etat.ctx}`); } catch { z.remove(); return; }
+  const CRIT = ['preference', 'proximite', 'delai', 'langue', 'reactivite'];
+  const champN = (k, val, min, max) => `<div class="champ"><label class="lbl" for="np-${k}">${P(`nsa_${k}`)}</label><input id="np-${k}" type="number" inputmode="numeric" min="${min}" max="${max}" step="1" value="${val}"${admin ? '' : ' disabled'}></div>`;
+  z.innerHTML = `<h3>${P('nsa_poids_titre')}</h3><p class="note">${P('nsa_poids_aide')}</p>
+    <div class="grille-poids">${CRIT.map((k) => champN(k, p[k], 0, 100)).join('')}</div>
+    <p class="note" id="np-total" aria-live="polite"></p>
+    <div class="grille-poids">${champN('penalite', p.penalite_refus, 0, 50)}${champN('horizon', p.horizon_jours, 1, 60)}</div>
+    ${admin ? `<div class="ligne"><button class="btn pri" type="button" id="np-enregistrer">${esc(t('general.enregistrer'))}</button><button class="btn" type="button" id="np-defaut">${P('nsa_defaut')}</button></div>` : `<p class="note">${P('nsa_lecture')}</p>`}`;
+  const total = () => CRIT.reduce((s2, k) => s2 + (Number($(`#np-${k}`).value) || 0), 0);
+  const maj = () => { const n = total(); const el = $('#np-total'); el.textContent = t('params.nsa_total', { n }); el.classList.toggle('erreur-texte', n !== 100); if ($('#np-enregistrer')) $('#np-enregistrer').disabled = n !== 100; };
+  CRIT.forEach((k) => { $(`#np-${k}`).oninput = maj; }); maj();
+  if (!admin) return;
+  $('#np-defaut').onclick = () => { Object.entries({ preference: 30, proximite: 25, delai: 25, langue: 10, reactivite: 10, penalite: 10, horizon: 14 }).forEach(([k, v]) => { $(`#np-${k}`).value = v; }); maj(); };
+  $('#np-enregistrer').onclick = () => agir($('#np-enregistrer'), async () => {
+    const corps = Object.fromEntries(CRIT.map((k) => [k, Number($(`#np-${k}`).value)]));
+    p = await api('PUT', '/nsa/poids', { etablissement_id: etat.ctx, ...corps, penalite_refus: Number($('#np-penalite').value), horizon_jours: Number($('#np-horizon').value), version: p.version });
+  }, t('params.nsa_poids_ok'));
+}
+
 async function vueParams() {
   const cfg = configCtx();
   const gest = etat.moi.utilisateur.role === 'gestionnaire';
@@ -1400,6 +1423,7 @@ async function vueParams() {
       <div class="panneau-c"><h3>${P('structure_titre')}</h3>${st ? `<dl class="compteurs">${[['departements', st.departements], ['services', st.services], ['unites', st.unites], ['chambres', st.chambres], ['lits', st.lits], ['civieres', st.civieres]]
         .map(([k, l]) => `<dt>${P(`s_${k}`)}</dt><dd class="num">${nb(nbActifs(l))}</dd>`).join('')}</dl>` : ''}
         <p class="note">${P('structure_aide')}</p>${u.admin ? `<button class="btn" type="button" data-param-nav="admin">${P('structure_gerer')}</button>` : ''}</div>
+      ${(e0.type_etablissement || 'hopital') === 'hopital' ? '<div class="panneau-c" id="params-nsa-poids"></div>' : ''}
       <div class="panneau-c"><h3>${P('cycle')}</h3><div class="cycle">${['libre', 'reserve', 'occupe', 'nettoyage', 'libre'].map((k) => `<span class="pill f-${k}">${esc(t(`etats.${k}`))}</span>`).join('→')}</div>
         <p class="note">${P('cycle_aide')}</p></div>
       <div class="panneau-c"><h3>${P('etablissements')}</h3><div>${etabs.map((e) => `<div class="reglage"><div><div>${esc(e.nom)}</div><div class="note">${esc(t(`partage.${e.partage}`))} · ${P(e.module_actif ? 'module_active' : 'module_desactive')}</div></div>
@@ -1421,6 +1445,7 @@ async function vueParams() {
   poserMenuParametres();
   const recharger = async () => { etat.moi = await api('GET', '/moi'); };
   if (section === 'og') { await panneauOg(etat.ctx); panneauVoixOg(); }
+  if ($('#params-nsa-poids')) panneauPoidsNsa($('#params-nsa-poids'), u.admin);
   if (section === 'apparence') {
     const sel = $('#p-langue');
     sel.innerHTML = LANGUES.map((l) => `<option value="${l}">${esc(dicoDe(l).langue?.court || l.toUpperCase())} · ${esc(dicoDe(l).langue?.nom || l)}</option>`).join('');
@@ -2152,7 +2177,7 @@ async function vueNsa() {
       <td class="num">${esc(l.code)}</td><td class="donnee">${esc(l.unite)}</td><td class="num">${esc(l.patient_ref)}</td><td class="num">${S('jours', { n: l.jours })}${l.jours >= 30 ? ' <span class="pt pt-attention" aria-hidden="true"></span>' : ''}</td>
       <td><select data-orient="${l.id}" aria-label="${S('orientation')}">${options('orientations', ORIENTATIONS, l.nsa_orientation)}</select>${l.transitoire ? ` <span class="badge">${S('transitoire_badge')}</span>` : ''}</td>
       <td><div class="ligne serre">${sorties === null ? '' : enCours.has(`${l.code}|${l.patient_ref}`) ? `<span class="badge">${S('vers_chsld', { chsld: enCours.get(`${l.code}|${l.patient_ref}`).chsld })}</span>`
-        : `<button class="btn pri" type="button" data-vers-chsld="${l.id}" data-code="${esc(l.code)}">${S('orienter_chsld')}</button>`}${estEntretien() ? '' : `<button class="btn" type="button" data-nsa-besoins="${l.id}" data-code="${esc(l.code)}">${S('besoins')}</button>`}<button class="btn" type="button" data-nsa-detail="${l.id}">${S('details')}</button><button class="btn" data-retirer="${l.id}">${S('retirer')}</button></div></td></tr>`).join('') || `<tr><td colspan="6" class="muted">${S('aucun')}</td></tr>`}</tbody></table></div>`;
+        : `<button class="btn pri" type="button" data-vers-chsld="${l.id}" data-code="${esc(l.code)}">${S('orienter_chsld')}</button>`}${estEntretien() ? '' : `<button class="btn" type="button" data-nsa-places="${l.id}" data-code="${esc(l.code)}">${S('places')}</button><button class="btn" type="button" data-nsa-besoins="${l.id}" data-code="${esc(l.code)}">${S('besoins')}</button>`}<button class="btn" type="button" data-nsa-detail="${l.id}">${S('details')}</button><button class="btn" data-retirer="${l.id}">${S('retirer')}</button></div></td></tr>`).join('') || `<tr><td colspan="6" class="muted">${S('aucun')}</td></tr>`}</tbody></table></div>`;
   const filtrer = () => {
     etat.nsaRecherche = $('#n-recherche').value; etat.nsaOrientation = $('#n-filtre').value;
     const q = etat.nsaRecherche.trim().toLowerCase(); let vus = 0;
@@ -2164,6 +2189,7 @@ async function vueNsa() {
   };
   v.querySelectorAll('[data-nsa-detail]').forEach((b) => { b.onclick = () => detailNsa(Number(b.dataset.nsaDetail)); });
   v.querySelectorAll('[data-nsa-besoins]').forEach((b) => { b.onclick = () => besoinsNsa(Number(b.dataset.nsaBesoins), b.dataset.code); });
+  v.querySelectorAll('[data-nsa-places]').forEach((b) => { b.onclick = () => placesNsa(Number(b.dataset.nsaPlaces), b.dataset.code); });
   $('#n-recherche').oninput = filtrer; $('#n-filtre').onchange = filtrer; filtrer();
   v.querySelectorAll('[data-orient]').forEach((sel) => { sel.onchange = () => agir(sel, () => api('PUT', `/lits/${sel.dataset.orient}/nsa`, { orientation: sel.value }), t('nsa.orient_ok')); });
   v.querySelectorAll('[data-retirer]').forEach((b) => { b.onclick = () => agir(b, () => api('DELETE', `/lits/${b.dataset.retirer}/nsa`), t('nsa.retire_ok')); });
@@ -2172,13 +2198,13 @@ async function vueNsa() {
 }
 
 /** « Orienter vers un CHSLD » : CHSLD du plus proche au plus loin, documents transmis ; l'humain choisit, le CHSLD décide de la place. */
-async function orienterVersChsld(litId, code) {
+async function orienterVersChsld(litId, code, choisi = null) {
   const S = (k, vars) => esc(t(`nsa.${k}`, vars));
   let dest;
   try { dest = await api('GET', `/nsa/chsld?etablissement_id=${etat.ctx}`); } catch (e) { toast(e.message, true); return; }
   const DOCS = ['formulaire_mecanisme', 'identite', 'carte_assurance_maladie', 'mandat_representant', 'consentement_hebergement'];
   modale(t('nsa.orienter_titre', { lit: code }), dest.length ? `<p class="note">${S('orienter_aide')}</p>
-      <label class="lbl" for="oc-chsld">${S('chsld')}</label><select id="oc-chsld">${dest.map((d) => `<option value="${d.id}">${esc(d.nom)} · ${S('chsld_option', { km: d.distance_km, n: d.places_libres })}</option>`).join('')}</select>
+      <label class="lbl" for="oc-chsld">${S('chsld')}</label><select id="oc-chsld">${dest.map((d) => `<option value="${d.id}"${d.id === choisi ? ' selected' : ''}>${esc(d.nom)} · ${S('chsld_option', { km: d.distance_km, n: d.places_libres })}</option>`).join('')}</select>
       <label class="lbl" for="oc-arrivee">${S('arrivee_souhaitee')}</label><input id="oc-arrivee" type="date">
       <p class="lbl">${S('documents_transmis')}</p><div class="cases">${DOCS.map((x) => `<label class="case"><input type="checkbox" data-oc-doc value="${x}" checked> ${esc(t(`chsld.document.${x}`))}</label>`).join('')}</div>
       <details><summary>${S('identite_titre')}</summary><p class="note">${S('identite_aide')}</p>
@@ -2244,6 +2270,35 @@ async function besoinsNsa(id, code) {
     langue: $('#nb-langue').value || null, municipalite_famille: $('#nb-muni').value.trim() || null,
     preferences: [0, 1, 2].map((i) => Number($(`#nb-pref-${i}`).value)).filter((x, i, a) => x && a.indexOf(x) === i),
   }), t('nsa.besoins_ok', { lit: code }))) !== null || false }]);
+}
+
+/**
+ * Places compatibles (lot B) : orientation choisie par l'équipe, besoins couverts, places libres ou à venir, classées sur 100 points
+ * avec une phrase d'explication. Arrimo propose ; « Transmettre une demande » reste un geste humain, avec les règles habituelles.
+ */
+async function placesNsa(id, code) {
+  const S = (k, vars) => esc(t(`nsa.${k}`, vars));
+  let r;
+  try { r = await api('GET', `/nsa/lits/${id}/places`); } catch (e) { toast(e.message, true); return; }
+  const p = r.poids;
+  const carte = (x, grande) => `<div class="item place-nsa${grande ? ' meilleure' : ''}" data-place="${x.id}"><div>
+      <b>${x.rang}. ${esc(x.nom)}</b> <span class="note">${esc(x.type)}${x.ville ? ` · ${esc(x.ville)}` : ''}${x.profil_declare ? '' : ` · ${S('profil_non_declare')}`}</span>
+      <span class="badge num">${S('places_score', { n: x.score })}</span>
+      <div>${esc(x.phrase)}</div>
+      ${grande ? `<div class="note">${S('places_points', x.points)}${x.penalite ? ` · ${S('places_penalite', { n: x.penalite })}` : ''}</div>` : ''}</div>
+      ${x.peut_envoyer && grande ? `<div class="actions-place"><button class="btn pri" type="button" data-transmettre="${x.id}">${S('transmettre')}</button></div>` : ''}</div>`;
+  const raison = (x) => (x.raison === 'capacite' ? S('exclu_capacite', { codes: x.codes.map((c) => t(`besoins_nsa.${c}`)).join(', ') })
+    : x.raison === 'aucune_place' ? S('exclu_aucune_place', { n: x.horizon_jours }) : S(`exclu_${x.raison}`));
+  const corps = r.sans_ressource ? `<p>${S('places_sans_ressource')}</p>` : `
+    ${r.besoins_renseignes ? '' : `<p class="note">${S('places_besoins_vides')}</p>`}
+    ${r.municipalite && !r.municipalite.localisee ? `<p class="note">${S('places_muni_non_localisee', { m: r.municipalite.nom })}</p>` : ''}
+    ${r.propositions.length ? `<h4>${S('places_meilleures')}</h4><div class="liste">${r.propositions.slice(0, 3).map((x) => carte(x, true)).join('')}</div>
+      ${r.propositions.length > 3 ? `<details><summary>${S('places_autres')} (${r.propositions.length - 3})</summary><div class="liste">${r.propositions.slice(3).map((x) => carte(x, false)).join('')}</div></details>` : ''}`
+    : `<p>${S('places_aucune', { n: r.horizon_jours })}</p>`}
+    ${r.exclues.length ? `<details><summary>${S('places_exclues', { n: r.exclues.length })}</summary><ul class="historique-nsa">${r.exclues.map((x) => `<li><b>${esc(x.nom)}</b> <span class="note">${esc(x.type)}</span> — ${raison(x)}</li>`).join('')}</ul></details>` : ''}
+    <p class="note">${S('places_bareme', { ...p, penalite: p.penalite_refus })}</p>`;
+  modale(t('nsa.places_titre', { lit: code }), `<p class="note">${S('places_orientation', { o: t(`orientations.${r.orientation}`) })}</p>${corps}`, [{ label: t('general.fermer'), pri: true }]);
+  document.querySelectorAll('#modale [data-transmettre]').forEach((b) => { b.onclick = () => { $('#modale').hidden = true; orienterVersChsld(id, code, Number(b.dataset.transmettre)); }; });
 }
 
 /* ---------------- Tuiles d'indicateurs ---------------- */

@@ -741,3 +741,10 @@ details.voir-carte summary::-webkit-details-marker { display: none; }
 .ct-etapes li.ct-a_venir, .ct-etapes li.ct-sans_objet { border-top-color: #94A3B8; opacity: .85; }
 .badge.ct-fait { background: #DCFCE7; color: #166534; } .badge.ct-en_cours { background: #DBEAFE; color: #1E40AF; }
 .badge.ct-bloquee { background: #FEE2E2; color: #991B1B; } .badge.ct-a_venir, .badge.ct-sans_objet { background: #F1F5F9; color: #475569; }
+
+/* NSA lot B : places compatibles et poids du classement */
+.place-nsa.meilleure { border-left: 3px solid var(--secondaire, #159895); }
+.place-nsa .badge.num { margin-left: 6px; }
+.place-nsa .actions-place { display: flex; flex-wrap: wrap; gap: var(--e2); margin-top: var(--e2); }
+.grille-poids { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--e2) var(--e3); align-items: end; }
+.erreur-texte { color: #DC2626; font-weight: 600; }

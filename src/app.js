@@ -369,6 +369,16 @@ function creerApp(pool, options = {}) {
   const nb = require('./nsa-besoins');
   api.get('/nsa/lits/:id/besoins', route((req) => nb.lire(pool, req.utilisateur, entier(req.params.id, 'id'))));
   api.put('/nsa/lits/:id/besoins', route((req) => nb.modifier(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
+  // Lot B (17 nov. 2026) : places compatibles classées et expliquées ; profil et places à venir des ressources ; poids par établissement
+  const np = require('./nsa-places');
+  api.get('/nsa/lits/:id/places', route((req) => np.placesCompatibles(pool, req.utilisateur, entier(req.params.id, 'id'), { langue: req.langue })));
+  api.get('/nsa/poids', route((req) => np.lirePoids(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
+  api.put('/nsa/poids', route((req) => np.majPoids(pool, req.utilisateur, entier(req.body.etablissement_id, 'etablissement_id'), req.body)));
+  api.get('/hebergement/profil', route((req) => np.lireProfil(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
+  api.put('/hebergement/profil', route((req) => np.majProfil(pool, req.utilisateur, entier(req.body.etablissement_id, 'etablissement_id'), req.body)));
+  api.get('/hebergement/places-a-venir', route((req) => np.listePlacesAVenir(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
+  api.post('/hebergement/places-a-venir', route((req) => np.creerPlaceAVenir(pool, req.utilisateur, req.body)));
+  api.put('/hebergement/places-a-venir/:id', route((req) => np.majPlaceAVenir(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   // Sortie d'un patient NSA vers un CHSLD (16 nov. 2026) : demande d'hébergement transmise, départ confirmé par l'hôpital
   const nc = require('./nsa-chsld');
   api.get('/nsa/chsld', route((req) => nc.destinations(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));

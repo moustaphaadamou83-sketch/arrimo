@@ -2,6 +2,13 @@
 (function () {
   const d = (window.ARRIMO_I18N = window.ARRIMO_I18N || {}); d.fr = d.fr || {};
   d.fr.chsld = {
+    hebergement: { profil_titre: 'Profil d’hébergement', profil_aide: 'Ce que votre milieu peut offrir. Les hôpitaux ne voient que les places compatibles ; aucune donnée de patient ici.',
+      statut: 'Statut', statut_public: 'Public', statut_conventionne: 'Privé conventionné', statut_prive: 'Privé', circuit: 'Admission', circuit_mecanisme_acces: 'Par le mécanisme d’accès', circuit_direct: 'Directe (contrat ou bail)',
+      capacites: 'Capacités', sexes: 'Chambres', sexes_mixte: 'Mixtes', sexes_F: 'Femmes seulement', sexes_M: 'Hommes seulement', langues: 'Langues offertes', langue_fr: 'Français', langue_en: 'Anglais', langue_autre: 'Autre',
+      delai: 'Délai d’admission (jours)', transitoire: 'Accepte des places transitoires', enregistrer: 'Enregistrer le profil', profil_ok: 'Profil d’hébergement enregistré.', non_declare: 'Profil pas encore déclaré : sans capacité déclarée, votre milieu n’est proposé que pour les patients sans besoin particulier.',
+      avenir_titre: 'Places à venir', avenir_aide: 'Départs prévus : la place apparaîtra comme « à venir » pour les hôpitaux. Ignorée le lendemain de la date si elle n’est pas mise à jour.',
+      date: 'Date prévue', certitude: 'Certitude', certitude_confirmee: 'Confirmée', certitude_probable: 'Probable', lit: 'Place (facultatif)', lit_aucun: 'Non précisée', ajouter: 'Ajouter',
+      liberee: 'Libérée', annuler: 'Annuler', aucune: 'Aucune place à venir déclarée.', expiree: 'date dépassée', ajoutee: 'Place à venir ajoutée.', maj: 'Place à venir mise à jour.' },
     nav: { accueil: 'Accueil', residents: 'Résidents', chambres: 'Chambres et lits', demandes: 'Demandes d’hébergement', admissions: 'Admissions et sorties',
       taches: 'Personnel et tâches', reseau: 'Réseau CHSLD', mouvements: 'Transferts et hospitalisations', urgences: 'Urgences proches', indicateurs: 'Indicateurs', hebergement: 'Hébergement', coordination: 'Coordination' },
     accueil: { a_nettoyer: "{n} chambre(s) à nettoyer", nettoyes_jour: "{n} nettoyée(s) aujourd’hui", messages_familles: "{n} message(s) de familles", visites_familles: "{n} visite(s) à traiter", situation: 'Situation de l’établissement', taux: 'Taux d’occupation', capacites: 'Capacités d’hébergement', mouvements: 'Mouvements', raccourcis: 'Notifications et raccourcis', aucune_action: 'Rien à traiter pour le moment.', titre: '{etab}', intro: 'Places, résidents, mouvements et événements en attente, à partir des données enregistrées.', places: 'Places',

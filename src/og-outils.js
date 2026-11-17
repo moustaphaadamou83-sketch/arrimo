@@ -279,7 +279,10 @@ async function repondre(pool, utilisateur, etabId, question, { historique } = {}
   const references = [...new Set(String(question).toUpperCase().match(/\bP-\d{1,12}\b/g) || [])];
   const rechercheReseau = suivi.estRechercheCapacite(question) && (references.length || /\b(?:cherch\w*|trouv\w*|recherch\w*) (?:un|des|de) lit/.test(qn)) && !/chez nous|\bici\b|notre etablissement/.test(qn);
   const recherchePatient = references.length && rechercheReseau;
-  let intentions = rechercheReseau ? ['pourquoi'] : references.length ? ['patient'] : choisir(detecterIntentions(qn), entites);
+  // Lot B NSA (17 nov. 2026) : « quelles places pour le patient NSA du lit X ? » → 3 meilleures places compatibles, expliquées ; l'équipe choisit
+  const placesNsa = /(places? (compatibles?|d hebergement|disponibles? pour|pour (le|ce|la|cette) (patient|lit|personne))|meilleures? places?|ou (l |le |la )?(orienter|placer|heberger))/.test(qn)
+    && !rechercheReseau;
+  let intentions = placesNsa ? ['places_nsa'] : rechercheReseau ? ['pourquoi'] : references.length ? ['patient'] : choisir(detecterIntentions(qn), entites);
   // Un établissement cité n'autorise jamais la lecture de ses patients ou lits locaux.
   if (entites.etabs.length && intentions.some(x => ['patient', 'lits_occupes', 'lit', 'attribution_locale', 'civieres', 'attente', 'transferts'].includes(x))) {
     const cible = entites.etabs[0];
@@ -330,6 +333,35 @@ async function repondre(pool, utilisateur, etabId, question, { historique } = {}
           civiere ? `Civière ${civiere.code} depuis ${duree(civiere.heures * 60)}.` : '',
           ...tr.map(x => `Transfert ${x.numero} : ${x.statut}.`)].filter(Boolean).join('\n'));
       }
+    },
+    async places_nsa() {
+      const ls = await lits();
+      let cibles = entites.lits.filter((x) => x.nsa_depuis);
+      for (const ref of references) { const x = ls.find((y) => y.patient_ref === ref && y.nsa_depuis); if (x && !cibles.some((c) => c.id === x.id)) cibles.push(x); }
+      if (!cibles.length) {
+        if (entites.lits.length || references.length) { blocs.push('Ce patient n’est pas désigné NSA ici : aucune place d’hébergement à proposer.'); return; }
+        const n = await charger('nsa', () => t.listeNsa(pool, utilisateur, etabId), 'NSA');
+        if (!n.total) { blocs.push('Aucun patient en NSA actuellement.'); return; }
+        const plus = [...n.lits].sort((a, b) => b.jours - a.jours)[0];
+        cibles = [plus];
+        blocs.push(`Aucun lit précisé : patient NSA le plus ancien, lit ${plus.code} (${plus.jours} j).`);
+      }
+      for (const c of cibles.slice(0, 3)) {
+        let r;
+        try { r = await require('./nsa-places').placesCompatibles(pool, utilisateur, c.id, { langue: 'fr' }); }
+        catch (e) { blocs.push(`Lit ${c.code} : places non consultables avec votre rôle.`); continue; }
+        noter('Hébergement');
+        const orient = ORIENT[r.orientation] || r.orientation;
+        if (r.sans_ressource) { blocs.push(`Lit ${c.code} : l’orientation choisie par l’équipe (${orient}) ne correspond à aucun milieu d’hébergement suivi dans Arrimo.`); continue; }
+        if (!r.propositions.length) {
+          blocs.push(`Lit ${c.code} : aucune place compatible avec l’orientation choisie par l’équipe (${orient}) d’ici ${r.horizon_jours} jours${r.exclues.length ? ` ; ${r.exclues.length === 1 ? 'un milieu écarté' : `${r.exclues.length} milieux écartés`}, raisons dans l’onglet NSA` : ''}.`);
+          continue;
+        }
+        blocs.push([`Lit ${c.code} (${c.patient_ref}) — places compatibles avec l’orientation choisie par l’équipe (${orient}), les ${Math.min(3, r.propositions.length)} meilleures :`,
+          ...r.propositions.slice(0, 3).map((p) => `${p.rang}. ${p.nom} (${p.type}) — ${p.score}/100. ${p.phrase}`)].join('\n'));
+        if (!r.besoins_renseignes) manquants.push(`besoins du patient du lit ${c.code} (onglet NSA → Besoins)`);
+      }
+      actions.push('Arrimo propose, l’équipe choisit : la demande s’envoie depuis l’onglet NSA (« Places compatibles »).');
     },
     async lits_occupes() {
       let ls = (await lits()).filter(x => x.etat === 'occupe');

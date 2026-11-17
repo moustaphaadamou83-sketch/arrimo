@@ -580,8 +580,8 @@ test('NSA lot A : besoins en catégories, accès restreint, jamais dans le journ
   assert.ok(!vide.corps.milieux.some((m) => m.id === sl), 'un hôpital n’est pas un milieu d’hébergement');
   // Refus : code inconnu, texte libre, municipalité avec code postal, plus de 3 préférences, hôpital en préférence
   for (const [corps, code] of [[{ codes: ['diabete'] }, 'besoin_invalide'], [{ chambre_sexe: 'X' }, 'besoin_invalide'], [{ langue: 'es' }, 'besoin_invalide'],
-    [{ municipalite_famille: 'H2X 1Y4' }, 'municipalite_invalide'], [{ preferences: [ch, ch] }, 'preference_invalide'], [{ preferences: [1, 2, 3, 4] }, 'preference_invalide'],
-    [{ preferences: [sl] }, 'preference_invalide']]) {
+    [{ municipalite_famille: 'H2X 1Y4' }, 'municipalite_invalide'], [{ preferences: [ch, ch] }, 'preferences_milieux_invalides'], [{ preferences: [1, 2, 3, 4] }, 'preferences_milieux_invalides'],
+    [{ preferences: [sl] }, 'preferences_milieux_invalides']]) {
     const r = await appel('bouchard', 'PUT', `/nsa/lits/${l.id}/besoins`, corps);
     assert.strictEqual(r.corps.code, code, JSON.stringify(corps));
   }
@@ -611,6 +611,106 @@ test('NSA lot A : besoins en catégories, accès restreint, jamais dans le journ
   assert.strictEqual((await appel('bouchard', 'PUT', `/nsa/lits/${l.id}/besoins`, { codes: [] })).corps.code, 'patient_non_nsa');
   await pool.query(`DELETE FROM nsa_besoins WHERE preferences @> ARRAY[$1::int]`, [ch]);
   await pool.query('DELETE FROM etablissements WHERE id = $1', [ch]);
+});
+
+test('NSA lot B : places compatibles classées et expliquées, profils et places à venir des ressources, poids par établissement, OG', async () => {
+  const sl = await id('SL');
+  const { hacher } = require('../src/auth');
+  const cfg = (await pool.query('SELECT config_id FROM etablissements WHERE id = $1', [sl])).rows[0].config_id;
+  const ty = (await pool.query('SELECT id FROM types_unite WHERE config_id = $1 ORDER BY id LIMIT 1', [cfg])).rows[0].id;
+  const jourPlus = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+  // Milieux d'hébergement fictifs : profils déclarés en base (côté ressource, l'API est testée plus bas)
+  async function ressource(code, nom, typeLocal, lat, lon, libres, profil) {
+    const e = (await pool.query(`INSERT INTO etablissements (code, nom, ville, latitude, longitude, config_id, type_etablissement, type_local_code, actif, module_actif)
+      VALUES ($1, $2, 'Ville fictive', $3, $4, $5, 'chsld', $6, true, true) RETURNING id`, [code, nom, lat, lon, cfg, typeLocal])).rows[0].id;
+    const un = (await pool.query('INSERT INTO unites (etablissement_id, type_id, nom) VALUES ($1, $2, $3) RETURNING id', [e, ty, 'Hébergement'])).rows[0].id;
+    const ch = (await pool.query(`INSERT INTO chambres (unite_id, numero) VALUES ($1, '1') RETURNING id`, [un])).rows[0].id;
+    for (let i = 0; i < libres; i += 1) await pool.query(`INSERT INTO lits (chambre_id, unite_id, type_id, etablissement_id, code, etat) VALUES ($1, $2, $3, $4, $5, 'libre')`, [ch, un, ty, e, `${code}-${i + 1}`]);
+    if (profil) await pool.query(`INSERT INTO ressource_profils (etablissement_id, capacites, sexes, accepte_transitoire, delai_admission_jours) VALUES ($1, $2, $3, $4, $5)`,
+      [e, profil.capacites || [], profil.sexes || 'mixte', !!profil.transitoire, profil.delai || 0]);
+    return e;
+  }
+  const A = await ressource('NB-A', 'RI des Pins', 'ri', 45.58, -73.70, 1, { capacites: ['fauteuil'] });
+  const B = await ressource('NB-B', 'RI du Fleuve', 'ri', 45.40, -73.95, 0, { capacites: ['fauteuil', 'oxygene'] });
+  const C = await ressource('NB-C', 'RI sans fauteuil', 'ri', 45.55, -73.70, 2, { capacites: [] });
+  const D = await ressource('NB-D', 'Résidence fictive', 'rpa', 45.57, -73.71, 3, { capacites: ['fauteuil'], transitoire: true });
+  const E = await ressource('NB-E', 'RI place lointaine', 'ri', 45.56, -73.72, 0, { capacites: ['fauteuil'] });
+  const F = await ressource('NB-F', 'RI pour femmes', 'ri', 45.56, -73.71, 1, { capacites: ['fauteuil'], sexes: 'F' });
+  await pool.query(`INSERT INTO places_a_venir (etablissement_id, date_prevue, certitude) VALUES ($1, $2, 'confirmee'), ($3, $4, 'probable')`, [B, jourPlus(3), E, jourPlus(30)]);
+  // Patient NSA orienté en RI : fauteuil, chambre pour hommes, famille à Laval (localisée par l'Hôpital des Mille-Îles), 1er choix : RI du Fleuve
+  const l = (await pool.query(`SELECT id, code, patient_ref FROM lits WHERE etablissement_id = $1 AND etat = 'occupe' AND nsa_depuis IS NULL ORDER BY id LIMIT 1`, [sl])).rows[0];
+  assert.strictEqual((await appel('bouchard', 'POST', `/lits/${l.id}/nsa`, { orientation: 'ri' })).statut, 200);
+  assert.strictEqual((await appel('bouchard', 'PUT', `/nsa/lits/${l.id}/besoins`, { codes: ['fauteuil'], chambre_sexe: 'M', municipalite_famille: 'laval', preferences: [B] })).statut, 200);
+  let r = (await appel('bouchard', 'GET', `/nsa/lits/${l.id}/places`)).corps;
+  assert.strictEqual(r.municipalite.localisee, true, 'municipalité localisée sans tenir compte des majuscules');
+  assert.deepStrictEqual(r.propositions.map((x) => x.id), [B, A], 'préférence de la famille d’abord, puis la place libre la plus proche');
+  assert.strictEqual(r.propositions[0].rang, 1);
+  assert.match(r.propositions[0].phrase, /^1er choix de la famille, \d+ km de Laval, place prévue le .* \(confirmée\), besoins couverts/);
+  assert.match(r.propositions[1].phrase, /place libre aujourd’hui/);
+  assert.ok(r.propositions.every((x) => x.score >= 0 && x.score <= 100));
+  const exclu = Object.fromEntries(r.exclues.map((x) => [x.id, x]));
+  assert.deepStrictEqual(exclu[C].codes, ['fauteuil']); assert.strictEqual(exclu[C].raison, 'capacite');
+  assert.strictEqual(exclu[E].raison, 'aucune_place', 'place prévue au-delà de l’horizon de 14 jours');
+  assert.strictEqual(exclu[F].raison, 'sexe');
+  assert.ok(!r.propositions.some((x) => x.id === D) && !exclu[D], 'une RPA n’est jamais proposée pour une orientation RI');
+  // Place transitoire acceptée par l'équipe : la RPA qui accepte les places transitoires apparaît, signalée comme telle
+  assert.strictEqual((await appel('bouchard', 'PUT', `/lits/${l.id}/nsa`, { transitoire: true })).statut, 200);
+  r = (await appel('bouchard', 'GET', `/nsa/lits/${l.id}/places`)).corps;
+  const d = r.propositions.find((x) => x.id === D);
+  assert.ok(d && d.transitoire && /place transitoire/.test(d.phrase));
+  // Refus précédent pour ce patient : pénalité affichée
+  const avant = r.propositions.find((x) => x.id === A).score;
+  await pool.query(`INSERT INTO demandes_hebergement (etablissement_id, numero, provenance, reference_externe, statut, hopital_id, hopital_lit_id)
+    VALUES ($1, $5, 'hopital', $3, 'refusee', $4, $2)`, [A, l.id, l.patient_ref, sl, `DH-T${l.id}`]);
+  r = (await appel('bouchard', 'GET', `/nsa/lits/${l.id}/places`)).corps;
+  const a = r.propositions.find((x) => x.id === A);
+  assert.strictEqual(a.score, Math.max(0, avant - 10)); assert.strictEqual(a.penalite, 10); assert.match(a.phrase, /déjà refusé/);
+  // Anglais : même classement, phrase traduite
+  const en = await appel('bouchard', 'GET', `/nsa/lits/${l.id}/places?langue=en`);
+  assert.match(en.corps.propositions[0].phrase, /^Family’s 1st choice, \d+ km from Laval/);
+  // Poids réglables par l'administration seulement, total 100
+  assert.strictEqual((await appel('bouchard', 'GET', `/nsa/poids?etablissement_id=${sl}`)).corps.par_defaut, true);
+  assert.strictEqual((await appel('bouchard', 'PUT', '/nsa/poids', { etablissement_id: sl, preference: 0, proximite: 50, delai: 30, langue: 10, reactivite: 10 })).statut, 403);
+  assert.strictEqual((await appel('reseau', 'PUT', '/nsa/poids', { etablissement_id: sl, preference: 10, proximite: 50, delai: 30, langue: 10, reactivite: 10 })).corps.code, 'poids_total_100');
+  const pw = await appel('reseau', 'PUT', '/nsa/poids', { etablissement_id: sl, preference: 0, proximite: 50, delai: 30, langue: 10, reactivite: 10, version: 0 });
+  assert.strictEqual(pw.statut, 200, JSON.stringify(pw.corps));
+  r = (await appel('bouchard', 'GET', `/nsa/lits/${l.id}/places`)).corps;
+  assert.strictEqual(r.poids.proximite, 50);
+  const ids = r.propositions.map((x) => x.id);
+  assert.ok(ids.indexOf(A) < ids.indexOf(B), 'sans poids pour la préférence, la place libre proche passe devant le 1er choix de la famille');
+  // OG : les 3 meilleures avec leur phrase, sans rien décider
+  const og = await appel('bouchard', 'POST', '/copilote/question', { etablissement_id: sl, question: `Quelles places compatibles pour le lit ${l.code} ?` });
+  assert.strictEqual(og.statut, 200);
+  assert.match(og.corps.reponse, /RI des Pins/); assert.match(og.corps.reponse, /\/100/); assert.match(og.corps.reponse, /l’équipe choisit/);
+  // Orientation sans milieu d'hébergement : rien à proposer
+  assert.strictEqual((await appel('bouchard', 'PUT', `/lits/${l.id}/nsa`, { orientation: 'readaptation' })).statut, 200);
+  assert.strictEqual((await appel('bouchard', 'GET', `/nsa/lits/${l.id}/places`)).corps.sans_ressource, true);
+  // Côté ressource : profil et places à venir, par le personnel de la ressource seulement
+  const ua = (await pool.query(`INSERT INTO utilisateurs (email, nom, mot_de_passe_hash, role) VALUES ('coord.nb-a@demo.arrimo', 'Coordination RI des Pins', $1, 'coordonnateur') RETURNING id`, [hacher(MOT_DE_PASSE_DEMO)])).rows[0].id;
+  await pool.query('INSERT INTO utilisateur_etablissements VALUES ($1, $2)', [ua, A]);
+  tokens.ri_a = (await appel(null, 'POST', '/connexion', { email: 'coord.nb-a@demo.arrimo', mot_de_passe: MOT_DE_PASSE_DEMO })).corps.token;
+  const pf = (await appel('ri_a', 'GET', `/hebergement/profil?etablissement_id=${A}`)).corps;
+  assert.deepStrictEqual([pf.genre, pf.type, pf.capacites], ['ri', 'RI', ['fauteuil']]);
+  assert.strictEqual((await appel('ri_a', 'PUT', '/hebergement/profil', { etablissement_id: A, capacites: ['diagnostic'] })).corps.code, 'profil_hebergement_invalide');
+  assert.strictEqual((await appel('ri_a', 'PUT', '/hebergement/profil', { etablissement_id: A, capacites: [], version: pf.version + 5 })).corps.code, 'version_perimee');
+  const pm = await appel('ri_a', 'PUT', '/hebergement/profil', { etablissement_id: A, capacites: ['fauteuil', 'leve_personne'], langues: ['fr', 'en'], delai_admission_jours: 2, version: pf.version });
+  assert.strictEqual(pm.statut, 200, JSON.stringify(pm.corps)); assert.strictEqual(pm.corps.delai_admission_jours, 2);
+  assert.strictEqual((await appel('bouchard', 'PUT', '/hebergement/profil', { etablissement_id: A, capacites: [] })).statut, 403, 'un hôpital ne modifie pas le profil d’une ressource');
+  assert.strictEqual((await appel('bouchard', 'GET', `/hebergement/profil?etablissement_id=${sl}`)).statut, 404, 'un hôpital n’a pas de profil d’hébergement');
+  assert.strictEqual((await appel('ri_a', 'POST', '/hebergement/places-a-venir', { etablissement_id: A, date_prevue: jourPlus(-3) })).corps.code, 'date_prevue_invalide');
+  assert.strictEqual((await appel('ri_a', 'POST', '/hebergement/places-a-venir', { etablissement_id: A, date_prevue: jourPlus(120) })).corps.code, 'date_prevue_invalide');
+  const pav = await appel('ri_a', 'POST', '/hebergement/places-a-venir', { etablissement_id: A, date_prevue: jourPlus(5), certitude: 'confirmee' });
+  assert.strictEqual(pav.statut, 200, JSON.stringify(pav.corps));
+  assert.strictEqual((await appel('ri_a', 'GET', `/hebergement/places-a-venir?etablissement_id=${A}`)).corps.length, 1);
+  assert.strictEqual((await appel('ri_a', 'PUT', `/hebergement/places-a-venir/${pav.corps.id}`, { statut: 'liberee', version: pav.corps.version })).corps.statut, 'liberee');
+  assert.strictEqual((await appel('ri_a', 'PUT', `/hebergement/places-a-venir/${pav.corps.id}`, { statut: 'annulee' })).corps.code, 'place_close');
+  assert.strictEqual((await appel('ri_a', 'GET', `/nsa/lits/${l.id}/places`)).statut, 403, 'une ressource ne consulte pas les patients NSA d’un hôpital');
+  // Aucune donnée de patient dans le journal des ressources
+  const jr = (await pool.query(`SELECT string_agg(action || ' ' || coalesce(detail, ''), ' | ') AS t FROM journal WHERE etablissement_id = $1`, [A])).rows[0].t;
+  assert.match(jr, /Profil d’hébergement mis à jour/); assert.ok(!jr.includes(l.patient_ref));
+  // Remise en état
+  await pool.query('DELETE FROM nsa_poids WHERE etablissement_id = $1', [sl]);
+  await appel('bouchard', 'DELETE', `/lits/${l.id}/nsa`);
 });
 
 test('file d’admission : besoins respectés, assignation, admission ; concurrence sur l’assignation', async () => {

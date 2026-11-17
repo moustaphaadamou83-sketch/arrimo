@@ -167,6 +167,16 @@ Chaque lot : `npm test` vert, revue, puis le « oui » de Moustafa avant toute p
 - Besoins `nsa_besoins` : listes fermées, municipalité, sexe facultatif, langue, 3 milieux préférés ; accès équipe et coordination seulement.
 - Déclaration, modification et retrait du statut NSA refusés au rôle entretien.
 
+## Lot B livré (branche `nsa-hebergement-lotB`)
+
+- **Côté ressource** (écran « Chambres et lits » d'un CHSLD, d'une RPA, d'une RI, d'une RTF ou d'une maison des aînés) : profil d'hébergement (statut public, conventionné ou privé, admission par le mécanisme d'accès ou directe, capacités, chambres mixtes ou réservées, langues, délai d'admission, places transitoires) et places à venir (date, certitude, place facultative ; ignorées le lendemain de la date). Aucune donnée de patient. Tables `ressource_profils`, `places_a_venir`.
+- **Côté hôpital** (onglet NSA → « Places ») : places compatibles avec l'orientation choisie par l'équipe. Filtre strict : genre de ressource (et statut pour un CHSLD) ; tous les besoins couverts ; chambre selon le sexe ; ressource qui reçoit des demandes ; place libre ou à venir dans l'horizon (14 jours par défaut). Une place transitoire acceptée par l'équipe ouvre les ressources qui en offrent. Les milieux écartés sont listés avec leur raison.
+- **Classement sur 100** (table `nsa_poids`, réglable par l'administration de l'établissement dans Paramètres, total contrôlé à 100) : préférence 30 / 20 / 10 selon le rang, proximité de la municipalité de la famille (à défaut, de l'hôpital) sur 100 km au plus, délai (libre maintenant : plein ; à venir : 80 % à 20 %, moins le délai d'admission), langue, réactivité (délai médian de réponse sur 90 jours ; sans historique : moitié des points) ; pénalité après un refus pour le même patient.
+- **Explication** en une phrase, en français ou en anglais (« 1er choix de la famille, 5 km de Ville X, place prévue le 21 novembre (confirmée), besoins couverts… »). Les besoins ne sont jamais nommés à une ressource.
+- **OG** : « Quelles places compatibles pour le lit X ? » → les 3 meilleures avec leur score et leur phrase ; l'envoi reste dans l'onglet NSA.
+- **Envoi** : « Transmettre une demande » ouvre la fenêtre habituelle avec le milieu présélectionné ; l'humain confirme.
+- **Limite connue** : la municipalité de la famille est localisée par les établissements connus d'Arrimo qui s'y trouvent ; sinon la distance est mesurée depuis l'hôpital (dit à l'écran). Un vrai géocodage viendra avec le pilote.
+
 ## Questions ouvertes pour Moustafa
 
 1. **Qui accepte la place proposée ?** Aujourd'hui, c'est la ressource qui clique « Proposition acceptée ». Faut-il une étape « acceptée par l'équipe et l'usager » côté hôpital ? Le plan prévoit `acceptation_equipe_le`.
