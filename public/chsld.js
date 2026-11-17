@@ -428,10 +428,15 @@
           <div>${pastille(d.statut, t(`chsld.demande_statut.${d.statut}`))} ${d.type_nom ? `· ${esc(d.type_nom)}` : ''} ${d.arrivee_souhaitee ? `· ${C('demandes.arrivee')} ${esc(jour(d.arrivee_souhaitee))}` : ''} ${d.lit_propose ? `· ${esc(d.lit_propose)}` : ''} ${d.resident_ref ? `· ${esc(d.resident_ref)}` : ''}</div>
           ${d.hopital_nom ? `<div class="note">${C('demandes.venant_de', { hopital: d.hopital_nom })}${d.statut === 'acceptee' ? ` · <b>${C(d.depart_hopital_le ? 'demandes.depart_confirme' : 'demandes.depart_attendu')}</b>` : ''}</div>` : ''}
           ${d.hopital_nom && d.acceptation_equipe_le && !d.depart_hopital_le ? `<div class="note">${C('demandes.place_confirmee', { quand: dateHeure(d.depart_prevu_le), transport: t(`nsa.transport_${d.transport_mode}`) })}</div>` : ''}
+          ${d.hopital_nom ? `<div class="note">${[d.age != null ? C('demandes.age', { n: d.age }) : '', d.lit_hopital ? C('demandes.lit_hopital', { lit: d.lit_hopital, hopital: d.hopital_nom }) : '',
+            d.nsa_jours != null ? C('demandes.nsa_jours', { n: d.nsa_jours }) : '', d.nsa_orientation ? C('demandes.orientation', { o: t(`orientations.${d.nsa_orientation}`) }) : '',
+            d.transitoire ? C('demandes.transitoire') : ''].filter(Boolean).join(' · ')}</div>
+          ${d.besoins ? `<div class="note">${C('demandes.besoins', { liste: d.besoins.length ? d.besoins.map((x) => t(`besoins_nsa.${x}`)).join(', ') : t('chsld.demandes.aucun_besoin') })}${d.chambre_sexe && d.chambre_sexe !== 'indifferent' ? ` · ${C('demandes.chambre', { s: t(`nsa.sexe_${d.chambre_sexe}`) })}` : ''}${d.langue_usager ? ` · ${C('demandes.langue', { l: t(`nsa.langue_${d.langue_usager}`) })}` : ''}</div>` : ''}` : ''}
           <div class="cases">${d.documents.map((x) => gerer() ? `<label class="case"><input type="checkbox" data-doc="${d.id}" data-code="${x.code}" data-version="${d.version}"${x.recu ? ' checked' : ''}> ${C(`document.${x.code}`)}</label>` : `<span class="note">${C(`document.${x.code}`)} : ${C(x.recu ? 'demandes.recu' : 'demandes.manquant')}</span>`).join('')}</div></div>
           ${gerer() ? `<div class="actions">${d.statut === 'recue' ? `<button class="btn" data-dh="verifier" data-id="${d.id}" data-version="${d.version}">${C('demandes.verifier')}</button>` : ''}
             ${d.statut === 'en_verification' ? `<button class="btn pri" data-dh="proposer_place" data-id="${d.id}" data-version="${d.version}">${C('demandes.proposer')}</button>` : ''}
             ${d.statut === 'place_proposee' ? `<button class="btn pri" data-dh="accepter" data-id="${d.id}" data-version="${d.version}">${C('demandes.accepter')}</button>` : ''}
+            ${d.hopital_id && ['recue', 'documents_manquants', 'en_verification'].includes(d.statut) ? `<button class="btn" data-dh="transferer" data-id="${d.id}" data-version="${d.version}">${C('demandes.transferer')}</button>` : ''}
             <button class="btn dan" data-dh="refuser" data-id="${d.id}" data-version="${d.version}">${C('demandes.refuser')}</button></div>` : ''}</div>`).join('')}</div>` : `<p class="vide">${C('demandes.aucune')}</p>`}`;
     if ($('#dh-nouvelle')) $('#dh-nouvelle').onclick = () => modale(t('chsld.demandes.nouvelle'), `<div class="ligne">${sel('dh-prov', C('demandes.provenance'), ['mecanisme_acces', 'hopital', 'autre_chsld', 'domicile'].map((x) => [x, t(`chsld.provenance.${x}`)]))}${champ('dh-ref', C('demandes.reference_externe'))}</div>
       <div class="ligne">${champ('dh-prenom', C('nouveau.prenom'))}${champ('dh-nom', C('nouveau.nom'))}${champ('dh-dn', C('nouveau.date_naissance'), '', 'type="date"')}</div>
@@ -443,6 +448,12 @@
     v.querySelectorAll('[data-doc]').forEach((c) => { c.onchange = () => agir(null, () => api('POST', `/chsld/demandes/${c.dataset.doc}/action`, { action: 'document', code: c.dataset.code, recu: c.checked, version: Number(c.dataset.version) })); });
     v.querySelectorAll('[data-dh]').forEach((b) => { b.onclick = async () => {
       const corps = { action: b.dataset.dh, version: Number(b.dataset.version) };
+      if (b.dataset.dh === 'transferer') {
+        // Transférer la demande à un autre milieu, choisi par un humain ; l'hôpital est averti
+        let milieux; try { milieux = await api('GET', `/chsld/demandes/${b.dataset.id}/milieux`); } catch (e) { toast(e.message, true); return; }
+        return modale(t('chsld.demandes.transferer_titre'), milieux.length ? `<p class="note">${C('demandes.transferer_aide')}</p>${sel('dh-vers', C('demandes.transferer_vers'), milieux.map((m) => [m.id, `${m.nom} (${m.type})${m.distance_km != null ? ` · ${m.distance_km} km` : ''} · ${t('nsa.chsld_option', { km: m.distance_km ?? '—', n: m.places_libres }).split(' · ').pop()}`]))}` : `<p>${C('demandes.aucun_milieu')}</p>`,
+          [{ label: t('general.annuler') }, ...(milieux.length ? [{ label: t('chsld.demandes.transferer'), pri: true, run: async () => (await agir(null, () => api('POST', `/chsld/demandes/${b.dataset.id}/transferer`, { version: Number(b.dataset.version), vers_id: Number($('#dh-vers').value) }), (r) => t('chsld.demandes.transfere_ok', { nouvelle: r.nouvelle, vers: r.vers }))) !== null || false }] : [])]);
+      }
       if (b.dataset.dh === 'refuser') {
         // Motif choisi dans une liste fermée : jamais de texte libre (aucune information clinique)
         const MOTIFS = ['capacite_insuffisante', 'besoin_non_couvert', 'place_plus_disponible', 'dossier_incomplet', 'choix_usager', 'autre'];

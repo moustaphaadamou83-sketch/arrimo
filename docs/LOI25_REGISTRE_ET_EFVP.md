@@ -26,6 +26,8 @@
 
 **Lots C et D (17 nov. 2026) :** une demande venue d'un hôpital porte des codes et des dates seulement (motif de refus en liste fermée, documents transmis, mode de transport, heure de départ, famille avisée) ; le texte libre de refus est ignoré pour ces demandes. Les indicateurs NSA ne contiennent aucune référence de patient. L'avis aux proches passe par les autorisations existantes d'Arrimo Famille (catégorie « Mouvements »), sans détail médical.
 
+**Demandes côté ressource (17 nov. 2026) :** le milieu destinataire d'une demande venue d'un hôpital voit l'âge (fiche fictive, démonstration et recette), le lit d'origine, les jours NSA, l'orientation et les catégories de besoins, tant que la demande est ouverte ; jamais de diagnostic. Le transfert à un autre milieu est une décision humaine, journalisée, et l'hôpital en est averti.
+
 **Journaux immuables :** ils ne peuvent pas être effacés. Il faut donc concilier cette règle avec les durées de conservation et le droit de rectification ; c'est à trancher avec l'avocat.
 
 ## 2. Services externes

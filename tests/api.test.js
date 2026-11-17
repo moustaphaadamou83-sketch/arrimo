@@ -879,6 +879,64 @@ test('Retour au CHSLD : statut « de retour », « Confirmer son retour », cham
   } finally { if (avant === undefined) delete process.env.ARRIMO_PATIENTS_FICTIFS; else process.env.ARRIMO_PATIENTS_FICTIFS = avant; }
 });
 
+test('Demandes d’hébergement côté ressource : âge, lit et jours NSA, besoins ; transfert à un autre milieu ; préparation de la chambre par l’entretien', async () => {
+  const avant = process.env.ARRIMO_PATIENTS_FICTIFS; process.env.ARRIMO_PATIENTS_FICTIFS = '1';
+  try {
+    const sl = await id('SL');
+    const { hacher } = require('../src/auth'); const TE = require('../src/types-etablissement');
+    const cfgH = (await pool.query('SELECT config_id FROM etablissements WHERE id = $1', [sl])).rows[0].config_id;
+    const cfg = await TE.configChsld(pool, cfgH);
+    const ty = (await pool.query('SELECT id FROM types_unite WHERE config_id = $1 ORDER BY ordre LIMIT 1', [cfg])).rows[0].id;
+    async function milieu(code, nom, login) {
+      const e = (await pool.query(`INSERT INTO etablissements (code, nom, ville, latitude, longitude, config_id, profil_config_id, type_etablissement, actif, module_actif)
+        VALUES ($1, $2, 'Montréal', 45.52, -73.59, $3, $4, 'chsld', true, true) RETURNING id`, [code, nom, cfg, cfgH])).rows[0].id;
+      const un = (await pool.query('INSERT INTO unites (etablissement_id, type_id, nom) VALUES ($1, $2, $3) RETURNING id', [e, ty, 'Hébergement'])).rows[0].id;
+      const ch = (await pool.query(`INSERT INTO chambres (unite_id, numero) VALUES ($1, '1') RETURNING id`, [un])).rows[0].id;
+      await pool.query(`INSERT INTO lits (chambre_id, unite_id, type_id, etablissement_id, code, etat) VALUES ($1, $2, $3, $4, $5, 'libre')`, [ch, un, ty, e, `${code}-1`]);
+      for (const [l, role] of [[login, 'admin_etab'], [`${login}.ent`, 'entretien']]) {
+        const u = (await pool.query(`INSERT INTO utilisateurs (email, nom, mot_de_passe_hash, role) VALUES ($1, $2, $3, $4) RETURNING id`, [`${l}@demo.arrimo`, l, hacher(MOT_DE_PASSE_DEMO), role])).rows[0].id;
+        await pool.query('INSERT INTO utilisateur_etablissements VALUES ($1, $2)', [u, e]);
+        tokens[l] = (await appel(null, 'POST', '/connexion', { email: `${l}@demo.arrimo`, mot_de_passe: MOT_DE_PASSE_DEMO })).corps.token;
+      }
+      return e;
+    }
+    const A = await milieu('DT-A', 'CHSLD fictif A', 'dt.a'); const B = await milieu('DT-B', 'CHSLD fictif B', 'dt.b');
+    const l = (await pool.query(`SELECT id, code, patient_ref FROM lits WHERE etablissement_id = $1 AND etat = 'occupe' AND nsa_depuis IS NULL ORDER BY id LIMIT 1`, [sl])).rows[0];
+    const jour = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+    assert.strictEqual((await appel('bouchard', 'POST', `/lits/${l.id}/nsa`, { orientation: 'chsld', depuis: jour(15) })).statut, 200);
+    assert.strictEqual((await appel('bouchard', 'PUT', `/nsa/lits/${l.id}/besoins`, { codes: ['fauteuil'], chambre_sexe: 'F', langue: 'fr' })).statut, 200);
+    const docs = ['formulaire_mecanisme', 'identite', 'carte_assurance_maladie', 'mandat_representant', 'consentement_hebergement'];
+    const d1 = await appel('bouchard', 'POST', `/nsa/lits/${l.id}/orienter-chsld`, { chsld_id: A, documents: docs, prenom: 'Fictive', nom: 'Usagère', date_naissance: '1938-05-04' });
+    assert.strictEqual(d1.statut, 200, JSON.stringify(d1.corps));
+    // Ce que voit le milieu : âge, lit et hôpital d'origine, jours NSA, orientation, besoins en catégories
+    let dA = (await appel('dt.a', 'GET', `/chsld/demandes?etablissement_id=${A}`)).corps.find((x) => x.numero === d1.corps.numero);
+    assert.ok(dA.age >= 87 && dA.age <= 88, `âge ${dA.age}`);
+    assert.deepStrictEqual([dA.lit_hopital, dA.hopital_nom, dA.nsa_orientation, dA.besoins, dA.chambre_sexe, dA.langue_usager], [l.code, 'CHU Saint-Laurent', 'chsld', ['fauteuil'], 'F', 'fr']);
+    assert.ok(dA.nsa_jours >= 14 && dA.nsa_jours <= 15);
+    // Transférer à un autre milieu : la demande est close ici, recréée chez B, l'hôpital est averti
+    const milieux = (await appel('dt.a', 'GET', `/chsld/demandes/${dA.id}/milieux`)).corps;
+    assert.ok(milieux.some((m) => m.id === B) && !milieux.some((m) => m.id === A));
+    assert.strictEqual((await appel('dt.a', 'POST', `/chsld/demandes/${dA.id}/transferer`, { vers_id: sl, version: dA.version })).statut, 404, 'un hôpital n’est pas un milieu');
+    const tr = await appel('dt.a', 'POST', `/chsld/demandes/${dA.id}/transferer`, { vers_id: B, version: dA.version });
+    assert.strictEqual(tr.statut, 200, JSON.stringify(tr.corps));
+    assert.strictEqual((await pool.query('SELECT statut FROM demandes_hebergement WHERE id = $1', [dA.id])).rows[0].statut, 'annulee');
+    assert.ok((await pool.query(`SELECT 1 FROM notifications WHERE etablissement_id = $1 AND code = 'nsa_transferee'`, [sl])).rowCount);
+    let dB = (await appel('dt.b', 'GET', `/chsld/demandes?etablissement_id=${B}`)).corps.find((x) => x.numero === tr.corps.nouvelle);
+    assert.deepStrictEqual([dB.statut, dB.hopital_nom, dB.lit_hopital, dB.besoins], ['recue', 'CHU Saint-Laurent', l.code, ['fauteuil']]);
+    assert.ok((await appel('bouchard', 'GET', `/nsa/orientations-chsld?etablissement_id=${sl}`)).corps.some((x) => x.numero === tr.corps.nouvelle && x.statut === 'recue'));
+    // B propose une place : la tâche « Préparer la chambre » est créée pour l'entretien ; l'arrivée attend qu'il la termine
+    assert.strictEqual((await appel('dt.b', 'POST', `/chsld/demandes/${dB.id}/action`, { action: 'verifier', version: dB.version })).statut, 200);
+    dB = (await appel('dt.b', 'GET', `/chsld/demandes?etablissement_id=${B}`)).corps.find((x) => x.numero === tr.corps.nouvelle);
+    const litB = (await pool.query(`SELECT id, version FROM lits WHERE etablissement_id = $1 ORDER BY id LIMIT 1`, [B])).rows[0];
+    assert.strictEqual((await appel('dt.b', 'POST', `/chsld/demandes/${dB.id}/action`, { action: 'proposer_place', version: dB.version, lit_id: litB.id, version_lit: litB.version })).statut, 200);
+    const prep = (await appel('dt.b.ent', 'GET', `/chsld/taches?etablissement_id=${B}`)).corps.find((x) => x.type === 'preparation_chambre' && x.lit_id === litB.id);
+    assert.ok(prep, 'tâche de préparation pour l’entretien');
+    assert.strictEqual((await appel('dt.b', 'POST', `/chsld/taches/${prep.id}/statut`, { statut: 'faite', version: prep.version })).corps.code, 'chambre_propre_par_entretien');
+    assert.strictEqual((await appel('dt.b.ent', 'POST', `/chsld/taches/${prep.id}/statut`, { statut: 'faite', version: prep.version })).statut, 200);
+    await appel('bouchard', 'DELETE', `/lits/${l.id}/nsa`);
+  } finally { if (avant === undefined) delete process.env.ARRIMO_PATIENTS_FICTIFS; else process.env.ARRIMO_PATIENTS_FICTIFS = avant; }
+});
+
 test('file d’admission : besoins respectés, assignation, admission ; concurrence sur l’assignation', async () => {
   const sl = await id('SL'); const med = await type('MED');
   const d = await appel('bouchard', 'POST', '/admissions', { etablissement_id: sl, type_id: med, patient_ref: 'P-70001', priorite: 'p1', besoins: { isolement: true } });

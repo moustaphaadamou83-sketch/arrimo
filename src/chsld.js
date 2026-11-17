@@ -452,9 +452,16 @@ async function absence(pool, u, residentId, b) {
 /* ------------------------------------------------------------------ demandes d'hébergement */
 async function listeDemandes(pool, u, etabId, q = {}) {
   const e = await etabChsld(pool, u, etabId, { module: 'demandes_hebergement' });
-  return (await pool.query(`SELECT d.*, t.nom AS type_nom, r.reference AS resident_ref, l.code AS lit_propose, h.nom AS hopital_nom
+  // Demande venue d'un hôpital : le milieu destinataire voit ce qu'il faut pour décider (âge, lit d'origine, jours NSA, orientation,
+  // besoins en catégories, départ prévu) ; jamais de diagnostic. Identité fictive seulement (démonstration, recette).
+  return (await pool.query(`SELECT d.*, t.nom AS type_nom, r.reference AS resident_ref, l.code AS lit_propose, h.nom AS hopital_nom, h.ville AS hopital_ville,
+      CASE WHEN d.date_naissance IS NOT NULL THEN date_part('year', age(d.date_naissance))::int END AS age, hl.code AS lit_hopital,
+      ep.debut_le AS nsa_depuis, floor(EXTRACT(EPOCH FROM (now() - ep.debut_le)) / 86400)::int AS nsa_jours, ep.orientation AS nsa_orientation, ep.transitoire AS nsa_transitoire,
+      nb.codes AS besoins, nb.chambre_sexe, nb.langue AS langue_usager
     FROM demandes_hebergement d LEFT JOIN types_unite t ON t.id = d.type_id LEFT JOIN residents r ON r.id = d.resident_id LEFT JOIN lits l ON l.id = d.lit_propose_id
-    LEFT JOIN etablissements h ON h.id = d.hopital_id
+    LEFT JOIN etablissements h ON h.id = d.hopital_id LEFT JOIN lits hl ON hl.id = d.hopital_lit_id
+    LEFT JOIN nsa_episodes ep ON ep.lit_id = d.hopital_lit_id AND ep.patient_ref = d.reference_externe AND ep.statut = 'actif'
+    LEFT JOIN nsa_besoins nb ON nb.episode_id = ep.id AND d.statut NOT IN ('admise', 'refusee', 'annulee')
     WHERE d.etablissement_id = $1 ${q.toutes ? '' : "AND d.statut NOT IN ('admise', 'refusee', 'annulee')"} ORDER BY d.cree_le`, [e.id])).rows;
 }
 async function creerDemande(pool, u, b) {
@@ -503,6 +510,9 @@ async function actionDemande(pool, u, id, b) {
       if (!lit || lit.etablissement_id !== e.id) throw new ErreurHttp(404, 'lit_introuvable');
       const l = await changerEtat(c, pool, u.id, Number(b.lit_id), 'reserve', { versionAttendue: b.version_lit, patientRef: r.reference, detail: `Place proposée (${d.numero})` });
       await c.query('UPDATE residents SET lit_id = $2, version = version + 1 WHERE id = $1', [r.id, l.id]);
+      // La chambre est préparée par l'entretien, qui confirme qu'elle est propre ; l'arrivée attend cette confirmation
+      await tache(c, e.id, u, { type: 'preparation_chambre', titre: `Préparer ${l.code} pour l’accueil de ${r.reference}`, lit_id: l.id, resident_id: r.id, assigne_role: 'entretien',
+        echeance: d.depart_prevu_le || (d.arrivee_souhaitee ? new Date(`${String(d.arrivee_souhaitee.toISOString?.() || d.arrivee_souhaitee).slice(0, 10)}T08:00:00`) : null) });
       residentId = r.id; litId = l.id; statut = 'place_proposee'; detail = `Place ${l.code} proposée ; résident ${r.reference}`;
     } else if (a === 'accepter') {
       if (statut !== 'place_proposee') throw new ErreurHttp(409, 'demande_statut_incompatible');
@@ -529,6 +539,50 @@ async function actionDemande(pool, u, id, b) {
     await journalChsld(c, e.id, u, 'Demande d’hébergement', `${d.numero} · ${statut}`);
     if (statut !== d.statut) await require('./nsa-chsld').avertirHopital(c, d, statut);
     return n;
+  });
+}
+
+/** Autres milieux qui reçoivent des demandes d'hébergement (pour transférer une demande) : nom, type, ville, places libres, distance de l'hôpital. */
+async function milieuxTransfert(pool, u, id) {
+  const d = (await pool.query('SELECT etablissement_id, hopital_id FROM demandes_hebergement WHERE id = $1', [id])).rows[0];
+  if (!d) throw new ErreurHttp(404, 'demande_introuvable');
+  await etabChsld(pool, u, d.etablissement_id, { roles: GERER, module: 'demandes_hebergement' });
+  const h = d.hopital_id ? (await pool.query('SELECT latitude, longitude FROM etablissements WHERE id = $1', [d.hopital_id])).rows[0] : null;
+  const rows = (await pool.query(`SELECT e.id, e.nom, e.ville, e.latitude, e.longitude, e.type_local_code, e.modules, e.type_etablissement,
+      (SELECT count(*)::int FROM lits l WHERE l.etablissement_id = e.id AND l.etat = 'libre' AND l.actif) AS places_libres
+    FROM etablissements e WHERE e.type_etablissement = 'chsld' AND e.actif AND e.module_actif AND e.id <> $1`, [d.etablissement_id])).rows;
+  const { distanceKm } = require('./services');
+  return rows.filter((e) => TE.moduleActif(e, 'demandes_hebergement'))
+    .map((e) => ({ id: e.id, nom: e.nom, ville: e.ville, type: TE.nomCourt(e), places_libres: e.places_libres, distance_km: h && e.latitude != null ? distanceKm(h, e) : null }))
+    .sort((a, b) => (a.distance_km ?? 1e9) - (b.distance_km ?? 1e9) || a.nom.localeCompare(b.nom));
+}
+/**
+ * « Transférer à un autre milieu » : la demande d'un hôpital est envoyée, telle quelle, à un autre milieu choisi par un humain ;
+ * celle-ci est close (« Transférée à … »), l'hôpital et le nouveau milieu sont avertis. Aucune place n'est réservée ici.
+ */
+async function transfererDemande(pool, u, id, b = {}) {
+  const d0 = (await pool.query('SELECT * FROM demandes_hebergement WHERE id = $1', [id])).rows[0];
+  if (!d0) throw new ErreurHttp(404, 'demande_introuvable');
+  const e = await etabChsld(pool, u, d0.etablissement_id, { roles: GERER, module: 'demandes_hebergement' });
+  const vers = (await milieuxTransfert(pool, u, id)).find((x) => x.id === Number(b.vers_id));
+  if (!vers) throw new ErreurHttp(404, 'chsld_introuvable');
+  return transaction(pool, async (c) => {
+    const d = (await c.query('SELECT * FROM demandes_hebergement WHERE id = $1 FOR UPDATE', [id])).rows[0]; versionAttendue(d, b.version);
+    if (!['recue', 'documents_manquants', 'en_verification'].includes(d.statut)) throw new ErreurHttp(409, 'demande_statut_incompatible');
+    await c.query(`UPDATE demandes_hebergement SET statut = 'annulee', version = version + 1, modifie_le = now() WHERE id = $1`, [d.id]);
+    await c.query('INSERT INTO demande_hebergement_etapes (demande_id, statut, detail, par) VALUES ($1, $2, $3, $4)', [d.id, 'annulee', `Transférée à ${vers.nom}`, u.id]);
+    const n = (await c.query(`INSERT INTO demandes_hebergement (etablissement_id, numero, provenance, reference_externe, prenom, nom, date_naissance, type_id, arrivee_souhaitee, statut, documents,
+        cree_par, hopital_id, hopital_lit_id, transitoire)
+      VALUES ($1, 'DH-' || lpad(nextval('demande_hebergement_seq')::text, 5, '0'), $2, $3, $4, $5, $6, NULL, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
+    [vers.id, d.provenance, d.reference_externe, d.prenom, d.nom, d.date_naissance, d.arrivee_souhaitee, d.documents.every((x) => x.recu) ? 'recue' : 'documents_manquants',
+      JSON.stringify(d.documents), u.id, d.hopital_id, d.hopital_lit_id, d.transitoire])).rows[0];
+    await c.query('INSERT INTO demande_hebergement_etapes (demande_id, statut, detail, par) VALUES ($1, $2, $3, $4)', [n.id, n.statut, `Transférée par ${e.nom} (${d.numero})`, u.id]);
+    await journalChsld(c, e.id, u, 'Demande d’hébergement transférée', `${d.numero} → ${n.numero} · ${vers.nom}`);
+    await journalChsld(c, vers.id, u, 'Demande d’hébergement reçue par transfert', `${n.numero} · ${e.nom}`);
+    const { notifier } = require('./services');
+    await notifier(c, vers.id, null, 'nsa_demande', { numero: n.numero, origine: e.nom });
+    if (d.hopital_id) await notifier(c, d.hopital_id, null, 'nsa_transferee', { numero: d.numero, dest: e.nom, vers: vers.nom, nouveau: n.numero });
+    return { ancienne: d.numero, nouvelle: n.numero, vers: vers.nom };
   });
 }
 
@@ -1244,4 +1298,4 @@ async function libererPlacementHopital(c, pool, u, retour) {
 module.exports = { etapeParcours, chronologie, etatReintegration, libererPlace, OCCUPATION_SQL, hopitauxLiaison, listeHopitauxLiaison, accueil, listeResidents, ficheResident, creerResident, modifierResident, ajouterContact, modifierContact, verifierRepresentant,
   reserverPlace, confirmerArrivee, changerChambre, sortie, absence, listeDemandes, creerDemande, actionDemande, preparerHospitalisation, actionCoordination,
   preparerRetour, preparerTransfertChsld, preparerTransfertHopital, listeCoordinations, reseau, listeTaches, creerTache, statutTache, creerCommunication, statutCommunication,
-  places, indicateurs, etabChsld, statutAffiche, CATEGORIES, RELATIONS, DOCUMENTS, DOCUMENTS_DIRECT, documentsPour, MOTIFS_REFUS, LIBELLES_REFUS, ACCESSIBILITE, exigerFictifs, lireContact, insererContact, mouvement, verrouResident };
+  places, indicateurs, etabChsld, statutAffiche, milieuxTransfert, transfererDemande, CATEGORIES, RELATIONS, DOCUMENTS, DOCUMENTS_DIRECT, documentsPour, MOTIFS_REFUS, LIBELLES_REFUS, ACCESSIBILITE, exigerFictifs, lireContact, insererContact, mouvement, verrouResident };
