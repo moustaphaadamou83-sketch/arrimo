@@ -144,3 +144,10 @@ table.compact { min-width: 0; }
   .demandes-compactes .demande-detail .ligne { flex-wrap: wrap; }
   .demandes-compactes .demande-detail p, .demandes-compactes .demande-detail div { overflow-wrap: anywhere; min-width: 0; }
 }
+
+/* Bandeau du siège : météo réelle de la ville de référence et heure à jour (17 nov. 2026) ; mêmes codes que l'en-tête hospitalier */
+.infos-siege { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 13px; color: #E6FAF6; font-variant-numeric: tabular-nums; }
+.infos-siege > span { white-space: nowrap; }
+.infos-siege .is-meteo { font-weight: 700; color: #fff; }
+.infos-siege .is-heure { font-weight: 700; color: #fff; }
+@media (max-width: 640px) { .infos-siege { order: 3; width: 100%; } .infos-siege .is-date { display: none; } }

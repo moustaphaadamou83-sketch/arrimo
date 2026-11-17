@@ -445,21 +445,24 @@ function majInfosLieu() {
   const m = meteoCtx.ctx === etat.ctx && meteoCtx.donnees?.disponible ? meteoCtx.donnees : null;
   const famille = m ? METEO.find(([codes]) => codes.includes(m.code)) : null;
   const meteoHtml = m ? `<span class="il-meteo" title="${esc(t('infos.source', { source: m.source }))}"><span aria-hidden="true">${famille ? (m.jour ? famille[2] : famille[3]) : '🌡️'}</span>
-      <span class="num">${esc(nb(Math.round(m.temperature)))} °C</span><span class="il-ciel">${famille ? esc(t(`infos.ciel_${famille[1]}`)) : ''}</span></span>` : '';
+      <span class="num">${esc(nb((Math.round(m.temperature) || 0)))} °C</span><span class="il-ciel">${famille ? esc(t(`infos.ciel_${famille[1]}`)) : ''}</span></span>` : '';
   z.innerHTML = `${meteoHtml}<span class="il-lieu">${esc(m?.ville || e.ville || '')}</span><span class="il-date">${esc(date)}</span><span class="il-heure num">${esc(h)}</span>`;
-  z.setAttribute('aria-label', t('infos.resume', { ville: m?.ville || e.ville || '', date, heure: h, meteo: m ? `${Math.round(m.temperature)} °C${famille ? `, ${t(`infos.ciel_${famille[1]}`)}` : ''}` : t('infos.meteo_indisponible') }));
+  z.setAttribute('aria-label', t('infos.resume', { ville: m?.ville || e.ville || '', date, heure: h, meteo: m ? `${(Math.round(m.temperature) || 0)} °C${famille ? `, ${t(`infos.ciel_${famille[1]}`)}` : ''}` : t('infos.meteo_indisponible') }));
   z.hidden = false;
 }
 async function majMeteo(forcer) {
   if (!etat.ctx || !etat.token) return;
-  if (!forcer && meteoCtx.ctx === etat.ctx && Date.now() - meteoCtx.lu < 15 * 60 * 1000) { majInfosLieu(); return; }
+  if (!forcer && meteoCtx.ctx === etat.ctx && Date.now() - meteoCtx.lu < 10 * 60 * 1000) { majInfosLieu(); return; }
   const ctx = etat.ctx;
   meteoCtx = { ctx, donnees: meteoCtx.ctx === ctx ? meteoCtx.donnees : null, lu: Date.now() };
   try { const d = await api('GET', `/meteo?etablissement_id=${ctx}`); if (etat.ctx === ctx) meteoCtx.donnees = d; } catch { /* l'heure et la date restent affichées */ }
   majInfosLieu();
 }
-setInterval(majInfosLieu, 30000);
+// Heure : vérifiée chaque seconde, l'en-tête n'est réécrit qu'au changement de minute (jamais en retard)
+let minuteAffichee = '';
+setInterval(() => { const m = new Date().toISOString().slice(0, 16); if (m !== minuteAffichee) { minuteAffichee = m; majInfosLieu(); } }, 1000);
 setInterval(() => majMeteo(false), 5 * 60 * 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { majInfosLieu(); majMeteo(false); } });
 
 /** Modifications OG non enregistrées : demander avant de quitter l'écran. */
 function quitterSansEnregistrer() {
