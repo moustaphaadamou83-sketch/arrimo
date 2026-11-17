@@ -201,6 +201,8 @@ function creerAppSh(pool, { env = process.env } = {}) {
     etapes: ETAPES.map((e, i) => ({ rang: i + 1, code: e.code, nom: e.nom })),
     types_import: TYPES_IMPORT,
   })));
+  // Météo réelle de la ville de référence (Montréal par défaut, ARRIMO_METEO_LIEU) : seules des coordonnées fixes partent vers Open-Meteo
+  api.get('/meteo', route(() => require('../meteo').meteoSiege()));
   api.get('/references/internationales',route(req=>require('./international').references(req.langue)));
   api.put('/moi/langue', route(async (req) => {
     const langue = String(req.body.langue || '');
