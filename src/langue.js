@@ -19,7 +19,7 @@ const TEXTES = {
     niveau_maj: { vert: 'Vert', jaune: 'Jaune', orange: 'Orange', rouge: 'Rouge' },
     besoin: { isolement: 'isolement', pression_negative: 'pression négative', ventilation: 'ventilation', telemetrie: 'télémétrie' },
     provenance: { urgence: 'urgence', bloc: 'bloc opératoire', externe: 'externe', autre: 'autre' },
-    orientation: { chsld: 'CHSLD', ri: 'ressource intermédiaire', readaptation: 'réadaptation', domicile: 'retour à domicile', palliatif: 'soins palliatifs', autre: 'autre' },
+    orientation: { chsld: 'CHSLD public', chsld_prive_conventionne: 'CHSLD privé conventionné', chsld_prive: 'CHSLD privé', rtf: 'ressource de type familial', rpa: 'résidence privée pour aînés', maison_aines: 'maison des aînés', ri: 'ressource intermédiaire', readaptation: 'réadaptation', domicile: 'retour à domicile', palliatif: 'soins palliatifs', autre: 'autre' },
     // recherche d'un lit ailleurs
     route: '{km} km par la route · environ {duree}',
     route_indisponible: 'Distance routière et durée indisponibles; aucun itinéraire fiable reçu.',
@@ -253,7 +253,7 @@ const TEXTES = {
     niveau_maj: { vert: 'Green', jaune: 'Yellow', orange: 'Orange', rouge: 'Red' },
     besoin: { isolement: 'isolation', pression_negative: 'negative pressure', ventilation: 'ventilation', telemetrie: 'telemetry' },
     provenance: { urgence: 'emergency', bloc: 'operating room', externe: 'external', autre: 'other' },
-    orientation: { chsld: 'long-term care (CHSLD)', ri: 'intermediate resource', readaptation: 'rehabilitation', domicile: 'home with support', palliatif: 'palliative care', autre: 'other' },
+    orientation: { chsld: 'public long-term care (CHSLD)', chsld_prive_conventionne: 'private subsidized long-term care (CHSLD)', chsld_prive: 'private long-term care (CHSLD)', rtf: 'family-type resource', rpa: 'private seniors’ residence', maison_aines: 'seniors’ home (maison des aînés)', ri: 'intermediate resource', readaptation: 'rehabilitation', domicile: 'home with support', palliatif: 'palliative care', autre: 'other' },
     route: '{km} road km · about {duree}',
     route_indisponible: 'Road distance and duration are unavailable; no reliable route was returned.',
     dispo_libres: '{n|# suitable bed available|# suitable beds available}',

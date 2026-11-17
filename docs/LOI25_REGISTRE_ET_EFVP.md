@@ -13,10 +13,14 @@
 |---|---|---|---|---|
 | Personnel des établissements | Nom, courriel, rôle, mot de passe haché, double authentification, connexions | Accès et traçabilité | `utilisateurs`, `sessions`, `journal_admin` | **À définir** |
 | Patients | Référence au format du pays, lit, service, statuts, horaires ; aucun diagnostic | Coordination des lits et transferts | `lits`, `civieres`, `transferts`, `journal` | **À définir** |
+| Patients NSA (parcours vers l'hébergement, 17 nov. 2026) | Épisode NSA : référence, lit, date de début déclarée, orientation choisie par l'équipe, place transitoire, auteur et historique des orientations | Suivi du statut NSA et des jours d'attente | `nsa_episodes`, `nsa_orientations` | **À définir** |
+| Patients NSA : besoins | **Renseignements de santé** en catégories fermées, sans diagnostic : marchette, fauteuil, lève-personne, unité sécurisée (errance), oxygène, soins particuliers ; sexe de la chambre (facultatif, « indifférent » par défaut) ; langue ; municipalité de la famille (pas d'adresse ni de code postal) ; jusqu'à 3 milieux préférés | Proposer des places compatibles ; l'équipe décide | `nsa_besoins` | **À définir** |
 | Patients fictifs (démo et recette) | Prénom, nom, date de naissance, passages | Démonstration seulement | `patients`, `patient_passages` | Sans objet |
 | Résidents CHSLD (fictifs) | Prénom, nom, date de naissance, téléphone, courriel, chambre, mouvements | Coordination du parcours | `residents`, `resident_contacts`, `resident_mouvements` | **À définir** |
 | Proches (fictifs) | Courriel, lien avec le résident, messages | Portail des proches | `proches_acces`, `messages_proches` | **À définir** |
 | Contacts clients | Nom, courriel, téléphone professionnels | Suivi commercial et implantation | Base de SH | **À définir** |
+
+**Besoins NSA (mesures en place, lot A) :** listes fermées vérifiées par la base et par l'API, aucun texte libre ; lecture et modification réservées à l'équipe et à la coordination de l'hôpital (jamais l'entretien, jamais un autre établissement) ; le journal note « Besoins NSA mis à jour » sans le contenu ; aucune notification ; absents de la liste NSA, du détail NSA et d'OG. Prochain lot : transmission à la seule ressource destinataire d'une demande. Prouvé par `tests/api.test.js` (« NSA lot A : besoins en catégories… »).
 
 **Journaux immuables :** ils ne peuvent pas être effacés. Il faut donc concilier cette règle avec les durées de conservation et le droit de rectification ; c'est à trancher avec l'avocat.
 

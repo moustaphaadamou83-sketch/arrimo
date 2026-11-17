@@ -81,6 +81,13 @@ const MESSAGES = {
   lit_non_occupe: "Le lit {code} n'est pas occupé.",
   conge_lit_occupe: 'Le congé prévu ne se règle que sur un lit occupé.',
   orientation_inconnue: 'Orientation NSA inconnue.',
+  deja_nsa: 'Le patient du lit {code} est déjà désigné NSA : modifiez l’orientation ou la date de début.',
+  nsa_debut_invalide: 'Date de début NSA invalide (format AAAA-MM-JJ).',
+  nsa_debut_futur: 'La date de début NSA ne peut pas être dans le futur.',
+  nsa_debut_trop_ancien: 'La date de début NSA ne peut pas remonter à plus de 365 jours.',
+  besoin_invalide: 'Besoin inconnu : choisissez dans la liste proposée.',
+  municipalite_invalide: 'Municipalité invalide : indiquez seulement le nom de la municipalité.',
+  preference_invalide: 'Préférences invalides : au plus 3 milieux d’hébergement différents, choisis dans la liste.',
   conge_statut_inconnu: 'Statut de congé inconnu.',
   nettoyage_impossible: 'Ce lit n’est pas en attente de nettoyage, ou le nettoyage a déjà commencé.',
   // civières de l'urgence

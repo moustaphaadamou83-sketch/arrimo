@@ -224,7 +224,7 @@ const duree = (min) => vig.dureeTexte(min);
 const CONF = { capacite_confirmee: 'disponibilité confirmée', capacite_perimee: 'confirmation périmée', capacite_non_confirmee: 'disponibilité non confirmée' };
 const STATUT_CONGE = { prevu: 'prévu', confirme: 'confirmé', attente_transport: 'en attente de transport', reporte: 'reporté', annule: 'annulé', realise: 'réalisé' };
 const ETAT = { libre: 'libre', reserve: 'réservé', occupe: 'occupé', nettoyage: 'en nettoyage', indispo: 'hors service' };
-const ORIENT = { chsld: 'CHSLD', ri: 'ressource intermédiaire', readaptation: 'réadaptation', domicile: 'domicile', palliatif: 'soins palliatifs', autre: 'autre' };
+const ORIENT = { chsld: 'CHSLD public', chsld_prive_conventionne: 'CHSLD privé conventionné', chsld_prive: 'CHSLD privé', rtf: 'ressource de type familial', rpa: 'résidence privée pour aînés', maison_aines: 'maison des aînés', ri: 'ressource intermédiaire', readaptation: 'réadaptation', domicile: 'domicile', palliatif: 'soins palliatifs', autre: 'autre' };
 
 /* ------------------------------------------------------------------ moteur */
 async function repondre(pool, utilisateur, etabId, question, { historique } = {}) {

@@ -9,7 +9,8 @@ const s = require('./services');
 const { tr, traducteurTypes, duree } = require('./langue');
 const cv = require('./civieres');
 
-const ORIENTATIONS = ['chsld', 'ri', 'readaptation', 'domicile', 'palliatif', 'autre'];
+// « chsld » = CHSLD public (code historique conservé). Décision de l'équipe : Arrimo ne choisit jamais l'orientation.
+const ORIENTATIONS = ['chsld', 'chsld_prive_conventionne', 'chsld_prive', 'ri', 'rtf', 'rpa', 'maison_aines', 'domicile', 'readaptation', 'palliatif', 'autre'];
 const CONGES = ['prevu', 'confirme', 'attente_transport', 'reporte'];
 const sqlAge = (alias, g) => s.sqlAge(alias, g);
 /** Groupe d'âge à partir de la date de naissance (fiche fictive) : moins de 28 jours néonatal, moins de 18 ans pédiatrique. */
@@ -41,18 +42,104 @@ async function modifierLitOccupe(pool, utilisateur, litId, champs, action, detai
   return client ? executer(client) : transaction(pool, executer);
 }
 
-async function designerNsa(pool, utilisateur, litId, orientation) {
+/* NSA par épisode (lot A, 17 nov. 2026) : l'équipe déclare, avec la date de début réelle ; l'épisode (nsa_episodes) suit le lit par déclencheur. */
+const ROLES_NSA = ['coordonnateur', 'gestionnaire', 'admin_etab', 'equipe_soins'];
+function exigerRoleNsa(utilisateur) {
+  if (!ROLES_NSA.includes(utilisateur.role)) throw new ErreurHttp(403, 'role_insuffisant');
+}
+/** Début NSA saisi par l'équipe : date (AAAA-MM-JJ) ou date-heure ISO ; jamais dans le futur, au plus 365 jours en arrière. Absent = maintenant. */
+function lireDebutNsa(v, maintenant = new Date()) {
+  if (v === undefined || v === null || v === '') return maintenant;
+  const s = String(v).trim();
+  if (!/^\d{4}-\d{2}-\d{2}/.test(s)) throw new ErreurHttp(400, 'nsa_debut_invalide');
+  if (s.length === 10) {
+    // Date seule : contrôlée ici, convertie à minuit dans le fuseau de l'établissement par debutNsa()
+    if (Number.isNaN(new Date(`${s}T12:00:00Z`).getTime()) || new Date(`${s}T12:00:00Z`).toISOString().slice(0, 10) !== s) throw new ErreurHttp(400, 'nsa_debut_invalide');
+    return s;
+  }
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) throw new ErreurHttp(400, 'nsa_debut_invalide');
+  if (d - maintenant > 5 * 60000) throw new ErreurHttp(400, 'nsa_debut_futur');
+  if (maintenant - d > 365 * 86400000) throw new ErreurHttp(400, 'nsa_debut_trop_ancien');
+  return d > maintenant ? maintenant : d;
+}
+/**
+ * Début NSA effectif : une date seule (AAAA-MM-JJ) vaut minuit dans le fuseau de l'établissement, pour que « déclaré le 5 nov. »
+ * compte les jours du calendrier local ; la date du jour vaut l'heure de la déclaration. Jamais dans le futur, au plus 365 jours.
+ */
+async function debutNsa(c, litId, v, maintenant = new Date()) {
+  const lu = lireDebutNsa(v, maintenant);
+  if (typeof lu !== 'string') return lu;
+  const r = (await c.query(`SELECT ($2::date::timestamp AT TIME ZONE COALESCE(cp.fuseau, 'America/Toronto')) AS debut,
+      ($3::timestamptz AT TIME ZONE COALESCE(cp.fuseau, 'America/Toronto'))::date::text AS aujourdhui
+    FROM lits l JOIN etablissements e ON e.id = l.etablissement_id LEFT JOIN config_pays cp ON cp.id = e.config_id WHERE l.id = $1`, [litId, lu, maintenant])).rows[0];
+  if (!r) throw new ErreurHttp(404, 'lit_introuvable');
+  if (lu > r.aujourdhui) throw new ErreurHttp(400, 'nsa_debut_futur');
+  if (lu === r.aujourdhui) return maintenant;
+  if (maintenant - r.debut > 366 * 86400000) throw new ErreurHttp(400, 'nsa_debut_trop_ancien');
+  return r.debut;
+}
+const jourIso = (d) => new Date(d).toISOString().slice(0, 10);
+async function historiserOrientation(c, litId, utilisateurId, { transitoire = null } = {}) {
+  const ep = (await c.query(`UPDATE nsa_episodes SET transitoire = COALESCE($2, transitoire), version = version + 1, modifie_le = now()
+    WHERE lit_id = $1 AND statut = 'actif' RETURNING id, orientation, transitoire`, [litId, transitoire])).rows[0];
+  if (ep) await c.query('INSERT INTO nsa_orientations (episode_id, orientation, transitoire, par) VALUES ($1, $2, $3, $4)', [ep.id, ep.orientation, ep.transitoire, utilisateurId]);
+  return ep;
+}
+
+async function designerNsa(pool, utilisateur, litId, b = {}) {
+  if (typeof b === 'string') b = { orientation: b };
+  exigerRoleNsa(utilisateur);
+  const orientation = b.orientation;
   if (!ORIENTATIONS.includes(orientation)) throw new ErreurHttp(400, 'orientation_inconnue');
-  return modifierLitOccupe(pool, utilisateur, litId,
-    { nsa_depuis: new Date(), nsa_orientation: orientation }, 'Désignation NSA', `Orientation : ${orientation}`);
+  lireDebutNsa(b.depuis);   // format contrôlé avant la transaction
+  const transitoire = b.transitoire === true;
+  return transaction(pool, async (c) => {
+    const debut = await debutNsa(c, litId, b.depuis);
+    const avant = (await c.query('SELECT code, nsa_depuis FROM lits WHERE id = $1 FOR NO KEY UPDATE', [litId])).rows[0];
+    if (avant?.nsa_depuis) throw new ErreurHttp(409, 'deja_nsa', { code: avant.code });
+    const lit = await modifierLitOccupe(pool, utilisateur, litId, { nsa_depuis: debut, nsa_orientation: orientation }, 'Désignation NSA',
+      `Orientation : ${orientation}${transitoire ? ' · place transitoire acceptée' : ''} · début ${jourIso(debut)}`, null, c);
+    await c.query('UPDATE nsa_episodes SET declare_par = $2 WHERE lit_id = $1 AND statut = \'actif\'', [litId, utilisateur.id]);
+    const ep = await historiserOrientation(c, litId, utilisateur.id, { transitoire });
+    return { ...lit, episode_id: ep.id, transitoire: ep.transitoire };
+  });
 }
 async function retirerNsa(pool, utilisateur, litId) {
+  exigerRoleNsa(utilisateur);
   return modifierLitOccupe(pool, utilisateur, litId, { nsa_depuis: null, nsa_orientation: null }, 'Fin du statut NSA', null);
 }
-async function changerNsaOrientation(pool, utilisateur, litId, orientation) {
-  if (!ORIENTATIONS.includes(orientation)) throw new ErreurHttp(400, 'orientation_inconnue');
-  return modifierLitOccupe(pool, utilisateur, litId, { nsa_orientation: orientation }, 'Orientation NSA modifiée', orientation);
+/** Modifie l'épisode en cours : orientation, place transitoire, date de début (correction). Chaque changement d'orientation est historisé. */
+async function modifierNsa(pool, utilisateur, litId, b = {}) {
+  if (typeof b === 'string') b = { orientation: b };
+  exigerRoleNsa(utilisateur);
+  if (b.orientation !== undefined && !ORIENTATIONS.includes(b.orientation)) throw new ErreurHttp(400, 'orientation_inconnue');
+  if (b.transitoire !== undefined && typeof b.transitoire !== 'boolean') throw new ErreurHttp(400, 'parametre_invalide', { nom: 'transitoire' });
+  if (b.depuis !== undefined) lireDebutNsa(b.depuis);
+  return transaction(pool, async (c) => {
+    const debut = b.depuis === undefined ? null : await debutNsa(c, litId, b.depuis);
+    const l = (await c.query('SELECT code, nsa_depuis, nsa_orientation FROM lits WHERE id = $1 FOR NO KEY UPDATE', [litId])).rows[0];
+    if (!l) throw new ErreurHttp(404, 'lit_introuvable');
+    if (!l.nsa_depuis) throw new ErreurHttp(409, 'patient_non_nsa', { code: l.code });
+    const ep = (await c.query(`SELECT id, version, transitoire FROM nsa_episodes WHERE lit_id = $1 AND statut = 'actif' FOR UPDATE`, [litId])).rows[0];
+    if (b.version_episode != null && ep && Number(b.version_episode) !== ep.version) throw new ErreurHttp(409, 'version_perimee');
+    const champs = {};
+    const orientationChange = b.orientation !== undefined && b.orientation !== l.nsa_orientation;
+    const transitoireChange = b.transitoire !== undefined && ep && b.transitoire !== ep.transitoire;
+    if (orientationChange) champs.nsa_orientation = b.orientation;
+    if (debut && debut.getTime() !== new Date(l.nsa_depuis).getTime()) champs.nsa_depuis = debut;
+    let lit = (await c.query('SELECT * FROM lits WHERE id = $1', [litId])).rows[0];
+    if (orientationChange || transitoireChange) {
+      if (orientationChange) lit = await modifierLitOccupe(pool, utilisateur, litId, { nsa_orientation: b.orientation }, 'Orientation NSA modifiée', b.orientation, null, c);
+      else await journaliser(c, { litId, utilisateurId: utilisateur.id, action: 'Orientation NSA modifiée', detail: b.transitoire ? 'Place transitoire acceptée' : 'Place permanente seulement' });
+      await historiserOrientation(c, litId, utilisateur.id, { transitoire: b.transitoire ?? null });
+    }
+    if (champs.nsa_depuis) lit = await modifierLitOccupe(pool, utilisateur, litId, { nsa_depuis: champs.nsa_depuis }, 'Début NSA corrigé', jourIso(champs.nsa_depuis), null, c);
+    const e = (await c.query(`SELECT id, version, transitoire FROM nsa_episodes WHERE lit_id = $1 AND statut = 'actif'`, [litId])).rows[0];
+    return { ...lit, episode_id: e?.id, transitoire: e?.transitoire ?? false, version_episode: e?.version };
+  });
 }
+const changerNsaOrientation = (pool, utilisateur, litId, orientation) => modifierNsa(pool, utilisateur, litId, { orientation });
 /**
  * Historique des congés : la ligne ouverte du lit suit son congé actuel (prévu, confirmé, reporté) ;
  * sans congé, elle est fermée comme « annulé ». Appelée dans la transaction qui modifie le lit.
@@ -504,9 +591,9 @@ async function niveauAlerte(db, etabId, langue = 'fr') {
 async function listeNsa(pool, utilisateur, etabId) {
   exigerEtablissement(utilisateur, etabId);
   const lits = await pool.query(
-    `SELECT l.id, l.code, l.patient_ref, l.nsa_depuis, l.nsa_orientation, u.nom AS unite,
+    `SELECT l.id, l.code, l.patient_ref, l.nsa_depuis, l.nsa_orientation, u.nom AS unite, ep.id AS episode_id, COALESCE(ep.transitoire, false) AS transitoire,
             EXTRACT(EPOCH FROM (now() - l.nsa_depuis)) / 86400 AS jours
-       FROM lits l JOIN unites u ON u.id = l.unite_id
+       FROM lits l JOIN unites u ON u.id = l.unite_id LEFT JOIN nsa_episodes ep ON ep.lit_id = l.id AND ep.statut = 'actif'
       WHERE l.etablissement_id = $1 AND l.nsa_depuis IS NOT NULL ORDER BY l.nsa_depuis`, [etabId]);
   const tot = await pool.query(
     `SELECT count(*) FILTER (WHERE l.etat = 'occupe')::int AS occupes, c.cible_nsa_pct
@@ -540,7 +627,12 @@ async function detailNsa(pool, utilisateur, litId) {
       WHERE j.lit_id = $1 AND j.date >= GREATEST($2::timestamptz,
             COALESCE((SELECT max(o.date) FROM journal o WHERE o.lit_id = $1 AND o.nouvel_etat = 'occupe'), $2::timestamptz))
       ORDER BY j.date DESC, j.id DESC LIMIT 20`, [l.id, l.nsa_depuis])).rows;
-  return { ...l, evenements };
+  // Épisode et historique des orientations (codes seulement ; les besoins ont leur propre accès, voir nsa-besoins.js)
+  const episode = (await pool.query(`SELECT ep.id, ep.debut_le, ep.transitoire, ep.version, d.nom AS declare_par FROM nsa_episodes ep
+      LEFT JOIN utilisateurs d ON d.id = ep.declare_par WHERE ep.lit_id = $1 AND ep.statut = 'actif'`, [l.id])).rows[0] || null;
+  const historique = episode ? (await pool.query(`SELECT o.le, o.orientation, o.transitoire, u.nom AS par FROM nsa_orientations o LEFT JOIN utilisateurs u ON u.id = o.par
+      WHERE o.episode_id = $1 ORDER BY o.le DESC, o.id DESC LIMIT 20`, [episode.id])).rows : [];
+  return { ...l, transitoire: episode?.transitoire ?? false, episode, historique, evenements };
 }
 
 /* ------------------------------------------------------------------ indicateurs */
@@ -670,7 +762,7 @@ function indicateursCsv(ind) {
 }
 
 module.exports = {
-  designerNsa, retirerNsa, changerNsaOrientation, majConge, debuterNettoyage, fileNettoyage,
+  designerNsa, retirerNsa, changerNsaOrientation, modifierNsa, lireDebutNsa, historiserOrientation, ROLES_NSA, majConge, debuterNettoyage, fileNettoyage,
   creerDemande, fileAdmission, alternativesAdmission, assignerLit, admettreDemande, annulerDemande, transfererDemande,
   admettreDepuisLit, annulerDepuisLit, reserverDepuisLit, synchroniserConge, synchroniserDemandeAdmise,
   niveauAlerte, listeNsa, detailNsa, indicateurs, indicateursCsv, besoinsDemande, ORIENTATIONS, groupeAgeDepuisNaissance,

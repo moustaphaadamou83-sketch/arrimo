@@ -338,11 +338,11 @@ function creerApp(pool, options = {}) {
   api.post('/lits/:id/nsa', route(async (req) => {
     const id = entier(req.params.id, 'id'); const v = await s.litVisible(pool, req.utilisateur, id);
     await s.exigerModule(pool, v.etablissement_id, 'nsa');
-    return t.designerNsa(pool, req.utilisateur, id, req.body.orientation);
+    return t.designerNsa(pool, req.utilisateur, id, req.body);
   }));
   api.put('/lits/:id/nsa', route(async (req) => {
     const id = entier(req.params.id, 'id'); await s.litVisible(pool, req.utilisateur, id);
-    return t.changerNsaOrientation(pool, req.utilisateur, id, req.body.orientation);
+    return t.modifierNsa(pool, req.utilisateur, id, req.body);
   }));
   api.delete('/lits/:id/nsa', route(async (req) => {
     const id = entier(req.params.id, 'id'); await s.litVisible(pool, req.utilisateur, id);
@@ -365,6 +365,10 @@ function creerApp(pool, options = {}) {
     await s.exigerModule(pool, d.etablissement_id, 'nsa');
     return d;
   }));
+  // Besoins NSA en catégories (lot A, 17 nov. 2026) : équipe et coordination seulement, jamais dans le journal ni les notifications
+  const nb = require('./nsa-besoins');
+  api.get('/nsa/lits/:id/besoins', route((req) => nb.lire(pool, req.utilisateur, entier(req.params.id, 'id'))));
+  api.put('/nsa/lits/:id/besoins', route((req) => nb.modifier(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   // Sortie d'un patient NSA vers un CHSLD (16 nov. 2026) : demande d'hébergement transmise, départ confirmé par l'hôpital
   const nc = require('./nsa-chsld');
   api.get('/nsa/chsld', route((req) => nc.destinations(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));

@@ -584,6 +584,9 @@ html.theme-bascule *, html.theme-bascule *::before, html.theme-bascule *::after 
 .detail-nsa { display: grid; grid-template-columns: max-content 1fr; gap: 4px var(--e3); margin: 0 0 var(--e3); }
 .detail-nsa dd { margin: 0; }
 .evenements-nsa { margin: 0; padding-left: 18px; max-height: 40vh; overflow: auto; font-size: 14px; }
+/* Détail NSA : l'historique des orientations et la correction gardent leur hauteur ; la fenêtre défile en entier */
+.historique-nsa { margin: 0; padding-left: 18px; font-size: 14px; flex-shrink: 0; }
+.boite > .evenements-nsa, .boite > .corriger-nsa, .boite > .detail-nsa { flex-shrink: 0; }
 .matrice-acces { margin-top: var(--e3); }
 .matrice-acces caption { text-align: left; caption-side: top; padding-bottom: var(--e2); }
 .matrice-acces th[scope="row"] { font-weight: 500; text-align: left; }

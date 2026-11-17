@@ -79,7 +79,11 @@ async function orienter(pool, u, litId, b = {}) {
     [dest.id, lit.patient_ref, id.prenom, id.nom, id.date_naissance, dateIso(b.arrivee_souhaitee), documents.every((x) => x.recu) ? 'recue' : 'documents_manquants',
       JSON.stringify(documents), u.id, h.id, lit.id])).rows[0];
     await c.query('INSERT INTO demande_hebergement_etapes (demande_id, statut, detail, par) VALUES ($1, $2, $3, $4)', [d.id, d.statut, `Reçue de ${h.nom} (patient NSA)`, u.id]);
-    if (lit.nsa_orientation !== 'chsld') await c.query(`UPDATE lits SET nsa_orientation = 'chsld' WHERE id = $1`, [lit.id]);
+    // Orientation de la famille CHSLD conservée (public, privé conventionné, privé) ; sinon CHSLD public, historisé
+    if (!['chsld', 'chsld_prive_conventionne', 'chsld_prive'].includes(lit.nsa_orientation)) {
+      await c.query(`UPDATE lits SET nsa_orientation = 'chsld' WHERE id = $1`, [lit.id]);
+      await require('./terrain').historiserOrientation(c, lit.id, u.id);
+    }
     await journaliser(c, { litId: lit.id, utilisateurId: u.id, action: 'Orientation NSA vers un CHSLD', detail: `${d.numero} · ${dest.nom}` });
     await journaliser(c, { etablissementId: dest.id, utilisateurId: u.id, action: 'Demande d’hébergement reçue d’un hôpital', detail: `${d.numero} · ${h.nom}` });
     await notifier(c, dest.id, null, 'nsa_demande', { numero: d.numero, origine: h.nom });

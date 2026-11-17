@@ -508,6 +508,111 @@ test('NSA : désignation, taux, et effacement automatique au départ du patient'
   assert.strictEqual((await appel('bouchard', 'POST', `/lits/${libre.id}/nsa`, { orientation: 'chsld' })).statut, 409, 'NSA seulement sur un lit occupé');
 });
 
+test('NSA lot A : épisode, date de début saisie, orientation élargie, place transitoire, historique', async () => {
+  const sl = await id('SL');
+  const l = (await pool.query(`SELECT id, code FROM lits WHERE etablissement_id = $1 AND etat = 'occupe' AND nsa_depuis IS NULL ORDER BY id LIMIT 1`, [sl])).rows[0];
+  const jour = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+  // Date de début : jamais dans le futur, au plus 365 jours en arrière, format contrôlé
+  assert.strictEqual((await appel('bouchard', 'POST', `/lits/${l.id}/nsa`, { orientation: 'rpa', depuis: jour(-2) })).corps.code, 'nsa_debut_futur');
+  assert.strictEqual((await appel('bouchard', 'POST', `/lits/${l.id}/nsa`, { orientation: 'rpa', depuis: jour(400) })).corps.code, 'nsa_debut_trop_ancien');
+  assert.strictEqual((await appel('bouchard', 'POST', `/lits/${l.id}/nsa`, { orientation: 'rpa', depuis: 'hier' })).statut, 400);
+  // L'entretien ne déclare pas un patient NSA
+  const ent = await appel(null, 'POST', '/connexion', { email: 'entretien.sl@demo.arrimo', mot_de_passe: MOT_DE_PASSE_DEMO });
+  tokens.entretien_sl = ent.corps.token;
+  assert.strictEqual((await appel('entretien_sl', 'POST', `/lits/${l.id}/nsa`, { orientation: 'rpa' })).statut, 403);
+  // Déclaration par l'équipe : RPA, début il y a 10 jours, place transitoire acceptée
+  const d = await appel('bouchard', 'POST', `/lits/${l.id}/nsa`, { orientation: 'rpa', depuis: jour(10), transitoire: true });
+  assert.strictEqual(d.statut, 200, JSON.stringify(d.corps));
+  assert.strictEqual(d.corps.transitoire, true);
+  assert.strictEqual((await appel('bouchard', 'POST', `/lits/${l.id}/nsa`, { orientation: 'chsld' })).corps.code, 'deja_nsa', 'jamais de remise à zéro du compteur');
+  let n = (await appel('bouchard', 'GET', `/nsa?etablissement_id=${sl}`)).corps.lits.find((x) => x.id === l.id);
+  assert.ok(n.jours >= 9 && n.jours <= 10, `compteur de jours : ${n.jours}`);
+  assert.strictEqual(n.transitoire, true);
+  assert.strictEqual(n.episode_id, d.corps.episode_id);
+  // Orientations élargies, historisées avec leur auteur
+  for (const o of ['chsld_prive_conventionne', 'rtf', 'maison_aines']) assert.strictEqual((await appel('bouchard', 'PUT', `/lits/${l.id}/nsa`, { orientation: o })).statut, 200);
+  assert.strictEqual((await appel('bouchard', 'PUT', `/lits/${l.id}/nsa`, { orientation: 'mauvaise' })).statut, 400);
+  // Correction de la date et de la place transitoire ; version de l'épisode contrôlée
+  let det = (await appel('bouchard', 'GET', `/nsa/lits/${l.id}`)).corps;
+  assert.strictEqual(det.nsa_orientation, 'maison_aines');
+  assert.deepStrictEqual(det.historique.map((h) => h.orientation), ['maison_aines', 'rtf', 'chsld_prive_conventionne', 'rpa']);
+  assert.ok(det.historique.every((h) => h.par), 'auteur de chaque orientation');
+  assert.ok(det.episode.declare_par);
+  assert.strictEqual((await appel('bouchard', 'PUT', `/lits/${l.id}/nsa`, { depuis: jour(20), version_episode: det.episode.version - 1 })).corps.code, 'version_perimee');
+  const corr = await appel('bouchard', 'PUT', `/lits/${l.id}/nsa`, { depuis: jour(20), transitoire: false, version_episode: det.episode.version });
+  assert.strictEqual(corr.statut, 200, JSON.stringify(corr.corps));
+  det = (await appel('bouchard', 'GET', `/nsa/lits/${l.id}`)).corps;
+  assert.ok(det.jours >= 19 && det.jours <= 20);
+  assert.strictEqual(det.transitoire, false);
+  const ep = (await pool.query('SELECT debut_le, orientation, statut FROM nsa_episodes WHERE id = $1', [d.corps.episode_id])).rows[0];
+  assert.strictEqual(new Date(ep.debut_le).toISOString().slice(0, 10), jour(20), 'épisode synchronisé avec le lit');
+  assert.strictEqual(ep.orientation, 'maison_aines');
+  const j = (await pool.query(`SELECT action FROM journal WHERE lit_id = $1 AND action IN ('Désignation NSA', 'Début NSA corrigé', 'Orientation NSA modifiée')`, [l.id])).rows.map((x) => x.action);
+  assert.ok(j.includes('Désignation NSA') && j.includes('Début NSA corrigé') && j.includes('Orientation NSA modifiée'));
+  // Fin de l'épisode : retiré (patient toujours là) ; parti (le patient quitte le lit)
+  assert.strictEqual((await appel('bouchard', 'DELETE', `/lits/${l.id}/nsa`)).statut, 200);
+  assert.strictEqual((await pool.query('SELECT statut FROM nsa_episodes WHERE id = $1', [d.corps.episode_id])).rows[0].statut, 'retire');
+  const d2 = (await appel('bouchard', 'POST', `/lits/${l.id}/nsa`, { orientation: 'domicile' })).corps;
+  assert.notStrictEqual(d2.episode_id, d.corps.episode_id, 'nouvel épisode');
+  assert.strictEqual((await appel('bouchard', 'POST', `/lits/${l.id}/action`, { action: 'liberer' })).statut, 200);
+  assert.strictEqual((await pool.query('SELECT statut FROM nsa_episodes WHERE id = $1', [d2.episode_id])).rows[0].statut, 'parti');
+  // Un lit mis NSA hors de l'API (scripts de démonstration) reçoit aussi son épisode
+  const autre = (await pool.query(`SELECT id FROM lits WHERE etablissement_id = $1 AND etat = 'occupe' AND nsa_depuis IS NULL ORDER BY id LIMIT 1`, [sl])).rows[0];
+  await pool.query(`UPDATE lits SET nsa_depuis = now() - interval '3 days', nsa_orientation = 'ri' WHERE id = $1`, [autre.id]);
+  assert.strictEqual((await pool.query(`SELECT orientation FROM nsa_episodes WHERE lit_id = $1 AND statut = 'actif'`, [autre.id])).rows[0].orientation, 'ri');
+  await pool.query('UPDATE lits SET nsa_depuis = NULL, nsa_orientation = NULL WHERE id = $1', [autre.id]);
+});
+
+test('NSA lot A : besoins en catégories, accès restreint, jamais dans le journal ni les notifications', async () => {
+  const sl = await id('SL');
+  const l = (await pool.query(`SELECT id FROM lits WHERE etablissement_id = $1 AND etat = 'occupe' AND nsa_depuis IS NULL ORDER BY id LIMIT 1`, [sl])).rows[0];
+  assert.strictEqual((await appel('bouchard', 'GET', `/nsa/lits/${l.id}/besoins`)).corps.code, 'patient_non_nsa');
+  assert.strictEqual((await appel('bouchard', 'POST', `/lits/${l.id}/nsa`, { orientation: 'chsld' })).statut, 200);
+  // Milieu d'hébergement fictif pour les préférences
+  const cfg = (await pool.query('SELECT config_id FROM etablissements WHERE id = $1', [sl])).rows[0].config_id;
+  const ch = (await pool.query(`INSERT INTO etablissements (code, nom, ville, latitude, longitude, config_id, type_etablissement, type_local_code, actif)
+    VALUES ('NSA-RI', 'Ressource fictive des Pins', 'Montréal', 45.52, -73.6, $1, 'chsld', 'ri', true) RETURNING id`, [cfg])).rows[0].id;
+  const vide = await appel('bouchard', 'GET', `/nsa/lits/${l.id}/besoins`);
+  assert.strictEqual(vide.statut, 200);
+  assert.deepStrictEqual(vide.corps.besoins.codes, []);
+  assert.strictEqual(vide.corps.besoins.chambre_sexe, 'indifferent', 'sexe de la chambre : indifférent par défaut');
+  assert.ok(vide.corps.milieux.some((m) => m.id === ch && m.type === 'RI'));
+  assert.ok(!vide.corps.milieux.some((m) => m.id === sl), 'un hôpital n’est pas un milieu d’hébergement');
+  // Refus : code inconnu, texte libre, municipalité avec code postal, plus de 3 préférences, hôpital en préférence
+  for (const [corps, code] of [[{ codes: ['diabete'] }, 'besoin_invalide'], [{ chambre_sexe: 'X' }, 'besoin_invalide'], [{ langue: 'es' }, 'besoin_invalide'],
+    [{ municipalite_famille: 'H2X 1Y4' }, 'municipalite_invalide'], [{ preferences: [ch, ch] }, 'preference_invalide'], [{ preferences: [1, 2, 3, 4] }, 'preference_invalide'],
+    [{ preferences: [sl] }, 'preference_invalide']]) {
+    const r = await appel('bouchard', 'PUT', `/nsa/lits/${l.id}/besoins`, corps);
+    assert.strictEqual(r.corps.code, code, JSON.stringify(corps));
+  }
+  const ok = await appel('bouchard', 'PUT', `/nsa/lits/${l.id}/besoins`, { version: 0, codes: ['oxygene', 'unite_securisee', 'oxygene'], chambre_sexe: 'F', langue: 'en',
+    municipalite_famille: 'Saint-Jean-sur-Richelieu', preferences: [ch] });
+  assert.strictEqual(ok.statut, 200, JSON.stringify(ok.corps));
+  assert.deepStrictEqual(ok.corps.besoins.codes, ['oxygene', 'unite_securisee']);
+  assert.strictEqual((await appel('bouchard', 'PUT', `/nsa/lits/${l.id}/besoins`, { version: 0, codes: [] })).corps.code, 'version_perimee');
+  const lu = (await appel('bouchard', 'GET', `/nsa/lits/${l.id}/besoins`)).corps.besoins;
+  assert.strictEqual(lu.municipalite_famille, 'Saint-Jean-sur-Richelieu');
+  assert.deepStrictEqual(lu.preferences, [ch]);
+  assert.strictEqual(lu.version, 1);
+  // Accès : ni l'entretien, ni un autre établissement ; le détail NSA et la liste ne contiennent pas les besoins
+  if (!tokens.entretien_sl) tokens.entretien_sl = (await appel(null, 'POST', '/connexion', { email: 'entretien.sl@demo.arrimo', mot_de_passe: MOT_DE_PASSE_DEMO })).corps.token;
+  assert.strictEqual((await appel('entretien_sl', 'GET', `/nsa/lits/${l.id}/besoins`)).statut, 403);
+  assert.strictEqual((await appel('entretien_sl', 'PUT', `/nsa/lits/${l.id}/besoins`, { codes: [] })).statut, 403);
+  assert.strictEqual((await appel('cote', 'GET', `/nsa/lits/${l.id}/besoins`)).statut, 403);
+  const det = JSON.stringify((await appel('bouchard', 'GET', `/nsa/lits/${l.id}`)).corps) + JSON.stringify((await appel('bouchard', 'GET', `/nsa?etablissement_id=${sl}`)).corps);
+  assert.ok(!/oxygene|unite_securisee|Richelieu/.test(det), 'besoins absents du détail et de la liste');
+  // Loi 25 : le journal note le fait, jamais le contenu ; aucune notification
+  const journal = (await pool.query(`SELECT action, coalesce(detail, '') AS detail FROM journal WHERE lit_id = $1`, [l.id])).rows;
+  assert.ok(journal.some((x) => x.action === 'Besoins NSA mis à jour' && x.detail === ''));
+  assert.ok(!journal.some((x) => /oxyg|securis|Richelieu|lève|fauteuil/i.test(`${x.action} ${x.detail}`)));
+  assert.strictEqual((await pool.query(`SELECT count(*)::int n FROM notifications WHERE message ~* 'oxyg|sécuris|securis|Richelieu'`)).rows[0].n, 0);
+  // L'épisode clos garde ses besoins (historique), le prochain repart à vide
+  assert.strictEqual((await appel('bouchard', 'DELETE', `/lits/${l.id}/nsa`)).statut, 200);
+  assert.strictEqual((await appel('bouchard', 'PUT', `/nsa/lits/${l.id}/besoins`, { codes: [] })).corps.code, 'patient_non_nsa');
+  await pool.query(`DELETE FROM nsa_besoins WHERE preferences @> ARRAY[$1::int]`, [ch]);
+  await pool.query('DELETE FROM etablissements WHERE id = $1', [ch]);
+});
+
 test('file d’admission : besoins respectés, assignation, admission ; concurrence sur l’assignation', async () => {
   const sl = await id('SL'); const med = await type('MED');
   const d = await appel('bouchard', 'POST', '/admissions', { etablissement_id: sl, type_id: med, patient_ref: 'P-70001', priorite: 'p1', besoins: { isolement: true } });

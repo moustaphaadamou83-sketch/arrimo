@@ -1014,7 +1014,11 @@ function transfererIci(x) {
 
 /* ---------------- Lits ---------------- */
 const options = (groupe, cles, choisi) => cles.map((k) => `<option value="${k}"${k === choisi ? ' selected' : ''}>${esc(t(`${groupe}.${k}`))}</option>`).join('');
-const ORIENTATIONS = ['chsld', 'ri', 'readaptation', 'domicile', 'palliatif', 'autre'];
+const ORIENTATIONS = ['chsld', 'chsld_prive_conventionne', 'chsld_prive', 'ri', 'rtf', 'rpa', 'maison_aines', 'domicile', 'readaptation', 'palliatif', 'autre'];
+/** Bornes du début NSA saisi par l'équipe (jour local) : au plus 365 jours en arrière, jamais dans le futur. */
+const jourLocal = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+const bornesDebutNsa = () => [jourLocal(new Date(Date.now() - 364 * 86400000)), jourLocal(new Date())];
+const BESOINS_NSA = ['marchette', 'fauteuil', 'leve_personne', 'unite_securisee', 'oxygene', 'soins_particuliers'];
 const MOTIFS = ['personnel', 'equipement', 'travaux', 'infection', 'autre'];
 const CONGES = ['prevu', 'confirme', 'attente_transport', 'reporte'];
 const GROUPES_AGE = ['adulte', 'pediatrique', 'neonatal'];
@@ -1048,9 +1052,15 @@ function brancherActionsLit(racine) {
         return;
       }
       if (action === 'nsa') {
+        const [jMin, jMax] = bornesDebutNsa();
         modale(t('lits.nsa_titre', { code }), `<p class="note">${esc(t('lits.nsa_aide'))}</p>
-          <div class="champ"><label class="lbl" for="m-orient">${esc(t('lits.orientation'))}</label><select id="m-orient">${options('orientations', ORIENTATIONS)}</select></div>`,
-        [{ label: t('general.annuler') }, { label: t('lits.designer'), pri: true, run: async () => (await agir(null, () => api('POST', `/lits/${id}/nsa`, { orientation: $('#m-orient').value }), t('lits.nsa_ok', { code }))) !== null || false }]);
+          <div class="champ"><label class="lbl" for="m-orient">${esc(t('lits.orientation'))}</label><select id="m-orient">${options('orientations', ORIENTATIONS)}</select></div>
+          <div class="champ"><label class="lbl" for="m-nsa-debut">${esc(t('lits.nsa_debut'))}</label><input id="m-nsa-debut" type="date" value="${jMax}" min="${jMin}" max="${jMax}">
+            <span class="note">${esc(t('lits.nsa_debut_aide'))}</span></div>
+          <label class="case"><input type="checkbox" id="m-nsa-transitoire"> ${esc(t('lits.nsa_transitoire'))}</label>`,
+        [{ label: t('general.annuler') }, { label: t('lits.designer'), pri: true, run: async () => (await agir(null, () => api('POST', `/lits/${id}/nsa`, {
+          orientation: $('#m-orient').value, depuis: $('#m-nsa-debut').value || null, transitoire: $('#m-nsa-transitoire').checked,
+        }), t('lits.nsa_ok', { code }))) !== null || false }]);
         return;
       }
       if (action === 'retirer_nsa') {
@@ -2137,9 +2147,9 @@ async function vueNsa() {
     ${sectionSorties}
     <div class="tableau"><table><thead><tr><th>${S('lit')}</th><th>${S('unite')}</th><th>${S('patient')}</th><th>${S('depuis')}</th><th>${S('orientation')}</th><th></th></tr></thead><tbody>${[...n.lits].sort((a, b) => b.jours - a.jours).map((l) => `<tr data-nsa-ligne="${esc(`${l.code} ${l.unite} ${l.patient_ref}`.toLowerCase())}" data-nsa-orient="${esc(l.nsa_orientation || '')}">
       <td class="num">${esc(l.code)}</td><td class="donnee">${esc(l.unite)}</td><td class="num">${esc(l.patient_ref)}</td><td class="num">${S('jours', { n: l.jours })}${l.jours >= 30 ? ' <span class="pt pt-attention" aria-hidden="true"></span>' : ''}</td>
-      <td><select data-orient="${l.id}" aria-label="${S('orientation')}">${options('orientations', ORIENTATIONS, l.nsa_orientation)}</select></td>
+      <td><select data-orient="${l.id}" aria-label="${S('orientation')}">${options('orientations', ORIENTATIONS, l.nsa_orientation)}</select>${l.transitoire ? ` <span class="badge">${S('transitoire_badge')}</span>` : ''}</td>
       <td><div class="ligne serre">${sorties === null ? '' : enCours.has(`${l.code}|${l.patient_ref}`) ? `<span class="badge">${S('vers_chsld', { chsld: enCours.get(`${l.code}|${l.patient_ref}`).chsld })}</span>`
-        : `<button class="btn pri" type="button" data-vers-chsld="${l.id}" data-code="${esc(l.code)}">${S('orienter_chsld')}</button>`}<button class="btn" type="button" data-nsa-detail="${l.id}">${S('details')}</button><button class="btn" data-retirer="${l.id}">${S('retirer')}</button></div></td></tr>`).join('') || `<tr><td colspan="6" class="muted">${S('aucun')}</td></tr>`}</tbody></table></div>`;
+        : `<button class="btn pri" type="button" data-vers-chsld="${l.id}" data-code="${esc(l.code)}">${S('orienter_chsld')}</button>`}${estEntretien() ? '' : `<button class="btn" type="button" data-nsa-besoins="${l.id}" data-code="${esc(l.code)}">${S('besoins')}</button>`}<button class="btn" type="button" data-nsa-detail="${l.id}">${S('details')}</button><button class="btn" data-retirer="${l.id}">${S('retirer')}</button></div></td></tr>`).join('') || `<tr><td colspan="6" class="muted">${S('aucun')}</td></tr>`}</tbody></table></div>`;
   const filtrer = () => {
     etat.nsaRecherche = $('#n-recherche').value; etat.nsaOrientation = $('#n-filtre').value;
     const q = etat.nsaRecherche.trim().toLowerCase(); let vus = 0;
@@ -2150,6 +2160,7 @@ async function vueNsa() {
     $('#n-compte').textContent = t('nsa.affiches', { n: vus, total: n.lits.length });
   };
   v.querySelectorAll('[data-nsa-detail]').forEach((b) => { b.onclick = () => detailNsa(Number(b.dataset.nsaDetail)); });
+  v.querySelectorAll('[data-nsa-besoins]').forEach((b) => { b.onclick = () => besoinsNsa(Number(b.dataset.nsaBesoins), b.dataset.code); });
   $('#n-recherche').oninput = filtrer; $('#n-filtre').onchange = filtrer; filtrer();
   v.querySelectorAll('[data-orient]').forEach((sel) => { sel.onchange = () => agir(sel, () => api('PUT', `/lits/${sel.dataset.orient}/nsa`, { orientation: sel.value }), t('nsa.orient_ok')); });
   v.querySelectorAll('[data-retirer]').forEach((b) => { b.onclick = () => agir(b, () => api('DELETE', `/lits/${b.dataset.retirer}/nsa`), t('nsa.retire_ok')); });
@@ -2181,6 +2192,8 @@ async function detailNsa(id) {
   const S = (k, vars) => esc(t(`nsa.${k}`, vars));
   let d;
   try { d = await api('GET', `/nsa/lits/${id}`); } catch (e) { toast(e.message, true); return; }
+  const hist = (d.historique || []).map((h) => `<li><span class="num">${esc(heure(h.le))}</span> · ${esc(t(`orientations.${h.orientation}`))}${h.transitoire ? ` · ${S('transitoire_badge')}` : ''}${
+    h.par ? ` <span class="note">(${esc(h.par)})</span>` : ''}</li>`).join('');
   const evts = d.evenements.map((e) => `<li><span class="num">${esc(heure(e.date))}</span> · ${esc(e.action)}${e.nouvel_etat ? ` → ${esc(t(`etats.${e.nouvel_etat}`))}` : ''}${
     e.utilisateur ? ` <span class="note">(${esc(e.utilisateur)})</span>` : ''}${e.refuse ? ` <span class="badge">${S('refuse')}</span>` : ''}</li>`).join('');
   modale(t('nsa.detail_titre', { lit: d.code }), `<dl class="detail-nsa">
@@ -2188,9 +2201,46 @@ async function detailNsa(id) {
       <dt>${S('unite')}</dt><dd>${esc(d.unite)}</dd>
       <dt>${S('orientation')}</dt><dd>${esc(t(`orientations.${d.nsa_orientation}`))}</dd>
       <dt>${S('depuis_le')}</dt><dd class="num">${esc(heure(d.nsa_depuis))} · ${S('jours', { n: d.jours })}</dd>
-      <dt>${S('statut')}</dt><dd>${S(d.jours >= 30 ? 'statut_long' : 'statut_en_cours')}</dd></dl>
+      <dt>${S('statut')}</dt><dd>${S(d.jours >= 30 ? 'statut_long' : 'statut_en_cours')}</dd>
+      <dt>${S('transitoire')}</dt><dd>${S(d.transitoire ? 'transitoire_oui' : 'transitoire_non')}</dd>
+      ${d.episode?.declare_par ? `<dt>${S('declare_par')}</dt><dd>${esc(d.episode.declare_par)}</dd>` : ''}</dl>
+    ${estEntretien() ? '' : `<details class="corriger-nsa"><summary>${S('corriger')}</summary>
+      <div class="ligne"><div class="champ"><label class="lbl" for="dn-debut">${S('debut')}</label><input id="dn-debut" type="date" value="${esc(jourLocal(new Date(d.nsa_depuis)))}" min="${bornesDebutNsa()[0]}" max="${bornesDebutNsa()[1]}"></div>
+      <label class="case"><input type="checkbox" id="dn-transitoire"${d.transitoire ? ' checked' : ''}> ${esc(t('lits.nsa_transitoire'))}</label></div>
+      <button class="btn" type="button" id="dn-enregistrer">${esc(t('general.enregistrer'))}</button></details>`}
+    <h4>${S('historique')}</h4>${hist ? `<ul class="historique-nsa">${hist}</ul>` : `<p class="muted">${S('aucun_historique')}</p>`}
     <h4>${S('evenements')}</h4>${evts ? `<ul class="evenements-nsa">${evts}</ul>` : `<p class="muted">${S('aucun_evenement')}</p>`}`,
   [{ label: t('general.fermer'), pri: true }]);
+  const bouton = $('#dn-enregistrer');
+  if (bouton) bouton.onclick = async () => {
+    const corps = { transitoire: $('#dn-transitoire').checked, version_episode: d.episode?.version };
+    if ($('#dn-debut').value !== jourLocal(new Date(d.nsa_depuis))) corps.depuis = $('#dn-debut').value;
+    if ((await agir(bouton, () => api('PUT', `/lits/${id}/nsa`, corps), t('nsa.corrige_ok'))) !== null) { $('#modale').hidden = true; }
+  };
+}
+
+/**
+ * Besoins du patient NSA en catégories (aucun diagnostic, aucun texte libre clinique) : équipe et coordination seulement.
+ * Ils serviront à proposer des places compatibles ; l'équipe choisit. Jamais dans le journal ni les notifications.
+ */
+async function besoinsNsa(id, code) {
+  const S = (k, vars) => esc(t(`nsa.${k}`, vars));
+  let d;
+  try { d = await api('GET', `/nsa/lits/${id}/besoins`); } catch (e) { toast(e.message, true); return; }
+  const b = d.besoins;
+  const choixMilieu = (i) => `<select id="nb-pref-${i}" aria-label="${S('preference_n', { n: i + 1 })}"><option value="">${S('preference_aucune')}</option>${d.milieux.map((m) =>
+    `<option value="${m.id}"${b.preferences[i] === m.id ? ' selected' : ''}>${esc(m.nom)} · ${esc(m.type)}${m.ville ? ` · ${esc(m.ville)}` : ''}</option>`).join('')}</select>`;
+  modale(t('nsa.besoins_titre', { lit: code }), `<p class="note">${S('besoins_aide')}</p>
+    <fieldset class="cases"><legend class="lbl">${S('besoins_categories')}</legend>${BESOINS_NSA.map((x) => `<label class="case"><input type="checkbox" data-nb-code value="${x}"${b.codes.includes(x) ? ' checked' : ''}> ${esc(t(`besoins_nsa.${x}`))}</label>`).join('')}</fieldset>
+    <div class="ligne"><div class="champ"><label class="lbl" for="nb-sexe">${S('chambre_sexe')}</label><select id="nb-sexe">${['indifferent', 'F', 'M'].map((x) => `<option value="${x}"${b.chambre_sexe === x ? ' selected' : ''}>${S(`sexe_${x}`)}</option>`).join('')}</select></div>
+      <div class="champ"><label class="lbl" for="nb-langue">${S('langue')}</label><select id="nb-langue"><option value="">${S('langue_non_precisee')}</option>${['fr', 'en', 'autre'].map((x) => `<option value="${x}"${b.langue === x ? ' selected' : ''}>${S(`langue_${x}`)}</option>`).join('')}</select></div></div>
+    <div class="champ"><label class="lbl" for="nb-muni">${S('municipalite')}</label><input id="nb-muni" autocomplete="off" maxlength="80" value="${esc(b.municipalite_famille || '')}"><span class="note">${S('municipalite_aide')}</span></div>
+    <p class="lbl">${S('preferences')}</p><div class="pile">${[0, 1, 2].map(choixMilieu).join('')}</div><p class="note">${S('preferences_aide')}</p>`,
+  [{ label: t('general.annuler') }, { label: t('general.enregistrer'), pri: true, run: async () => (await agir(null, () => api('PUT', `/nsa/lits/${id}/besoins`, {
+    version: b.version, codes: [...document.querySelectorAll('[data-nb-code]:checked')].map((x) => x.value), chambre_sexe: $('#nb-sexe').value,
+    langue: $('#nb-langue').value || null, municipalite_famille: $('#nb-muni').value.trim() || null,
+    preferences: [0, 1, 2].map((i) => Number($(`#nb-pref-${i}`).value)).filter((x, i, a) => x && a.indexOf(x) === i),
+  }), t('nsa.besoins_ok', { lit: code }))) !== null || false }]);
 }
 
 /* ---------------- Tuiles d'indicateurs ---------------- */
