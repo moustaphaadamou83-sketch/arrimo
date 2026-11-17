@@ -1029,6 +1029,7 @@ window.ARRIMO_I18N.en = {
     refus_hebergement_motif_requis: 'Choose the refusal reason from the list (no free text for a request from a hospital).', motif_refus_invalide: 'Unknown refusal reason: choose from the list.',
     place_non_confirmee_equipe: 'First confirm the place with the patient or family and plan the departure.', depart_prevu_invalide: 'Invalid departure date and time: from now up to 60 days.',
     transport_invalide: 'Unknown transport mode: choose from the list.', accord_usager_requis: 'The place must be confirmed by the team with the patient or family.', depart_deja_confirme: 'The departure is already confirmed.',
+    chambre_propre_par_entretien: 'A clean room is confirmed by housekeeping: the housekeeping team completes this task.',
     profil_hebergement_invalide: 'Invalid care profile: choose from the lists.', ressource_introuvable: 'Care setting not found.', date_prevue_invalide: 'Invalid expected date: from today up to 90 days.',
     place_introuvable: 'Expected place not found.', place_close: 'This expected place is already freed or cancelled.',
     poids_invalides: 'Invalid weights: whole numbers from 0 to 100 (penalty 0 to 50, horizon 1 to 60 days).', poids_total_100: 'The five weights must add up to exactly 100.',

@@ -670,7 +670,7 @@ html.theme-bascule *, html.theme-bascule *::before, html.theme-bascule *::after 
 .ch-etat { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-libelle); font-weight: 600; white-space: nowrap; }
 .ch-etat::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--inactif); flex: none; }
 .ch-libre::before, .ch-present::before, .ch-recue::before, .ch-faite::before, .ch-admise::before, .ch-acceptee::before { background: var(--succes); }
-.ch-reserve::before, .ch-preadmission::before, .ch-place_proposee::before, .ch-envoyee::before, .ch-en_cours::before, .ch-en_verification::before { background: var(--info); }
+.ch-retour_en_route::before, .ch-retour_a_reintegrer::before, .ch-reserve::before, .ch-preadmission::before, .ch-place_proposee::before, .ch-envoyee::before, .ch-en_cours::before, .ch-en_verification::before { background: var(--info); }
 .ch-occupe::before { background: var(--secondaire); }
 .ch-conservee::before, .ch-hospitalise::before, .ch-absent::before, .ch-nettoyage::before, .ch-a_faire::before, .ch-documents_manquants::before, .ch-transfert_en_cours::before { background: var(--attention); }
 .ch-indispo::before, .ch-refusee::before, .ch-expiree::before { background: var(--critique); }

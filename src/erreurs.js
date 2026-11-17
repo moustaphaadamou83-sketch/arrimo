@@ -100,6 +100,7 @@ const MESSAGES = {
   transport_invalide: 'Mode de transport inconnu : choisissez dans la liste.',
   accord_usager_requis: 'La place doit être confirmée par l’équipe avec l’usager ou la famille.',
   depart_deja_confirme: 'Le départ est déjà confirmé.',
+  chambre_propre_par_entretien: 'La chambre propre est confirmée par l’entretien : c’est l’équipe d’entretien qui termine cette tâche.',
   municipalite_invalide: 'Municipalité invalide : indiquez seulement le nom de la municipalité.',
   preferences_milieux_invalides: 'Préférences invalides : au plus 3 milieux d’hébergement différents, choisis dans la liste.',
   conge_statut_inconnu: 'Statut de congé inconnu.',

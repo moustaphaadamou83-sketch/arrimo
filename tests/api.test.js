@@ -814,6 +814,71 @@ test('NSA lots C et D : demande, refus motivé, place suivante, confirmation ave
   } finally { if (avant === undefined) delete process.env.ARRIMO_PATIENTS_FICTIFS; else process.env.ARRIMO_PATIENTS_FICTIFS = avant; }
 });
 
+test('Retour au CHSLD : statut « de retour », « Confirmer son retour », chambre propre confirmée par l’entretien, « Réintégrer dans sa chambre »', async () => {
+  const avant = process.env.ARRIMO_PATIENTS_FICTIFS; process.env.ARRIMO_PATIENTS_FICTIFS = '1';
+  try {
+    const sl = await id('SL');
+    const { hacher } = require('../src/auth'); const TE = require('../src/types-etablissement');
+    const cfgH = (await pool.query('SELECT config_id FROM etablissements WHERE id = $1', [sl])).rows[0].config_id;
+    const cfg = await TE.configChsld(pool, cfgH);
+    const ty = (await pool.query('SELECT id FROM types_unite WHERE config_id = $1 ORDER BY ordre LIMIT 1', [cfg])).rows[0].id;
+    const e = (await pool.query(`INSERT INTO etablissements (code, nom, ville, latitude, longitude, config_id, profil_config_id, type_etablissement, actif, module_actif)
+      VALUES ('RT-CH', 'CHSLD fictif du Retour', 'Montréal', 45.5, -73.6, $1, $2, 'chsld', true, true) RETURNING id`, [cfg, cfgH])).rows[0].id;
+    const un = (await pool.query('INSERT INTO unites (etablissement_id, type_id, nom) VALUES ($1, $2, $3) RETURNING id', [e, ty, 'Hébergement'])).rows[0].id;
+    const ch = (await pool.query(`INSERT INTO chambres (unite_id, numero) VALUES ($1, '7') RETURNING id`, [un])).rows[0].id;
+    const lit = (await pool.query(`INSERT INTO lits (chambre_id, unite_id, type_id, etablissement_id, code, etat) VALUES ($1, $2, $3, $4, 'RT-7', 'libre') RETURNING id, version`, [ch, un, ty, e])).rows[0];
+    const compte = async (login, role) => {
+      const u = (await pool.query(`INSERT INTO utilisateurs (email, nom, mot_de_passe_hash, role) VALUES ($1, $2, $3, $4) RETURNING id`, [`${login}@demo.arrimo`, login, hacher(MOT_DE_PASSE_DEMO), role])).rows[0].id;
+      await pool.query('INSERT INTO utilisateur_etablissements VALUES ($1, $2)', [u, e]);
+      tokens[login] = (await appel(null, 'POST', '/connexion', { email: `${login}@demo.arrimo`, mot_de_passe: MOT_DE_PASSE_DEMO })).corps.token;
+      return u;
+    };
+    await compte('rt.coord', 'admin_etab');
+    // Sans compte d'entretien actif (petite ressource) : la coordination peut confirmer la chambre propre, et le journal le dit
+    const r0 = await appel('rt.coord', 'POST', '/chsld/residents', { etablissement_id: e, prenom: 'Jean', nom: 'Fictif', date_naissance: '1940-01-02' });
+    assert.strictEqual(r0.statut, 200, JSON.stringify(r0.corps));
+    const res = r0.corps;
+    assert.strictEqual((await appel('rt.coord', 'POST', `/chsld/residents/${res.id}/reserver-place`, { lit_id: lit.id, version: lit.version, version_resident: res.version })).statut, 200);
+    let tache = (await appel('rt.coord', 'GET', `/chsld/taches?etablissement_id=${e}`)).corps.find((x) => x.type === 'preparation_chambre');
+    assert.strictEqual((await appel('rt.coord', 'POST', `/chsld/taches/${tache.id}/statut`, { statut: 'faite', version: tache.version })).statut, 200);
+    assert.ok((await pool.query(`SELECT 1 FROM journal WHERE etablissement_id = $1 AND detail ~ 'aucun compte d’entretien actif'`, [e])).rowCount);
+    let r = (await appel('rt.coord', 'GET', `/chsld/residents/${res.id}`)).corps.resident;
+    assert.strictEqual((await appel('rt.coord', 'POST', `/chsld/residents/${res.id}/arrivee`, { version: r.version })).statut, 200);
+    // Désormais un compte d'entretien actif : la chambre propre est toujours confirmée par l'entretien
+    await compte('rt.entretien', 'entretien');
+    // Hospitalisé, puis l'hôpital confirme le départ du retour : la liste n'affiche plus « Hospitalisé »
+    await pool.query(`UPDATE residents SET statut = 'hospitalise' WHERE id = $1`, [res.id]);
+    const ref = (await pool.query('SELECT reference FROM residents WHERE id = $1', [res.id])).rows[0].reference;
+    const co = (await pool.query(`INSERT INTO coordinations (numero, type, resident_id, resident_ref, origine_id, destination_id, statut, lit_id)
+      VALUES ('CO-RT-1', 'retour', $1, $2, $3, $4, 'en_cours', $5) RETURNING id, version`, [res.id, ref, sl, e, lit.id])).rows[0];
+    let ligne = (await appel('rt.coord', 'GET', `/chsld/residents?etablissement_id=${e}`)).corps.find((x) => x.id === res.id);
+    assert.deepStrictEqual([ligne.statut, ligne.statut_affiche, ligne.retour_id, ligne.retour_statut], ['hospitalise', 'retour_en_route', co.id, 'en_cours']);
+    let fiche = (await appel('rt.coord', 'GET', `/chsld/residents/${res.id}`)).corps;
+    assert.deepStrictEqual([fiche.resident.statut_affiche, fiche.retour.id], ['retour_en_route', co.id]);
+    // « Confirmer son retour » : résident arrivé, réintégration à confirmer ; une tâche de préparation de la chambre
+    assert.strictEqual((await appel('rt.coord', 'POST', `/coordinations/${co.id}/action`, { etablissement_id: e, action: 'confirmer_arrivee', version: co.version })).statut, 200);
+    ligne = (await appel('rt.coord', 'GET', `/chsld/residents?etablissement_id=${e}`)).corps.find((x) => x.id === res.id);
+    assert.deepStrictEqual([ligne.statut, ligne.statut_affiche, ligne.retour_statut, !!ligne.retour_arrivee_le], ['retour_a_reintegrer', 'retour_a_reintegrer', 'recue', true]);
+    await appel('rt.coord', 'POST', '/chsld/taches', { etablissement_id: e, type: 'preparation_chambre', titre: 'Préparer RT-7 pour le retour', lit_id: lit.id, assigne_role: 'entretien' });
+    tache = (await appel('rt.coord', 'GET', `/chsld/taches?etablissement_id=${e}`)).corps.find((x) => x.type === 'preparation_chambre' && x.statut === 'a_faire');
+    assert.ok(tache, 'tâche de préparation ouverte');
+    // Réintégration refusée tant que la chambre n'est pas propre
+    let c2 = (await pool.query('SELECT version FROM coordinations WHERE id = $1', [co.id])).rows[0];
+    assert.strictEqual((await appel('rt.coord', 'POST', `/coordinations/${co.id}/action`, { etablissement_id: e, action: 'reintegrer', identite_verifiee: true, conditions_accueil: true, version: c2.version })).statut, 409);
+    // La coordination ne peut pas déclarer la chambre propre : c'est l'entretien
+    assert.strictEqual((await appel('rt.coord', 'POST', `/chsld/taches/${tache.id}/statut`, { statut: 'faite', version: tache.version })).corps.code, 'chambre_propre_par_entretien');
+    assert.strictEqual((await appel('rt.entretien', 'POST', `/chsld/taches/${tache.id}/statut`, { statut: 'faite', version: tache.version })).statut, 200);
+    fiche = (await appel('rt.coord', 'GET', `/chsld/residents/${res.id}`)).corps;
+    assert.ok(fiche.retour.chambre_verifiee_le, 'chambre déclarée prête d’elle-même quand l’entretien termine');
+    // « Réintégrer dans sa chambre » : présent, parcours clos
+    c2 = (await pool.query('SELECT version FROM coordinations WHERE id = $1', [co.id])).rows[0];
+    const ri = await appel('rt.coord', 'POST', `/coordinations/${co.id}/action`, { etablissement_id: e, action: 'reintegrer', identite_verifiee: true, conditions_accueil: true, version: c2.version });
+    assert.strictEqual(ri.statut, 200, JSON.stringify(ri.corps));
+    ligne = (await appel('rt.coord', 'GET', `/chsld/residents?etablissement_id=${e}`)).corps.find((x) => x.id === res.id);
+    assert.deepStrictEqual([ligne.statut, ligne.statut_affiche, ligne.retour_id], ['present', 'present', null]);
+  } finally { if (avant === undefined) delete process.env.ARRIMO_PATIENTS_FICTIFS; else process.env.ARRIMO_PATIENTS_FICTIFS = avant; }
+});
+
 test('file d’admission : besoins respectés, assignation, admission ; concurrence sur l’assignation', async () => {
   const sl = await id('SL'); const med = await type('MED');
   const d = await appel('bouchard', 'POST', '/admissions', { etablissement_id: sl, type_id: med, patient_ref: 'P-70001', priorite: 'p1', besoins: { isolement: true } });

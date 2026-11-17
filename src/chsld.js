@@ -157,6 +157,15 @@ async function accueil(pool, u, etabId) {
 }
 
 /* ------------------------------------------------------------------ résidents */
+/**
+ * Statut montré au personnel, déduit des statuts enregistrés : un résident dont l'hôpital a confirmé le départ du retour n'est plus
+ * affiché « Hospitalisé » mais « De retour de l'hôpital, arrivée à confirmer ». Rien n'est écrit : le statut enregistré ne change
+ * qu'à la confirmation de l'arrivée (puis de la réintégration) par le CHSLD.
+ */
+function statutAffiche(r) {
+  const enRoute = r.statut === 'hospitalise' && r.retour_statut === 'en_cours' && !r.retour_arrivee_le;
+  return { ...r, statut_affiche: enRoute ? 'retour_en_route' : r.statut };
+}
 async function listeResidents(pool, u, etabId, q = {}) {
   const e = await etabChsld(pool, u, etabId);
   const cond = ['r.etablissement_id = $1']; const p = [e.id];
@@ -165,9 +174,12 @@ async function listeResidents(pool, u, etabId, q = {}) {
   if (q.q) { p.push(`%${String(q.q).trim().toLowerCase()}%`); cond.push(`(lower(r.nom) LIKE $${p.length} OR lower(r.prenom) LIKE $${p.length} OR lower(r.reference) LIKE $${p.length} OR lower(coalesce(r.nom_usage,'')) LIKE $${p.length})`); }
   return (await pool.query(`SELECT r.id, r.reference, r.prenom, r.nom, r.nom_usage, r.date_naissance, r.statut, r.langue, r.admis_le, r.arrivee_prevue, r.version,
       l.code AS lit, ch.numero AS chambre, un.nom AS unite,
-      (SELECT count(*)::int FROM resident_contacts k WHERE k.resident_id = r.id AND k.actif) AS contacts
+      (SELECT count(*)::int FROM resident_contacts k WHERE k.resident_id = r.id AND k.actif) AS contacts, ro.id AS retour_id, ro.version AS retour_version, ro.statut AS retour_statut,
+      ro.arrivee_le AS retour_arrivee_le, ro.chambre_verifiee_le AS retour_chambre_verifiee_le
     FROM residents r LEFT JOIN lits l ON l.id = r.lit_id LEFT JOIN chambres ch ON ch.id = l.chambre_id LEFT JOIN unites un ON un.id = l.unite_id
-    WHERE ${cond.join(' AND ')} ORDER BY r.nom, r.prenom LIMIT 300`, p)).rows;
+    LEFT JOIN LATERAL (SELECT co.id, co.version, co.statut, co.arrivee_le, co.chambre_verifiee_le FROM coordinations co WHERE co.resident_id = r.id AND co.type = 'retour'
+      AND co.destination_id = r.etablissement_id AND co.cloturee_le IS NULL AND co.statut IN ('acceptee', 'en_cours', 'recue') ORDER BY co.id DESC LIMIT 1) ro ON true
+    WHERE ${cond.join(' AND ')} ORDER BY r.nom, r.prenom LIMIT 300`, p)).rows.map(statutAffiche);
 }
 async function ficheResident(pool, u, id) {
   const { r, e } = await lireResident(pool, u, id);
@@ -189,7 +201,12 @@ async function ficheResident(pool, u, id) {
   const hosp = coordinations.find((c) => c.type === 'hospitalisation' && ['en_cours', 'recue'].includes(c.statut));
   const localisation = r.statut === 'hospitalise' && hosp ? { hopital: hosp.destination, confirmee: hosp.statut === 'recue', numero: hosp.numero } : null;
   const reintegration = ['hospitalise', 'retour_a_reintegrer', 'absent'].includes(r.statut) || coordinations.some((c) => c.type === 'retour' && ['envoyee', 'acceptee', 'en_cours'].includes(c.statut)) ? await etatReintegration(pool, r.id) : null;
-  return { resident: r, lit: lit ? { ...lit, entretien: (await pool.query("SELECT COALESCE(entretien_statut, 'propre') e FROM lits WHERE id = $1", [lit.id])).rows[0].e } : null, contacts, mouvements, coordinations, taches, communications, localisation, reintegration };
+  // Retour de l'hôpital en cours (côté CHSLD) : boutons « Confirmer son retour » puis « Réintégrer dans sa chambre » sur la fiche
+  const ro = coordinations.find((c) => c.type === 'retour' && c.destination_id === e.id && !c.cloturee_le && ['acceptee', 'en_cours', 'recue'].includes(c.statut));
+  const ch = ro ? (await pool.query('SELECT chambre_verifiee_le FROM coordinations WHERE id = $1', [ro.id])).rows[0] : null;
+  const retour = ro ? { id: ro.id, numero: ro.numero, version: ro.version, statut: ro.statut, arrivee_le: ro.arrivee_le, chambre_verifiee_le: ch.chambre_verifiee_le, origine: ro.origine } : null;
+  const residentAffiche = statutAffiche({ ...r, retour_statut: retour?.statut, retour_arrivee_le: retour?.arrivee_le });
+  return { resident: { ...r, statut_affiche: residentAffiche.statut_affiche }, lit: lit ? { ...lit, entretien: (await pool.query("SELECT COALESCE(entretien_statut, 'propre') e FROM lits WHERE id = $1", [lit.id])).rows[0].e } : null, contacts, mouvements, coordinations, taches, communications, localisation, reintegration, retour };
 }
 function lireIdentite(b) {
   const prenom = texte(b.prenom, 80), nom = texte(b.nom, 80), dn = dateIso(b.date_naissance);
@@ -1020,6 +1037,15 @@ async function statutTache(pool, u, id, b) {
   if (!t0) throw new ErreurHttp(404, 'tache_introuvable');
   const e = await etabChsld(pool, u, t0.etablissement_id, { roles: [...CONSULTER, 'entretien'] });
   if (u.role === 'entretien' && !['entretien', 'preparation_chambre'].includes(t0.type)) throw new ErreurHttp(403, 'role_insuffisant');
+  // Chambre propre : toujours confirmée par l'entretien (décision de Moustafa, 17 nov. 2026). Exception : un milieu sans aucun compte
+  // d'entretien actif (petite ressource, RTF) ; le responsable confirme alors, et le journal le dit.
+  let sansEntretien = false;
+  if (b.statut === 'faite' && ['entretien', 'preparation_chambre'].includes(t0.type) && u.role !== 'entretien') {
+    const n = (await pool.query(`SELECT count(*)::int n FROM utilisateurs x JOIN utilisateur_etablissements ue ON ue.utilisateur_id = x.id
+      WHERE ue.etablissement_id = $1 AND x.role = 'entretien' AND x.actif`, [t0.etablissement_id])).rows[0].n;
+    if (n) throw new ErreurHttp(403, 'chambre_propre_par_entretien');
+    sansEntretien = true;
+  }
   if (!['a_faire', 'en_cours', 'faite', 'annulee'].includes(b.statut)) throw new ErreurHttp(400, 'tache_invalide');
   const NS = require('./nettoyage-securise');
   return NS.avecBlocage(pool, u, () => transaction(pool, async (c) => {
@@ -1036,7 +1062,7 @@ async function statutTache(pool, u, id, b) {
     }
     if (b.statut === 'faite') await require('./famille').tacheTerminee(c, t, u);
     if (b.statut === 'faite' && t.lit_id && ['preparation_chambre', 'entretien'].includes(t.type)) await chambrePrete(c, u, t.lit_id);
-    await journalChsld(c, e.id, u, 'Tâche', `${t.type} · n° ${t.id} · ${b.statut}`);
+    await journalChsld(c, e.id, u, 'Tâche', `${t.type} · n° ${t.id} · ${b.statut}${sansEntretien ? ' · confirmée par la direction ou la coordination, aucun compte d’entretien actif' : ''}`);
     return n;
   }));
 }
@@ -1218,4 +1244,4 @@ async function libererPlacementHopital(c, pool, u, retour) {
 module.exports = { etapeParcours, chronologie, etatReintegration, libererPlace, OCCUPATION_SQL, hopitauxLiaison, listeHopitauxLiaison, accueil, listeResidents, ficheResident, creerResident, modifierResident, ajouterContact, modifierContact, verifierRepresentant,
   reserverPlace, confirmerArrivee, changerChambre, sortie, absence, listeDemandes, creerDemande, actionDemande, preparerHospitalisation, actionCoordination,
   preparerRetour, preparerTransfertChsld, preparerTransfertHopital, listeCoordinations, reseau, listeTaches, creerTache, statutTache, creerCommunication, statutCommunication,
-  places, indicateurs, etabChsld, CATEGORIES, RELATIONS, DOCUMENTS, DOCUMENTS_DIRECT, documentsPour, MOTIFS_REFUS, LIBELLES_REFUS, ACCESSIBILITE, exigerFictifs, lireContact, insererContact, mouvement, verrouResident };
+  places, indicateurs, etabChsld, statutAffiche, CATEGORIES, RELATIONS, DOCUMENTS, DOCUMENTS_DIRECT, documentsPour, MOTIFS_REFUS, LIBELLES_REFUS, ACCESSIBILITE, exigerFictifs, lireContact, insererContact, mouvement, verrouResident };

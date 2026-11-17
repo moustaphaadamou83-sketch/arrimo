@@ -14,6 +14,26 @@
   const sel = (id, lib, options, choisi = '') => `<div class="champ"><label class="lbl" for="${id}">${lib}</label><select id="${id}">${options.map(([v, l]) => `<option value="${esc(v)}"${String(v) === String(choisi) ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>`;
   const champ = (id, lib, val = '', attrs = '') => `<div class="champ"><label class="lbl" for="${id}">${lib}</label><input id="${id}" value="${esc(val ?? '')}" ${attrs}></div>`;
 
+  /* Retour de l'hôpital, côté CHSLD : « Confirmer son retour » (arrivée physique), puis « Réintégrer dans sa chambre ».
+     La réintégration n'est possible qu'une fois la chambre déclarée propre par l'entretien. Mêmes règles que « Transferts et hospitalisations ». */
+  const boutonsRetour = (ro, statut) => {
+    if (!ro || !gerer()) return '';
+    if (ro.statut === 'en_cours' && !ro.arrivee_le) return `<button class="btn pri" type="button" data-retour="confirmer_arrivee" data-id="${ro.id}" data-version="${ro.version}">${C('retour.confirmer_retour')}</button>`;
+    if (ro.statut === 'recue' && ro.arrivee_le && statut === 'retour_a_reintegrer') {
+      return ro.chambre_verifiee_le ? `<button class="btn pri" type="button" data-retour="reintegrer" data-id="${ro.id}" data-version="${ro.version}">${C('coord.reintegrer')}</button>`
+        : `<span class="note">${C('retour.attente_entretien')}</span>`;
+    }
+    return '';
+  };
+  function brancherRetour(zone) {
+    zone.querySelectorAll('[data-retour]').forEach((b) => { b.onclick = () => {
+      const id = b.dataset.id, version = Number(b.dataset.version), ok = t('chsld.actions.ok');
+      if (b.dataset.retour === 'confirmer_arrivee') return agir(b, () => api('POST', `/coordinations/${id}/action`, { etablissement_id: ctx(), version, action: 'confirmer_arrivee' }), t('chsld.retour.retour_ok'));
+      return modale(t('chsld.coord.reintegrer'), `<p class="note">${C('reint.reintegrer_aide')}</p><label class="case"><input type="checkbox" id="ri-id"> ${C('actions.identite_verifiee')}</label><label class="case"><input type="checkbox" id="ri-cond"> ${C('reint.conditions')}</label>`,
+        [{ label: t('general.annuler') }, { label: t('chsld.coord.reintegrer'), pri: true, run: async () => (await agir(null, () => api('POST', `/coordinations/${id}/action`, { etablissement_id: ctx(), version, action: 'reintegrer', identite_verifiee: $('#ri-id').checked, conditions_accueil: $('#ri-cond').checked }), ok)) !== null || false }]);
+    }; });
+  }
+
   /* ------------------------------------------------------------------ Accueil */
   /* Messages des familles, en tête de l'accueil : lire et répondre sans passer par la fiche du résident */
   async function panneauMessagesFamilles(v) {
@@ -122,7 +142,8 @@
       <div class="ligne filtres-acl">${champ('ch-q', C('residents.rechercher'), q, 'type="search" autocomplete="off"')}${sel('ch-statut', C('residents.statut'), [['actifs', t('chsld.residents.tous_statuts')], ['tous', t('chsld.residents.tous')]], statut)}</div>
       ${liste.length ? `<div class="tableau"><table><thead><tr><th>${C('residents.ref')}</th><th>${C('residents.nom')}</th><th>${C('residents.statut')}</th><th>${C('residents.place')}</th><th>${C('residents.contacts')}</th></tr></thead><tbody>
         ${liste.map((r) => `<tr><td class="num">${esc(r.reference)}</td><td><button class="lien" data-res="${r.id}">${esc(r.prenom)} ${esc(r.nom)}</button>${r.nom_usage ? `<div class="note">« ${esc(r.nom_usage)} »</div>` : ''}<div class="note">${C('residents.ne_le', { date: jour(r.date_naissance) })}</div></td>
-          <td>${statutResident(r.statut)}</td><td>${r.lit ? `${esc(r.unite)} · ${esc(r.lit)}` : '—'}</td><td class="num">${r.contacts}</td></tr>`).join('')}</tbody></table></div>` : `<p class="vide">${C('residents.aucun')}</p>`}`;
+          <td>${statutResident(r.statut_affiche || r.statut)}${(() => { const bt = boutonsRetour(r.retour_id ? { id: r.retour_id, version: r.retour_version, statut: r.retour_statut, arrivee_le: r.retour_arrivee_le, chambre_verifiee_le: r.retour_chambre_verifiee_le } : null, r.statut); return bt ? `<div class="actions serre">${bt}</div>` : ''; })()}</td><td>${r.lit ? `${esc(r.unite)} · ${esc(r.lit)}` : '—'}</td><td class="num">${r.contacts}</td></tr>`).join('')}</tbody></table></div>` : `<p class="vide">${C('residents.aucun')}</p>`}`;
+    brancherRetour(v);
     let minuteur;
     $('#ch-q').oninput = (e) => { clearTimeout(minuteur); minuteur = setTimeout(() => { etat.chRecherche = e.target.value.trim(); rafraichir(); }, 350); };
     $('#ch-statut').onchange = (e) => { etat.chStatut = e.target.value; rafraichir(); };
@@ -209,8 +230,8 @@
     if (g && ['present', 'absent', 'hospitalise', 'preadmission'].includes(r.statut)) actions.push(['sortie', 'sortie']);
     if (g && r.statut === 'hospitalise' && r.lit_id) actions.push(['liberer_place', 'liberer-place']);
     v.innerHTML = `<div class="entete"><div><button class="btn discret" id="ch-retour">← ${C('fiche.retour')}</button>
-        <h2>${esc(r.prenom)} ${esc(r.nom)} <span class="note num">${esc(r.reference)}</span></h2><p>${statutResident(r.statut)} · ${C('residents.ne_le', { date: jour(r.date_naissance) })}</p>${loc}</div>
-        <div class="actions">${actions.map(([k, a]) => `<button class="btn${['arrivee', 'reserver'].includes(k) ? ' pri' : ''}" data-ch-action="${a}">${C(`actions.${k}`)}</button>`).join('')}</div></div>
+        <h2>${esc(r.prenom)} ${esc(r.nom)} <span class="note num">${esc(r.reference)}</span></h2><p>${statutResident(r.statut_affiche || r.statut)} · ${C('residents.ne_le', { date: jour(r.date_naissance) })}</p>${loc}</div>
+        <div class="actions">${boutonsRetour(f.retour, r.statut)}${actions.map(([k, a]) => `<button class="btn${['arrivee', 'reserver'].includes(k) ? ' pri' : ''}" data-ch-action="${a}">${C(`actions.${k}`)}</button>`).join('')}</div></div>
       <div class="deux"><div class="pile">
         <div class="panneau-c"><h3>${C('fiche.hebergement')}</h3>${f.lit ? `<p><b>${esc(f.lit.unite)}</b> · ${C('residents.chambre')} ${esc(f.lit.chambre)} · ${esc(f.lit.code)} ${pastille(f.lit.etat, t(`chsld.chambres.${f.lit.etat === 'occupe' && r.statut !== 'present' ? 'conservee' : f.lit.etat}`))}</p>` : `<p class="note">${C('fiche.aucune_place')}</p>`}
           ${r.admis_le ? `<p class="note">${C('fiche.admis_le')} ${esc(dateHeure(r.admis_le))}</p>` : r.arrivee_prevue ? `<p class="note">${C('fiche.arrivee_prevue')} : ${esc(jour(r.arrivee_prevue))}</p>` : ''}</div>
@@ -234,6 +255,7 @@
       </div></div>`;
     panneauEvaluations(v, r);
     $('#ch-retour').onclick = () => { etat.chResident = null; rafraichir(); };
+    brancherRetour(v);
     v.querySelectorAll('[data-ch-action]').forEach((b) => { b.onclick = () => actionResident(b.dataset.chAction, r, f); });
     if ($('#ch-modifier')) $('#ch-modifier').onclick = () => modifierIdentite(r);
     if ($('#ch-ajout-contact')) $('#ch-ajout-contact').onclick = () => editerContact(r, null, f.contacts.length);
