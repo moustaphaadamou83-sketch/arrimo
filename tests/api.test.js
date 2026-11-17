@@ -713,6 +713,107 @@ test('NSA lot B : places compatibles classées et expliquées, profils et places
   await appel('bouchard', 'DELETE', `/lits/${l.id}/nsa`);
 });
 
+test('NSA lots C et D : demande, refus motivé, place suivante, confirmation avec l’usager, départ organisé, lit à libérer, indicateurs', async () => {
+  const avant = process.env.ARRIMO_PATIENTS_FICTIFS; process.env.ARRIMO_PATIENTS_FICTIFS = '1';
+  try {
+    const sl = await id('SL');
+    const { hacher } = require('../src/auth'); const TE = require('../src/types-etablissement');
+    const cfgH = (await pool.query('SELECT config_id FROM etablissements WHERE id = $1', [sl])).rows[0].config_id;
+    const cfg = await TE.configChsld(pool, cfgH);
+    const ty = (await pool.query('SELECT id FROM types_unite WHERE config_id = $1 ORDER BY ordre LIMIT 1', [cfg])).rows[0].id;
+    async function ressource(code, nom, typeLocal, circuit, login) {
+      const e = (await pool.query(`INSERT INTO etablissements (code, nom, ville, latitude, longitude, config_id, profil_config_id, type_etablissement, type_local_code, actif, module_actif)
+        VALUES ($1, $2, 'Montréal', 45.51, -73.58, $3, $4, 'chsld', $5, true, true) RETURNING id`, [code, nom, cfg, cfgH, typeLocal])).rows[0].id;
+      const un = (await pool.query('INSERT INTO unites (etablissement_id, type_id, nom) VALUES ($1, $2, $3) RETURNING id', [e, ty, 'Hébergement'])).rows[0].id;
+      const ch = (await pool.query(`INSERT INTO chambres (unite_id, numero) VALUES ($1, '1') RETURNING id`, [un])).rows[0].id;
+      await pool.query(`INSERT INTO lits (chambre_id, unite_id, type_id, etablissement_id, code, etat) VALUES ($1, $2, $3, $4, $5, 'libre'), ($1, $2, $3, $4, $6, 'libre')`, [ch, un, ty, e, `${code}-1`, `${code}-2`]);
+      await pool.query('INSERT INTO ressource_profils (etablissement_id, circuit, statut_ressource) VALUES ($1, $2, $3)', [e, circuit, typeLocal === 'rpa' ? 'prive' : 'public']);
+      const u = (await pool.query(`INSERT INTO utilisateurs (email, nom, mot_de_passe_hash, role) VALUES ($1, $2, $3, 'coordonnateur') RETURNING id`, [`${login}@demo.arrimo`, `Coordination ${nom}`, hacher(MOT_DE_PASSE_DEMO)])).rows[0].id;
+      await pool.query('INSERT INTO utilisateur_etablissements VALUES ($1, $2)', [u, e]);
+      tokens[login] = (await appel(null, 'POST', '/connexion', { email: `${login}@demo.arrimo`, mot_de_passe: MOT_DE_PASSE_DEMO })).corps.token;
+      return e;
+    }
+    const rpa = await ressource('NC-RPA', 'Résidence fictive du Parc', 'rpa', 'direct', 'coord.nc-rpa');
+    const chsld = await ressource('NC-CH', 'CHSLD fictif du Carré', null, 'mecanisme_acces', 'coord.nc-ch');
+    const l = (await pool.query(`SELECT id, code, patient_ref FROM lits WHERE etablissement_id = $1 AND etat = 'occupe' AND nsa_depuis IS NULL ORDER BY id LIMIT 1`, [sl])).rows[0];
+    assert.strictEqual((await appel('bouchard', 'POST', `/lits/${l.id}/nsa`, { orientation: 'ri' })).statut, 200);
+    const identite = { prenom: 'Fictive', nom: 'Usagère', date_naissance: '1938-05-04' };
+    // Destinations : circuit et documents propres à chaque milieu (admission directe d'une RPA : contrat ou bail)
+    const dest = (await appel('bouchard', 'GET', `/nsa/chsld?etablissement_id=${sl}`)).corps;
+    const dRpa = dest.find((x) => x.id === rpa);
+    assert.deepStrictEqual([dRpa.type, dRpa.circuit, dRpa.documents.includes('contrat_hebergement'), dRpa.documents.includes('formulaire_mecanisme')], ['RPA', 'direct', true, false]);
+    assert.strictEqual((await appel('bouchard', 'POST', `/nsa/lits/${l.id}/orienter-chsld`, { chsld_id: rpa, documents: ['formulaire_mecanisme'], ...identite })).corps.code, 'document_invalide');
+    const d1 = await appel('bouchard', 'POST', `/nsa/lits/${l.id}/orienter-chsld`, { chsld_id: rpa, documents: ['identite', 'contrat_hebergement'], ...identite });
+    assert.strictEqual(d1.statut, 200, JSON.stringify(d1.corps));
+    let det = (await appel('bouchard', 'GET', `/nsa/lits/${l.id}`)).corps;
+    assert.strictEqual(det.nsa_orientation, 'rpa', 'le milieu choisi par l’humain fixe l’orientation, historisée');
+    assert.strictEqual(det.historique[0].orientation, 'rpa');
+    // La RPA refuse : motif obligatoire, choisi dans la liste ; jamais de texte libre
+    const dh1 = (await pool.query('SELECT id, version FROM demandes_hebergement WHERE numero = $1', [d1.corps.numero])).rows[0];
+    assert.strictEqual((await appel('coord.nc-rpa', 'POST', `/chsld/demandes/${dh1.id}/action`, { action: 'refuser', version: dh1.version, motif: 'texte libre' })).corps.code, 'refus_hebergement_motif_requis');
+    assert.strictEqual((await appel('coord.nc-rpa', 'POST', `/chsld/demandes/${dh1.id}/action`, { action: 'refuser', version: dh1.version, motif_code: 'diagnostic' })).corps.code, 'motif_refus_invalide');
+    assert.strictEqual((await appel('coord.nc-rpa', 'POST', `/chsld/demandes/${dh1.id}/action`, { action: 'refuser', version: dh1.version, motif_code: 'besoin_non_couvert', motif: 'détail clinique interdit' })).statut, 200);
+    const etape = (await pool.query(`SELECT detail FROM demande_hebergement_etapes WHERE demande_id = $1 ORDER BY id DESC LIMIT 1`, [dh1.id])).rows[0].detail;
+    assert.strictEqual(etape, 'Refusée · Besoin non couvert', 'le texte libre est ignoré');
+    let sorties = (await appel('bouchard', 'GET', `/nsa/orientations-chsld?etablissement_id=${sl}`)).corps;
+    const s1 = sorties.find((x) => x.numero === d1.corps.numero);
+    assert.deepStrictEqual([s1.statut, s1.motif_refus_code, s1.reponse_heures != null, s1.patient_present, s1.lit_id], ['refusee', 'besoin_non_couvert', true, true, l.id]);
+    assert.ok((await pool.query(`SELECT 1 FROM notifications WHERE etablissement_id = $1 AND code = 'nsa_refusee' AND message ~ 'place suivante'`, [sl])).rowCount);
+    // Place suivante : demande au CHSLD (mécanisme d'accès) ; il propose et accepte
+    const d2 = await appel('bouchard', 'POST', `/nsa/lits/${l.id}/orienter-chsld`, { chsld_id: chsld, documents: ['formulaire_mecanisme', 'identite', 'carte_assurance_maladie', 'mandat_representant', 'consentement_hebergement'], ...identite });
+    assert.strictEqual(d2.statut, 200, JSON.stringify(d2.corps));
+    assert.strictEqual((await appel('bouchard', 'GET', `/nsa/lits/${l.id}`)).corps.nsa_orientation, 'chsld');
+    const dh2 = () => pool.query('SELECT id, version, statut FROM demandes_hebergement WHERE numero = $1', [d2.corps.numero]).then((r) => r.rows[0]);
+    assert.strictEqual((await appel('coord.nc-ch', 'POST', `/chsld/demandes/${(await dh2()).id}/action`, { action: 'verifier', version: (await dh2()).version })).statut, 200);
+    const litCh = (await pool.query(`SELECT id, version FROM lits WHERE etablissement_id = $1 AND etat = 'libre' ORDER BY id LIMIT 1`, [chsld])).rows[0];
+    const prop = await appel('coord.nc-ch', 'POST', `/chsld/demandes/${(await dh2()).id}/action`, { action: 'proposer_place', version: (await dh2()).version, lit_id: litCh.id, version_lit: litCh.version });
+    assert.strictEqual(prop.statut, 200, JSON.stringify(prop.corps));
+    assert.strictEqual((await appel('coord.nc-ch', 'POST', `/chsld/demandes/${(await dh2()).id}/action`, { action: 'accepter', version: (await dh2()).version })).statut, 200);
+    // Hôpital : le départ exige d'abord la place confirmée avec l'usager ou la famille, et le départ organisé
+    const idd = (await dh2()).id;
+    assert.strictEqual((await appel('bouchard', 'POST', `/nsa/orientations-chsld/${idd}/depart`, {})).corps.code, 'place_non_confirmee_equipe');
+    const depart = new Date(Date.now() + 2 * 86400000); depart.setUTCHours(15, 0, 0, 0);
+    const corps = { depart_prevu_le: depart.toISOString(), transport_mode: 'transport_adapte', documents_transmis: ['identite', 'formulaire_mecanisme'], famille_avisee: true };
+    assert.strictEqual((await appel('bouchard', 'POST', `/nsa/orientations-chsld/${idd}/confirmer-place`, corps)).corps.code, 'accord_usager_requis');
+    assert.strictEqual((await appel('bouchard', 'POST', `/nsa/orientations-chsld/${idd}/confirmer-place`, { ...corps, usager_famille_d_accord: true, transport_mode: 'helicoptere' })).corps.code, 'transport_invalide');
+    assert.strictEqual((await appel('bouchard', 'POST', `/nsa/orientations-chsld/${idd}/confirmer-place`, { ...corps, usager_famille_d_accord: true, depart_prevu_le: '2020-01-01T10:00:00Z' })).corps.code, 'depart_prevu_invalide');
+    assert.strictEqual((await appel('bouchard', 'POST', `/nsa/orientations-chsld/${idd}/confirmer-place`, { ...corps, usager_famille_d_accord: true, documents_transmis: ['contrat_hebergement'] })).corps.code, 'document_invalide');
+    const cp = await appel('bouchard', 'POST', `/nsa/orientations-chsld/${idd}/confirmer-place`, { ...corps, usager_famille_d_accord: true });
+    assert.strictEqual(cp.statut, 200, JSON.stringify(cp.corps));
+    // Lit d'hôpital « à libérer » : congé prévu à l'heure du départ ; la ressource est avertie
+    const lit = (await pool.query('SELECT etat, conge_statut, sortie_prevue FROM lits WHERE id = $1', [l.id])).rows[0];
+    assert.deepStrictEqual([lit.etat, lit.conge_statut, new Date(lit.sortie_prevue).toISOString()], ['occupe', 'prevu', depart.toISOString()]);
+    assert.ok((await pool.query(`SELECT 1 FROM notifications WHERE etablissement_id = $1 AND code = 'nsa_place_confirmee'`, [chsld])).rowCount);
+    sorties = (await appel('bouchard', 'GET', `/nsa/orientations-chsld?etablissement_id=${sl}`)).corps;
+    const s2 = sorties.find((x) => x.numero === d2.corps.numero);
+    assert.deepStrictEqual([s2.transport_mode, s2.documents_transmis.sort(), !!s2.acceptation_equipe_le, !!s2.famille_avisee_le], ['transport_adapte', ['formulaire_mecanisme', 'identite'], true, true]);
+    const vueRessource = (await appel('coord.nc-ch', 'GET', `/chsld/demandes?etablissement_id=${chsld}`)).corps.find((x) => x.numero === d2.corps.numero);
+    assert.ok(vueRessource.acceptation_equipe_le && vueRessource.depart_prevu_le);
+    // Départ confirmé : le lit part au nettoyage ; l'épisode NSA est terminé (« parti »)
+    assert.strictEqual((await appel('bouchard', 'POST', `/nsa/orientations-chsld/${idd}/depart`, {})).statut, 200);
+    assert.strictEqual((await pool.query('SELECT etat FROM lits WHERE id = $1', [l.id])).rows[0].etat, 'nettoyage');
+    assert.strictEqual((await pool.query(`SELECT statut FROM nsa_episodes WHERE lit_id = $1 ORDER BY id DESC LIMIT 1`, [l.id])).rows[0].statut, 'parti');
+    assert.strictEqual((await appel('bouchard', 'POST', `/nsa/orientations-chsld/${idd}/confirmer-place`, { ...corps, usager_famille_d_accord: true })).corps.code, 'depart_deja_confirme');
+    // Indicateurs : par semaine, par ressource, motifs ; codes et nombres seulement
+    const ind = (await appel('bouchard', 'GET', `/nsa/indicateurs?etablissement_id=${sl}&semaines=4`)).corps;
+    assert.strictEqual(ind.par_semaine.length, 4);
+    assert.ok(ind.totaux.demandes >= 2 && ind.totaux.refus >= 1 && ind.totaux.lits_liberes >= 1 && ind.totaux.sorties >= 1, JSON.stringify(ind.totaux));
+    assert.strictEqual(ind.motifs_refus.besoin_non_couvert, 1);
+    const rR = ind.par_ressource.find((x) => x.id === rpa); const rC = ind.par_ressource.find((x) => x.id === chsld);
+    assert.deepStrictEqual([rR.type, rR.refus, rC.places_proposees], ['RPA', 1, 1]);
+    assert.ok(ind.par_semaine.at(-1).delai_place_jours != null, 'délai pour trouver une place mesuré');
+    assert.ok(!JSON.stringify(ind).includes(l.patient_ref), 'aucune référence de patient dans les indicateurs');
+    const c = await fetch(`${base}/api/nsa/indicateurs.csv?etablissement_id=${sl}`, { headers: { Authorization: `Bearer ${tokens.bouchard}` } });
+    const texte = await c.text();
+    assert.match(texte, /^﻿?Semaine du;Nouveaux NSA/); assert.match(texte, /Résidence fictive du Parc;RPA/); assert.ok(!texte.includes(l.patient_ref));
+    const cEn = await (await fetch(`${base}/api/nsa/indicateurs.csv?etablissement_id=${sl}`, { headers: { Authorization: `Bearer ${tokens.bouchard}`, 'X-Langue': 'en' } })).text();
+    assert.match(cEn, /Week of;New ALC/);
+    if (!tokens.entretien_sl) tokens.entretien_sl = (await appel(null, 'POST', '/connexion', { email: 'entretien.sl@demo.arrimo', mot_de_passe: MOT_DE_PASSE_DEMO })).corps.token;
+    assert.strictEqual((await appel('entretien_sl', 'GET', `/nsa/indicateurs?etablissement_id=${sl}`)).statut, 403);
+    assert.strictEqual((await appel('cote', 'GET', `/nsa/indicateurs?etablissement_id=${sl}`)).statut, 403);
+  } finally { if (avant === undefined) delete process.env.ARRIMO_PATIENTS_FICTIFS; else process.env.ARRIMO_PATIENTS_FICTIFS = avant; }
+});
+
 test('file d’admission : besoins respectés, assignation, admission ; concurrence sur l’assignation', async () => {
   const sl = await id('SL'); const med = await type('MED');
   const d = await appel('bouchard', 'POST', '/admissions', { etablissement_id: sl, type_id: med, patient_ref: 'P-70001', priorite: 'p1', besoins: { isolement: true } });

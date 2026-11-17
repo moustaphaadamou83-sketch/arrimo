@@ -384,6 +384,15 @@ function creerApp(pool, options = {}) {
   api.get('/nsa/chsld', route((req) => nc.destinations(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   api.get('/nsa/orientations-chsld', route((req) => nc.liste(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   api.post('/nsa/lits/:id/orienter-chsld', route((req) => nc.orienter(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
+  const ni = require('./nsa-indicateurs');
+  api.get('/nsa/indicateurs', route((req) => ni.indicateurs(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'), { semaines: req.query.semaines })));
+  api.get('/nsa/indicateurs.csv', async (req, res, next) => {
+    try {
+      const ind = await ni.indicateurs(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'), { semaines: req.query.semaines });
+      res.set('Content-Type', 'text/csv; charset=utf-8').send(`\ufeff${ni.csv(ind, req.langue)}`);
+    } catch (e) { next(e); }
+  });
+  api.post('/nsa/orientations-chsld/:id/confirmer-place', route((req) => nc.confirmerPlace(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   api.post('/nsa/orientations-chsld/:id/depart', route((req) => nc.confirmerDepart(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   api.get('/nsa', route(async (req) => {
     const etab = entier(req.query.etablissement_id, 'etablissement_id');

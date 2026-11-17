@@ -45,6 +45,15 @@ Ouvrez deux fenêtres côte à côte : à gauche **hopital.x@demo.arrimo**, à d
   Sur une tablette, l'écran s'utilise d'une main. **Terminé** : le lit ou la civière redevient libre partout.
 - Onglet **NSA** : le taux comparé à la cible de 8 % ; onglet **Lits** : les lits fermés faute de personnel, avec leur motif.
 
+## 6 bis. Un patient NSA vers l'hébergement (onglet NSA)
+Le parcours complet sur la démo publique (Hôpital B et CHSLD des Érables) est décrit dans le guide en ligne `/demo-guide`. En bref :
+- **Besoins** : catégories seulement (fauteuil, unité sécurisée, oxygène…), municipalité de la famille, jusqu'à 3 milieux préférés ; jamais de diagnostic, rien dans le journal ni les notifications.
+- **Places** : milieux compatibles avec l'orientation choisie par l'équipe, libres ou à venir, notés sur 100 avec une phrase d'explication ; les milieux écartés sont listés avec leur raison. Poids réglables dans Paramètres (total 100).
+- **Demande** : la ressource accepte ou refuse avec un motif choisi dans une liste ; « Proposer la place suivante » après un refus.
+- **Départ** : l'équipe confirme la place avec l'usager ou la famille, organise le départ (heure, transport, documents, famille avisée) ; le lit passe « à libérer », puis au nettoyage au départ.
+- **Indicateurs du parcours** : par semaine et par ressource, export CSV. OG répond à « Quelles places compatibles pour le lit … ? ».
+- Côté ressource (CHSLD, RPA, RI, RTF, maison des aînés) : « Chambres et lits » → profil d'hébergement et places à venir.
+
 ## 7. La preuve (onglet Indicateurs)
 - Chaque indicateur affiche sa cible et sa tendance par rapport aux 30 jours précédents ; une pastille seulement si la cible est dépassée.
 - Message clé : *« Un pilote de 6 mois mesure ces chiffres avant et après. »*

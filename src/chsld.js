@@ -24,6 +24,13 @@ const RELATIONS = ['fille', 'fils', 'conjoint', 'soeur', 'frere', 'parent', 'pet
 const CATEGORIES = ['administratif', 'hebergement', 'rendez_vous', 'mouvements'];
 const ACCESSIBILITE = ['fauteuil', 'deambulateur', 'leve_personne', 'lit_electrique', 'malentendant', 'malvoyant'];
 const DOCUMENTS = ['formulaire_mecanisme', 'identite', 'carte_assurance_maladie', 'mandat_representant', 'consentement_hebergement'];
+/** Documents selon le circuit d'admission de la ressource : mécanisme d'accès (CHSLD, RI, RTF) ou admission directe (RPA, privé : contrat ou bail). */
+const DOCUMENTS_DIRECT = ['identite', 'mandat_representant', 'consentement_hebergement', 'contrat_hebergement'];
+const documentsPour = (circuit) => (circuit === 'direct' ? DOCUMENTS_DIRECT : DOCUMENTS);
+/** Motifs de refus d'une demande : liste fermée, jamais de texte libre (aucune information clinique ne doit y figurer). */
+const MOTIFS_REFUS = ['capacite_insuffisante', 'besoin_non_couvert', 'place_plus_disponible', 'dossier_incomplet', 'choix_usager', 'autre'];
+const LIBELLES_REFUS = { capacite_insuffisante: 'Capacité insuffisante', besoin_non_couvert: 'Besoin non couvert', place_plus_disponible: 'Place plus disponible',
+  dossier_incomplet: 'Dossier incomplet', choix_usager: 'Choix de l’usager ou de la famille', autre: 'Autre motif' };
 
 function exigerFictifs() {
   if (!['demo', 'recette'].includes(environnement()) && process.env.ARRIMO_PATIENTS_FICTIFS !== '1') throw new ErreurHttp(403, 'residents_reserve_demo');
@@ -461,9 +468,9 @@ async function actionDemande(pool, u, id, b) {
   return transaction(pool, async (c) => {
     const d = (await c.query('SELECT * FROM demandes_hebergement WHERE id = $1 FOR UPDATE', [id])).rows[0]; versionAttendue(d, b.version);
     if (['admise', 'refusee', 'annulee'].includes(d.statut)) throw new ErreurHttp(409, 'demande_close');
-    let statut = d.statut, documents = d.documents, residentId = d.resident_id, litId = d.lit_propose_id, detail = null;
+    let statut = d.statut, documents = d.documents, residentId = d.resident_id, litId = d.lit_propose_id, detail = null, motifRefus = d.motif_refus_code;
     if (a === 'document') {
-      if (!DOCUMENTS.includes(b.code) || typeof b.recu !== 'boolean') throw new ErreurHttp(400, 'document_invalide');
+      if (!documents.some((x) => x.code === b.code) || typeof b.recu !== 'boolean') throw new ErreurHttp(400, 'document_invalide');
       documents = documents.map((x) => (x.code === b.code ? { ...x, recu: b.recu } : x));
       if (['recue', 'documents_manquants'].includes(statut)) statut = documents.every((x) => x.recu) ? 'recue' : 'documents_manquants';
       detail = `Document ${b.code} : ${b.recu ? 'reçu' : 'manquant'}`;
@@ -492,10 +499,15 @@ async function actionDemande(pool, u, id, b) {
         const r = (await c.query(`UPDATE residents SET statut = 'sorti', lit_id = NULL, version = version + 1 WHERE id = $1 AND statut = 'preadmission' RETURNING *`, [residentId])).rows[0];
         if (r) await mouvement(c, r, 'annulation', u, { detail: `${d.numero} ${a === 'refuser' ? 'refusée' : 'annulée'}` });
       }
-      statut = a === 'refuser' ? 'refusee' : 'annulee'; detail = texte(b.motif, 200) || (a === 'refuser' ? 'Refusée' : 'Annulée');
+      statut = a === 'refuser' ? 'refusee' : 'annulee';
+      if (a === 'refuser' && b.motif_code !== undefined && !MOTIFS_REFUS.includes(b.motif_code)) throw new ErreurHttp(400, 'motif_refus_invalide');
+      // Demande venue d'un hôpital (patient NSA) : motif de refus obligatoire, choisi dans la liste ; jamais de texte libre
+      if (a === 'refuser' && d.hopital_id && !b.motif_code) throw new ErreurHttp(400, 'refus_hebergement_motif_requis');
+      motifRefus = a === 'refuser' ? b.motif_code || null : null;
+      detail = motifRefus ? `Refusée · ${LIBELLES_REFUS[motifRefus]}` : d.hopital_id ? 'Annulée' : texte(b.motif, 200) || (a === 'refuser' ? 'Refusée' : 'Annulée');
     } else throw new ErreurHttp(400, 'action_inconnue');
-    const n = (await c.query(`UPDATE demandes_hebergement SET statut = $2, documents = $3, resident_id = $4, lit_propose_id = $5, version = version + 1, modifie_le = now() WHERE id = $1 RETURNING *`,
-      [id, statut, JSON.stringify(documents), residentId, litId])).rows[0];
+    const n = (await c.query(`UPDATE demandes_hebergement SET statut = $2, documents = $3, resident_id = $4, lit_propose_id = $5, motif_refus_code = $6, version = version + 1, modifie_le = now() WHERE id = $1 RETURNING *`,
+      [id, statut, JSON.stringify(documents), residentId, litId, motifRefus])).rows[0];
     await c.query('INSERT INTO demande_hebergement_etapes (demande_id, statut, detail, par) VALUES ($1, $2, $3, $4)', [id, statut, detail, u.id]);
     await journalChsld(c, e.id, u, 'Demande d’hébergement', `${d.numero} · ${statut}`);
     if (statut !== d.statut) await require('./nsa-chsld').avertirHopital(c, d, statut);
@@ -1206,4 +1218,4 @@ async function libererPlacementHopital(c, pool, u, retour) {
 module.exports = { etapeParcours, chronologie, etatReintegration, libererPlace, OCCUPATION_SQL, hopitauxLiaison, listeHopitauxLiaison, accueil, listeResidents, ficheResident, creerResident, modifierResident, ajouterContact, modifierContact, verifierRepresentant,
   reserverPlace, confirmerArrivee, changerChambre, sortie, absence, listeDemandes, creerDemande, actionDemande, preparerHospitalisation, actionCoordination,
   preparerRetour, preparerTransfertChsld, preparerTransfertHopital, listeCoordinations, reseau, listeTaches, creerTache, statutTache, creerCommunication, statutCommunication,
-  places, indicateurs, etabChsld, CATEGORIES, RELATIONS, DOCUMENTS, ACCESSIBILITE, exigerFictifs, lireContact, insererContact, mouvement, verrouResident };
+  places, indicateurs, etabChsld, CATEGORIES, RELATIONS, DOCUMENTS, DOCUMENTS_DIRECT, documentsPour, MOTIFS_REFUS, LIBELLES_REFUS, ACCESSIBILITE, exigerFictifs, lireContact, insererContact, mouvement, verrouResident };

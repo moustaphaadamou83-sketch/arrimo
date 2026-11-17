@@ -17,6 +17,12 @@ const TE = require('./types-etablissement');
 const ch = require('./chsld');
 
 const GERER = ['coordonnateur', 'admin_etab', 'gestionnaire'];
+const EQUIPE = [...GERER, 'equipe_soins'];
+const TRANSPORTS = ['ambulance', 'transport_adapte', 'famille', 'autre'];
+const genreDe = (e) => (['rpa', 'ri', 'rtf', 'maison_aines'].includes(e.type_local_code) ? e.type_local_code : 'chsld');
+const statutDe = (e) => (['chsld_prive', 'rpa'].includes(e.type_local_code) ? 'prive' : 'public');
+/** Orientation correspondant au milieu choisi par l'humain (genre de ressource, statut pour un CHSLD). */
+const orientationDe = (dest) => (dest.genre !== 'chsld' ? dest.genre : ({ public: 'chsld', conventionne: 'chsld_prive_conventionne', prive: 'chsld_prive' })[dest.statut_ressource] || 'chsld');
 const CLOS = ['admise', 'refusee', 'annulee'];
 const texte = (v, max = 80) => { const t = String(v ?? '').trim().replace(/\s+/g, ' ').slice(0, max); return t || null; };
 const dateIso = (v) => { const d = String(v || '').slice(0, 10); return /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(new Date(`${d}T12:00:00Z`).getTime()) ? d : null; };
@@ -35,11 +41,13 @@ async function hopital(db, u, etabId, { gerer = false } = {}) {
 /** CHSLD qui reçoivent des demandes d'hébergement, du plus proche au plus loin ; places libres en nombre seulement. */
 async function destinations(pool, u, etabId) {
   const h = await hopital(pool, u, etabId);
-  const rows = (await pool.query(`SELECT e.id, e.nom, e.ville, e.latitude, e.longitude, e.modules, e.type_etablissement,
+  const rows = (await pool.query(`SELECT e.id, e.nom, e.ville, e.latitude, e.longitude, e.modules, e.type_etablissement, e.type_local_code, p.circuit, p.statut_ressource,
       (SELECT count(*)::int FROM lits l WHERE l.etablissement_id = e.id AND l.etat = 'libre' AND l.actif) AS places_libres
-    FROM etablissements e WHERE e.type_etablissement = 'chsld' AND e.actif AND e.module_actif`)).rows;
+    FROM etablissements e LEFT JOIN ressource_profils p ON p.etablissement_id = e.id WHERE e.type_etablissement = 'chsld' AND e.actif AND e.module_actif`)).rows;
   return rows.filter((e) => TE.moduleActif(e, 'demandes_hebergement'))
-    .map((e) => ({ id: e.id, nom: e.nom, ville: e.ville, places_libres: e.places_libres, distance_km: distanceKm(h, e) }))
+    .map((e) => { const circuit = e.circuit || (e.type_local_code === 'rpa' ? 'direct' : 'mecanisme_acces');
+      return { id: e.id, nom: e.nom, ville: e.ville, type: TE.nomCourt(e), genre: genreDe(e), statut_ressource: e.statut_ressource || statutDe(e), circuit, documents: ch.documentsPour(circuit),
+        places_libres: e.places_libres, distance_km: distanceKm(h, e) }; })
     .sort((a, b) => a.distance_km - b.distance_km || a.nom.localeCompare(b.nom));
 }
 
@@ -62,8 +70,8 @@ async function orienter(pool, u, litId, b = {}) {
   const dest = (await destinations(pool, u, h.id)).find((x) => x.id === chsldId);
   if (!dest) throw new ErreurHttp(404, 'chsld_introuvable');
   const recus = new Set(Array.isArray(b.documents) ? b.documents : []);
-  if ([...recus].some((x) => !ch.DOCUMENTS.includes(x))) throw new ErreurHttp(400, 'document_invalide');
-  const documents = ch.DOCUMENTS.map((code) => ({ code, recu: recus.has(code) }));
+  if ([...recus].some((x) => !dest.documents.includes(x))) throw new ErreurHttp(400, 'document_invalide');
+  const documents = dest.documents.map((code) => ({ code, recu: recus.has(code) }));
   return transaction(pool, async (c) => {
     const lit = (await c.query('SELECT * FROM lits WHERE id = $1 FOR NO KEY UPDATE', [litId])).rows[0];
     if (b.version != null && Number(b.version) !== lit.version) throw new ErreurHttp(409, 'version_perimee');
@@ -79,11 +87,15 @@ async function orienter(pool, u, litId, b = {}) {
     [dest.id, lit.patient_ref, id.prenom, id.nom, id.date_naissance, dateIso(b.arrivee_souhaitee), documents.every((x) => x.recu) ? 'recue' : 'documents_manquants',
       JSON.stringify(documents), u.id, h.id, lit.id])).rows[0];
     await c.query('INSERT INTO demande_hebergement_etapes (demande_id, statut, detail, par) VALUES ($1, $2, $3, $4)', [d.id, d.statut, `Reçue de ${h.nom} (patient NSA)`, u.id]);
-    // Orientation de la famille CHSLD conservée (public, privé conventionné, privé) ; sinon CHSLD public, historisé
-    if (!['chsld', 'chsld_prive_conventionne', 'chsld_prive'].includes(lit.nsa_orientation)) {
-      await c.query(`UPDATE lits SET nsa_orientation = 'chsld' WHERE id = $1`, [lit.id]);
+    // Le milieu choisi par l'humain fixe l'orientation (historisée) ; une place transitoire acceptée par l'équipe la laisse inchangée
+    const ep = (await c.query(`SELECT transitoire FROM nsa_episodes WHERE lit_id = $1 AND statut = 'actif'`, [lit.id])).rows[0];
+    const voulue = orientationDe(dest);
+    const transitoire = voulue !== lit.nsa_orientation && !!ep?.transitoire;
+    if (voulue !== lit.nsa_orientation && !transitoire) {
+      await c.query('UPDATE lits SET nsa_orientation = $2 WHERE id = $1', [lit.id, voulue]);
       await require('./terrain').historiserOrientation(c, lit.id, u.id);
     }
+    if (transitoire) await c.query('UPDATE demandes_hebergement SET transitoire = true WHERE id = $1', [d.id]);
     await journaliser(c, { litId: lit.id, utilisateurId: u.id, action: 'Orientation NSA vers un CHSLD', detail: `${d.numero} · ${dest.nom}` });
     await journaliser(c, { etablissementId: dest.id, utilisateurId: u.id, action: 'Demande d’hébergement reçue d’un hôpital', detail: `${d.numero} · ${h.nom}` });
     await notifier(c, dest.id, null, 'nsa_demande', { numero: d.numero, origine: h.nom });
@@ -95,7 +107,10 @@ async function orienter(pool, u, litId, b = {}) {
 async function liste(pool, u, etabId) {
   const h = await hopital(pool, u, etabId);
   return (await pool.query(`SELECT d.id, d.numero, d.statut, d.version, d.reference_externe AS patient_ref, d.arrivee_souhaitee, d.cree_le, d.modifie_le,
-      d.depart_hopital_le, d.lit_propose_id IS NOT NULL AS place_reservee, e.nom AS chsld, l.code AS lit, r.admis_le AS arrivee_le,
+      d.depart_hopital_le, d.lit_propose_id IS NOT NULL AS place_reservee, e.nom AS chsld, e.type_local_code, l.code AS lit, l.id AS lit_id, r.admis_le AS arrivee_le,
+      d.motif_refus_code, d.transitoire, d.acceptation_equipe_le, d.depart_prevu_le, d.transport_mode, d.documents_transmis, d.famille_avisee_le, d.documents,
+      (SELECT EXTRACT(EPOCH FROM (min(x.date) - d.cree_le)) / 3600 FROM demande_hebergement_etapes x WHERE x.demande_id = d.id AND x.date > d.cree_le
+        AND x.statut IN ('en_verification', 'place_proposee', 'acceptee', 'refusee'))::float AS reponse_heures,
       (l.etat = 'occupe' AND l.patient_ref = d.reference_externe) AS patient_present
     FROM demandes_hebergement d JOIN etablissements e ON e.id = d.etablissement_id LEFT JOIN lits l ON l.id = d.hopital_lit_id
     LEFT JOIN residents r ON r.id = d.resident_id AND r.statut NOT IN ('preadmission', 'sorti')
@@ -113,6 +128,7 @@ async function confirmerDepart(pool, u, demandeId, b = {}) {
     if (d.depart_hopital_le) return { ...d, deja_confirme: true };
     if (b.version != null && Number(b.version) !== d.version) throw new ErreurHttp(409, 'version_perimee');
     if (d.statut !== 'acceptee') throw new ErreurHttp(409, 'place_non_acceptee');
+    if (!d.acceptation_equipe_le) throw new ErreurHttp(409, 'place_non_confirmee_equipe');
     const dest = (await c.query('SELECT nom FROM etablissements WHERE id = $1', [d.etablissement_id])).rows[0].nom;
     const lit = (await c.query('SELECT id, etat, patient_ref FROM lits WHERE id = $1', [d.hopital_lit_id])).rows[0];
     if (lit && lit.etat === 'occupe' && lit.patient_ref === d.reference_externe) {
@@ -126,6 +142,47 @@ async function confirmerDepart(pool, u, demandeId, b = {}) {
   });
 }
 
+/**
+ * Place acceptée par la ressource : l'équipe de l'hôpital la confirme avec l'usager ou la famille et organise le départ
+ * (date et heure, transport, documents transmis, famille avisée). Le lit d'hôpital passe « à libérer » (congé prévu à cette heure).
+ * Rien de clinique : codes et dates seulement. La ressource est avertie (numéro de demande, établissement, heure).
+ */
+async function confirmerPlace(pool, u, demandeId, b = {}) {
+  const d0 = (await pool.query('SELECT hopital_id FROM demandes_hebergement WHERE id = $1', [demandeId])).rows[0];
+  if (!d0 || !d0.hopital_id) throw new ErreurHttp(404, 'demande_introuvable');
+  const h = await hopital(pool, u, d0.hopital_id);
+  if (!EQUIPE.includes(u.role)) throw new ErreurHttp(403, 'role_insuffisant');
+  const depart = new Date(String(b.depart_prevu_le || ''));
+  if (Number.isNaN(depart.getTime()) || depart < Date.now() - 3600000 || depart > Date.now() + 60 * 86400000) throw new ErreurHttp(400, 'depart_prevu_invalide');
+  if (!TRANSPORTS.includes(b.transport_mode)) throw new ErreurHttp(400, 'transport_invalide');
+  if (b.usager_famille_d_accord !== true) throw new ErreurHttp(400, 'accord_usager_requis');
+  return transaction(pool, async (c) => {
+    const d = (await c.query('SELECT * FROM demandes_hebergement WHERE id = $1 FOR UPDATE', [demandeId])).rows[0];
+    if (b.version != null && Number(b.version) !== d.version) throw new ErreurHttp(409, 'version_perimee');
+    if (d.statut !== 'acceptee') throw new ErreurHttp(409, 'place_non_acceptee');
+    if (d.depart_hopital_le) throw new ErreurHttp(409, 'depart_deja_confirme');
+    const codes = (d.documents || []).map((x) => x.code);
+    const transmis = [...new Set(Array.isArray(b.documents_transmis) ? b.documents_transmis : [])];
+    if (transmis.some((x) => !codes.includes(x))) throw new ErreurHttp(400, 'document_invalide');
+    const n = (await c.query(`UPDATE demandes_hebergement SET acceptation_equipe_le = COALESCE(acceptation_equipe_le, now()), acceptation_equipe_par = COALESCE(acceptation_equipe_par, $2),
+        depart_prevu_le = $3, transport_mode = $4, documents_transmis = $5, famille_avisee_le = CASE WHEN $6 THEN COALESCE(famille_avisee_le, now()) ELSE NULL END,
+        version = version + 1, modifie_le = now() WHERE id = $1 RETURNING *`, [d.id, u.id, depart, b.transport_mode, transmis, b.famille_avisee === true])).rows[0];
+    const dest = (await c.query('SELECT nom FROM etablissements WHERE id = $1', [d.etablissement_id])).rows[0].nom;
+    await c.query('INSERT INTO demande_hebergement_etapes (demande_id, statut, detail, par) VALUES ($1, $2, $3, $4)',
+      [d.id, d.statut, `Place confirmée par ${h.nom} avec l’usager ou la famille ; départ prévu ${depart.toISOString().slice(0, 16).replace('T', ' ')} UTC (${b.transport_mode})`, u.id]);
+    // Lit d'hôpital « à libérer » : congé prévu à l'heure du départ (journalisé, visible au tableau des lits et dans les prévisions)
+    const lit = (await c.query('SELECT id, etat, patient_ref FROM lits WHERE id = $1', [d.hopital_lit_id])).rows[0];
+    if (lit && lit.etat === 'occupe' && lit.patient_ref === d.reference_externe) await require('./terrain').majConge(pool, u, lit.id, 'prevu', depart.toISOString(), c);
+    await journaliser(c, { litId: d.hopital_lit_id, utilisateurId: u.id, action: 'Place d’hébergement confirmée', detail: `${d.numero} · ${dest} · départ prévu` });
+    await journaliser(c, { etablissementId: d.etablissement_id, utilisateurId: u.id, action: 'Place confirmée par l’hôpital', detail: `${d.numero} · ${h.nom}` });
+    const quand = new Intl.DateTimeFormat('fr-CA', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'America/Toronto' }).format(depart);
+    await notifier(c, d.etablissement_id, null, 'nsa_place_confirmee', { numero: d.numero, origine: h.nom, quand });
+    // Arrimo Famille : les proches autorisés (catégorie « Mouvements ») sont avisés qu'une étape a changé, sans aucun détail médical
+    if (d.resident_id) await require('./portail-notifications').signaler(c, d.resident_id, 'mouvements');
+    return n;
+  });
+}
+
 /** Avis à l'hôpital d'origine quand le CHSLD fait avancer la demande (appelé dans la transaction du CHSLD). */
 async function avertirHopital(c, d, statut) {
   if (!d.hopital_id || !['place_proposee', 'acceptee', 'refusee', 'annulee', 'admise'].includes(statut)) return;
@@ -133,4 +190,4 @@ async function avertirHopital(c, d, statut) {
   await notifier(c, d.hopital_id, null, `nsa_${statut}`, { numero: d.numero, dest });
 }
 
-module.exports = { destinations, orienter, liste, confirmerDepart, avertirHopital };
+module.exports = { destinations, orienter, liste, confirmerPlace, confirmerDepart, avertirHopital, TRANSPORTS };

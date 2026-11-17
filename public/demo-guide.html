@@ -32,12 +32,14 @@
 <ol class="etapes">
   <li><span class="qui">Hôpital B → onglet « Lits »</span>
     <p>Le tableau des lits : occupés, libres, fermés faute de personnel. Onglet « NSA » : taux comparé à la cible de 8 %, trois patients qui attendent une autre ressource.</p></li>
-  <li><span class="qui">Hôpital B → « NSA » → « Orienter vers un CHSLD »</span>
-    <p>Les CHSLD sont proposés du plus proche au plus loin, avec leurs places libres. Choisir le CHSLD des Érables, cocher les documents transmis, « Transmettre la demande ». Aucune donnée clinique ; le CHSLD décide de la place.</p></li>
+  <li><span class="qui">Hôpital B → « NSA » → Lucienne Tremblay (MED-201A) → « Besoins », puis « Places »</span>
+    <p>Besoins en catégories, sans diagnostic : fauteuil roulant, unité sécurisée, famille à Val-des-Pins, 1er choix : les Érables. « Places » propose les Érables (note sur 100 et phrase d’explication) et montre pourquoi le CHSLD du Saint-Laurent est écarté : pas d’unité sécurisée déclarée. Arrimo propose ; l’équipe choisit.</p></li>
+  <li><span class="qui">« Transmettre une demande » (ou « Demander une place »)</span>
+    <p>La fenêtre habituelle s’ouvre, les Érables présélectionnés ; cocher les documents transmis, « Transmettre la demande ». Aucune donnée clinique ; la ressource décide de la place. En cas de refus, le motif vient d’une liste et « Proposer la place suivante » rouvre les places compatibles.</p></li>
   <li><span class="qui">CHSLD des Érables → « Demandes d’hébergement »</span>
     <p>La demande arrive (« Patient NSA de Hôpital B »). « Passer en vérification », « Proposer une place » (elle est réservée), « Accepter ».</p></li>
-  <li><span class="qui">Hôpital B → « NSA » → « Sorties vers les CHSLD »</span>
-    <p>« Confirmer le départ » : le lit part au nettoyage, le tableau des lits suit. Le CHSLD ne peut pas confirmer l’arrivée avant ce départ.</p></li>
+  <li><span class="qui">Hôpital B → « NSA » → « Demandes de place d’hébergement »</span>
+    <p>« Confirmer la place et organiser le départ » : l’équipe confirme avec l’usager ou la famille, choisit l’heure, le transport, les documents, coche « Famille avisée ». Le lit passe « à libérer » (congé prévu). Puis « Confirmer le départ » : le lit part au nettoyage, le tableau des lits suit. Le CHSLD ne peut pas confirmer l’arrivée avant ce départ.</p></li>
   <li><span class="qui">CHSLD des Érables → « Admissions et sorties »</span>
     <p>« Confirmer l’arrivée » : le résident est admis ; l’Hôpital B voit « Arrivé au CHSLD ».</p></li>
   <li><span class="qui">Hôpital B → « Liaison CHSLD et résidences » → Jean Dupont (R-00001), hospitalisé</span>
@@ -46,6 +48,8 @@
     <p>Hôpital : « Confirmer le départ » (le lit part au nettoyage). CHSLD : « Confirmer l’arrivée », puis « Réintégrer dans sa chambre ».</p></li>
   <li><span class="qui">CHSLD des Érables → fiche de Jean Dupont → Proches → Marie</span>
     <p>Avis à la famille, catégorie « Mouvements » : « Retour confirmé ce jour ». Sur le téléphone, Arrimo Famille montre le message et les étapes du retour, sans aucun détail clinique.</p></li>
+  <li><span class="qui">Hôpital B → « NSA » → « Indicateurs du parcours vers l’hébergement »</span>
+    <p>Par semaine et par ressource : nouveaux NSA, délai pour trouver une place, refus et motifs, lits libérés ; export CSV. Codes et nombres seulement.</p></li>
 </ol>
 <h2>Second temps : préhospitalier (du malaise au CHSLD au retour du résident)</h2>
 <p><b>Données fictives seulement.</b> Établissements existants de la démonstration (CHSLD des Érables, Hôpital B — Mont-Clair), « CCS de démonstration » et « Ambulances de démonstration » (unités DM-101 à DM-103). Mot de passe : celui de la démonstration (jamais affiché ici). Ouvrez chaque compte dans une fenêtre séparée ; l'ambulance sur un téléphone (<code>/secours</code>).</p>
@@ -86,13 +90,15 @@
 <p><b>Fictitious data only.</b> Two windows: Hospital B (<code>hopital.b@demo.arrimo</code>) and CHSLD des Érables (<code>coordination.erables@chsld.example.invalid</code>); Arrimo Family on a phone (<code>/proches</code>, <code>marie.dupont@example.invalid</code>).</p>
 <ol class="etapes">
   <li><span class="qui">Hospital B → Beds, then ALC</span><p>Bed board (occupied, free, closed for lack of staff); ALC rate against the 8% target, three patients waiting.</p></li>
-  <li><span class="qui">Hospital B → ALC → “Refer to a CHSLD”</span><p>CHSLDs nearest first with free rooms; choose CHSLD des Érables, documents, “Send the request”. No clinical data; the CHSLD decides on the room.</p></li>
+  <li><span class="qui">Hospital B → ALC → Lucienne Tremblay (MED-201A) → Needs, then Places</span><p>Need categories, no diagnosis (wheelchair, secure unit, family in Val-des-Pins, 1st choice: Érables). “Places” suggests Érables with a score and a one-sentence reason, and shows why Saint-Laurent is left out (no secure unit declared). Arrimo suggests; the team decides.</p></li>
+  <li><span class="qui">“Send a request” (or “Request a place”)</span><p>The usual window opens with Érables preselected; documents, “Send the request”. No clinical data; the CHSLD decides on the room.</p></li>
   <li><span class="qui">CHSLD des Érables → Placement requests</span><p>Verify, offer a room (reserved), accept.</p></li>
-  <li><span class="qui">Hospital B → ALC → Discharges to CHSLDs</span><p>“Confirm departure”: the bed goes to cleaning. The CHSLD cannot confirm the arrival before.</p></li>
+  <li><span class="qui">Hospital B → ALC → Care-setting place requests</span><p>“Confirm the place and plan the departure” with the patient or family (time, transport, documents, family informed): the bed becomes “to be freed”. Then “Confirm departure”: the bed goes to cleaning. The CHSLD cannot confirm the arrival before.</p></li>
   <li><span class="qui">CHSLD des Érables → Admissions and discharges</span><p>“Confirm arrival”; Hospital B sees “Arrived at the CHSLD”.</p></li>
   <li><span class="qui">Hospital B → CHSLD liaison → Jean Dupont (R-00001)</span><p>Prepare the return; CHSLD accepts, completes the room preparation task (Staff and tasks): the room is ready automatically.</p></li>
   <li><span class="qui">Hospital B, then CHSLD</span><p>Confirm departure; confirm arrival; reinstate in his room.</p></li>
   <li><span class="qui">CHSLD → Jean Dupont → Family → Marie</span><p>Message, “Movements” category: “Return confirmed today”. Arrimo Family shows the message and the return steps, no clinical detail.</p></li>
+  <li><span class="qui">Hospital B → ALC → Care-setting pathway indicators</span><p>By week and by care setting: new ALC, time to a place, refusals and reasons, beds freed; CSV export. Codes and numbers only.</p></li>
 </ol>
 <h2>Second part: pre-hospital (from a resident’s malaise at the CHSLD to the return home)</h2>
 <p><b>Fictitious data only.</b> Existing demo facilities (CHSLD des Érables, Hospital B — Mont-Clair), “demo CCS” and “demo ambulances” (units DM-101 to DM-103). Password: the demo password (never shown here). The ambulance on a phone (<code>/secours</code>). Arrimo informs; it never chooses a destination, and nothing is assigned or dispatched in Arrimo.</p>

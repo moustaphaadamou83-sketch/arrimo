@@ -24,6 +24,8 @@
 
 **Lot B (17 nov. 2026) :** les profils des ressources et les places à venir ne contiennent aucune donnée de patient. Les places compatibles ne sont consultables que par l'équipe de l'hôpital du patient ; la réponse dit « besoins couverts » sans les nommer, et rien n'est transmis aux ressources avant une demande envoyée par un humain.
 
+**Lots C et D (17 nov. 2026) :** une demande venue d'un hôpital porte des codes et des dates seulement (motif de refus en liste fermée, documents transmis, mode de transport, heure de départ, famille avisée) ; le texte libre de refus est ignoré pour ces demandes. Les indicateurs NSA ne contiennent aucune référence de patient. L'avis aux proches passe par les autorisations existantes d'Arrimo Famille (catégorie « Mouvements »), sans détail médical.
+
 **Journaux immuables :** ils ne peuvent pas être effacés. Il faut donc concilier cette règle avec les durées de conservation et le droit de rectification ; c'est à trancher avec l'avocat.
 
 ## 2. Services externes

@@ -2155,14 +2155,19 @@ async function vueNsa() {
   const etapeSortie = (o) => {
     if (o.statut === 'admise') return S('sortie_arrivee', { quand: o.arrivee_le ? heure(o.arrivee_le) : '' });
     if (o.depart_hopital_le) return S('sortie_partie', { quand: heure(o.depart_hopital_le) });
-    if (o.statut === 'acceptee') return S('sortie_acceptee');
-    if (['refusee', 'annulee'].includes(o.statut)) return S('sortie_close');
-    return S('sortie_attente');
+    if (o.statut === 'acceptee' && o.acceptation_equipe_le) return S('sortie_organisee', { quand: heure(o.depart_prevu_le), transport: t(`nsa.transport_${o.transport_mode}`) })
+      + (o.famille_avisee_le ? ` · ${S('famille_avisee')}` : '');
+    if (o.statut === 'acceptee') return S('sortie_a_confirmer');
+    if (o.statut === 'refusee') return S('sortie_refusee', { motif: o.motif_refus_code ? t(`motifs_refus_hebergement.${o.motif_refus_code}`) : '—' });
+    if (o.statut === 'annulee') return S('sortie_close');
+    return o.reponse_heures == null ? S('sortie_attente_depuis', { duree: depuis(o.cree_le) }) : S('sortie_attente');
   };
   const sectionSorties = sorties && sorties.length ? `<h3>${S('sorties_titre')}</h3><p class="note">${S('sorties_aide')}</p><div class="liste">${sorties.map((o) => `<div class="item" data-sortie="${esc(o.numero)}"><div>
-      <b class="num">${esc(o.numero)}</b> · ${S('lit')} <span class="num">${esc(o.lit || '—')}</span> · <span class="num">${esc(o.patient_ref)}</span> → ${esc(o.chsld)}
-      <div><span class="badge">${esc(t(`chsld.demande_statut.${o.statut}`))}</span> · ${etapeSortie(o)}</div></div>
-      ${o.statut === 'acceptee' && !o.depart_hopital_le ? `<div class="actions"><button class="btn pri" data-depart-chsld="${o.id}" data-version="${o.version}" data-num="${esc(o.numero)}">${S('confirmer_depart')}</button></div>` : ''}</div>`).join('')}</div>` : '';
+      <b class="num">${esc(o.numero)}</b> · ${S('lit')} <span class="num">${esc(o.lit || '—')}</span> · <span class="num">${esc(o.patient_ref)}</span> → ${esc(o.chsld)}${o.transitoire ? ` <span class="badge">${S('transitoire_badge')}</span>` : ''}
+      <div><span class="badge">${esc(t(`chsld.demande_statut.${o.statut}`))}</span> · ${etapeSortie(o)}${o.reponse_heures != null ? ` <span class="note">· ${S('reponse_en', { duree: duree(Math.round(o.reponse_heures * 60)) })}</span>` : ''}</div></div>
+      ${o.statut === 'acceptee' && !o.depart_hopital_le && !o.acceptation_equipe_le && !estEntretien() ? `<div class="actions"><button class="btn pri" data-confirmer-place="${o.id}">${S('confirmer_place')}</button></div>` : ''}
+      ${o.statut === 'acceptee' && !o.depart_hopital_le && o.acceptation_equipe_le ? `<div class="actions"><button class="btn" data-confirmer-place="${o.id}">${S('modifier_depart')}</button><button class="btn pri" data-depart-chsld="${o.id}" data-version="${o.version}" data-num="${esc(o.numero)}">${S('confirmer_depart')}</button></div>` : ''}
+      ${o.statut === 'refusee' && o.patient_present && o.lit_id && !enCours.has(`${o.lit}|${o.patient_ref}`) && !estEntretien() ? `<div class="actions"><button class="btn pri" data-suivante="${o.lit_id}" data-code="${esc(o.lit)}">${S('proposer_suivante')}</button></div>` : ''}</div>`).join('')}</div>` : '';
   v.innerHTML = `<div class="entete"><div><h2>${S('titre', { etab: etabCtx().nom })}</h2><p>${S('intro')}</p></div></div>
     <div class="tuiles">
       ${tuile({ lbl: t('nsa.taux'), val: pct(n.taux), etat: etatSeuil(n.taux, n.cible, n.cible * 1.5), note: S('cible', { n: pct(n.cible) }) })}
@@ -2194,6 +2199,9 @@ async function vueNsa() {
   v.querySelectorAll('[data-orient]').forEach((sel) => { sel.onchange = () => agir(sel, () => api('PUT', `/lits/${sel.dataset.orient}/nsa`, { orientation: sel.value }), t('nsa.orient_ok')); });
   v.querySelectorAll('[data-retirer]').forEach((b) => { b.onclick = () => agir(b, () => api('DELETE', `/lits/${b.dataset.retirer}/nsa`), t('nsa.retire_ok')); });
   v.querySelectorAll('[data-vers-chsld]').forEach((b) => { b.onclick = () => orienterVersChsld(Number(b.dataset.versChsld), b.dataset.code); });
+  v.querySelectorAll('[data-confirmer-place]').forEach((b) => { b.onclick = () => confirmerPlace((sorties || []).find((o) => String(o.id) === b.dataset.confirmerPlace)); });
+  v.querySelectorAll('[data-suivante]').forEach((b) => { b.onclick = () => placesNsa(Number(b.dataset.suivante), b.dataset.code); });
+  panneauIndicateursNsa(v);
   v.querySelectorAll('[data-depart-chsld]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/nsa/orientations-chsld/${b.dataset.departChsld}/depart`, { version: Number(b.dataset.version) }), t('nsa.depart_ok', { numero: b.dataset.num })); });
 }
 
@@ -2202,11 +2210,12 @@ async function orienterVersChsld(litId, code, choisi = null) {
   const S = (k, vars) => esc(t(`nsa.${k}`, vars));
   let dest;
   try { dest = await api('GET', `/nsa/chsld?etablissement_id=${etat.ctx}`); } catch (e) { toast(e.message, true); return; }
-  const DOCS = ['formulaire_mecanisme', 'identite', 'carte_assurance_maladie', 'mandat_representant', 'consentement_hebergement'];
+  const docsDe = (id) => (dest.find((d) => d.id === Number(id)) || dest[0])?.documents || [];
+  const casesDocs = (id) => docsDe(id).map((x) => `<label class="case"><input type="checkbox" data-oc-doc value="${x}" checked> ${esc(t(`chsld.document.${x}`))}</label>`).join('');
   modale(t('nsa.orienter_titre', { lit: code }), dest.length ? `<p class="note">${S('orienter_aide')}</p>
-      <label class="lbl" for="oc-chsld">${S('chsld')}</label><select id="oc-chsld">${dest.map((d) => `<option value="${d.id}"${d.id === choisi ? ' selected' : ''}>${esc(d.nom)} · ${S('chsld_option', { km: d.distance_km, n: d.places_libres })}</option>`).join('')}</select>
+      <label class="lbl" for="oc-chsld">${S('chsld')}</label><select id="oc-chsld">${dest.map((d) => `<option value="${d.id}"${d.id === choisi ? ' selected' : ''}>${esc(d.nom)}${d.type && d.type !== 'CHSLD' ? ` (${esc(d.type)})` : ''} · ${S('chsld_option', { km: d.distance_km, n: d.places_libres })}</option>`).join('')}</select>
       <label class="lbl" for="oc-arrivee">${S('arrivee_souhaitee')}</label><input id="oc-arrivee" type="date">
-      <p class="lbl">${S('documents_transmis')}</p><div class="cases">${DOCS.map((x) => `<label class="case"><input type="checkbox" data-oc-doc value="${x}" checked> ${esc(t(`chsld.document.${x}`))}</label>`).join('')}</div>
+      <p class="lbl">${S('documents_transmis')}</p><div class="cases" id="oc-docs">${casesDocs(choisi || dest[0]?.id)}</div>
       <details><summary>${S('identite_titre')}</summary><p class="note">${S('identite_aide')}</p>
         <div class="ligne"><input id="oc-prenom" placeholder="${S('prenom')}" aria-label="${S('prenom')}"><input id="oc-nom" placeholder="${S('nom')}" aria-label="${S('nom')}"><input id="oc-dn" type="date" aria-label="${S('date_naissance')}"></div></details>`
     : `<p>${S('aucun_chsld')}</p>`,
@@ -2214,6 +2223,7 @@ async function orienterVersChsld(litId, code, choisi = null) {
     chsld_id: Number($('#oc-chsld').value), arrivee_souhaitee: $('#oc-arrivee').value || null, documents: [...document.querySelectorAll('[data-oc-doc]:checked')].map((x) => x.value),
     prenom: $('#oc-prenom').value || undefined, nom: $('#oc-nom').value || undefined, date_naissance: $('#oc-dn').value || undefined,
   }), (r) => t('nsa.orienter_ok', { numero: r.numero, chsld: r.chsld }))) !== null || false }] : [])]);
+  if ($('#oc-chsld')) $('#oc-chsld').onchange = () => { $('#oc-docs').innerHTML = casesDocs($('#oc-chsld').value); };
 }
 
 /** Panneau de détails d'un lit ALC : informations existantes et événements du journal depuis le début du séjour. */
@@ -2301,6 +2311,63 @@ async function placesNsa(id, code) {
   document.querySelectorAll('#modale [data-transmettre]').forEach((b) => { b.onclick = () => { $('#modale').hidden = true; orienterVersChsld(id, code, Number(b.dataset.transmettre)); }; });
 }
 
+/**
+ * La ressource a accepté : l'équipe confirme la place avec l'usager ou la famille et organise le départ
+ * (date et heure, transport, documents transmis, famille avisée). Le lit passe « à libérer » à l'heure prévue.
+ */
+function confirmerPlace(o) {
+  if (!o) return;
+  const S = (k, vars) => esc(t(`nsa.${k}`, vars));
+  const local = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  const defaut = o.depart_prevu_le ? new Date(o.depart_prevu_le) : (() => { const d = new Date(Date.now() + 86400000); d.setHours(10, 0, 0, 0); return d; })();
+  const codes = (o.documents || []).map((x) => x.code);
+  modale(t('nsa.confirmer_place_titre', { numero: o.numero, dest: o.chsld }), `<p class="note">${S('cp_aide')}</p>
+    <label class="case"><input type="checkbox" id="cp-accord"${o.acceptation_equipe_le ? ' checked' : ''}> ${S('cp_accord')}</label>
+    <div class="ligne"><div class="champ"><label class="lbl" for="cp-depart">${S('cp_depart')}</label><input id="cp-depart" type="datetime-local" value="${local(defaut)}" min="${local(new Date())}"></div>
+      <div class="champ"><label class="lbl" for="cp-transport">${S('cp_transport')}</label><select id="cp-transport">${['ambulance', 'transport_adapte', 'famille', 'autre'].map((x) => `<option value="${x}"${o.transport_mode === x ? ' selected' : ''}>${S(`transport_${x}`)}</option>`).join('')}</select></div></div>
+    <fieldset class="cases"><legend class="lbl">${S('cp_documents')}</legend>${codes.map((x) => `<label class="case"><input type="checkbox" data-cp-doc value="${x}"${!o.acceptation_equipe_le || (o.documents_transmis || []).includes(x) ? ' checked' : ''}> ${esc(t(`chsld.document.${x}`))}</label>`).join('')}</fieldset>
+    <label class="case"><input type="checkbox" id="cp-famille"${o.famille_avisee_le ? ' checked' : ''}> ${S('cp_famille')}</label>
+    <p class="note">${S('cp_transport_aide')}</p>`,
+  [{ label: t('general.annuler') }, { label: t('nsa.confirmer_place'), pri: true, run: async () => {
+    if (!$('#cp-accord').checked) { toast(t('nsa.cp_accord_requis'), true); return false; }
+    return (await agir(null, () => api('POST', `/nsa/orientations-chsld/${o.id}/confirmer-place`, { version: o.version, usager_famille_d_accord: true,
+      depart_prevu_le: new Date($('#cp-depart').value).toISOString(), transport_mode: $('#cp-transport').value,
+      documents_transmis: [...document.querySelectorAll('[data-cp-doc]:checked')].map((x) => x.value), famille_avisee: $('#cp-famille').checked }), t('nsa.cp_ok', { numero: o.numero }))) !== null || false;
+  } }]);
+}
+
+/** Indicateurs du parcours NSA (par semaine, par ressource, motifs de refus) : codes et nombres seulement. */
+async function panneauIndicateursNsa(v) {
+  if (estEntretien()) return;
+  const S = (k, vars) => esc(t(`nsa.${k}`, vars));
+  let i;
+  try { i = await api('GET', `/nsa/indicateurs?etablissement_id=${etat.ctx}&semaines=8`); } catch { return; }
+  const val = (x) => (x == null ? '—' : esc(nb(x)));
+  const sem = (d) => new Date(`${d}T12:00:00Z`).toLocaleDateString(locale(), { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const motifs = Object.entries(i.motifs_refus);
+  v.insertAdjacentHTML('beforeend', `<details class="panneau-c" id="nsa-indicateurs"><summary><b>${S('ind_titre')}</b> <span class="note">${S('ind_resume', { n: i.semaines, nouveaux: i.totaux.nouveaux_nsa, sorties: i.totaux.sorties, lits: i.totaux.lits_liberes })}</span></summary>
+    <p class="note">${S('ind_aide')}</p>
+    <div class="tuiles">${tuile({ lbl: t('nsa.ind_en_cours'), val: nb(i.en_cours.patients), note: S('ind_plus_long', { n: i.en_cours.plus_long }) })}
+      ${tuile({ lbl: t('nsa.ind_jours'), val: nb(i.en_cours.jours), note: S('cumul') })}
+      ${tuile({ lbl: t('nsa.ind_lits'), val: nb(i.totaux.lits_liberes), note: S('ind_sur', { n: i.semaines }) })}
+      ${tuile({ lbl: t('nsa.ind_refus'), val: nb(i.totaux.refus), note: S('ind_sur_demandes', { n: i.totaux.demandes }) })}</div>
+    <h4>${S('ind_par_semaine')}</h4><div class="tableau"><table><thead><tr><th>${S('ind_semaine')}</th><th>${S('ind_nouveaux')}</th><th>${S('ind_sorties')}</th><th>${S('ind_jours_moyens')}</th><th>${S('ind_demandes')}</th><th>${S('ind_refus')}</th><th>${S('ind_delai')}</th><th>${S('ind_lits')}</th></tr></thead>
+      <tbody>${i.par_semaine.map((r) => `<tr><td class="num">${esc(sem(r.semaine))}</td><td class="num">${val(r.nouveaux_nsa)}</td><td class="num">${val(r.sorties)}</td><td class="num">${val(r.jours_nsa_moyens)}</td><td class="num">${val(r.demandes)}</td><td class="num">${val(r.refus)}</td><td class="num">${val(r.delai_place_jours)}</td><td class="num">${val(r.lits_liberes)}</td></tr>`).join('')}</tbody></table></div>
+    <h4>${S('ind_par_ressource')}</h4>${i.par_ressource.length ? `<div class="tableau"><table><thead><tr><th>${S('ind_ressource')}</th><th>${S('ind_demandes')}</th><th>${S('ind_proposees')}</th><th>${S('ind_refus')}</th><th>${S('ind_admissions')}</th><th>${S('ind_reponse')}</th></tr></thead>
+      <tbody>${i.par_ressource.map((r) => `<tr><td>${esc(r.nom)} <span class="note">${esc(r.type)}</span></td><td class="num">${val(r.demandes)}</td><td class="num">${val(r.places_proposees)}</td><td class="num">${val(r.refus)}</td><td class="num">${val(r.admissions)}</td><td class="num">${r.reponse_mediane_h == null ? '—' : esc(duree(Math.round(r.reponse_mediane_h * 60)))}</td></tr>`).join('')}</tbody></table></div>` : `<p class="note">${S('ind_aucune_demande')}</p>`}
+    <h4>${S('ind_motifs')}</h4>${motifs.length ? `<ul class="historique-nsa">${motifs.map(([k, n]) => `<li>${esc(k === 'non_precise' ? t('nsa.ind_non_precise') : t(`motifs_refus_hebergement.${k}`))} : <b class="num">${nb(n)}</b></li>`).join('')}</ul>` : `<p class="note">${S('ind_aucun_refus')}</p>`}
+    <div class="actions"><button class="btn" type="button" id="nsa-ind-csv">${icone('download')}${S('ind_exporter')}</button></div></details>`);
+  $('#nsa-ind-csv').onclick = async () => {
+    try {
+      const r = await fetch(`/api/nsa/indicateurs.csv?etablissement_id=${etat.ctx}&semaines=8`, { headers: { Authorization: `Bearer ${etat.token}`, 'X-Langue': langue } });
+      if (!r.ok) throw new Error(t('indicateurs.export_impossible'));
+      const url = URL.createObjectURL(await r.blob()); const a2 = document.createElement('a');
+      a2.href = url; a2.download = `arrimo-nsa-${etabCtx().nom.replace(/\W+/g, '-')}.csv`; document.body.appendChild(a2); a2.click(); a2.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    } catch (e) { toast(e.message, true); }
+  };
+}
+
 /* ---------------- Tuiles d'indicateurs ---------------- */
 /** État d'un indicateur où « plus bas est mieux » : rien sous la cible, « attention » au-delà, « critique » au-delà du seuil critique. */
 const etatSeuil = (val, cible, critique) => (val == null || cible == null ? null : critique != null && val >= critique ? 'critique' : val > cible ? 'attention' : null);
@@ -2326,7 +2393,7 @@ async function vueIndicateurs() {
   const I = (k, vars) => esc(t(`indicateurs.${k}`, vars));
   const c = i.cibles; const p = i.precedent; const j = i.periode_jours;
   const cibleMax = (v) => t('indicateurs.cible_max', { v });
-  const motifs = Object.entries(i.transferts.refus_par_motif).map(([k, x]) => `${t(`motifs_refus.${k}`)} ${nb(x)}`).join(', ');
+  const motifs = Object.entries(i.transferts.refus_par_motif).map(([k, x]) => `${t(`motifs_refus_hebergement.${k}`)} ${nb(x)}`).join(', ');
   const niveauEtat = { vert: null, jaune: 'attention', orange: 'attention', rouge: 'critique' }[i.alerte.niveau];
   const capacite = [
     tuile({ lbl: t('indicateurs.occupation'), val: pct(i.capacite.occupation_patients), note: I('occupation_note', { occupes: i.capacite.occupes, libres: i.capacite.libres, dotes: i.capacite.dotes }),

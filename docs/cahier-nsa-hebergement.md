@@ -177,6 +177,16 @@ Chaque lot : `npm test` vert, revue, puis le « oui » de Moustafa avant toute p
 - **Envoi** : « Transmettre une demande » ouvre la fenêtre habituelle avec le milieu présélectionné ; l'humain confirme.
 - **Limite connue** : la municipalité de la famille est localisée par les établissements connus d'Arrimo qui s'y trouvent ; sinon la distance est mesurée depuis l'hôpital (dit à l'écran). Un vrai géocodage viendra avec le pilote.
 
+## Lots C et D livrés (branche `nsa-hebergement-lotCD`)
+
+- **Demande à tout milieu** (CHSLD, RPA, RI, RTF, maison des aînés) : documents selon le circuit d'admission (mécanisme d'accès, ou admission directe avec contrat ou bail) ; le milieu choisi par l'humain fixe l'orientation (historisée), sauf place transitoire acceptée par l'équipe.
+- **Réponse de la ressource** : délai de réponse mesuré à partir des étapes ; refus avec un motif obligatoire choisi dans une liste fermée (capacité insuffisante, besoin non couvert, place plus disponible, dossier incomplet, choix de l'usager ou de la famille, autre) ; aucun texte libre pour une demande venue d'un hôpital. L'hôpital voit le motif et « Proposer la place suivante » rouvre les places compatibles (pénalité affichée pour le milieu qui a refusé).
+- **Confirmation de la place** (décision de Moustafa) : après l'acceptation de la ressource, l'équipe confirme avec l'usager ou la famille et organise le départ (date et heure, transport, documents transmis, famille avisée). Le lit d'hôpital passe « à libérer » (congé prévu à cette heure) ; la ressource est avertie ; les proches autorisés (catégorie « Mouvements ») reçoivent un avis Arrimo Famille, sans information médicale. Le départ n'est possible qu'après cette confirmation.
+- **Indicateurs** (onglet NSA) : par semaine (nouveaux NSA, sorties, jours NSA moyens, demandes, refus, délai pour une place, lits libérés), par ressource (demandes, places proposées, refus, admissions, réponse médiane), motifs de refus ; export CSV en français ou en anglais. Codes et nombres seulement.
+- **Démonstration** : `db/demo-ressources-nsa.js` (démo et recette seulement, rejouable) déclare les profils des milieux existants, une place à venir aux Érables, et les besoins fictifs de Lucienne Tremblay et Roger Lavoie. Les RI, RTF et maisons des aînés de démonstration se créent depuis SH, comme les CHSLD : le script leur donne ensuite un profil.
+- **Epic** : note `docs/nsa-epic-correspondance.md` (hypothèses à valider avec l'équipe informatique ; aucun code).
+- **Guide** : `/demo-guide` et `GUIDE-DEMO.md` mis à jour.
+
 ## Questions ouvertes pour Moustafa
 
 1. **Qui accepte la place proposée ?** Aujourd'hui, c'est la ressource qui clique « Proposition acceptée ». Faut-il une étape « acceptée par l'équipe et l'usager » côté hôpital ? Le plan prévoit `acceptation_equipe_le`.

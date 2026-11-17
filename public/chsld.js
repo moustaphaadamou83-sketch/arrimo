@@ -405,6 +405,7 @@
       ${liste.length ? `<div class="liste">${liste.map((d) => `<div class="item"><div><b class="num">${esc(d.numero)}</b> · ${esc(d.prenom)} ${esc(d.nom)} · ${C(`provenance.${d.provenance}`)}${d.reference_externe ? ` · ${esc(d.reference_externe)}` : ''}
           <div>${pastille(d.statut, t(`chsld.demande_statut.${d.statut}`))} ${d.type_nom ? `· ${esc(d.type_nom)}` : ''} ${d.arrivee_souhaitee ? `· ${C('demandes.arrivee')} ${esc(jour(d.arrivee_souhaitee))}` : ''} ${d.lit_propose ? `· ${esc(d.lit_propose)}` : ''} ${d.resident_ref ? `· ${esc(d.resident_ref)}` : ''}</div>
           ${d.hopital_nom ? `<div class="note">${C('demandes.venant_de', { hopital: d.hopital_nom })}${d.statut === 'acceptee' ? ` · <b>${C(d.depart_hopital_le ? 'demandes.depart_confirme' : 'demandes.depart_attendu')}</b>` : ''}</div>` : ''}
+          ${d.hopital_nom && d.acceptation_equipe_le && !d.depart_hopital_le ? `<div class="note">${C('demandes.place_confirmee', { quand: dateHeure(d.depart_prevu_le), transport: t(`nsa.transport_${d.transport_mode}`) })}</div>` : ''}
           <div class="cases">${d.documents.map((x) => gerer() ? `<label class="case"><input type="checkbox" data-doc="${d.id}" data-code="${x.code}" data-version="${d.version}"${x.recu ? ' checked' : ''}> ${C(`document.${x.code}`)}</label>` : `<span class="note">${C(`document.${x.code}`)} : ${C(x.recu ? 'demandes.recu' : 'demandes.manquant')}</span>`).join('')}</div></div>
           ${gerer() ? `<div class="actions">${d.statut === 'recue' ? `<button class="btn" data-dh="verifier" data-id="${d.id}" data-version="${d.version}">${C('demandes.verifier')}</button>` : ''}
             ${d.statut === 'en_verification' ? `<button class="btn pri" data-dh="proposer_place" data-id="${d.id}" data-version="${d.version}">${C('demandes.proposer')}</button>` : ''}
@@ -420,6 +421,12 @@
     v.querySelectorAll('[data-doc]').forEach((c) => { c.onchange = () => agir(null, () => api('POST', `/chsld/demandes/${c.dataset.doc}/action`, { action: 'document', code: c.dataset.code, recu: c.checked, version: Number(c.dataset.version) })); });
     v.querySelectorAll('[data-dh]').forEach((b) => { b.onclick = async () => {
       const corps = { action: b.dataset.dh, version: Number(b.dataset.version) };
+      if (b.dataset.dh === 'refuser') {
+        // Motif choisi dans une liste fermée : jamais de texte libre (aucune information clinique)
+        const MOTIFS = ['capacite_insuffisante', 'besoin_non_couvert', 'place_plus_disponible', 'dossier_incomplet', 'choix_usager', 'autre'];
+        return modale(t('chsld.demandes.refus_titre'), `<p class="note">${C('demandes.refus_aide')}</p>${sel('dh-motif', C('demandes.refus_motif'), MOTIFS.map((x) => [x, t(`motifs_refus_hebergement.${x}`)]))}`,
+          [{ label: t('general.annuler') }, { label: t('chsld.demandes.refuser'), pri: true, run: async () => (await agir(null, () => api('POST', `/chsld/demandes/${b.dataset.id}/action`, { ...corps, motif_code: $('#dh-motif').value }), t('chsld.actions.ok'))) !== null || false }]);
+      }
       if (b.dataset.dh === 'proposer_place') {
         const libres = await placesLibres();
         return modale(t('chsld.demandes.proposer'), libres.length ? sel('dh-lit', C('actions.choisir_place'), libres.map((p) => [p.id, `${p.unite} · ${p.code}`])) : `<p>${C('actions.aucune_place')}</p>`,
