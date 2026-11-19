@@ -198,6 +198,16 @@ window.ARRIMO_I18N.en.aide = {
         ['Step H12 is missing', 'First add the missing time with “Correct the time”.'],
       ],
     },
+    'transports-planifies': {
+      nom: 'Non-urgent transport',
+      but: 'Book a non-urgent transport and follow its confirmation, pick-up and arrival.',
+      gestes: [
+        'Click “Book a transport”, choose the bed to free (or enter the reference), the reason, the destination, the time slot and the vehicle.',
+        'When the carrier confirms, the bed becomes “awaiting transport” at the confirmed time; at pick-up, it goes to cleaning.',
+        'Book the day before if possible; you can cancel until the patient is picked up.',
+      ],
+      erreurs: [['Invalid time slot', 'The end must follow the start, within 12 h.']],
+    },
     vigilance: {
       nom: 'Discharges and alerts',
       but: 'See planned departures bed by bed (status, time and source) and explained blockages: origin, threshold, fact or hypothesis, suggested action and owner.',

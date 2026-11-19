@@ -628,7 +628,7 @@ async function rafraichir() {
     await Promise.all([e ? majCompteurs() : null, ({
       copilote: vueCopilote, reseau: vueReseau, national: vueNational, lits: vueLits, urgence: vueUrgence, admissions: vueAdmissions, transferts: vueTransferts,
       nettoyage: vueNettoyage, vigilance: vueVigilance, nsa: vueNsa, indicateurs: vueIndicateurs, journal: vueJournal, params: vueParams,
-      admin: vueAdmin, compte: vueCompte, support:vueSupportClient, patients: vuePatients, continuite: vueContinuite, ...(window.ArrimoChsld?.vues || {}), ...(window.ArrimoSecours?.vues || {}), ...(window.ArrimoChrono?.vues || {}),
+      admin: vueAdmin, compte: vueCompte, support:vueSupportClient, patients: vuePatients, continuite: vueContinuite, ...(window.ArrimoChsld?.vues || {}), ...(window.ArrimoSecours?.vues || {}), ...(window.ArrimoChrono?.vues || {}), ...(window.ArrimoTransportPlanifie?.vues || {}),
     })[etat.vue]()]);
     poserMenuParametres();
     majInfosLieu();
@@ -658,7 +658,7 @@ setInterval(() => {
   if (etat.token && etat.moi && !fluxApp && window.ArrimoFlux) {
     fluxApp = window.ArrimoFlux.ecouter(() => etat.token, () => {
       window.ArrimoSecours?.veille?.();
-      if ($('#modale').hidden && document.visibilityState === 'visible' && ['secours', 'chrono', 'c-urgences', 'c-mouvements', 'liaison', 'urgence'].includes(etat.vue)) rafraichir();
+      if ($('#modale').hidden && document.visibilityState === 'visible' && ['secours', 'chrono', 'transports-planifies', 'c-urgences', 'c-mouvements', 'liaison', 'urgence'].includes(etat.vue)) rafraichir();
     });
     fluxApp.jeton = etat.token;
   }

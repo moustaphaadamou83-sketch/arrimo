@@ -310,6 +310,7 @@ const MESSAGES = {
   prealerte_close: "Cette préalerte est close : aucune action n’est plus possible.",
   prealerte_statut_incompatible: "Cette étape n’est pas possible à ce stade de la préalerte.",
   role_secours: "Votre rôle donne accès aux écrans de secours seulement.",
+  plage_invalide: "Plage invalide : la fin doit suivre le début, sans dépasser 12 h, et pas dans le passé.",
   rapatriement_deja_propose: "Un rapatriement est déjà proposé pour ce transfert.",
   rapatriement_aucune_place: "Aucun lit compatible libre et confirmé dans la région d’origine : rien n’est proposé pour l’instant.",
   rapatriement_introuvable: "Rapatriement introuvable.",

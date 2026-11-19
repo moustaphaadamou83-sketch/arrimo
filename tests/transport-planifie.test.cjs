@@ -1,0 +1,94 @@
+'use strict';
+/**
+ * Transport non urgent (20 nov. 2026) : demande sans coordination, réservation tardive signalée, plage confirmée par le transporteur,
+ * refus motivé (liste fermée), lit « à libérer » puis libéré à la prise en charge, le transporteur ne voit que la référence et les lieux,
+ * pas deux acceptations, horodatages, module non activé refusé, FR/EN.
+ */
+const test = require('node:test');
+const assert = require('node:assert');
+const { demarrerServeur } = require('./serveur-test.cjs');
+const { creerPool } = require('../src/db');
+const { creerApp } = require('../src/app');
+const { viderBase } = require('../db/vider');
+const { seed, MOT_DE_PASSE_DEMO } = require('../db/seed');
+const { hacher } = require('../src/auth');
+
+let pool; let serveur; let base; const tokens = {}; const ids = {};
+async function appel(qui, methode, chemin, corps) {
+  const r = await fetch(`${base}/api${chemin}`, { method: methode, headers: { 'Content-Type': 'application/json', ...(qui ? { Authorization: `Bearer ${tokens[qui]}` } : {}) }, body: corps ? JSON.stringify(corps) : undefined });
+  return { statut: r.status, corps: await r.json().catch(() => null) };
+}
+async function connecter(q, email) { const r = await appel(null, 'POST', '/connexion', { email, mot_de_passe: MOT_DE_PASSE_DEMO }); assert.strictEqual(r.statut, 200, q); tokens[q] = r.corps.token; }
+const dans = (h) => new Date(Date.now() + h * 3600000).toISOString();
+const demande = (b) => appel('tremblay', 'POST', '/transports-planifies', { etablissement_id: ids.mb, organisation_id: ids.amb, motif_transport: 'retour_domicile', destination_libelle: 'Sherbrooke',
+  plage_debut: dans(24), plage_fin: dans(25), type_vehicule: 'transport_adapte', infos: { accessibilite: ['fauteuil'], accompagnateur: true }, ...b });
+
+test.before(async () => {
+  require('./routeur-fictif.cjs').activer();
+  pool = creerPool(process.env.TEST_DATABASE_URL); await viderBase(pool); await seed(pool, { silencieux: true });
+  serveur = await demarrerServeur(creerApp(pool)); base = `http://127.0.0.1:${serveur.address().port}`;
+  const e = (await pool.query("SELECT id, config_id FROM etablissements WHERE code = 'MB'")).rows[0]; ids.mb = e.id;
+  ids.sl = (await pool.query("SELECT id FROM etablissements WHERE code = 'SL'")).rows[0].id;
+  await pool.query(`UPDATE etablissements SET modules = COALESCE(modules, '{}'::jsonb) || '{"transport_planifie": true}' WHERE id = $1`, [ids.mb]);
+  ids.amb = (await pool.query("INSERT INTO organisations_secours (code, nom, type, profils, config_id) VALUES ('TA-1', 'Transport adapté fictif', 'transport_adapte', '{ambulance}', $1) RETURNING id", [e.config_id])).rows[0].id;
+  ids.u1 = (await pool.query("INSERT INTO unites_secours (organisation_id, numero, type_vehicule) VALUES ($1, 'TA-01', 'transport_adapte') RETURNING id", [ids.amb])).rows[0].id;
+  const u = (await pool.query("INSERT INTO utilisateurs (email, nom, mot_de_passe_hash, role) VALUES ('ta@demo.arrimo', 'Transporteur fictif', $1, 'superviseur_secours') RETURNING id", [hacher(MOT_DE_PASSE_DEMO)])).rows[0].id;
+  await pool.query('INSERT INTO utilisateur_organisations VALUES ($1, $2)', [u, ids.amb]);
+  ids.lit = (await pool.query("SELECT id, patient_ref FROM lits WHERE etablissement_id = $1 AND etat = 'occupe' AND patient_ref IS NOT NULL ORDER BY id LIMIT 1", [ids.mb])).rows[0];
+  await connecter('tremblay', 'tremblay@demo.arrimo'); await connecter('bouchard', 'bouchard@demo.arrimo'); await connecter('ta', 'ta@demo.arrimo');
+});
+test.after(async () => { serveur?.close(); await pool?.end(); });
+
+test('demande sans coordination : contrôles, module non activé refusé, réservation tardive signalée', async () => {
+  assert.strictEqual((await appel('bouchard', 'POST', '/transports-planifies', { etablissement_id: ids.sl, organisation_id: ids.amb, motif_transport: 'retour_domicile', destination_libelle: 'Montréal', plage_debut: dans(24), plage_fin: dans(25), type_vehicule: 'ambulance' })).corps.code, 'module_desactive');
+  assert.strictEqual((await demande({ motif_transport: 'autre' })).statut, 400);
+  assert.strictEqual((await demande({ plage_fin: dans(23) })).corps.code, 'plage_invalide');
+  assert.strictEqual((await demande({ infos: { accessibilite: ['fusee'] } })).statut, 400);
+  const tard = await demande({ reference: 'P-88001', plage_debut: dans(2), plage_fin: dans(3) });
+  assert.strictEqual(tard.statut, 200, JSON.stringify(tard.corps)); assert.strictEqual(tard.corps.avertissement, 'reservation_tardive'); assert.strictEqual(tard.corps.coordination_id, null);
+  const r = await demande({ lit_id: ids.lit.id });
+  assert.strictEqual(r.statut, 200, JSON.stringify(r.corps)); assert.strictEqual(r.corps.avertissement, null); assert.strictEqual(r.corps.resident_ref, ids.lit.patient_ref);
+  ids.d1 = r.corps.id; ids.d2 = tard.corps.id;
+  assert.strictEqual((await demande({ lit_id: ids.lit.id })).corps.code, 'transport_deja_demande', 'une seule demande ouverte par lit');
+});
+
+test('transporteur : ne voit que la référence et les lieux ; confirme la plage sans unité ; le lit passe « en attente de transport »', async () => {
+  const l = (await appel('ta', 'GET', '/secours/transports')).corps;
+  const d = l.find((x) => x.id === ids.d1);
+  assert.ok(d); assert.strictEqual(d.destination, 'Sherbrooke'); assert.deepStrictEqual(d.infos, { accessibilite: ['fauteuil'], accompagnateur: true });
+  for (const cle of ['patient', 'nom', 'prenom', 'date_naissance', 'diagnostic']) assert.ok(!(cle in d), cle);
+  const pd = dans(24.5); const pf = dans(25.5);
+  const a = await appel('ta', 'POST', `/secours/transports/${ids.d1}/action`, { action: 'accepter', plage_confirmee_debut: pd, plage_confirmee_fin: pf });
+  assert.strictEqual(a.statut, 200, JSON.stringify(a.corps)); assert.strictEqual(new Date(a.corps.plage_confirmee_debut).toISOString(), pd);
+  assert.strictEqual((await appel('ta', 'POST', `/secours/transports/${ids.d1}/action`, { action: 'accepter' })).statut, 409, 'pas deux acceptations');
+  const lit = (await pool.query('SELECT conge_statut, sortie_prevue FROM lits WHERE id = $1', [ids.lit.id])).rows[0];
+  assert.strictEqual(lit.conge_statut, 'attente_transport'); assert.strictEqual(new Date(lit.sortie_prevue).toISOString(), pd);
+  // Refus motivé (liste fermée) sur l'autre demande
+  const ref = await appel('ta', 'POST', `/secours/transports/${ids.d2}/action`, { action: 'refuser', motif: 'hors_territoire' });
+  assert.strictEqual(ref.corps.motif_refus, 'hors_territoire');
+});
+
+test('départ (unité exigée), prise en charge → lit au nettoyage, arrivée ; heures dans l’Horloge ; l’hôpital voit la plage confirmée', async () => {
+  assert.strictEqual((await appel('ta', 'POST', `/secours/transports/${ids.d1}/action`, { action: 'en_route' })).corps.code, 'unite_introuvable');
+  assert.strictEqual((await appel('ta', 'POST', `/secours/transports/${ids.d1}/action`, { action: 'en_route', unite_id: ids.u1 })).statut, 200);
+  assert.strictEqual((await appel('ta', 'POST', `/secours/transports/${ids.d1}/action`, { action: 'pris_en_charge' })).statut, 200);
+  assert.strictEqual((await pool.query('SELECT etat FROM lits WHERE id = $1', [ids.lit.id])).rows[0].etat, 'nettoyage', 'lit libéré à la prise en charge');
+  assert.strictEqual((await appel('ta', 'POST', `/secours/transports/${ids.d1}/action`, { action: 'arrivee' })).statut, 200);
+  const h = (await pool.query("SELECT etape FROM horodatages WHERE objet = 'demande_transport' AND objet_id = $1 ORDER BY id", [ids.d1])).rows.map((r) => r.etape);
+  assert.deepStrictEqual(h, ['demande', 'decision', 'prise_en_charge', 'arrivee']);
+  const vue = (await appel('tremblay', 'GET', `/transports?etablissement_id=${ids.mb}`)).corps.find((x) => x.id === ids.d1);
+  assert.ok(vue.plage_confirmee_debut); assert.strictEqual(vue.statut, 'arrivee');
+  assert.ok((await pool.query("SELECT 1 FROM v_demandes WHERE circuit = 'transport' AND id = $1 AND statut = 'terminee'", [ids.d1])).rowCount, 'lecture commune des demandes');
+});
+
+test('anglais : chaque texte de l’écran et de l’ambulance existe en FR et en EN', () => {
+  const vm = require('node:vm'); const fs = require('node:fs');
+  const c = { window: {} }; vm.createContext(c);
+  for (const f of ['fr', 'en', 'aide.fr', 'aide.en']) vm.runInContext(fs.readFileSync(require.resolve(`../public/i18n/${f}.js`), 'utf8'), c);
+  const { fr, en } = c.window.ARRIMO_I18N;
+  const src = fs.readFileSync(require.resolve('../public/transport-planifie.js'), 'utf8');
+  const cles = [...new Set([...src.matchAll(/P\('([a-z_]+)'/g), ...src.matchAll(/t\('transport_planifie\.([a-z_]+)'/g)].map((m) => m[1]))];
+  for (const p of ['m_retour_domicile', 'm_transfert_stable', 'm_depart_nsa', 'm_retour_chsld', 'v_ambulance', 'v_transport_adapte', 'v_autre', 's_demandee', 's_acceptee', 's_refusee', 's_en_route', 's_pris_en_charge', 's_arrivee', 's_annulee', 'a_fauteuil', 'a_malvoyant']) cles.push(p);
+  for (const k of cles) { assert.ok(fr.transport_planifie[k], `fr ${k}`); assert.ok(en.transport_planifie[k], `en ${k}`); }
+  assert.ok(fr.aide.ecrans['transports-planifies'] && en.aide.ecrans['transports-planifies']);
+});

@@ -88,16 +88,71 @@ async function demander(pool, u, coordinationId, b) {
 }
 
 const CHAMPS = `d.*, o.nom AS organisation, un.numero AS unite, un.plaque, eo.nom AS origine, eo.adresse AS origine_adresse, eo.ville AS origine_ville,
-  ed.nom AS destination, ed.ville AS destination_ville, co.numero AS coordination, co.type AS coordination_type, co.statut AS coordination_statut,
+  COALESCE(ed.nom, d.destination_libelle) AS destination, ed.ville AS destination_ville, l.code AS lit_code, co.numero AS coordination, co.type AS coordination_type, co.statut AS coordination_statut,
   pref.categorie AS categorie_urgence, pref.hopital_prefere_id, hp.nom AS hopital_prefere, ev.etat AS etat_vehicule, ev.modifie_le AS etat_vehicule_le,
   (SELECT json_build_object('numero', p.numero, 'statut', p.statut, 'destination_id', p.destination_id, 'destination', e2.nom, 'heure_prevue', p.heure_prevue,
      'arrivee_confirmee_le', p.arrivee_confirmee_le, 'eta_minutes', (SELECT ea.minutes FROM eta_prealertes ea WHERE ea.prealerte_id = p.id),
      'eta_km', (SELECT ea.distance_km::float FROM eta_prealertes ea WHERE ea.prealerte_id = p.id)) FROM prealertes p JOIN etablissements e2 ON e2.id = p.destination_id
    WHERE p.demande_transport_id = d.id AND p.statut <> 'remplacee' ORDER BY p.id DESC LIMIT 1) AS prealerte`;
 const FROM = `FROM demandes_transport d JOIN organisations_secours o ON o.id = d.organisation_id LEFT JOIN unites_secours un ON un.id = d.unite_id
-  JOIN etablissements eo ON eo.id = d.origine_id JOIN etablissements ed ON ed.id = d.destination_id JOIN coordinations co ON co.id = d.coordination_id
+  JOIN etablissements eo ON eo.id = d.origine_id LEFT JOIN etablissements ed ON ed.id = d.destination_id LEFT JOIN coordinations co ON co.id = d.coordination_id
+  LEFT JOIN lits l ON l.id = d.lit_id
   LEFT JOIN demande_transport_preferences pref ON pref.demande_id = d.id LEFT JOIN etablissements hp ON hp.id = pref.hopital_prefere_id
   LEFT JOIN etats_vehicules ev ON ev.unite_id = d.unite_id`;
+
+/**
+ * Transport non urgent (cahier v2, C.4 ; 20 nov. 2026) : un hôpital ou une résidence réserve un transport SANS coordination CHSLD
+ * (retour à domicile, transfert stable, départ NSA, retour CHSLD) : date et plage, type de véhicule, accessibilité, accompagnateur ;
+ * lit « à libérer » lié. Réservation la veille recommandée (avertissement). Le transporteur ne voit que la référence et les lieux.
+ */
+const MOTIFS_TRANSPORT = ['retour_domicile', 'transfert_stable', 'depart_nsa', 'retour_chsld'];
+const TYPES_VEHICULE = ['ambulance', 'transport_adapte', 'autre'];
+// Mêmes listes fermées que les demandes de transport d'une coordination (lues par l'écran de l'ambulance)
+const ACCESSIBILITE = ['fauteuil', 'deambulateur', 'leve_personne', 'lit_electrique', 'malentendant', 'malvoyant'];
+async function planifier(pool, u, b) {
+  const origine = entier(b.etablissement_id); if (!origine) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'etablissement_id' });
+  exigerEtablissement(u, origine);
+  if (!ROLES_ETAB.includes(u.role)) throw new ErreurHttp(403, 'role_insuffisant');
+  const e = (await pool.query('SELECT id, modules, type_etablissement FROM etablissements WHERE id = $1 AND actif', [origine])).rows[0];
+  if (!e || !require('./types-etablissement').moduleActif(e, 'transport_planifie')) throw new ErreurHttp(403, 'module_desactive', { module: 'transport_planifie' });
+  if (!MOTIFS_TRANSPORT.includes(b.motif_transport)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'motif_transport' });
+  if (!TYPES_VEHICULE.includes(b.type_vehicule)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'type_vehicule' });
+  const debut = new Date(b.plage_debut); const fin = new Date(b.plage_fin);
+  if (Number.isNaN(debut.getTime()) || Number.isNaN(fin.getTime()) || fin <= debut || debut < Date.now() - 5 * 60000 || fin - debut > 12 * 3600000) throw new ErreurHttp(400, 'plage_invalide');
+  const acc = Array.isArray(b.infos?.accessibilite) ? [...new Set(b.infos.accessibilite)] : [];
+  if (acc.some((x) => !ACCESSIBILITE.includes(x))) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'accessibilite' });
+  const infos = { ...(acc.length ? { accessibilite: acc } : {}), ...(b.infos?.accompagnateur != null ? { accompagnateur: b.infos.accompagnateur === true } : {}) };
+  const orgs = await organisationsRegion(pool, origine);
+  if (!orgs.some((o) => o.id === entier(b.organisation_id))) throw new ErreurHttp(404, 'organisation_introuvable');
+  const destId = b.destination_id ? entier(b.destination_id) : null;
+  const libelle = destId ? null : String(b.destination_libelle || '').trim();
+  if (!destId && (libelle.length < 2 || libelle.length > 120)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'destination' });
+  if (destId && !(await pool.query('SELECT 1 FROM etablissements WHERE id = $1 AND actif', [destId])).rowCount) throw new ErreurHttp(404, 'etab_introuvable');
+  let litId = null; let ref = null;
+  if (b.lit_id != null) {
+    const l = (await pool.query("SELECT id, patient_ref, etat FROM lits WHERE id = $1 AND etablissement_id = $2", [entier(b.lit_id), origine])).rows[0];
+    if (!l || l.etat !== 'occupe') throw new ErreurHttp(409, 'lit_non_occupe', { code: '' });
+    litId = l.id; ref = l.patient_ref;
+    const ouvert = (await pool.query(`SELECT numero FROM demandes_transport WHERE lit_id = $1 AND statut = ANY($2)`, [litId, OUVERTES])).rows[0];
+    if (ouvert) throw new ErreurHttp(409, 'transport_deja_demande', { numero: ouvert.numero });
+  } else {
+    ref = String(b.reference || '').trim();
+    if (!/^[A-Z]{1,3}-\d{4,6}$/.test(ref)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'reference' });
+  }
+  const d = await transaction(pool, async (c) => {
+    const r = (await c.query(`INSERT INTO demandes_transport (numero, organisation_id, origine_id, destination_id, destination_libelle, resident_ref, heure_souhaitee, infos,
+        motif_transport, type_vehicule, plage_debut, plage_fin, lit_id, cree_par) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $7, $11, $12, $13) RETURNING *`,
+    [await numero(c), entier(b.organisation_id), origine, destId, libelle, ref, debut, JSON.stringify(infos), b.motif_transport, b.type_vehicule, fin, litId, u.id])).rows[0];
+    await evenement(c, r, 'demandee', u, { motif_transport: r.motif_transport, type_vehicule: r.type_vehicule });
+    await require('./horloge').marquer(c, { objet: 'demande_transport', objetId: r.id, etape: 'demande', source: 'clic', auteurId: u.id });
+    await emettre(c, r, 'transport.demandee');
+    await journaliser(c, { etablissementId: origine, utilisateurId: u.id, action: 'Transport réservé', detail: `${r.numero} · ${r.motif_transport}` });
+    return r;
+  });
+  require('./flux').signaler();
+  // Réservation la veille recommandée : simple avertissement, jamais un refus
+  return { ...d, avertissement: debut - Date.now() < 18 * 3600000 ? 'reservation_tardive' : null };
+}
 
 /** Demandes de transport visibles : ambulance (son organisation), établissement (origine ou destination), CCS (sa région, lecture). */
 async function liste(pool, u, q = {}) {
@@ -154,13 +209,34 @@ async function agir(pool, u, id, b) {
       if (!attendu[a]) throw new ErreurHttp(400, 'action_inconnue');
       if (d.statut !== attendu[a]) throw new ErreurHttp(409, 'transport_statut_incompatible');
       if (a === 'accepter') {
-        const un = (await c.query('SELECT id, numero FROM unites_secours WHERE id = $1 AND organisation_id = $2 AND actif', [entier(b.unite_id), d.organisation_id])).rows[0];
-        if (!un) throw new ErreurHttp(404, 'unite_introuvable');
-        n = await maj("statut = 'acceptee', unite_id = $2, acceptee_le = now()", [un.id]); detail = { unite: un.numero };
+        const un = b.unite_id == null && !d.coordination_id ? null
+          : (await c.query('SELECT id, numero FROM unites_secours WHERE id = $1 AND organisation_id = $2 AND actif', [entier(b.unite_id), d.organisation_id])).rows[0];
+        if (!un && d.coordination_id) throw new ErreurHttp(404, 'unite_introuvable');
+        // Transport planifié (20 nov. 2026) : plage confirmée par le transporteur (la plage demandée par défaut)
+        const pd = b.plage_confirmee_debut ? new Date(b.plage_confirmee_debut) : d.plage_debut; const pf = b.plage_confirmee_fin ? new Date(b.plage_confirmee_fin) : d.plage_fin;
+        if ((pd && Number.isNaN(new Date(pd).getTime())) || (pf && Number.isNaN(new Date(pf).getTime())) || (pd && pf && new Date(pf) <= new Date(pd))) throw new ErreurHttp(400, 'plage_invalide');
+        n = await maj("statut = 'acceptee', unite_id = COALESCE($2, unite_id), acceptee_le = now(), plage_confirmee_debut = $3, plage_confirmee_fin = $4", [un?.id || null, pd || null, pf || null]);
+        detail = { unite: un?.numero || null, plage_debut: pd, plage_fin: pf };
+        // Lit « à libérer » : congé en attente de transport, à l'heure confirmée (mêmes règles que l'écran Lits)
+        if (n.lit_id) await require('./terrain').majConge(pool, { id: u.id || null }, n.lit_id, 'attente_transport', pd || undefined, c);
       } else if (a === 'refuser') {
         const motif = MOTIFS.includes(b.motif) ? b.motif : 'autre';
         n = await maj("statut = 'refusee', motif_refus = $2", [motif]); detail = { motif };
-      } else n = await maj(`statut = '${a}', ${a}_le = now()`);
+      } else {
+        if (a === 'en_route' && !d.unite_id) {   // transport planifié accepté sans unité : l'unité est donnée au départ
+          const un = (await c.query('SELECT id FROM unites_secours WHERE id = $1 AND organisation_id = $2 AND actif', [entier(b.unite_id), d.organisation_id])).rows[0];
+          if (!un) throw new ErreurHttp(404, 'unite_introuvable');
+          await c.query('UPDATE demandes_transport SET unite_id = $2 WHERE id = $1', [d.id, un.id]);
+        }
+        n = await maj(`statut = '${a}', ${a}_le = now()`);
+        // Prise en charge d'un patient hospitalisé : le patient quitte son lit, qui part au nettoyage (règles des lits)
+        if (a === 'pris_en_charge' && n.lit_id) {
+          const lit = (await c.query('SELECT etat FROM lits WHERE id = $1', [n.lit_id])).rows[0];
+          if (lit?.etat === 'occupe') await require('./regles').changerEtat(c, pool, u.id || null, n.lit_id, 'nettoyage', { detail: `Départ en transport ${n.numero}` });
+        }
+      }
+      const etapeH = { accepter: 'decision', refuser: 'decision', pris_en_charge: 'prise_en_charge', arrivee: 'arrivee' }[a];
+      if (etapeH) await require('./horloge').marquer(c, { objet: 'demande_transport', objetId: n.id, etape: etapeH, source: u.connecteur ? 'connecteur' : 'clic', auteurId: u.id || null });
       // État du véhicule suivi automatiquement à chaque étape (16 nov. 2026) : le CCS, l'hôpital et l'établissement voient le même statut
       const fixer = require('./vehicules').fixer;
       if (a === 'en_route' && n.unite_id) await fixer(c, n.unite_id, 'en_route', { source: 'transport', utilisateurId: u.id || null });
@@ -177,16 +253,16 @@ async function agir(pool, u, id, b) {
     await evenement(c, n, a, u, detail);
     await emettre(c, n, `transport.${a}`);
     require('./flux').signaler();
-    const co = (await c.query('SELECT numero, resident_id FROM coordinations WHERE id = $1', [n.coordination_id])).rows[0];
+    const co = n.coordination_id ? (await c.query('SELECT numero, resident_id FROM coordinations WHERE id = $1', [n.coordination_id])).rows[0] : null;
     // Arrimo Famille : le proche autorisé (mouvements) est avisé quand le résident est pris en charge et quand il arrive (sans détail)
-    if (cote === 'ambulance' && ['pris_en_charge', 'arrivee'].includes(a)) await require('./portail-notifications').signaler(c, co.resident_id, 'mouvements');
-    for (const etab of [n.origine_id, n.destination_id]) {
-      await journaliser(c, { etablissementId: etab, utilisateurId: u.id || null, action: ACTIONS_JOURNAL[a], detail: `${n.numero} · ${co.numero}` });
+    if (co && cote === 'ambulance' && ['pris_en_charge', 'arrivee'].includes(a)) await require('./portail-notifications').signaler(c, co.resident_id, 'mouvements');
+    for (const etab of [n.origine_id, n.destination_id].filter(Boolean)) {
+      await journaliser(c, { etablissementId: etab, utilisateurId: u.id || null, action: ACTIONS_JOURNAL[a], detail: co ? `${n.numero} · ${co.numero}` : n.numero });
     }
     // L'établissement d'origine suit son transport (cahier 3, étape 6) ; la destination est avertie de l'approche
-    const vars = { numero: n.numero, coordination: co.numero, ref: n.resident_ref };
+    const vars = { numero: n.numero, coordination: co?.numero || '', ref: n.resident_ref };
     if (cote === 'ambulance') await require('./services').notifier(c, n.origine_id, null, `transport_${a}`, vars);
-    if (['pris_en_charge', 'annuler'].includes(a)) await require('./services').notifier(c, n.destination_id, null, `transport_${a}`, vars);
+    if (n.destination_id && ['pris_en_charge', 'annuler'].includes(a)) await require('./services').notifier(c, n.destination_id, null, `transport_${a}`, vars);
     return n;
   });
 }
@@ -199,4 +275,4 @@ async function fiche(pool, u, id, q = {}) {
     WHERE ev.demande_id = $1 ORDER BY ev.id`, [d.id])).rows;
   return { ...d, evenements };
 }
-module.exports = { organisations, demander, liste, agir, fiche, OUVERTES };
+module.exports = { organisations, demander, planifier, liste, agir, fiche, OUVERTES, MOTIFS_TRANSPORT, TYPES_VEHICULE };

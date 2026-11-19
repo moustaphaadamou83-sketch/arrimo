@@ -198,6 +198,16 @@ window.ARRIMO_I18N.fr.aide = {
         ['L’étape H12 manque', 'Ajoutez d’abord l’heure manquante avec « Corriger l’heure ».'],
       ],
     },
+    'transports-planifies': {
+      nom: 'Transports non urgents',
+      but: 'Réserver un transport non urgent et suivre sa confirmation, sa prise en charge et son arrivée.',
+      gestes: [
+        'Cliquez « Réserver un transport », choisissez le lit à libérer (ou saisissez la référence), le motif, la destination, la plage et le véhicule.',
+        'Quand le transporteur confirme, le lit passe « en attente de transport » à l’heure confirmée ; à la prise en charge, il part au nettoyage.',
+        'Réservez de préférence la veille ; vous pouvez annuler tant que le patient n’est pas pris en charge.',
+      ],
+      erreurs: [['Plage invalide', 'La fin doit suivre le début, sans dépasser 12 h.']],
+    },
     vigilance: {
       nom: 'Congés et alertes',
       but: 'Voir lit par lit les départs prévus (avec leur statut, l’heure et la source) et les blocages expliqués : origine, seuil, fait ou hypothèse, action proposée et responsable.',

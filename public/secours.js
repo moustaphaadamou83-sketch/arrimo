@@ -51,6 +51,8 @@
       sexes: { F: 'Femme', M: 'Homme', X: 'Autre' }, envoyer_demande: 'Envoyer la demande', demande_envoyee: 'Demande envoyée à l’hôpital.',
       sg: { douleur_thoracique: 'Douleur thoracique', difficulte_respiratoire: 'Difficulté respiratoire', deficit_neurologique: 'Déficit neurologique', alteration_conscience: 'Altération de la conscience', chute: 'Chute', traumatisme: 'Traumatisme', saignement: 'Saignement', fievre: 'Fièvre', douleur_abdominale: 'Douleur abdominale', autre: 'Autre' },
       classees_aide_lieu: 'Depuis {depart}. Tri : disponibilité, puis temps de route.',
+      tp_motif: 'Transport non urgent : {m}', tp_m: { retour_domicile: 'retour à domicile', transfert_stable: 'transfert stable', depart_nsa: 'départ NSA', retour_chsld: 'retour en résidence' },
+      tp_plage: 'plage demandée {d}-{f}', tp_plage_conf: 'plage confirmée {d}-{f}', tp_v: { ambulance: 'ambulance', transport_adapte: 'transport adapté', autre: 'autre véhicule' },
       o_chrono: 'Chrono', ch_titre: 'Chrono · temps à l’urgence', ch_intro: 'Mêmes heures que l’urgence : arrivée (H11), triage (H12, H13), civière libérée (H14), départ (H15). Chiffres indicatifs ; aucune prime ni pénalité.',
       ch_porte: 'À la porte', ch_route: 'En route', ch_termines: 'Passages terminés', ch_aucun: 'Aucun passage.', ch_min: '{n} min à la porte', ch_depart: 'Départ de l’hôpital',
       ch_H11: 'Arrivée', ch_H12: 'Début triage', ch_H13: 'Fin triage', ch_H14: 'Civière libérée', ch_H15: 'Départ', ch_corrigee: 'corrigée', ch_total: 'total {n} min', ch_inactif: 'Aucun hôpital de votre secteur n’utilise encore le Chrono.',
@@ -122,6 +124,8 @@
       sexes: { F: 'Female', M: 'Male', X: 'Other' }, envoyer_demande: 'Send the request', demande_envoyee: 'Request sent to the hospital.',
       sg: { douleur_thoracique: 'Chest pain', difficulte_respiratoire: 'Breathing difficulty', deficit_neurologique: 'Neurological deficit', alteration_conscience: 'Altered consciousness', chute: 'Fall', traumatisme: 'Trauma', saignement: 'Bleeding', fievre: 'Fever', douleur_abdominale: 'Abdominal pain', autre: 'Other' },
       classees_aide_lieu: 'From {depart}. Sorted by availability, then driving time.',
+      tp_motif: 'Non-urgent transport: {m}', tp_m: { retour_domicile: 'return home', transfert_stable: 'stable transfer', depart_nsa: 'ALC departure', retour_chsld: 'return to residence' },
+      tp_plage: 'requested slot {d}-{f}', tp_plage_conf: 'confirmed slot {d}-{f}', tp_v: { ambulance: 'ambulance', transport_adapte: 'adapted transport', autre: 'other vehicle' },
       o_chrono: 'Chrono', ch_titre: 'Chrono · emergency department times', ch_intro: 'Same times as the emergency department: arrival (H11), triage (H12, H13), stretcher released (H14), departure (H15). Indicative figures; no bonus or penalty.',
       ch_porte: 'At the door', ch_route: 'On the way', ch_termines: 'Completed visits', ch_aucun: 'No visit.', ch_min: '{n} min at the door', ch_depart: 'Leaving the hospital',
       ch_H11: 'Arrival', ch_H12: 'Triage start', ch_H13: 'Triage end', ch_H14: 'Stretcher released', ch_H15: 'Departure', ch_corrigee: 'corrected', ch_total: 'total {n} min', ch_inactif: 'No hospital in your area uses Chrono yet.',
@@ -531,6 +535,7 @@
       const a = amb ? d.actions : [];
       return `<div class="ligne-s"><div><strong>${esc(d.numero)}</strong> · ${esc(d.resident_ref)} · <b>${esc(t('trs.' + d.statut))}</b><br>
         <span class="note">${esc(t('tr_de', { origine: `${d.origine}${d.origine_adresse ? `, ${d.origine_adresse}` : ''}` }))} ${esc(t('tr_vers', { dest: d.destination }))}${d.heure_souhaitee ? ` · ${esc(t('tr_heure', { heure: heure(d.heure_souhaitee) }))}` : ''}${d.unite ? ` · ${esc(d.unite)}` : ''}</span>
+        ${d.motif_transport ? `<br><span class="note">${esc(t('tp_motif', { m: t('tp_m.' + d.motif_transport) }))} · ${esc(d.plage_confirmee_debut ? t('tp_plage_conf', { d: heure(d.plage_confirmee_debut), f: heure(d.plage_confirmee_fin) }) : t('tp_plage', { d: heure(d.plage_debut), f: heure(d.plage_fin) }))}${d.type_vehicule ? ` · ${esc(t('tp_v.' + d.type_vehicule))}` : ''}</span>` : ''}
         ${infos.length ? `<br><span class="note">${esc(infos.join(' · '))}</span>` : ''}
         ${d.categorie_urgence || d.hopital_prefere ? `<br><span class="note">${esc([d.categorie_urgence ? t('tr_cat', { cat: t('cat.' + d.categorie_urgence) }) : null, d.hopital_prefere ? t('tr_pref', { h: d.hopital_prefere }) : null].filter(Boolean).join(' · '))}</span>` : ''}</div>
         ${a.length ? `<div class="grille" style="min-width:min(100%,320px)">${a.includes('accepter') && u ? `<button class="btn pri" data-tr="accepter" data-id="${d.id}" data-version="${d.version}">${esc(t('tr_accepter', { unite: u.numero }))}</button>` : ''}
