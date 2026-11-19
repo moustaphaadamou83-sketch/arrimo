@@ -748,3 +748,6 @@ details.voir-carte summary::-webkit-details-marker { display: none; }
 .place-nsa .actions-place { display: flex; flex-wrap: wrap; gap: var(--e2); margin-top: var(--e2); }
 .grille-poids { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--e2) var(--e3); align-items: end; }
 .erreur-texte { color: #DC2626; font-weight: 600; }
+/* Tuiles : une note longue (mot sans coupure, nombre) se coupe au lieu d'élargir la grille (débordement à 820 px, 20 nov. 2026) */
+.tuile { min-width: 0; }
+.tuile .note { overflow-wrap: anywhere; }

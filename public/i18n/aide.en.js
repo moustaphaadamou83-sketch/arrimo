@@ -173,6 +173,31 @@ window.ARRIMO_I18N.en.aide = {
         ['“A return to the CHSLD is already being prepared”', 'The return already exists: follow it in “Hospital stays and returns”.'],
       ],
     },
+    continuite: {
+      nom: 'Trail',
+      but: 'Follow each resident’s full pathway between the long-term care centre, the ambulance and the hospital: six steps, one person responsible per step, the same times on both sides.',
+      gestes: [
+        'Open an ongoing pathway to see the current step, who must act and since when.',
+        'A step waiting too long is flagged: follow up with the named person responsible.',
+        'Tick “Also show older ones” to find completed pathways.',
+      ],
+      erreurs: [
+        ['No ongoing pathway', 'No resident is currently between two facilities.'],
+      ],
+    },
+    chrono: {
+      nom: 'Chrono',
+      but: 'See ambulances on the way and at the door, with the time elapsed since arrival, and record triage start, triage end and stretcher released. The ambulance and the CCS read the same times.',
+      gestes: [
+        'The clock turns orange at 15 min and red at 20 min: the minutes and the word are always written.',
+        'Click “Triage start”, “Triage end”, then “Stretcher released” when it happens.',
+        'A forgotten step or a wrong time is fixed with “Correct the time” and a reason; nothing is erased.',
+        'The monthly report gives means, medians and shares beyond target; export it as CSV.',
+      ],
+      erreurs: [
+        ['Step H12 is missing', 'First add the missing time with “Correct the time”.'],
+      ],
+    },
     vigilance: {
       nom: 'Discharges and alerts',
       but: 'See planned departures bed by bed (status, time and source) and explained blockages: origin, threshold, fact or hypothesis, suggested action and owner.',

@@ -11,6 +11,7 @@ const JOURNAL_OPERATIONNEL = ['Hôpital créé','Hôpital créé depuis le CRM',
   'Ticket créé','Incident déclaré','Ticket modifié','Ticket pris en charge'];
 const PERMISSIONS = {
   'GET /moi': ROLES_SH,
+  'GET /meteo': ROLES_SH,   // météo de la ville de référence (bandeau, 17 nov. 2026)
   'GET /references/internationales': ROLES_SH,
   'PUT /moi/langue': ROLES_SH,
   'PUT /moi/fuseau-horaire': ROLES_SH,

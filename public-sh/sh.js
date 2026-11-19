@@ -310,7 +310,7 @@ async function afficherConnexions(h) {
     <td>${c.actif ? 'Active' : 'Désactivée'}${c.abandonnees ? ` · ${nb(c.abandonnees)} ${c.abandonnees > 1 ? 'envois abandonnés' : 'envoi abandonné'}` : ''}</td><td class="note">${c.derniere_activite ? esc(new Date(c.derniere_activite).toLocaleString('fr-CA')) : '—'}</td>
     <td>${c.actif ? `<button class="btn" data-cx-revoquer="${esc(c.genre)}" data-id="${c.id}">Désactiver</button>` : ''}</td></tr>`;
   z.innerHTML = `<p class="note">Droits limités aux données de ce client. Clés et secrets générés sur le serveur et remis une seule fois au contact technique par un lien de 24 h : jamais affichés ici. Aucun port ouvert (HTTPS seulement).</p>
-    <table><thead><tr><th>Nom</th><th>Type</th><th>État</th><th>Dernière activité</th><th></th></tr></thead><tbody>${d.connexions.map(ligne).join('') || '<tr><td colspan="5" class="note">Aucune connexion.</td></tr>'}</tbody></table>
+    <div class="tableau"><table><thead><tr><th>Nom</th><th>Type</th><th>État</th><th>Dernière activité</th><th></th></tr></thead><tbody>${d.connexions.map(ligne).join('') || '<tr><td colspan="5" class="note">Aucune connexion.</td></tr>'}</tbody></table></div>
     <div class="grille-form" style="margin-top:10px">
       <label>Type<select id="cx-genre">${genres.map((g) => `<option value="${g}">${esc(GENRES_CONNEXION[g])}</option>`).join('')}</select></label>
       <label>Nom<input id="cx-nom" maxlength="100" placeholder="Ex. moteur d’interface"></label>
@@ -800,7 +800,7 @@ function brancherEditeurStructure(v,h){
       for(const ch of structure.chambres.filter(x=>x.unite===u.unite)){const nbLits=structure.lits.filter(x=>x.unite===u.unite&&x.chambre===ch.chambre).length;deps.push(`<tr><td>Chambre</td><td>　↳ ${esc(ch.etage||'')} / ${esc(ch.chambre)} · ${nbLits}/${esc(ch.capacite||'—')} lits</td><td>${ch.actif?'Actif':'Inactif'} · ${esc(ch.statut_operationnel||'')}</td></tr>`);
         for(const l of structure.lits.filter(x=>x.unite===u.unite&&x.chambre===ch.chambre))deps.push(`<tr><td>Lit</td><td>　　 ↳ ${esc(l.lit)}</td><td>${l.actif?'Actif':'Inactif'}</td></tr>`);}}
     for(const c of structure.civieres)deps.push(`<tr><td>Civière</td><td>${esc(c.unite||'—')} / ${esc(c.civiere)}</td><td>${c.actif?'Actif':'Inactif'}</td></tr>`);
-    arbre.innerHTML=`<table class="compact"><thead><tr><th>Niveau</th><th>Rattachement et capacité calculée</th><th>État</th></tr></thead><tbody>${deps.join('')||'<tr><td colspan="3">Aucune structure configurée.</td></tr>'}</tbody></table>`;
+    arbre.innerHTML=`<div class="tableau"><table class="compact"><thead><tr><th>Niveau</th><th>Rattachement et capacité calculée</th><th>État</th></tr></thead><tbody>${deps.join('')||'<tr><td colspan="3">Aucune structure configurée.</td></tr>'}</tbody></table></div>`;
   };
   const chargerType=()=>{
     const t=typeSel.value, rows=structure?.[t]||[];existSel.innerHTML=`<option value="">Nouvel élément</option>${rows.map((r,i)=>`<option value="${i}">${esc(cleLigne(t,r))}</option>`).join('')}`;

@@ -6,7 +6,8 @@
   let meteo = null; let lue = 0; let minute = '';
   const en = () => (typeof langueUI !== 'undefined' && langueUI === 'en');
   const fuseau = () => { try { return (etat.moi && etat.moi.utilisateur && etat.moi.utilisateur.fuseau_horaire) || 'America/Toronto'; } catch { return 'America/Toronto'; } };
-  const connecte = () => { try { return !!etat.token; } catch { return false; } };
+  // Session complète seulement (écran de l'application affiché, après la double authentification) : avant, /api/meteo répond 403
+  const connecte = () => { try { const app = document.getElementById('ecran-app'); return !!etat.token && !!app && !app.hidden; } catch { return false; } };
   function afficher() {
     const z = document.getElementById('infos-siege'); if (!z) return;
     if (!connecte()) { z.hidden = true; return; }

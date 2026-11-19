@@ -220,7 +220,8 @@ async function tableau(pool, u, etabId) {
     q(`SELECT count(*)::int planifies FROM coordinations WHERE destination_id = $1 AND type = 'retour' AND statut IN ('envoyee', 'acceptee', 'en_cours')`)]);
   const echecs = (await pool.query(`SELECT count(*)::int n FROM proches_notifications_journal j JOIN proches_acces a ON a.id = j.acces_id WHERE a.etablissement_id = $1 AND j.statut = 'echec' AND j.le > now() - interval '7 days'`, [etabId])).rows[0].n;
   return { demandes, messages: { ...messages, premiere_reponse_mediane_min: reponse.mediane_min }, confirmations, visites, retours, notifications_echouees: echecs,
-    mesure: 'Chiffres calculés sur les données enregistrées dans Arrimo. Aucun nombre d’appels évités n’est estimé.' };
+    mesure: u.langue === 'en' ? 'Figures computed from data recorded in Arrimo. No number of avoided calls is estimated.'
+      : 'Chiffres calculés sur les données enregistrées dans Arrimo. Aucun nombre d’appels évités n’est estimé.' };
 }
 async function demandesEtab(pool, u, etabId) {
   await garde(pool, u, etabId);

@@ -1045,10 +1045,10 @@ async function listeCoordinationsBrute(pool, u, etabId, q = {}) {
 /** Capacités partagées des autres CHSLD (nombre de places par type d'unité) ; aucune garantie d'admission. */
 async function reseau(pool, u, etabId) {
   const e = await etabChsld(pool, u, etabId, { module: 'reseau_chsld' });
-  const rows = (await pool.query(`SELECT x.id, x.nom, x.ville, x.partage, t.nom AS unite, count(*) FILTER (WHERE l.etat = 'libre')::int AS libres,
+  const rows = (await pool.query(`SELECT x.id, x.nom, x.ville, x.partage, CASE WHEN $2 = 'en' THEN COALESCE(t.nom_en, t.nom) ELSE t.nom END AS unite, count(*) FILTER (WHERE l.etat = 'libre')::int AS libres,
       count(*) FILTER (WHERE l.etat = 'libre' AND l.disponibilite_confirmee_le >= now() - interval '24 hours')::int AS confirmees, max(l.disponibilite_confirmee_le) AS confirme_le
     FROM etablissements x JOIN lits l ON l.etablissement_id = x.id JOIN types_unite t ON t.id = l.type_id
-    WHERE x.type_etablissement = 'chsld' AND x.actif AND x.module_actif AND x.id <> $1 AND x.partage <> 'aucun' GROUP BY x.id, t.id ORDER BY x.nom, t.ordre`, [e.id])).rows;
+    WHERE x.type_etablissement = 'chsld' AND x.actif AND x.module_actif AND x.id <> $1 AND x.partage <> 'aucun' GROUP BY x.id, t.id ORDER BY x.nom, t.ordre`, [e.id, u.langue === 'en' ? 'en' : 'fr'])).rows;
   const hopitaux = (await pool.query(`SELECT id, nom, ville FROM etablissements WHERE type_etablissement = 'hopital' AND actif ORDER BY nom`)).rows;
   return { chsld: rows, hopitaux, avertissement: 'disponibilite_non_garantie' };
 }

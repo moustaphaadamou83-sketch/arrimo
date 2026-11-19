@@ -527,7 +527,7 @@ test('interface en anglais : aucun texte fran√ßais restant (noms propres except√
     await x.waitForSelector('#v-copilote .reponse');
     await ecran(x, `02-question-${i}`);
   }
-  for (const vue of ['reseau', 'national', 'lits', 'urgence', 'admissions', 'transferts', 'nettoyage', 'nsa', 'indicateurs', 'journal', 'params']) {
+  for (const vue of ['reseau', 'national', 'lits', 'urgence', 'admissions', 'transferts', 'nettoyage', 'vigilance', 'nsa', 'indicateurs', 'journal', 'params']) {
     await onglet(x, vue);
     await ecran(x, `03-${vue}`);
   }
@@ -647,7 +647,7 @@ for (const L of LARGEURS.slice(1)) {
     const x = await ouvrir(L, 'hopital.x@demo.arrimo', 'en');
     await x.waitForSelector('#v-copilote .niveau');
     await ecran(x, '01-copilot');
-    for (const vue of ['reseau', 'national', 'lits', 'urgence', 'admissions', 'transferts', 'nettoyage', 'nsa', 'indicateurs', 'journal', 'params']) {
+    for (const vue of ['reseau', 'national', 'lits', 'urgence', 'admissions', 'transferts', 'nettoyage', 'vigilance', 'nsa', 'indicateurs', 'journal', 'params']) {
       await onglet(x, vue);
       await ecran(x, `03-${vue}`);
     }

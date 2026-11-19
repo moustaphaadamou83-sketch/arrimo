@@ -124,7 +124,7 @@ async function conges(pool, utilisateur, etabId, f = {}) {
     resume[h] = { confirmes: dans.filter((x) => x.statut === 'confirme').length, prevus: dans.filter((x) => x.statut !== 'confirme').length,
       lits: dans.map((x) => x.lit) };
   }
-  return {
+  return require('./vigilance-en').traduire({
     etablissement: cfg.nom, filtres: { horizon, jour: f.jour || null, unite: f.unite ? Number(f.unite) : null, statut: f.statut || null },
     lignes: filtrees,
     resume, retards: lignes.filter((x) => x.verification).length,
@@ -134,7 +134,7 @@ async function conges(pool, utilisateur, etabId, f = {}) {
       estimation: 'Les prévisions statistiques (OG, Prévisions) sont séparées : elles s’appuient sur l’historique et donnent une marge.',
     },
     ...(await fraicheur(pool)),
-  };
+  }, utilisateur.langue);
 }
 
 /** Durée lisible pour les textes d'alerte. */
@@ -184,7 +184,7 @@ async function blocages(pool, utilisateur, etabId) {
       const r = Number(l.retard_min);
       ajouter({ ...base, type: 'conge_retarde', niveau: r > cfg.marge_conge_min ? 'modere' : 'faible', duree_min: Math.round(r), depuis: l.sortie_prevue,
         titre: `${l.code} — Congé prévu dépassé de ${dureeTexte(r)}, départ non enregistré.`,
-        evenement: `Congé prévu le ${new Intl.DateTimeFormat('fr-CA', { timeZone: cfg.fuseau, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(l.sortie_prevue))}`,
+        evenement: `Congé prévu le ${new Intl.DateTimeFormat(utilisateur.langue === 'en' ? 'en-CA' : 'fr-CA', { timeZone: cfg.fuseau, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(l.sortie_prevue))}`,
         seuil: { valeur_min: 0, marge_min: cfg.marge_conge_min, regle: `Alerte dès l’heure dépassée ; niveau relevé après la marge configurée (${cfg.marge_conge_min} min).` },
         cause: { nature: 'hypothese', texte: 'Départ peut-être fait sans être saisi, ou congé reporté (transport, attente d’un résultat).' },
         action: 'Vérifier avec l’unité : enregistrer le départ, ou mettre à jour le congé (reporté, nouvelle heure). Le lit n’est pas libéré automatiquement.' });
@@ -218,10 +218,10 @@ async function blocages(pool, utilisateur, etabId) {
     }
   }
   const dem = (await pool.query(
-    `SELECT d.id, d.patient_ref, d.priorite, d.provenance, d.cree_le, t.nom AS type_nom, cv.code AS civiere,
+    `SELECT d.id, d.patient_ref, d.priorite, d.provenance, d.cree_le, CASE WHEN $3 = 'en' THEN COALESCE(t.nom_en, t.nom) ELSE t.nom END AS type_nom, cv.code AS civiere,
             EXTRACT(EPOCH FROM (now() - d.cree_le)) / 60 AS attente_min
        FROM demandes_admission d JOIN types_unite t ON t.id = d.type_id LEFT JOIN civieres cv ON cv.id = d.civiere_id
-      WHERE d.etablissement_id = $1 AND d.statut = 'attente' AND d.cree_le < now() - make_interval(mins => $2)`, [etabId, cfg.attente_admission_max_min])).rows;
+      WHERE d.etablissement_id = $1 AND d.statut = 'attente' AND d.cree_le < now() - make_interval(mins => $2)`, [etabId, cfg.attente_admission_max_min, utilisateur.langue === 'en' ? 'en' : 'fr'])).rows;
   for (const d of dem) {
     ajouter({ genre: 'demande', ressource_id: d.id, ressource: `Demande n° ${d.id} (${d.patient_ref})`, unite: d.type_nom, chambre: null,
       depuis: d.cree_le, duree_min: Math.round(Number(d.attente_min)), type: 'attente_admission', niveau: 'modere',
@@ -266,7 +266,7 @@ async function blocages(pool, utilisateur, etabId) {
   }
   const rang = { eleve: 0, modere: 1, faible: 2 };
   alertes.sort((a, b) => rang[a.niveau] - rang[b.niveau] || b.duree_min - a.duree_min);
-  return {
+  return require('./vigilance-en').traduire({
     etablissement: cfg.nom, alertes,
     par_type: alertes.reduce((m, a) => ({ ...m, [a.type]: (m[a.type] || 0) + 1 }), {}),
     regles_couleurs: {
@@ -275,7 +275,7 @@ async function blocages(pool, utilisateur, etabId) {
       faible: 'Jaune : à vérifier (seuil atteint, sans effet bloquant établi).',
     },
     ...(await fraicheur(pool)),
-  };
+  }, utilisateur.langue);
 }
 
 /** Enregistre l'exécution du contrôle périodique (heure réelle, durée, nombre de changements). */

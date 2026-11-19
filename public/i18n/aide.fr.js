@@ -173,6 +173,31 @@ window.ARRIMO_I18N.fr.aide = {
         ['« Un retour vers le CHSLD est déjà en préparation »', 'Le retour existe déjà : suivez-le dans « Hospitalisations et retours ».'],
       ],
     },
+    continuite: {
+      nom: 'Sillage',
+      but: 'Suivre le parcours complet de chaque résident entre le CHSLD, l’ambulance et l’hôpital : six étapes, un responsable par étape, les mêmes heures des deux côtés.',
+      gestes: [
+        'Ouvrez un parcours en cours pour voir l’étape actuelle, qui doit agir et depuis quand.',
+        'Une étape en attente trop longtemps est signalée : relancez la personne responsable nommée.',
+        'Cochez « Afficher aussi les plus anciens » pour retrouver les parcours terminés.',
+      ],
+      erreurs: [
+        ['Aucun parcours en cours', 'Aucun résident n’est actuellement entre deux établissements.'],
+      ],
+    },
+    chrono: {
+      nom: 'Chrono',
+      but: 'Voir les ambulances en route et à la porte, avec le temps écoulé depuis l’arrivée, et noter le début du triage, la fin du triage et la civière libérée. Les mêmes heures sont lues par l’ambulance et le CCS.',
+      gestes: [
+        'Le chrono passe à l’orange à 15 min et au rouge à 20 min : les minutes et le mot sont toujours écrits.',
+        'Cliquez « Début triage », « Fin triage », puis « Civière libérée » au moment où cela se produit.',
+        'Une étape oubliée ou une heure fausse se corrige avec « Corriger l’heure » et un motif ; rien n’est effacé.',
+        'Le rapport mensuel donne moyennes, médianes et parts hors cible ; exportez-le en CSV.',
+      ],
+      erreurs: [
+        ['L’étape H12 manque', 'Ajoutez d’abord l’heure manquante avec « Corriger l’heure ».'],
+      ],
+    },
     vigilance: {
       nom: 'Congés et alertes',
       but: 'Voir lit par lit les départs prévus (avec leur statut, l’heure et la source) et les blocages expliqués : origine, seuil, fait ou hypothèse, action proposée et responsable.',

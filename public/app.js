@@ -623,7 +623,7 @@ async function rafraichir() {
     await Promise.all([e ? majCompteurs() : null, ({
       copilote: vueCopilote, reseau: vueReseau, national: vueNational, lits: vueLits, urgence: vueUrgence, admissions: vueAdmissions, transferts: vueTransferts,
       nettoyage: vueNettoyage, vigilance: vueVigilance, nsa: vueNsa, indicateurs: vueIndicateurs, journal: vueJournal, params: vueParams,
-      admin: vueAdmin, compte: vueCompte, support:vueSupportClient, patients: vuePatients, continuite: vueContinuite, ...(window.ArrimoChsld?.vues || {}), ...(window.ArrimoSecours?.vues || {}),
+      admin: vueAdmin, compte: vueCompte, support:vueSupportClient, patients: vuePatients, continuite: vueContinuite, ...(window.ArrimoChsld?.vues || {}), ...(window.ArrimoSecours?.vues || {}), ...(window.ArrimoChrono?.vues || {}),
     })[etat.vue]()]);
     poserMenuParametres();
     majInfosLieu();
@@ -653,7 +653,7 @@ setInterval(() => {
   if (etat.token && etat.moi && !fluxApp && window.ArrimoFlux) {
     fluxApp = window.ArrimoFlux.ecouter(() => etat.token, () => {
       window.ArrimoSecours?.veille?.();
-      if ($('#modale').hidden && document.visibilityState === 'visible' && ['secours', 'c-urgences', 'c-mouvements', 'liaison', 'urgence'].includes(etat.vue)) rafraichir();
+      if ($('#modale').hidden && document.visibilityState === 'visible' && ['secours', 'chrono', 'c-urgences', 'c-mouvements', 'liaison', 'urgence'].includes(etat.vue)) rafraichir();
     });
     fluxApp.jeton = etat.token;
   }
@@ -1527,6 +1527,8 @@ async function vueCopilote() {
     api('GET', `/copilote/briefing?etablissement_id=${etat.ctx}&langue=${langue}`),
     api('GET', `/copilote/reseau?etablissement_id=${etat.ctx}&langue=${langue}`),
   ]);
+  // Réponse vide (connexion interrompue pendant un changement d'écran) : le prochain rafraîchissement affiche la vue
+  if (!b || !r) return;
   etat.recos = b.recommandations;
   const exemples = t('copilote.exemples');
   const C = (k, vars) => esc(t(`copilote.${k}`, vars));
