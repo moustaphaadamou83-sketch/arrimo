@@ -766,6 +766,8 @@ function creerAppSh(pool, { env = process.env } = {}) {
       const m=map.get(code); if(!m) throw new ErreurSh(400,'Module inconnu ou inactif.');
       const manque=m.dependances.filter((d)=>!choisis.has(d)); if(manque.length) throw new ErreurSh(409,`Le module ${code} requiert : ${manque.join(', ')}.`);
     }
+    const avant=new Map((await pool.query('SELECT module_code,licence FROM sh_hopital_modules WHERE hopital_id=$1',[h.id])).rows.map((r)=>[r.module_code,r.licence]));
+    const changements=modules.filter((m)=>(avant.get(m.code)||'non_selectionne')!==m.licence).map((m)=>`${m.code} : ${avant.get(m.code)||'non_selectionne'} → ${m.licence}`);
     await transaction(pool,async(c)=>{
       for(const m of modules){
         if(!map.has(m.code)||!['non_selectionne','propose','souscrit','suspendu'].includes(m.licence)) throw new ErreurSh(400,'Module ou licence invalide.');
@@ -775,7 +777,7 @@ function creerAppSh(pool, { env = process.env } = {}) {
           [h.id,m.code,m.licence,JSON.stringify(m.parametres||{}),req.u.email]);
       }
       if (choisis.size) await terminerTacheAuto(c, h.id, 'modules', req.u);
-      await journal(c,req.u,'Catalogue de modules modifié',`${h.code_etab} · ${h.nom}`,`${nombre(choisis.size, 'licence souscrite', 'licences souscrites')}`,h.id);
+      await journal(c,req.u,'Catalogue de modules modifié',`${h.code_etab} · ${h.nom}`,`${nombre(choisis.size, 'licence souscrite', 'licences souscrites')}${changements.length?` · ${changements.join(' ; ')}`:''}`,h.id);
     });
     // Client déjà relié : modules (ou profils d'une organisation de secours) transmis un par un à son environnement
     let modules_transmis = null;

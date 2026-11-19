@@ -13,6 +13,8 @@ const AJOUTS_CATALOGUE_SH = new Set(['comptes', 'documents', 'support', 'journal
   'portail_proches', 'messagerie_securisee', 'appels_video',
   // Préhospitalier et Liaison Établissements (migration SH 45, 12 nov. 2026)
   'liaison_secours', 'transport_ambulancier', 'profil_ccs', 'profil_ambulance',
+  // Chantier moteur commun (migration SH 49, 19 nov. 2026) : modules « Bientôt »
+  'chrono', 'urgences_direct', 'transferts_suivi', 'transport_planifie', 'bourse_places', 'donnees_regionales', 'mode_crise', 'visites_confirmees', 'eviter_transferts',
   // Migration 38 : module hospitalier Liaison CHSLD (une ligne ajoutée, aucune ligne existante modifiée)
   'liaison_chsld']);
 // Seconde exception, liste fermée : renommages de valeurs voulus par une migration SH. L'empreinte « avant » est calculée

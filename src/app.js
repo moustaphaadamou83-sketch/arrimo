@@ -217,6 +217,19 @@ function creerApp(pool, options = {}) {
     return ok ? next() : next(new ErreurHttp(403, 'role_secours'));
   });
 
+  // Direction régionale (lot 0, 19 nov. 2026) : lecture de sa région seulement, jamais les lits, patients ni résidents
+  api.use((req, res, next) => {
+    if (req.utilisateur.role !== 'direction_regionale') return next();
+    const ok = (req.method === 'GET' && ['/moi', '/demandes', '/demandes/synthese', '/direction/region', '/regions', '/meteo'].includes(req.path)) || req.path.startsWith('/moi/')
+      || (req.method === 'POST' && req.path === '/deconnexion');
+    return ok ? next() : next(new ErreurHttp(403, 'role_direction_regionale'));
+  });
+  // Demandes, lecture commune des 5 circuits (moteur commun, lot 0) ; régions
+  api.get('/demandes', route((req) => require('./demandes').liste(pool, req.utilisateur, req.query)));
+  api.get('/demandes/synthese', route((req) => require('./demandes').synthese(pool, req.utilisateur, req.query)));
+  api.get('/direction/region', route((req) => require('./directions').region(pool, req.utilisateur)));
+  api.get('/regions', route((req) => require('./directions').regions(pool, req.query.pays)));
+
   // Mot de passe temporaire : le changer est la seule action permise
   api.use((req, res, next) => {
     if (!req.utilisateur.mdp_temporaire) return next();

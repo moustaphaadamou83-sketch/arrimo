@@ -151,3 +151,30 @@ table.compact { min-width: 0; }
 .infos-siege .is-meteo { font-weight: 700; color: #fff; }
 .infos-siege .is-heure { font-weight: 700; color: #fff; }
 @media (max-width: 640px) { .infos-siege { order: 3; width: 100%; } .infos-siege .is-date { display: none; } }
+/* Écran d'activation des modules en cartes (19 nov. 2026) : sarcelle activé, gris désactivé, toujours avec le mot à côté */
+.filtre-modules { display: flex; flex-wrap: wrap; gap: var(--e2); margin-bottom: var(--e3); }
+.grille-modules { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--e3); }
+.carte-module { background: var(--carte); border: 1px solid var(--bordure); border-radius: var(--rayon); padding: var(--e3); display: flex; flex-direction: column; gap: var(--e2); }
+.carte-module h4 { margin: 0; font-size: 1rem; }
+.carte-module .note { margin: 0; }
+.carte-tete { display: flex; gap: var(--e2); align-items: flex-start; }
+.carte-tete > div { flex: 1; }
+.carte-emoji { font-size: 2rem; line-height: 1; }
+.carte-module.etat-bientot { opacity: .62; background: var(--doux); }
+.etiquette-bientot, .etiquette-inclus { font-size: var(--t-note); font-weight: 700; border-radius: 999px; padding: 2px 8px; border: 1px solid var(--bordure); white-space: nowrap; }
+.etiquette-inclus { color: var(--principal); }
+.sous-module { display: flex; align-items: center; justify-content: space-between; gap: var(--e2); border-top: 1px solid var(--bordure); padding-top: var(--e2); }
+.sous-nom { font-size: var(--t-note); }
+.interrupteur { display: inline-flex; align-items: center; gap: 8px; background: none; border: 0; padding: 4px; min-height: 40px; cursor: pointer; font: inherit; color: var(--texte); }
+.interrupteur .piste { width: 40px; height: 22px; border-radius: 11px; background: #94A3B8; position: relative; transition: background .15s; flex: none; }
+.interrupteur .bouton { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .15s; }
+.interrupteur.on .piste { background: #159895; }
+.interrupteur.on .bouton { left: 21px; }
+.interrupteur .mot { font-size: var(--t-note); font-weight: 600; min-width: 5.5em; text-align: left; }
+.interrupteur:disabled { cursor: not-allowed; }
+.interrupteur:focus-visible { outline: 2px solid var(--principal); outline-offset: 2px; border-radius: 6px; }
+.carte-raison .btn { margin-top: var(--e1); }
+.lien-carte { align-self: flex-start; }
+.avance-modules { margin-top: var(--e4); }
+.avance-modules summary { cursor: pointer; font-weight: 600; }
+@media (max-width: 700px) { .grille-modules { grid-template-columns: 1fr; } }

@@ -235,6 +235,16 @@ function brancherSh(api, pool, route) {
     if (b.type_local_code !== undefined) {
       vals.push(require('./types-etablissement').codeTypeLocal(b.type_local_code)); sets.push(`type_local_code = $${vals.length}`);
     }
+    // Région (moteur commun, lot 0) : code de la table regions, vide = aucune
+    if (b.region_code !== undefined) {
+      const r = b.region_code ? (await pool.query('SELECT id FROM regions WHERE code = $1', [String(b.region_code)])).rows[0] : { id: null };
+      if (!r) throw new ErreurHttp(400, 'region_inconnue');
+      vals.push(r.id); sets.push(`region_id = $${vals.length}`); detail.push(`région ${b.region_code || 'retirée'}`);
+    }
+    if (b.langue !== undefined) {
+      if (!['fr', 'en'].includes(b.langue)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'langue' });
+      vals.push(b.langue); sets.push(`langue = $${vals.length}`); detail.push(`langue ${b.langue}`);
+    }
     if (b.vocation !== undefined) {
       if (!['general', 'pediatrique', 'specialise'].includes(b.vocation)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'vocation' });
       vals.push(b.vocation); sets.push(`vocation = $${vals.length}`); detail.push(`vocation ${b.vocation}`);
@@ -254,6 +264,13 @@ function brancherSh(api, pool, route) {
     return o;
   };
   const PROFILS = (b) => [...new Set(Object.entries(b.profils_choix || {}).filter(([, v]) => v === true).map(([k]) => ({ profil_ccs: 'ccs', profil_ambulance: 'ambulance' }[k])).filter(Boolean))];
+  // Régions et directions régionales (moteur commun, lot 0) : créées depuis SH, journalisées
+  api.get('/sh/regions', sh(async (req) => require('./directions').regions(pool, req.query.pays)));
+  api.post('/sh/directions-regionales', sh(async (req) => {
+    const d = await require('./directions').creer(pool, req.body || {});
+    await journalAdmin(pool, systeme, 'Direction régionale enregistrée', d.nom, `${d.code} · ${parSh(req.body || {})}`);
+    return d;
+  }));
   api.get('/sh/organisations-secours', sh(async () => (await pool.query(`SELECT o.code, o.nom, o.type, o.profils, o.actif, o.config_id, c.code AS configuration_code,
       (SELECT count(*)::int FROM unites_secours un WHERE un.organisation_id = o.id) AS unites,
       (SELECT count(*)::int FROM utilisateur_organisations uo WHERE uo.organisation_id = o.id) AS comptes

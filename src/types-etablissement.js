@@ -18,6 +18,7 @@ const TYPES = {
   entreprise_ambulanciere: { nom: 'Entreprise ambulancière', nom_en: 'Ambulance company', statut: 'operationnel', famille: 'secours', type_secours: 'ambulancier' },
   urgences_sante: { nom: 'Urgences-santé', nom_en: 'Urgences-santé', statut: 'operationnel', famille: 'secours', type_secours: 'urgences_sante' },
   premiers_repondants: { nom: 'Pompiers / premiers répondants', nom_en: 'Firefighters / first responders', statut: 'a_venir', famille: 'secours', type_secours: 'premiers_repondants' },
+  entreprise_transport_adapte: { nom: 'Transport adapté', nom_en: 'Adapted transport', statut: 'a_venir', famille: 'secours', type_secours: 'transport_adapte' },
 };
 // Types d'établissement opérationnels (lits, résidents) : jamais une organisation de secours
 const TYPES_OPERATIONNELS = Object.keys(TYPES).filter((t) => TYPES[t].statut === 'operationnel' && TYPES[t].famille !== 'secours');
@@ -69,6 +70,25 @@ const MODULES = [
   { code: 'portail_proches', categorie: 'optionnel', types: ['chsld'], statut: 'disponible', drapeau: 'portail_proches', nom: 'Portail des proches (pilote)', nom_en: 'Family portal (pilot)', note: 'Invitation individuelle, révocable ; démonstration et recette', dependances: ['proches'] },
   { code: 'messagerie_securisee', categorie: 'optionnel', types: ['chsld'], statut: 'disponible', drapeau: 'portail_proches', nom: 'Messagerie sécurisée', nom_en: 'Secure messaging', note: 'Dans le portail des proches', dependances: ['portail_proches'] },
   { code: 'appels_video', categorie: 'optionnel', types: ['chsld'], statut: 'etude', nom: 'Appels audio et vidéo', nom_en: 'Audio and video calls', note: 'Étude seulement' },
+  // Chantier « moteur commun + modules » (cahier v2, 19 nov. 2026) : affichés « Bientôt » jusqu'à leur livraison, jamais activables avant
+  { code: 'chrono', categorie: 'optionnel', types: ['hopital', ...TYPES_SECOURS], statut: 'a_venir', drapeau: 'chrono', nom: 'Chrono (temps à l’urgence)', nom_en: 'Chrono (emergency offload times)',
+    note: 'Heures H11 à H15, chrono à la porte, rapport mensuel', note_en: 'H11 to H15 times, door clock, monthly report', dependances: ['liaison_secours'] },
+  { code: 'urgences_direct', categorie: 'optionnel', types: ['hopital', ...TYPES_SECOURS], statut: 'a_venir', drapeau: 'urgences_direct', nom: 'Urgences en direct', nom_en: 'Live emergency status',
+    note: 'État des urgences, fermetures planifiées, page publique sur consentement', note_en: 'Emergency status, planned closures, public page with consent' },
+  { code: 'transferts_suivi', categorie: 'optionnel', types: ['hopital', ...TYPES_SECOURS], statut: 'a_venir', drapeau: 'transferts_suivi', nom: 'Transferts (centrale et rapatriements)', nom_en: 'Transfers (hub and repatriation)',
+    note: 'Fiche de transfert unique, centrale régionale, rapatriements proposés', note_en: 'Single transfer record, regional hub, proposed repatriations' },
+  { code: 'transport_planifie', categorie: 'optionnel', types: ['hopital', 'chsld', ...TYPES_SECOURS], statut: 'a_venir', drapeau: 'transport_planifie', nom: 'Transport non urgent', nom_en: 'Non-urgent transport',
+    note: 'Réservation, plage confirmée, lit à libérer', note_en: 'Booking, confirmed time slot, bed to free' },
+  { code: 'bourse_places', categorie: 'optionnel', types: ['hopital', 'chsld'], statut: 'a_venir', drapeau: 'bourse_places', nom: 'Bourse des places', nom_en: 'Placement exchange',
+    note: 'Places libres et à venir, classement expliqué, lien invité', note_en: 'Free and upcoming places, explained ranking, guest link' },
+  { code: 'donnees_regionales', categorie: 'optionnel', types: ['hopital', 'chsld'], statut: 'a_venir', drapeau: 'donnees_regionales', nom: 'Données et listes d’attente', nom_en: 'Data and waiting lists',
+    note: 'Tableaux régionaux, petits nombres masqués, CSV', note_en: 'Regional dashboards, small counts masked, CSV' },
+  { code: 'mode_crise', categorie: 'optionnel', types: ['hopital', 'chsld'], statut: 'a_venir', drapeau: 'mode_crise', nom: 'Mode crise (évacuation)', nom_en: 'Crisis mode (evacuation)',
+    note: 'Places de la région, lieu proposé par résident, suivi', note_en: 'Regional places, proposed site per resident, tracking' },
+  { code: 'visites_confirmees', categorie: 'optionnel', types: ['chsld'], statut: 'a_venir', drapeau: 'visites_confirmees', nom: 'Visites confirmées', nom_en: 'Confirmed visits',
+    note: 'Visites prévues du CLSC ou du prestataire, arrivée et départ', note_en: 'Planned CLSC or provider visits, arrival and departure' },
+  { code: 'eviter_transferts', categorie: 'optionnel', types: ['chsld'], statut: 'a_venir', drapeau: 'eviter_transferts', nom: 'Éviter les transferts inutiles', nom_en: 'Avoid unnecessary transfers',
+    note: 'Liste de l’établissement et alternatives avant l’appel', note_en: 'Facility checklist and alternatives before calling' },
 ];
 const MODULE = new Map(MODULES.map((m) => [m.code, m]));
 /** Drapeaux opérationnels modifiables (etablissements.modules) pour un type. */
@@ -147,6 +167,10 @@ const TYPES_LOCAUX = {
   rtf: { court: 'RTF', court_en: 'RTF' },
   maison_aines: { court: 'maison des aînés', court_en: 'seniors’ home' },
   maison_retraite: { court: 'résidence', court_en: 'residence' },
+  // Moteur commun, lot 0 (19 nov. 2026) : destinations élargies, même moteur d'hébergement
+  soins_palliatifs: { court: 'maison de soins palliatifs', court_en: 'palliative care home' },
+  hospitalisation_domicile: { court: 'HAD', court_en: 'hospital at home' },
+  sante_mentale: { court: 'ressource en santé mentale', court_en: 'mental health resource' },
 };
 /** Code de type local reçu de SH ou de l'administration : vide = aucun. */
 function codeTypeLocal(valeur) {

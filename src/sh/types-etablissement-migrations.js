@@ -134,5 +134,29 @@ async function migrerLiaisonSecours(c) {
   await c.query('INSERT INTO sh_migrations(version) VALUES($1)', [LIAISON_SECOURS_VERSION]);
   return true;
 }
+/* Migration 49 (19 nov. 2026, moteur commun lot 0) : modules du chantier ajoutés au catalogue (statut « a_venir », non activables),
+   type « transport adapté » accepté, types locaux soins palliatifs, HAD et santé mentale (modèle CHSLD). Lignes ajoutées seulement. */
+const MOTEUR_COMMUN_VERSION = 49;
+const MODULES_CHANTIER = ['chrono', 'urgences_direct', 'transferts_suivi', 'transport_planifie', 'bourse_places', 'donnees_regionales', 'mode_crise', 'visites_confirmees', 'eviter_transferts'];
+async function migrerMoteurCommun(c) {
+  if ((await c.query('SELECT 1 FROM sh_migrations WHERE version=$1', [MOTEUR_COMMUN_VERSION])).rowCount) return false;
+  const TE = require('../types-etablissement');
+  const types = Object.keys(TE.TYPES).map((t) => `'${t}'`).join(',');
+  await c.query(`ALTER TABLE hopitaux DROP CONSTRAINT IF EXISTS hopitaux_type_etablissement_check;
+    ALTER TABLE hopitaux ADD CONSTRAINT hopitaux_type_etablissement_check CHECK (type_etablissement IN (${types}));`);
+  for (const code of MODULES_CHANTIER) {
+    const i = TE.MODULES.findIndex((m) => m.code === code); const m = TE.MODULES[i];
+    await c.query(`INSERT INTO sh_modules_catalogue (code, nom, description, dependances, categorie, types, statut, ordre, nom_en, note)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT (code) DO NOTHING`,
+    [m.code, m.nom, m.note || m.nom, m.dependances || [], m.categorie, m.types, m.statut, i + 1, m.nom_en, m.note || null]);
+  }
+  const seuls = ['reseau_chsld', 'demandes_hebergement'];
+  for (const [code, nom, en, off] of [['soins_palliatifs', 'Maison de soins palliatifs', 'Palliative care home', ['reseau_chsld']],
+    ['hospitalisation_domicile', 'Hospitalisation à domicile (HAD)', 'Hospital at home', [...seuls, 'taches']], ['sante_mentale', 'Ressource en santé mentale', 'Mental health resource', seuls]]) {
+    await c.query(`INSERT INTO sh_types_locaux (pays_code, code, nom, nom_en, modele, modules_desactives) VALUES ('CA', $1, $2, $3, 'chsld', $4) ON CONFLICT (pays_code, code) DO NOTHING`, [code, nom, en, off]);
+  }
+  await c.query('INSERT INTO sh_migrations(version) VALUES($1)', [MOTEUR_COMMUN_VERSION]);
+  return true;
+}
 const VERSION_SH = TYPES_AINES_VERSION;
-module.exports = { LIAISON_SECOURS_VERSION, migrerLiaisonSecours, TYPES_ETABLISSEMENT_VERSION, LIAISON_CHSLD_VERSION, PRODUCTIONS_VERSION, TYPES_LOCAUX_VERSION, DEMANDES_SITE_VERSION, VERSION_SH, migrerTypesEtablissement, migrerLiaisonChsld, migrerProductions, migrerTypesLocaux, migrerDemandesSite, migrerTypesAines };
+module.exports = { MOTEUR_COMMUN_VERSION, MODULES_CHANTIER, migrerMoteurCommun, LIAISON_SECOURS_VERSION, migrerLiaisonSecours, TYPES_ETABLISSEMENT_VERSION, LIAISON_CHSLD_VERSION, PRODUCTIONS_VERSION, TYPES_LOCAUX_VERSION, DEMANDES_SITE_VERSION, VERSION_SH, migrerTypesEtablissement, migrerLiaisonChsld, migrerProductions, migrerTypesLocaux, migrerDemandesSite, migrerTypesAines };

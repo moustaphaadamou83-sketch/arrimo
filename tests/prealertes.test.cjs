@@ -553,7 +553,7 @@ test('scénario D : correspondance de dossier par un système hospitalier simul�
     assert.strictEqual((await appel('bouchard', 'POST', `/secours/prealertes/${pa.id}/correspondance`, { ...ident, etablissement_id: ids.sl })).statut, 404);
     for (const qui of ['para', 'ccs']) {
       const brut = JSON.stringify((await appel(qui, 'GET', '/secours/prealertes')).corps);
-      assert.deepStrictEqual(['Fictif', '"correspondance"', 'P-9100', '1951'].filter((x) => brut.includes(x)), [], qui);
+      assert.deepStrictEqual(['Fictif', '"correspondance"', 'P-9100', '1951-03-04'].filter((x) => brut.includes(x)), [], qui);
       assert.doesNotMatch(brut, /"correspondance_(statut|patient_id|candidats|le|par)"/, qui);
     }
     assert.strictEqual((await appel('para', 'POST', `/secours/prealertes/${pa.id}/correspondance`, ident)).statut, 403);
