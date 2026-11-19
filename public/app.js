@@ -208,14 +208,19 @@ function messageErreur(data, statut) {
   if (data && data.code && aTrad(`erreurs.${data.code}`)) return t(`erreurs.${data.code}`, data.vars || {});
   return (data && data.erreur) || t('general.erreur_http', { statut });
 }
-async function api(methode, chemin, corps) {
+async function api(methode, chemin, corps, essai = 0) {
   const r = await fetch(`/api${chemin}`, {
     method: methode,
     headers: { 'Content-Type': 'application/json', 'X-Langue': langue, ...(etat.token ? { Authorization: `Bearer ${etat.token}` } : {}) },
     body: corps ? JSON.stringify(corps) : undefined,
   });
-  let data = null;
-  try { data = await r.json(); } catch { /* réponse vide */ }
+  let data = null; let lu = true;
+  try { data = await r.json(); } catch { lu = false; /* réponse vide ou interrompue */ }
+  // Lecture interrompue (changement d'écran, réseau) : une lecture GET est relancée une fois ; jamais un « null » silencieux
+  if (r.ok && !lu && (r.headers.get('content-type') || '').includes('json')) {
+    if (methode === 'GET' && essai < 1) return api(methode, chemin, corps, essai + 1);
+    throw new Error(messageErreur(null, r.status));
+  }
   if (r.status === 401 && etat.token && !etat.pause) { deconnecter(true); }
   if (!r.ok) {
     const e = new Error(messageErreur(data, r.status));
