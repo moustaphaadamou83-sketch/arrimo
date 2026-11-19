@@ -675,11 +675,14 @@ async function lireNotifications(pool, utilisateur, etabId) {
     `SELECT n.*, t.numero FROM notifications n LEFT JOIN transferts t ON t.id = n.transfert_id
       WHERE n.etablissement_id = $1 ORDER BY n.date DESC LIMIT 50`, [etabId]);
   const nomType = await traducteurTypes(pool, utilisateur.langue);
-  const fuseau = rows.some((n) => n.vars?.arrivee) ? (await etablissement(pool, etabId)).config.fuseau : null;
+  const fuseau = rows.some((n) => n.vars?.arrivee || n.vars?.debut) ? (await etablissement(pool, etabId)).config.fuseau : null;
   for (const n of rows) {
     if (!n.code) continue;
     const vars = { ...n.vars, ...(n.vars?.type ? { type: nomType(n.vars.type) } : {}) };
     if (vars.arrivee) vars.heure = heureLocale(utilisateur.langue, vars.arrivee, fuseau);
+    // Urgences en direct : heures et services touchés dans la langue du lecteur
+    for (const k of ['debut', 'fin']) if (vars[k]) vars[k] = new Date(vars[k]).toLocaleString(dico(utilisateur.langue, 'locale'), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: fuseau });
+    if (typeof vars.services === 'string' && n.code?.startsWith('urgence_fermeture')) vars.services = vars.services.split(', ').map((x) => tr(utilisateur.langue, `service_urgence.${x}`)).join(', ');
     // Disponibilité à côté : type d'unité et temps de route dans la langue du lecteur
     if (vars.type_nom) vars.type = nomType(vars.type_nom).toLowerCase();
     if (vars.min != null) vars.duree = duree(utilisateur.langue, vars.min);

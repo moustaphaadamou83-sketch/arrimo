@@ -285,7 +285,7 @@ async function urgenceAvecDeclaration(db, etabId) {
   return u || d ? { ...(u || {}), declaration: d } : null;
 }
 async function declarationDe(db, etabId) {
-  const r = (await db.query('SELECT e.urgence_statut_declare, e.urgence_statut_le, c.disponibilite_fraicheur_min FROM etablissements e JOIN config_pays c ON c.id = e.config_id WHERE e.id = $1', [etabId])).rows[0];
+  const r = (await db.query('SELECT e.urgence_statut_declare, e.urgence_statut_le, e.reouverture_prevue_le, c.disponibilite_fraicheur_min FROM etablissements e JOIN config_pays c ON c.id = e.config_id WHERE e.id = $1', [etabId])).rows[0];
   return r ? declaration(r) : null;
 }
 /** Actions proposées selon le rôle et l'étape (le serveur revérifie chacune). Le CCS ne fait que consulter. */
@@ -469,25 +469,34 @@ async function servicesHopital(pool, u, etabId) {
 function declaration(e) {
   if (!e.urgence_statut_declare) return null;
   const age = Math.round((Date.now() - new Date(e.urgence_statut_le).getTime()) / 60000);
-  return { statut: e.urgence_statut_declare, le: e.urgence_statut_le, age_min: age, perime: age > (e.disponibilite_fraicheur_min || 15), source: 'declaration_etablissement' };
+  // Une fermeture déclarée reste valable jusqu'à l'heure de réouverture prévue (jamais « périmée » avant)
+  const fermee = e.urgence_statut_declare === 'fermee_temporairement';
+  return { statut: e.urgence_statut_declare, le: e.urgence_statut_le, age_min: age, perime: fermee ? false : age > (e.disponibilite_fraicheur_min || 15),
+    reouverture_prevue_le: fermee ? e.reouverture_prevue_le || null : null, source: 'declaration_etablissement' };
 }
-const STATUTS_URGENCE = ['ouvert', 'capacite_limitee', 'saturation', 'delestage'];
+const STATUTS_URGENCE = ['ouvert', 'capacite_limitee', 'saturation', 'delestage', 'fermee_temporairement'];
 /** L'hôpital déclare le statut de son urgence (personne habilitée, journalisé). Une confirmation sans changement renouvelle l'heure. */
 async function declarerUrgence(pool, u, b) {
   const e = await exigerHopital(pool, u, b.etablissement_id);
   if (!['coordonnateur', 'gestionnaire', 'admin_etab'].includes(u.role)) throw new ErreurHttp(403, 'role_insuffisant');
   const statut = String(b.statut || '');
   if (!STATUTS_URGENCE.includes(statut)) throw new ErreurHttp(400, 'statut_urgence_invalide');
+  // Fermée temporairement (Urgences en direct, 20 nov. 2026) : heure de réouverture prévue obligatoire, dans les 14 jours
+  let reouverture = null;
+  if (statut === 'fermee_temporairement') {
+    reouverture = new Date(b.reouverture_prevue_le);
+    if (Number.isNaN(reouverture.getTime()) || reouverture <= new Date() || reouverture - Date.now() > 14 * 24 * 3600000) throw new ErreurHttp(400, 'reouverture_requise');
+  }
   return transaction(pool, async (c) => {
-    const r = (await c.query(`UPDATE etablissements SET urgence_statut_declare = $2, urgence_statut_le = now(), urgence_statut_par = $3 WHERE id = $1
-      RETURNING urgence_statut_declare AS statut, urgence_statut_le AS le`, [e.id, statut, u.id])).rows[0];
-    await journaliser(c, { etablissementId: e.id, utilisateurId: u.id, action: 'Statut de l’urgence déclaré', detail: statut });
+    const r = (await c.query(`UPDATE etablissements SET urgence_statut_declare = $2, urgence_statut_le = now(), urgence_statut_par = $3, reouverture_prevue_le = $4 WHERE id = $1
+      RETURNING urgence_statut_declare AS statut, urgence_statut_le AS le, reouverture_prevue_le`, [e.id, statut, u.id, reouverture])).rows[0];
+    await journaliser(c, { etablissementId: e.id, utilisateurId: u.id, action: 'Statut de l’urgence déclaré', detail: reouverture ? `${statut} · réouverture ${reouverture.toISOString()}` : statut });
     return r;
   });
 }
 async function statutUrgence(pool, u, etabId) {
   const e = await exigerHopital(pool, u, etabId);
-  const r = (await pool.query(`SELECT e.urgence_statut_declare, e.urgence_statut_le, c.disponibilite_fraicheur_min, us.nom AS par
+  const r = (await pool.query(`SELECT e.urgence_statut_declare, e.urgence_statut_le, e.reouverture_prevue_le, c.disponibilite_fraicheur_min, us.nom AS par
     FROM etablissements e JOIN config_pays c ON c.id = e.config_id LEFT JOIN utilisateurs us ON us.id = e.urgence_statut_par WHERE e.id = $1`, [e.id])).rows[0];
   return { declaration: declaration(r), par: r.par, seuil_min: r.disponibilite_fraicheur_min, statuts: STATUTS_URGENCE };
 }

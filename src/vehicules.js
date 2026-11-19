@@ -118,10 +118,11 @@ async function capacites(pool, hop) {
   });
 }
 const SQL_HOPITAUX = `SELECT e.id, e.nom, e.ville, e.latitude, e.longitude, e.modules, e.type_etablissement,
-    e.urgence_statut_declare, e.urgence_statut_le, c.disponibilite_fraicheur_min, c.seuil_civieres_jaune, c.seuil_civieres_orange, c.seuil_civieres_rouge
+    e.urgence_statut_declare, e.urgence_statut_le, e.reouverture_prevue_le, c.disponibilite_fraicheur_min, c.seuil_civieres_jaune, c.seuil_civieres_orange, c.seuil_civieres_rouge
   FROM etablissements e JOIN config_pays c ON c.id = e.config_id WHERE e.actif AND e.config_id = ANY($1) AND COALESCE(e.type_etablissement, 'hopital') = 'hopital'`;
 // Disponibilité : 0 disponible, 1 capacité limitée ou tendue, 2 saturation ou délestage, 3 inconnue
 function rangDisponibilite(h) {
+  if (h.ecartee) return 4;
   const d = h.statut_declare && !h.statut_declare.perime ? h.statut_declare.statut : null;
   if (d === 'saturation' || d === 'delestage' || h.urgence?.niveau === 'rouge' || h.urgence?.civieres_libres === 0) return 2;
   if (d === 'capacite_limitee' || ['jaune', 'orange'].includes(h.urgence?.niveau)) return 1;
@@ -131,7 +132,13 @@ function rangDisponibilite(h) {
  * Classement des urgences depuis un point de départ : temps de route OSRM (distance à vol d'oiseau si le routeur ne répond pas),
  * tri par disponibilité puis temps de route. Le premier est le « meilleur choix » signalé par OG : une information, jamais une décision.
  */
-async function classer(hops, depart) {
+async function classer(hops, depart, { categorie = null, pool = null } = {}) {
+  // Urgences en direct : une urgence fermée (ou dont le service de la catégorie est fermé) est écartée, avec la raison
+  if (pool && hops.length) {
+    const ud = require('./urgences-direct');
+    const f = await ud.fermeturesEnCours(pool, hops.map((h) => h.id));
+    for (const h of hops) { const e = ud.ecartee(h, f.get(h.id), categorie); if (e) h.ecartee = e; }
+  }
   let routes = null; let source = 'osrm';
   try { routes = (await require('./routage').matrice(depart, hops.filter((h) => h.latitude != null))).routes; } catch { routes = null; source = 'vol_oiseau'; }
   const avecCoord = hops.filter((h) => h.latitude != null);
@@ -160,7 +167,7 @@ async function urgencesProches(pool, u, etabId) {
   const hops = await capacites(pool, (await pool.query(SQL_HOPITAUX, [await configsRegion(pool, id)])).rows);
   // Les 8 plus proches à vol d'oiseau sont classées par le routeur (requête légère) ; les autres suivent
   const proches = hops.map((h) => ({ ...h, vol: km(ici, h) })).sort((a, b) => (a.vol ?? 1e9) - (b.vol ?? 1e9));
-  const c = await classer(proches.slice(0, 8).map(({ vol, ...h }) => h), ici);
+  const c = await classer(proches.slice(0, 8).map(({ vol, ...h }) => h), ici, { pool });
   const reste = proches.slice(8).map(({ vol, ...h }) => ({ ...h, distance_km: vol, temps_min: null, source_distance: 'vol_oiseau', rang: rangDisponibilite(h) }));
   return [...c.urgences, ...reste];
 }
@@ -193,7 +200,7 @@ async function urgencesClassees(pool, u, q = {}) {
   } else throw new ErreurHttp(400, 'parametre_invalide', { nom: 'unite_id' });
   // Hôpitaux qui reçoivent les préalertes (Liaison Secours actif) dans la région
   const hops = (await pool.query(SQL_HOPITAUX, [cfgs])).rows.filter((e) => TE.moduleActif(e, 'liaison_secours'));
-  return classer(await capacites(pool, hops), depart);
+  return classer(await capacites(pool, hops), depart, { pool, categorie: q.categorie ? String(q.categorie) : null });
 }
 
 /** Établissements d'hébergement de la région (nom et position seulement) : symboles de la carte des secours. */

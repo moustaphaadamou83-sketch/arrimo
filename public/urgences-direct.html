@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="fr-CA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Urgences en direct · Arrimo</title>
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<script src="/apparence.js"></script>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body class="page-urgences">
+<header class="barre"><div class="barre-in">
+  <a class="marque" href="/urgences"><img src="/logo.svg" alt="" width="30" height="30"><div><strong>Arrimo</strong><div class="ud-sous" id="ud-sous"></div></div></a>
+  <div class="barre-droite"><div class="bascule-langue" role="group" aria-label="Langue / Language"><button type="button" data-ud-langue="fr">FR</button><button type="button" data-ud-langue="en">EN</button></div></div>
+</div></header>
+<main class="contenu ud-contenu">
+  <p class="ud-vital" id="ud-vital" role="alert"></p>
+  <p class="ud-demo" id="ud-demo"></p>
+  <h1 id="ud-titre"></h1>
+  <p class="note" id="ud-intro"></p>
+  <div id="ud-liste" aria-live="polite"></div>
+  <section class="panneau-c"><h2 id="ud-options-titre"></h2><ul id="ud-options" class="liste-simple"></ul></section>
+  <p class="note" id="ud-licence"></p>
+</main>
+<script src="/urgences-direct.js"></script>
+</body>
+</html>

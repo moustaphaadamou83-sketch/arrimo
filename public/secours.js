@@ -16,7 +16,7 @@
       s_envoyee: 'transmise, réception non confirmée', s_recue: 'reçue par l’écran de l’hôpital', s_consultee: 'consultée', s_prise_en_compte: 'prise en compte', s_preparation: 'préparation en cours',
       s_preparation_terminee: 'préparation terminée', s_arrivee: 'arrivée confirmée', s_cloturee: 'remise confirmée, clôturée', s_annulee: 'annulée', s_remplacee: 'remplacée (destination modifiée)',
       urgences: 'Urgences de la région', declare: 'Déclaré : {statut}, il y a {age} min', ancien: 'donnée ancienne',
-      st: { ouvert: 'ouverte', capacite_limitee: 'capacité limitée', saturation: 'saturation', delestage: 'délestage' }, vol_oiseau: '{km} km à vol d’oiseau', civieres: '{n} civières libres', civiere1: '{n} civière libre', sans_donnee: 'aucune donnée d’urgence',
+      st: { ouvert: 'ouverte', capacite_limitee: 'capacité limitée', saturation: 'saturation', delestage: 'délestage', fermee_temporairement: 'fermée temporairement' }, ecartee: 'Écartée : fermée temporairement{reouv}', ecartee_service: 'Écartée pour cette catégorie : service fermé', reouv: ' (réouverture {heure})', vol_oiseau: '{km} km à vol d’oiseau', civieres: '{n} civières libres', civiere1: '{n} civière libre', sans_donnee: 'aucune donnée d’urgence',
       position: 'Partager la position de l’unité', position_aide: 'Facultatif : améliore l’heure d’arrivée vue par l’hôpital. Conservée 24 h au plus.', position_on: 'Position partagée',
       position_refus: 'Position non disponible sur cet appareil.', sans_position_court: 'position inconnue', historique: 'Dernières 24 heures', aucune: 'Aucune préalerte.', organisation: 'Préalertes de l’organisation',
       ccs_en_cours: 'Ambulances annoncées dans la région', carte: 'Carte régionale', alertes: 'Alertes de saturation', aucune_alerte: 'Aucune saturation déclarée ou mesurée.',
@@ -87,7 +87,7 @@
       s_envoyee: 'sent, receipt not confirmed', s_recue: 'received by the hospital screen', s_consultee: 'viewed', s_prise_en_compte: 'acknowledged', s_preparation: 'preparation in progress',
       s_preparation_terminee: 'preparation complete', s_arrivee: 'arrival confirmed', s_cloturee: 'handover confirmed, closed', s_annulee: 'cancelled', s_remplacee: 'replaced (destination changed)',
       urgences: 'Emergency departments in the region', declare: 'Declared: {statut}, {age} min ago', ancien: 'stale data',
-      st: { ouvert: 'open', capacite_limitee: 'limited capacity', saturation: 'saturation', delestage: 'diversion' }, vol_oiseau: '{km} km as the crow flies', civieres: '{n} free stretchers', civiere1: '{n} free stretcher', sans_donnee: 'no emergency data',
+      st: { ouvert: 'open', capacite_limitee: 'limited capacity', saturation: 'saturation', delestage: 'diversion', fermee_temporairement: 'temporarily closed' }, ecartee: 'Excluded: temporarily closed{reouv}', ecartee_service: 'Excluded for this category: service closed', reouv: ' (reopening {heure})', vol_oiseau: '{km} km as the crow flies', civieres: '{n} free stretchers', civiere1: '{n} free stretcher', sans_donnee: 'no emergency data',
       position: 'Share the unit’s position', position_aide: 'Optional: improves the arrival time seen by the hospital. Kept 24 h at most.', position_on: 'Position shared',
       position_refus: 'Position unavailable on this device.', sans_position_court: 'position unknown', historique: 'Last 24 hours', aucune: 'No pre-alert.', organisation: 'Organization pre-alerts',
       ccs_en_cours: 'Ambulances announced in the region', carte: 'Regional map', alertes: 'Saturation alerts', aucune_alerte: 'No saturation declared or measured.',
@@ -368,13 +368,15 @@
     return `<section class="carte-s"><h2>${t('vehicules')}</h2><p class="note">${t('vehicules_aide')}</p>${l.length ? l.map((v) => `<div class="ligne-s" data-vehicule="${esc(v.numero)}"><div><strong>${esc(v.numero)}</strong>${v.plaque ? ` · ${esc(v.plaque)}` : ''} <span class="note">${esc(v.organisation)}</span><br>${pastilleV(v.etat)}${v.destination ? ` <span>${esc(t('vers', { dest: v.destination }))}</span>` : ''}</div>
       <div class="note">${v.modifie_le ? esc(t('maj', { heure: heure(v.modifie_le) })) : ''}${v.position ? '' : `${v.modifie_le ? ' · ' : ''}${t('sans_position')}`}</div></div>`).join('') : `<p class="note">${t('aucun_vehicule')}</p>`}</section>`;
   }
-  const COUL_RANG = ['#16A34A', '#F59E0B', '#DC2626', '#94A3B8'];
+  const COUL_RANG = ['#16A34A', '#F59E0B', '#DC2626', '#94A3B8', '#DC2626'];
   function tableauClasse(r, { choisir = false, demander = false } = {}) {
     if (!r) return `<p class="note">${t('aucune')}</p>`;
     if (r.sans_position) return `<p class="bandeau">${t('sans_position')}</p>`;
     const og = r.og;
     const lignes = r.urgences.map((h) => {
-      const st = h.statut_declare && !h.statut_declare.perime ? t('st.' + h.statut_declare.statut) : TXT[L].rang[h.rang];
+      // Urgences en direct : urgence écartée (fermée ou service fermé), raison écrite en toutes lettres
+      const st = h.ecartee ? (h.ecartee.raison === 'service_ferme' ? t('ecartee_service') : t('ecartee', { reouv: h.ecartee.reouverture ? t('reouv', { heure: heure(h.ecartee.reouverture) }) : '' }))
+        : h.statut_declare && !h.statut_declare.perime ? t('st.' + h.statut_declare.statut) : TXT[L].rang[h.rang];
       const meilleur = og && og.id === h.id;
       return `<tr class="${meilleur ? 'meilleur' : ''}" data-dest-classee="${h.id}"><td data-l="${t('c_urgence')}"><strong>${esc(ArrimoCarte.court(h.nom))}</strong>${meilleur ? ` <span class="badge-og">${t('og_meilleur')}</span>` : ''}</td>
         <td data-l="${t('c_temps')}" class="num">${h.temps_min != null ? `<strong>${h.temps_min} min</strong>` : '—'}</td>

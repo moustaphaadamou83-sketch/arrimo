@@ -100,9 +100,39 @@
     const d = u.declaration; const gerer = ['coordonnateur', 'gestionnaire', 'admin_etab'].includes(etat.moi.utilisateur.role);
     return `<div class="panneau-c" style="margin:8px 0"><h3 style="margin:0 0 4px">${S('urg_titre')}</h3>
       <p class="note">${d ? S('urg_actuel', { statut: t(`liaison_secours.st_${d.statut}`), age: d.age_min, par: u.par ? ` · ${u.par}` : '' }) : S('urg_aucun')}</p>
+      ${d?.reouverture_prevue_le ? `<p class="note"><strong>${S('urg_reouverture', { heure: heure(d.reouverture_prevue_le) })}</strong></p>` : ''}
       ${d && d.perime ? `<p class="bandeau" role="status">${S('urg_perime')}</p>` : ''}
       ${gerer ? `<div class="chips" role="group">${u.statuts.map((x) => `<button class="chip" type="button" data-ls-urg="${x}" aria-pressed="${d?.statut === x}">${S(`st_${x}`)}</button>`).join('')}</div>` : ''}
       <p class="note">${S('urg_aide', { seuil: u.seuil_min })}</p></div>`;
+  }
+  /* Urgences en direct (20 nov. 2026) : fermetures planifiées, avis automatiques ; fermetures des urgences voisines */
+  function panneauFermetures(ud) {
+    const gerer = ['coordonnateur', 'gestionnaire', 'admin_etab'].includes(etat.moi.utilisateur.role);
+    const ligne = (f, moi) => `<li><strong>${moi ? '' : `${esc(f.hopital)} · `}${f.services.map((x) => S(`sv_${x}`)).join(', ')}</strong> · ${heure(f.debut_le)} → ${heure(f.fin_prevue_le)} · ${S(`fd_${f.statut}`)}
+      ${moi && gerer ? (f.statut === 'planifiee' ? ` <button class="btn" type="button" data-fd-action="annuler" data-fd="${f.id}" data-v="${f.version}">${S('fd_annuler')}</button>`
+        : ` <button class="btn" type="button" data-fd-action="terminer" data-fd="${f.id}" data-v="${f.version}">${S('fd_terminer')}</button>`) : ''}</li>`;
+    return `<div class="panneau-c" style="margin:8px 0"><h3 style="margin:0 0 4px">${S('fd_titre')}</h3>
+      <p class="note">${ud.publie ? S('fd_publie') : S('fd_non_publie')}</p>
+      ${ud.fermetures.length ? `<ul class="liste-simple">${ud.fermetures.map((f) => ligne(f, true)).join('')}</ul>` : `<p class="note">${S('fd_aucune')}</p>`}
+      ${gerer ? `<button class="btn" type="button" id="fd-planifier">${S('fd_planifier')}</button><p class="note">${S('fd_aide')}</p>` : ''}
+      ${ud.voisins.length ? `<h4>${S('fd_voisins')}</h4><ul class="liste-simple">${ud.voisins.map((f) => ligne(f, false)).join('')}</ul>` : ''}</div>`;
+  }
+  function modalePlanifier(services) {
+    const local = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    const debut = new Date(Date.now() + 3600000); const fin = new Date(Date.now() + 5 * 3600000);
+    modale(t('liaison_secours.fd_planifier'), `<p class="note">${S('fd_aide')}</p>
+      <div class="champ"><label class="lbl" for="fd-debut">${S('fd_debut')}</label><input type="datetime-local" id="fd-debut" value="${local(debut)}"></div>
+      <div class="champ"><label class="lbl" for="fd-fin">${S('fd_fin')}</label><input type="datetime-local" id="fd-fin" value="${local(fin)}"></div>
+      <fieldset class="champ"><legend class="lbl">${S('fd_services')}</legend>${services.map((x, i) => `<label class="case"><input type="checkbox" data-fd-sv="${x}"${i ? '' : ' checked'}> ${S(`sv_${x}`)}</label>`).join('')}</fieldset>`,
+    [{ label: t('general.annuler') }, { label: t('liaison_secours.fd_planifier'), pri: true, run: async () => (await agir(null, () => api('POST', '/urgences-direct/fermetures', {
+      etablissement_id: etat.ctx, debut_le: new Date($('#fd-debut').value).toISOString(), fin_prevue_le: new Date($('#fd-fin').value).toISOString(),
+      services: [...document.querySelectorAll('[data-fd-sv]:checked')].map((c) => c.dataset.fdSv) }), t('liaison_secours.fd_ok'))) !== null || false }]);
+  }
+  function modaleFermeture() {
+    const d = new Date(Date.now() + 4 * 3600000); const v = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    modale(t('liaison_secours.urg_reouverture_titre'), `<div class="champ"><label class="lbl" for="fd-reouv">${S('urg_reouverture_champ')}</label><input type="datetime-local" id="fd-reouv" value="${v}"></div>`,
+      [{ label: t('general.annuler') }, { label: t('liaison_secours.st_fermee_temporairement'), pri: true, run: async () => (await agir(null, () => api('POST', '/secours/urgence', {
+        etablissement_id: etat.ctx, statut: 'fermee_temporairement', reouverture_prevue_le: new Date($('#fd-reouv').value).toISOString() }), t('liaison_secours.ok'))) !== null || false }]);
   }
   // Scénario D (démonstration seulement) : système hospitalier SIMULÉ, fiches fictives ; identité visible par l'hôpital seulement
   function blocCorrespondance(p) {
@@ -140,7 +170,9 @@
     const v = $('#v-secours'); if (!v) return;
     document.getElementById('alerte-secours')?.remove();
     let d; let urg = null;
-    try { [d, urg] = await Promise.all([api('GET', `/secours/prealertes?etablissement_id=${etat.ctx}`), api('GET', `/secours/urgence?etablissement_id=${etat.ctx}`).catch(() => null)]); }
+    let ud = null;
+    try { [d, urg, ud] = await Promise.all([api('GET', `/secours/prealertes?etablissement_id=${etat.ctx}`), api('GET', `/secours/urgence?etablissement_id=${etat.ctx}`).catch(() => null),
+      api('GET', `/urgences-direct?etablissement_id=${etat.ctx}`).catch(() => null)]); }
     catch (e) { v.innerHTML = `<p class="note">${esc(e.message)}</p>`; return; }
     const ouvertes = d.prealertes.filter((p) => OUVERTES.includes(p.statut)); const closes = d.prealertes.filter((p) => !OUVERTES.includes(p.statut));
     // Nouvelle préalerte depuis le dernier affichage : son (si activé sur ce poste)
@@ -149,7 +181,7 @@
     alertesSonores(ouvertes);
     ouvertes.forEach((p) => etatS.vues.add(p.id));
     // Point 2 : rien n'est redessiné si les données n'ont pas changé (un appui en cours n'est jamais perdu)
-    const sig = JSON.stringify([d, urg, etatS.affichage, son(), etat.ctx]);
+    const sig = JSON.stringify([d, urg, ud, etatS.affichage, son(), etat.ctx]);
     if (sig === etatS.signature && v.innerHTML) { etatS.donnees = d; return; }
     etatS.signature = sig;
     etatS.donnees = d;
@@ -157,7 +189,7 @@
     v.innerHTML = `<div class="entete"><div><h2>${S('titre', { etab: e?.nom || '' })}</h2><p>${S('intro')}</p></div>
         <div class="actions"><button class="btn" type="button" id="ls-og"><img src="og-robot.svg" alt="" width="20" height="20" style="vertical-align:middle;margin-right:6px">${S('og')}</button></div></div>
       <p class="note">${S('regle')}</p>
-      ${urg ? panneauUrgence(urg) : ''}
+      ${urg ? panneauUrgence(urg) : ''}${ud ? panneauFermetures(ud) : ''}
       <div class="chips" role="group"><button class="chip" type="button" data-ls-vue="liste" aria-pressed="${etatS.affichage === 'liste'}">${S('liste')}</button><button class="chip" type="button" data-ls-vue="carte" aria-pressed="${etatS.affichage === 'carte'}">${S('carte')}</button>
         <label class="case" style="margin-left:12px"><input type="checkbox" id="ls-son"${son() ? ' checked' : ''}> ${S('son')}</label></div>
       ${etatS.affichage === 'carte' ? '<div id="ls-carte" style="height:420px;border-radius:12px;margin:12px 0"></div>' : ''}
@@ -185,7 +217,10 @@
     }; });
     v.querySelectorAll('[data-ls-lit]').forEach((b) => { b.onclick = () => document.querySelector('#onglets button[data-v="urgence"]')?.click(); });
     v.querySelectorAll('[data-ls-cd]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/secours/prealertes/${b.dataset.id}/correspondance/confirmer`, { etablissement_id: etat.ctx, patient_id: Number(b.dataset.lsCd) }), t('liaison_secours.ok')); });
-    v.querySelectorAll('[data-ls-urg]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', '/secours/urgence', { etablissement_id: etat.ctx, statut: b.dataset.lsUrg }), t('liaison_secours.ok')); });
+    v.querySelectorAll('[data-ls-urg]').forEach((b) => { b.onclick = () => (b.dataset.lsUrg === 'fermee_temporairement' ? modaleFermeture()
+      : agir(b, () => api('POST', '/secours/urgence', { etablissement_id: etat.ctx, statut: b.dataset.lsUrg }), t('liaison_secours.ok'))); });
+    if ($('#fd-planifier')) $('#fd-planifier').onclick = () => modalePlanifier(ud.services);
+    v.querySelectorAll('[data-fd-action]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/urgences-direct/fermetures/${b.dataset.fd}/action`, { action: b.dataset.fdAction, version: Number(b.dataset.v) }), t('liaison_secours.ok')); });
     v.querySelectorAll('[data-ls-vue]').forEach((b) => { b.onclick = () => { etatS.affichage = b.dataset.lsVue; ls.ecrire('arrimo-secours-affichage', etatS.affichage); vueSecours(); }; });
     const caseSon = v.querySelector('#ls-son'); if (caseSon) caseSon.onchange = () => { ls.ecrire('arrimo-secours-son', caseSon.checked ? '1' : null); if (caseSon.checked) bip(); };
     const og = v.querySelector('#ls-og');

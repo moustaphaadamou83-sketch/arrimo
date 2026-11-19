@@ -12,7 +12,7 @@ const crypto = require('crypto');
 const { ErreurHttp } = require('./db');
 const { lireSecretMfa } = require('./auth');
 
-const EVENEMENTS = ['prealerte', 'transport'];
+const EVENEMENTS = ['prealerte', 'transport', 'urgence'];
 const MAX_TENTATIVES = 8;
 
 function verifierUrl(u) {

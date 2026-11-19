@@ -762,3 +762,18 @@ details.voir-carte summary::-webkit-details-marker { display: none; }
 .ch-etapes { list-style: none; padding: 0; margin: 0 0 var(--e2); display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--e1) var(--e3); }
 .ch-code { font-weight: 700; color: var(--principal); }
 :root[data-theme="sombre"] .ch-porte.niveau-rouge .ch-minutes { color: #FCA5A5; }
+/* Urgences en direct, page publique (20 nov. 2026) : état écrit en toutes lettres, couleur de statut en appui seulement */
+.ud-contenu { max-width: 760px; }
+.ud-sous { font-size: 12px; opacity: .85; }
+.ud-vital { background: #DC2626; color: #fff; font-weight: 700; padding: 12px 16px; border-radius: var(--rayon-carte); margin: 16px 0 8px; font-size: 1.05rem; }
+.ud-demo { border: 1px dashed var(--bordure); border-radius: var(--rayon-carte); padding: 8px 12px; color: var(--texte-2); }
+.ud-carte { background: var(--carte); border: 1px solid var(--bordure); border-left-width: 6px; border-radius: var(--rayon-carte); padding: 12px 16px; margin: 12px 0; }
+.ud-carte h2 { margin: 0; font-size: 1.1rem; }
+.ud-carte p { margin: 4px 0; }
+.ud-tete { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: baseline; }
+.ud-etat { font-weight: 700; }
+.ud-maj { font-weight: 600; }
+.ud-carte.etat-ouverte { border-left-color: #16A34A; }
+.ud-carte.etat-capacite_reduite { border-left-color: #F59E0B; }
+.ud-carte.etat-fermee_temporairement { border-left-color: #DC2626; }
+.ud-carte.etat-inconnu { border-left-color: #94A3B8; }
