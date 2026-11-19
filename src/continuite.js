@@ -33,9 +33,12 @@ async function chargerParcours(db, filtreSql, args) {
     LEFT JOIN etablissements et ON et.id = e.etablissement_id WHERE e.coordination_id = ANY($1) ORDER BY e.date, e.id`, [tous])).rows;
   const evTr = transports.length ? (await db.query(`SELECT demande_id, type, cree_le FROM demande_transport_evenements WHERE demande_id = ANY($1) ORDER BY id`, [transports.map((t) => t.id)])).rows : [];
   const evPa = prealertes.length ? (await db.query(`SELECT prealerte_id, type, cree_le FROM prealerte_evenements WHERE prealerte_id = ANY($1) ORDER BY id`, [prealertes.map((p) => p.id)])).rows : [];
+  // Chrono (19 nov. 2026) : heures H11 à H15 du passage de l'ambulance à l'urgence, depuis l'Horloge (mêmes heures que l'écran Chrono)
+  const evCh = prealertes.length ? (await db.query(`SELECT p.prealerte_id, h.etape, h.heure FROM passages_chrono p
+    JOIN v_horodatages_courants h ON h.objet = 'passage_chrono' AND h.objet_id = p.id WHERE p.prealerte_id = ANY($1)`, [prealertes.map((p) => p.id)])).rows : [];
   return cos.map((co) => construire(co, {
     retour: retours.filter((r) => r.liee_id === co.id).at(-1) || null,
-    transports, prealertes, etapesCo, evTr, evPa,
+    transports, prealertes, etapesCo, evTr, evPa, evCh,
   }));
 }
 
@@ -96,6 +99,7 @@ function construire(co, x) {
     ...x.etapesCo.filter((s) => s.coordination_id === co.id || s.coordination_id === r?.id).map((s) => ({ date: s.date, source: s.coordination_id === co.id ? 'aller' : 'retour', code: s.statut, par: s.etablissement })),
     ...x.evTr.filter((v) => v.demande_id === aller?.id || v.demande_id === retourTr?.id).map((v) => ({ date: v.cree_le, source: 'transport', code: v.type, par: aller?.organisation })),
     ...x.evPa.filter((v) => v.prealerte_id === pa?.id).map((v) => ({ date: v.cree_le, source: 'prealerte', code: v.type, par: null })),
+    ...(x.evCh || []).filter((v) => v.prealerte_id === pa?.id).map((v) => ({ date: v.heure, source: 'chrono', code: v.etape, par: null })),
   ].sort((a, b) => new Date(a.date) - new Date(b.date));
   return {
     id: co.id, numero: co.numero, resident_id: co.resident_id, resident_ref: co.resident_ref, origine_id: co.origine_id, origine: co.origine, hopital_id: pa?.destination_id || co.destination_id, hopital,

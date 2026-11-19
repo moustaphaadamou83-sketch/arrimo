@@ -64,7 +64,10 @@ test.after(async () => { serveurSh?.close(); serveurPilote?.close(); await poolP
 
 test('migration SH 49 : modules du chantier au catalogue « à venir », nouveaux types locaux, rien de modifié', async () => {
   const cat = (await pool.query("SELECT code, statut FROM sh_modules_catalogue WHERE code = ANY($1)", [require('../src/sh/types-etablissement-migrations').MODULES_CHANTIER])).rows;
-  assert.strictEqual(cat.length, 9); assert.ok(cat.every((m) => m.statut === 'a_venir'));
+  assert.strictEqual(cat.length, 9);
+  // Migration 50 : Chrono livré, carte « Disponible » ; les 8 autres restent « Bientôt »
+  assert.deepStrictEqual(cat.filter((m) => m.statut !== 'a_venir').map((m) => [m.code, m.statut]), [['chrono', 'disponible']]);
+  assert.ok((await pool.query('SELECT 1 FROM sh_migrations WHERE version = 50')).rowCount);
   const locaux = (await pool.query("SELECT code FROM sh_types_locaux WHERE code IN ('soins_palliatifs', 'hospitalisation_domicile', 'sante_mentale')")).rows;
   assert.strictEqual(locaux.length, 3);
   assert.ok((await pool.query('SELECT 1 FROM sh_migrations WHERE version = 49')).rowCount);
@@ -79,8 +82,9 @@ test('cartes : 17 au total, seules celles du type apparaissent, état et filtre'
   assert.ok(chs.includes('hebergement') && chs.includes('visites_confirmees') && !chs.includes('chrono') && !chs.includes('hopital'));
   const amb = cartes.cartesDuType(catalogue('entreprise_ambulanciere')).map((c) => c.id);
   assert.ok(amb.includes('secours') && amb.includes('chrono') && !amb.includes('bourse_places'));
-  const chrono = cartes.cartesDuType(catalogue('hopital')).find((c) => c.id === 'chrono');
-  assert.strictEqual(cartes.etatCarte(chrono), 'bientot');
+  const carte = (id) => cartes.cartesDuType(catalogue('hopital')).find((c) => c.id === id);
+  assert.strictEqual(cartes.etatCarte(carte('mode_crise')), 'bientot');
+  assert.strictEqual(cartes.etatCarte(carte('chrono')), 'desactive', 'Chrono livré : activable');
   // Tout code du catalogue (hors communs inclus) est rangé dans une carte
   const ranges = new Set(cartes.CARTES.flatMap((c) => c.codes));
   for (const m of TE.MODULES.filter((x) => x.categorie !== 'commun' || x.code === 'og')) assert.ok(ranges.has(m.code), `carte manquante : ${m.code}`);
@@ -94,7 +98,7 @@ test('anglais : chaque carte et chaque texte de l’écran existent en FR et en 
 
 test('serveur : « Bientôt » refusé, activation et désactivation journalisées avec l’auteur et le détail ; dépendance exigée', async () => {
   const h = await sh('POST', '/hopitaux', { type_etablissement: 'hopital', nom: 'Hôpital fictif des cartes', code_etab: 'HC-CARTES', environnement: 'pilote', pays_code: 'CA', latitude: 45.4, longitude: -71.9 });
-  let r = await appelSh('PUT', `/hopitaux/${h.id}/modules`, { modules: [{ code: 'chrono', licence: 'souscrit' }] });
+  let r = await appelSh('PUT', `/hopitaux/${h.id}/modules`, { modules: [{ code: 'mode_crise', licence: 'souscrit' }] });
   assert.strictEqual(r.statut, 409); assert.match(r.corps.erreur, /pas encore disponible/);
   r = await appelSh('PUT', `/hopitaux/${h.id}/modules`, { modules: [{ code: 'liaison_chsld', licence: 'souscrit' }] });
   assert.strictEqual(r.statut, 409, 'dépendance absente refusée');
@@ -104,5 +108,8 @@ test('serveur : « Bientôt » refusé, activation et désactivation journalisé
   assert.ok(j.some((x) => /liaison_secours : non_selectionne → souscrit/.test(x.detail) && x.utilisateur_id), JSON.stringify(j));
   assert.ok(j.some((x) => /liaison_secours : souscrit → non_selectionne/.test(x.detail)));
   const fiche = await sh('GET', `/hopitaux/${h.id}`);
-  assert.strictEqual(fiche.modules.find((m) => m.code === 'chrono').statut, 'a_venir');
+  assert.strictEqual(fiche.modules.find((m) => m.code === 'mode_crise').statut, 'a_venir');
+  // Chrono exige Liaison Secours : refusé seul, accepté avec
+  assert.strictEqual((await appelSh('PUT', `/hopitaux/${h.id}/modules`, { modules: [{ code: 'chrono', licence: 'souscrit' }] })).statut, 409);
+  await sh('PUT', `/hopitaux/${h.id}/modules`, { modules: [{ code: 'liaison_secours', licence: 'souscrit' }, { code: 'chrono', licence: 'souscrit' }] });
 });

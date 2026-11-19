@@ -343,6 +343,7 @@ async function agir(pool, u, id, b) {
         if (pa.arrivee_signalee_le) throw new ErreurHttp(409, 'prealerte_statut_incompatible');
         n = await maj('arrivee_signalee_le = now()');
         await notifier(c, pa.destination_id, 'secours_arrivee', n);
+        await require('./chrono').arriveeSignalee(c, pa, u);   // Chrono : H11 (heure de la position si elle a précédé)
       } else if (a === 'annuler') {
         n = await maj("statut = 'annulee'");
         await require('./reservations').liberer(c, pa.id, u.id || null, 'annulee');
@@ -384,10 +385,12 @@ async function agir(pool, u, id, b) {
         n = await maj("arrivee_confirmee_le = now(), statut = 'arrivee'");
         detail = { unite: attendue };
         await vehicules.fixer(c, pa.unite_id, 'a_l_hopital', { destinationId: pa.destination_id, source: 'arrivee_confirmee', utilisateurId: u.id || null });
+        await require('./chrono').arriveeSignalee(c, pa, u);
       } else if (a === 'confirmer_remise') {
         if (pa.statut !== 'arrivee') throw new ErreurHttp(409, 'prealerte_statut_incompatible');
         n = await maj("remise_le = now(), cloturee_le = now(), statut = 'cloturee'");
         await require('./reservations').liberer(c, pa.id, u.id || null, 'remise_sans_installation');
+        await require('./chrono').remise(c, pa, u);            // Chrono : H14 civière libérée
         // Patient reçu par l'urgence : l'ambulance redevient disponible d'elle-même (décision de Moustafa, 16 nov. 2026)
         await vehicules.fixer(c, pa.unite_id, 'disponible', { source: 'remise', utilisateurId: u.id || null });
       } else if (a === 'signaler_probleme') {
@@ -505,7 +508,17 @@ async function position(pool, u, uniteId, b) {
   const lat = Number(b.latitude); const lon = Number(b.longitude);
   if (!(lat >= -90 && lat <= 90) || !(lon >= -180 && lon <= 180) || b.latitude == null || b.longitude == null) throw new ErreurHttp(400, 'position_invalide');
   const precision = b.precision_m == null ? null : Math.max(0, Math.round(Number(b.precision_m)) || 0);
-  await pool.query('INSERT INTO positions_unites (unite_id, latitude, longitude, precision_m) VALUES ($1, $2, $3, $4)', [un.id, lat, lon, precision]);
+  // Heure de la position prise par le téléphone (positions en attente rejouées après une coupure) : jamais dans le futur, 1 h au plus
+  let heure = new Date();
+  if (b.horodatage != null) {
+    const h = new Date(b.horodatage);
+    if (Number.isNaN(h.getTime()) || Date.now() - h > 3600000) throw new ErreurHttp(400, 'position_invalide');
+    if (h <= heure) heure = h;   // horloge du téléphone en avance : heure de réception (jamais une heure future)
+  }
+  await transaction(pool, async (c) => {
+    await c.query('INSERT INTO positions_unites (unite_id, latitude, longitude, precision_m, position_le) VALUES ($1, $2, $3, $4, $5)', [un.id, lat, lon, precision, heure]);
+    await require('./chrono').traiterPosition(c, un, { latitude: lat, longitude: lon, heure, precision_m: precision });
+  });
   const eta = await recalculerEta(pool, un.id, { latitude: lat, longitude: lon });
   require('./flux').signaler();
   return { enregistree: true, ...(eta ? { eta } : {}) };

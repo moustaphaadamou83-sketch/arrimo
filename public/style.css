@@ -751,3 +751,14 @@ details.voir-carte summary::-webkit-details-marker { display: none; }
 /* Tuiles : une note longue (mot sans coupure, nombre) se coupe au lieu d'élargir la grille (débordement à 820 px, 20 nov. 2026) */
 .tuile { min-width: 0; }
 .tuile .note { overflow-wrap: anywhere; }
+/* Chrono (19 nov. 2026) : bordure de statut (vert, orange à 15 min, rouge à 20 min) ; les minutes et le mot sont toujours écrits */
+.ch-porte { border: 1px solid var(--bordure); border-left-width: 6px; border-radius: var(--rayon-carte); padding: var(--e3); margin-bottom: var(--e3); background: var(--carte); }
+.ch-porte.niveau-vert { border-left-color: #16A34A; }
+.ch-porte.niveau-orange { border-left-color: #F59E0B; }
+.ch-porte.niveau-rouge { border-left-color: #DC2626; }
+.ch-tete { display: flex; flex-wrap: wrap; gap: var(--e2); align-items: baseline; margin-bottom: var(--e2); }
+.ch-minutes { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ch-porte.niveau-rouge .ch-minutes { color: #B91C1C; }
+.ch-etapes { list-style: none; padding: 0; margin: 0 0 var(--e2); display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--e1) var(--e3); }
+.ch-code { font-weight: 700; color: var(--principal); }
+:root[data-theme="sombre"] .ch-porte.niveau-rouge .ch-minutes { color: #FCA5A5; }

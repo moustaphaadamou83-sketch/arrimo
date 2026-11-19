@@ -158,5 +158,13 @@ async function migrerMoteurCommun(c) {
   await c.query('INSERT INTO sh_migrations(version) VALUES($1)', [MOTEUR_COMMUN_VERSION]);
   return true;
 }
+/* Migration 50 (19 nov. 2026) : module Chrono livré, sa carte passe de « Bientôt » à « Disponible ». Une seule valeur modifiée. */
+const CHRONO_VERSION = 50;
+async function migrerChrono(c) {
+  if ((await c.query('SELECT 1 FROM sh_migrations WHERE version=$1', [CHRONO_VERSION])).rowCount) return false;
+  await c.query("UPDATE sh_modules_catalogue SET statut = 'disponible' WHERE code = 'chrono' AND statut = 'a_venir'");
+  await c.query('INSERT INTO sh_migrations(version) VALUES($1)', [CHRONO_VERSION]);
+  return true;
+}
 const VERSION_SH = TYPES_AINES_VERSION;
-module.exports = { MOTEUR_COMMUN_VERSION, MODULES_CHANTIER, migrerMoteurCommun, LIAISON_SECOURS_VERSION, migrerLiaisonSecours, TYPES_ETABLISSEMENT_VERSION, LIAISON_CHSLD_VERSION, PRODUCTIONS_VERSION, TYPES_LOCAUX_VERSION, DEMANDES_SITE_VERSION, VERSION_SH, migrerTypesEtablissement, migrerLiaisonChsld, migrerProductions, migrerTypesLocaux, migrerDemandesSite, migrerTypesAines };
+module.exports = { CHRONO_VERSION, migrerChrono, MOTEUR_COMMUN_VERSION, MODULES_CHANTIER, migrerMoteurCommun, LIAISON_SECOURS_VERSION, migrerLiaisonSecours, TYPES_ETABLISSEMENT_VERSION, LIAISON_CHSLD_VERSION, PRODUCTIONS_VERSION, TYPES_LOCAUX_VERSION, DEMANDES_SITE_VERSION, VERSION_SH, migrerTypesEtablissement, migrerLiaisonChsld, migrerProductions, migrerTypesLocaux, migrerDemandesSite, migrerTypesAines };

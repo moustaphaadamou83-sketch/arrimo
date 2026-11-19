@@ -126,7 +126,11 @@ test('SH : régions, direction régionale et région d’un établissement régl
 });
 
 test('Modules du chantier : « Bientôt », jamais activables ; nouveaux types locaux ; tout est traduit', () => {
-  for (const code of ['chrono', 'urgences_direct', 'transferts_suivi', 'transport_planifie', 'bourse_places', 'donnees_regionales', 'mode_crise', 'visites_confirmees', 'eviter_transferts']) {
+  // Chrono livré le 19 nov. 2026 : disponible et activable ; les autres restent « Bientôt »
+  const chrono = TE.MODULES.find((x) => x.code === 'chrono');
+  assert.strictEqual(chrono.statut, 'disponible'); assert.deepStrictEqual(TE.drapeauxDepuisChoix('hopital', { chrono: true }), { chrono: true });
+  assert.strictEqual(TE.moduleActif({ type_etablissement: 'hopital', modules: { chrono: true } }, 'chrono'), true);
+  for (const code of ['urgences_direct', 'transferts_suivi', 'transport_planifie', 'bourse_places', 'donnees_regionales', 'mode_crise', 'visites_confirmees', 'eviter_transferts']) {
     const m = TE.MODULES.find((x) => x.code === code);
     assert.ok(m, code); assert.strictEqual(m.statut, 'a_venir', code);
     assert.ok(m.nom && m.nom_en && m.note && m.note_en, `traduction complète : ${code}`);

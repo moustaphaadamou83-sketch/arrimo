@@ -51,6 +51,9 @@
       sexes: { F: 'Femme', M: 'Homme', X: 'Autre' }, envoyer_demande: 'Envoyer la demande', demande_envoyee: 'Demande envoyée à l’hôpital.',
       sg: { douleur_thoracique: 'Douleur thoracique', difficulte_respiratoire: 'Difficulté respiratoire', deficit_neurologique: 'Déficit neurologique', alteration_conscience: 'Altération de la conscience', chute: 'Chute', traumatisme: 'Traumatisme', saignement: 'Saignement', fievre: 'Fièvre', douleur_abdominale: 'Douleur abdominale', autre: 'Autre' },
       classees_aide_lieu: 'Depuis {depart}. Tri : disponibilité, puis temps de route.',
+      o_chrono: 'Chrono', ch_titre: 'Chrono · temps à l’urgence', ch_intro: 'Mêmes heures que l’urgence : arrivée (H11), triage (H12, H13), civière libérée (H14), départ (H15). Chiffres indicatifs ; aucune prime ni pénalité.',
+      ch_porte: 'À la porte', ch_route: 'En route', ch_termines: 'Passages terminés', ch_aucun: 'Aucun passage.', ch_min: '{n} min à la porte', ch_depart: 'Départ de l’hôpital',
+      ch_H11: 'Arrivée', ch_H12: 'Début triage', ch_H13: 'Fin triage', ch_H14: 'Civière libérée', ch_H15: 'Départ', ch_corrigee: 'corrigée', ch_total: 'total {n} min', ch_inactif: 'Aucun hôpital de votre secteur n’utilise encore le Chrono.',
       o_regional: 'Vue régionale', o_flotte: 'Flotte', o_prealertes: 'Préalertes', o_demandes: 'Demandes des établissements', o_historique: 'Historique', o_og: 'OG', o_mission: 'Mission', o_urgences: 'Urgences classées', o_transports: 'Transports',
       profil_ccs: 'Profil CCS', profil_amb: 'Profil Ambulance', role_repartiteur: 'Répartiteur', role_paramedic: 'Paramédic', role_superviseur_secours: 'Superviseur', fictif: 'Données fictives',
       theme_clair: 'Clair', theme_sombre: 'Sombre', theme_automatique: 'Auto', theme_aide: 'Apparence : clair, sombre ou automatique (selon l’appareil)',
@@ -119,6 +122,9 @@
       sexes: { F: 'Female', M: 'Male', X: 'Other' }, envoyer_demande: 'Send the request', demande_envoyee: 'Request sent to the hospital.',
       sg: { douleur_thoracique: 'Chest pain', difficulte_respiratoire: 'Breathing difficulty', deficit_neurologique: 'Neurological deficit', alteration_conscience: 'Altered consciousness', chute: 'Fall', traumatisme: 'Trauma', saignement: 'Bleeding', fievre: 'Fever', douleur_abdominale: 'Abdominal pain', autre: 'Other' },
       classees_aide_lieu: 'From {depart}. Sorted by availability, then driving time.',
+      o_chrono: 'Chrono', ch_titre: 'Chrono · emergency department times', ch_intro: 'Same times as the emergency department: arrival (H11), triage (H12, H13), stretcher released (H14), departure (H15). Indicative figures; no bonus or penalty.',
+      ch_porte: 'At the door', ch_route: 'On the way', ch_termines: 'Completed visits', ch_aucun: 'No visit.', ch_min: '{n} min at the door', ch_depart: 'Leaving the hospital',
+      ch_H11: 'Arrival', ch_H12: 'Triage start', ch_H13: 'Triage end', ch_H14: 'Stretcher released', ch_H15: 'Departure', ch_corrigee: 'corrected', ch_total: 'total {n} min', ch_inactif: 'No hospital in your area uses Chrono yet.',
       o_regional: 'Regional view', o_flotte: 'Fleet', o_prealertes: 'Pre-alerts', o_demandes: 'Requests from facilities', o_historique: 'History', o_og: 'OG', o_mission: 'Mission', o_urgences: 'Ranked emergencies', o_transports: 'Transports',
       profil_ccs: 'CCS profile', profil_amb: 'Ambulance profile', role_repartiteur: 'Dispatcher', role_paramedic: 'Paramedic', role_superviseur_secours: 'Supervisor', fictif: 'Fictitious data',
       theme_clair: 'Light', theme_sombre: 'Dark', theme_automatique: 'Auto', theme_aide: 'Appearance: light, dark or automatic (from the device)',
@@ -200,6 +206,7 @@
       etat.vehicules = await api('GET', '/secours/vehicules').catch(() => []);
       const avant = new Set((etat.missions || []).map((m) => m.id));
       etat.missions = await api('GET', '/secours/missions').catch(() => []);
+      etat.chrono = await api('GET', '/secours/chrono').catch(() => null);
       // Nouvelle mission proposée à l'équipage : alerte sonore (une fois)
       if (ROLES_AMB.includes(etat.moi.utilisateur.role) && etat.missionsVues && etat.missions.some((m) => m.statut === 'proposee' && !avant.has(m.id))) bipMission();
       etat.missionsVues = true;
@@ -214,7 +221,7 @@
   let derniereSignature = null; let dernierAppui = 0; let renduDiffere = null;
   document.addEventListener('pointerdown', () => { dernierAppui = Date.now(); }, true);
   function rendreSiChange() {
-    const sig = JSON.stringify([etat.prealertes, etat.vehicules, etat.transports, etat.destinations, etat.classees, etat.unites, etat.erreur, etat.message, etat.enLigne, L, etat.onglet, etat.alternatives]);
+    const sig = JSON.stringify([etat.chrono, etat.prealertes, etat.vehicules, etat.transports, etat.destinations, etat.classees, etat.unites, etat.erreur, etat.message, etat.enLigne, L, etat.onglet, etat.alternatives]);
     if (sig === derniereSignature) { enTete(); return; }
     const attente = 1000 - (Date.now() - dernierAppui);
     if (attente > 0) { clearTimeout(renduDiffere); renduDiffere = setTimeout(rendreSiChange, attente); return; }
@@ -252,7 +259,7 @@
     return `${heure(p.heure_prevue)} · ${m > 0 ? t('dans', { n: m }) : t('depassee')}`;
   }
 
-  const ONGLETS = { ccs: ['regional', 'flotte', 'prealertes', 'demandes', 'historique', 'og'], amb: ['mission', 'urgences', 'transports', 'historique', 'og'] };
+  const ONGLETS = { ccs: ['regional', 'flotte', 'prealertes', 'demandes', 'chrono', 'historique', 'og'], amb: ['mission', 'urgences', 'transports', 'chrono', 'historique', 'og'] };
   const ongletCourant = (amb) => { const l = ONGLETS[amb ? 'amb' : 'ccs']; return l.includes(etat.onglet) ? etat.onglet : l[0]; };
   function enTete() {
     const amb = ROLES_AMB.includes(etat.moi.utilisateur.role);
@@ -563,6 +570,7 @@
         flotte: `${missionsCcs()}${tableauFlotte()}`,
         prealertes: `<section class="carte-s"><h2>${t('ccs_en_cours')}</h2>${etat.prealertes.filter((p) => OUVERTES.includes(p.statut)).map(ligneListe).join('') || `<p class="note">${t('aucune')}</p>`}</section>`,
         demandes: demandesEtablissements(),
+        chrono: carteChrono(false),
         historique: `<section class="carte-s"><h2>${t('historique')}</h2>${fermees.map(ligneListe).join('') || `<p class="note">${t('aucune')}</p>`}</section>`,
         og: carteOg(false),
       };
@@ -584,12 +592,28 @@
         ${r?.depart ? `<p class="note">${esc(r.depart.le ? t('classees_aide', { depart: u.numero, heure: heure(r.depart.le) }) : t('classees_aide_lieu', { depart: ArrimoCarte.court(r.depart.nom || '') }))}</p>` : ''}${tableauClasse(r, { choisir: !enCours })}
         <details class="voir-carte"><summary class="btn">${t('voir_carte')}</summary><div id="carte-amb" style="height:320px;margin-top:10px"></div></details></section>`,
       transports: carteTransports(true),
+      chrono: carteChrono(true),
       historique: `${superviseur ? `<section class="carte-s"><h2>${t('organisation')}</h2>${etat.prealertes.filter((p) => OUVERTES.includes(p.statut)).map(ligneListe).join('') || `<p class="note">${t('aucune')}</p>`}</section>` : ''}
         <section class="carte-s"><h2>${t('historique')}</h2>${recentes.length ? recentes.map(ligneListe).join('') : `<p class="note">${t('aucune')}</p>`}</section>`,
       og: carteOg(true),
     };
     m.innerHTML = `${msg}${sections[o]}`;
     const det = m.querySelector('.voir-carte'); if (det) det.addEventListener('toggle', () => { if (det.open) dessinerCarteAmbulance(u).catch(() => {}); });
+  }
+
+  /* Chrono (19 nov. 2026) : les mêmes heures que l'urgence ; l'équipage peut signaler son départ (H15) après la civière libérée. */
+  function carteChrono(amb) {
+    const d = etat.chrono;
+    if (!d) return `<section class="carte-s"><h2>${t('ch_titre')}</h2><p class="note">${t('ch_inactif')}</p></section>`;
+    const E = ['H11', 'H12', 'H13', 'H14', 'H15'];
+    const heures = (p) => `<ol class="ch-etapes">${E.map((e) => `<li>${e} · ${t('ch_' + e)} : ${p.heures[e] ? `${heure(p.heures[e].heure)}${p.heures[e].corrigee ? ` (${t('ch_corrigee')})` : ''}` : '—'}</li>`).join('')}</ol>`;
+    const porte = d.a_la_porte.map((p) => `<article class="carte-s ch-porte"><h3>${esc(p.unite)} · ${esc(p.hopital)}</h3>
+      ${p.a_la_porte_min != null ? `<p><strong>${t('ch_min', { n: p.a_la_porte_min })}</strong></p>` : ''}${heures(p)}
+      ${amb && p.heures.H14 && !p.heures.H15 ? `<button class="btn pri" data-ch-depart="${p.id}">${t('ch_depart')}</button>` : ''}</article>`).join('');
+    return `<section class="carte-s"><h2>${t('ch_titre')}</h2><p class="note">${t('ch_intro')}</p>
+      <h3>${t('ch_porte')}</h3>${porte || `<p class="note">${t('ch_aucun')}</p>`}
+      <h3>${t('ch_route')}</h3>${d.en_route.length ? `<ul>${d.en_route.map((p) => `<li>${esc(p.unite)} → ${esc(p.hopital)}${p.eta_min != null ? ` · ${p.eta_min} min` : ''}</li>`).join('')}</ul>` : `<p class="note">${t('ch_aucun')}</p>`}
+      <h3>${t('ch_termines')}</h3>${d.termines.length ? `<ul>${d.termines.map((p) => `<li>${esc(p.unite)} · ${esc(p.hopital)}${p.durees.total != null ? ` · ${t('ch_total', { n: p.durees.total })}` : ''}</li>`).join('')}</ul>` : `<p class="note">${t('ch_aucun')}</p>`}</section>`;
   }
 
   async function agir(p, corps) {
@@ -656,6 +680,7 @@
       if (p && h && confirm(t('confirmer_dest', { dest: h.nom }))) return agir(p, { action: 'changer_destination', destination_id: h.id });
       return;
     }
+    if (b.dataset.chDepart) { etat.erreur = null; try { await api('POST', `/secours/chrono/passages/${b.dataset.chDepart}/depart`, {}); etat.message = t('fait'); } catch (e) { etat.erreur = e.message; } await charger(); return; }
     if (b.dataset.onglet) { etat.onglet = b.dataset.onglet; ecrire('arrimo-secours-onglet', etat.onglet); rendre(); window.scrollTo(0, 0); return; }
     if (b.id === 'theme') {
       const MODES = ['clair', 'sombre', 'automatique']; const m0 = window.ArrimoApparence?.mode() || 'automatique';
@@ -715,7 +740,7 @@
     if (!u || !navigator.geolocation) return Promise.resolve(null);
     return new Promise((ok) => navigator.geolocation.getCurrentPosition(async (pos) => {
       etat.position = { latitude: pos.coords.latitude, longitude: pos.coords.longitude, le: Date.now() };
-      try { await api('POST', `/secours/unites/${u.id}/position`, { latitude: pos.coords.latitude, longitude: pos.coords.longitude, precision_m: pos.coords.accuracy }); } catch { /* prochaine prise */ }
+      try { await api('POST', `/secours/unites/${u.id}/position`, { latitude: pos.coords.latitude, longitude: pos.coords.longitude, precision_m: pos.coords.accuracy, horodatage: new Date(pos.timestamp || Date.now()).toISOString() }); } catch { /* prochaine prise */ }
       ok(etat.position);
     }, () => { etat.erreur = t('position_refus'); ok(null); }, { enableHighAccuracy: true, maximumAge: 20000, timeout: 15000 }));
   }

@@ -33,10 +33,28 @@ function ligne(L, p) {
   return `• ${p.numero} · ${p.unite} (${p.organisation}) · ${T(L, 'priorité', 'priority')} ${PRIO[lang(L)][p.priorite]} · ${eta} · ${ETAT[lang(L)][p.statut] || p.statut}${arrivee}`;
 }
 
+
+/** Chrono (19 nov. 2026) : ambulances à la porte et temps écoulé, depuis les mêmes heures que l'écran. OG lit, ne corrige rien. */
+const CHRONO_Q = /(a la porte|at the door|chrono|\bh1[1-5]\b|decharg\w*|offload\w*|temps a l.?urgence|temps d.?attente des ambulances|ambulance wait)/;
+async function reponseChrono(pool, u, q, L) {
+  let d;
+  try { d = await require('./chrono').tableau(pool, u, q); } catch (e) {
+    return T(L, 'Le Chrono n’est pas activé pour cet établissement.', 'Chrono is not enabled for this facility.');
+  }
+  const porte = d.a_la_porte;
+  if (!porte.length) return T(L, `Aucune ambulance à la porte. En route : ${d.en_route.length}.`, `No ambulance at the door. On the way: ${d.en_route.length}.`);
+  const lignes = porte.map((p) => `• ${p.unite} (${p.organisation}) · ${p.hopital} · ${p.a_la_porte_min ?? '—'} min${p.prochaine ? T(L, ` · prochaine étape : ${p.prochaine}`, ` · next step: ${p.prochaine}`) : ''}`);
+  const rouge = porte.filter((p) => p.a_la_porte_min >= d.cibles.porte).length;
+  const n = porte.length; const pl = n > 1 ? 's' : '';
+  return `${T(L, `${n} ambulance${pl} à la porte, dont ${rouge} au-delà de ${d.cibles.porte} min (cible indicative). En route : ${d.en_route.length}.`,
+    `${n} ambulance${pl} at the door, ${rouge} beyond ${d.cibles.porte} min (indicative target). On the way: ${d.en_route.length}.`)}\n${lignes.join('\n')}`;
+}
+
 async function repondre(pool, u, etabId, q, L) {
   const qn = norm(q);
-  if (!concerne(qn, q)) return null;
+  if (!concerne(qn, q) && !CHRONO_Q.test(qn)) return null;
   const local = (reponse) => ({ mode: 'local', reponse, sources: ['arrimo'], intentions: ['liaison_secours'], ouvrir: 'secours' });
+  if (CHRONO_Q.test(qn)) return { mode: 'local', reponse: await reponseChrono(pool, u, { etablissement_id: etabId }, require('./og-localisation').langueDemandee(q, L)), sources: ['arrimo'], intentions: ['chrono'], ouvrir: 'chrono' };
   if (/(quel(le)? (hopital|destination|service)|which (hospital|destination|service)).*(choisir|envoyer|diriger|choose|send)|priorit\w* clinique|clinical priority|diagnosti/.test(qn)) {
     return local(T(L, 'Je ne décide ni de la destination, ni du service, ni d’une priorité clinique : ce sont les professionnels et les protocoles qui en décident. Je peux afficher les préalertes et leurs étapes.',
       'I do not decide the destination, the department or a clinical priority: professionals and protocols do. I can show pre-alerts and their steps.'));
@@ -84,6 +102,7 @@ async function repondreSecours(pool, u, question, L) {
   if (!pa.ROLES_SECOURS.includes(u.role)) throw new ErreurHttp(403, 'role_insuffisant');
   const q = String(question || '').slice(0, 500); const qn = norm(q);
   const local = (reponse, intention) => ({ mode: 'local', reponse, sources: ['arrimo'], intentions: [intention] });
+  if (CHRONO_Q.test(qn)) return local(await reponseChrono(pool, u, {}, require('./og-localisation').langueDemandee(q, L)), 'chrono');
   if (/(quel(le)? (hopital|destination|service)|which (hospital|destination|service)|ou (aller|l.?amener|transporter)|where (to go|should))|priorit\w* clinique|clinical priority|diagnosti|triage/.test(qn)) {
     return local(T(L, 'Je ne décide ni de la destination, ni du service, ni d’une priorité clinique : ce sont l’équipe et les protocoles applicables qui en décident. Je peux afficher l’état des urgences de la région et le suivi des préalertes.',
       'I do not decide the destination, the department or a clinical priority: the crew and applicable protocols do. I can show the regional emergency status and pre-alert tracking.'), 'refus_decision');
@@ -130,4 +149,4 @@ async function repondreSecours(pool, u, question, L) {
   const n = cible.length;
   return local(`${n > 1 ? T(L, `${n} préalertes en cours :`, `${n} pre-alerts in progress:`) : T(L, '1 préalerte en cours :', '1 pre-alert in progress:')}\n${cible.map((p) => `${ligne(L, p)} → ${p.destination}`).join('\n')}`, 'suivi');
 }
-module.exports = { repondre, repondreSecours, concerne };
+module.exports = { repondre, repondreSecours, concerne, CHRONO_Q };

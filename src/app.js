@@ -224,6 +224,23 @@ function creerApp(pool, options = {}) {
       || (req.method === 'POST' && req.path === '/deconnexion');
     return ok ? next() : next(new ErreurHttp(403, 'role_direction_regionale'));
   });
+  // Chrono (19 nov. 2026) : mêmes routes pour l'urgence (/chrono) et pour l'ambulance et le CCS (/secours/chrono)
+  const chrono = require('./chrono');
+  for (const pre of ['/chrono', '/secours/chrono']) {
+    api.get(`${pre}`, route((req) => chrono.tableau(pool, req.utilisateur, req.query)));
+    api.get(`${pre}/rapport`, route((req) => chrono.rapport(pool, req.utilisateur, req.query)));
+    api.get(`${pre}/rapport.csv`, async (req, res, next) => {
+      try {
+        const r = await chrono.rapport(pool, req.utilisateur, req.query);
+        res.set('Content-Type', 'text/csv; charset=utf-8').set('Content-Disposition', `attachment; filename="chrono-${r.mois}.csv"`).send(chrono.csv(r, req.langue));
+      } catch (e) { next(e); }
+    });
+    api.get(`${pre}/ecarts`, route((req) => chrono.ecarts(pool, req.utilisateur, req.query)));
+    api.get(`${pre}/passages/:id`, route((req) => chrono.fiche(pool, req.utilisateur, req.params.id, req.query)));
+    api.post(`${pre}/passages/:id/etape`, route((req) => chrono.marquerEtape(pool, req.utilisateur, req.params.id, req.body)));
+    api.post(`${pre}/passages/:id/depart`, route((req) => chrono.depart(pool, req.utilisateur, req.params.id, req.body)));
+    api.post(`${pre}/passages/:id/corriger`, route((req) => chrono.corriger(pool, req.utilisateur, req.params.id, req.body)));
+  }
   // Demandes, lecture commune des 5 circuits (moteur commun, lot 0) ; régions
   api.get('/demandes', route((req) => require('./demandes').liste(pool, req.utilisateur, req.query)));
   api.get('/demandes/synthese', route((req) => require('./demandes').synthese(pool, req.utilisateur, req.query)));

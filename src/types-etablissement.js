@@ -71,7 +71,7 @@ const MODULES = [
   { code: 'messagerie_securisee', categorie: 'optionnel', types: ['chsld'], statut: 'disponible', drapeau: 'portail_proches', nom: 'Messagerie sécurisée', nom_en: 'Secure messaging', note: 'Dans le portail des proches', dependances: ['portail_proches'] },
   { code: 'appels_video', categorie: 'optionnel', types: ['chsld'], statut: 'etude', nom: 'Appels audio et vidéo', nom_en: 'Audio and video calls', note: 'Étude seulement' },
   // Chantier « moteur commun + modules » (cahier v2, 19 nov. 2026) : affichés « Bientôt » jusqu'à leur livraison, jamais activables avant
-  { code: 'chrono', categorie: 'optionnel', types: ['hopital', ...TYPES_SECOURS], statut: 'a_venir', drapeau: 'chrono', nom: 'Chrono (temps à l’urgence)', nom_en: 'Chrono (emergency offload times)',
+  { code: 'chrono', categorie: 'optionnel', types: ['hopital', ...TYPES_SECOURS], statut: 'disponible', drapeau: 'chrono', nom: 'Chrono (temps à l’urgence)', nom_en: 'Chrono (emergency offload times)',
     note: 'Heures H11 à H15, chrono à la porte, rapport mensuel', note_en: 'H11 to H15 times, door clock, monthly report', dependances: ['liaison_secours'] },
   { code: 'urgences_direct', categorie: 'optionnel', types: ['hopital', ...TYPES_SECOURS], statut: 'a_venir', drapeau: 'urgences_direct', nom: 'Urgences en direct', nom_en: 'Live emergency status',
     note: 'État des urgences, fermetures planifiées, page publique sur consentement', note_en: 'Emergency status, planned closures, public page with consent' },
