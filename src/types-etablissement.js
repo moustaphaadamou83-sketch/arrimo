@@ -75,7 +75,7 @@ const MODULES = [
     note: 'Heures H11 à H15, chrono à la porte, rapport mensuel', note_en: 'H11 to H15 times, door clock, monthly report', dependances: ['liaison_secours'] },
   { code: 'urgences_direct', categorie: 'optionnel', types: ['hopital', ...TYPES_SECOURS], statut: 'disponible', drapeau: 'urgences_direct', nom: 'Urgences en direct', nom_en: 'Live emergency status',
     note: 'État des urgences, fermetures planifiées, page publique sur consentement', note_en: 'Emergency status, planned closures, public page with consent' },
-  { code: 'transferts_suivi', categorie: 'optionnel', types: ['hopital', ...TYPES_SECOURS], statut: 'a_venir', drapeau: 'transferts_suivi', nom: 'Transferts (centrale et rapatriements)', nom_en: 'Transfers (hub and repatriation)',
+  { code: 'transferts_suivi', categorie: 'optionnel', types: ['hopital', ...TYPES_SECOURS], statut: 'disponible', drapeau: 'transferts_suivi', nom: 'Transferts (centrale et rapatriements)', nom_en: 'Transfers (hub and repatriation)',
     note: 'Fiche de transfert unique, centrale régionale, rapatriements proposés', note_en: 'Single transfer record, regional hub, proposed repatriations' },
   { code: 'transport_planifie', categorie: 'optionnel', types: ['hopital', 'chsld', ...TYPES_SECOURS], statut: 'a_venir', drapeau: 'transport_planifie', nom: 'Transport non urgent', nom_en: 'Non-urgent transport',
     note: 'Réservation, plage confirmée, lit à libérer', note_en: 'Booking, confirmed time slot, bed to free' },

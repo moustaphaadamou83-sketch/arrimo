@@ -439,6 +439,8 @@ async function creerTransfert(pool, utilisateur, b, client = null) {
       detail: `${tr.patient_ref} → ${dest.nom}`, transfertId: tr.id });
     await notifier(c, destId, tr.id, 'transfert_demande',
       { numero: tr.numero, urgent: tr.urgent ? ' (URGENT)' : '', type: type.rows[0].nom, lit: lit.code, origine: origine.nom });
+    // Horloge (Transferts, 20 nov. 2026) : heure de la demande, dans la même transaction
+    await require('./horloge').marquer(c, { objet: 'transfert', objetId: tr.id, etape: 'demande', heure: tr.date_demande, source: client ? 'connecteur' : 'clic', auteurId: utilisateur.id || null });
     return { ...tr, lit_code: lit.code, route: mesureRoute };
   };
   return client ? executer(client) : transaction(pool, executer);
@@ -560,6 +562,9 @@ async function avancerTransfert(pool, utilisateur, transfertId, etape, corps = {
       return `${k} = $${vals.length + 1}`;
     });
     const u = await c.query(`UPDATE transferts SET ${sets.join(', ')} WHERE id = $1 RETURNING *`, [t.id, ...vals]);
+    // Horloge : décision (acceptation ou refus), départ, arrivée — délais décision → départ → arrivée lus partout depuis les mêmes heures
+    const etapeHorloge = { accepter: 'decision', refuser: 'decision', depart: 'depart', reception: 'arrivee' }[etape];
+    if (etapeHorloge) await require('./horloge').marquer(c, { objet: 'transfert', objetId: t.id, etape: etapeHorloge, source: client ? 'connecteur' : 'clic', auteurId: utilisateur.id || null });
     if (journal && t.lit_id) {
       await journaliser(c, { litId: t.lit_id, utilisateurId: utilisateur.id, action: journal,
         detail: maj.transport_info || t.numero, transfertId: t.id });

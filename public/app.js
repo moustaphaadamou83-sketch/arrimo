@@ -1170,6 +1170,29 @@ function attente(x) {
   const id = cote === 'origine' ? x.origine_id : x.destination_id;
   return id === etat.ctx ? '' : t('transferts.attente_de', { etab: cote === 'origine' ? x.origine_nom : x.destination_nom });
 }
+/** Fiche unique du transfert (20 nov. 2026) : mêmes étapes et mêmes heures pour l'origine, la destination, la coordination et le transporteur. */
+async function ficheTransfert(id) {
+  const f = await api('GET', `/transferts-suivi/${id}`).catch((e) => { toast(e.message, true); return null; });
+  if (!f) return;
+  const T = (k, v) => esc(t(`transferts.${k}`, v));
+  const h = (x) => (x ? esc(heure(x)) : '—'); const d = (x) => (x == null ? '—' : esc(t('transferts.minutes', { n: x })));
+  const rap = f.rapatriement;
+  const corps = `<p><strong>${esc(f.origine)} → ${esc(f.destination)}</strong>${f.patient_ref ? ` · <span class="donnee">${esc(f.patient_ref)}</span>` : ''} · ${esc(f.type_nom)}${f.urgent ? ` · ${T('urgent')}` : ''}</p>
+    <p>${T('statut_fiche', { statut: t(`statuts.${f.statut}`) })}${f.lit ? ` · ${T('lit_receveur', { lit: f.lit.code })}` : ''}${f.motif_refus ? ` · ${T(`motif_${f.motif_refus}`)}` : ''}</p>
+    <table><tbody><tr><th>${T('h_demande')}</th><td>${h(f.heures.demande)}</td></tr><tr><th>${T('h_decision')}</th><td>${h(f.heures.decision)} (${d(f.delais.decision_min)})</td></tr>
+      <tr><th>${T('h_depart')}</th><td>${h(f.heures.depart)} (${d(f.delais.depart_min)})</td></tr><tr><th>${T('h_arrivee')}</th><td>${h(f.heures.arrivee)} (${d(f.delais.route_min)})</td></tr></tbody></table>
+    ${f.transport ? `<p>${T('transport_fiche', { unite: f.transport.unite, org: f.transport.organisation, statut: t(`liaison_secours.s_${f.transport.statut}`) })}${f.transport.eta_min != null ? ` · ${T('eta', { n: f.transport.eta_min })}` : ''}</p>` : ''}
+    ${f.alertes.length ? `<div class="bandeau" role="alert">${f.alertes.map((a) => T(`alerte_${a.code}`, a)).join('<br>')}</div>` : ''}
+    ${rap ? `<p>${T(`rapatriement_${rap.statut}`, { vers: rap.vers })}</p>` : ''}
+    ${f.cote === 'destination' && rap?.statut === 'propose' ? `<div class="champ"><label class="lbl" for="rap-motif">${T('rapatriement_motif')}</label><select id="rap-motif">${['pas_stable', 'famille_refuse', 'pas_de_lit', 'autre'].map((m) => `<option value="${m}">${T(`rap_motif_${m}`)}</option>`).join('')}</select></div>` : ''}`;
+  const actions = [{ label: t('general.fermer') }];
+  if (f.cote === 'destination' && f.statut === 'recu' && !rap) actions.push({ label: t('transferts.stable_retour'), pri: true, run: async () => (await agir(null, () => api('POST', `/transferts/${f.id}/stable-retour`), (r) => t('transferts.rapatriement_propose', { vers: r.vers }))) !== null || false });
+  if (f.cote === 'destination' && rap?.statut === 'propose') {
+    actions.push({ label: t('transferts.rapatriement_refuser'), run: async () => (await agir(null, () => api('POST', `/rapatriements/${rap.id}/decision`, { decision: 'refuser', motif: $('#rap-motif').value }), t('transferts.rapatriement_decide'))) !== null || false });
+    actions.push({ label: t('transferts.rapatriement_accepter'), pri: true, run: async () => (await agir(null, () => api('POST', `/rapatriements/${rap.id}/decision`, { decision: 'accepter' }), t('transferts.rapatriement_decide'))) !== null || false });
+  }
+  modale(t('transferts.fiche_titre', { numero: f.numero }), corps, actions);
+}
 async function vueTransferts() {
   const v = $('#v-transferts');
   const page = await api('GET', `/transferts?etablissement_id=${etat.ctx}`);
@@ -1196,10 +1219,14 @@ async function vueTransferts() {
       ${attente(x) ? `<div class="note">${esc(attente(x))}</div>` : ''}
       ${x.statut === 'demande' ? `<div class="note">${esc(t('transferts.relances', { n: x.nombre_relances || 0 }))}${x.service_responsable ? ` · ${esc(t('transferts.service_responsable_valeur', { service: x.service_responsable }))}` : ''}</div>
         ${x.destination_id === etat.ctx ? `<div class="ligne"><input class="champ" maxlength="100" data-service-responsable="${x.id}" value="${esc(x.service_responsable || '')}" placeholder="${esc(t('transferts.service_responsable'))}"><button class="btn" data-enregistrer-responsable="${x.id}" data-num="${esc(x.numero)}">${esc(t('transferts.enregistrer_responsable'))}</button></div>` : ''}` : ''}
-      ${actif ? `<div class="actions">${actionsTransfert(x).map(([a, p]) => `<button class="btn${p ? ' pri' : ''}${a === 'refuser' ? ' dan' : ''}" data-tr="${x.id}" data-etape="${a}" data-num="${esc(x.numero)}">${esc(t(`transferts.${a}`))}</button>`).join('')}</div>` : ''}
+      ${actif ? `<div class="actions">${actionsTransfert(x).map(([a, p]) => `<button class="btn${p ? ' pri' : ''}${a === 'refuser' ? ' dan' : ''}" data-tr="${x.id}" data-etape="${a}" data-num="${esc(x.numero)}">${esc(t(`transferts.${a}`))}</button>`).join('')}<button class="btn discret" data-tr-fiche="${x.id}">${esc(t('transferts.fiche'))}</button></div>` : ''}
     </div>`).join('') || `<div class="vide">${esc(t('transferts.aucun'))}</div>`}</div>`;
   }).join('');
-  v.innerHTML = `<div class="entete"><div><h2>${esc(t('transferts.titre', { etab: etabCtx().nom }))}</h2><p>${esc(t('transferts.intro'))}</p></div></div><div class="kanban">${cols}</div>${plus ? boutonPlus('transferts') : ''}`;
+  // Centrale des transferts urgents de la région (coordination réseau, 20 nov. 2026)
+  const centrale = etat.moi.utilisateur.gestionnaire ? await api('GET', '/transferts-suivi/centrale').catch(() => null) : null;
+  const blocCentrale = centrale ? `<section class="panneau-c"><h3>${esc(t('transferts.centrale'))}</h3>${centrale.transferts.length ? `<ul class="liste-simple">${centrale.transferts.map((x) => `<li><strong>${esc(x.numero)}</strong> · ${esc(x.origine)} → ${esc(x.destination)} · ${esc(t(`statuts.${x.statut}`))} · ${esc(t('transferts.attente_min', { n: x.attente_min }))}${x.alertes.length ? ` · <span class="etat-niveau n-rouge">${esc(x.alertes.map((a) => t(`transferts.alerte_${a.code}`, a)).join(' · '))}</span>` : ''} <button class="btn discret" data-tr-fiche="${x.id}">${esc(t('transferts.fiche'))}</button></li>`).join('')}</ul>` : `<p class="note">${esc(t('transferts.centrale_vide'))}</p>`}</section>` : '';
+  v.innerHTML = `<div class="entete"><div><h2>${esc(t('transferts.titre', { etab: etabCtx().nom }))}</h2><p>${esc(t('transferts.intro'))}</p></div></div>${blocCentrale}<div class="kanban">${cols}</div>${plus ? boutonPlus('transferts') : ''}`;
+  v.querySelectorAll('[data-tr-fiche]').forEach((b) => { b.onclick = () => ficheTransfert(Number(b.dataset.trFiche)); });
   brancherPlus(v, 'transferts', `/transferts?etablissement_id=${etat.ctx}`, trs.filter(termine));
   v.querySelectorAll('[data-tr]').forEach((b) => {
     b.onclick = () => {
@@ -1209,9 +1236,10 @@ async function vueTransferts() {
         return;
       }
       if (etape === 'refuser') {
-        modale(t('transferts.refuser_titre', { numero }), `<div class="champ"><label class="lbl" for="m-motif">${esc(t('transferts.motif_facultatif'))}</label><input id="m-motif" maxlength="300" autocomplete="off"></div>
+        modale(t('transferts.refuser_titre', { numero }), `<div class="champ"><label class="lbl" for="m-motif-code">${esc(t('transferts.motif_code'))}</label><select id="m-motif-code">${['pas_de_lit', 'pas_de_personnel', 'plateau_technique', 'autre'].map((m) => `<option value="${m}">${esc(t(`transferts.motif_${m}`))}</option>`).join('')}</select></div>
+          <div class="champ"><label class="lbl" for="m-motif">${esc(t('transferts.motif_facultatif'))}</label><input id="m-motif" maxlength="300" autocomplete="off"></div>
           <p class="note">${esc(t('transferts.refuser_aide'))}</p>`,
-        [{ label: t('general.retour') }, { label: t('transferts.refuser_bouton'), pri: true, run: async () => (await agir(null, () => api('POST', `/transferts/${id}/refuser`, { motif: $('#m-motif').value }), t('transferts.refuse_ok', { numero }))) !== null || false }]);
+        [{ label: t('general.retour') }, { label: t('transferts.refuser_bouton'), pri: true, run: async () => (await agir(null, () => api('POST', `/transferts/${id}/refuser`, { motif_code: $('#m-motif-code').value, motif: $('#m-motif').value }), t('transferts.refuse_ok', { numero }))) !== null || false }]);
         return;
       }
       agir(b, () => api('POST', `/transferts/${id}/${etape}`), t({ accepter: 'transferts.accepte_ok', chambre_prete: 'transferts.chambre_prete_ok', transport: 'transferts.transport_ok', depart: 'transferts.depart_ok', reception: 'transferts.reception_ok' }[etape], { numero }));

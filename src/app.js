@@ -229,7 +229,7 @@ function creerApp(pool, options = {}) {
   // Direction régionale (lot 0, 19 nov. 2026) : lecture de sa région seulement, jamais les lits, patients ni résidents
   api.use((req, res, next) => {
     if (req.utilisateur.role !== 'direction_regionale') return next();
-    const ok = (req.method === 'GET' && ['/moi', '/demandes', '/demandes/synthese', '/direction/region', '/regions', '/meteo'].includes(req.path)) || req.path.startsWith('/moi/')
+    const ok = (req.method === 'GET' && (['/moi', '/demandes', '/demandes/synthese', '/direction/region', '/regions', '/meteo'].includes(req.path) || /^\/transferts-suivi\/(centrale|\d+)$/.test(req.path))) || req.path.startsWith('/moi/')
       || (req.method === 'POST' && req.path === '/deconnexion');
     return ok ? next() : next(new ErreurHttp(403, 'role_direction_regionale'));
   });
@@ -256,6 +256,14 @@ function creerApp(pool, options = {}) {
   api.post('/urgences-direct/fermetures', route((req) => ud.planifier(pool, req.utilisateur, req.body)));
   api.post('/urgences-direct/fermetures/:id/action', route((req) => ud.changer(pool, req.utilisateur, req.params.id, req.body)));
   api.get('/secours/urgences-direct', route((req) => ud.vueSecours(pool, req.utilisateur)));
+  // Transferts (20 nov. 2026) : fiche unique, centrale régionale, rapatriement proposé ; transporteur et CCS par /secours/*
+  const ts = require('./transferts-suivi');
+  api.get('/transferts-suivi/centrale', route((req) => ts.centrale(pool, req.utilisateur)));
+  api.get('/transferts-suivi/:id', route((req) => ts.fiche(pool, req.utilisateur, req.params.id)));
+  api.get('/secours/transferts-centrale', route((req) => ts.centrale(pool, req.utilisateur)));
+  api.get('/secours/transferts/:id', route((req) => ts.fiche(pool, req.utilisateur, req.params.id)));
+  api.post('/transferts/:id/stable-retour', route((req) => ts.stablePourRetour(pool, req.utilisateur, req.params.id)));
+  api.post('/rapatriements/:id/decision', route((req) => ts.deciderRapatriement(pool, req.utilisateur, req.params.id, req.body)));
   // Demandes, lecture commune des 5 circuits (moteur commun, lot 0) ; régions
   api.get('/demandes', route((req) => require('./demandes').liste(pool, req.utilisateur, req.query)));
   api.get('/demandes/synthese', route((req) => require('./demandes').synthese(pool, req.utilisateur, req.query)));
