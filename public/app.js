@@ -481,7 +481,7 @@ function allerA(vue) {
   if (vue !== etat.vue) hautDePage();
   ouvrirNav(false);
   etat.vue = vue;
-  document.querySelectorAll('#onglets button').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.v === vue)));
+  document.querySelectorAll('#onglets button[data-v]').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.v === vue)));
   document.querySelectorAll('.contenu > section').forEach((sec) => { sec.hidden = sec.id !== `v-${vue}`; });
   rafraichir();
 }
@@ -524,7 +524,7 @@ async function demarrer() {
     etat.ctx = null; majSelecteurCtx();
     $('#ecran-connexion').hidden = true;
     $('#ecran-app').hidden = false;
-    document.querySelectorAll('#onglets button').forEach((b) => { b.hidden = b.dataset.v !== 'admin'; });
+    document.querySelectorAll('#onglets button[data-v]').forEach((b) => { b.hidden = b.dataset.v !== 'admin'; });
     $('#b-notif').hidden = true;
     allerA(etat.moi.utilisateur.totp_actif || etat.moi.demo ? 'admin' : 'compte');
     document.body.dataset.pret = '1';
@@ -549,7 +549,7 @@ async function demarrer() {
   $('#b-notif').hidden = entretien;
   $('#b-recherche').hidden = entretien;
   if (entretien) etat.vue = 'nettoyage';
-  document.querySelectorAll('#onglets button').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.v === etat.vue)));
+  document.querySelectorAll('#onglets button[data-v]').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.v === etat.vue)));
   document.querySelectorAll('.contenu > section').forEach((sec) => { sec.hidden = sec.id !== `v-${etat.vue}`; });
   await rafraichir();
   veilleNotifs();
@@ -566,7 +566,7 @@ function appliquerModules() {
   const mods = (etabCtx() && etabCtx().modules) || {};
   const type = typeEtab();
   document.body.dataset.typeEtab = type; document.documentElement.dataset.typeEtab = type;
-  document.querySelectorAll('#onglets button').forEach((b) => {
+  document.querySelectorAll('#onglets button[data-v]').forEach((b) => {
     const mod = Object.keys(MODULE_ONGLET).find((k) => MODULE_ONGLET[k] === b.dataset.v);
     const autreType = b.dataset.type && b.dataset.type !== type;
     // Entretien : nettoyage (et ses tâches en CHSLD) seulement
@@ -587,7 +587,7 @@ function appliquerModules() {
   else { placer('bourse', 'vigilance'); placer('transports-planifies', 'vigilance'); placer('donnees', 'national'); }
   const accueil = type === 'chsld' ? 'c-accueil' : 'copilote';
   const cur = document.querySelector(`#onglets button[data-v="${etat.vue}"]`);
-  if (cur && cur.hidden && !entretien) { etat.vue = accueil; document.querySelectorAll('#onglets button').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.v === accueil))); document.querySelectorAll('.contenu > section').forEach((sec) => { sec.hidden = sec.id !== `v-${accueil}`; }); }
+  if (cur && cur.hidden && !entretien) { etat.vue = accueil; document.querySelectorAll('#onglets button[data-v]').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.v === accueil))); document.querySelectorAll('.contenu > section').forEach((sec) => { sec.hidden = sec.id !== `v-${accueil}`; }); }
 }
 const libelleAge = (g) => (g && g !== 'adulte' ? `<span class="badge age-${esc(g)}">${esc(t(`fin.age_${g}`))}</span>` : '');
 
@@ -605,12 +605,12 @@ $('#ctx').onchange = async (e) => {
   majInfosLieu(); majMeteo(true); chargerNomOg();
   await rafraichir();
 };
-document.querySelectorAll('#onglets button').forEach((b) => {
+document.querySelectorAll('#onglets button[data-v]').forEach((b) => {
   b.onclick = async () => {
     ouvrirNav(false);
     if (etat.vue !== b.dataset.v) hautDePage();
     etat.vue = b.dataset.v;
-    document.querySelectorAll('#onglets button').forEach((x) => x.setAttribute('aria-selected', String(x === b)));
+    document.querySelectorAll('#onglets button[data-v]').forEach((x) => x.setAttribute('aria-selected', String(x === b)));
     document.querySelectorAll('.contenu > section').forEach((s) => { s.hidden = s.id !== `v-${etat.vue}`; });
     await rafraichir();
   };
@@ -2877,7 +2877,7 @@ async function vueAdmin() {
 
 /* ---------------- Aide intégrée ---------------- */
 /** Écrans accessibles au rôle connecté (ceux dont l'onglet est visible, plus Mon compte). */
-const ecransDuRole = () => [...document.querySelectorAll('#onglets button')].filter((b) => !b.hidden).map((b) => b.dataset.v).concat('compte');
+const ecransDuRole = () => [...document.querySelectorAll('#onglets button[data-v]')].filter((b) => !b.hidden).map((b) => b.dataset.v).concat('compte');
 
 function blocAide(cle, ouvert) {
   const e = t(`aide.ecrans.${cle}`);
