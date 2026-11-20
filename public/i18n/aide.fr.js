@@ -214,6 +214,12 @@ window.ARRIMO_I18N.fr.aide = {
       gestes: ['Filtrez par type de ressource, besoins et distance.', 'Imprimez la fiche d’une page (sans diagnostic) d’un patient NSA.', 'Invitez un professionnel sans compte avec un lien nominatif de 7 jours, révocable.'],
       erreurs: [['Courriel professionnel requis', 'Les adresses personnelles ne sont pas acceptées pour un lien invité.']],
     },
+    donnees: {
+      nom: 'Données',
+      but: 'Suivre les indicateurs de la région et de l’établissement : temps à la porte, transferts, NSA, places libres, listes d’attente par type de ressource, refus par motif.',
+      gestes: ['Choisissez la période.', 'Les cellules de 1 à 4 sont masquées (« < 5 ») pour protéger les personnes.', 'Exportez le tableau en CSV : aucune référence patient.'],
+      erreurs: [['Module désactivé', 'Le module Données doit être activé par l’administration.']],
+    },
     vigilance: {
       nom: 'Congés et alertes',
       but: 'Voir lit par lit les départs prévus (avec leur statut, l’heure et la source) et les blocages expliqués : origine, seuil, fait ou hypothèse, action proposée et responsable.',

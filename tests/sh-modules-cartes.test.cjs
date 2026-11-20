@@ -66,7 +66,7 @@ test('migration SH 49 : modules du chantier au catalogue « à venir », nouveau
   const cat = (await pool.query("SELECT code, statut FROM sh_modules_catalogue WHERE code = ANY($1)", [require('../src/sh/types-etablissement-migrations').MODULES_CHANTIER])).rows;
   assert.strictEqual(cat.length, 9);
   // Migration 50 : Chrono livré, carte « Disponible » ; les 8 autres restent « Bientôt »
-  assert.deepStrictEqual(cat.filter((m) => m.statut !== 'a_venir').map((m) => [m.code, m.statut]).sort(), [['bourse_places', 'disponible'], ['chrono', 'disponible'], ['transferts_suivi', 'disponible'], ['transport_planifie', 'disponible'], ['urgences_direct', 'disponible']]);
+  assert.deepStrictEqual(cat.filter((m) => m.statut !== 'a_venir').map((m) => [m.code, m.statut]).sort(), [['bourse_places', 'disponible'], ['chrono', 'disponible'], ['donnees_regionales', 'disponible'], ['transferts_suivi', 'disponible'], ['transport_planifie', 'disponible'], ['urgences_direct', 'disponible']]);
   assert.ok((await pool.query('SELECT 1 FROM sh_migrations WHERE version = 50')).rowCount);
   const locaux = (await pool.query("SELECT code FROM sh_types_locaux WHERE code IN ('soins_palliatifs', 'hospitalisation_domicile', 'sante_mentale')")).rows;
   assert.strictEqual(locaux.length, 3);

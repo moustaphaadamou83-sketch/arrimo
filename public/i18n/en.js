@@ -79,7 +79,7 @@ window.ARRIMO_I18N.en = {
     ciel_degage: 'Clear', ciel_nuageux: 'Partly cloudy', ciel_couvert: 'Overcast', ciel_brouillard: 'Fog', ciel_bruine: 'Drizzle',
     ciel_pluie: 'Rain', ciel_neige: 'Snow', ciel_orage: 'Thunderstorm',
   },
-  onglets: { bourse: 'Exchange', 'transports-planifies': 'Transports', chrono: 'Chrono', continuite: 'Trail', 
+  onglets: { donnees: 'Data', bourse: 'Exchange', 'transports-planifies': 'Transports', chrono: 'Chrono', continuite: 'Trail', 
     patients: 'Patients', 
     vigilance: 'Discharges & alerts',
     national: 'National',

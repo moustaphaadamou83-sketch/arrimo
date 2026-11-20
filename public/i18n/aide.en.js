@@ -214,6 +214,12 @@ window.ARRIMO_I18N.en.aide = {
       gestes: ['Filter by resource type, needs and distance.', 'Print the one-page sheet (no diagnosis) of an ALC patient.', 'Invite a professional without an account with a named 7-day link, revocable.'],
       erreurs: [['Work email required', 'Personal addresses are not accepted for a guest link.']],
     },
+    donnees: {
+      nom: 'Data',
+      but: 'Follow the region’s and the facility’s indicators: door times, transfers, ALC, free places, waiting lists by resource type, declines by reason.',
+      gestes: ['Choose the period.', 'Cells of 1 to 4 are masked (“< 5”) to protect people.', 'Export the table as CSV: no patient reference.'],
+      erreurs: [['Module disabled', 'The Data module must be enabled by the administration.']],
+    },
     vigilance: {
       nom: 'Discharges and alerts',
       but: 'See planned departures bed by bed (status, time and source) and explained blockages: origin, threshold, fact or hypothesis, suggested action and owner.',

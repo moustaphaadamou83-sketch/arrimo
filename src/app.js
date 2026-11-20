@@ -56,6 +56,7 @@ function creerApp(pool, options = {}) {
   app.get('/proches', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'proches.html')));
   // Écrans de secours (ambulance, CCS) : même connexion que le personnel, page séparée adaptée aux tablettes embarquées
   app.get('/secours', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'secours.html')));
+  app.get('/direction', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'direction.html')));
   // Remise à usage unique d'un accès de connexion (contact technique du client) : la page ne fait que lire le lien
   app.get('/remise', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'remise.html')));
   // FHIR R4 en lecture pour le système d'un hôpital relié (portée « fhir », données de l'établissement seulement)
@@ -234,7 +235,7 @@ function creerApp(pool, options = {}) {
   // Direction régionale (lot 0, 19 nov. 2026) : lecture de sa région seulement, jamais les lits, patients ni résidents
   api.use((req, res, next) => {
     if (req.utilisateur.role !== 'direction_regionale') return next();
-    const ok = (req.method === 'GET' && (['/moi', '/demandes', '/demandes/synthese', '/direction/region', '/regions', '/meteo'].includes(req.path) || /^\/transferts-suivi\/(centrale|\d+)$/.test(req.path))) || req.path.startsWith('/moi/')
+    const ok = (req.method === 'GET' && (['/moi', '/demandes', '/demandes/synthese', '/direction/region', '/regions', '/meteo', '/donnees', '/donnees.csv'].includes(req.path) || /^\/transferts-suivi\/(centrale|\d+)$/.test(req.path))) || req.path.startsWith('/moi/')
       || (req.method === 'POST' && req.path === '/deconnexion');
     return ok ? next() : next(new ErreurHttp(403, 'role_direction_regionale'));
   });
@@ -261,6 +262,13 @@ function creerApp(pool, options = {}) {
   api.post('/urgences-direct/fermetures', route((req) => ud.planifier(pool, req.utilisateur, req.body)));
   api.post('/urgences-direct/fermetures/:id/action', route((req) => ud.changer(pool, req.utilisateur, req.params.id, req.body)));
   api.get('/secours/urgences-direct', route((req) => ud.vueSecours(pool, req.utilisateur)));
+  // Données (20 nov. 2026) : tableaux régionaux, listes d'attente, petits nombres masqués, CSV sans référence
+  const donnees = require('./donnees');
+  api.get('/donnees', route((req) => donnees.tableau(pool, req.utilisateur, req.query)));
+  api.get('/donnees.csv', async (req, res, next) => {
+    try { res.set('Content-Type', 'text/csv; charset=utf-8').set('Content-Disposition', 'attachment; filename="arrimo-donnees.csv"').send(donnees.csv(await donnees.tableau(pool, req.utilisateur, req.query), req.langue)); }
+    catch (e) { next(e); }
+  });
   // Bourse des places (20 nov. 2026)
   const bourse = require('./bourse');
   api.get('/bourse', route((req) => bourse.places(pool, req.utilisateur, req.query)));

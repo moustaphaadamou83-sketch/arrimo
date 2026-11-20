@@ -130,7 +130,7 @@ test('Modules du chantier : « Bientôt », jamais activables ; nouveaux types l
   const chrono = TE.MODULES.find((x) => x.code === 'chrono');
   assert.strictEqual(chrono.statut, 'disponible'); assert.deepStrictEqual(TE.drapeauxDepuisChoix('hopital', { chrono: true }), { chrono: true });
   assert.strictEqual(TE.moduleActif({ type_etablissement: 'hopital', modules: { chrono: true } }, 'chrono'), true);
-  for (const code of [ 'donnees_regionales', 'mode_crise', 'visites_confirmees', 'eviter_transferts']) {
+  for (const code of [ 'mode_crise', 'visites_confirmees', 'eviter_transferts']) {
     const m = TE.MODULES.find((x) => x.code === code);
     assert.ok(m, code); assert.strictEqual(m.statut, 'a_venir', code);
     assert.ok(m.nom && m.nom_en && m.note && m.note_en, `traduction complète : ${code}`);

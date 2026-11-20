@@ -79,7 +79,7 @@ window.ARRIMO_I18N.fr = {
     ciel_degage: 'Dégagé', ciel_nuageux: 'Partiellement nuageux', ciel_couvert: 'Couvert', ciel_brouillard: 'Brouillard', ciel_bruine: 'Bruine',
     ciel_pluie: 'Pluie', ciel_neige: 'Neige', ciel_orage: 'Orage',
   },
-  onglets: { bourse: 'Bourse', 'transports-planifies': 'Transports', chrono: 'Chrono', continuite: 'Sillage', 
+  onglets: { donnees: 'Données', bourse: 'Bourse', 'transports-planifies': 'Transports', chrono: 'Chrono', continuite: 'Sillage', 
     patients: 'Patients', 
     vigilance: 'Congés et alertes',
     national: 'National',
