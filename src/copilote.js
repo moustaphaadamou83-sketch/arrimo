@@ -389,6 +389,8 @@ async function question(pool, utilisateur, etabId, q, fetchImpl, patientContexte
 async function repondreQuestion(pool, utilisateur, etabId, q, fetchImpl, patientContexteId, L) {
   // CHSLD : même moteur et mêmes droits, intentions propres à l'hébergement (src/og-chsld.js)
   const type = (await pool.query('SELECT type_etablissement FROM etablissements WHERE id = $1', [etabId])).rows[0]?.type_etablissement;
+  // Modules du chantier (20 nov. 2026) : urgences en direct, transferts, transport, bourse, listes d'attente, mode crise ; mêmes droits
+  { require('./auth').exigerEtablissement(utilisateur, etabId); const m = await require('./og-modules').repondre(pool, utilisateur, etabId, q, L); if (m) return m; }
   if (type === 'chsld') { require('./auth').exigerEtablissement(utilisateur, etabId); return require('./og-chsld').repondre(pool, utilisateur, etabId, q, L); }
   // Hôpital : Liaison CHSLD (arrivées, accueil, retours), mêmes droits que le module ; null si la question n'en relève pas
   // Hôpital : Liaison Secours (préalertes des ambulances), mêmes droits que le module ; null si la question n'en relève pas

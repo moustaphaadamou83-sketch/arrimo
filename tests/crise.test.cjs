@@ -115,3 +115,15 @@ test('anglais : textes du Mode crise complets en FR et EN', () => {
   const k = (x) => [...x.matchAll(/(\w+): '/g)].map((m) => m[1]).sort();
   assert.deepStrictEqual(k(bloc('fr')), k(bloc('en')));
 });
+
+test('OG : questions des modules (évacuation, bourse, listes d’attente), FR/EN, mêmes droits ; module non activé expliqué', async () => {
+  const q = (qui, question, etab) => appel(qui, 'POST', '/copilote/question', { etablissement_id: etab, question });
+  await pool.query("UPDATE etablissements SET module_actif = true WHERE id = $1", [ids.src]);
+  const r = await q('admin.eva', 'Y a-t-il une évacuation en cours ?', ids.src);
+  assert.strictEqual(r.statut, 200, JSON.stringify(r.corps)); assert.match(r.corps.reponse, /Aucune évacuation en cours/);
+  assert.match((await q('admin.eva', 'Is there an evacuation in progress?', ids.src)).corps.reponse, /No evacuation in progress/);
+  assert.match((await q('admin.eva', 'Quelles places libres dans la bourse ?', ids.src)).corps.reponse, /pas activé/);
+  await pool.query(`UPDATE etablissements SET modules = modules || '{"bourse_places": true, "donnees_regionales": true}' WHERE id = $1`, [ids.src]);
+  assert.match((await q('admin.eva', 'Quelles places libres dans la bourse ?', ids.src)).corps.reponse, /3 premières places|Aucune place/);
+  assert.ok((await q('admin.eva', 'Où en sont les listes d’attente ?', ids.src)).corps.intentions.includes('listes_attente'));
+});
