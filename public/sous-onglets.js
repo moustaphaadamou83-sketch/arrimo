@@ -1,4 +1,4 @@
-/* Sous-onglets des modules (22 nov. 2026) : chaque écran de module est rangé en sous-onglets (ex. Chrono : En direct · Rapport).
+/* Sous-onglets des modules (22 nov. 2026) : chaque écran de module est rangé en module-sous-onglets (ex. Chrono : En direct · Rapport).
    Le contenu ne change pas : les blocs existants sont seulement montrés par groupe. Choix mémorisé par écran ; FR/EN ; clavier. */
 (() => {
   // Index = position parmi les enfants directs de l'écran, sans l'en-tête (.entete) ni la barre ; non listé = toujours visible
@@ -16,25 +16,25 @@
   const esc = (x) => String(x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   function appliquer(vue) {
     const v = document.getElementById(`v-${vue}`); const conf = CONFIG[vue]; if (!v || !conf) return;
-    const blocs = [...v.children].filter((e) => !e.classList.contains('entete') && !e.classList.contains('sous-onglets'));
+    const blocs = [...v.children].filter((e) => !e.classList.contains('entete') && !e.classList.contains('module-sous-onglets'));
     const groupes = conf.map(([cle, fr, en, idx]) => ({ cle, libelle: langue() ? en : fr, elems: idx.map((i) => blocs[i]).filter(Boolean) })).filter((g) => g.elems.length);
-    let barre = v.querySelector(':scope > .sous-onglets');
+    let barre = v.querySelector(':scope > .module-sous-onglets');
     if (groupes.length < 2) { barre?.remove(); blocs.forEach((e) => { e.hidden = false; }); return; }
     const actif = groupes.some((g) => g.cle === choix[vue]) ? choix[vue] : groupes[0].cle;
     const html = groupes.map((g) => `<button type="button" role="tab" data-so="${g.cle}" aria-selected="${g.cle === actif}" tabindex="${g.cle === actif ? 0 : -1}">${esc(g.libelle)}</button>`).join('');
-    if (!barre) { barre = document.createElement('div'); barre.className = 'sous-onglets'; barre.setAttribute('role', 'tablist'); const e = v.querySelector(':scope > .entete'); if (e) e.after(barre); else v.prepend(barre); }
+    if (!barre) { barre = document.createElement('div'); barre.className = 'module-sous-onglets'; barre.setAttribute('role', 'tablist'); const e = v.querySelector(':scope > .entete'); if (e) e.after(barre); else v.prepend(barre); }
     if (barre.innerHTML !== html) barre.innerHTML = html;
     const dans = new Set(groupes.flatMap((g) => g.elems));
     for (const g of groupes) for (const e of g.elems) e.hidden = g.cle !== actif;
     blocs.forEach((e) => { if (!dans.has(e)) e.hidden = false; });
   }
   document.addEventListener('click', (ev) => {
-    const b = ev.target.closest('.sous-onglets [data-so]'); if (!b) return;
+    const b = ev.target.closest('.module-sous-onglets [data-so]'); if (!b) return;
     const vue = b.closest('section[id^="v-"]')?.id.slice(2); if (!vue) return;
-    const cle = b.dataset.so; choix[vue] = cle; appliquer(vue); document.querySelector(`#v-${vue} > .sous-onglets [data-so="${cle}"]`)?.focus();
+    const cle = b.dataset.so; choix[vue] = cle; appliquer(vue); document.querySelector(`#v-${vue} > .module-sous-onglets [data-so="${cle}"]`)?.focus();
   });
   document.addEventListener('keydown', (ev) => {
-    const b = ev.target.closest?.('.sous-onglets [data-so]'); if (!b || !['ArrowRight', 'ArrowLeft'].includes(ev.key)) return;
+    const b = ev.target.closest?.('.module-sous-onglets [data-so]'); if (!b || !['ArrowRight', 'ArrowLeft'].includes(ev.key)) return;
     const l = [...b.parentElement.children]; const n = l[(l.indexOf(b) + (ev.key === 'ArrowRight' ? 1 : l.length - 1)) % l.length]; n.click();
   });
   const attentes = {};

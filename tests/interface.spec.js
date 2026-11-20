@@ -966,7 +966,7 @@ for (const L of LARGEURS) {
     assert.strictEqual((await pool.query("SELECT apparence FROM utilisateurs WHERE email='hopital.x@demo.arrimo'")).rows[0].apparence, 'sombre');
     assert.strictEqual((await pool.query("SELECT count(*)::int n FROM utilisateurs WHERE apparence<>'automatique'")).rows[0].n, 1, 'les autres comptes ne changent pas');
     await x.keyboard.press('Escape');
-    const vues = await x.evaluate(() => [...document.querySelectorAll('#onglets button[data-v]')].filter((b) => !b.hidden && b.offsetParent !== null).map((b) => b.dataset.v));
+    const vues = await x.evaluate(() => [...document.querySelectorAll('#onglets button[data-v]')].filter((b) => !b.hidden && (b.offsetParent !== null || b.classList.contains('hors-barre'))).map((b) => b.dataset.v));
     assert.ok(vues.length >= 8, `onglets visibles : ${vues}`);
     for (const v of vues) { await onglet(x, v); await verifier(x, L, `sombre-${v}`); }
     await x.context().close();
