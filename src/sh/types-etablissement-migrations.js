@@ -245,9 +245,23 @@ async function migrerDerniersModules(c) {
   await c.query(`INSERT INTO sh_modules_catalogue (code, nom, description, dependances, categorie, types, statut, ordre, nom_en, note)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT (code) DO NOTHING`, [m.code, m.nom, m.nom, [], m.categorie, m.types, m.statut, i + 1, m.nom_en, null]);
   // Les types de secours ajoutés depuis la migration 45 voient aussi les profils existants
-  await c.query("UPDATE sh_modules_catalogue SET types = $1 WHERE code IN ('profil_ccs', 'profil_ambulance', 'chrono', 'urgences_direct', 'transferts_suivi', 'transport_planifie') AND NOT types @> $1", [TE.TYPES_SECOURS]);
+  await c.query("UPDATE sh_modules_catalogue SET types = ARRAY(SELECT DISTINCT unnest(types || $1::text[])) WHERE code IN ('profil_ccs', 'profil_ambulance', 'chrono', 'urgences_direct', 'transferts_suivi', 'transport_planifie') AND NOT types @> $1", [TE.TYPES_SECOURS]);
   await c.query('INSERT INTO sh_migrations(version) VALUES($1)', [DERNIERS_MODULES_VERSION]);
   return true;
 }
+/* Migration 59 (22 nov. 2026) : correctif de la 58, qui avait REMPLACÉ les types de six modules au lieu de les compléter
+   (Chrono, Urgences en direct, Transferts, Transport n'étaient plus proposés aux hôpitaux ni aux CHSLD dans SH).
+   Les types reprennent ceux du code (src/types-etablissement.js), réunis avec ceux déjà en base ; rien d'autre ne change. */
+const TYPES_MODULES_VERSION = 59;
+async function migrerTypesModules(c) {
+  if ((await c.query('SELECT 1 FROM sh_migrations WHERE version=$1', [TYPES_MODULES_VERSION])).rowCount) return false;
+  const TE = require('../types-etablissement');
+  for (const code of ['profil_ccs', 'profil_ambulance', 'chrono', 'urgences_direct', 'transferts_suivi', 'transport_planifie']) {
+    const m = TE.MODULES.find((x) => x.code === code); if (!m) continue;
+    await c.query('UPDATE sh_modules_catalogue SET types = ARRAY(SELECT DISTINCT unnest(types || $2::text[]) ORDER BY 1) WHERE code = $1', [code, m.types]);
+  }
+  await c.query('INSERT INTO sh_migrations(version) VALUES($1)', [TYPES_MODULES_VERSION]);
+  return true;
+}
 const VERSION_SH = TYPES_AINES_VERSION;
-module.exports = { DERNIERS_MODULES_VERSION, migrerDerniersModules, EXPORTS_VERSION, migrerExports, CRISE_VERSION, migrerCrise, DONNEES_VERSION, migrerDonnees, BOURSE_VERSION, migrerBourse, TRANSPORT_PLANIFIE_VERSION, migrerTransportPlanifie, TRANSFERTS_VERSION, migrerTransferts, URGENCES_DIRECT_VERSION, migrerUrgencesDirect, CHRONO_VERSION, migrerChrono, MOTEUR_COMMUN_VERSION, MODULES_CHANTIER, migrerMoteurCommun, LIAISON_SECOURS_VERSION, migrerLiaisonSecours, TYPES_ETABLISSEMENT_VERSION, LIAISON_CHSLD_VERSION, PRODUCTIONS_VERSION, TYPES_LOCAUX_VERSION, DEMANDES_SITE_VERSION, VERSION_SH, migrerTypesEtablissement, migrerLiaisonChsld, migrerProductions, migrerTypesLocaux, migrerDemandesSite, migrerTypesAines };
+module.exports = { TYPES_MODULES_VERSION, migrerTypesModules, DERNIERS_MODULES_VERSION, migrerDerniersModules, EXPORTS_VERSION, migrerExports, CRISE_VERSION, migrerCrise, DONNEES_VERSION, migrerDonnees, BOURSE_VERSION, migrerBourse, TRANSPORT_PLANIFIE_VERSION, migrerTransportPlanifie, TRANSFERTS_VERSION, migrerTransferts, URGENCES_DIRECT_VERSION, migrerUrgencesDirect, CHRONO_VERSION, migrerChrono, MOTEUR_COMMUN_VERSION, MODULES_CHANTIER, migrerMoteurCommun, LIAISON_SECOURS_VERSION, migrerLiaisonSecours, TYPES_ETABLISSEMENT_VERSION, LIAISON_CHSLD_VERSION, PRODUCTIONS_VERSION, TYPES_LOCAUX_VERSION, DEMANDES_SITE_VERSION, VERSION_SH, migrerTypesEtablissement, migrerLiaisonChsld, migrerProductions, migrerTypesLocaux, migrerDemandesSite, migrerTypesAines };

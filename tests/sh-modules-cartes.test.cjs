@@ -73,6 +73,17 @@ test('migration SH 49 : modules du chantier au catalogue « à venir », nouveau
   assert.ok((await pool.query('SELECT 1 FROM sh_migrations WHERE version = 49')).rowCount);
 });
 
+test('migration SH 59 : les types du catalogue en base contiennent ceux du code (Chrono et Transport proposés aux hôpitaux et CHSLD)', async () => {
+  const TE = require('../src/types-etablissement');
+  assert.ok((await pool.query('SELECT 1 FROM sh_migrations WHERE version = 59')).rowCount);
+  const rows = (await pool.query('SELECT code, types FROM sh_modules_catalogue WHERE code = ANY($1)', [TE.MODULES.map((m) => m.code)])).rows;
+  for (const r of rows) {
+    const m = TE.MODULES.find((x) => x.code === r.code);
+    const manquent = m.types.filter((t) => !r.types.includes(t));
+    assert.deepStrictEqual(manquent, [], `${r.code} : types du code absents du catalogue SH`);
+  }
+});
+
 test('cartes : 17 au total, seules celles du type apparaissent, état et filtre', () => {
   assert.strictEqual(cartes.CARTES.length, 17);
   const catalogue = (type) => TE.catalogue(type).map((m) => ({ ...m, licence: 'non_selectionne' }));
