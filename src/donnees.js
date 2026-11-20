@@ -69,14 +69,20 @@ async function tableau(pool, u, q = {}) {
     const ns = b.nsa.filter((x) => x.id === e.id);
     return { id: e.id, nom: e.nom, region: e.region_code, type: e.type_etablissement,
       chrono_passages: ch.length, chrono_porte_mediane_min: mediane(ch.map((x) => (x.porte == null ? null : Number(x.porte)))),
-      transferts: tr.length, transferts_refuses: tr.filter((x) => x.statut === 'refuse' && x.destination_id === e.id).length,
+      // Un transfert compte une seule fois dans le total : à son établissement d'origine (« demandés ») ; reçus à part
+      transferts: tr.filter((x) => x.origine_id === e.id).length, transferts_recus: tr.filter((x) => x.destination_id === e.id).length,
+      transferts_refuses: tr.filter((x) => x.statut === 'refuse' && x.destination_id === e.id).length,
       transferts_decision_mediane_min: mediane(tr.filter((x) => x.destination_id === e.id).map((x) => (x.decision == null ? null : Number(x.decision)))),
       nsa_actifs: ns.length, nsa_jours_median: mediane(ns.map((x) => Math.max(0, Math.floor(Number(x.jours))))),
       places_libres: b.places.filter((x) => x.id === e.id).reduce((s, x) => s + Number(x.libres || 0), 0) };
   });
-  // Totaux calculés sur les chiffres bruts, puis masqués comme le détail
+  // Les établissements actifs d'abord ; ceux sans aucune donnée sur la période sont marqués « vide » (repliés à l'écran)
+  const activite = (l) => l.chrono_passages + l.transferts + l.transferts_recus + l.nsa_actifs;
+  for (const l of lignes) l.vide = activite(l) === 0 && !l.places_libres;
+  lignes.sort((x, y) => activite(y) - activite(x) || (y.places_libres || 0) - (x.places_libres || 0) || x.nom.localeCompare(y.nom));
+  // Totaux calculés sur les chiffres bruts (somme exacte des lignes, y compris les cellules « < 5 »), puis masqués comme le détail
   const somme = (k) => lignes.reduce((s, l) => s + (l[k] || 0), 0);
-  const totaux = Object.fromEntries(['chrono_passages', 'transferts', 'transferts_refuses', 'nsa_actifs', 'places_libres'].map((k) => [k, somme(k)]));
+  const totaux = Object.fromEntries(['chrono_passages', 'transferts', 'transferts_recus', 'transferts_refuses', 'nsa_actifs', 'places_libres'].map((k) => [k, somme(k)]));
   const refus = {};
   for (const r of b.refus) { const k = `${r.circuit}:${r.motif || 'sans_motif'}`; refus[k] = (refus[k] || 0) + 1; }
   // Listes d'attente par type de ressource : NSA ouverts (orientation) + demandes d'hébergement en cours ; places libres en face
@@ -86,9 +92,9 @@ async function tableau(pool, u, q = {}) {
   for (const d of b.demandesHeb) ajout(d.type_local_code || 'chsld', d.jours);
   for (const pl of b.places) { const g = pl.type_local_code || 'chsld'; (attente[g] || (attente[g] = { personnes: 0, jours: [], places_libres: 0 })).places_libres += Number(pl.libres || 0); }
   // Une médiane calculée sur moins de 5 personnes est masquée avec son nombre (sinon elle pourrait identifier quelqu'un)
-  const MEDIANES = { chrono_porte_mediane_min: 'chrono_passages', nsa_jours_median: 'nsa_actifs', transferts_decision_mediane_min: 'transferts' };
+  const MEDIANES = { chrono_porte_mediane_min: 'chrono_passages', nsa_jours_median: 'nsa_actifs', transferts_decision_mediane_min: 'transferts_recus' };
   const masqueLigne = (l) => Object.fromEntries(Object.entries(l).map(([k, v]) => {
-    if (['chrono_passages', 'transferts', 'transferts_refuses', 'nsa_actifs'].includes(k)) return [k, masquer(v)];
+    if (['chrono_passages', 'transferts', 'transferts_recus', 'transferts_refuses', 'nsa_actifs'].includes(k)) return [k, masquer(v)];
     if (MEDIANES[k] && l[MEDIANES[k]] > 0 && l[MEDIANES[k]] < SEUIL && v != null) return [k, { masque: true }];
     return [k, v];
   }));
@@ -103,9 +109,9 @@ async function tableau(pool, u, q = {}) {
 function csv(t, langue = 'fr') {
   const en = langue === 'en'; const v = (x) => (x && x.masque ? '<5' : x == null ? '' : String(x));
   const champ = (s) => (/[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
-  const tete = en ? ['Facility', 'Region', 'Chrono visits', 'Door median (min)', 'Transfers', 'Transfers declined', 'Decision median (min)', 'ALC open', 'ALC median days', 'Free places']
-    : ['Établissement', 'Région', 'Passages Chrono', 'Porte médiane (min)', 'Transferts', 'Transferts refusés', 'Décision médiane (min)', 'NSA ouverts', 'Jours NSA médians', 'Places libres'];
-  const lignes = t.etablissements.map((l) => [l.nom, l.region || '', v(l.chrono_passages), v(l.chrono_porte_mediane_min), v(l.transferts), v(l.transferts_refuses), v(l.transferts_decision_mediane_min), v(l.nsa_actifs), v(l.nsa_jours_median), v(l.places_libres)].map(champ).join(';'));
+  const tete = en ? ['Facility', 'Region', 'Chrono visits', 'Door median (min)', 'Transfers requested', 'Transfers received', 'Transfers declined', 'Decision median (min)', 'ALC open', 'ALC median days', 'Free places']
+    : ['Établissement', 'Région', 'Passages Chrono', 'Porte médiane (min)', 'Transferts demandés', 'Transferts reçus', 'Transferts refusés', 'Décision médiane (min)', 'NSA ouverts', 'Jours NSA médians', 'Places libres'];
+  const lignes = t.etablissements.map((l) => [l.nom, l.region || '', v(l.chrono_passages), v(l.chrono_porte_mediane_min), v(l.transferts), v(l.transferts_recus), v(l.transferts_refuses), v(l.transferts_decision_mediane_min), v(l.nsa_actifs), v(l.nsa_jours_median), v(l.places_libres)].map(champ).join(';'));
   return `﻿${[tete.join(';'), ...lignes].join('\r\n')}\r\n`;
 }
 

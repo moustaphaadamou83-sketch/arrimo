@@ -13,7 +13,7 @@ window.ARRIMO_I18N.en = {
     f_texte: 'Text assistant', f_vocal: 'Voice features', f_dictee: 'Dictation', f_conversation: 'Continuous conversation', f_personnalisation: 'Personalization', f_actions: 'Supervised administrative actions',
     f_patients: 'Fictitious patients (demo and test)', f_documents: 'Document reading', f_rapports: 'Reports', couleur_n: 'Shade {n}', peau_n: 'Tone {n}' },
   types_etab: { hopitaux: 'Hospitals', chsld: 'CHSLDs (long-term care)', hebergement: 'Long-term care and seniors’ housing' },
-  nav: { operations: 'Operations', pilotage: 'Monitoring', gestion: 'Management', principale: 'Main navigation', ouvrir: 'Open the menu', fermer: 'Close the menu' },
+  nav: { operations: 'Operations', pilotage: 'Monitoring', gestion: 'Management', principale: 'Main navigation', ouvrir: 'Open the menu', fermer: 'Close the menu', plus: 'More', plus_aide: 'Other screens' },
   apparence: { basculer: 'Switch theme', choisir: 'Appearance', clair: 'Light', sombre: 'Dark', automatique: 'Automatic (system)', soleil: 'Follow sunrise and sunset (facility)', enregistree: 'Appearance saved.' },
   priorites_ui: {
     "titre": "Priorities and allocation",

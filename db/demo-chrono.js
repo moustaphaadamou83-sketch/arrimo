@@ -1,6 +1,6 @@
 /**
  * Démonstration et recette seulement (19 nov. 2026) : prépare le moteur commun et le Chrono dans la démo.
- * - Région CA-QC-06 (Montréal, ville de la météo de la démo) pour les établissements et organisations de secours de la démo.
+ * - Région CA-QC-04 (Mauricie-et-Centre-du-Québec) pour les établissements et organisations de secours de la démo.
  * - Module Chrono activé sur les hôpitaux A, B et C (HX, HY, HC) s'ils ont Liaison Secours (cahier v2, C.12), journalisé.
  * - Rapport mensuel non vide : quelques passages fictifs TERMINÉS plus tôt dans le mois, heures dans l'Horloge (source « systeme »).
  *   Aucun passage « à la porte » n'est créé : en démonstration, l'équipage signale son arrivée (H11) en direct.
@@ -17,11 +17,11 @@ const PROFILS = [[3, 9, 16, 31], [5, 12, 24, 41], [2, 7, 14, 26], [6, 15, 28, 52
 async function preparer(pool, { silencieux = false } = {}) {
   if (!['demo', 'recette'].includes(environnement())) throw new Error('Démonstration et recette seulement (ARRIMO_ENV).');
   const log = (m) => { if (!silencieux) console.log(m); };
-  const region = (await pool.query("SELECT id FROM regions WHERE code = 'CA-QC-06'")).rows[0];
+  const region = (await pool.query("SELECT id FROM regions WHERE code = 'CA-QC-04'")).rows[0];
   if (!region) throw new Error('Table regions absente : appliquer d’abord la migration du moteur commun.');
   const r1 = await pool.query('UPDATE etablissements SET region_id = $1 WHERE region_id IS NULL', [region.id]);
   const r2 = await pool.query('UPDATE organisations_secours SET region_id = $1 WHERE region_id IS NULL', [region.id]);
-  log(`Région CA-QC-06 : ${r1.rowCount} établissements, ${r2.rowCount} organisations`);
+  log(`Région CA-QC-04 : ${r1.rowCount} établissements, ${r2.rowCount} organisations`);
   const hop = (await pool.query("SELECT id, code, nom, modules FROM etablissements WHERE code = ANY($1) AND (modules->>'liaison_secours') = 'true'", [HOPITAUX])).rows;
   for (const h of hop) {
     if ((h.modules || {}).chrono === true) { log(`Chrono déjà actif : ${h.code}`); continue; }

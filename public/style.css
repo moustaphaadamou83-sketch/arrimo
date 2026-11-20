@@ -777,3 +777,13 @@ details.voir-carte summary::-webkit-details-marker { display: none; }
 .ud-carte.etat-capacite_reduite { border-left-color: #F59E0B; }
 .ud-carte.etat-fermee_temporairement { border-left-color: #DC2626; }
 .ud-carte.etat-inconnu { border-left-color: #94A3B8; }
+/* Menu « Plus » de la barre d'onglets (22 nov. 2026) : onglets qui ne tiennent pas, rangés par groupe */
+#onglets .hors-barre { display: none !important; }
+.onglets .onglets-plus { margin-left: auto; flex: none; }
+.onglets .onglets-plus .ic { width: 14px; height: 14px; }
+.menu-onglets-plus { position: absolute; z-index: 60; min-width: 230px; max-height: 70vh; overflow-y: auto; padding: var(--e2) 0;
+  background: var(--carte); color: var(--texte); border: 1px solid var(--bordure, #E2E8F0); border-radius: 10px; box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18); }
+.menu-onglets-plus .mop-groupe { padding: var(--e2) var(--e4) 2px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--texte-2, #64748B); }
+.menu-onglets-plus button { display: block; width: 100%; text-align: left; font: inherit; background: none; border: 0; color: inherit; padding: 9px var(--e4); min-height: 40px; cursor: pointer; }
+.menu-onglets-plus button:hover, .menu-onglets-plus button:focus-visible { background: var(--fond); outline: none; }
+@media (max-width: 600px) { .onglets .onglets-plus { display: none !important; } }

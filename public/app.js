@@ -581,6 +581,10 @@ function appliquerModules() {
   const net = $('#onglets button[data-v="nettoyage"]');
   const ancre = type === 'chsld' ? $('#onglets button[data-v="c-admissions"]') : $('#onglets button[data-v="transferts"]');
   if (net && ancre && ancre.nextElementSibling !== net) ancre.after(net);
+  // Modules communs (22 nov. 2026) : Transports et Bourse avec les opérations, Données avec le pilotage (hôpital) ; dans la coordination (CHSLD)
+  const placer = (v, apres) => { const x = $(`#onglets button[data-v="${v}"]`); const y = $(`#onglets button[data-v="${apres}"]`); if (x && y && y.nextElementSibling !== x) y.after(x); };
+  if (type === 'chsld') { placer('donnees', 'c-indicateurs'); placer('bourse', 'c-indicateurs'); placer('transports-planifies', 'c-indicateurs'); }
+  else { placer('bourse', 'vigilance'); placer('transports-planifies', 'vigilance'); placer('donnees', 'national'); }
   const accueil = type === 'chsld' ? 'c-accueil' : 'copilote';
   const cur = document.querySelector(`#onglets button[data-v="${etat.vue}"]`);
   if (cur && cur.hidden && !entretien) { etat.vue = accueil; document.querySelectorAll('#onglets button').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.v === accueil))); document.querySelectorAll('.contenu > section').forEach((sec) => { sec.hidden = sec.id !== `v-${accueil}`; }); }
