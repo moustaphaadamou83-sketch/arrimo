@@ -11,7 +11,7 @@
     if (!d) return;
     const hopital = (etabCtx().type_etablissement || 'hopital') === 'hopital';
     const lits = hopital ? ((await api('GET', `/lits?etablissement_id=${etat.ctx}`).catch(() => [])) || []).filter((l) => l.nsa_depuis) : [];
-    const raison = (p) => B('raison', { couverts: p.raison.besoins_couverts, demandes: p.raison.besoins_demandes, pb: p.raison.points_besoins, km: p.raison.km ?? '—', pp: p.raison.points_proximite });
+    const raison = (p) => B(p.raison.besoins_demandes ? 'raison' : 'raison_sans_besoin', { couverts: p.raison.besoins_couverts, demandes: p.raison.besoins_demandes, pb: p.raison.points_besoins, km: p.raison.km ?? '—', pp: p.raison.points_proximite });
     v.innerHTML = `<div class="entete"><div><h2>${B('titre')}</h2><p class="note">${B('intro', { besoins: d.formule.besoins, proximite: d.formule.proximite })}</p></div></div>
       <section class="panneau-c"><div class="ligne">
         <div class="champ"><label class="lbl" for="bo-genre">${B('type')}</label><select id="bo-genre"><option value="">${B('tous')}</option>${d.genres.map((g) => `<option value="${g}"${F.genre === g ? ' selected' : ''}>${B(`g_${g}`)}</option>`).join('')}</select></div>
@@ -22,7 +22,7 @@
           <td>${p.distance_km ?? '—'}</td><td><strong>${p.score}</strong>/100</td><td class="note">${raison(p)}${p.raison.manquants.length ? ` · ${B('manque', { liste: p.raison.manquants.map((m) => t(`bourse.b_${m}`)).join(', ') })}` : ''}</td></tr>`).join('')}</tbody></table></div>` : `<p class="note">${B('aucune')}</p>`}
         <p class="note">${B('neutralite')}</p></section>
       ${hopital ? `<section class="panneau-c"><h3>${B('fiche_titre')}</h3>${lits.length ? `<div class="ligne"><select id="bo-lit">${lits.map((l) => `<option value="${l.id}">${esc(l.code)} · ${esc(l.patient_ref)}</option>`).join('')}</select><button class="btn" id="bo-fiche">${B('imprimer')}</button></div>` : `<p class="note">${B('aucun_nsa')}</p>`}</section>` : ''}
-      <section class="panneau-c"><h3>${B('invites')}</h3><p class="note">${B('invites_aide')}</p><button class="btn" id="bo-inviter">${B('inviter')}</button>
+      <section class="panneau-c"><h3>${B('invites')}</h3><p class="note">${B('invites_aide')}</p><div class="ligne"><button class="btn" id="bo-inviter">${B('inviter')}</button></div>
         ${inv.length ? `<ul class="liste-simple">${inv.map((i) => `<li>${esc(i.nom)} · ${esc(i.organisation)} · ${esc(i.courriel)} · ${i.active ? B('expire', { d: heure(i.expire_le) }) : B('inactive')}${i.active ? ` <button class="btn discret" data-bo-revoquer="${i.id}">${B('revoquer')}</button>` : ''}</li>`).join('')}</ul>` : ''}</section>`;
     $('#bo-genre').onchange = (e) => { F.genre = e.target.value; vue(); };
     $('#bo-dist').onchange = (e) => { F.distance_max = e.target.value; vue(); };

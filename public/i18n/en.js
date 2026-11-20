@@ -152,7 +152,7 @@ window.ARRIMO_I18N.en = {
   bourse: {
     titre: 'Placement exchange', intro: 'Free and upcoming places of all residential resources. Ranking out of 100: needs covered ({besoins}) and proximity ({proximite}); no subscription, licence or payment enters the calculation.',
     type: 'Type', tous: 'All types', distance: 'Distance (km)', km: '{n} km at most', toute_distance: 'Any distance', besoins: 'Needs to cover', ressource: 'Resource', libres: 'Free', a_venir: 'Upcoming (14 d)',
-    score: 'Score', pourquoi: 'Why', raison: '{couverts}/{demandes} needs covered ({pb} pts) · {km} km ({pp} pts)', manque: 'missing: {liste}', groupe: 'group {g}', aucune: 'No place matches.',
+    score: 'Score', pourquoi: 'Why', raison: '{couverts}/{demandes} needs covered ({pb} pts) · {km} km ({pp} pts)', raison_sans_besoin: 'no need requested ({pb} pts) · {km} km ({pp} pts)', manque: 'missing: {liste}', groupe: 'group {g}', aucune: 'No place matches.',
     neutralite: 'The same order is shown to everyone, subscribers or not, and to guests.',
     fiche_titre: 'One-page transfer sheet', imprimer: 'Print the sheet', aucun_nsa: 'No patient in alternate level of care.', popup: 'Allow pop-ups to print.',
     f_reference: 'Reference', f_hopital: 'Hospital', f_lit: 'Bed', f_orientation: 'Orientation', f_jours_nsa: 'Days in ALC', f_tranche_age: 'Age group', f_besoins: 'Needs (categories)', f_langue: 'Language', f_date: 'Desired date',

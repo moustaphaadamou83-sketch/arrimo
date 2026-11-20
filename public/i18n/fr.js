@@ -152,7 +152,7 @@ window.ARRIMO_I18N.fr = {
   bourse: {
     titre: 'Bourse des places', intro: 'Places libres et à venir de toutes les ressources d’hébergement. Classement sur 100 : besoins couverts ({besoins}) et proximité ({proximite}) ; aucun abonnement, licence ni paiement n’entre dans le calcul.',
     type: 'Type', tous: 'Tous les types', distance: 'Distance (km)', km: '{n} km au plus', toute_distance: 'Toute distance', besoins: 'Besoins à couvrir', ressource: 'Ressource', libres: 'Libres', a_venir: 'À venir (14 j)',
-    score: 'Score', pourquoi: 'Pourquoi', raison: '{couverts}/{demandes} besoins couverts ({pb} pts) · {km} km ({pp} pts)', manque: 'manque : {liste}', groupe: 'groupe {g}', aucune: 'Aucune place ne correspond.',
+    score: 'Score', pourquoi: 'Pourquoi', raison: '{couverts}/{demandes} besoins couverts ({pb} pts) · {km} km ({pp} pts)', raison_sans_besoin: 'aucun besoin demandé ({pb} pts) · {km} km ({pp} pts)', manque: 'manque : {liste}', groupe: 'groupe {g}', aucune: 'Aucune place ne correspond.',
     neutralite: 'Le même ordre s’affiche pour tous, abonnés ou non, et pour les invités.',
     fiche_titre: 'Fiche de transfert d’une page', imprimer: 'Imprimer la fiche', aucun_nsa: 'Aucun patient en niveau de soins alternatif.', popup: 'Autorisez les fenêtres pour imprimer.',
     f_reference: 'Référence', f_hopital: 'Hôpital', f_lit: 'Lit', f_orientation: 'Orientation', f_jours_nsa: 'Jours en NSA', f_tranche_age: 'Tranche d’âge', f_besoins: 'Besoins (catégories)', f_langue: 'Langue', f_date: 'Date souhaitée',
