@@ -214,5 +214,22 @@ async function migrerCrise(c) {
   await c.query('INSERT INTO sh_migrations(version) VALUES($1)', [CRISE_VERSION]);
   return true;
 }
+/* Migration 57 (20 nov. 2026) : garantie de continuité — exports complets d'un client : archive chiffrée au repos (stockage des documents),
+   lien à usage unique d'une heure (empreinte du jeton seulement), journal (qui, quand, taille, empreinte SHA-256). Table neuve. */
+const EXPORTS_VERSION = 57;
+async function migrerExports(c) {
+  if ((await c.query('SELECT 1 FROM sh_migrations WHERE version=$1', [EXPORTS_VERSION])).rowCount) return false;
+  await c.query(`CREATE TABLE IF NOT EXISTS sh_exports_clients(
+    id serial PRIMARY KEY, hopital_id int NOT NULL REFERENCES hopitaux(id), jeton_empreinte text NOT NULL UNIQUE, nom_fichier text NOT NULL,
+    stockage_ref text NOT NULL, taille int NOT NULL, sha256 text NOT NULL, tables int NOT NULL, lignes int NOT NULL,
+    expire_le timestamptz NOT NULL, telecharge_le timestamptz, cree_par int REFERENCES sh_utilisateurs(id) ON DELETE SET NULL, cree_le timestamptz NOT NULL DEFAULT now())`);
+  const owner = (await c.query('SELECT current_user owner')).rows[0].owner; const role = `${owner}_scope`;
+  if (/^[a-z][a-z0-9_]{0,50}$/.test(role) && (await c.query('SELECT 1 FROM pg_roles WHERE rolname = $1', [role])).rowCount) {
+    await c.query(`GRANT SELECT,INSERT,UPDATE ON sh_exports_clients TO "${role}"`);
+    await c.query(`GRANT USAGE,SELECT ON SEQUENCE sh_exports_clients_id_seq TO "${role}"`);
+  }
+  await c.query('INSERT INTO sh_migrations(version) VALUES($1)', [EXPORTS_VERSION]);
+  return true;
+}
 const VERSION_SH = TYPES_AINES_VERSION;
-module.exports = { CRISE_VERSION, migrerCrise, DONNEES_VERSION, migrerDonnees, BOURSE_VERSION, migrerBourse, TRANSPORT_PLANIFIE_VERSION, migrerTransportPlanifie, TRANSFERTS_VERSION, migrerTransferts, URGENCES_DIRECT_VERSION, migrerUrgencesDirect, CHRONO_VERSION, migrerChrono, MOTEUR_COMMUN_VERSION, MODULES_CHANTIER, migrerMoteurCommun, LIAISON_SECOURS_VERSION, migrerLiaisonSecours, TYPES_ETABLISSEMENT_VERSION, LIAISON_CHSLD_VERSION, PRODUCTIONS_VERSION, TYPES_LOCAUX_VERSION, DEMANDES_SITE_VERSION, VERSION_SH, migrerTypesEtablissement, migrerLiaisonChsld, migrerProductions, migrerTypesLocaux, migrerDemandesSite, migrerTypesAines };
+module.exports = { EXPORTS_VERSION, migrerExports, CRISE_VERSION, migrerCrise, DONNEES_VERSION, migrerDonnees, BOURSE_VERSION, migrerBourse, TRANSPORT_PLANIFIE_VERSION, migrerTransportPlanifie, TRANSFERTS_VERSION, migrerTransferts, URGENCES_DIRECT_VERSION, migrerUrgencesDirect, CHRONO_VERSION, migrerChrono, MOTEUR_COMMUN_VERSION, MODULES_CHANTIER, migrerMoteurCommun, LIAISON_SECOURS_VERSION, migrerLiaisonSecours, TYPES_ETABLISSEMENT_VERSION, LIAISON_CHSLD_VERSION, PRODUCTIONS_VERSION, TYPES_LOCAUX_VERSION, DEMANDES_SITE_VERSION, VERSION_SH, migrerTypesEtablissement, migrerLiaisonChsld, migrerProductions, migrerTypesLocaux, migrerDemandesSite, migrerTypesAines };

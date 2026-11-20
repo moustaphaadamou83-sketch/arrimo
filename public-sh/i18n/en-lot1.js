@@ -1,5 +1,13 @@
 (function(root){
   const textes={
+    "Garantie de continuité":"Continuity guarantee",
+    "Export complet des données de ce client : un CSV par table, un JSON et un dictionnaire des données ; jamais de mot de passe, clé ni secret. Lien à usage unique, valable 1 h, journalisé. En production, l’archive contient des renseignements personnels : remettez-la seulement au responsable désigné du client.":"Full export of this client’s data: one CSV per table, a JSON file and a data dictionary; never a password, key or secret. Single-use link, valid 1 h, logged. In production, the archive contains personal information: hand it only to the client’s designated officer.",
+    "Exporter toutes les données":"Export all data",
+    "Archive téléchargée":"Archive downloaded",
+    "lignes":"rows",
+    "Lien expiré ou déjà utilisé.":"Link expired or already used.",
+    "Établissement non relié à un environnement.":"Facility not linked to an environment.",
+    "Archive altérée pendant le transfert.":"Archive altered during transfer.",
     "SLA contractuels":"Contractual SLAs",
     "SLA contractuel":"Contractual SLA",
     "Délai standard":"Standard response target",

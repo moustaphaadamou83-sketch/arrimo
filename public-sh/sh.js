@@ -529,6 +529,7 @@ async function vueHopital(v) {
         <div class="panneau-c"><h3>Sites et responsables</h3>${blocDossier(h)}</div>
         <div class="panneau-c" id="modules"><h3>Modules et licences</h3><div id="zone-cartes-modules">${ArrimoModulesCartes.bloc(h)}</div><details class="avance-modules"><summary>${esc(ArrimoModulesCartes.T[langueUI === 'en' ? 'en' : 'fr'].avance)}</summary>${blocModules(h)}</details></div>
         ${etat.moi.utilisateur.role === 'administration' && h.relie ? '<div class="panneau-c" id="connexions"><h3>Connexions des logiciels externes</h3><div id="zone-connexions"><p class="note">Chargement…</p></div></div>' : ''}
+        ${etat.moi.utilisateur.role === 'administration' && h.relie ? '<div class="panneau-c"><h3>Garantie de continuité</h3><p class="note">Export complet des données de ce client : un CSV par table, un JSON et un dictionnaire des données ; jamais de mot de passe, clé ni secret. Lien à usage unique, valable 1 h, journalisé. En production, l’archive contient des renseignements personnels : remettez-la seulement au responsable désigné du client.</p><button class="btn" id="b-export-client">Exporter toutes les données</button></div>' : ''}
         ${etat.moi.utilisateur.role === 'administration' && h.relie ? '<div class="panneau-c"><h3>Configuration hospitalière Arrimo</h3><p class="note">Consulter et régler les modules opérationnels, la vocation et le catalogue des spécialités. Les occupations, demandes, transferts et historiques sont conservés. Les priorités sont approuvées dans Arrimo par les professionnels habilités.</p><button class="btn" id="b-configuration-operationnelle">Configurer dans Arrimo</button></div>' : ''}
         <div class="panneau-c"><h3>Comptes de l’établissement</h3><p>${nb(h.utilisateurs_prevus)} prévus · ${nb(h.utilisateurs_autorises)} autorisés · ${h.comptes.invites == null ? '—' : nb(h.comptes.invites)} invités · ${h.comptes.actifs == null ? '—' : nb(h.comptes.actifs)} activés</p>${h.comptes.par_role ? `<ul>${Object.entries(h.comptes.par_role).map(([role,x])=>`<li>${esc(role)} : ${nb(x.invites)} invité(s), ${nb(x.actifs)} activé(s)</li>`).join('')}</ul>` : ''}<p class="note">Les comptes invités et activés sont lus depuis l’environnement relié; aucune donnée d’authentification n’est affichée.</p></div>
       </div>
@@ -558,6 +559,13 @@ async function vueHopital(v) {
   $('#b-dossier').onclick=(ev)=>agir(ev.currentTarget,()=>api('PUT',`/hopitaux/${h.id}/dossier`,{sites:lireLignes('#liste-sites','site-sh'),contacts:lireLignes('#liste-contacts','contact-sh')}),'Dossier établissement enregistré.');
   $('#b-modules').onclick=(ev)=>agir(ev.currentTarget,()=>api('PUT',`/hopitaux/${h.id}/modules`,{modules:[...v.querySelectorAll('[data-module]')].map((x)=>({code:x.dataset.module,licence:x.value,parametres:JSON.parse(v.querySelector(`[data-param="${CSS.escape(x.dataset.module)}"]`).value)}))}),'Catalogue enregistré.');
   ArrimoModulesCartes.brancher(h, $('#zone-cartes-modules', v), { modale, enregistrer: (liste) => agir(null, () => api('PUT', `/hopitaux/${h.id}/modules`, { modules: liste }), ArrimoModulesCartes.T[langueUI === 'en' ? 'en' : 'fr'].enregistre) });
+  if ($('#b-export-client')) $('#b-export-client').onclick = (ev) => agir(ev.currentTarget, async () => {
+    const r = await api('POST', `/hopitaux/${h.id}/export`);
+    const f = await fetch(r.lien, { headers: { Authorization: `Bearer ${etat.token}` } });
+    if (!f.ok) throw new Error(traduireTexte('Lien expiré ou déjà utilisé.'));
+    const url = URL.createObjectURL(await f.blob()); const a = document.createElement('a'); a.href = url; a.download = r.nom; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    return r;
+  }, (r) => `${traduireTexte('Archive téléchargée')} : ${r.tables} tables, ${r.lignes} ${traduireTexte('lignes')}, SHA-256 ${r.sha256.slice(0, 16)}…`);
   if ($('#b-configuration-operationnelle')) $('#b-configuration-operationnelle').onclick = () => configurationOperationnelle(h);
   if ($('#zone-connexions')) afficherConnexions(h);
   v.querySelectorAll('[data-verif]').forEach((c) => { c.onchange = () => agir(null, () => api('PUT', `/verifications/${c.dataset.verif}`, { faite: c.checked })); });

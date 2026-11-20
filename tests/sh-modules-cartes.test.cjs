@@ -116,3 +116,20 @@ test('serveur : « Bientôt » refusé, activation et désactivation journalisé
   assert.strictEqual((await appelSh('PUT', `/hopitaux/${h.id}/modules`, { modules: [{ code: 'chrono', licence: 'souscrit' }] })).statut, 409);
   await sh('PUT', `/hopitaux/${h.id}/modules`, { modules: [{ code: 'liaison_secours', licence: 'souscrit' }, { code: 'chrono', licence: 'souscrit' }] });
 });
+
+test('garantie de continuité : export complet réservé à l’administration, lien à usage unique, journal avec taille et empreinte', async () => {
+  const h = await sh('POST', '/hopitaux', { type_etablissement: 'hopital', nom: 'Hôpital Mont-Bellevue (export)', code_etab: 'MB', environnement: 'pilote', pays_code: 'CA', latitude: 45.4, longitude: -71.9 });
+  await pool.query('UPDATE hopitaux SET relie = true WHERE id = $1', [h.id]);
+  const r = await appelSh('POST', `/hopitaux/${h.id}/export`);
+  assert.strictEqual(r.statut, 200, JSON.stringify(r.corps)); assert.match(r.corps.sha256, /^[0-9a-f]{64}$/); assert.ok(r.corps.tables > 5);
+  const get = () => fetch(`${baseSh}${r.corps.lien}`, { headers: { Authorization: `Bearer ${jeton}` } });
+  const a = await get(); assert.strictEqual(a.status, 200); assert.match(a.headers.get('content-type'), /zip/);
+  const octets = Buffer.from(await a.arrayBuffer());
+  assert.strictEqual(require('crypto').createHash('sha256').update(octets).digest('hex'), r.corps.sha256);
+  assert.strictEqual((await get()).status, 410, 'usage unique');
+  const stock = (await pool.query('SELECT stockage_ref FROM sh_exports_clients ORDER BY id DESC LIMIT 1')).rows[0].stockage_ref;
+  const brut = fs.readFileSync(path.join(fs.readdirSync(os.tmpdir()).filter((d) => d.startsWith('arrimo-cartes-')).map((d) => path.join(os.tmpdir(), d)).find((d) => fs.existsSync(path.join(d, stock))), stock));
+  assert.strictEqual(brut.subarray(0, 4).toString('latin1'), 'ASD1', 'archive chiffrée au repos');
+  const j = (await pool.query("SELECT detail, utilisateur_id FROM sh_journal WHERE action LIKE 'Export complet des données%' ORDER BY id")).rows;
+  assert.strictEqual(j.length, 2); assert.ok(j.every((x) => x.utilisateur_id && x.detail.includes(r.corps.sha256)));
+});

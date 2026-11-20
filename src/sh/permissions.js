@@ -60,6 +60,8 @@ const PERMISSIONS = {
   'POST /profils-pays/:id/diffuser': ['administration'],
   'GET /demo-rpa': ['administration'],
   'GET /hopitaux/:id/structure': ['administration', 'implantation'],
+  'POST /hopitaux/:id/export': ['administration'],   // Garantie de continuité : export complet (20 nov. 2026)
+  'GET /exports/:jeton': ['administration'],
   'GET /hopitaux/:id/profils-pays': ['administration','implantation'],
   'GET /hopitaux/:id/suivi': ROLES_SH,
   'POST /hopitaux': ['administration', 'commercial'],
@@ -254,6 +256,7 @@ const PERMISSIONS = {
 function cleRoute(method, path) {
   return `${method.toUpperCase()} ${String(path).replace(/\/\d+(?=\/|$)/g, '/:id')
     .replace(/\/hopitaux\/:id\/import\/modeles\/[^/]+$/, '/hopitaux/:id/import/modeles/:type')
+    .replace(/^\/exports\/[A-Za-z0-9_-]{20,}$/, '/exports/:jeton')
     .replace(/\/hopitaux\/:id\/formation\/(coordination|urgence|entretien|administration|chsld|paramedic|superviseur_secours|repartiteur)$/, '/hopitaux/:id/formation/:role')
     .replace(/^\/parametres\/[a-z_]{2,60}$/, '/parametres/:cle')
     .replace(/^(\/hopitaux\/:id\/deploiement)\/[a-z_]{3,40}(\/preuves)?$/, '$1/:code$2')

@@ -264,6 +264,13 @@ function brancherSh(api, pool, route) {
     return o;
   };
   const PROFILS = (b) => [...new Set(Object.entries(b.profils_choix || {}).filter(([, v]) => v === true).map(([k]) => ({ profil_ccs: 'ccs', profil_ambulance: 'ambulance' }[k])).filter(Boolean))];
+  // Garantie de continuité (20 nov. 2026) : archive complète de l'établissement (sans aucun secret), journalisée
+  api.get('/sh/etablissements/:code/export', sh(async (req) => {
+    const e = await etabParCode(req.params.code);
+    const a = await require('./export-client').archive(pool, e.id);
+    await journalAdmin(pool, systeme, 'Export complet des données', e.nom, `${a.tables} tables · ${a.lignes} lignes · ${a.taille} octets · sha256 ${a.sha256} · ${parSh(req.query)}`, e.id);
+    return { nom: a.nom, taille: a.taille, sha256: a.sha256, tables: a.tables, lignes: a.lignes, base64: a.octets.toString('base64') };
+  }));
   // Régions et directions régionales (moteur commun, lot 0) : créées depuis SH, journalisées
   api.get('/sh/regions', sh(async (req) => require('./directions').regions(pool, req.query.pays)));
   api.post('/sh/directions-regionales', sh(async (req) => {

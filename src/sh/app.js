@@ -635,6 +635,32 @@ function creerAppSh(pool, { env = process.env } = {}) {
       golive: { possible: ['recette','pilote'].includes(h.environnement) && h.relie && !manquants.length && production, production_reliee: production, productions } };
   }
   api.get('/hopitaux/:id', route((req) => fiche(entier(req.params.id))));
+  // Garantie de continuité (20 nov. 2026) : export complet d'un client, réservé à l'administration ; archive chiffrée au repos,
+  // lien à usage unique valable 1 h ; journal avec l'auteur, la taille et l'empreinte. Contient des renseignements personnels en production.
+  api.post('/hopitaux/:id/export', route(async (req) => {
+    const h = await hopital(entier(req.params.id));
+    if (!h.relie) throw new ErreurSh(409, 'Établissement non relié à un environnement.');
+    const a = await appeler(cible(h.environnement), 'GET', `/sh/etablissements/${encodeURIComponent(h.code_etab)}/export?par=${encodeURIComponent(req.u.email)}`, null, { delaiMs: 120000 });
+    const octets = Buffer.from(a.base64, 'base64');
+    if (require('crypto').createHash('sha256').update(octets).digest('hex') !== a.sha256) throw new ErreurSh(502, 'Archive altérée pendant le transfert.');
+    const { stockage_ref } = await require('./documents').ecrire(octets, env);
+    const jeton = require('crypto').randomBytes(24).toString('base64url');
+    const empreinte = require('crypto').createHash('sha256').update(jeton).digest('hex');
+    await pool.query(`INSERT INTO sh_exports_clients (hopital_id, jeton_empreinte, nom_fichier, stockage_ref, taille, sha256, tables, lignes, expire_le, cree_par)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now() + interval '1 hour', $9)`, [h.id, empreinte, a.nom, stockage_ref, a.taille, a.sha256, a.tables, a.lignes, req.u.id]);
+    await journal(pool, req.u, 'Export complet des données préparé', `${h.code_etab} · ${h.nom}`, `${a.tables} tables · ${a.lignes} lignes · ${a.taille} octets · sha256 ${a.sha256}`, h.id);
+    return { lien: `/api/exports/${jeton}`, expire_dans_min: 60, nom: a.nom, taille: a.taille, sha256: a.sha256, tables: a.tables, lignes: a.lignes };
+  }));
+  api.get('/exports/:jeton', async (req, res, next) => {
+    try {
+      const empreinte = require('crypto').createHash('sha256').update(String(req.params.jeton)).digest('hex');
+      const x = (await pool.query(`UPDATE sh_exports_clients SET telecharge_le = now() WHERE jeton_empreinte = $1 AND telecharge_le IS NULL AND expire_le > now() RETURNING *`, [empreinte])).rows[0];
+      if (!x) throw new ErreurSh(410, 'Lien expiré ou déjà utilisé.');
+      const octets = await require('./documents').lire({ stockage_ref: x.stockage_ref, empreinte: x.sha256 }, env);
+      await journal(pool, req.u, 'Export complet des données téléchargé', x.nom_fichier, `${x.taille} octets · sha256 ${x.sha256}`, x.hopital_id);
+      res.set('Content-Type', 'application/zip').set('Content-Disposition', `attachment; filename="${x.nom_fichier}"`).set('Cache-Control', 'no-store').send(octets);
+    } catch (e) { next(e); }
+  });
   api.get('/hopitaux/:id/structure', route(async (req) => {
     const h = await hopital(entier(req.params.id));
     if (!['recette','pilote'].includes(h.environnement) || h.golive_le || h.statut === 'actif') throw new ErreurSh(409, 'La structure est modifiable dans SH uniquement avant le Go Live en recette. Après activation, Arrimo est la référence opérationnelle.');
