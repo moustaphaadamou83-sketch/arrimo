@@ -217,7 +217,7 @@ async function api(methode, chemin, corps, essai = 0) {
   let data = null; let lu = true;
   try { data = await r.json(); } catch { lu = false; /* réponse vide ou interrompue */ }
   // Lecture interrompue (changement d'écran, réseau) : une lecture GET est relancée une fois ; jamais un « null » silencieux
-  if (r.ok && !lu && (r.headers.get('content-type') || '').includes('json')) {
+  if (r.ok && (!lu || data === null) && r.status !== 204) {
     if (methode === 'GET' && essai < 1) return api(methode, chemin, corps, essai + 1);
     throw new Error(messageErreur(null, r.status));
   }
@@ -812,6 +812,7 @@ async function vueReseau() {
     api('GET', `/reseau?depuis=${etat.ctx}`),
     api('GET', `/blocages?etablissement_id=${etat.ctx}`),
   ]);
+  if (!res || !Array.isArray(res.etablissements)) return;
 
   const resume = cfg.types.map((ty) => {
     let libres = 0; let dotes = 0;
@@ -950,6 +951,7 @@ async function vueNational() {
   const cfg = configCtx(); const F = etat.national;
   const qs = `depuis=${etat.ctx}&page=${F.page}${F.type_id ? `&type_id=${F.type_id}` : ''}${F.max ? `&max_minutes=${F.max}` : ''}${F.avec_lit && F.type_id ? '&avec_lit=1' : ''}${qsBesoins(F.besoins)}`;
   const r = await api('GET', `/national?${qs}`);
+  if (!r || !Array.isArray(r.etablissements)) return;   // réponse interrompue : le prochain rafraîchissement redessine
   const typeChoisi = cfg.types.find((x) => String(x.id) === String(F.type_id));
   const carteEtab = (x) => {
     const u = x.urgence;
