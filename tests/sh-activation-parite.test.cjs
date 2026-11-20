@@ -213,7 +213,7 @@ test('activation réelle SH et parité avec Hôpital B, sans données publiques'
       const context=await browser.newContext({viewport:{width:1440,height:1000}});const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
       await page.goto(basePilote);await page.fill('#c-email',email);await page.fill('#c-mdp',MDP);await page.click('#f-connexion button[type=submit]');await page.waitForSelector('body[data-pret="1"]');
       if(await page.locator('#b-premiers-pas-ok').isVisible())await page.click('#b-premiers-pas-ok');
-      menus[qui]=await page.locator('#onglets button').evaluateAll(bs=>bs.filter(b=>!b.hidden).map(b=>b.dataset.v));
+      menus[qui]=await page.locator('#onglets button[data-v]').evaluateAll(bs=>bs.filter(b=>!b.hidden).map(b=>b.dataset.v));
       for(const langue of ['fr','en']){
         await page.click('#b-menu');await page.selectOption('#langue-barre',langue);await page.click('#b-menu');
         await page.click('#og-open');await page.fill('#og-question',langue==='fr'?'Où se trouve P-99102 ?':'Where is patient P-99102?');

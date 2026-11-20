@@ -59,7 +59,7 @@ async function parcourir(email) {
   await page.click('#f-connexion button[type=submit]');
   await page.waitForSelector('body[data-pret="1"]', { state: 'attached', timeout: 20000 });
   const b = page.locator('#b-premiers-pas-ok'); if (await b.isVisible().catch(() => false)) await b.click();
-  const vues = await page.$$eval('#onglets button', (bs) => bs.filter((x) => !x.hidden).map((x) => x.dataset.v));
+  const vues = await page.$$eval('#onglets button[data-v]', (bs) => bs.filter((x) => !x.hidden).map((x) => x.dataset.v));
   for (const v of vues) {
     await page.click(`#onglets button[data-v="${v}"]`);
     await page.waitForTimeout(700);

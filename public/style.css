@@ -804,7 +804,7 @@ details.voir-carte summary::-webkit-details-marker { display: none; }
 @media (max-width: 600px) { .sillage-fil li { grid-template-columns: 1fr; gap: 2px; } }
 /* Sous-onglets des modules (22 nov. 2026) */
 .module-sous-onglets { display: flex; flex-wrap: wrap; gap: var(--e2); margin: 0 0 var(--e4); padding-bottom: var(--e2); border-bottom: 1px solid var(--bordure); }
-.module-sous-onglets button { font: inherit; font-weight: 600; background: none; border: 1px solid transparent; border-radius: 999px; padding: 7px 16px; min-height: 38px; color: var(--texte-2); cursor: pointer; }
+.module-sous-onglets button { font: inherit; font-weight: 600; background: none; border: 1px solid transparent; border-radius: 999px; padding: 7px 16px; min-height: 38px; color: var(--texte); cursor: pointer; }
 .module-sous-onglets button:hover { color: var(--texte); background: var(--fond); }
 .module-sous-onglets button[aria-selected="true"] { color: #fff; background: var(--principal-plein, #0E5E6F); border-color: var(--principal-plein, #0E5E6F); }
 @media (max-width: 600px) { .module-sous-onglets { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .module-sous-onglets button { flex: none; } }

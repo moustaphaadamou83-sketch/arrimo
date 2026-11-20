@@ -73,7 +73,7 @@ async function verifierAide(page, L, nom, role) {
   await menu(page, '#b-aide');
   await page.waitForSelector('#panneau-aide:not([hidden]) .aide-role');
   assert.strictEqual(await page.getAttribute('#panneau-aide .aide-role', 'data-role'), role);
-  const onglets = await page.$$eval('#onglets button', (bs) => bs.filter((b) => !b.hidden).map((b) => b.dataset.v));
+  const onglets = await page.$$eval('#onglets button[data-v]', (bs) => bs.filter((b) => !b.hidden).map((b) => b.dataset.v));
   const aides = await page.$$eval('#panneau-aide [data-aide]', (ds) => ds.map((d) => d.dataset.aide));
   for (const o of [...onglets, 'compte']) assert.ok(aides.includes(o), `${nom} : aide de l'écran ${o}`);
   assert.ok(await page.isVisible('#panneau-aide details[open] ol li'), `${nom} : l'écran actuel est expliqué`);
@@ -696,7 +696,7 @@ test('environnement neuf : premier compte, mot de passe choisi, premier établis
     await toast(page, 'activée');
     await allerOnglet(page, 'admin');
     await page.waitForSelector('#ne-code');
-    assert.deepStrictEqual(await page.$$eval('#onglets button', (bs) => bs.filter((b) => !b.hidden).map((b) => b.dataset.v)), ['admin']);
+    assert.deepStrictEqual(await page.$$eval('#onglets button[data-v]', (bs) => bs.filter((b) => !b.hidden).map((b) => b.dataset.v)), ['admin']);
     assert.match(await page.textContent('#bandeau-demo'), /Recette/);
     await fermerPremiersPas(page);
     await verifier(page, { ...L, nom: 'environnements' }, 'recette-premier-etablissement');
@@ -705,7 +705,7 @@ test('environnement neuf : premier compte, mot de passe choisi, premier établis
     await page.click('#b-ne-creer');
     await toast(page, 'est créé');
     // L'établissement existe : l'application s'ouvre normalement (inactif jusqu'à la fin de l'implantation)
-    await page.waitForFunction(() => [...document.querySelectorAll('#onglets button')].filter((b) => !b.hidden).length > 5);
+    await page.waitForFunction(() => [...document.querySelectorAll('#onglets button[data-v]')].filter((b) => !b.hidden).length > 5);
     assert.strictEqual(await page.inputValue('#ctx'), String((await pool.query(`SELECT id FROM etablissements WHERE code = 'HOP-A'`)).rows[0].id));
     page.erreurs = page.erreurs.filter((m) => !/40[13]/.test(m));
     await page.context().close();
