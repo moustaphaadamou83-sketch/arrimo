@@ -1180,6 +1180,7 @@ window.ARRIMO_I18N.en = {
     specialite_inconnue: 'Unknown specialty in the catalogue.',
     module_desactive: 'The {module} module is not enabled for this facility.',
     etab_introuvable: 'Facility not found.',
+    objet_introuvable: 'Not found or outside your scope.',
     autre_etab: 'Choose a facility other than your own.',
     etab_ne_partage_pas: 'This facility does not share its capacity.',
     hors_rayon: 'Facility outside the suggestion radius.',

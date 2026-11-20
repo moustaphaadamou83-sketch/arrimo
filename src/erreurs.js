@@ -149,6 +149,7 @@ const MESSAGES = {
   module_desactive: 'Le module {module} n’est pas activé pour cet établissement.',
   // transferts
   etab_introuvable: 'Établissement introuvable.',
+  objet_introuvable: 'Introuvable ou hors de votre périmètre.',
   autre_etab: 'Choisissez un autre établissement que le vôtre.',
   etab_ne_partage_pas: 'Cet établissement ne partage pas sa capacité.',
   hors_rayon: 'Établissement hors du rayon de suggestion.',

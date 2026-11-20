@@ -103,7 +103,7 @@ async function repondreSecours(pool, u, question, L) {
   const q = String(question || '').slice(0, 500); const qn = norm(q);
   const local = (reponse, intention) => ({ mode: 'local', reponse, sources: ['arrimo'], intentions: [intention] });
   const num = q.match(/\b(PA|CH|DT|MC)-\d{3,6}\b/i);
-  if (num) { const x = await require('./sillage').expliquer(pool, u, num[0], require('./og-localisation').langueDemandee(q, L)); if (x) return { ...local(x.texte, 'sillage'), sillage: { objet: x.objet, id: x.id } }; }
+  if (num && /\b(parcours|explique\w*|sillage|chronologie|historique|ou en est|path|trail|explain|timeline|history|status of)\b/.test(qn)) { const x = await require('./sillage').expliquer(pool, u, num[0], require('./og-localisation').langueDemandee(q, L)); if (x) return { ...local(x.texte, 'sillage'), sillage: { objet: x.objet, id: x.id } }; }
   if (CHRONO_Q.test(qn)) return local(await reponseChrono(pool, u, {}, require('./og-localisation').langueDemandee(q, L)), 'chrono');
   if (/(quel(le)? (hopital|destination|service)|which (hospital|destination|service)|ou (aller|l.?amener|transporter)|where (to go|should))|priorit\w* clinique|clinical priority|diagnosti|triage/.test(qn)) {
     return local(T(L, 'Je ne décide ni de la destination, ni du service, ni d’une priorité clinique : ce sont l’équipe et les protocoles applicables qui en décident. Je peux afficher l’état des urgences de la région et le suivi des préalertes.',

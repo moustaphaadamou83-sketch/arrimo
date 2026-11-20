@@ -22,16 +22,16 @@ const INTENTIONS = [
 ];
 
 const NUMERO = /\b(PA|CH|DT|VI|DH|MC|CO|TR)-\d{3,6}\b/i;
-const ATTENTE = /\b(en attente|a faire|a confirmer|confirmations?|actions? (en attente|a faire)|en retard|pending|to do|to confirm|overdue|needs? attention)\b/;
+const ATTENTE = /(qu.?est.?ce qui est en attente|qu.?y a.?t.?il en attente|quoi (est )?en attente|actions? en attente|confirmations? manquantes?|parcours a surveiller|what.?s pending|what is pending|what needs attention|pending actions?|paths? to watch)/;
 async function repondre(pool, u, etabId, question, langue) {
   const qn = norm(question);
   // Sillage transversal : « explique le parcours PA-000123 », « qu'est-ce qui est en attente ? »
   const num = String(question || '').match(NUMERO);
-  if (num) {
+  if (num && /\b(parcours|explique\w*|sillage|chronologie|historique|ou en est|path|trail|explain|timeline|history|status of)\b/.test(qn)) {
     const x = await require('./sillage').expliquer(pool, u, num[0], require('./og-localisation').langueDemandee(question, langue));
     if (x) return { ...reponse(x.texte, 'sillage', require('./sillage').ECRANS[x.objet]), sillage: { objet: x.objet, id: x.id } };
   }
-  if (ATTENTE.test(qn) && !/\b(lits?|beds?|nsa|alc|admissions?)\b/.test(qn) && etabId) {
+  if (ATTENTE.test(qn) && etabId) {
     const L = require('./og-localisation').langueDemandee(question, langue);
     const a = await require('./sillage').attention(pool, u, etabId).catch(() => null);
     if (a) {
