@@ -1675,6 +1675,9 @@ async function vueUrgence() {
   v.innerHTML = `<div class="entete"><div><h2>${U('titre', { etab: etabCtx().nom })}</h2><p>${U('intro')}</p>${boutonArrivee}</div>
     <div class="legende">${['libre', 'occupee', 'nettoyage', 'indispo'].map((k) => `<span><i class="f-${k === 'occupee' ? 'occupe' : k}"></i>${esc(t(`etats.${k}`))}</span>`).join('')}</div></div>
     <div class="tuiles">
+      ${(() => { const reg = civieres.filter((c) => c.categorie === 'reguliere'); const n = (e) => reg.filter((c) => c.etat === e).length;
+    // COR-004 : compteur bien visible, même source que « Urgences proches » (stats.libres du serveur) ; recalculé à chaque action
+    return tuile({ lbl: t('urgence.libres_regulieres'), val: nb(stats.libres), note: U('libres_detail', { occ: n('occupee'), net: n('nettoyage'), ind: n('indispo'), cor: stats.en_corridor || 0 }), etat: stats.libres ? null : 'critique' }); })()}
       ${tuile({ lbl: t('urgence.taux'), val: pct(stats.taux), note: U('taux_note', { occ: stats.occupees, fonc: stats.fonctionnelles }),
     etat: etatSeuil(stats.taux, cfg.seuil_civieres_jaune, cfg.seuil_civieres_rouge), cible: t('indicateurs.cible_max', { v: pct(cfg.seuil_civieres_jaune) }) })}
       ${tuile({ lbl: t('urgence.corridor'), val: nb(stats.en_corridor), note: U('corridor_note', { n: stats.libres }), etat: stats.en_corridor ? 'attention' : null })}

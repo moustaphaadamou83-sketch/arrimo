@@ -77,3 +77,23 @@ test('COR-001 : formulaire manuel — destinations partenaires (CHSLD compris) e
     plage_debut: new Date(Date.now() + 24 * 3600000).toISOString(), plage_fin: new Date(Date.now() + 25 * 3600000).toISOString(), type_vehicule: 'transport_adapte', organisation_id: ids.org });
   assert.strictEqual(r.s, 200, JSON.stringify(r.d)); assert.strictEqual(r.d.statut, 'demandee');
 });
+
+test('COR-004 : le compteur des civières libres suit « hors service » et « remettre en service », même valeur que « Urgences proches »', async () => {
+  const lire = async () => (await appel('coord.h', 'GET', `/civieres?etablissement_id=${ids.h}`)).d;
+  if (!(await pool.query("SELECT 1 FROM civieres WHERE etablissement_id = $1 AND categorie = 'reguliere' AND etat = 'libre'", [ids.h])).rowCount) {
+    for (const n of [1, 2]) await pool.query("INSERT INTO civieres (etablissement_id, code, categorie, etat) VALUES ($1, $2, 'reguliere', 'libre')", [ids.h, `URG-T${n}`]);
+  }
+  const avant = await lire();
+  const c = avant.civieres.find((x) => x.etat === 'libre' && x.categorie === 'reguliere' && !x.reservation);
+  assert.ok(c, 'une civière régulière libre');
+  const hs = await appel('coord.h', 'POST', `/civieres/${c.id}/action`, { action: 'hors_service', version: c.version, motif: 'equipement' });
+  assert.strictEqual(hs.s, 200, JSON.stringify(hs.d));
+  const pendant = await lire(); assert.strictEqual(pendant.stats.libres, avant.stats.libres - 1);
+  const c2 = pendant.civieres.find((x) => x.id === c.id);
+  const re = await appel('coord.h', 'POST', `/civieres/${c.id}/action`, { action: 'remettre', version: c2.version });
+  assert.strictEqual(re.s, 200, JSON.stringify(re.d));
+  assert.strictEqual((await lire()).stats.libres, avant.stats.libres);
+  // « Urgences proches » (CHSLD) lit la même valeur (statsUrgence)
+  const st = await require('../src/civieres').statsUrgence(pool, [ids.h]);
+  assert.strictEqual(st.get(ids.h).libres, avant.stats.libres);
+});

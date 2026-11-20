@@ -477,7 +477,7 @@ window.ARRIMO_I18N.fr = {
     demande_lit: 'Demande de lit', pas_encore: 'Pas encore (hospitalisation non décidée)', confirmer_doublon: 'Créer même si un patient semblable existe (après vérification)',
     enregistrer_arrivee: 'Enregistrer', arrivee_ok: '{ref} placé sur la civière {code}.',
   },
-  urgence: {
+  urgence: { libres_regulieres: 'Civières régulières libres', libres_detail: 'Occupées {occ} · nettoyage {net} · hors service {ind} · corridor {cor}', 
     reservee: 'Réservée', reservee_pour: 'Pour l’ambulance {unite} ({numero}) : ne peut être donnée à un autre patient.',
     titre: 'Urgence · {etab}', intro: 'Civières de l’urgence, distinctes des lits. Le taux compte tous les patients sur civière (corridor compris) rapportés aux civières régulières en service : il peut dépasser 100 %.',
     aucune: 'Aucune civière n’est configurée pour cette urgence. Un administrateur les ajoute dans Administration, Unités et lits.',

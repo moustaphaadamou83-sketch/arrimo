@@ -476,7 +476,7 @@ window.ARRIMO_I18N.en = {
     demande_lit: 'Bed request', pas_encore: 'Not yet (admission not decided)', confirmer_doublon: 'Create even if a similar patient exists (after checking)',
     enregistrer_arrivee: 'Save', arrivee_ok: '{ref} placed on stretcher {code}.',
   },
-  urgence: {
+  urgence: { libres_regulieres: 'Free regular stretchers', libres_detail: 'Occupied {occ} · cleaning {net} · out of service {ind} · hallway {cor}', 
     reservee: 'Reserved', reservee_pour: 'For ambulance {unite} ({numero}): cannot be given to another patient.',
     titre: 'ER · {etab}', intro: 'ER stretchers, separate from beds. The rate counts every patient on a stretcher (hallway included) over the regular stretchers in service: it can exceed 100%.',
     aucune: 'No stretchers are set up for this ER. An administrator adds them in Administration, Units and beds.',
