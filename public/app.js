@@ -611,12 +611,14 @@ document.querySelectorAll('#onglets button').forEach((b) => {
   };
 });
 
-const etabCtx = () => etat.moi.etablissements.find((e) => e.id === etat.ctx);
+const etabCtx = () => etat.moi?.etablissements?.find((e) => e.id === etat.ctx);
 const configCtx = () => (etabCtx() ? etat.moi.configs.find((c) => c.id === etabCtx().config_id) : etat.moi.configs[0]);
 
 let enCours = false;
 // Une demande de rendu pendant un rendu en cours (clic rapide après une action) n'est pas perdue : elle est rejouée ensuite.
 let rafraichirEnAttente = false;
+// Session fermée pendant un affichage en cours (déconnexion, autre compte) : l'affichage interrompu est abandonné sans erreur
+window.addEventListener('unhandledrejection', (ev) => { if (!etat.moi && ev.reason instanceof TypeError) ev.preventDefault(); });
 async function rafraichir() {
   if (!etat.token || !etat.moi) return;
   if (enCours) { rafraichirEnAttente = true; return; }
