@@ -18,10 +18,11 @@ async function preparer(pool) {
   const types = ['aide_hygiene', 'soins_infirmiers', 'readaptation'];
   for (const [i, r] of res.entries()) {
     for (let j = 0; j < 5; j += 1) {
-      const d = new Date(); d.setDate(d.getDate() + j); d.setHours(9 + i * 2, 0, 0, 0);
+      // Heure de Montréal (9 h, 11 h, 13 h), quel que soit le fuseau du serveur
       const n = (await pool.query("SELECT nextval('visite_seq') AS n")).rows[0].n;
       await pool.query(`INSERT INTO visites (numero, etablissement_id, resident_id, resident_ref, prestataire_id, type_visite, debut_prevu, fin_prevue)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, [`VI-${String(n).padStart(6, '0')}`, era.id, r.id, r.reference, org, types[i], d, new Date(d.getTime() + 3600000)]);
+        SELECT $1, $2, $3, $4, $5, $6, d, d + interval '1 hour' FROM (SELECT ((now() AT TIME ZONE 'America/Toronto')::date + $7::int + make_time($8, 0, 0)) AT TIME ZONE 'America/Toronto' AS d) x`,
+      [`VI-${String(n).padStart(6, '0')}`, era.id, r.id, r.reference, org, types[i], j, 9 + i * 2]);
     }
   }
   await pool.query(`INSERT INTO eviter_listes (etablissement_id, verifications, alternatives) VALUES ($1, $2, $3) ON CONFLICT (etablissement_id) DO NOTHING`, [era.id,
