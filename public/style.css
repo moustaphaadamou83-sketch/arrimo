@@ -809,3 +809,4 @@ details.voir-carte summary::-webkit-details-marker { display: none; }
 .module-sous-onglets button[aria-selected="true"] { color: #fff; background: var(--principal-plein, #0E5E6F); border-color: var(--principal-plein, #0E5E6F); }
 @media (max-width: 600px) { .module-sous-onglets { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .module-sous-onglets button { flex: none; } }
 @media (max-width: 600px) { .sillage-btn { min-height: 44px; display: inline-flex; align-items: center; } .module-sous-onglets { flex-wrap: wrap; overflow-x: visible; } .module-sous-onglets button { min-height: 44px; } }
+a.menu-item { text-decoration: none; color: inherit; }

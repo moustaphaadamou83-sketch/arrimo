@@ -308,6 +308,8 @@ function brancherSh(api, pool, route) {
     const b = req.body || {}; const o = await orgParCode(req.params.code);
     const sets = []; const vals = [o.id]; const detail = [];
     if (b.profils_choix !== undefined) { vals.push(PROFILS(b)); sets.push(`profils = $${vals.length}`); detail.push(`profils : ${PROFILS(b).join('+') || 'aucun'}`); }
+    // Module Formation (22 nov. 2026) : la licence SH « formation » d'une organisation de secours suit le même envoi que ses profils
+    if (b.profils_choix && typeof b.profils_choix.formation === 'boolean') { vals.push(b.profils_choix.formation); sets.push(`formation = $${vals.length}`); detail.push(`formation : ${b.profils_choix.formation ? 'activée' : 'désactivée'}`); }
     if (b.actif !== undefined) {
       if (!b.actif && String(b.motif || '').trim().length < 3) throw new ErreurHttp(400, 'motif_desactivation');
       vals.push(!!b.actif); sets.push(`actif = $${vals.length}`); detail.push(b.actif ? 'activée' : `désactivée · motif : ${String(b.motif).slice(0, 300)}`);

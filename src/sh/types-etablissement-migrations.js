@@ -263,5 +263,17 @@ async function migrerTypesModules(c) {
   await c.query('INSERT INTO sh_migrations(version) VALUES($1)', [TYPES_MODULES_VERSION]);
   return true;
 }
+/* Migration 60 (22 nov. 2026) : module 🎓 Formation au catalogue SH (optionnel, tous les types d'organisation), carte « Disponible ». */
+const FORMATION_VERSION = 60;
+async function migrerFormation(c) {
+  if ((await c.query('SELECT 1 FROM sh_migrations WHERE version=$1', [FORMATION_VERSION])).rowCount) return false;
+  const TE = require('../types-etablissement');
+  const i = TE.MODULES.findIndex((m) => m.code === 'formation'); const m = TE.MODULES[i];
+  await c.query(`INSERT INTO sh_modules_catalogue (code, nom, description, dependances, categorie, types, statut, ordre, nom_en, note)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT (code) DO UPDATE SET types = EXCLUDED.types, statut = EXCLUDED.statut`,
+  [m.code, m.nom, m.note, [], m.categorie, m.types, m.statut, i + 1, m.nom_en, null]);
+  await c.query('INSERT INTO sh_migrations(version) VALUES($1)', [FORMATION_VERSION]);
+  return true;
+}
 const VERSION_SH = TYPES_AINES_VERSION;
-module.exports = { TYPES_MODULES_VERSION, migrerTypesModules, DERNIERS_MODULES_VERSION, migrerDerniersModules, EXPORTS_VERSION, migrerExports, CRISE_VERSION, migrerCrise, DONNEES_VERSION, migrerDonnees, BOURSE_VERSION, migrerBourse, TRANSPORT_PLANIFIE_VERSION, migrerTransportPlanifie, TRANSFERTS_VERSION, migrerTransferts, URGENCES_DIRECT_VERSION, migrerUrgencesDirect, CHRONO_VERSION, migrerChrono, MOTEUR_COMMUN_VERSION, MODULES_CHANTIER, migrerMoteurCommun, LIAISON_SECOURS_VERSION, migrerLiaisonSecours, TYPES_ETABLISSEMENT_VERSION, LIAISON_CHSLD_VERSION, PRODUCTIONS_VERSION, TYPES_LOCAUX_VERSION, DEMANDES_SITE_VERSION, VERSION_SH, migrerTypesEtablissement, migrerLiaisonChsld, migrerProductions, migrerTypesLocaux, migrerDemandesSite, migrerTypesAines };
+module.exports = { FORMATION_VERSION, migrerFormation, TYPES_MODULES_VERSION, migrerTypesModules, DERNIERS_MODULES_VERSION, migrerDerniersModules, EXPORTS_VERSION, migrerExports, CRISE_VERSION, migrerCrise, DONNEES_VERSION, migrerDonnees, BOURSE_VERSION, migrerBourse, TRANSPORT_PLANIFIE_VERSION, migrerTransportPlanifie, TRANSFERTS_VERSION, migrerTransferts, URGENCES_DIRECT_VERSION, migrerUrgencesDirect, CHRONO_VERSION, migrerChrono, MOTEUR_COMMUN_VERSION, MODULES_CHANTIER, migrerMoteurCommun, LIAISON_SECOURS_VERSION, migrerLiaisonSecours, TYPES_ETABLISSEMENT_VERSION, LIAISON_CHSLD_VERSION, PRODUCTIONS_VERSION, TYPES_LOCAUX_VERSION, DEMANDES_SITE_VERSION, VERSION_SH, migrerTypesEtablissement, migrerLiaisonChsld, migrerProductions, migrerTypesLocaux, migrerDemandesSite, migrerTypesAines };

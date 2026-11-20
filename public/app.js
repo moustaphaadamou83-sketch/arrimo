@@ -577,6 +577,8 @@ function appliquerModules() {
       || (b.dataset.moduleOptionnel && mods[b.dataset.moduleOptionnel] !== true);
   });
   document.querySelectorAll('#onglets .onglets-groupe[data-type]').forEach((g) => { g.hidden = g.dataset.type !== type || entretien; });
+  // Formation (22 nov. 2026) : entrée « Ma formation » si le module est activé pour l'établissement courant
+  const bf = $('#b-formation'); if (bf) bf.hidden = !(mods.formation === true || etat.moi.utilisateur.gestionnaire);
   // Nettoyage (commun) : dans le groupe Hébergement d'un CHSLD, dans Opérations d'un hôpital
   const net = $('#onglets button[data-v="nettoyage"]');
   const ancre = type === 'chsld' ? $('#onglets button[data-v="c-admissions"]') : $('#onglets button[data-v="transferts"]');

@@ -87,6 +87,8 @@ const MODULES = [
     note: 'Tableaux régionaux, petits nombres masqués, CSV', note_en: 'Regional dashboards, small counts masked, CSV' },
   { code: 'mode_crise', categorie: 'optionnel', types: ['hopital', 'chsld'], statut: 'disponible', drapeau: 'mode_crise', nom: 'Mode crise (évacuation)', nom_en: 'Crisis mode (evacuation)',
     note: 'Places de la région, lieu proposé par résident, suivi', note_en: 'Regional places, proposed site per resident, tracking' },
+  { code: 'formation', categorie: 'optionnel', types: ['hopital', 'chsld', ...Object.keys(TYPES).filter((t) => TYPES[t].famille === 'secours')], statut: 'disponible', drapeau: 'formation', nom: 'Formation', nom_en: 'Training',
+    note: 'Parcours par rôle, capsules courtes, exercices et attestations', note_en: 'Role-based paths, short lessons, exercises and certificates' },
   { code: 'visites_confirmees', categorie: 'optionnel', types: ['chsld'], statut: 'disponible', drapeau: 'visites_confirmees', nom: 'Visites confirmées', nom_en: 'Confirmed visits',
     note: 'Visites prévues du CLSC ou du prestataire, arrivée et départ', note_en: 'Planned CLSC or provider visits, arrival and departure' },
   { code: 'eviter_transferts', categorie: 'optionnel', types: ['chsld'], statut: 'disponible', drapeau: 'eviter_transferts', nom: 'Éviter les transferts inutiles', nom_en: 'Avoid unnecessary transfers',

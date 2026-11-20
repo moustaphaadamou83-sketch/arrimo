@@ -61,7 +61,7 @@ window.ARRIMO_I18N.en = {
     reinit_titre: 'New password', reinit_aide: 'Choose a password of at least 12 characters, with letters and numbers.',
     reinit_ok: 'Password saved. Sign in with your new password.',
   },
-  barre: {
+  barre: { formation: 'My training',
     recette: 'Test environment · test data, not for real use',
     menu: 'Account',
     etablissement: 'Facility', notifications: 'Notifications', mon_compte: 'My account', deconnexion: 'Sign out', aide: 'Help',

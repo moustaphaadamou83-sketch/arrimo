@@ -51,6 +51,8 @@ function creerApp(pool, options = {}) {
     });
     next();
   });
+  // Module Formation (22 nov. 2026) : « Ma formation », page à part pour tous les rôles (avant le statique : le dossier public/formation existe)
+  app.get(['/formation', '/formation/'], (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'formation', 'index.html')));
   app.use(express.static(path.join(__dirname, '..', 'public')));
   // Pages légales, accessibles sans connexion (français et anglais)
   app.get('/proches', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'proches.html')));
@@ -224,6 +226,15 @@ function creerApp(pool, options = {}) {
         || (/^\/(lits|civieres)\/\d+\/action$/.test(req.path) && req.body && req.body.action === 'nettoyage_ok')));
     return ok ? next() : next(new ErreurHttp(403, 'role_entretien'));
   });
+
+  // Module Formation (22 nov. 2026) : ouvert à tous les rôles connectés, AVANT les filtres des rôles limités ; chacun ne voit que ses parcours
+  const fp = require('./formation-parcours');
+  api.get('/formation/moi', route((req) => fp.moi(pool, req.utilisateur, req.langue)));
+  api.put('/formation/parcours', route((req) => fp.choisir(pool, req.utilisateur, req.body)));
+  api.get('/formation/capsules/:code', route((req) => fp.contenu(pool, req.utilisateur, req.params.code, req.langue)));
+  api.post('/formation/capsules/:code/vue', route((req) => fp.marquerVue(pool, req.utilisateur, req.params.code)));
+  api.post('/formation/capsules/:code/quiz/debut', route((req) => fp.debutQuiz(pool, req.utilisateur, req.params.code)));
+  api.post('/formation/capsules/:code/quiz', route((req) => fp.repondre(pool, req.utilisateur, req.params.code, req.body)));
 
   // Rôles de secours (paramédic, superviseur, répartiteur) : écrans de secours seulement, jamais les lits, patients ni résidents
   api.use((req, res, next) => {

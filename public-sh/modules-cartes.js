@@ -10,7 +10,7 @@
     { id: 'og', emoji: '✨', codes: ['og'], fr: ['OG', 'Assistant : propose, un humain décide'], en: ['OG', 'Assistant: suggests, a person decides'] },
     { id: 'sillage', emoji: '🧭', codes: [], inclus: true, fr: ['Sillage', 'Fil du patient ou du résident entre établissements'], en: ['Trail', 'Patient or resident thread across facilities'] },
     { id: 'connect', emoji: '🔌', codes: [], inclus: true, fr: ['Arrimo Connect', 'Branchement HL7, FHIR et API signée'], en: ['Arrimo Connect', 'HL7, FHIR and signed API connection'] },
-    { id: 'formation', emoji: '🎓', codes: [], inclus: true, lien: '#formation', fr: ['Formation', 'Parcours de formation des équipes'], en: ['Training', 'Team training path'] },
+    { id: 'formation', emoji: '🎓', codes: ['formation'], fr: ['Formation', 'Parcours de formation des équipes'], en: ['Training', 'Team training path'] },
     { id: 'chrono', emoji: '⏱️', codes: ['chrono'], fr: ['Chrono', 'Temps à la porte de l’urgence, H11 à H15'], en: ['Chrono', 'Emergency door times, H11 to H15'] },
     { id: 'urgences_direct', emoji: '🚨', codes: ['urgences_direct'], fr: ['Urgences en direct', 'État des urgences et fermetures planifiées'], en: ['Live emergency status', 'Emergency status and planned closures'] },
     { id: 'transferts_suivi', emoji: '🔁', codes: ['transferts_suivi'], fr: ['Transferts', 'Centrale régionale et rapatriements'], en: ['Transfers', 'Regional hub and repatriation'] },
