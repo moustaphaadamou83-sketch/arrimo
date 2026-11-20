@@ -221,6 +221,7 @@ function creerApp(pool, options = {}) {
     if (req.utilisateur.role !== 'entretien') return next();
     // La météo de l'en-tête et le nom de l'assistant (lecture seule, propres à l'établissement) s'affichent aussi pour l'entretien.
     const ok = (req.method === 'GET' && ['/moi', '/nettoyage', '/meteo', '/og/configuration', '/chsld/taches', '/chsld/places'].includes(req.path)) || req.path.startsWith('/moi/')
+      || req.path.startsWith('/formation/')   // Module Formation : son parcours Hygiène et salubrité
       || (req.method === 'POST' && /^\/chsld\/taches\/\d+\/statut$/.test(req.path))
       || (req.method === 'POST' && (req.path === '/deconnexion' || /^\/nettoyage\/\d+\/(debut|terminer)$/.test(req.path)
         || (/^\/(lits|civieres)\/\d+\/action$/.test(req.path) && req.body && req.body.action === 'nettoyage_ok')));

@@ -166,3 +166,10 @@ test('aide en contexte : capsule de chaque écran ; OG « comment faire… » re
   const og = (await appel('soins.a', 'POST', '/copilote/question', { etablissement_id: ids.a, question: 'Comment corriger une heure dans le Chrono ?', langue: 'fr' })).d;
   assert.match(og.reponse, /Corriger une heure/); assert.strictEqual(og.lien, '/formation#capsule/C2');
 });
+
+test('rôle Entretien : accès à sa formation (Hygiène et salubrité), pas au reste', async () => {
+  await compte('menage.a', 'entretien', { etab: ids.a });
+  const m = await appel('menage.a', 'GET', '/formation/moi'); assert.strictEqual(m.s, 200); assert.deepStrictEqual(m.d.parcours.map((p) => p.code), ['hygiene']);
+  assert.strictEqual((await appel('menage.a', 'GET', '/formation/aide')).s, 200);
+  assert.strictEqual((await appel('menage.a', 'GET', `/transferts?etablissement_id=${ids.a}`)).s, 403);
+});
