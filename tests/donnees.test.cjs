@@ -53,6 +53,7 @@ test('direction régionale : sa région seulement ; établissement : module exig
   const nMb = await actifs(ids.mb); const nSl = await actifs(ids.sl);
   assert.ok(nMb >= 5 && nSl > 0 && nSl < 5, `jeu d’essai : ${nMb} et ${nSl}`);
   assert.strictEqual(mb.nsa_actifs, nMb); assert.deepStrictEqual(sl.nsa_actifs, { masque: true }, 'moins de 5 → « < 5 »');
+  assert.deepStrictEqual(sl.nsa_jours_median, { masque: true }, 'la médiane d’un petit nombre est masquée aussi'); assert.ok(mb.nsa_jours_median >= 0);
   assert.strictEqual(d.totaux.nsa_actifs, nMb + nSl, 'total calculé sur les chiffres bruts, au-dessus du seuil');
   assert.strictEqual((await appel('bouchard', `/donnees?etablissement_id=${ids.sl}`)).corps.code, 'module_desactive');
   assert.deepStrictEqual((await appel('tremblay', `/donnees?etablissement_id=${ids.mb}`)).corps.etablissements.map((x) => x.id).sort(), [ids.mb, ids.sl].sort());
