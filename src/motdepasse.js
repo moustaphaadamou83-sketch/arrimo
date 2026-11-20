@@ -14,10 +14,11 @@ const empreinte = (jeton) => crypto.createHash('sha256').update(String(jeton)).d
 
 /** Crée un jeton et envoie le lien, si le compte existe et est actif. Ne révèle jamais si l'adresse existe. */
 /** Langue du destinataire : celle qu'il a choisie, sinon celle de son établissement, sinon celle de la demande (anglais partout, 19 nov. 2026). */
-async function langueDe(pool, utilisateurId, repli = 'fr') {
+async function langueDe(pool, utilisateurId, repli = null) {
   const r = (await pool.query(`SELECT u.langue_interface, (SELECT e.langue FROM utilisateur_etablissements ue JOIN etablissements e ON e.id = ue.etablissement_id
     WHERE ue.utilisateur_id = u.id ORDER BY e.id LIMIT 1) AS langue_etab FROM utilisateurs u WHERE u.id = $1`, [utilisateurId])).rows[0];
-  return r?.langue_interface || r?.langue_etab || (repli === 'en' ? 'en' : 'fr');
+  // Ordre : langue choisie par la personne, sinon celle de sa propre demande (mot de passe oublié), sinon celle de son établissement
+  return r?.langue_interface || (repli === 'en' || repli === 'fr' ? repli : null) || r?.langue_etab || 'fr';
 }
 async function demander(pool, email, langue) {
   if (!courriel.actif()) throw new ErreurHttp(503, 'courriel_non_configure');
@@ -77,4 +78,4 @@ async function inviter(pool, email, nom, par = 'console SH') {
   return { ok: true };
 }
 
-module.exports = { demander, reinitialiser, inviter, DUREE_MIN };
+module.exports = { langueDe, demander, reinitialiser, inviter, DUREE_MIN };

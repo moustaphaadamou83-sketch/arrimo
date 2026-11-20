@@ -172,9 +172,9 @@ test('Anglais : courriels dans la langue du destinataire (choisie, sinon celle d
     assert.match(envoyes.at(-1).sujet, /Reset your password/);
     await pool.query("UPDATE utilisateurs SET langue_interface = NULL WHERE email = 'tremblay@demo.arrimo'");
     await pool.query("UPDATE etablissements SET langue = 'en' WHERE id IN (SELECT etablissement_id FROM utilisateur_etablissements ue JOIN utilisateurs u ON u.id = ue.utilisateur_id WHERE u.email = 'tremblay@demo.arrimo')");
-    await require('../src/motdepasse').demander(pool, 'tremblay@demo.arrimo', 'fr');
-    await new Promise((r) => setTimeout(r, 50));
-    assert.match(envoyes.at(-1).sujet, /Reset your password/, 'langue de l’établissement');
+    const u = (await pool.query("SELECT id FROM utilisateurs WHERE email = 'tremblay@demo.arrimo'")).rows[0].id;
+    assert.strictEqual(await require('../src/motdepasse').langueDe(pool, u), 'en', 'sans choix ni demande : langue de l’établissement (invitation)');
+    assert.strictEqual(await require('../src/motdepasse').langueDe(pool, u, 'fr'), 'fr', 'mot de passe oublié : langue de la demande avant celle de l’établissement');
   } finally {
     courriel.definirTransport(null);
     await pool.query("UPDATE etablissements SET langue = 'fr'");
