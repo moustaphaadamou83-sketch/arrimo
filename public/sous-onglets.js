@@ -31,7 +31,7 @@
   document.addEventListener('click', (ev) => {
     const b = ev.target.closest('.sous-onglets [data-so]'); if (!b) return;
     const vue = b.closest('section[id^="v-"]')?.id.slice(2); if (!vue) return;
-    choix[vue] = b.dataset.so; appliquer(vue); b.closest('.sous-onglets').querySelector(`[data-so="${b.dataset.so}"]`)?.focus();
+    const cle = b.dataset.so; choix[vue] = cle; appliquer(vue); document.querySelector(`#v-${vue} > .sous-onglets [data-so="${cle}"]`)?.focus();
   });
   document.addEventListener('keydown', (ev) => {
     const b = ev.target.closest?.('.sous-onglets [data-so]'); if (!b || !['ArrowRight', 'ArrowLeft'].includes(ev.key)) return;
