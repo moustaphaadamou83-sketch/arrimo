@@ -161,3 +161,22 @@ test('Anglais : chaque message d’erreur du serveur a sa traduction anglaise (�
   assert.ok(codes.length > 400);
   assert.deepStrictEqual(codes.filter((x) => !(x in en)), []);
 });
+
+test('Anglais : courriels dans la langue du destinataire (choisie, sinon celle de son établissement), jamais celle de la requête', async () => {
+  const courriel = require('../src/courriel'); const envoyes = [];
+  courriel.definirTransport(async (m) => { envoyes.push(m); });
+  try {
+    await pool.query("UPDATE utilisateurs SET langue_interface = 'en' WHERE email = 'tremblay@demo.arrimo'");
+    await require('../src/motdepasse').demander(pool, 'tremblay@demo.arrimo', 'fr');
+    await new Promise((r) => setTimeout(r, 50));
+    assert.match(envoyes.at(-1).sujet, /Reset your password/);
+    await pool.query("UPDATE utilisateurs SET langue_interface = NULL WHERE email = 'tremblay@demo.arrimo'");
+    await pool.query("UPDATE etablissements SET langue = 'en' WHERE id IN (SELECT etablissement_id FROM utilisateur_etablissements ue JOIN utilisateurs u ON u.id = ue.utilisateur_id WHERE u.email = 'tremblay@demo.arrimo')");
+    await require('../src/motdepasse').demander(pool, 'tremblay@demo.arrimo', 'fr');
+    await new Promise((r) => setTimeout(r, 50));
+    assert.match(envoyes.at(-1).sujet, /Reset your password/, 'langue de l’établissement');
+  } finally {
+    courriel.definirTransport(null);
+    await pool.query("UPDATE etablissements SET langue = 'fr'");
+  }
+});

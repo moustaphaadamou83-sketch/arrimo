@@ -13,6 +13,12 @@ const DUREE_MIN = 30;
 const empreinte = (jeton) => crypto.createHash('sha256').update(String(jeton)).digest('hex');
 
 /** Crée un jeton et envoie le lien, si le compte existe et est actif. Ne révèle jamais si l'adresse existe. */
+/** Langue du destinataire : celle qu'il a choisie, sinon celle de son établissement, sinon celle de la demande (anglais partout, 19 nov. 2026). */
+async function langueDe(pool, utilisateurId, repli = 'fr') {
+  const r = (await pool.query(`SELECT u.langue_interface, (SELECT e.langue FROM utilisateur_etablissements ue JOIN etablissements e ON e.id = ue.etablissement_id
+    WHERE ue.utilisateur_id = u.id ORDER BY e.id LIMIT 1) AS langue_etab FROM utilisateurs u WHERE u.id = $1`, [utilisateurId])).rows[0];
+  return r?.langue_interface || r?.langue_etab || (repli === 'en' ? 'en' : 'fr');
+}
 async function demander(pool, email, langue) {
   if (!courriel.actif()) throw new ErreurHttp(503, 'courriel_non_configure');
   const adresse = String(email || '').trim().toLowerCase();
@@ -26,7 +32,8 @@ async function demander(pool, email, langue) {
         [empreinte(jeton), u.id, DUREE_MIN]);
       const lien = `${require('./environnement').urlPublique()}/#reinit=${jeton}`;
       // Envoi sans attendre : la réponse prend le même temps que l'adresse existe ou non
-      courriel.envoyer({ a: u.email, sujet: tr(langue, 'courriel_sujet'), texte: tr(langue, 'courriel_texte', { nom: u.nom, lien, min: DUREE_MIN }) })
+      const L = await langueDe(pool, u.id, langue);
+      courriel.envoyer({ a: u.email, sujet: tr(L, 'courriel_sujet'), texte: tr(L, 'courriel_texte', { nom: u.nom, lien, min: DUREE_MIN }) })
         .catch((e) => console.error('Courriel de réinitialisation :', e.message));
     }
   }
@@ -61,7 +68,8 @@ async function inviter(pool, email, nom, par = 'console SH') {
   await pool.query("INSERT INTO jetons_mdp (jeton_hash,utilisateur_id,type,expire_le) VALUES ($1,$2,'invitation',now()+interval '24 hours')", [empreinte(jeton), u.id]);
   const lien = `${require('./environnement').urlPublique()}/#reinit=${jeton}`;
   try {
-    await courriel.envoyer({ a: adresse, sujet: 'Invitation à Arrimo', texte: `Bonjour ${u.nom || nom},\n\nUn accès individuel à Arrimo vous a été préparé par ${String(par).slice(0, 120)}. Choisissez votre mot de passe avec ce lien à usage unique (24 heures) :\n${lien}` });
+    const L = await langueDe(pool, u.id);
+    await courriel.envoyer({ a: adresse, sujet: tr(L, 'invitation_sujet'), texte: tr(L, 'invitation_texte', { nom: u.nom || nom, par: String(par).slice(0, 120), lien }) });
   } catch (e) {
     await pool.query('UPDATE jetons_mdp SET utilise_le=now() WHERE jeton_hash=$1', [empreinte(jeton)]);
     throw new ErreurHttp(502, 'courriel_non_configure');
