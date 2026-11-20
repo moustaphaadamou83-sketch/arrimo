@@ -22,6 +22,7 @@ Fichier `.env` de chaque environnement (droits 600, jamais dans le dépôt) :
 | Notifications push | `ARRIMO_VAPID_PUBLIQUE`, `ARRIMO_VAPID_PRIVEE`, `ARRIMO_VAPID_SUJET`, `ARRIMO_PUSH_HOTES` |
 | Démonstration | `ARRIMO_DEMO`, `DEMO_MOT_DE_PASSE`, `ARRIMO_PATIENTS_FICTIFS`, `ARRIMO_METEO`, `ARRIMO_METEO_LIEU`, `SIMULATION_MINUTES` |
 | OG (facultatif) | `COPILOTE_IA_URL`, `COPILOTE_IA_MODELE`, `COPILOTE_IA_CLE` |
+| Données ouvertes (facultatif) | `ARRIMO_MSSS_URGENCES` (1 = lecture horaire du fichier des urgences du MSSS), `ARRIMO_MSSS_URGENCES_URL` |
 
 ## 3. Installation pas à pas
 
@@ -65,6 +66,7 @@ Environnements : `src/environnement.js` ; noms par environnement : `deploy/noms.
 | `src/urgences-direct.js` | fermetures d'urgence, page publique (démonstration) |
 | `src/transferts-suivi.js`, `src/transports.js` | fiche de transfert, centrale, rapatriements ; transports |
 | `src/bourse.js`, `src/donnees.js`, `src/crise.js` | bourse des places, données régionales, mode crise |
+| `src/visites.js`, `src/eviter-transferts.js`, `src/msss-urgences.js` | visites confirmées, avant l’appel, lecteur des données ouvertes du MSSS |
 | `src/chsld.js`, `src/liaison-chsld.js`, `src/nsa-*.js` | hébergement, liaison CHSLD, parcours NSA |
 | `src/prealertes.js`, `src/vehicules.js`, `src/connect.js` | préhospitalier, Arrimo Connect |
 | `src/copilote.js`, `src/og-*.js` | OG (propose, n'agit jamais) |
