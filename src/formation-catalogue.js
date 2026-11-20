@@ -56,8 +56,34 @@ const CAPSULES = [
       Q('Que montre la préalerte au personnel de l’urgence ?', 'What does the pre-alert show emergency staff?',
         ['Le diagnostic du patient', 'L’unité, la plaque, la priorité déclarée et l’heure d’arrivée', 'Le dossier médical complet'], ['The patient’s diagnosis', 'Unit, plate, declared priority and arrival time', 'The full medical record'], 1),
     ] }),
-  C('S3', 'liaison_secours', '🚑', 150, 'Suivre les unités et les missions', 'Follow units and missions'),
-  C('S4', 'liaison_secours', '🚑', 150, 'Superviser : préalertes non reçues ou non prises en compte', 'Supervise: pre-alerts not received or not acknowledged'),
+  C('S3', 'liaison_secours', '🚑', 150, 'Suivre les unités et les missions', 'Follow units and missions', {
+    pret: true, compte: 'ccs.demo@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez la flotte.', 'Open the fleet.') }],
+    objectif: ST('Vous saurez voir la flotte de la région et l’état de chaque unité.', 'You will know how to see the region’s fleet and each unit’s status.'),
+    scenes: [
+      { onglet: 'flotte', cible: '[data-onglet="flotte"]', st: ST('Ouvrez « Flotte » : toutes les unités de la région.', 'Open “Fleet”: every unit in the region.') },
+      { onglet: 'flotte', cible: '#contenu', st: ST('Chaque unité montre son état déclaré par l’équipage : disponible, en route, à l’hôpital…', 'Each unit shows the status declared by its crew: available, en route, at hospital…') },
+      { onglet: 'regional', cible: '[data-onglet="regional"]', st: ST('La vue régionale place les unités et les urgences sur la carte.', 'The regional view places units and departments on the map.') },
+    ],
+    quiz: [
+      Q('L’état d’une unité est déclaré par :', 'A unit’s status is declared by:', ['Le CCS', 'L’équipage, en un geste', 'Arrimo, au hasard'], ['The communication centre', 'The crew, in one tap', 'Arrimo, randomly'], 1),
+      Q('Arrimo attribue-t-il les unités ?', 'Does Arrimo assign units?', ['Oui', 'Non : la répartition reste dans le système du CCS'], ['Yes', 'No: dispatching stays in the centre’s system'], 1),
+      Q('La vue régionale montre :', 'The regional view shows:', ['Les unités et les urgences sur la carte', 'Les diagnostics', 'Les salaires'], ['Units and departments on the map', 'Diagnoses', 'Salaries'], 0),
+    ] }),
+  C('S4', 'liaison_secours', '🚑', 150, 'Superviser : préalertes non reçues ou non prises en compte', 'Supervise: pre-alerts not received or not acknowledged', {
+    pret: true, compte: 'ccs.demo@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez les préalertes de la région.', 'Open the region’s pre-alerts.') }],
+    objectif: ST('Vous saurez repérer une préalerte qui n’a pas été vue à l’urgence.', 'You will know how to spot a pre-alert that was not seen at the department.'),
+    scenes: [
+      { onglet: 'prealertes', cible: '[data-onglet="prealertes"]', st: ST('Ouvrez « Préalertes » : toutes celles de la région.', 'Open “Pre-alerts”: all of the region’s.') },
+      { onglet: 'prealertes', cible: '#contenu', st: ST('Une préalerte non reçue ou non prise en compte au-delà du délai est signalée.', 'A pre-alert not received or not acknowledged beyond the delay is flagged.') },
+      { onglet: 'prealertes', cible: '#contenu', st: ST('Contactez l’urgence concernée ; la préalerte reste tracée.', 'Contact the department concerned; the pre-alert stays logged.') },
+    ],
+    quiz: [
+      Q('Une préalerte « non prise en compte » veut dire :', 'A pre-alert “not acknowledged” means:', ['Personne à l’urgence ne l’a confirmée', 'Elle est annulée', 'Elle est arrivée'], ['Nobody at the department has confirmed it', 'It is cancelled', 'It has arrived'], 0),
+      Q('Le délai d’alerte est :', 'The alert delay is:', ['Configuré', 'Aléatoire', 'Inexistant'], ['Configured', 'Random', 'Non-existent'], 0),
+      Q('Que faites-vous ?', 'What do you do?', ['Je contacte l’urgence', 'Je supprime la préalerte', 'Rien'], ['I contact the department', 'I delete the pre-alert', 'Nothing'], 0),
+    ] }),
   // ---------------------------------------------------------------- ⏱️ Chrono
   C('C1', 'chrono', '⏱️', 150, 'Marquer le triage et la civière libérée', 'Mark triage and stretcher released', {
     pret: true, compte: 'hopital.a@demo.arrimo',
@@ -91,7 +117,20 @@ const CAPSULES = [
       Q('Le motif d’une correction est :', 'The reason for a correction is:', ['Un texte libre', 'Choisi dans une liste fermée', 'Facultatif'], ['Free text', 'Chosen from a closed list', 'Optional'], 1),
       Q('Une étape jamais cliquée est-elle estimée par Arrimo ?', 'Is a step never clicked estimated by Arrimo?', ['Oui, automatiquement', 'Non, jamais', 'Seulement la nuit'], ['Yes, automatically', 'No, never', 'Only at night'], 1),
     ] }),
-  C('C3', 'chrono', '⏱️', 150, 'Lire le rapport mensuel du Chrono', 'Read the monthly Chrono report'),
+  C('C3', 'chrono', '⏱️', 150, 'Lire le rapport mensuel du Chrono', 'Read the monthly Chrono report', {
+    pret: true, compte: 'hopital.a@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez le rapport et les écarts.', 'Open the report and gaps.') }],
+    objectif: ST('Vous saurez lire les moyennes, médianes et le taux hors cible, et exporter le rapport.', 'You will know how to read averages, medians and the over-target rate, and export the report.'),
+    scenes: [
+      { ecran: 'chrono', sous: 'rapport', cible: '#v-chrono [data-so="rapport"]', st: ST('Ouvrez Chrono, sous-onglet « Rapport et écarts ».', 'Open Chrono, “Report and gaps” sub-tab.') },
+      { ecran: 'chrono', sous: 'rapport', cible: '#ch-rapport', st: ST('Pour le mois : passages, moyenne, médiane, et % hors cible pour la porte, la sortie et le total.', 'For the month: visits, average, median, and % over target for the door, departure and total.') },
+      { ecran: 'chrono', sous: 'rapport', cible: '#ch-rapport', st: ST('Les étapes manquantes sont comptées, jamais estimées. Exportez en CSV.', 'Missing steps are counted, never estimated. Export as CSV.') },
+    ],
+    quiz: [
+      Q('Une étape manquante dans le rapport est :', 'A missing step in the report is:', ['Estimée', 'Comptée comme manquante', 'Supprimée'], ['Estimated', 'Counted as missing', 'Deleted'], 1),
+      Q('« Hors cible » veut dire :', '“Over target” means:', ['Au-delà du temps cible configuré', 'Un patient perdu', 'Une erreur'], ['Beyond the configured target time', 'A lost patient', 'An error'], 0),
+      Q('Le rapport sert à :', 'The report is used to:', ['Calculer des pénalités', 'Mesurer et améliorer, sans prime ni pénalité', 'Rien'], ['Calculate penalties', 'Measure and improve, with no bonus or penalty', 'Nothing'], 1),
+    ] }),
   // ---------------------------------------------------------------- 🚨 Urgences en direct
   C('U1', 'urgences_direct', '🚨', 120, 'Déclarer le statut de l’urgence', 'Declare the emergency department status', {
     pret: true, compte: 'hopital.a@demo.arrimo',
@@ -107,7 +146,20 @@ const CAPSULES = [
       Q('Une déclaration vieille de plusieurs heures :', 'A declaration several hours old:', ['Est signalée comme périmée', 'Est effacée', 'Devient « fermée »'], ['Is flagged as stale', 'Is deleted', 'Becomes “closed”'], 0),
       Q('Arrimo peut-il déduire que votre urgence est fermée ?', 'Can Arrimo infer that your department is closed?', ['Oui', 'Non, jamais'], ['Yes', 'No, never'], 1),
     ] }),
-  C('U2', 'urgences_direct', '🚨', 150, 'Planifier une fermeture', 'Plan a closure'),
+  C('U2', 'urgences_direct', '🚨', 150, 'Planifier une fermeture', 'Plan a closure', {
+    pret: true, compte: 'hopital.a@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez le statut et les fermetures.', 'Open status and closures.') }],
+    objectif: ST('Vous saurez annoncer une fermeture planifiée aux secours et aux urgences voisines.', 'You will know how to announce a planned closure to emergency services and nearby departments.'),
+    scenes: [
+      { ecran: 'secours', sous: 'urgence', cible: '#v-secours [data-so="urgence"]', st: ST('Dans Liaison Secours, ouvrez « Statut et fermetures ».', 'In Emergency liaison, open “Status and closures”.') },
+      { ecran: 'secours', sous: 'urgence', cible: '#v-secours .panneau-c', st: ST('Planifiez une fermeture : services touchés, début et fin prévue.', 'Plan a closure: services affected, start and planned end.') },
+      { ecran: 'secours', sous: 'urgence', cible: '#v-secours .panneau-c', st: ST('Les secours et les urgences voisines sont prévenus ; vous pouvez la modifier ou l’annuler.', 'Emergency services and nearby departments are notified; you can change or cancel it.') },
+    ],
+    quiz: [
+      Q('Une fermeture planifiée est annoncée :', 'A planned closure is announced:', ['Aux secours et aux urgences voisines', 'Au public seulement', 'À personne'], ['To emergency services and nearby departments', 'To the public only', 'To nobody'], 0),
+      Q('On peut l’annuler ?', 'Can it be cancelled?', ['Oui', 'Non'], ['Yes', 'No'], 0),
+      Q('Une fermeture doit préciser :', 'A closure must state:', ['Les services touchés, le début et la fin prévue', 'Le diagnostic', 'Rien'], ['Services affected, start and planned end', 'The diagnosis', 'Nothing'], 0),
+    ] }),
   C('U3', 'urgences_direct', '🚨', 120, 'Consulter les urgences avant de partir', 'Check emergency departments before leaving', {
     pret: true, compte: 'ambulance.demo@demo.arrimo',
     exercice: [{ scene: 1, consigne: ST('Ouvrez la liste des urgences de la région.', 'Open the list of the region’s departments.') }],
@@ -123,10 +175,62 @@ const CAPSULES = [
       Q('Les urgences sont classées :', 'Departments are listed:', ['Par ordre alphabétique', 'De la plus proche à la plus loin', 'Au hasard'], ['Alphabetically', 'Nearest first', 'Randomly'], 1),
     ] }),
   // ---------------------------------------------------------------- 🔁 Transferts
-  C('T1', null, '🔁', 180, 'Demander un transfert', 'Request a transfer'),
-  C('T2', null, '🔁', 150, 'Accepter ou refuser un transfert avec motif', 'Accept or decline a transfer with a reason'),
-  C('T3', 'transferts_suivi', '🔁', 150, 'Fiche du transfert, délais et alertes', 'Transfer sheet, timelines and alerts'),
-  C('T4', 'transferts_suivi', '🔁', 120, 'Rapatriement proposé', 'Suggested repatriation'),
+  C('T1', null, '🔁', 180, 'Demander un transfert', 'Request a transfer', {
+    pret: true, compte: 'hopital.a@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez Transferts.', 'Open Transfers.') }],
+    objectif: ST('Vous saurez demander un transfert vers l’établissement le plus proche qui a un lit adapté.', 'You will know how to request a transfer to the nearest facility with a suitable bed.'),
+    scenes: [
+      { ecran: 'transferts', cible: '#onglets button[data-v="transferts"]', st: ST('Ouvrez Transferts : les demandes envoyées et reçues.', 'Open Transfers: requests sent and received.') },
+      { ecran: 'transferts', cible: '#v-transferts', st: ST('Demandez un transfert : unité demandée, puis destination, la plus proche qui a un lit confirmé.', 'Request a transfer: requested unit, then destination, the nearest with a confirmed bed.') },
+      { ecran: 'transferts', cible: '#v-transferts', st: ST('La destination accepte ou refuse avec un motif ; vous suivez chaque étape.', 'The destination accepts or declines with a reason; you follow each step.') },
+    ],
+    quiz: [
+      Q('Arrimo propose d’abord :', 'Arrimo first suggests:', ['Le plus grand hôpital', 'Le plus proche qui a un lit adapté, sauf s’il est débordé', 'Au hasard'], ['The biggest hospital', 'The nearest with a suitable bed, unless it is overloaded', 'Randomly'], 1),
+      Q('La destination peut refuser :', 'The destination can decline:', ['Avec un motif', 'Sans rien dire', 'Jamais'], ['With a reason', 'Silently', 'Never'], 0),
+      Q('Le patient est identifié par :', 'The patient is identified by:', ['Une référence', 'Son diagnostic', 'Son nom complet'], ['A reference', 'Their diagnosis', 'Their full name'], 0),
+    ] }),
+  C('T2', null, '🔁', 150, 'Accepter ou refuser un transfert avec motif', 'Accept or decline a transfer with a reason', {
+    pret: true, compte: 'hopital.a@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Repérez les demandes reçues.', 'Find the received requests.') }],
+    objectif: ST('Vous saurez répondre à une demande de transfert dans le délai, avec un motif si vous refusez.', 'You will know how to answer a transfer request within the delay, with a reason if you decline.'),
+    scenes: [
+      { ecran: 'transferts', cible: '#v-transferts', st: ST('Les demandes reçues attendent votre réponse ; le délai configuré s’affiche.', 'Received requests await your answer; the configured delay is shown.') },
+      { ecran: 'transferts', cible: '#v-transferts', st: ST('Acceptez en réservant un lit, ou refusez avec un motif : pas de lit, pas de personnel, plateau technique…', 'Accept by reserving a bed, or decline with a reason: no bed, no staff, technical platform…') },
+      { ecran: 'transferts', cible: '#v-transferts', st: ST('Un refus motivé alimente les données régionales : il aide à comprendre les blocages.', 'A reasoned decline feeds regional data: it helps understand blockages.') },
+    ],
+    quiz: [
+      Q('Refuser un transfert demande :', 'Declining a transfer requires:', ['Un motif de la liste', 'Un appel', 'Rien'], ['A reason from the list', 'A call', 'Nothing'], 0),
+      Q('Accepter réserve :', 'Accepting reserves:', ['Un lit', 'Une ambulance', 'Un médecin'], ['A bed', 'An ambulance', 'A doctor'], 0),
+      Q('Une demande sans réponse au-delà du délai :', 'A request with no answer beyond the delay:', ['Est signalée dans la Vigilance', 'Est acceptée seule', 'Disparaît'], ['Is flagged in Watch', 'Is accepted automatically', 'Disappears'], 0),
+    ] }),
+  C('T3', 'transferts_suivi', '🔁', 150, 'Fiche du transfert, délais et alertes', 'Transfer sheet, timelines and alerts', {
+    pret: true, compte: 'hopital.a@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Repérez un transfert à ouvrir.', 'Find a transfer to open.') }],
+    objectif: ST('Vous saurez ouvrir la fiche d’un transfert et lire ses délais et alertes.', 'You will know how to open a transfer sheet and read its timelines and alerts.'),
+    scenes: [
+      { ecran: 'transferts', cible: '#v-transferts', st: ST('Chaque transfert a sa fiche : ouvrez-la avec « Fiche ».', 'Each transfer has its sheet: open it with “Sheet”.') },
+      { ecran: 'transferts', cible: '#v-transferts', st: ST('Demande, décision, départ, arrivée : chaque heure et chaque délai.', 'Request, decision, departure, arrival: every time and every delay.') },
+      { ecran: 'transferts', cible: '#v-transferts', st: ST('Une alerte s’affiche quand une étape dépasse son délai ; le Sillage montre tout le parcours.', 'An alert shows when a step exceeds its delay; the Trail shows the whole journey.') },
+    ],
+    quiz: [
+      Q('La fiche montre :', 'The sheet shows:', ['Les heures et délais de chaque étape', 'Le diagnostic', 'Les salaires'], ['Times and delays of each step', 'The diagnosis', 'Salaries'], 0),
+      Q('Une alerte de délai veut dire :', 'A delay alert means:', ['Une étape dépasse son délai configuré', 'Le patient est décédé', 'Une erreur'], ['A step exceeds its configured delay', 'The patient died', 'An error'], 0),
+      Q('Pour tout le parcours, ouvrez :', 'For the whole journey, open:', ['Le Sillage', 'Les paramètres', 'Le journal'], ['The Trail', 'Settings', 'The log'], 0),
+    ] }),
+  C('T4', 'transferts_suivi', '🔁', 120, 'Rapatriement proposé', 'Suggested repatriation', {
+    pret: true, compte: 'hopital.a@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Repérez les transferts.', 'Find the transfers.') }],
+    objectif: ST('Vous saurez répondre à un rapatriement proposé quand le patient est stable.', 'You will know how to answer a suggested repatriation once the patient is stable.'),
+    scenes: [
+      { ecran: 'transferts', cible: '#v-transferts', st: ST('Quand l’équipe déclare le patient stable pour un retour, un rapatriement est proposé.', 'When the team declares the patient stable for return, a repatriation is suggested.') },
+      { ecran: 'transferts', cible: '#v-transferts', st: ST('L’établissement d’origine accepte, ou refuse avec un motif.', 'The original facility accepts, or declines with a reason.') },
+      { ecran: 'transferts', cible: '#v-transferts', st: ST('La décision reste humaine ; Arrimo ne fait que proposer.', 'The decision stays human; Arrimo only suggests.') },
+    ],
+    quiz: [
+      Q('Un rapatriement est proposé quand :', 'A repatriation is suggested when:', ['Le patient est déclaré stable pour un retour', 'Tous les jours', 'Jamais'], ['The patient is declared stable for return', 'Every day', 'Never'], 0),
+      Q('Qui décide ?', 'Who decides?', ['Arrimo', 'Les équipes'], ['Arrimo', 'The teams'], 1),
+      Q('Un refus de rapatriement :', 'A repatriation decline:', ['Est motivé', 'Est interdit', 'Est automatique'], ['Is reasoned', 'Is forbidden', 'Is automatic'], 0),
+    ] }),
   // ---------------------------------------------------------------- 🚐 Transport
   C('R1', 'transport_planifie', '🚐', 150, 'Réserver un transport non urgent', 'Book a non-urgent transport', {
     pret: true, compte: 'hopital.a@demo.arrimo',
@@ -143,7 +247,20 @@ const CAPSULES = [
       Q('Une réservation pour dans 3 heures :', 'A booking 3 hours ahead:', ['Est refusée', 'Est acceptée avec un avertissement : réservez la veille si possible', 'Est automatique'], ['Is refused', 'Is accepted with a warning: book the day before if possible', 'Is automatic'], 1),
       Q('Le transporteur refuse :', 'The carrier declines:', ['Sans explication', 'Avec un motif dans une liste', 'Par téléphone seulement'], ['With no explanation', 'With a reason from a list', 'By phone only'], 1),
     ] }),
-  C('R2', 'transport_planifie', '🚐', 120, 'Confirmer ou refuser une plage de transport', 'Confirm or decline a transport time slot'),
+  C('R2', 'transport_planifie', '🚐', 120, 'Confirmer ou refuser une plage de transport', 'Confirm or decline a transport time slot', {
+    pret: true, compte: 'ambulance.demo@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez les transports.', 'Open transports.') }],
+    objectif: ST('Vous saurez confirmer une plage de transport, ou la refuser avec un motif.', 'You will know how to confirm a transport time slot, or decline it with a reason.'),
+    scenes: [
+      { onglet: 'transports', cible: '[data-onglet="transports"]', st: ST('Ouvrez « Transports » : les demandes des établissements.', 'Open “Transports”: requests from facilities.') },
+      { onglet: 'transports', cible: '#contenu', st: ST('Chaque demande : référence, lieux, plage souhaitée, véhicule. Jamais de diagnostic.', 'Each request: reference, places, requested slot, vehicle. Never a diagnosis.') },
+      { onglet: 'transports', cible: '#contenu', st: ST('Confirmez une plage, ou refusez avec un motif : aucune unité, hors territoire…', 'Confirm a slot, or decline with a reason: no unit, out of area…') },
+    ],
+    quiz: [
+      Q('Le transporteur voit :', 'The carrier sees:', ['La référence et les lieux', 'Le diagnostic', 'Le dossier'], ['The reference and the places', 'The diagnosis', 'The record'], 0),
+      Q('Refuser demande :', 'Declining requires:', ['Un motif', 'Rien', 'Un appel'], ['A reason', 'Nothing', 'A call'], 0),
+      Q('La plage confirmée :', 'The confirmed slot:', ['Est vue par l’établissement', 'Est secrète', 'Est effacée'], ['Is seen by the facility', 'Is secret', 'Is erased'], 0),
+    ] }),
   // ---------------------------------------------------------------- 🏥 Hôpital et NSA
   C('H1', null, '🛏️', 150, 'Lits : réserver, occuper, libérer', 'Beds: reserve, occupy, release', {
     pret: true, compte: 'hopital.a@demo.arrimo',
@@ -174,7 +291,20 @@ const CAPSULES = [
       Q('Qui attribue le lit ?', 'Who assigns the bed?', ['Arrimo, seul', 'La coordination, avec l’aide d’OG', 'Le patient'], ['Arrimo, alone', 'Coordination, helped by OG', 'The patient'], 1),
       Q('OG peut-il préparer une demande ?', 'Can OG prepare a request?', ['Oui, une personne la confirme', 'Non', 'Oui, il l’envoie seul'], ['Yes, a person confirms it', 'No', 'Yes, it sends it alone'], 0),
     ] }),
-  C('H3', 'nettoyage', '🧽', 120, 'Nettoyage prioritaire', 'Priority cleaning'),
+  C('H3', 'nettoyage', '🧽', 120, 'Nettoyage prioritaire', 'Priority cleaning', {
+    pret: true, compte: 'entretien.erables@chsld.example.invalid',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez la file de nettoyage.', 'Open the cleaning queue.') }],
+    objectif: ST('Vous saurez quel lit nettoyer en premier, et confirmer le nettoyage.', 'You will know which bed to clean first, and confirm the cleaning.'),
+    scenes: [
+      { ecran: 'nettoyage', cible: '#onglets button[data-v="nettoyage"]', st: ST('Ouvrez Nettoyage : la file des lits à nettoyer, par priorité.', 'Open Cleaning: the queue of beds to clean, by priority.') },
+      { ecran: 'nettoyage', cible: '#v-nettoyage', st: ST('Démarrez le nettoyage du premier lit ; l’équipe voit qu’il est en cours.', 'Start cleaning the first bed; the team sees it is in progress.') },
+      { ecran: 'nettoyage', cible: '#v-nettoyage', st: ST('Confirmez la fin : le lit redevient libre, pour tous, tout de suite.', 'Confirm the end: the bed becomes free again, for everyone, right away.') },
+    ],
+    quiz: [
+      Q('La file est classée :', 'The queue is ordered:', ['Par priorité, selon les patients qui attendent', 'Par ordre alphabétique', 'Au hasard'], ['By priority, based on patients waiting', 'Alphabetically', 'Randomly'], 0),
+      Q('Le lit redevient libre quand :', 'The bed becomes free when:', ['L’entretien confirme la fin du nettoyage', 'Le patient part', 'Le soir'], ['Housekeeping confirms the end of cleaning', 'The patient leaves', 'In the evening'], 0),
+      Q('Voyez-vous des données médicales ?', 'Do you see medical data?', ['Oui', 'Non'], ['Yes', 'No'], 1),
+    ] }),
   C('H4', 'nsa', '🏥', 180, 'Épisode NSA et orientation', 'ALC episode and orientation', {
     pret: true, compte: 'hopital.a@demo.arrimo',
     exercice: [{ scene: 1, consigne: ST('Ouvrez NSA.', 'Open ALC.') }],
@@ -205,9 +335,35 @@ const CAPSULES = [
       Q('Une ressource écartée :', 'An excluded resource:', ['Disparaît sans explication', 'Apparaît avec la raison de son exclusion', 'Est supprimée'], ['Disappears without explanation', 'Appears with the reason it was excluded', 'Is deleted'], 1),
       Q('Qui envoie la demande ?', 'Who sends the request?', ['OG, seul', 'Une personne de l’équipe', 'La ressource'], ['OG, alone', 'A team member', 'The resource'], 1),
     ] }),
-  C('H6', null, '🏥', 150, 'Congés prévus et vigilance des lits', 'Planned discharges and bed watch'),
+  C('H6', null, '🏥', 150, 'Congés prévus et vigilance des lits', 'Planned discharges and bed watch', {
+    pret: true, compte: 'hopital.a@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez les congés prévus.', 'Open planned discharges.') }],
+    objectif: ST('Vous saurez anticiper les lits qui se libèrent et repérer les blocages.', 'You will know how to anticipate beds that free up and spot blockages.'),
+    scenes: [
+      { ecran: 'vigilance', sous: 'conges', cible: '#v-vigilance [data-so="conges"]', st: ST('Ouvrez Congés et alertes, sous-onglet « Congés prévus ».', 'Open Discharges & alerts, “Planned discharges” sub-tab.') },
+      { ecran: 'vigilance', sous: 'conges', cible: '#v-vigilance', st: ST('Les congés prévus dans 4, 12 et 24 heures ; un congé prévu n’est jamais un lit libre.', 'Discharges planned in 4, 12 and 24 hours; a planned discharge is never a free bed.') },
+      { ecran: 'vigilance', sous: 'alertes', cible: '#v-vigilance [data-so="alertes"]', st: ST('Les blocages expliqués : réservation prolongée, congé retardé, nettoyage en attente…', 'Explained blockages: long reservation, delayed discharge, cleaning pending…') },
+    ],
+    quiz: [
+      Q('Un congé prévu est :', 'A planned discharge is:', ['Un lit libre', 'Encore occupé jusqu’au départ réel', 'Annulé'], ['A free bed', 'Still occupied until the actual departure', 'Cancelled'], 1),
+      Q('Arrimo libère-t-il un lit automatiquement ?', 'Does Arrimo free a bed automatically?', ['Oui', 'Non'], ['Yes', 'No'], 1),
+      Q('Chaque alerte indique :', 'Each alert states:', ['Sur quoi elle repose et une action proposée', 'Rien', 'Un diagnostic'], ['What it is based on and a suggested action', 'Nothing', 'A diagnosis'], 0),
+    ] }),
   // ---------------------------------------------------------------- 🏡 Hébergement
-  C('E1', null, '🏡', 150, 'Résidents et chambres', 'Residents and rooms'),
+  C('E1', null, '🏡', 150, 'Résidents et chambres', 'Residents and rooms', {
+    pret: true, compte: 'coordination.erables@chsld.example.invalid',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez les résidents.', 'Open residents.') }, { scene: 2, consigne: ST('Ouvrez les chambres et lits.', 'Open rooms and beds.') }],
+    objectif: ST('Vous saurez retrouver un résident et l’état des chambres.', 'You will know how to find a resident and the status of rooms.'),
+    scenes: [
+      { ecran: 'c-residents', cible: '#onglets button[data-v="c-residents"]', st: ST('Ouvrez Résidents : la liste de vos résidents, avec leur chambre.', 'Open Residents: your residents, with their room.') },
+      { ecran: 'c-chambres', cible: '#onglets button[data-v="c-chambres"]', st: ST('Chambres et lits : libres, occupées, réservées, à entretenir.', 'Rooms and beds: free, occupied, reserved, to clean.') },
+      { ecran: 'c-chambres', cible: '#v-c-chambres', st: ST('Une chambre conservée pendant une hospitalisation reste attribuée au résident.', 'A room kept during a hospital stay stays assigned to the resident.') },
+    ],
+    quiz: [
+      Q('Une chambre conservée :', 'A kept room:', ['Reste attribuée au résident', 'Est libre', 'Est fermée'], ['Stays assigned to the resident', 'Is free', 'Is closed'], 0),
+      Q('Les résidents sont visibles par :', 'Residents are visible to:', ['Votre établissement', 'Tout le réseau', 'Le public'], ['Your facility', 'The whole network', 'The public'], 0),
+      Q('L’état d’une chambre change pour :', 'A room’s status changes for:', ['Toute l’équipe en même temps', 'Vous seulement', 'Personne'], ['The whole team at once', 'You only', 'Nobody'], 0),
+    ] }),
   C('E2', null, '🏡', 180, 'Recevoir une demande d’hébergement', 'Receive a placement request', {
     pret: true, compte: 'coordination.erables@chsld.example.invalid',
     exercice: [{ scene: 1, consigne: ST('Ouvrez les demandes d’hébergement.', 'Open placement requests.') }],
@@ -238,7 +394,20 @@ const CAPSULES = [
       Q('Pour connaître l’état du résident à l’hôpital :', 'To know the resident’s status at the hospital:', ['Je téléphone chaque jour', 'Je lis le dernier statut confirmé', 'Je ne peux pas'], ['I call daily', 'I read the last confirmed status', 'I cannot'], 1),
       Q('Au retour :', 'On return:', ['Un nouveau dossier est créé', 'Je confirme l’arrivée ; il retrouve son lit', 'Rien'], ['A new file is created', 'I confirm the arrival; they get their bed back', 'Nothing'], 1),
     ] }),
-  C('E4', 'taches', '🏡', 120, 'Tâches et entretien des chambres', 'Tasks and room upkeep'),
+  C('E4', null, '🏡', 120, 'Tâches et entretien des chambres', 'Tasks and room upkeep', {
+    pret: true, compte: 'entretien.erables@chsld.example.invalid',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez les tâches.', 'Open tasks.') }],
+    objectif: ST('Vous saurez faire et confirmer les tâches d’entretien des chambres.', 'You will know how to do and confirm room upkeep tasks.'),
+    scenes: [
+      { ecran: 'c-taches', cible: '#onglets button[data-v="c-taches"]', st: ST('Ouvrez Tâches : l’entretien et la préparation des chambres.', 'Open Tasks: room upkeep and preparation.') },
+      { ecran: 'c-taches', cible: '#v-c-taches', st: ST('Démarrez une tâche, puis confirmez-la quand elle est faite.', 'Start a task, then confirm it once done.') },
+      { ecran: 'c-taches', cible: '#v-c-taches', st: ST('La coordination voit la chambre prête, sans téléphoner.', 'Coordination sees the room is ready, without calling.') },
+    ],
+    quiz: [
+      Q('Une tâche confirmée :', 'A confirmed task:', ['Est vue par la coordination', 'Disparaît sans trace', 'Doit être téléphonée'], ['Is seen by coordination', 'Disappears without trace', 'Must be phoned in'], 0),
+      Q('Pendant une hospitalisation, la chambre :', 'During a hospital stay, the room:', ['Est entretenue sans libérer la place', 'Est libérée', 'Est fermée'], ['Is maintained without freeing the place', 'Is freed', 'Is closed'], 0),
+      Q('Voyez-vous un diagnostic ?', 'Do you see a diagnosis?', ['Oui', 'Non'], ['Yes', 'No'], 1),
+    ] }),
   // ---------------------------------------------------------------- 🛏️ Bourse
   C('B1', 'bourse_places', '🛏️', 150, 'Chercher une place avec les filtres', 'Search for a place with filters', {
     pret: true, compte: 'hopital.a@demo.arrimo',
@@ -284,14 +453,92 @@ const CAPSULES = [
       Q('Les consultations d’un invité sont :', 'A guest’s views are:', ['Journalisées', 'Invisibles', 'Effacées'], ['Logged', 'Invisible', 'Erased'], 0),
     ] }),
   // ---------------------------------------------------------------- ✅ Visites confirmées
-  C('V1', 'visites_confirmees', '✅', 150, 'Planifier les visites', 'Plan visits'),
-  C('V2', 'visites_confirmees', '✅', 120, 'Confirmer son arrivée et son départ', 'Confirm arrival and departure'),
-  C('V3', 'visites_confirmees', '✅', 120, 'Visite manquée : agir', 'Missed visit: take action'),
+  C('V1', 'visites_confirmees', '✅', 150, 'Planifier les visites', 'Plan visits', {
+    pret: true, compte: 'coordination.erables@chsld.example.invalid',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez les visites.', 'Open visits.') }, { scene: 2, consigne: ST('Planifiez une visite.', 'Plan a visit.') }],
+    objectif: ST('Vous saurez planifier les visites du CLSC ou du prestataire pour un résident.', 'You will know how to plan CLSC or provider visits for a resident.'),
+    scenes: [
+      { ecran: 'visites', sous: 'horaire', cible: '#onglets button[data-v="visites"]', st: ST('Ouvrez Visites : l’horaire des visites prévues.', 'Open Visits: the schedule of planned visits.') },
+      { ecran: 'visites', sous: 'horaire', cible: '#v-visites .btn.pri', st: ST('« Planifier une visite » : résident, prestataire, type, plage, série quotidienne ou hebdomadaire.', '“Plan a visit”: resident, provider, type, slot, daily or weekly series.') },
+      { ecran: 'visites', sous: 'horaire', cible: '#v-visites table', st: ST('Le prestataire ne voit que la référence du résident, jamais son nom.', 'The provider only sees the resident reference, never the name.') },
+    ],
+    quiz: [
+      Q('Le prestataire voit :', 'The provider sees:', ['La référence du résident', 'Son nom', 'Son dossier'], ['The resident reference', 'Their name', 'Their record'], 0),
+      Q('Une série hebdomadaire crée :', 'A weekly series creates:', ['Plusieurs visites, une par semaine', 'Une seule visite', 'Aucune'], ['Several visits, one per week', 'A single visit', 'None'], 0),
+      Q('Le type de visite est :', 'The visit type is:', ['Une catégorie de service', 'Un diagnostic', 'Un texte libre'], ['A service category', 'A diagnosis', 'Free text'], 0),
+    ] }),
+  C('V2', 'visites_confirmees', '✅', 120, 'Confirmer son arrivée et son départ', 'Confirm arrival and departure', {
+    pret: true, compte: 'intervenant.demo@demo.arrimo',
+    exercice: [{ scene: 2, consigne: ST('Confirmez votre arrivée.', 'Confirm your arrival.') }],
+    objectif: ST('Vous saurez confirmer votre arrivée et votre départ, au clic ou par votre position si vous l’acceptez.', 'You will know how to confirm your arrival and departure, by click or by your location if you agree.'),
+    scenes: [
+      { page: '/intervenant', cible: '#iv-contenu', st: ST('Votre page montre vos visites du jour : résidence, type, plage.', 'Your page shows today’s visits: residence, type, slot.') },
+      { page: '/intervenant', cible: '[data-iv="arrivee"]', st: ST('À votre arrivée, touchez « Je suis arrivé ».', 'On arrival, tap “I have arrived”.') },
+      { page: '/intervenant', cible: '#iv-pos', st: ST('Si vous l’acceptez, votre position confirme la visite ; elle n’est jamais conservée.', 'If you agree, your location confirms the visit; it is never kept.') },
+    ],
+    quiz: [
+      Q('Votre position est :', 'Your location is:', ['Conservée', 'Utilisée seulement avec votre accord, jamais conservée', 'Partagée'], ['Kept', 'Used only with your agreement, never kept', 'Shared'], 1),
+      Q('Vous voyez des résidents :', 'You see residents:', ['Par leur référence', 'Par leur nom', 'Pas du tout'], ['By their reference', 'By their name', 'Not at all'], 0),
+      Q('Une visite sans arrivée pendant sa plage :', 'A visit with no arrival during its slot:', ['Est signalée « manquée » à la résidence', 'Est effacée', 'Est payée'], ['Is flagged “missed” to the residence', 'Is deleted', 'Is paid'], 0),
+    ] }),
+  C('V3', 'visites_confirmees', '✅', 120, 'Visite manquée : agir', 'Missed visit: take action', {
+    pret: true, compte: 'coordination.erables@chsld.example.invalid',
+    exercice: [{ scene: 1, consigne: ST('Repérez les visites.', 'Find the visits.') }],
+    objectif: ST('Vous saurez repérer une visite manquée et noter les soins donnés à la place.', 'You will know how to spot a missed visit and record care given instead.'),
+    scenes: [
+      { ecran: 'visites', sous: 'horaire', cible: '#v-visites table', st: ST('Une visite sans arrivée pendant sa plage passe à « Manquée ».', 'A visit with no arrival during its slot becomes “Missed”.') },
+      { ecran: 'visites', sous: 'horaire', cible: '#v-visites table', st: ST('Si la résidence donne les soins, notez-le : une catégorie dans la liste.', 'If the residence gives the care, record it: a category from the list.') },
+      { ecran: 'visites', sous: 'rapport', cible: '#v-visites [data-so="rapport"]', st: ST('Le rapport mensuel compte les visites prévues, faites et manquées.', 'The monthly report counts visits planned, done and missed.') },
+    ],
+    quiz: [
+      Q('Les soins donnés à la place sont notés :', 'Care given instead is recorded:', ['Par catégorie', 'En texte libre', 'Pas du tout'], ['By category', 'As free text', 'Not at all'], 0),
+      Q('Arrimo calcule-t-il une retenue ?', 'Does Arrimo calculate a deduction?', ['Oui', 'Non'], ['Yes', 'No'], 1),
+      Q('Le rapport compte :', 'The report counts:', ['Prévues, faites, manquées', 'Les diagnostics', 'Rien'], ['Planned, done, missed', 'Diagnoses', 'Nothing'], 0),
+    ] }),
   // ---------------------------------------------------------------- 🛡️ Avant l'appel
-  C('A1', 'eviter_transferts', '🛡️', 120, 'Utiliser la liste avant l’appel', 'Use the before-calling checklist'),
-  C('A2', 'eviter_transferts', '🛡️', 120, 'Écrire la liste de l’établissement', 'Write the facility’s checklist'),
+  C('A1', 'eviter_transferts', '🛡️', 120, 'Utiliser la liste avant l’appel', 'Use the before-calling checklist', {
+    pret: true, compte: 'coordination.erables@chsld.example.invalid',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez la liste avant l’appel.', 'Open the before-calling checklist.') }, { scene: 3, consigne: ST('Notez un transfert fait.', 'Record a transfer made.') }],
+    objectif: ST('Vous saurez parcourir la liste de votre établissement et noter votre décision.', 'You will know how to go through your facility’s checklist and record your decision.'),
+    scenes: [
+      { ecran: 'eviter', sous: 'appel', cible: '#onglets button[data-v="eviter"]', st: ST('Ouvrez « Avant l’appel » : la liste de votre établissement.', 'Open “Before calling”: your facility’s checklist.') },
+      { ecran: 'eviter', sous: 'appel', cible: '#v-eviter', st: ST('Cochez les vérifications ; les alternatives et leurs coordonnées sont à côté.', 'Tick the checks; alternatives and their contacts are alongside.') },
+      { ecran: 'eviter', sous: 'appel', cible: '#ev-fait', st: ST('Notez votre décision : transfert évité grâce à une alternative, ou transfert fait.', 'Record your decision: transfer avoided thanks to an alternative, or transfer made.') },
+    ],
+    quiz: [
+      Q('La liste vient :', 'The checklist comes from:', ['De votre établissement (son protocole)', 'D’Arrimo', 'D’Internet'], ['Your facility (its protocol)', 'Arrimo', 'The internet'], 0),
+      Q('La liste peut-elle bloquer l’appel ?', 'Can the checklist block the call?', ['Oui', 'Non'], ['Yes', 'No'], 1),
+      Q('En urgence vitale :', 'In a life-threatening emergency:', ['J’appelle le 911 sans attendre', 'Je remplis la liste d’abord', 'J’attends'], ['I call 911 without waiting', 'I fill in the checklist first', 'I wait'], 0),
+    ] }),
+  C('A2', 'eviter_transferts', '🛡️', 120, 'Écrire la liste de l’établissement', 'Write the facility’s checklist', {
+    pret: true, compte: 'coordination.erables@chsld.example.invalid',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez le réglage de la liste.', 'Open the list settings.') }, { scene: 3, consigne: ST('Enregistrez la liste.', 'Save the list.') }],
+    objectif: ST('Vous saurez écrire la liste de vérification de votre établissement, selon son protocole.', 'You will know how to write your facility’s checklist, according to its protocol.'),
+    scenes: [
+      { ecran: 'eviter', sous: 'regler', cible: '#v-eviter [data-so="regler"]', st: ST('Ouvrez le sous-onglet « Régler la liste ».', 'Open the “Set the list” sub-tab.') },
+      { ecran: 'eviter', sous: 'regler', cible: '#v-eviter textarea', st: ST('Une vérification par ligne, tirée de votre protocole.', 'One check per line, taken from your protocol.') },
+      { ecran: 'eviter', sous: 'regler', cible: '#ev-enregistrer', st: ST('Cochez les alternatives disponibles, leurs coordonnées, puis enregistrez.', 'Tick the available alternatives, their contacts, then save.') },
+    ],
+    quiz: [
+      Q('Qui écrit la liste ?', 'Who writes the list?', ['L’établissement', 'Arrimo', 'Le patient'], ['The facility', 'Arrimo', 'The patient'], 0),
+      Q('Une vérification, c’est :', 'A check is:', ['Une ligne tirée du protocole', 'Un diagnostic', 'Une ordonnance'], ['A line from the protocol', 'A diagnosis', 'A prescription'], 0),
+      Q('Les alternatives ont :', 'Alternatives have:', ['Des coordonnées', 'Un prix', 'Rien'], ['Contacts', 'A price', 'Nothing'], 0),
+    ] }),
   // ---------------------------------------------------------------- 📊 Données
-  C('D1', 'donnees_regionales', '📊', 150, 'Lire le tableau régional', 'Read the regional table'),
+  C('D1', 'donnees_regionales', '📊', 150, 'Lire le tableau régional', 'Read the regional table', {
+    pret: true, compte: 'hopital.a@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez les données.', 'Open data.') }],
+    objectif: ST('Vous saurez lire le tableau régional : passages, transferts, NSA, places libres.', 'You will know how to read the regional table: visits, transfers, ALC, free places.'),
+    scenes: [
+      { ecran: 'donnees', sous: 'tableau', cible: '#onglets button[data-v="donnees"]', st: ST('Ouvrez Données, sous-onglet « Tableau régional ».', 'Open Data, “Regional table” sub-tab.') },
+      { ecran: 'donnees', sous: 'tableau', cible: '#v-donnees table', st: ST('Établissements actifs en premier ; chaque transfert compte une fois, à son origine.', 'Active facilities first; each transfer counts once, at its origin.') },
+      { ecran: 'donnees', sous: 'tableau', cible: '#v-donnees', st: ST('Choisissez la période ; les totaux incluent les cellules « < 5 ».', 'Choose the period; totals include the “< 5” cells.') },
+    ],
+    quiz: [
+      Q('Un transfert compte :', 'A transfer counts:', ['Une fois, à son origine', 'Deux fois', 'Pas du tout'], ['Once, at its origin', 'Twice', 'Not at all'], 0),
+      Q('Les établissements sans donnée :', 'Facilities with no data:', ['Sont repliés à la fin', 'Sont en tête', 'Sont supprimés'], ['Are folded at the end', 'Are first', 'Are deleted'], 0),
+      Q('Voit-on des références patient ?', 'Are patient references shown?', ['Oui', 'Non'], ['Yes', 'No'], 1),
+    ] }),
   C('D2', 'donnees_regionales', '📊', 120, 'Listes d’attente et export', 'Waiting lists and export', {
     pret: true, compte: 'hopital.a@demo.arrimo',
     exercice: [{ scene: 1, consigne: ST('Ouvrez Données.', 'Open Data.') }, { scene: 4, consigne: ST('Exportez en CSV.', 'Export as CSV.') }],
@@ -308,11 +555,50 @@ const CAPSULES = [
       Q('L’export se fait en :', 'Export is in:', ['CSV', 'PDF seulement', 'Rien'], ['CSV', 'PDF only', 'Nothing'], 0),
     ] }),
   // ---------------------------------------------------------------- 🆘 Mode crise
-  C('K1', 'mode_crise', '🆘', 150, 'Déclencher une évacuation', 'Start an evacuation'),
-  C('K2', 'mode_crise', '🆘', 180, 'Confirmer les lieux et suivre l’évacuation', 'Confirm places and follow the evacuation'),
+  C('K1', 'mode_crise', '🆘', 150, 'Déclencher une évacuation', 'Start an evacuation', {
+    pret: true, compte: 'coordination.saint-laurent@chsld.example.invalid',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez le mode crise.', 'Open crisis mode.') }, { scene: 3, consigne: ST('Déclenchez l’évacuation.', 'Start the evacuation.') }],
+    objectif: ST('Vous saurez déclencher une évacuation, une décision humaine.', 'You will know how to start an evacuation, a human decision.'),
+    scenes: [
+      { ecran: 'crise', cible: '#onglets button[data-v="crise"]', st: ST('Ouvrez Mode crise.', 'Open Crisis mode.') },
+      { ecran: 'crise', cible: '#v-crise select', st: ST('Choisissez le motif : incendie, inondation, panne…', 'Choose the reason: fire, flood, outage…') },
+      { ecran: 'crise', cible: '#v-crise .btn', st: ST('Déclenchez : un lieu est proposé pour chaque résident, à confirmer.', 'Start it: a place is suggested for each resident, to confirm.') },
+    ],
+    quiz: [
+      Q('Qui déclenche une évacuation ?', 'Who starts an evacuation?', ['Une personne habilitée', 'Arrimo seul', 'Le CCS'], ['An authorized person', 'Arrimo alone', 'The communication centre'], 0),
+      Q('Après le déclenchement :', 'After starting:', ['Un lieu est proposé pour chaque résident', 'Tout est automatique', 'Rien'], ['A place is suggested for each resident', 'Everything is automatic', 'Nothing'], 0),
+      Q('La direction régionale :', 'The regional authority:', ['Voit l’évacuation', 'N’en sait rien'], ['Sees the evacuation', 'Knows nothing'], 0),
+    ] }),
+  C('K2', 'mode_crise', '🆘', 180, 'Confirmer les lieux et suivre l’évacuation', 'Confirm places and follow the evacuation', {
+    pret: true, compte: 'coordination.erables@chsld.example.invalid',
+    exercice: [{ scene: 2, consigne: ST('Confirmez le lieu d’un résident.', 'Confirm a resident’s place.') }],
+    objectif: ST('Vous saurez confirmer le lieu de chaque résident et suivre départs et arrivées.', 'You will know how to confirm each resident’s place and follow departures and arrivals.'),
+    scenes: [
+      { ecran: 'crise', cible: '#v-crise table', st: ST('Pour chaque résident, un lieu est proposé : le plus proche qui convient.', 'For each resident, a place is suggested: the nearest suitable one.') },
+      { ecran: 'crise', cible: '#v-crise table .btn', st: ST('Confirmez le lieu ; la place est réservée par les règles des lits.', 'Confirm the place; it is reserved by the bed rules.') },
+      { ecran: 'crise', cible: '#v-crise', st: ST('Suivez les départs, les arrivées et les familles avisées, résident par résident.', 'Follow departures, arrivals and families notified, resident by resident.') },
+    ],
+    quiz: [
+      Q('Le lieu proposé est :', 'The suggested place is:', ['À confirmer par l’équipe', 'Définitif', 'Secret'], ['To be confirmed by the team', 'Final', 'Secret'], 0),
+      Q('On suit :', 'You follow:', ['Départ, arrivée, famille avisée', 'Rien', 'Les salaires'], ['Departure, arrival, family notified', 'Nothing', 'Salaries'], 0),
+      Q('Les familles reçoivent :', 'Families receive:', ['Une information sans détail médical', 'Le dossier', 'Rien'], ['Information with no medical detail', 'The record', 'Nothing'], 0),
+    ] }),
   // ---------------------------------------------------------------- 👨‍👩‍👧 Famille
   C('F1', 'portail_proches', '👨‍👩‍👧', 120, 'Le portail des proches', 'The relatives’ portal'),
-  C('F2', 'portail_proches', '👨‍👩‍👧', 120, 'Inviter un proche', 'Invite a relative'),
+  C('F2', 'portail_proches', '👨‍👩‍👧', 120, 'Inviter un proche', 'Invite a relative', {
+    pret: true, compte: 'coordination.erables@chsld.example.invalid',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez les résidents.', 'Open residents.') }],
+    objectif: ST('Vous saurez inviter un proche autorisé au portail des familles.', 'You will know how to invite an authorized relative to the family portal.'),
+    scenes: [
+      { ecran: 'c-residents', cible: '#onglets button[data-v="c-residents"]', st: ST('Ouvrez Résidents, puis la fiche du résident.', 'Open Residents, then the resident’s record.') },
+      { ecran: 'c-residents', cible: '#v-c-residents', st: ST('Dans les contacts, invitez le proche autorisé : il reçoit un lien personnel.', 'In contacts, invite the authorized relative: they receive a personal link.') },
+      { ecran: 'c-residents', cible: '#v-c-residents', st: ST('Le proche ne voit que les informations qu’on lui permet de voir.', 'The relative only sees the information they are allowed to see.') },
+    ],
+    quiz: [
+      Q('Le proche voit :', 'The relative sees:', ['Les informations autorisées', 'Tout le dossier', 'Les autres résidents'], ['Authorized information', 'The whole record', 'Other residents'], 0),
+      Q('L’invitation est :', 'The invitation is:', ['Personnelle', 'Publique', 'Partagée'], ['Personal', 'Public', 'Shared'], 0),
+      Q('Qui invite ?', 'Who invites?', ['L’équipe de la résidence', 'Arrimo', 'N’importe qui'], ['The residence team', 'Arrimo', 'Anyone'], 0),
+    ] }),
   // ---------------------------------------------------------------- Console SH
   C('SH1', null, '🧩', 150, 'Activer un module et gérer les comptes', 'Turn on a module and manage accounts'),
   // ---------------------------------------------------------------- ✨🧭👁️ Transversal

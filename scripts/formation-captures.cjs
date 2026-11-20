@@ -19,11 +19,12 @@ const W = 1180; const H = 740;
       const ctx = await nav.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 1.5, colorScheme: 'light', reducedMotion: 'reduce' }); const pg = await ctx.newPage();
       await pg.addInitScript((l) => { try { localStorage.setItem('arrimo-langue', l); } catch {} }, L);
       await pg.goto(BASE); await pg.fill('#c-email', c.compte); await pg.fill('#c-mdp', MDP); await pg.press('#c-mdp', 'Enter');
-      await pg.waitForFunction(() => document.body.dataset.pret === '1' || location.pathname === '/secours' && document.querySelector('#onglets-s button'), null, { timeout: 30000 }); if (await pg.locator('#b-premiers-pas-ok').isVisible().catch(() => false)) await pg.click('#b-premiers-pas-ok');
+      await pg.waitForFunction(() => document.body.dataset.pret === '1' || (location.pathname === '/secours' && document.querySelector('#onglets-s button')) || (location.pathname === '/intervenant' && document.querySelector('#iv-contenu article, #iv-contenu .note')), null, { timeout: 30000 }); if (await pg.locator('#b-premiers-pas-ok').isVisible().catch(() => false)) await pg.click('#b-premiers-pas-ok');
       await pg.evaluate(() => { document.documentElement.dataset.theme = 'clair'; });
       fs.mkdirSync(path.join(SORTIE, c.code), { recursive: true });
       for (const [i, s] of c.scenes.entries()) {
-        if (s.onglet) { await pg.evaluate((o) => document.querySelector(`#onglets-s [data-onglet="${o}"]`)?.click(), s.onglet); await pg.waitForTimeout(1600); }
+        if (s.page) { if (new URL(pg.url()).pathname !== s.page) await pg.goto(BASE + s.page); await pg.waitForTimeout(1500); }
+        else if (s.onglet) { await pg.evaluate((o) => document.querySelector(`#onglets-s [data-onglet="${o}"]`)?.click(), s.onglet); await pg.waitForTimeout(1600); }
         else { await pg.evaluate((v) => { const b = document.querySelector(`#onglets button[data-v="${v}"]`); if (b) b.click(); }, s.ecran); await pg.waitForTimeout(1600); }
         if (s.sous) { await pg.evaluate(([v, so]) => document.querySelector(`#v-${v} .module-sous-onglets [data-so="${so}"]`)?.click(), [s.ecran, s.sous]); await pg.waitForTimeout(400); }
         const r = await pg.evaluate((sel) => {
