@@ -43,14 +43,14 @@
     const d = await api('GET', `/eviter?etablissement_id=${etat.ctx}`);
     if (!d) return;
     v.innerHTML = `<div class="entete"><div><h2>${A('titre')}</h2><p class="note">${A('intro')}</p></div></div>
-      <section class="panneau-c"><h3>${A('verifications')}</h3>${d.verifications.length ? `<ul class="cases">${d.verifications.map((x, i) => `<li><label class="case"><input type="checkbox" id="ev-v${i}"> ${esc(x)}</label></li>`).join('')}</ul>` : `<p class="note">${A('vide')}</p>`}
+      <section class="panneau-c"><h3>${A('verifications')}</h3>${d.verifications.length ? `<div class="pile">${d.verifications.map((x, i) => `<label class="case"><input type="checkbox" id="ev-v${i}"> ${esc(x)}</label>`).join('')}</div>` : `<p class="note">${A('vide')}</p>`}
         <h3>${A('alternatives')}</h3>${d.alternatives.length ? `<ul class="liste-simple">${d.alternatives.map((a) => `<li><strong>${A(`a_${a.code}`)}</strong>${a.contact ? ` · ${esc(a.contact)}` : ''} <button class="btn" data-ev-evite="${a.code}">${A('evite_grace')}</button></li>`).join('')}</ul>` : `<p class="note">${A('vide_alt')}</p>`}
-        <p class="note">${A('jamais_bloquant')}</p><button class="btn" id="ev-fait">${A('transfert_fait')}</button></section>
+        <p class="note">${A('jamais_bloquant')}</p><div class="ligne"><button class="btn" id="ev-fait">${A('transfert_fait')}</button></div></section>
       <section class="panneau-c"><h3>${A('mois_titre')}</h3><p>${A('mois', { e: d.mois.evites, f: d.mois.faits })}</p></section>
       ${d.peut_regler ? `<section class="panneau-c"><h3>${A('regler')}</h3><p class="note">${A('regler_aide')}</p>
         <div class="champ"><label class="lbl" for="ev-verifs">${A('verifications')}</label><textarea id="ev-verifs" rows="5">${esc(d.verifications.join('\n'))}</textarea></div>
         ${d.alternatives_possibles.map((c) => { const a = d.alternatives.find((x) => x.code === c); return `<div class="ligne"><label class="case"><input type="checkbox" data-ev-alt="${c}"${a ? ' checked' : ''}> ${A(`a_${c}`)}</label><input data-ev-contact="${c}" value="${esc(a?.contact || '')}" placeholder="${A('contact')}" aria-label="${A('contact')}" maxlength="120"></div>`; }).join('')}
-        <button class="btn pri" id="ev-enregistrer">${A('enregistrer')}</button></section>` : ''}`;
+        <div class="ligne"><button class="btn pri" id="ev-enregistrer">${A('enregistrer')}</button></div></section>` : ''}`;
     v.querySelectorAll('[data-ev-evite]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', '/eviter/decisions', { etablissement_id: etat.ctx, decision: 'transfert_evite', alternative: b.dataset.evEvite }), t('eviter.note')); });
     $('#ev-fait').onclick = (e) => agir(e.currentTarget, () => api('POST', '/eviter/decisions', { etablissement_id: etat.ctx, decision: 'transfert_fait' }), t('eviter.note'));
     if ($('#ev-enregistrer')) $('#ev-enregistrer').onclick = (e) => agir(e.currentTarget, () => api('PUT', '/eviter', { etablissement_id: etat.ctx, version: d.version,
