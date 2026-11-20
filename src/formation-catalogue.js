@@ -15,7 +15,21 @@ const Q = (fr, en, choixFr, choixEn, bonne) => ({ q: { fr, en }, choix: { fr: ch
 
 const CAPSULES = [
   // ---------------------------------------------------------------- 🚑 Secours
-  C('S1', 'liaison_secours', '🚑', 150, 'Envoyer une préalerte', 'Send a pre-alert'),
+  C('S1', 'liaison_secours', '🚑', 150, 'Envoyer une préalerte', 'Send a pre-alert', {
+    pret: true, compte: 'ambulance.demo@demo.arrimo',
+    objectif: ST('Vous saurez prévenir l’urgence de destination en un geste, même si le réseau coupe.', 'You will know how to warn the destination emergency department in one tap, even if the network drops.'),
+    scenes: [
+      { onglet: 'mission', cible: '[data-onglet="mission"]', st: ST('Ouvrez « Mission » : tout se fait sur un seul écran, pensé pour le téléphone.', 'Open “Mission”: everything happens on one screen, designed for the phone.') },
+      { onglet: 'mission', cible: '[data-choix="destination"]', st: ST('Choisissez l’urgence de destination. Son statut déclaré s’affiche à côté.', 'Choose the destination emergency department. Its declared status is shown alongside.') },
+      { onglet: 'mission', cible: '[data-choix="priorite"]', st: ST('Indiquez la priorité que vous déclarez, puis la catégorie : jamais de diagnostic.', 'Set the priority you declare, then the category: never a diagnosis.') },
+      { onglet: 'mission', cible: '[data-act="envoyer"]', st: ST('Envoyez. Sans réseau, la préalerte attend et part dès que le réseau revient, sans doublon.', 'Send. With no network, the pre-alert waits and goes out as soon as the network is back, with no duplicate.') },
+      { onglet: 'mission', cible: '#contenu', st: ST('Vous voyez ensuite quand l’urgence l’a reçue, puis prise en compte.', 'You then see when the department received it, then acknowledged it.') },
+    ],
+    quiz: [
+      Q('La préalerte contient :', 'The pre-alert contains:', ['Le diagnostic du patient', 'La priorité déclarée et une catégorie, sans diagnostic', 'Le nom du patient'], ['The patient’s diagnosis', 'The declared priority and a category, no diagnosis', 'The patient’s name'], 1),
+      Q('Le réseau coupe au moment d’envoyer :', 'The network drops as you send:', ['La préalerte est perdue', 'Elle part dès que le réseau revient, sans doublon', 'Il faut tout recommencer'], ['The pre-alert is lost', 'It goes out as soon as the network is back, with no duplicate', 'You must start over'], 1),
+      Q('Qui décide de la destination ?', 'Who decides the destination?', ['Arrimo', 'L’équipe et les protocoles applicables', 'L’urgence'], ['Arrimo', 'The crew and the applicable protocols', 'The emergency department'], 1),
+    ] }),
   C('S2', 'liaison_secours', '🚑', 180, 'Prendre en compte une préalerte et confirmer le bon véhicule', 'Acknowledge a pre-alert and confirm the right vehicle', {
     pret: true, compte: 'hopital.a@demo.arrimo', chrono_test_s: 60,
     objectif: ST('Vous saurez prendre en compte une ambulance annoncée, vérifier l’unité et la plaque à l’arrivée, et réorienter avec un motif.',
@@ -89,14 +103,39 @@ const CAPSULES = [
       Q('Arrimo peut-il déduire que votre urgence est fermée ?', 'Can Arrimo infer that your department is closed?', ['Oui', 'Non, jamais'], ['Yes', 'No, never'], 1),
     ] }),
   C('U2', 'urgences_direct', '🚨', 150, 'Planifier une fermeture', 'Plan a closure'),
-  C('U3', 'urgences_direct', '🚨', 120, 'Consulter les urgences avant de partir', 'Check emergency departments before leaving'),
+  C('U3', 'urgences_direct', '🚨', 120, 'Consulter les urgences avant de partir', 'Check emergency departments before leaving', {
+    pret: true, compte: 'ambulance.demo@demo.arrimo',
+    objectif: ST('Vous saurez voir l’état déclaré des urgences de la région avant de partir.', 'You will know how to see the declared status of the region’s emergency departments before leaving.'),
+    scenes: [
+      { onglet: 'urgences', cible: '[data-onglet="urgences"]', st: ST('Ouvrez « Urgences » : les urgences de votre région, de la plus proche à la plus loin.', 'Open “Emergencies”: your region’s departments, nearest first.') },
+      { onglet: 'urgences', cible: '#contenu', st: ST('Chaque urgence montre son statut déclaré, l’heure et les fermetures planifiées.', 'Each department shows its declared status, the time and planned closures.') },
+      { onglet: 'urgences', cible: '#contenu', st: ST('Un statut ancien est signalé comme périmé : vérifiez avant de vous y fier.', 'An old status is flagged as stale: check before relying on it.') },
+    ],
+    quiz: [
+      Q('Le statut d’une urgence est déclaré par :', 'A department’s status is declared by:', ['L’urgence elle-même', 'Arrimo', 'L’ambulancier'], ['The department itself', 'Arrimo', 'The paramedic'], 0),
+      Q('Un statut marqué « périmé » :', 'A status marked “stale”:', ['Est fiable', 'Est ancien : à vérifier', 'Veut dire fermé'], ['Is reliable', 'Is old: check it', 'Means closed'], 1),
+      Q('Les urgences sont classées :', 'Departments are listed:', ['Par ordre alphabétique', 'De la plus proche à la plus loin', 'Au hasard'], ['Alphabetically', 'Nearest first', 'Randomly'], 1),
+    ] }),
   // ---------------------------------------------------------------- 🔁 Transferts
   C('T1', null, '🔁', 180, 'Demander un transfert', 'Request a transfer'),
   C('T2', null, '🔁', 150, 'Accepter ou refuser un transfert avec motif', 'Accept or decline a transfer with a reason'),
   C('T3', 'transferts_suivi', '🔁', 150, 'Fiche du transfert, délais et alertes', 'Transfer sheet, timelines and alerts'),
   C('T4', 'transferts_suivi', '🔁', 120, 'Rapatriement proposé', 'Suggested repatriation'),
   // ---------------------------------------------------------------- 🚐 Transport
-  C('R1', 'transport_planifie', '🚐', 150, 'Réserver un transport non urgent', 'Book a non-urgent transport'),
+  C('R1', 'transport_planifie', '🚐', 150, 'Réserver un transport non urgent', 'Book a non-urgent transport', {
+    pret: true, compte: 'hopital.a@demo.arrimo',
+    objectif: ST('Vous saurez réserver un retour à domicile ou un départ NSA, et suivre la plage confirmée.', 'You will know how to book a return home or an ALC departure, and follow the confirmed time slot.'),
+    scenes: [
+      { ecran: 'transports-planifies', cible: '#onglets button[data-v="transports-planifies"]', st: ST('Ouvrez Transports : les transports non urgents de votre établissement.', 'Open Transports: your facility’s non-urgent transports.') },
+      { ecran: 'transports-planifies', cible: '#v-transports-planifies .btn.pri', st: ST('Cliquez « Réserver un transport » : motif, référence, destination, plage souhaitée, type de véhicule.', 'Click “Book a transport”: reason, reference, destination, requested slot, vehicle type.') },
+      { ecran: 'transports-planifies', cible: '#v-transports-planifies table', st: ST('Le transporteur confirme une plage ou refuse avec un motif ; vous le voyez ici.', 'The carrier confirms a slot or declines with a reason; you see it here.') },
+      { ecran: 'transports-planifies', cible: '[data-sillage]', st: ST('Le bouton Sillage suit le transport jusqu’à l’arrivée.', 'The Trail button follows the transport to arrival.') },
+    ],
+    quiz: [
+      Q('Le transporteur voit :', 'The carrier sees:', ['Le diagnostic', 'La référence et les lieux seulement', 'Le dossier complet'], ['The diagnosis', 'The reference and places only', 'The full record'], 1),
+      Q('Une réservation pour dans 3 heures :', 'A booking 3 hours ahead:', ['Est refusée', 'Est acceptée avec un avertissement : réservez la veille si possible', 'Est automatique'], ['Is refused', 'Is accepted with a warning: book the day before if possible', 'Is automatic'], 1),
+      Q('Le transporteur refuse :', 'The carrier declines:', ['Sans explication', 'Avec un motif dans une liste', 'Par téléphone seulement'], ['With no explanation', 'With a reason from a list', 'By phone only'], 1),
+    ] }),
   C('R2', 'transport_planifie', '🚐', 120, 'Confirmer ou refuser une plage de transport', 'Confirm or decline a transport time slot'),
   // ---------------------------------------------------------------- 🏥 Hôpital et NSA
   C('H1', null, '🛏️', 150, 'Lits : réserver, occuper, libérer', 'Beds: reserve, occupy, release', {
@@ -127,18 +166,107 @@ const CAPSULES = [
       Q('OG peut-il préparer une demande ?', 'Can OG prepare a request?', ['Oui, une personne la confirme', 'Non', 'Oui, il l’envoie seul'], ['Yes, a person confirms it', 'No', 'Yes, it sends it alone'], 0),
     ] }),
   C('H3', 'nettoyage', '🧽', 120, 'Nettoyage prioritaire', 'Priority cleaning'),
-  C('H4', 'nsa', '🏥', 180, 'Épisode NSA et orientation', 'ALC episode and orientation'),
-  C('H5', 'nsa', '🏥', 180, 'Places compatibles et demande d’hébergement', 'Compatible places and placement request'),
+  C('H4', 'nsa', '🏥', 180, 'Épisode NSA et orientation', 'ALC episode and orientation', {
+    pret: true, compte: 'hopital.a@demo.arrimo',
+    objectif: ST('Vous saurez déclarer un patient NSA et son orientation, sans diagnostic.', 'You will know how to declare an ALC patient and their orientation, with no diagnosis.'),
+    scenes: [
+      { ecran: 'nsa', cible: '#onglets button[data-v="nsa"]', st: ST('Ouvrez NSA : les patients qui n’ont plus besoin de soins aigus et attendent un autre milieu.', 'Open ALC: patients who no longer need acute care and wait for another setting.') },
+      { ecran: 'nsa', cible: '#v-nsa', st: ST('La date de début est saisie par l’équipe et n’est jamais remise à zéro.', 'The start date is entered by the team and never reset.') },
+      { ecran: 'nsa', cible: '#v-nsa', st: ST('Choisissez l’orientation (CHSLD, RPA, RI, soins palliatifs…) et les besoins en catégories.', 'Choose the orientation (long-term care, residence, palliative care…) and needs as categories.') },
+      { ecran: 'nsa', cible: '#v-nsa', st: ST('Les jours NSA s’additionnent et alimentent les listes d’attente régionales.', 'ALC days add up and feed the regional waiting lists.') },
+    ],
+    quiz: [
+      Q('La date de début NSA :', 'The ALC start date:', ['Est remise à zéro à chaque transfert', 'Est saisie par l’équipe et conservée', 'Est calculée par Arrimo'], ['Resets at each transfer', 'Is entered by the team and kept', 'Is calculated by Arrimo'], 1),
+      Q('Les besoins sont saisis :', 'Needs are entered:', ['En texte libre', 'En catégories fermées', 'Avec le diagnostic'], ['As free text', 'As closed categories', 'With the diagnosis'], 1),
+      Q('L’orientation sert à :', 'The orientation is used to:', ['Trouver les places compatibles', 'Facturer', 'Rien'], ['Find compatible places', 'Bill', 'Nothing'], 0),
+    ] }),
+  C('H5', 'nsa', '🏥', 180, 'Places compatibles et demande d’hébergement', 'Compatible places and placement request', {
+    pret: true, compte: 'hopital.a@demo.arrimo',
+    objectif: ST('Vous saurez trouver les places compatibles et envoyer une demande d’hébergement.', 'You will know how to find compatible places and send a placement request.'),
+    scenes: [
+      { ecran: 'nsa', cible: '#v-nsa', st: ST('Depuis le patient NSA, ouvrez « Places compatibles ».', 'From the ALC patient, open “Compatible places”.') },
+      { ecran: 'nsa', cible: '#v-nsa', st: ST('Les trois meilleures places viennent en tête, avec la raison : besoins couverts, distance, préférences.', 'The three best places come first, with the reason: needs covered, distance, preferences.') },
+      { ecran: 'nsa', cible: '#v-nsa', st: ST('Une ressource écartée l’est avec sa raison, par exemple « pas d’unité sécurisée ».', 'An excluded resource comes with its reason, for example “no secure unit”.') },
+      { ecran: 'nsa', cible: '#v-nsa', st: ST('« Envoyer la demande » reste votre décision ; la ressource répond dans son délai configuré.', '“Send the request” stays your decision; the resource replies within its configured delay.') },
+    ],
+    quiz: [
+      Q('Le classement des places est :', 'The place ranking is:', ['Une décision automatique', 'Une proposition expliquée', 'Secret'], ['An automatic decision', 'An explained suggestion', 'Secret'], 1),
+      Q('Une ressource écartée :', 'An excluded resource:', ['Disparaît sans explication', 'Apparaît avec la raison de son exclusion', 'Est supprimée'], ['Disappears without explanation', 'Appears with the reason it was excluded', 'Is deleted'], 1),
+      Q('Qui envoie la demande ?', 'Who sends the request?', ['OG, seul', 'Une personne de l’équipe', 'La ressource'], ['OG, alone', 'A team member', 'The resource'], 1),
+    ] }),
   C('H6', null, '🏥', 150, 'Congés prévus et vigilance des lits', 'Planned discharges and bed watch'),
   // ---------------------------------------------------------------- 🏡 Hébergement
   C('E1', null, '🏡', 150, 'Résidents et chambres', 'Residents and rooms'),
-  C('E2', 'demandes_hebergement', '🏡', 180, 'Recevoir une demande d’hébergement', 'Receive a placement request'),
-  C('E3', 'hospitalisations', '🏡', 150, 'Départ vers l’hôpital et retour', 'Departure to hospital and return'),
+  C('E2', null, '🏡', 180, 'Recevoir une demande d’hébergement', 'Receive a placement request', {
+    pret: true, compte: 'coordination.erables@chsld.example.invalid',
+    objectif: ST('Vous saurez traiter une demande d’hébergement : documents, place proposée, réponse motivée.', 'You will know how to handle a placement request: documents, place offered, reasoned reply.'),
+    scenes: [
+      { ecran: 'c-demandes', cible: '#onglets button[data-v="c-demandes"]', st: ST('Ouvrez Demandes d’hébergement : les demandes reçues des hôpitaux.', 'Open Placement requests: requests received from hospitals.') },
+      { ecran: 'c-demandes', cible: '#v-c-demandes', st: ST('Vérifiez les documents ; s’il en manque, demandez-les en un clic.', 'Check the documents; if some are missing, ask for them in one click.') },
+      { ecran: 'c-demandes', cible: '#v-c-demandes', st: ST('Proposez une place libre ou à venir, ou refusez avec un motif de la liste.', 'Offer a free or upcoming place, or decline with a reason from the list.') },
+      { ecran: 'c-demandes', cible: '#v-c-demandes', st: ST('L’hôpital confirme avec l’usager ou la famille ; vous préparez l’arrivée.', 'The hospital confirms with the patient or family; you prepare the arrival.') },
+    ],
+    quiz: [
+      Q('Il manque un document :', 'A document is missing:', ['Je refuse la demande', 'Je le demande en un clic', 'J’attends sans rien dire'], ['I decline the request', 'I ask for it in one click', 'I wait silently'], 1),
+      Q('Un refus se fait :', 'A decline is made:', ['Avec un motif de la liste', 'Sans motif', 'Par courriel'], ['With a reason from the list', 'With no reason', 'By email'], 0),
+      Q('Qui confirme l’acceptation finale ?', 'Who confirms the final acceptance?', ['La ressource seule', 'L’hôpital, avec l’usager ou la famille', 'Arrimo'], ['The resource alone', 'The hospital, with the patient or family', 'Arrimo'], 1),
+    ] }),
+  C('E3', null, '🏡', 150, 'Départ vers l’hôpital et retour', 'Departure to hospital and return', {
+    pret: true, compte: 'coordination.erables@chsld.example.invalid',
+    objectif: ST('Vous saurez suivre un résident parti à l’hôpital et préparer son retour sans perdre sa chambre.', 'You will know how to follow a resident gone to hospital and prepare their return without losing their room.'),
+    scenes: [
+      { ecran: 'c-mouvements', cible: '#onglets button[data-v="c-mouvements"]', st: ST('Ouvrez Mouvements : les résidents partis à l’hôpital.', 'Open Movements: residents gone to hospital.') },
+      { ecran: 'c-mouvements', cible: '#v-c-mouvements', st: ST('La chambre reste attribuée au résident pendant son absence.', 'The room stays assigned to the resident while away.') },
+      { ecran: 'c-mouvements', cible: '#v-c-mouvements', st: ST('Vous voyez le dernier statut confirmé par l’hôpital, sans téléphoner.', 'You see the last status confirmed by the hospital, without calling.') },
+      { ecran: 'c-mouvements', cible: '#v-c-mouvements', st: ST('Au retour, confirmez l’arrivée : le résident retrouve son lit, sans nouveau dossier.', 'On return, confirm the arrival: the resident gets their bed back, with no new file.') },
+    ],
+    quiz: [
+      Q('Pendant l’hospitalisation, la chambre :', 'During the hospital stay, the room:', ['Est libérée', 'Reste attribuée au résident', 'Est vendue'], ['Is released', 'Stays assigned to the resident', 'Is sold'], 1),
+      Q('Pour connaître l’état du résident à l’hôpital :', 'To know the resident’s status at the hospital:', ['Je téléphone chaque jour', 'Je lis le dernier statut confirmé', 'Je ne peux pas'], ['I call daily', 'I read the last confirmed status', 'I cannot'], 1),
+      Q('Au retour :', 'On return:', ['Un nouveau dossier est créé', 'Je confirme l’arrivée ; il retrouve son lit', 'Rien'], ['A new file is created', 'I confirm the arrival; they get their bed back', 'Nothing'], 1),
+    ] }),
   C('E4', 'taches', '🏡', 120, 'Tâches et entretien des chambres', 'Tasks and room upkeep'),
   // ---------------------------------------------------------------- 🛏️ Bourse
-  C('B1', 'bourse_places', '🛏️', 150, 'Chercher une place avec les filtres', 'Search for a place with filters'),
-  C('B2', 'bourse_places', '🛏️', 120, 'Fiche de transfert d’une page', 'One-page transfer sheet'),
-  C('B3', 'bourse_places', '🛏️', 120, 'Inviter un professionnel externe', 'Invite an external professional'),
+  C('B1', 'bourse_places', '🛏️', 150, 'Chercher une place avec les filtres', 'Search for a place with filters', {
+    pret: true, compte: 'hopital.a@demo.arrimo',
+    objectif: ST('Vous saurez trouver la place qui convient et comprendre son classement.', 'You will know how to find the right place and understand its ranking.'),
+    scenes: [
+      { ecran: 'bourse', sous: 'places', cible: '#onglets button[data-v="bourse"]', st: ST('Ouvrez la Bourse : toutes les places libres et à venir, au même endroit.', 'Open the Exchange: every free and upcoming place, in one spot.') },
+      { ecran: 'bourse', sous: 'places', cible: '#v-bourse select', st: ST('Filtrez par type de ressource et par distance.', 'Filter by resource type and distance.') },
+      { ecran: 'bourse', sous: 'places', cible: '#v-bourse fieldset', st: ST('Cochez les besoins : lève-personne, unité sécurisée, oxygène… Le classement change.', 'Tick the needs: lift, secure unit, oxygen… The ranking changes.') },
+      { ecran: 'bourse', sous: 'places', cible: '#v-bourse table', st: ST('Chaque score sur 100 est expliqué : besoins couverts (60) et proximité (40).', 'Each score out of 100 is explained: needs covered (60) and proximity (40).') },
+    ],
+    quiz: [
+      Q('Le score d’une place tient compte :', 'A place’s score takes into account:', ['De l’abonnement de la ressource', 'Des besoins couverts et de la proximité', 'Du hasard'], ['The resource’s subscription', 'Needs covered and proximity', 'Chance'], 1),
+      Q('Cocher « unité sécurisée » :', 'Ticking “secure unit”:', ['Ne change rien', 'Fait monter les ressources qui l’ont', 'Supprime les autres'], ['Changes nothing', 'Moves up resources that have it', 'Deletes the others'], 1),
+      Q('Un invité voit-il le même ordre ?', 'Does a guest see the same order?', ['Oui, exactement', 'Non'], ['Yes, exactly', 'No'], 0),
+    ] }),
+  C('B2', 'bourse_places', '🛏️', 120, 'Fiche de transfert d’une page', 'One-page transfer sheet', {
+    pret: true, compte: 'hopital.a@demo.arrimo',
+    objectif: ST('Vous saurez imprimer une fiche de transfert claire, sans diagnostic.', 'You will know how to print a clear transfer sheet, with no diagnosis.'),
+    scenes: [
+      { ecran: 'bourse', sous: 'fiche', cible: '#v-bourse [data-so="fiche"]', st: ST('Ouvrez le sous-onglet « Fiche de transfert ».', 'Open the “Transfer sheet” sub-tab.') },
+      { ecran: 'bourse', sous: 'fiche', cible: '#v-bourse', st: ST('Choisissez le patient : la fiche reprend sa tranche d’âge, ses besoins en catégories, l’orientation et la date souhaitée.', 'Choose the patient: the sheet shows age range, needs as categories, orientation and desired date.') },
+      { ecran: 'bourse', sous: 'fiche', cible: '#v-bourse', st: ST('Imprimez-la ou joignez-la : une page, sans diagnostic.', 'Print or attach it: one page, no diagnosis.') },
+    ],
+    quiz: [
+      Q('La fiche de transfert contient :', 'The transfer sheet contains:', ['Le diagnostic', 'Les besoins en catégories, sans diagnostic', 'Le dossier complet'], ['The diagnosis', 'Needs as categories, no diagnosis', 'The full record'], 1),
+      Q('L’âge apparaît :', 'Age appears:', ['En tranche d’âge', 'En date de naissance', 'Pas du tout'], ['As an age range', 'As a date of birth', 'Not at all'], 0),
+      Q('La fiche fait :', 'The sheet is:', ['Une page', 'Dix pages', 'Un fichier vidéo'], ['One page', 'Ten pages', 'A video file'], 0),
+    ] }),
+  C('B3', 'bourse_places', '🛏️', 120, 'Inviter un professionnel externe', 'Invite an external professional', {
+    pret: true, compte: 'hopital.a@demo.arrimo',
+    objectif: ST('Vous saurez donner un accès invité nominatif, limité dans le temps et révocable.', 'You will know how to give a named guest access, time-limited and revocable.'),
+    scenes: [
+      { ecran: 'bourse', sous: 'invites', cible: '#v-bourse [data-so="invites"]', st: ST('Ouvrez le sous-onglet « Accès invités ».', 'Open the “Guest access” sub-tab.') },
+      { ecran: 'bourse', sous: 'invites', cible: '#v-bourse', st: ST('Indiquez le nom et le courriel du professionnel : il reçoit un lien valable 7 jours.', 'Enter the professional’s name and email: they receive a link valid for 7 days.') },
+      { ecran: 'bourse', sous: 'invites', cible: '#v-bourse', st: ST('Vous pouvez révoquer l’accès à tout moment ; chaque consultation est journalisée.', 'You can revoke access at any time; every view is logged.') },
+    ],
+    quiz: [
+      Q('Un lien invité est valable :', 'A guest link is valid for:', ['7 jours', 'Pour toujours', '1 heure'], ['7 days', 'Forever', '1 hour'], 0),
+      Q('L’accès invité peut être :', 'Guest access can be:', ['Révoqué à tout moment', 'Jamais révoqué', 'Partagé librement'], ['Revoked at any time', 'Never revoked', 'Freely shared'], 0),
+      Q('Les consultations d’un invité sont :', 'A guest’s views are:', ['Journalisées', 'Invisibles', 'Effacées'], ['Logged', 'Invisible', 'Erased'], 0),
+    ] }),
   // ---------------------------------------------------------------- ✅ Visites confirmées
   C('V1', 'visites_confirmees', '✅', 150, 'Planifier les visites', 'Plan visits'),
   C('V2', 'visites_confirmees', '✅', 120, 'Confirmer son arrivée et son départ', 'Confirm arrival and departure'),
@@ -148,7 +276,20 @@ const CAPSULES = [
   C('A2', 'eviter_transferts', '🛡️', 120, 'Écrire la liste de l’établissement', 'Write the facility’s checklist'),
   // ---------------------------------------------------------------- 📊 Données
   C('D1', 'donnees_regionales', '📊', 150, 'Lire le tableau régional', 'Read the regional table'),
-  C('D2', 'donnees_regionales', '📊', 120, 'Listes d’attente et export', 'Waiting lists and export'),
+  C('D2', 'donnees_regionales', '📊', 120, 'Listes d’attente et export', 'Waiting lists and export', {
+    pret: true, compte: 'hopital.a@demo.arrimo',
+    objectif: ST('Vous saurez lire les listes d’attente par type de ressource et exporter les données.', 'You will know how to read waiting lists by resource type and export the data.'),
+    scenes: [
+      { ecran: 'donnees', sous: 'attente', cible: '#onglets button[data-v="donnees"]', st: ST('Ouvrez Données, sous-onglet « Listes d’attente ».', 'Open Data, “Waiting lists” sub-tab.') },
+      { ecran: 'donnees', sous: 'attente', cible: '#v-donnees table', st: ST('Pour chaque type de ressource : personnes en attente, ancienneté médiane, places libres en face.', 'For each resource type: people waiting, median wait, free places alongside.') },
+      { ecran: 'donnees', sous: 'attente', cible: '#v-donnees', st: ST('Les nombres de 1 à 4 sont masqués « < 5 » pour protéger la vie privée.', 'Numbers from 1 to 4 are hidden as “< 5” to protect privacy.') },
+      { ecran: 'donnees', sous: 'tableau', cible: '#do-csv', st: ST('Exportez en CSV pour vos rapports.', 'Export as CSV for your reports.') },
+    ],
+    quiz: [
+      Q('« < 5 » veut dire :', '“< 5” means:', ['Une erreur', 'Un nombre de 1 à 4, masqué pour la vie privée', 'Zéro'], ['An error', 'A number from 1 to 4, hidden for privacy', 'Zero'], 1),
+      Q('Les listes d’attente sont classées :', 'Waiting lists are grouped:', ['Par type de ressource', 'Par patient', 'Par diagnostic'], ['By resource type', 'By patient', 'By diagnosis'], 0),
+      Q('L’export se fait en :', 'Export is in:', ['CSV', 'PDF seulement', 'Rien'], ['CSV', 'PDF only', 'Nothing'], 0),
+    ] }),
   // ---------------------------------------------------------------- 🆘 Mode crise
   C('K1', 'mode_crise', '🆘', 150, 'Déclencher une évacuation', 'Start an evacuation'),
   C('K2', 'mode_crise', '🆘', 180, 'Confirmer les lieux et suivre l’évacuation', 'Confirm places and follow the evacuation'),
