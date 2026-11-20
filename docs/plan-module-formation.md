@@ -99,3 +99,12 @@ Chaque lot : tests verts, puis publication avec les règles habituelles (sauvega
 2. **Polices** : le cahier demande Space Grotesk et Inter ; l'application utilise aujourd'hui Public Sans. Formation seulement en Space Grotesk / Inter (hébergées sur nos serveurs, licence libre), ou toute l'application ?
 3. **Bac à sable** : un nouvel environnement « formation » sur le serveur de démonstration (service, base, sous-domaine `formation.arrimo.senseafri.com`). C'est une action sur le serveur : votre accord est requis.
 4. **Voix** : nom du service de synthèse vocale quand il sera prêt ; l'emplacement (piste audio par langue) est prévu dès le lot 1.
+
+## 6. État d'avancement (22 nov. 2026)
+- Lot 1 (moteur, « Ma formation », Triage / AIC) : fait.
+- Lot 2 (« À vous de jouer ») : exercice guidé **dans la page de formation**, sur les vraies captures de la démo, état et note tenus par le serveur, bulle « cliquez ici ». Reste : le bac à sable comme environnement séparé (service, base, sous-domaine `formation.`, certificat), pour des exercices dans l'application elle-même.
+- Lot 3 (chaîne de captures) : `scripts/formation-captures.cjs` régénère captures et zones depuis une copie de la démo. Vidéos montées (ffmpeg) : à brancher sur `/root/arrimo-video`.
+- Lot 4 et lot 7 : 42 capsules prêtes sur 44 ; restent F1 (portail des proches, connexion à part) et SH1 (console SH).
+- Lot 5 (attestation PDF, tableau du formateur, superutilisateurs, satisfaction) et lot 6 (« ? » de chaque écran, OG) : faits.
+- Lot 8 : export SCORM 1.2 préparé (`scripts/formation-scorm.cjs`), non activé.
+- Lot 9 : activation démo (préparer-demo.sh) et SH (migration 60) prêtes ; publication en cours.
