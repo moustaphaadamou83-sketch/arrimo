@@ -5,7 +5,7 @@
   const nav = document.getElementById('onglets'); if (!nav) return;
   const tr = (k, d) => { try { return (typeof t === 'function' && t(k)) || d; } catch { return d; } };
   const etroit = window.matchMedia('(max-width: 600px)');
-  let plus; let menu; let attente = 0; let occupe = false;
+  let plus; let menu; let attente = 0; let occupe = false; let dernierMenu = ''; let derniereTete = '';
   const esc = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   function creer() {
     plus = document.createElement('button'); plus.type = 'button'; plus.id = 'b-onglets-plus'; plus.className = 'onglets-plus'; plus.hidden = true;
@@ -27,10 +27,11 @@
     if (occupe) return; occupe = true;
     try {
       if (!plus) creer();
+      const ouvert = !menu.hidden;
       onglets().forEach((b) => b.classList.remove('hors-barre'));
       nav.querySelectorAll('.onglets-groupe').forEach((g) => g.classList.remove('hors-barre'));
-      plus.hidden = true; basculer(false);
-      if (etroit.matches || document.body.classList.contains('nav-verticale') || nav.scrollWidth <= nav.clientWidth + 1) return;
+      plus.hidden = true;
+      if (etroit.matches || document.body.classList.contains('nav-verticale') || nav.scrollWidth <= nav.clientWidth + 1) { basculer(false); return; }
       plus.hidden = false;
       const visibles = onglets().filter((b) => !b.hidden);
       for (let i = visibles.length - 1; i >= 0 && nav.scrollWidth > nav.clientWidth + 1; i -= 1) {
@@ -54,10 +55,13 @@
           s.items.push({ v: el.dataset.v, libelle: el.textContent.trim().replace(/\s+/g, ' ') });
         }
       }
-      plus.innerHTML = `<span>${esc(tr('nav.plus', 'Plus'))}</span><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-chevron-down"/></svg>`;
+      const tete = `<span>${esc(tr('nav.plus', 'Plus'))}</span><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-chevron-down"/></svg>`;
+      if (derniereTete !== tete) { plus.innerHTML = tete; derniereTete = tete; }
       plus.setAttribute('aria-label', `${tr('nav.plus', 'Plus')} · ${tr('nav.plus_aide', '')}`);
-      menu.innerHTML = sections.map((s) => `${s.groupe ? `<div class="mop-groupe" role="presentation">${esc(s.groupe)}</div>` : ''}${s.items.map((i) => `<button type="button" role="menuitem" data-proxy="${esc(i.v)}">${esc(i.libelle)}</button>`).join('')}`).join('');
-      if (!sections.length) plus.hidden = true;
+      // Menu reconstruit seulement si son contenu change : un compteur qui bouge ne ferme pas un menu ouvert
+      const contenu = sections.map((s) => `${s.groupe ? `<div class="mop-groupe" role="presentation">${esc(s.groupe)}</div>` : ''}${s.items.map((i) => `<button type="button" role="menuitem" data-proxy="${esc(i.v)}">${esc(i.libelle)}</button>`).join('')}`).join('');
+      if (dernierMenu !== contenu) { menu.innerHTML = contenu; dernierMenu = contenu; }
+      if (!sections.length) { plus.hidden = true; basculer(false); } else if (ouvert) menu.hidden = false;
       nav.scrollLeft = 0;
     } finally { occupe = false; }
   }
