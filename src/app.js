@@ -233,6 +233,11 @@ function creerApp(pool, options = {}) {
     return ok ? next() : next(new ErreurHttp(403, 'role_secours'));
   });
 
+  // Sillage transversal (22 nov. 2026) : chronologie d'un parcours depuis n'importe quel module, mêmes droits ; Vigilance des parcours
+  api.get('/sillage', route((req) => require('./sillage').fil(pool, req.utilisateur, String(req.query.objet || ''), req.query.id)));
+  api.get('/secours/sillage', route((req) => require('./sillage').fil(pool, req.utilisateur, String(req.query.objet || ''), req.query.id)));
+  api.get('/sillage/attention', route((req) => require('./sillage').attention(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
+
   // Intervenant d'un prestataire (21 nov. 2026) : ses visites seulement
   api.use((req, res, next) => {
     if (req.utilisateur.role !== 'intervenant') return next();
@@ -243,7 +248,7 @@ function creerApp(pool, options = {}) {
   // Direction régionale (lot 0, 19 nov. 2026) : lecture de sa région seulement, jamais les lits, patients ni résidents
   api.use((req, res, next) => {
     if (req.utilisateur.role !== 'direction_regionale') return next();
-    const ok = (req.method === 'GET' && (['/moi', '/demandes', '/demandes/synthese', '/direction/region', '/regions', '/meteo', '/donnees', '/donnees.csv'].includes(req.path) || /^\/transferts-suivi\/(centrale|\d+)$/.test(req.path))) || req.path.startsWith('/moi/') || req.path.startsWith('/crise/')
+    const ok = (req.method === 'GET' && (['/moi', '/demandes', '/demandes/synthese', '/direction/region', '/regions', '/meteo', '/donnees', '/donnees.csv', '/sillage'].includes(req.path) || /^\/transferts-suivi\/(centrale|\d+)$/.test(req.path))) || req.path.startsWith('/moi/') || req.path.startsWith('/crise/')
       || (req.method === 'POST' && req.path === '/deconnexion');
     return ok ? next() : next(new ErreurHttp(403, 'role_direction_regionale'));
   });

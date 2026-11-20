@@ -16,7 +16,7 @@
         ${p.a_la_porte_min != null ? `<span class="ch-minutes" role="timer" aria-label="${K('a_la_porte_depuis', { n: p.a_la_porte_min })}">${K('minutes', { n: p.a_la_porte_min })} · ${K(`niveau_${n}`)}</span>` : ''}</div>
       <ol class="ch-etapes">${ETAPES.map((e) => `<li><span class="ch-code">${e}</span> ${K(`etape_${e}`)} : ${heureEtape(p.heures[e])}</li>`).join('')}</ol>
       <div class="ligne">${p.prochaine ? `<button class="btn pri" data-ch-etape="${p.prochaine}" data-id="${p.id}">${K(`bouton_${p.prochaine}`)}</button>` : ''}
-        <button class="btn" data-ch-corriger="${p.id}">${K('corriger')}</button></div></article>`;
+        <button class="btn" data-ch-corriger="${p.id}">${K('corriger')}</button>${(window.ArrimoSillage?.bouton('passage_chrono', p.id) || '')}</div></article>`;
   }
 
   async function vueChrono() {

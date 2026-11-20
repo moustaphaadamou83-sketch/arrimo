@@ -787,3 +787,24 @@ details.voir-carte summary::-webkit-details-marker { display: none; }
 .menu-onglets-plus button { display: block; width: 100%; text-align: left; font: inherit; background: none; border: 0; color: inherit; padding: 9px var(--e4); min-height: 40px; cursor: pointer; }
 .menu-onglets-plus button:hover, .menu-onglets-plus button:focus-visible { background: var(--fond); outline: none; }
 @media (max-width: 600px) { .onglets .onglets-plus { display: none !important; } }
+/* Sillage transversal (22 nov. 2026) : panneau de parcours commun aux modules */
+.sillage-panneau { width: min(720px, calc(100vw - 32px)); max-height: 86vh; border: 1px solid var(--bordure); border-radius: 14px; padding: 0; background: var(--carte); color: var(--texte); }
+.sillage-panneau::backdrop { background: rgba(15, 23, 42, 0.45); }
+.sillage-corps { padding: var(--e4) var(--e5, 20px); display: flex; flex-direction: column; gap: var(--e3); }
+.sillage-tete { display: flex; align-items: center; justify-content: space-between; gap: var(--e3); }
+.sillage-tete h2 { margin: 0; font-size: 1.15rem; }
+.sillage-corps h3 { margin: var(--e2) 0 0; font-size: 0.8rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--texte-2); }
+.sillage-objets { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
+.sillage-fil { list-style: none; margin: 0; padding: 0 0 0 14px; border-left: 2px solid var(--accent, #57C5B6); display: grid; gap: var(--e3); }
+.sillage-fil li { display: grid; grid-template-columns: 112px 1fr; gap: var(--e3); position: relative; }
+.sillage-fil li::before { content: ''; position: absolute; left: -20px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--secondaire, #159895); }
+.sillage-fil time { font-variant-numeric: tabular-nums; color: var(--texte-2); }
+.sillage-manques { border-left: 4px solid #F59E0B; padding: var(--e2) var(--e3); background: rgba(245, 158, 11, 0.08); border-radius: 6px; }
+.sillage-btn { margin-left: var(--e2); }
+@media (max-width: 600px) { .sillage-fil li { grid-template-columns: 1fr; gap: 2px; } }
+/* Sous-onglets des modules (22 nov. 2026) */
+.sous-onglets { display: flex; flex-wrap: wrap; gap: var(--e2); margin: 0 0 var(--e4); padding-bottom: var(--e2); border-bottom: 1px solid var(--bordure); }
+.sous-onglets button { font: inherit; font-weight: 600; background: none; border: 1px solid transparent; border-radius: 999px; padding: 7px 16px; min-height: 38px; color: var(--texte-2); cursor: pointer; }
+.sous-onglets button:hover { color: var(--texte); background: var(--fond); }
+.sous-onglets button[aria-selected="true"] { color: #fff; background: var(--principal-plein, #0E5E6F); border-color: var(--principal-plein, #0E5E6F); }
+@media (max-width: 600px) { .sous-onglets { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .sous-onglets button { flex: none; } }

@@ -78,7 +78,7 @@
     const a = p.actions || [];
     const boutons = a.filter((x) => x !== 'signaler_probleme').map((x) => `<button class="btn${['prendre_en_compte', 'confirmer_vehicule', 'confirmer_service'].includes(x) ? ' pri' : ''}" type="button" data-ls="${x}" data-id="${p.id}">${S(`act_${x}`)}</button>`).join('');
     return `<article class="item" style="border-left:6px solid ${COUL_PRIO[p.priorite]}" data-prealerte="${p.id}"><div>
-      <div><b class="num">${esc(p.numero)}</b> ${pastillePrio(p)} <span class="ch-etat">${S(`s_${p.statut}`)}</span></div>
+      <div><b class="num">${esc(p.numero)}</b> ${pastillePrio(p)} <span class="ch-etat">${S(`s_${p.statut}`)}</span> ${(window.ArrimoSillage?.bouton('prealerte', p.id) || '')}</div>
       <div><b>${esc(p.organisation)}</b> · ${S('unite', { numero: p.unite })}${p.plaque ? ` · ${S('plaque', { plaque: p.plaque })}` : ''}</div>
       ${p.eta && OUVERTES.includes(p.statut) && p.statut !== 'arrivee' ? `<div class="ls-eta" style="font-size:1.15em;margin:4px 0"><b>${p.eta.minutes != null ? S('arrive_dans', { unite: p.unite, n: p.eta.minutes, km: p.eta.distance_km }) : S('arrive_km', { unite: p.unite, km: p.eta.distance_km })}</b> <span class="note">${S('eta_calcul', { heure: heureCourte(p.eta.le) })}</span></div>` : ''}
       ${blocConfirmation(p)}${blocProximite(p)}${blocReservation(p)}${blocProfil(p)}

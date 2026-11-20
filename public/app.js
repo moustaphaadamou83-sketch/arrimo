@@ -635,7 +635,7 @@ async function rafraichir() {
     bandeau.innerHTML = !e || e.module_actif ? '' : `<div>${t('barre.bandeau_inactif', { etab: esc(e.nom) })}</div>`;
     await Promise.all([e ? majCompteurs() : null, ({
       copilote: vueCopilote, reseau: vueReseau, national: vueNational, lits: vueLits, urgence: vueUrgence, admissions: vueAdmissions, transferts: vueTransferts,
-      nettoyage: vueNettoyage, vigilance: vueVigilance, nsa: vueNsa, indicateurs: vueIndicateurs, journal: vueJournal, params: vueParams,
+      nettoyage: vueNettoyage, vigilance: async () => { await vueVigilance(); await window.ArrimoSillage?.vigilance($('#v-vigilance'), etat.ctx); }, nsa: vueNsa, indicateurs: vueIndicateurs, journal: vueJournal, params: vueParams,
       admin: vueAdmin, compte: vueCompte, support:vueSupportClient, patients: vuePatients, continuite: vueContinuite, ...(window.ArrimoChsld?.vues || {}), ...(window.ArrimoSecours?.vues || {}), ...(window.ArrimoChrono?.vues || {}), ...(window.ArrimoTransportPlanifie?.vues || {}), ...(window.ArrimoBourse?.vues || {}), donnees: () => window.ArrimoDonnees.afficher($('#v-donnees'), { api, langue, etablissement_id: etat.ctx }), ...(window.ArrimoVisitesEviter?.vues || {}), crise: () => window.ArrimoCrise.afficher($('#v-crise'), { api, langue, etablissement_id: etat.ctx }),
     })[etat.vue]()]);
     poserMenuParametres();
@@ -1195,7 +1195,7 @@ async function ficheTransfert(id) {
     ${f.alertes.length ? `<div class="bandeau" role="alert">${f.alertes.map((a) => T(`alerte_${a.code}`, a)).join('<br>')}</div>` : ''}
     ${rap ? `<p>${T(`rapatriement_${rap.statut}`, { vers: rap.vers })}</p>` : ''}
     ${f.cote === 'destination' && rap?.statut === 'propose' ? `<div class="champ"><label class="lbl" for="rap-motif">${T('rapatriement_motif')}</label><select id="rap-motif">${['pas_stable', 'famille_refuse', 'pas_de_lit', 'autre'].map((m) => `<option value="${m}">${T(`rap_motif_${m}`)}</option>`).join('')}</select></div>` : ''}`;
-  const actions = [{ label: t('general.fermer') }];
+  const actions = [{ label: t('general.fermer') }, { label: window.ArrimoSillage?.TXT[lire('arrimo-langue') === 'en' ? 'en' : 'fr'].bouton || 'Sillage', run: async () => { window.ArrimoSillage?.ouvrir('transfert', f.id); return true; } }];
   if (f.cote === 'destination' && f.statut === 'recu' && !rap) actions.push({ label: t('transferts.stable_retour'), pri: true, run: async () => (await agir(null, () => api('POST', `/transferts/${f.id}/stable-retour`), (r) => t('transferts.rapatriement_propose', { vers: r.vers }))) !== null || false });
   if (f.cote === 'destination' && rap?.statut === 'propose') {
     actions.push({ label: t('transferts.rapatriement_refuser'), run: async () => (await agir(null, () => api('POST', `/rapatriements/${rap.id}/decision`, { decision: 'refuser', motif: $('#rap-motif').value }), t('transferts.rapatriement_decide'))) !== null || false });

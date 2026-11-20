@@ -107,7 +107,7 @@ async function chrono(pool, hop) {
       const n = `PA-${String((await c.query("SELECT nextval('prealerte_seq') AS n")).rows[0].n).padStart(6, '0')}`;
       id = (await c.query(`INSERT INTO prealertes (numero, organisation_id, unite_id, destination_id, statut, priorite, categorie, heure_prevue, recue_le, cle_idempotence)
         VALUES ($1, $2, $3, $4, 'recue', 'urgente', 'medicale', $5, now(), $6) RETURNING id`, [n, u.organisation_id, u.id, hop.id, minutes(6), `${MARQUE}-${Date.now()}`])).rows[0].id;
-      await horloge.marquer(c, { objet: 'prealerte', objetId: id, etape: 'envoi', heure: new Date(), source: 'systeme' }).catch(() => {});
+      await horloge.marquer(c, { objet: 'prealerte', objetId: id, etape: 'demande', heure: new Date(), source: 'systeme' });
     }
     if (id) {
       await c.query('UPDATE prealertes SET heure_prevue = $2, modifie_le = now() WHERE id = $1', [id, minutes(6)]);

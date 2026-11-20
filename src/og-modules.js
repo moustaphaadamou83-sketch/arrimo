@@ -21,8 +21,27 @@ const INTENTIONS = [
   ['bourse', /\b(bourse|placement exchange)\b/],
 ];
 
+const NUMERO = /\b(PA|CH|DT|VI|DH|MC|CO|TR)-\d{3,6}\b/i;
+const ATTENTE = /\b(en attente|a faire|a confirmer|confirmations?|actions? (en attente|a faire)|en retard|pending|to do|to confirm|overdue|needs? attention)\b/;
 async function repondre(pool, u, etabId, question, langue) {
-  const qn = norm(question); const intention = INTENTIONS.find(([, re]) => re.test(qn))?.[0];
+  const qn = norm(question);
+  // Sillage transversal : « explique le parcours PA-000123 », « qu'est-ce qui est en attente ? »
+  const num = String(question || '').match(NUMERO);
+  if (num) {
+    const x = await require('./sillage').expliquer(pool, u, num[0], require('./og-localisation').langueDemandee(question, langue));
+    if (x) return { ...reponse(x.texte, 'sillage', require('./sillage').ECRANS[x.objet]), sillage: { objet: x.objet, id: x.id } };
+  }
+  if (ATTENTE.test(qn) && !/\b(lits?|beds?|nsa|alc|admissions?)\b/.test(qn) && etabId) {
+    const L = require('./og-localisation').langueDemandee(question, langue);
+    const a = await require('./sillage').attention(pool, u, etabId).catch(() => null);
+    if (a) {
+      const lib = { confirmation_manquante: T(L, 'confirmation manquante (délai dépassé)', 'missing confirmation (deadline passed)'), civiere_au_dela_cible: T(L, 'ambulance à la porte au-delà de la cible', 'ambulance at the door beyond target'),
+        visite_manquee: T(L, 'visite manquée sans suite', 'missed visit with no follow-up'), transition_incomplete: T(L, 'étape non confirmée', 'step not confirmed') };
+      return reponse(a.items.length ? `${T(L, 'À regarder maintenant :', 'To look at now:')}\n${a.items.map((i) => `• ${i.numero} · ${lib[i.code]}${i.etapes ? ` (${i.etapes.join(', ')})` : ''}${i.chez_nous ? '' : T(L, ' · chez le partenaire', ' · at the partner')}`).join('\n')}\n${T(L, 'Demandez-moi « explique le parcours <numéro> » pour le détail. L’équipe décide.', 'Ask me “explain path <number>” for details. The team decides.')}`
+        : T(L, 'Rien en attente : aucune confirmation manquante ni étape en retard.', 'Nothing pending: no missing confirmation or overdue step.'), 'attention', 'vigilance');
+    }
+  }
+  const intention = INTENTIONS.find(([, re]) => re.test(qn))?.[0];
   if (!intention) return null;
   const L = require('./og-localisation').langueDemandee(question, langue);
   try {

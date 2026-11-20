@@ -331,7 +331,7 @@
   function carteEnCours(p) {
     const fait = (e) => p[{ envoyee: 'cree_le', recue: 'recue_le', consultee: 'consultee_le', prise_en_compte: 'prise_en_compte_le', preparation: 'preparation_le', preparation_terminee: 'preparation_terminee_le', arrivee: 'arrivee_confirmee_le' }[e]];
     const a = p.actions || [];
-    return `<section class="carte-s prio-${esc(p.priorite)}"><h2>${t('en_cours')} · ${esc(p.numero)}</h2>
+    return `<section class="carte-s prio-${esc(p.priorite)}"><h2>${t('en_cours')} · ${esc(p.numero)} ${(window.ArrimoSillage?.bouton('prealerte', p.id) || '')}</h2>
       <div class="gros">${esc(t('vers', { dest: p.destination }))}</div>${reponseHopital(p)}
       <p>${t('prio.' + p.priorite)} · ${t('cat.' + p.categorie)} · <strong>${t('s_' + p.statut)}</strong></p>
       <p>${t('arrivee_prevue')} : <strong>${esc(eta(p))}</strong></p>
