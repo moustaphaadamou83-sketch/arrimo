@@ -8,11 +8,11 @@ const { creerPool } = require('../src/db');
 const { environnement } = require('../src/environnement');
 async function preparer(pool) {
   if (environnement() !== 'demo') throw new Error('Démonstration seulement (ARRIMO_ENV=demo).');
-  const era = (await pool.query("SELECT id, config_id FROM etablissements WHERE code = 'CHSLD-ERA'")).rows[0];
+  const era = (await pool.query("SELECT id, config_id, profil_config_id FROM etablissements WHERE code = 'CHSLD-ERA'")).rows[0];
   if (!era) { console.log('CHSLD des Érables absent'); return; }
   const org = (await pool.query(`INSERT INTO organisations_secours (code, nom, type, profils, config_id, region_id)
     VALUES ('DEMO-CLSC', 'CLSC de démonstration', 'prestataire', '{visites}', $1, (SELECT id FROM regions WHERE code = 'CA-QC-04'))
-    ON CONFLICT (code) DO UPDATE SET profils = '{visites}' RETURNING id`, [era.config_id])).rows[0].id;
+    ON CONFLICT (code) DO UPDATE SET profils = '{visites}' RETURNING id`, [era.profil_config_id || era.config_id])).rows[0].id;
   if ((await pool.query('SELECT 1 FROM visites WHERE prestataire_id = $1 LIMIT 1', [org])).rowCount) { console.log('Visites de démonstration déjà présentes'); return; }
   const res = (await pool.query("SELECT id, reference FROM residents WHERE etablissement_id = $1 AND statut = 'present' ORDER BY id LIMIT 3", [era.id])).rows;
   const types = ['aide_hygiene', 'soins_infirmiers', 'readaptation'];
