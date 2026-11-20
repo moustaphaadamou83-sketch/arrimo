@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS utilisateur_directions (
 );
 ALTER TABLE utilisateurs DROP CONSTRAINT IF EXISTS utilisateurs_role_check;
 ALTER TABLE utilisateurs ADD CONSTRAINT utilisateurs_role_check
-  CHECK (role IN ('coordonnateur', 'gestionnaire', 'entretien', 'admin_etab', 'equipe_soins', 'paramedic', 'superviseur_secours', 'repartiteur', 'direction_regionale'));
+  CHECK (role IN ('coordonnateur', 'gestionnaire', 'entretien', 'admin_etab', 'equipe_soins', 'paramedic', 'superviseur_secours', 'repartiteur', 'direction_regionale', 'intervenant'));
 -- Langue de l'établissement (notifications et courriels quand le destinataire n'a pas choisi)
 ALTER TABLE etablissements ADD COLUMN IF NOT EXISTS langue text NOT NULL DEFAULT 'fr' CHECK (langue IN ('fr', 'en'));
 

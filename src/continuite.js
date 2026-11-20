@@ -36,9 +36,16 @@ async function chargerParcours(db, filtreSql, args) {
   // Chrono (19 nov. 2026) : heures H11 à H15 du passage de l'ambulance à l'urgence, depuis l'Horloge (mêmes heures que l'écran Chrono)
   const evCh = prealertes.length ? (await db.query(`SELECT p.prealerte_id, h.etape, h.heure FROM passages_chrono p
     JOIN v_horodatages_courants h ON h.objet = 'passage_chrono' AND h.objet_id = p.id WHERE p.prealerte_id = ANY($1)`, [prealertes.map((p) => p.id)])).rows : [];
+  // Sillage (21 nov. 2026) : évacuation (mode crise) et transports non urgents du même résident, dans la même chronologie
+  const residents = [...new Set(cos.map((c) => c.resident_id))];
+  const evEv = (await db.query(`SELECT er.resident_id, ev.numero, er.confirme_le, er.depart_le, er.arrivee_le, er.revenu_le FROM evacuation_residents er
+    JOIN evacuations ev ON ev.id = er.evacuation_id WHERE er.resident_id = ANY($1)`, [residents])).rows;
+  const refs = [...new Set(cos.map((c) => c.resident_ref))];
+  const evTp = (await db.query(`SELECT d.resident_ref, d.origine_id, e.type, e.cree_le FROM demandes_transport d JOIN demande_transport_evenements e ON e.demande_id = d.id
+    WHERE d.coordination_id IS NULL AND d.resident_ref = ANY($1)`, [refs])).rows;
   return cos.map((co) => construire(co, {
     retour: retours.filter((r) => r.liee_id === co.id).at(-1) || null,
-    transports, prealertes, etapesCo, evTr, evPa, evCh,
+    transports, prealertes, etapesCo, evTr, evPa, evCh, evEv, evTp,
   }));
 }
 
@@ -100,6 +107,9 @@ function construire(co, x) {
     ...x.evTr.filter((v) => v.demande_id === aller?.id || v.demande_id === retourTr?.id).map((v) => ({ date: v.cree_le, source: 'transport', code: v.type, par: aller?.organisation })),
     ...x.evPa.filter((v) => v.prealerte_id === pa?.id).map((v) => ({ date: v.cree_le, source: 'prealerte', code: v.type, par: null })),
     ...(x.evCh || []).filter((v) => v.prealerte_id === pa?.id).map((v) => ({ date: v.heure, source: 'chrono', code: v.etape, par: null })),
+    ...(x.evEv || []).filter((v) => v.resident_id === co.resident_id).flatMap((v) => [['confirme_le', 'lieu_confirme'], ['depart_le', 'depart'], ['arrivee_le', 'arrivee'], ['revenu_le', 'retour']]
+      .filter(([k]) => v[k]).map(([k, code]) => ({ date: v[k], source: 'evacuation', code: `${v.numero} ${code}`, par: null }))),
+    ...(x.evTp || []).filter((v) => v.resident_ref === co.resident_ref && v.origine_id === co.origine_id).map((v) => ({ date: v.cree_le, source: 'transport', code: v.type, par: null })),
   ].sort((a, b) => new Date(a.date) - new Date(b.date));
   return {
     id: co.id, numero: co.numero, resident_id: co.resident_id, resident_ref: co.resident_ref, origine_id: co.origine_id, origine: co.origine, hopital_id: pa?.destination_id || co.destination_id, hopital,

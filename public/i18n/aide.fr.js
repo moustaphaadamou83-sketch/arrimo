@@ -226,6 +226,18 @@ window.ARRIMO_I18N.fr.aide = {
       gestes: ['Déclenchez l’évacuation avec son motif.', 'Confirmez le lieu proposé pour chaque résident : la place est réservée.', 'Notez le départ (mode de transport), l’arrivée, puis planifiez le retour ; levez l’évacuation à la fin.'],
       erreurs: [['Plus aucun lit libre', 'Choisissez une autre destination dans la liste des places de la région.']],
     },
+    visites: {
+      nom: 'Visites confirmées',
+      but: 'Planifier les visites du CLSC ou du prestataire et voir si elles ont eu lieu ; noter les soins donnés par la résidence quand une visite est manquée.',
+      gestes: ['Planifiez une visite (ou une série) : résident, type, prestataire, plage.', 'Une visite sans arrivée pendant sa plage devient « manquée » et vous êtes avisé.', 'Choisissez le soin donné à la place, puis consultez le rapport mensuel.'],
+      erreurs: [['Plage invalide', 'La fin doit suivre le début, 8 h au plus.']],
+    },
+    eviter: {
+      nom: 'Avant l’appel',
+      but: 'Avant d’appeler l’ambulance, relire la liste de votre établissement et ses alternatives ; noter la décision de l’équipe.',
+      gestes: ['Relisez la liste de vérification de votre protocole.', 'Si une alternative suffit, cliquez « Transfert évité grâce à elle » ; sinon « Transfert fait ».', 'L’administration écrit la liste et les coordonnées.'],
+      erreurs: [['Version périmée', 'Quelqu’un a modifié la liste : rechargez l’écran.']],
+    },
     vigilance: {
       nom: 'Congés et alertes',
       but: 'Voir lit par lit les départs prévus (avec leur statut, l’heure et la source) et les blocages expliqués : origine, seuil, fait ou hypothèse, action proposée et responsable.',

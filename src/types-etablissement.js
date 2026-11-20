@@ -18,6 +18,7 @@ const TYPES = {
   entreprise_ambulanciere: { nom: 'Entreprise ambulancière', nom_en: 'Ambulance company', statut: 'operationnel', famille: 'secours', type_secours: 'ambulancier' },
   urgences_sante: { nom: 'Urgences-santé', nom_en: 'Urgences-santé', statut: 'operationnel', famille: 'secours', type_secours: 'urgences_sante' },
   premiers_repondants: { nom: 'Pompiers / premiers répondants', nom_en: 'Firefighters / first responders', statut: 'a_venir', famille: 'secours', type_secours: 'premiers_repondants' },
+  prestataire_soins: { nom: 'Prestataire de soins à domicile (CLSC, entreprise)', nom_en: 'Home care provider (CLSC, company)', statut: 'operationnel', famille: 'secours', type_secours: 'prestataire' },
   entreprise_transport_adapte: { nom: 'Transport adapté', nom_en: 'Adapted transport', statut: 'a_venir', famille: 'secours', type_secours: 'transport_adapte' },
 };
 // Types d'établissement opérationnels (lits, résidents) : jamais une organisation de secours
@@ -55,6 +56,7 @@ const MODULES = [
     note: 'Demandes de transport vers une entreprise ambulancière, suivi des étapes ; référence du résident seulement' },
   // Organisations de secours : profils activés un par un (CCS, Ambulance) ; Urgences-santé = les deux
   { code: 'profil_ccs', categorie: 'secours', types: TYPES_SECOURS, statut: 'disponible', drapeau: 'ccs', nom: 'Profil CCS (répartition, vue régionale)', nom_en: 'CCS profile (dispatch, regional view)' },
+  { code: 'profil_visites', categorie: 'secours', types: TYPES_SECOURS, statut: 'disponible', drapeau: 'visites', nom: 'Profil Visites (intervenants à domicile)', nom_en: 'Visits profile (home care workers)' },
   { code: 'profil_ambulance', categorie: 'secours', types: TYPES_SECOURS, statut: 'disponible', drapeau: 'ambulance', nom: 'Profil Ambulance (unités, préalertes, transports)', nom_en: 'Ambulance profile (units, pre-alerts, transports)' },
   // CHSLD
   { code: 'residents', categorie: 'chsld', types: ['chsld'], statut: 'inclus', nom: 'Résidents et accueil', nom_en: 'Residents and admission', note: 'Dossier, contacts, autorisations, mouvements' },
@@ -85,9 +87,9 @@ const MODULES = [
     note: 'Tableaux régionaux, petits nombres masqués, CSV', note_en: 'Regional dashboards, small counts masked, CSV' },
   { code: 'mode_crise', categorie: 'optionnel', types: ['hopital', 'chsld'], statut: 'disponible', drapeau: 'mode_crise', nom: 'Mode crise (évacuation)', nom_en: 'Crisis mode (evacuation)',
     note: 'Places de la région, lieu proposé par résident, suivi', note_en: 'Regional places, proposed site per resident, tracking' },
-  { code: 'visites_confirmees', categorie: 'optionnel', types: ['chsld'], statut: 'a_venir', drapeau: 'visites_confirmees', nom: 'Visites confirmées', nom_en: 'Confirmed visits',
+  { code: 'visites_confirmees', categorie: 'optionnel', types: ['chsld'], statut: 'disponible', drapeau: 'visites_confirmees', nom: 'Visites confirmées', nom_en: 'Confirmed visits',
     note: 'Visites prévues du CLSC ou du prestataire, arrivée et départ', note_en: 'Planned CLSC or provider visits, arrival and departure' },
-  { code: 'eviter_transferts', categorie: 'optionnel', types: ['chsld'], statut: 'a_venir', drapeau: 'eviter_transferts', nom: 'Éviter les transferts inutiles', nom_en: 'Avoid unnecessary transfers',
+  { code: 'eviter_transferts', categorie: 'optionnel', types: ['chsld'], statut: 'disponible', drapeau: 'eviter_transferts', nom: 'Éviter les transferts inutiles', nom_en: 'Avoid unnecessary transfers',
     note: 'Liste de l’établissement et alternatives avant l’appel', note_en: 'Facility checklist and alternatives before calling' },
 ];
 const MODULE = new Map(MODULES.map((m) => [m.code, m]));

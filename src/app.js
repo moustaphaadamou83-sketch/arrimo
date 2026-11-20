@@ -41,7 +41,7 @@ function creerApp(pool, options = {}) {
       'X-Frame-Options': 'DENY',
       'Referrer-Policy': 'no-referrer',
       // Géolocalisation : écran Ambulance seulement (position facultative, partagée par l'équipe)
-      'Permissions-Policy': `camera=(), geolocation=(${req.path === '/secours' ? 'self' : ''}), payment=(), microphone=(self)`,
+      'Permissions-Policy': `camera=(), geolocation=(${['/secours', '/intervenant'].includes(req.path) ? 'self' : ''}), payment=(), microphone=(self)`,
       // Réponses de l'API jamais conservées par le navigateur ni par un intermédiaire
       ...(req.path.startsWith('/api/') ? { 'Cache-Control': 'no-store' } : {}),
       // Police hébergée ici (aucun appel à un service tiers)
@@ -57,6 +57,7 @@ function creerApp(pool, options = {}) {
   // Écrans de secours (ambulance, CCS) : même connexion que le personnel, page séparée adaptée aux tablettes embarquées
   app.get('/secours', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'secours.html')));
   app.get('/direction', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'direction.html')));
+  app.get('/intervenant', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'intervenant.html')));
   // Remise à usage unique d'un accès de connexion (contact technique du client) : la page ne fait que lire le lien
   app.get('/remise', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'remise.html')));
   // FHIR R4 en lecture pour le système d'un hôpital relié (portée « fhir », données de l'établissement seulement)
@@ -232,6 +233,13 @@ function creerApp(pool, options = {}) {
     return ok ? next() : next(new ErreurHttp(403, 'role_secours'));
   });
 
+  // Intervenant d'un prestataire (21 nov. 2026) : ses visites seulement
+  api.use((req, res, next) => {
+    if (req.utilisateur.role !== 'intervenant') return next();
+    const ok = (req.method === 'GET' && ['/moi', '/visites', '/visites/rapport', '/visites/rapport.csv'].includes(req.path)) || req.path.startsWith('/moi/')
+      || (req.method === 'POST' && (req.path === '/deconnexion' || /^\/visites\/\d+\/pointer$/.test(req.path)));
+    return ok ? next() : next(new ErreurHttp(403, 'role_intervenant'));
+  });
   // Direction régionale (lot 0, 19 nov. 2026) : lecture de sa région seulement, jamais les lits, patients ni résidents
   api.use((req, res, next) => {
     if (req.utilisateur.role !== 'direction_regionale') return next();
@@ -262,6 +270,23 @@ function creerApp(pool, options = {}) {
   api.post('/urgences-direct/fermetures', route((req) => ud.planifier(pool, req.utilisateur, req.body)));
   api.post('/urgences-direct/fermetures/:id/action', route((req) => ud.changer(pool, req.utilisateur, req.params.id, req.body)));
   api.get('/secours/urgences-direct', route((req) => ud.vueSecours(pool, req.utilisateur)));
+  // Visites confirmées (21 nov. 2026) : résidence (planifier, horaire, soins donnés à la place, rapport) ; intervenant (/visites/mes-visites)
+  const visites = require('./visites');
+  api.get('/visites', route((req) => visites.horaire(pool, req.utilisateur, req.query)));
+  api.post('/visites', route((req) => visites.planifier(pool, req.utilisateur, req.body)));
+  api.get('/visites/prestataires', route((req) => visites.prestataires(pool, req.utilisateur, req.query.etablissement_id)));
+  api.get('/visites/rapport', route((req) => visites.rapport(pool, req.utilisateur, req.query)));
+  api.get('/visites/rapport.csv', async (req, res, next) => {
+    try { const r = await visites.rapport(pool, req.utilisateur, req.query); res.set('Content-Type', 'text/csv; charset=utf-8').set('Content-Disposition', `attachment; filename="visites-${r.mois}.csv"`).send(visites.csv(r, req.langue)); }
+    catch (e) { next(e); }
+  });
+  api.post('/visites/:id/residence', route((req) => visites.agirResidence(pool, req.utilisateur, req.params.id, req.body)));
+  api.post('/visites/:id/pointer', route((req) => visites.pointer(pool, req.utilisateur, req.params.id, req.body)));
+  // Éviter les transferts inutiles (21 nov. 2026) : liste et alternatives de l'établissement ; décisions comptées
+  const eviter = require('./eviter-transferts');
+  api.get('/eviter', route((req) => eviter.lire(pool, req.utilisateur, req.query.etablissement_id)));
+  api.put('/eviter', route((req) => eviter.regler(pool, req.utilisateur, req.body)));
+  api.post('/eviter/decisions', route((req) => eviter.decider(pool, req.utilisateur, req.body)));
   // Mode crise (20 nov. 2026) : évacuation d'un établissement d'hébergement
   const crise = require('./crise');
   api.get('/crise/evacuations', route((req) => crise.liste(pool, req.utilisateur, req.query)));

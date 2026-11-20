@@ -13,8 +13,8 @@ const { journalAdmin } = require('./admin');
 
 // Un seul modèle d'organisation : le type dit ce qu'elle est, les profils activés ce qu'elle fait ; les rôles suivent les profils
 const TYPES = ['ccs', 'ambulancier', 'urgences_sante', 'premiers_repondants'];
-const PROFILS_PAR_DEFAUT = { ccs: ['ccs'], ambulancier: ['ambulance'], urgences_sante: ['ccs', 'ambulance'], premiers_repondants: [] };
-const ROLES_PROFIL = { ambulance: ['paramedic', 'superviseur_secours'], ccs: ['repartiteur'] };
+const PROFILS_PAR_DEFAUT = { ccs: ['ccs'], ambulancier: ['ambulance'], urgences_sante: ['ccs', 'ambulance'], premiers_repondants: [], prestataire: ['visites'], transport_adapte: ['ambulance'] };
+const ROLES_PROFIL = { ambulance: ['paramedic', 'superviseur_secours'], ccs: ['repartiteur'], visites: ['intervenant'] };
 const rolesDe = (profils) => profils.flatMap((p) => ROLES_PROFIL[p] || []);
 const lireProfils = (v, type) => {
   if (v == null) return PROFILS_PAR_DEFAUT[type];

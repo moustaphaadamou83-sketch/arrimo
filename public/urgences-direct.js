@@ -8,14 +8,14 @@
       ouverte: 'Ouverte', capacite_reduite: 'Capacité réduite', fermee_temporairement: 'Fermée temporairement', inconnu: 'État non déclaré',
       maj: 'Mis à jour à {h}', non_a_jour: 'Non à jour : dernière déclaration à {h}', jamais: 'Aucune déclaration', reouv: 'Réouverture prévue : {h}',
       services: 'Services fermés : {s}', proche: 'Urgence ouverte la plus proche : {nom} ({km} km à vol d’oiseau)', planifiee: 'Fermeture prévue : {d} → {f} ({s})',
-      options: 'Autres options', licence: 'Données sous licence {l}. {a}. Mise à jour toutes les minutes au plus.', aucune: 'Aucune urgence publiée.', erreur: 'Données indisponibles pour le moment.',
+      options: 'Autres options', licence: 'Données sous licence {l}. {a}. Mise à jour toutes les minutes au plus.', aucune: 'Aucune urgence publiée.', erreur: 'Données indisponibles pour le moment.', autres: 'Autres urgences du Québec (occupation seulement)', occupation: '{o} civières occupées sur {f} ({t} %)', releve: 'relevé {h}',
       sv: { toute_urgence: 'toute l’urgence', pediatrie: 'pédiatrie', obstetrique: 'obstétrique', imagerie: 'imagerie', sante_mentale: 'santé mentale', traumatologie: 'traumatologie' } },
     en: { sous: 'Live emergency status', titre: 'Live emergency status', intro: 'Status declared by participating emergency departments. No wait time is estimated: if in doubt, call.',
       vital: 'In a life-threatening emergency, call {n}.', demo: 'Demonstration: fictitious data, fictitious facilities. This page is not in service.',
       ouverte: 'Open', capacite_reduite: 'Reduced capacity', fermee_temporairement: 'Temporarily closed', inconnu: 'Status not declared',
       maj: 'Updated at {h}', non_a_jour: 'Not up to date: last declaration at {h}', jamais: 'No declaration', reouv: 'Expected reopening: {h}',
       services: 'Closed services: {s}', proche: 'Nearest open emergency department: {nom} ({km} km as the crow flies)', planifiee: 'Planned closure: {d} → {f} ({s})',
-      options: 'Other options', licence: 'Data under the {l} licence. {a}. Updated every minute at most.', aucune: 'No published emergency department.', erreur: 'Data unavailable right now.',
+      options: 'Other options', licence: 'Data under the {l} licence. {a}. Updated every minute at most.', aucune: 'No published emergency department.', erreur: 'Data unavailable right now.', autres: 'Other Québec emergency departments (occupancy only)', occupation: '{o} stretchers occupied out of {f} ({t}%)', releve: 'reading {h}',
       sv: { toute_urgence: 'the whole department', pediatrie: 'paediatrics', obstetrique: 'obstetrics', imagerie: 'imaging', sante_mentale: 'mental health', traumatologie: 'trauma' } },
   };
   let L = (() => { try { return localStorage.getItem('arrimo-langue') === 'en' ? 'en' : (navigator.language || '').startsWith('en') && !localStorage.getItem('arrimo-langue') ? 'en' : 'fr'; } catch { return 'fr'; } })();
@@ -42,6 +42,11 @@
         ${u.ouverte_la_plus_proche ? `<p>${esc(t('proche', { nom: u.ouverte_la_plus_proche.nom, km: u.ouverte_la_plus_proche.km }))}</p>` : ''}
         ${u.fermetures_planifiees.map((f) => `<p class="note">${esc(t('planifiee', { d: h(f.debut_le), f: h(f.fin_prevue_le), s: sv(f.services) }))}</p>`).join('')}</article>`;
     }).join('') : `<p class="note">${esc(t('aucune'))}</p>`;
+    const au = donnees.autres_urgences;
+    let bloc = document.getElementById('ud-autres');
+    if (!bloc) { bloc = document.createElement('section'); bloc.id = 'ud-autres'; bloc.className = 'panneau-c'; document.getElementById('ud-liste').after(bloc); }
+    bloc.hidden = !au;
+    if (au) bloc.innerHTML = `<h2>${esc(t('autres'))}</h2><p class="note">${esc(au.source)}</p><ul class="liste-simple">${au.urgences.map((u) => `<li><strong>${esc(u.installation)}</strong> · ${esc(u.region || '')} · ${esc(t('occupation', { o: u.civieres_occupees ?? '—', f: u.civieres_fonctionnelles ?? '—', t: u.taux_occupation ?? '—' }))}${u.extraction ? ` · ${esc(t('releve', { h: u.extraction }))}` : ''}</li>`).join('')}</ul>`;
     $('#ud-options').innerHTML = donnees.options.map((o) => `<li>${esc(o[L] || o.fr)}</li>`).join('');
     $('#ud-licence').textContent = t('licence', { l: donnees.licence, a: donnees.attribution });
   }

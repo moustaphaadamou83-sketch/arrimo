@@ -226,6 +226,18 @@ window.ARRIMO_I18N.en.aide = {
       gestes: ['Start the evacuation with its reason.', 'Confirm the proposed place for each resident: the place is reserved.', 'Record the departure (transport mode), the arrival, then plan the return; lift the evacuation at the end.'],
       erreurs: [['No free bed left', 'Choose another destination from the list of regional places.']],
     },
+    visites: {
+      nom: 'Confirmed visits',
+      but: 'Plan visits from the CLSC or the provider and see whether they took place; record care given by the residence when a visit is missed.',
+      gestes: ['Plan a visit (or a series): resident, type, provider, time slot.', 'A visit with no arrival during its time slot becomes “missed” and you are notified.', 'Choose the care given instead, then check the monthly report.'],
+      erreurs: [['Invalid time slot', 'The end must follow the start, within 8 h.']],
+    },
+    eviter: {
+      nom: 'Before calling',
+      but: 'Before calling the ambulance, review your facility’s checklist and alternatives; record the team’s decision.',
+      gestes: ['Review the checklist from your protocol.', 'If an alternative is enough, click “Transfer avoided thanks to it”; otherwise “Transfer made”.', 'The administration writes the checklist and contact details.'],
+      erreurs: [['Outdated version', 'Someone changed the checklist: reload the screen.']],
+    },
     vigilance: {
       nom: 'Discharges and alerts',
       but: 'See planned departures bed by bed (status, time and source) and explained blockages: origin, threshold, fact or hypothesis, suggested action and owner.',

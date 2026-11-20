@@ -6,7 +6,7 @@
  */
 const { ErreurHttp } = require('./db');
 
-const OBJETS = ['prealerte', 'transfert', 'demande_transport', 'demande_hebergement', 'mission_ccs', 'passage_chrono', 'coordination'];
+const OBJETS = ['prealerte', 'transfert', 'demande_transport', 'demande_hebergement', 'mission_ccs', 'passage_chrono', 'coordination', 'visite'];
 const ETAPES = ['H11', 'H12', 'H13', 'H14', 'H15', 'demande', 'decision', 'depart', 'arrivee', 'prise_en_charge', 'remise', 'reception'];
 const SOURCES = ['position', 'clic', 'connecteur', 'systeme'];
 const MOTIFS_CORRECTION = ['oubli', 'erreur_saisie', 'position_imprecise', 'panne_reseau', 'autre'];

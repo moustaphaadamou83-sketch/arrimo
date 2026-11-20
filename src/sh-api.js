@@ -263,7 +263,7 @@ function brancherSh(api, pool, route) {
     if (!o) throw new ErreurHttp(404, 'organisation_introuvable');
     return o;
   };
-  const PROFILS = (b) => [...new Set(Object.entries(b.profils_choix || {}).filter(([, v]) => v === true).map(([k]) => ({ profil_ccs: 'ccs', profil_ambulance: 'ambulance' }[k])).filter(Boolean))];
+  const PROFILS = (b) => [...new Set(Object.entries(b.profils_choix || {}).filter(([, v]) => v === true).map(([k]) => ({ profil_ccs: 'ccs', profil_ambulance: 'ambulance', profil_visites: 'visites' }[k])).filter(Boolean))];
   // Garantie de continuité (20 nov. 2026) : archive complète de l'établissement (sans aucun secret), journalisée
   api.get('/sh/etablissements/:code/export', sh(async (req) => {
     const e = await etabParCode(req.params.code);

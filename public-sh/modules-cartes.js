@@ -5,7 +5,7 @@
   const CARTES = [
     { id: 'hopital', emoji: '🏥', codes: ['lits', 'admissions_hopital', 'transferts', 'urgence', 'nsa', 'nettoyage', 'national', 'liaison_chsld'], fr: ['Hôpital', 'Lits, admissions, urgence, NSA, nettoyage'], en: ['Hospital', 'Beds, admissions, emergency, ALC, cleaning'] },
     { id: 'hebergement', emoji: '🏡', codes: ['residents', 'chambres', 'demandes_hebergement', 'entretien_chsld', 'taches', 'hospitalisations', 'reseau_chsld'], fr: ['Hébergement', 'Résidents, chambres, demandes, entretien'], en: ['Residential care', 'Residents, rooms, requests, housekeeping'] },
-    { id: 'secours', emoji: '🚑', codes: ['liaison_secours', 'transport_ambulancier', 'profil_ccs', 'profil_ambulance'], fr: ['Secours', 'Préalertes, transports ambulanciers, CCS'], en: ['Emergency services', 'Pre-alerts, ambulance transport, CCS'] },
+    { id: 'secours', emoji: '🚑', codes: ['liaison_secours', 'transport_ambulancier', 'profil_ccs', 'profil_ambulance', 'profil_visites'], fr: ['Secours', 'Préalertes, transports ambulanciers, CCS'], en: ['Emergency services', 'Pre-alerts, ambulance transport, CCS'] },
     { id: 'famille', emoji: '👨‍👩‍👧', codes: ['proches', 'portail_proches', 'messagerie_securisee', 'appels_video'], fr: ['Famille', 'Proches, portail, messagerie sécurisée'], en: ['Family', 'Relatives, portal, secure messaging'] },
     { id: 'og', emoji: '✨', codes: ['og'], fr: ['OG', 'Assistant : propose, un humain décide'], en: ['OG', 'Assistant: suggests, a person decides'] },
     { id: 'sillage', emoji: '🧭', codes: [], inclus: true, fr: ['Sillage', 'Fil du patient ou du résident entre établissements'], en: ['Trail', 'Patient or resident thread across facilities'] },

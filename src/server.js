@@ -47,6 +47,8 @@ setInterval(() => require('./webhooks').envoyer(pool).catch((e) => console.error
 setInterval(() => require('./remises').purger(pool).catch((e) => console.error('Remises de secrets :', e.code || e.name)), 60 * 60000).unref();
 // Positions des unités de secours : conservées 24 h au plus
 // Confirmation rapide des préalertes : sans réponse dans le délai, la demande est acceptée et la civière réservée
+setInterval(() => require('./msss-urgences').lire(pool).catch((e) => console.error('Lecture MSSS :', e.code || e.name)), 60 * 60000).unref();
+setInterval(() => require('./visites').manquees(pool).catch((e) => console.error('Visites manquées :', e.code || e.name)), 5 * 60000).unref();
 setInterval(() => require('./urgences-direct').echeances(pool).catch((e) => console.error('Urgences en direct :', e.code || e.name)), 60000).unref();
 setInterval(() => require('./reservations').echeances(pool).catch((e) => console.error('Confirmation rapide :', e.code || e.name)), 5000).unref();
 setInterval(() => require('./prealertes').purgerPositions(pool).catch((e) => console.error('Positions des unités :', e.code || e.name)), 60 * 60000).unref();

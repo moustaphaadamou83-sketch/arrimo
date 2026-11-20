@@ -130,13 +130,11 @@ test('Modules du chantier : « Bientôt », jamais activables ; nouveaux types l
   const chrono = TE.MODULES.find((x) => x.code === 'chrono');
   assert.strictEqual(chrono.statut, 'disponible'); assert.deepStrictEqual(TE.drapeauxDepuisChoix('hopital', { chrono: true }), { chrono: true });
   assert.strictEqual(TE.moduleActif({ type_etablissement: 'hopital', modules: { chrono: true } }, 'chrono'), true);
-  for (const code of [ 'visites_confirmees', 'eviter_transferts']) {
-    const m = TE.MODULES.find((x) => x.code === code);
-    assert.ok(m, code); assert.strictEqual(m.statut, 'a_venir', code);
-    assert.ok(m.nom && m.nom_en && m.note && m.note_en, `traduction complète : ${code}`);
-    assert.throws(() => TE.drapeauxDepuisChoix(m.types[0], { [code]: true }), { code: 'module_non_disponible' }, code);
-    assert.strictEqual(TE.moduleActif({ type_etablissement: m.types[0], modules: { [m.drapeau]: true } }, code), false, code);
+  // 21 nov. 2026 : tous les modules du chantier sont livrés ; un module à l'étude reste refusé (appels vidéo)
+  for (const code of ['chrono', 'urgences_direct', 'transferts_suivi', 'transport_planifie', 'bourse_places', 'donnees_regionales', 'mode_crise', 'visites_confirmees', 'eviter_transferts']) {
+    const m = TE.MODULES.find((x) => x.code === code); assert.strictEqual(m.statut, 'disponible', code); assert.ok(m.nom_en && m.note_en, code);
   }
+  assert.throws(() => TE.drapeauxDepuisChoix('chsld', { appels_video: true }), { code: 'module_non_disponible' });
   for (const t of ['soins_palliatifs', 'hospitalisation_domicile', 'sante_mentale']) {
     assert.ok(TE.TYPES_LOCAUX[t].court && TE.TYPES_LOCAUX[t].court_en, t);
   }

@@ -231,5 +231,23 @@ async function migrerExports(c) {
   await c.query('INSERT INTO sh_migrations(version) VALUES($1)', [EXPORTS_VERSION]);
   return true;
 }
+/* Migration 58 (21 nov. 2026) : derniers modules du cahier — Visites confirmées et Éviter les transferts inutiles « Disponible » ;
+   type de client « prestataire de soins à domicile » et profil « Visites » (intervenants). Contrainte élargie, lignes ajoutées. */
+const DERNIERS_MODULES_VERSION = 58;
+async function migrerDerniersModules(c) {
+  if ((await c.query('SELECT 1 FROM sh_migrations WHERE version=$1', [DERNIERS_MODULES_VERSION])).rowCount) return false;
+  const TE = require('../types-etablissement');
+  const types = Object.keys(TE.TYPES).map((t) => `'${t}'`).join(',');
+  await c.query(`ALTER TABLE hopitaux DROP CONSTRAINT IF EXISTS hopitaux_type_etablissement_check;
+    ALTER TABLE hopitaux ADD CONSTRAINT hopitaux_type_etablissement_check CHECK (type_etablissement IN (${types}));`);
+  await c.query("UPDATE sh_modules_catalogue SET statut = 'disponible' WHERE code IN ('visites_confirmees', 'eviter_transferts') AND statut = 'a_venir'");
+  const i = TE.MODULES.findIndex((m) => m.code === 'profil_visites'); const m = TE.MODULES[i];
+  await c.query(`INSERT INTO sh_modules_catalogue (code, nom, description, dependances, categorie, types, statut, ordre, nom_en, note)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT (code) DO NOTHING`, [m.code, m.nom, m.nom, [], m.categorie, m.types, m.statut, i + 1, m.nom_en, null]);
+  // Les types de secours ajoutés depuis la migration 45 voient aussi les profils existants
+  await c.query("UPDATE sh_modules_catalogue SET types = $1 WHERE code IN ('profil_ccs', 'profil_ambulance', 'chrono', 'urgences_direct', 'transferts_suivi', 'transport_planifie') AND NOT types @> $1", [TE.TYPES_SECOURS]);
+  await c.query('INSERT INTO sh_migrations(version) VALUES($1)', [DERNIERS_MODULES_VERSION]);
+  return true;
+}
 const VERSION_SH = TYPES_AINES_VERSION;
-module.exports = { EXPORTS_VERSION, migrerExports, CRISE_VERSION, migrerCrise, DONNEES_VERSION, migrerDonnees, BOURSE_VERSION, migrerBourse, TRANSPORT_PLANIFIE_VERSION, migrerTransportPlanifie, TRANSFERTS_VERSION, migrerTransferts, URGENCES_DIRECT_VERSION, migrerUrgencesDirect, CHRONO_VERSION, migrerChrono, MOTEUR_COMMUN_VERSION, MODULES_CHANTIER, migrerMoteurCommun, LIAISON_SECOURS_VERSION, migrerLiaisonSecours, TYPES_ETABLISSEMENT_VERSION, LIAISON_CHSLD_VERSION, PRODUCTIONS_VERSION, TYPES_LOCAUX_VERSION, DEMANDES_SITE_VERSION, VERSION_SH, migrerTypesEtablissement, migrerLiaisonChsld, migrerProductions, migrerTypesLocaux, migrerDemandesSite, migrerTypesAines };
+module.exports = { DERNIERS_MODULES_VERSION, migrerDerniersModules, EXPORTS_VERSION, migrerExports, CRISE_VERSION, migrerCrise, DONNEES_VERSION, migrerDonnees, BOURSE_VERSION, migrerBourse, TRANSPORT_PLANIFIE_VERSION, migrerTransportPlanifie, TRANSFERTS_VERSION, migrerTransferts, URGENCES_DIRECT_VERSION, migrerUrgencesDirect, CHRONO_VERSION, migrerChrono, MOTEUR_COMMUN_VERSION, MODULES_CHANTIER, migrerMoteurCommun, LIAISON_SECOURS_VERSION, migrerLiaisonSecours, TYPES_ETABLISSEMENT_VERSION, LIAISON_CHSLD_VERSION, PRODUCTIONS_VERSION, TYPES_LOCAUX_VERSION, DEMANDES_SITE_VERSION, VERSION_SH, migrerTypesEtablissement, migrerLiaisonChsld, migrerProductions, migrerTypesLocaux, migrerDemandesSite, migrerTypesAines };

@@ -516,6 +516,7 @@ async function demarrer() {
   // Ambulances et CCS : écran de secours dédié (/secours), jamais l'interface des établissements
   if (['paramedic', 'superviseur_secours', 'repartiteur'].includes(etat.moi.utilisateur.role)) { location.replace('/secours'); return; }
   if (etat.moi.utilisateur.role === 'direction_regionale') { location.replace('/direction'); return; }
+  if (etat.moi.utilisateur.role === 'intervenant') { location.replace('/intervenant'); return; }
   const etabs = etat.moi.etablissements;
   majNomUtilisateur();
   if (!etabs.length && etat.moi.utilisateur.gestionnaire) {
@@ -631,7 +632,7 @@ async function rafraichir() {
     await Promise.all([e ? majCompteurs() : null, ({
       copilote: vueCopilote, reseau: vueReseau, national: vueNational, lits: vueLits, urgence: vueUrgence, admissions: vueAdmissions, transferts: vueTransferts,
       nettoyage: vueNettoyage, vigilance: vueVigilance, nsa: vueNsa, indicateurs: vueIndicateurs, journal: vueJournal, params: vueParams,
-      admin: vueAdmin, compte: vueCompte, support:vueSupportClient, patients: vuePatients, continuite: vueContinuite, ...(window.ArrimoChsld?.vues || {}), ...(window.ArrimoSecours?.vues || {}), ...(window.ArrimoChrono?.vues || {}), ...(window.ArrimoTransportPlanifie?.vues || {}), ...(window.ArrimoBourse?.vues || {}), donnees: () => window.ArrimoDonnees.afficher($('#v-donnees'), { api, langue, etablissement_id: etat.ctx }), crise: () => window.ArrimoCrise.afficher($('#v-crise'), { api, langue, etablissement_id: etat.ctx }),
+      admin: vueAdmin, compte: vueCompte, support:vueSupportClient, patients: vuePatients, continuite: vueContinuite, ...(window.ArrimoChsld?.vues || {}), ...(window.ArrimoSecours?.vues || {}), ...(window.ArrimoChrono?.vues || {}), ...(window.ArrimoTransportPlanifie?.vues || {}), ...(window.ArrimoBourse?.vues || {}), donnees: () => window.ArrimoDonnees.afficher($('#v-donnees'), { api, langue, etablissement_id: etat.ctx }), ...(window.ArrimoVisitesEviter?.vues || {}), crise: () => window.ArrimoCrise.afficher($('#v-crise'), { api, langue, etablissement_id: etat.ctx }),
     })[etat.vue]()]);
     poserMenuParametres();
     majInfosLieu();

@@ -222,8 +222,12 @@ async function donneesPubliques(pool) {
     u.ouverte_la_plus_proche = proche || null;
   }
   const cfg = rows[0] || (await pool.query('SELECT numero_urgence, options_publiques FROM config_pays ORDER BY id LIMIT 1')).rows[0] || {};
+  // Autres urgences (fichier horaire du MSSS, Données Québec) : occupation seulement, source citée, jamais un état « fermé »
+  const msss = require('./msss-urgences');
+  const autres = msss.actif() ? await msss.autresUrgences(pool) : [];
   cache = { le: Date.now(), donnees: { version: 'v1', genere_le: new Date().toISOString(), numero_urgence: cfg.numero_urgence || '911', options: cfg.options_publiques || [],
-    licence: 'CC-BY 4.0', attribution: 'Arrimo — données déclarées par les établissements participants (démonstration, données fictives)', urgences } };
+    licence: 'CC-BY 4.0', attribution: 'Arrimo — données déclarées par les établissements participants (démonstration, données fictives)', urgences,
+    autres_urgences: autres.length ? { source: msss.ATTRIBUTION, occupation_seulement: true, urgences: autres } : null } };
   return cache.donnees;
 }
 async function apiPublique(pool, ip) {
