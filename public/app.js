@@ -2856,13 +2856,26 @@ async function vueAdmin() {
       <div class="tableau"><table><thead><tr><th>${D('th_nom')}</th><th>${D('etablissement')}</th><th>${D('th_dernier')}</th><th>${D('th_rejets')}</th><th></th></tr></thead><tbody>${cons.map((c) => `<tr>
         <td><span class="donnee">${esc(c.nom)}</span>${c.actif ? '' : ` <span class="badge">${D('revoque')}</span>`}</td><td>${esc(c.etablissement || t('admin.reseau_lect'))}</td>
         <td class="note">${c.dernier_message ? heure(c.dernier_message) : esc(t('general.aucun'))}</td><td class="num${c.rejets_24h ? ' refuse' : ''}">${c.rejets_24h}</td>
-        <td>${c.actif ? `<button class="btn dan" data-revoquer="${c.id}">${D('revoquer')}</button>` : ''}</td></tr>`).join('') || `<tr><td colspan="5" class="muted">${D('aucun_connecteur')}</td></tr>`}</tbody></table></div></div>`;
+        <td><div class="ligne"><button class="btn" data-con-messages="${c.id}">${D('con_messages')}</button>${c.etablissement_id ? `<button class="btn" data-con-corr="${c.id}">${D('con_correspondances')}</button>` : ''}${c.actif ? `<button class="btn dan" data-revoquer="${c.id}">${D('revoquer')}</button>` : ''}</div></td></tr>`).join('') || `<tr><td colspan="5" class="muted">${D('aucun_connecteur')}</td></tr>`}</tbody></table></div></div>`;
     $('#b-con').onclick = (ev) => agir(ev.target, async () => {
       // Clé jamais affichée : remise unique au contact technique du client
       const r = await api('POST', '/admin/connecteurs', { nom: $('#c-nom-con').value || t('admin.connecteur_defaut'), etablissement_id: $('#c-etab-con').value ? Number($('#c-etab-con').value) : null, courriel_technique: $('#c-courriel-con').value });
       toast(t(r.remise.envoyee ? 'admin.remise_envoyee' : 'admin.remise_non_envoyee', { a: r.remise.destinataire }));
     });
     corps.querySelectorAll('[data-revoquer]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/admin/connecteurs/${b.dataset.revoquer}/revoquer`), t('admin.revoque_ok')); });
+    // Connecteur DSN (22 nov. 2026) : messages reçus et correspondance des codes de lits
+    corps.querySelectorAll('[data-con-messages]').forEach((b) => { b.onclick = async () => {
+      const m = await api('GET', `/admin/connecteurs/${b.dataset.conMessages}/messages`);
+      modale(D('con_messages'), m.length ? `<div class="tableau"><table><thead><tr><th>${D('th_recu')}</th><th>${D('th_evenement')}</th><th>${D('th_statut')}</th><th>${D('th_detail')}</th></tr></thead><tbody>${m.map((x) => `<tr><td class="note">${esc(heure(x.recu_le))}</td><td>${esc(x.evenement.replaceAll('_', ' '))}</td><td><span class="badge${x.statut === 'rejete' ? ' refuse' : ''}">${esc(D(`st_${x.statut}`))}</span></td><td class="note">${esc(x.detail || '')}</td></tr>`).join('')}</tbody></table></div>` : `<p class="note">${esc(t('general.aucun'))}</p>`, [{ label: t('general.fermer') }]);
+    }; });
+    corps.querySelectorAll('[data-con-corr]').forEach((b) => { b.onclick = async () => {
+      const id = b.dataset.conCorr; const c = await api('GET', `/admin/connecteurs/${id}/correspondances`);
+      modale(D('con_correspondances'), `<p class="note">${D('corr_aide')}</p><textarea id="corr-texte" rows="10" style="width:100%;font-family:ui-monospace,monospace">genre;code DSN;code Arrimo\n${esc(c.map((x) => `${x.genre};${x.code_externe};${x.code_arrimo}`).join('\n'))}</textarea><p class="note" id="corr-retour"></p>`,
+        [{ label: t('general.annuler') }, { label: D('corr_enregistrer'), pri: true, run: async () => {
+          const r = await api('PUT', `/admin/connecteurs/${id}/correspondances`, { texte: $('#corr-texte').value });
+          if (!r.enregistre) { $('#corr-retour').textContent = D('corr_erreurs', { n: r.erreurs.length, l: r.erreurs.slice(0, 5).map((x) => `${x.ligne}${x.code ? ` (${x.code})` : ''}`).join(', ') }); return false; }
+          toast(D('corr_ok', { n: r.lignes })); return true; } }]);
+    }; });
   }
 
   if (etat.adminOnglet === 'journal') {

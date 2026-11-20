@@ -4,7 +4,9 @@
  * l'hôpital envoie le message brut ; Arrimo le traduit vers les événements existants (src/connecteurs.js), mêmes règles et
  * même idempotence (MSH-10). Seul l'identifiant PID-3 (référence pseudonymisée attendue) est lu : le nom (PID-5), la date de
  * naissance et tout autre champ d'identité ne sont jamais lus ni conservés.
- * Correspondances : A01 admission · A02 transfert interne · A03 congé · A04 arrivée à l'urgence (civière) · A16 congé prévu.
+ * Correspondances : A01 admission · A02 transfert interne · A03 congé · A04 arrivée à l'urgence (civière) · A16 congé prévu ;
+ * connecteur DSN (22 nov. 2026) : A11, A12, A13 annulations · A20 statut de lit (NPU) · A17 échange de lits (à confirmer dans Arrimo) ·
+ * A06, A07, A08, A21, A22 reçus, journalisés, sans changement d'état.
  * Lit et civière : composante « lit » de PV1-3 (PV1-6 pour l'emplacement précédent), égale au code Arrimo.
  */
 const { ErreurHttp } = require('./db');
@@ -13,17 +15,20 @@ function analyser(texte) {
   const brut = String(texte || '').replace(/\r\n|\n/g, '\r').trim();
   if (!brut.startsWith('MSH')) throw new ErreurHttp(400, 'hl7_invalide');
   const sep = brut[3]; const comp = brut[4] || '^';
-  const segments = {};
+  const segments = {}; const tous = {};
   for (const ligne of brut.split('\r').filter(Boolean)) {
     const champs = ligne.split(sep);
     // MSH : le séparateur est lui-même MSH-1 ; on décale pour garder la numérotation HL7
     if (champs[0] === 'MSH') champs.splice(1, 0, sep);
     if (!segments[champs[0]]) segments[champs[0]] = champs;
+    (tous[champs[0]] = tous[champs[0]] || []).push(champs);
   }
-  const champ = (seg, n, c = 1) => ((segments[seg] || [])[n] || '').split(comp)[c - 1] || '';
+  const champ = (seg, n, c = 1, rang = 0) => (((tous[seg] || [])[rang] || [])[n] || '').split(comp)[c - 1] || '';
   return { segments, champ };
 }
-const EVENEMENTS = { A01: 'admission', A02: 'transfert_interne', A03: 'conge', A04: 'arrivee_urgence', A16: 'conge_prevu' };
+const EVENEMENTS = { A01: 'admission', A02: 'transfert_interne', A03: 'conge', A04: 'arrivee_urgence', A16: 'conge_prevu',
+  A06: 'changement_classe', A07: 'changement_classe', A08: 'mise_a_jour', A11: 'annulation_admission', A12: 'annulation_transfert', A13: 'annulation_conge',
+  A17: 'echange_lits', A20: 'statut_lit', A21: 'absence_temporaire', A22: 'retour_absence_temporaire' };
 const dateHl7 = (v) => {
   const m = String(v || '').match(/^(\d{4})(\d{2})(\d{2})(\d{2})?(\d{2})?/);
   return m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0))).toISOString() : null;
@@ -36,7 +41,10 @@ function traduire(texte) {
   if (type !== 'ADT' || !EVENEMENTS[declencheur]) throw new ErreurHttp(400, 'hl7_evenement_non_pris_en_charge', { evenement: `${type}^${declencheur}` });
   if (!controle) throw new ErreurHttp(400, 'hl7_invalide');
   const ev = { identifiant: controle.slice(0, 120), evenement: EVENEMENTS[declencheur], patient_ref: champ('PID', 3, 1).slice(0, 40) };
-  if (declencheur === 'A04') ev.civiere = champ('PV1', 3, 3); else ev.lit = champ('PV1', 3, 3);
+  if (declencheur === 'A04') ev.civiere = champ('PV1', 3, 3); else if (declencheur === 'A20') ev.lit = champ('NPU', 1, 3); else ev.lit = champ('PV1', 3, 3);
+  if (declencheur === 'A12') ev.lit_annule = champ('PV1', 6, 3);
+  if (declencheur === 'A17') { ev.lit2 = champ('PV1', 3, 3, 1); ev.patient_ref2 = champ('PID', 3, 1, 1).slice(0, 40); }
+  if (declencheur === 'A20') ev.statut_lit = champ('NPU', 2, 1);
   if (declencheur === 'A02') ev.lit_precedent = champ('PV1', 6, 3);
   if (declencheur === 'A04') ev.date = dateHl7(champ('PV1', 44, 1)) || dateHl7(champ('EVN', 2, 1));
   if (declencheur === 'A16') ev.date = dateHl7(champ('PV2', 9, 1)) || dateHl7(champ('EVN', 3, 1));

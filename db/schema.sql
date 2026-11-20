@@ -2246,3 +2246,13 @@ CREATE TABLE IF NOT EXISTS formation_satisfaction (
   cree_le         timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (utilisateur_id, parcours)
 );
+
+-- Connecteur DSN (22 nov. 2026) : identique à db/migrations/20261122-dsn.sql
+CREATE TABLE IF NOT EXISTS connecteur_correspondances (
+  connecteur_id  int  NOT NULL REFERENCES connecteurs(id) ON DELETE CASCADE,
+  genre          text NOT NULL CHECK (genre IN ('lit', 'civiere')),
+  code_externe   text NOT NULL CHECK (length(code_externe) BETWEEN 1 AND 60),
+  code_arrimo    text NOT NULL CHECK (length(code_arrimo) BETWEEN 1 AND 60),
+  modifie_le     timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (connecteur_id, genre, code_externe)
+);

@@ -678,6 +678,47 @@ function brancher(api, pool, route, entier, options = {}) {
     await journalAdmin(pool, req.utilisateur, 'Connecteur créé', con.nom, `remise à ${remise.destinataire}`, etab);
     return { id: con.id, nom: con.nom, etablissement_id: con.etablissement_id, remise };
   }));
+  // Connecteur DSN (22 nov. 2026) : messages reçus (accepté, ignoré, rejeté, avec la raison) et correspondance des codes de lits
+  const connecteurGerable = async (req) => {
+    exigerAdmin(req);
+    const c = (await pool.query('SELECT * FROM connecteurs WHERE id = $1', [entier(req.params.id, 'id')])).rows[0];
+    if (!c) throw new ErreurHttp(404, 'connecteur_introuvable');
+    if (c.etablissement_id) await exigerEtabGerable(req.utilisateur, c.etablissement_id); else if (!req.utilisateur.gestionnaire) throw new ErreurHttp(403, 'reserve_gestionnaire');
+    return c;
+  };
+  api.get('/admin/connecteurs/:id/messages', route(async (req) => {
+    const c = await connecteurGerable(req);
+    const statut = ['applique', 'ignore', 'rejete'].includes(req.query.statut) ? req.query.statut : null;
+    return (await pool.query(`SELECT identifiant, evenement, statut, detail, recu_le FROM messages_connecteur WHERE connecteur_id = $1 AND ($2::text IS NULL OR statut = $2)
+      ORDER BY recu_le DESC LIMIT 200`, [c.id, statut])).rows;
+  }));
+  api.get('/admin/connecteurs/:id/correspondances', route(async (req) => {
+    const c = await connecteurGerable(req);
+    return (await pool.query('SELECT genre, code_externe, code_arrimo FROM connecteur_correspondances WHERE connecteur_id = $1 ORDER BY genre, code_externe', [c.id])).rows;
+  }));
+  /** Remplace la table : texte « genre;code DSN;code Arrimo », une ligne par lit ou civière ; chaque code Arrimo doit exister. */
+  api.put('/admin/connecteurs/:id/correspondances', route(async (req) => {
+    const c = await connecteurGerable(req);
+    if (!c.etablissement_id) throw new ErreurHttp(400, 'connecteur_lecture');
+    const lignes = String(req.body.texte || '').split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !/^genre\b/i.test(l));
+    if (lignes.length > 5000) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'texte' });
+    const lits = new Set((await pool.query('SELECT code FROM lits WHERE etablissement_id = $1', [c.etablissement_id])).rows.map((x) => x.code));
+    const civ = new Set((await pool.query('SELECT code FROM civieres WHERE etablissement_id = $1', [c.etablissement_id])).rows.map((x) => x.code));
+    const erreurs = []; const ok = [];
+    lignes.forEach((l, i) => {
+      const [g, ext, arr] = l.split(/[;,\t]/).map((x) => String(x || '').trim());
+      if (!['lit', 'civiere'].includes(g) || !ext || !arr || ext.length > 60) { erreurs.push({ ligne: i + 1, raison: 'format' }); return; }
+      if (!(g === 'lit' ? lits : civ).has(arr)) { erreurs.push({ ligne: i + 1, raison: 'code_arrimo_inconnu', code: arr }); return; }
+      ok.push([g, ext, arr]);
+    });
+    if (erreurs.length) return { enregistre: false, erreurs: erreurs.slice(0, 50) };
+    await transaction(pool, async (t) => {
+      await t.query('DELETE FROM connecteur_correspondances WHERE connecteur_id = $1', [c.id]);
+      for (const [g, ext, arr] of ok) await t.query('INSERT INTO connecteur_correspondances (connecteur_id, genre, code_externe, code_arrimo) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING', [c.id, g, ext, arr]);
+    });
+    await journalAdmin(pool, req.utilisateur, 'Connecteur : correspondances', c.nom, `${ok.length} codes`, c.etablissement_id);
+    return { enregistre: true, lignes: ok.length };
+  }));
   api.post('/admin/connecteurs/:id/revoquer', route(async (req) => {
     exigerAdmin(req);
     const c = (await pool.query('SELECT * FROM connecteurs WHERE id = $1', [entier(req.params.id, 'id')])).rows[0];

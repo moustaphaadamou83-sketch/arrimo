@@ -688,7 +688,7 @@ window.ARRIMO_I18N.fr = {
       courriel_autre_etab: 'Ce courriel appartient déjà à un compte d’un autre établissement.', doublon: 'Doublon : déjà présent à la ligne {premiere}.',
     },
   },
-  admin: {
+  admin: { con_messages: 'Messages', con_correspondances: 'Correspondances', th_recu: 'Reçu', th_evenement: 'Événement', th_statut: 'Statut', th_detail: 'Détail', st_applique: 'Appliqué', st_ignore: 'Ignoré', st_rejete: 'Rejeté', corr_aide: 'Une ligne par lit ou civière : genre (lit ou civiere) ; code dans le DSN ; code dans Arrimo. Chaque code Arrimo doit exister.', corr_enregistrer: 'Enregistrer', corr_ok: '{n} correspondances enregistrées.', corr_erreurs: '{n} lignes à corriger : {l}', 
     courriel_technique: 'Courriel du contact technique du client', remise_envoyee: 'Accès remis par un lien à usage unique (24 h) envoyé à {a}.', remise_non_envoyee: 'Accès préparé pour {a}, mais le courriel n’est pas configuré : le lien n’a pas pu être envoyé.',
     filtre_statut: 'État du compte', statut_tous: 'Tous les comptes', statut_actifs: 'Actifs', statut_desactives: 'Désactivés',
     acces_titre: 'Accès effectifs par rôle. Les modules désactivés pour un établissement restent masqués pour tous.', acces_fonction: 'Fonction',

@@ -687,7 +687,7 @@ window.ARRIMO_I18N.en = {
       courriel_autre_etab: 'This email already belongs to an account of another facility.', doublon: 'Duplicate: already on line {premiere}.',
     },
   },
-  admin: {
+  admin: { con_messages: 'Messages', con_correspondances: 'Code mapping', th_recu: 'Received', th_evenement: 'Event', th_statut: 'Status', th_detail: 'Detail', st_applique: 'Applied', st_ignore: 'Ignored', st_rejete: 'Rejected', corr_aide: 'One line per bed or stretcher: type (lit or civiere); code in the EHR; code in Arrimo. Each Arrimo code must exist.', corr_enregistrer: 'Save', corr_ok: '{n} mappings saved.', corr_erreurs: '{n} lines to fix: {l}', 
     courriel_technique: 'Client technical contact email', remise_envoyee: 'Access delivered through a single-use link (24 h) sent to {a}.', remise_non_envoyee: 'Access prepared for {a}, but email is not configured: the link could not be sent.',
     filtre_statut: 'Account status', statut_tous: 'All accounts', statut_actifs: 'Active', statut_desactives: 'Deactivated',
     acces_titre: 'Effective access by role. Modules turned off for a facility stay hidden for everyone.', acces_fonction: 'Feature',

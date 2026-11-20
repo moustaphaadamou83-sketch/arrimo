@@ -30,7 +30,11 @@ async function identifier(pool, cle) {
   return rows[0];
 }
 
-const EVENEMENTS = ['admission', 'transfert_interne', 'conge', 'conge_prevu', 'arrivee_urgence'];
+const EVENEMENTS = ['admission', 'transfert_interne', 'conge', 'conge_prevu', 'arrivee_urgence',
+  // Connecteur DSN (22 nov. 2026)
+  'annulation_admission', 'annulation_transfert', 'annulation_conge', 'statut_lit', 'echange_lits', 'mise_a_jour', 'changement_classe', 'absence_temporaire', 'retour_absence_temporaire'];
+// Statut de lit HL7 (NPU-2) : U inoccupé, C fermé, H entretien, K contaminé, I isolé, O occupé
+const STATUTS_LIT = ['U', 'C', 'H', 'K', 'I', 'O'];
 
 /** Applique un événement. Idempotent : le même identifiant n'est appliqué qu'une fois. */
 async function recevoirEvenement(pool, connecteur, ev) {
@@ -40,8 +44,10 @@ async function recevoirEvenement(pool, connecteur, ev) {
   if (!EVENEMENTS.includes(ev.evenement)) throw new ErreurHttp(400, 'evenement_invalide', { liste: EVENEMENTS.join(', ') });
 
   const trouverLit = async (c, code) => {
+    // Table de correspondance du connecteur (code du lit dans Epic → code Arrimo), sinon le code tel quel
+    const map = (await c.query("SELECT code_arrimo FROM connecteur_correspondances WHERE connecteur_id = $1 AND genre = 'lit' AND code_externe = $2", [connecteur.id, String(code || '')])).rows[0];
     const r = await c.query('SELECT id, code, etat, patient_ref, version FROM lits WHERE etablissement_id = $1 AND code = $2',
-      [connecteur.etablissement_id, String(code || '')]);
+      [connecteur.etablissement_id, map ? map.code_arrimo : String(code || '')]);
     if (!r.rows[0]) throw new ErreurHttp(404, 'lit_inconnu', { code });
     return r.rows[0];
   };
@@ -87,10 +93,49 @@ async function recevoirEvenement(pool, connecteur, ev) {
           // Arrivée à l'urgence transmise par le système de l'hôpital : référence seulement, civière désignée par son code
           const deja = (await c.query(`SELECT code FROM civieres WHERE etablissement_id = $1 AND patient_ref = $2 AND etat = 'occupee'`, [connecteur.etablissement_id, ref])).rows[0];
           if (deja) { statut = 'ignore'; detail = `${ref} déjà sur la civière ${deja.code}`; return; }
-          const cv = (await c.query('SELECT id, code FROM civieres WHERE etablissement_id = $1 AND code = $2', [connecteur.etablissement_id, String(ev.civiere || '')])).rows[0];
+          const mapC = (await c.query("SELECT code_arrimo FROM connecteur_correspondances WHERE connecteur_id = $1 AND genre = 'civiere' AND code_externe = $2", [connecteur.id, String(ev.civiere || '')])).rows[0];
+          const cv = (await c.query('SELECT id, code FROM civieres WHERE etablissement_id = $1 AND code = $2', [connecteur.etablissement_id, mapC ? mapC.code_arrimo : String(ev.civiere || '')])).rows[0];
           if (!cv) throw new ErreurHttp(404, 'civiere_introuvable');
           await require('./regles').changerEtatCiviere(c, pool, null, cv.id, 'occupee', { patientRef: ref, arrivee: ev.date || null, detail: `${connecteur.nom} : arrivée à l’urgence` });
           detail = `Arrivée ${ref} sur la civière ${cv.code} (source : ${connecteur.nom})`;
+        } else if (ev.evenement === 'annulation_admission') {
+          // A11 : l'admission n'a pas eu lieu ; le lit passe au nettoyage (seule sortie permise d'un lit occupé), l'entretien confirme
+          const lit = await trouverLit(c, ev.lit);
+          if (!(lit.etat === 'occupe' && lit.patient_ref === ref)) { statut = 'ignore'; detail = `Annulation d’admission : lit ${ev.lit} non occupé par ${ref}`; return; }
+          await changerEtat(c, pool, null, lit.id, 'nettoyage', { detail: `${connecteur.nom} : annulation d’admission` });
+          detail = `Annulation de l’admission ${ref} au lit ${ev.lit}`;
+        } else if (ev.evenement === 'annulation_transfert') {
+          // A12 : retour au lit d'origine (PV1-3) ; le lit du transfert annulé (PV1-6) passe au nettoyage
+          const annule = await trouverLit(c, ev.lit_annule);
+          if (annule.etat === 'occupe' && annule.patient_ref === ref) await changerEtat(c, pool, null, annule.id, 'nettoyage', { detail: `${connecteur.nom} : annulation de transfert` });
+          const retour = await trouverLit(c, ev.lit);
+          if (retour.etat === 'nettoyage') await changerEtat(c, pool, null, retour.id, 'libre', { detail: `${connecteur.nom} : annulation de transfert, retour au lit` });
+          await occuper(c, await trouverLit(c, ev.lit), ref, `${connecteur.nom} : annulation de transfert`);
+          detail = `Annulation du transfert ${ev.lit_annule} → ${ev.lit}`;
+        } else if (ev.evenement === 'annulation_conge') {
+          // A13 : le patient n'est pas parti ; son lit redevient occupé s'il n'a pas été donné à quelqu'un d'autre
+          const lit = await trouverLit(c, ev.lit);
+          if (lit.etat === 'occupe' && lit.patient_ref === ref) { statut = 'ignore'; detail = `${ref} déjà au lit ${ev.lit}`; return; }
+          if (lit.etat === 'nettoyage') await changerEtat(c, pool, null, lit.id, 'libre', { detail: `${connecteur.nom} : annulation de congé` });
+          else if (lit.etat !== 'libre') throw new ErreurHttp(409, 'admission_impossible', { code: lit.code, lit_etat: lit.etat, ref });
+          await occuper(c, await trouverLit(c, ev.lit), ref, `${connecteur.nom} : annulation de congé`);
+          detail = `Annulation du congé de ${ref} au lit ${ev.lit}`;
+        } else if (ev.evenement === 'statut_lit') {
+          // A20 : statut d'un lit dans le DSN ; appliqué seulement par une transition permise, sinon journalisé comme écart
+          if (!STATUTS_LIT.includes(ev.statut_lit)) throw new ErreurHttp(400, 'evenement_invalide', { liste: STATUTS_LIT.join(', ') });
+          const lit = await trouverLit(c, ev.lit);
+          const vise = { U: 'libre', C: 'indispo', K: 'indispo', I: 'indispo', H: 'nettoyage', O: 'occupe' }[ev.statut_lit];
+          if (lit.etat === vise) { statut = 'ignore'; detail = `Lit ${ev.lit} déjà ${vise}`; return; }
+          const permis = (lit.etat === 'nettoyage' && vise === 'libre') || (lit.etat === 'indispo' && vise === 'libre') || (lit.etat === 'libre' && vise === 'indispo');
+          if (!permis) { statut = 'ignore'; detail = `Écart : lit ${ev.lit} « ${lit.etat} » dans Arrimo, « ${vise} » dans le DSN ; à vérifier`; return; }
+          await changerEtat(c, pool, null, lit.id, vise, { detail: `${connecteur.nom} : statut du lit (${ev.statut_lit})`, ...(vise === 'indispo' ? { motif: ['K', 'I'].includes(ev.statut_lit) ? 'infection' : 'autre' } : {}) });
+          detail = `Statut du lit ${ev.lit} : ${vise}`;
+        } else if (ev.evenement === 'echange_lits') {
+          // A17 : échange de lits entre deux patients ; jamais deviné : journalisé pour confirmation par la coordination
+          statut = 'ignore'; detail = `Échange de lits ${ev.lit} ↔ ${ev.lit2} reçu : à confirmer dans Arrimo`; return;
+        } else if (['mise_a_jour', 'changement_classe', 'absence_temporaire', 'retour_absence_temporaire'].includes(ev.evenement)) {
+          // A08, A06, A07, A21, A22 : aucune donnée d'identité conservée, aucun changement d'état ; reçus et journalisés
+          statut = 'ignore'; detail = `${ev.evenement.replaceAll('_', ' ')} reçu (aucun changement d’état)`; return;
         } else if (ev.evenement === 'conge_prevu') {
           const lit = await trouverLit(c, ev.lit);
           const d = new Date(ev.date);
