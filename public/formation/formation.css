@@ -110,3 +110,9 @@ a { color: var(--sarcelle); }
   .fo-points { width: 100%; justify-content: center; margin: 4px 0 0; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+/* Exercice guidé (« À vous de jouer ») */
+.fo-consigne { font-size: 18px; margin: 4px 0 12px; }
+.fo-cible { cursor: crosshair; }
+.fo-cible img { animation: none; user-select: none; }
+.fo-cible .zone.indice { background: transparent; cursor: pointer; padding: 0; pointer-events: auto; z-index: 2; }
+.fo-cible .bulle { position: absolute; left: 50%; top: calc(100% + 8px); transform: translateX(-50%); white-space: nowrap; background: var(--ambre); color: #1F2937; font-weight: 800; font-size: 14px; padding: 6px 10px; border-radius: 999px; box-shadow: 0 6px 16px rgba(0, 0, 0, .25); }

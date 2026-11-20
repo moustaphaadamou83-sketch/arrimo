@@ -53,7 +53,7 @@ async function parcoursDe(db, x) {
 function etatDe(pr) {
   if (!pr) return 'a_faire';
   if (pr.reussi_le) return 'reussi';
-  return pr.vu_le || pr.essais > 0 ? 'en_cours' : 'a_faire';
+  return pr.vu_le || pr.essais > 0 || pr.pratique_le ? 'en_cours' : 'a_faire';
 }
 
 /** « Ma formation » : parcours, capsules visibles avec leur état, progression, prochaine capsule. */
@@ -107,7 +107,9 @@ async function contenu(pool, u, code, langue) {
       const img = `captures/${c.code}/${i + 1}-${l}.jpg`; const voix = `voix/${c.code}/${i + 1}-${l}.mp3`;
       return { sous_titre: s.st[l], image: existe(img) ? `/formation/${img}` : null, zone: m[i + 1]?.[l] || m[i + 1]?.fr || null, voix: existe(voix) ? `/formation/${voix}` : null };
     }),
-    quiz: c.quiz.map((q) => ({ question: q.q[l], choix: q.choix[l] })), exercice: null };
+    quiz: c.quiz.map((q) => ({ question: q.q[l], choix: q.choix[l] })),
+    exercice: (c.exercice || []).map((x) => { const img = `captures/${c.code}/${x.scene}-${l}.jpg`; return { consigne: x.consigne[l], image: existe(img) ? `/formation/${img}` : null }; }),
+    pratique: !!pr?.pratique_le, quiz_reussi: !!pr?.quiz_reussi_le };
 }
 
 async function marquerVue(pool, u, code) {
@@ -136,9 +138,52 @@ async function repondre(pool, u, code, b = {}) {
   const reussi = score >= SEUIL && !horsTemps;
   await pool.query('INSERT INTO formation_essais (utilisateur_id, capsule, genre, score, reussi, duree_ms, details) VALUES ($1, $2, \'quiz\', $3, $4, $5, $6)',
     [u.id, c.code, score, reussi, duree, JSON.stringify({ justes, hors_temps: horsTemps })]);
-  await pool.query(`UPDATE formation_progression SET essais = essais + 1, quiz_debut_le = NULL, meilleur_score = GREATEST(COALESCE(meilleur_score, 0), $3),
-      reussi_le = CASE WHEN $4 THEN COALESCE(reussi_le, now()) ELSE reussi_le END, maj_le = now() WHERE utilisateur_id = $1 AND capsule = $2`, [u.id, c.code, score, reussi]);
-  return { score, reussi, hors_temps: horsTemps, duree_ms: duree, seuil: SEUIL, corrections: justes.map((j, i) => ({ juste: j, bonne: c.quiz[i].bonne })) };
+  const sansExercice = !(c.exercice || []).length;
+  const maj = (await pool.query(`UPDATE formation_progression SET essais = essais + 1, quiz_debut_le = NULL, meilleur_score = GREATEST(COALESCE(meilleur_score, 0), $3),
+      quiz_reussi_le = CASE WHEN $4 THEN COALESCE(quiz_reussi_le, now()) ELSE quiz_reussi_le END,
+      reussi_le = CASE WHEN $4 AND ($5 OR pratique_le IS NOT NULL) THEN COALESCE(reussi_le, now()) ELSE reussi_le END, maj_le = now()
+    WHERE utilisateur_id = $1 AND capsule = $2 RETURNING reussi_le, pratique_le`, [u.id, c.code, score, reussi, sansExercice])).rows[0];
+  return { capsule_reussie: !!maj.reussi_le, exercice_a_faire: reussi && !sansExercice && !maj.pratique_le, score, reussi, hors_temps: horsTemps, duree_ms: duree, seuil: SEUIL, corrections: justes.map((j, i) => ({ juste: j, bonne: c.quiz[i].bonne })) };
 }
 
-module.exports = { moi, choisir, contenu, marquerVue, debutQuiz, repondre, SEUIL, _contexte: contexte, _actif: actif };
+/** Exercice guidé (« À vous de jouer ») : l'état (étape, erreurs) est tenu par le serveur ; chaque clic est vérifié contre la zone
+    attendue de la capture ; après une erreur, la zone est montrée (« cliquez ici »). Note : 100 − 25 par erreur, réussi à 50. */
+const MARGE = 2;
+async function debutExercice(pool, u, code, b = {}) {
+  const c = await capsuleAccessible(pool, u, code);
+  if (!(c.exercice || []).length) throw new ErreurHttp(404, 'objet_introuvable');
+  const etat = { etape: 0, erreurs: 0, langue: L(b.langue), debut: Date.now() };
+  await pool.query(`INSERT INTO formation_progression (utilisateur_id, capsule, exercice_etat) VALUES ($1, $2, $3)
+    ON CONFLICT (utilisateur_id, capsule) DO UPDATE SET exercice_etat = $3, maj_le = now()`, [u.id, c.code, JSON.stringify(etat)]);
+  return { etapes: c.exercice.length, etape: 0 };
+}
+async function clicExercice(pool, u, code, b = {}) {
+  const c = await capsuleAccessible(pool, u, code);
+  const pr = (await pool.query('SELECT exercice_etat, quiz_reussi_le FROM formation_progression WHERE utilisateur_id = $1 AND capsule = $2', [u.id, c.code])).rows[0];
+  const etat = pr?.exercice_etat; if (!etat || etat.etape >= (c.exercice || []).length) throw new ErreurHttp(409, 'parametre_invalide', { nom: 'debut' });
+  const x = Number(b.x); const y = Number(b.y);
+  if (!(x >= 0 && x <= 100 && y >= 0 && y <= 100)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'clic' });
+  const etapeDef = c.exercice[etat.etape];
+  const zones = lireManifeste()[c.code]?.[etapeDef.scene] || {};
+  const z = zones[etat.langue] || zones.fr || null;
+  const juste = !z || (x >= z.x - MARGE && x <= z.x + z.w + MARGE && y >= z.y - MARGE && y <= z.y + z.h + MARGE);
+  if (!juste) {
+    etat.erreurs += 1;
+    await pool.query('UPDATE formation_progression SET exercice_etat = $3, maj_le = now() WHERE utilisateur_id = $1 AND capsule = $2', [u.id, c.code, JSON.stringify(etat)]);
+    return { juste: false, indice: z, etape: etat.etape };
+  }
+  etat.etape += 1;
+  if (etat.etape < c.exercice.length) {
+    await pool.query('UPDATE formation_progression SET exercice_etat = $3, maj_le = now() WHERE utilisateur_id = $1 AND capsule = $2', [u.id, c.code, JSON.stringify(etat)]);
+    return { juste: true, termine: false, etape: etat.etape };
+  }
+  const score = Math.max(0, 100 - 25 * etat.erreurs); const reussi = score >= 50;
+  await pool.query('INSERT INTO formation_essais (utilisateur_id, capsule, genre, score, reussi, duree_ms, details) VALUES ($1, $2, \'exercice\', $3, $4, $5, $6)',
+    [u.id, c.code, score, reussi, Date.now() - (etat.debut || Date.now()), JSON.stringify({ erreurs: etat.erreurs })]);
+  const maj = (await pool.query(`UPDATE formation_progression SET exercice_etat = NULL, pratique_le = CASE WHEN $3 THEN COALESCE(pratique_le, now()) ELSE pratique_le END,
+      reussi_le = CASE WHEN $3 AND quiz_reussi_le IS NOT NULL THEN COALESCE(reussi_le, now()) ELSE reussi_le END, maj_le = now()
+    WHERE utilisateur_id = $1 AND capsule = $2 RETURNING reussi_le`, [u.id, c.code, reussi])).rows[0];
+  return { juste: true, termine: true, score, reussi, erreurs: etat.erreurs, capsule_reussie: !!maj.reussi_le };
+}
+
+module.exports = { moi, choisir, contenu, marquerVue, debutQuiz, repondre, debutExercice, clicExercice, SEUIL, _contexte: contexte, _actif: actif };

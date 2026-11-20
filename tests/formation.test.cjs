@@ -82,9 +82,12 @@ test('capsule : contenu sans les réponses ; capsule hors parcours ou en prépar
   await appel('soins.a', 'POST', '/formation/capsules/C1/quiz/debut');
   const bon = CAT.capsule('C1').quiz.map((q) => q.bonne);
   const r = (await appel('soins.a', 'POST', '/formation/capsules/C1/quiz', { reponses: bon })).d; assert.deepStrictEqual([r.reussi, r.score], [true, 100]);
+  const man = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'public', 'formation', 'captures', 'manifeste.json'), 'utf8'));
+  await appel('soins.a', 'POST', '/formation/capsules/C1/exercice/debut');
+  for (const e of CAT.capsule('C1').exercice) { const z = man.C1[e.scene].fr; await appel('soins.a', 'POST', '/formation/capsules/C1/exercice/clic', { x: z.x + z.w / 2, y: z.y + z.h / 2 }); }
   const m = (await appel('soins.a', 'GET', '/formation/moi')).d;
   assert.strictEqual(m.parcours[0].capsules.find((x) => x.code === 'C1').etat, 'reussi'); assert.ok(m.progression > 0);
-  const essais = (await pool.query("SELECT count(*)::int n FROM formation_essais WHERE capsule = 'C1'")).rows[0].n; assert.strictEqual(essais, 2);
+  const essais = (await pool.query("SELECT count(*)::int n FROM formation_essais WHERE capsule = 'C1' AND genre = 'quiz'")).rows[0].n; assert.strictEqual(essais, 2);
 });
 
 test('test chronométré (60 s) : au-delà du temps, échec même avec les bonnes réponses ; temps mesuré par le serveur', async () => {
@@ -101,4 +104,22 @@ test('interface : textes de « Ma formation » complets en FR et en EN', () => {
   const { fr, en } = ctx.window.ArrimoFormation?.TXT || {};
   assert.ok(fr && en, 'textes exposés'); assert.deepStrictEqual(cles(fr), cles(en));
   assert.ok(!/\(s\)/.test(JSON.stringify(fr)), 'aucun « (s) »');
+});
+
+test('exercice guidé : état tenu par le serveur, clic faux → bulle, clic juste → étape suivante ; capsule réussie seulement avec exercice ET test', async () => {
+  const man = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'public', 'formation', 'captures', 'manifeste.json'), 'utf8'));
+  const c = CAT.capsule('H2');
+  assert.strictEqual((await appel('soins.a', 'POST', '/formation/capsules/H2/exercice/clic', { x: 1, y: 1 })).s, 409, 'pas de clic sans début');
+  await appel('soins.a', 'POST', '/formation/capsules/H2/quiz/debut');
+  const q = (await appel('soins.a', 'POST', '/formation/capsules/H2/quiz', { reponses: c.quiz.map((x) => x.bonne) })).d;
+  assert.deepStrictEqual([q.reussi, q.capsule_reussie, q.exercice_a_faire], [true, false, true], 'test seul : capsule pas encore réussie');
+  assert.strictEqual((await appel('soins.a', 'POST', '/formation/capsules/H2/exercice/debut')).d.etapes, c.exercice.length);
+  const z = man.H2[c.exercice[0].scene].fr;
+  const faux = (await appel('soins.a', 'POST', '/formation/capsules/H2/exercice/clic', { x: 99, y: 99 })).d;
+  assert.deepStrictEqual([faux.juste, faux.indice], [false, z]);
+  const bon = (await appel('soins.a', 'POST', '/formation/capsules/H2/exercice/clic', { x: z.x + z.w / 2, y: z.y + z.h / 2 })).d;
+  assert.deepStrictEqual([bon.juste, bon.termine, bon.score, bon.reussi, bon.capsule_reussie], [true, true, 75, true, true]);
+  const m = (await appel('soins.a', 'GET', '/formation/moi')).d;
+  assert.strictEqual(m.parcours[0].capsules.find((x) => x.code === 'H2').etat, 'reussi');
+  assert.strictEqual((await appel('soins.a', 'POST', '/formation/capsules/H2/exercice/clic', { x: -5, y: 2 })).s, 409, 'exercice terminé');
 });

@@ -17,6 +17,7 @@ const CAPSULES = [
   // ---------------------------------------------------------------- 🚑 Secours
   C('S1', 'liaison_secours', '🚑', 150, 'Envoyer une préalerte', 'Send a pre-alert', {
     pret: true, compte: 'ambulance.demo@demo.arrimo',
+    exercice: [{ scene: 2, consigne: ST('Choisissez l’urgence de destination.', 'Choose the destination department.') }, { scene: 3, consigne: ST('Indiquez la priorité déclarée.', 'Set the declared priority.') }, { scene: 4, consigne: ST('Envoyez la préalerte.', 'Send the pre-alert.') }],
     objectif: ST('Vous saurez prévenir l’urgence de destination en un geste, même si le réseau coupe.', 'You will know how to warn the destination emergency department in one tap, even if the network drops.'),
     scenes: [
       { onglet: 'mission', cible: '[data-onglet="mission"]', st: ST('Ouvrez « Mission » : tout se fait sur un seul écran, pensé pour le téléphone.', 'Open “Mission”: everything happens on one screen, designed for the phone.') },
@@ -32,6 +33,7 @@ const CAPSULES = [
     ] }),
   C('S2', 'liaison_secours', '🚑', 180, 'Prendre en compte une préalerte et confirmer le bon véhicule', 'Acknowledge a pre-alert and confirm the right vehicle', {
     pret: true, compte: 'hopital.a@demo.arrimo', chrono_test_s: 60,
+    exercice: [{ scene: 4, consigne: ST('Prenez en compte la préalerte qui arrive.', 'Acknowledge the incoming pre-alert.') }, { scene: 5, consigne: ST('Ouvrez les détails pour vérifier l’unité et la plaque.', 'Open the details to check the unit and plate.') }, { scene: 8, consigne: ST('La plaque ne correspond pas : signalez un problème.', 'The plate does not match: report a problem.') }],
     objectif: ST('Vous saurez prendre en compte une ambulance annoncée, vérifier l’unité et la plaque à l’arrivée, et réorienter avec un motif.',
       'You will know how to acknowledge an announced ambulance, check the unit and plate on arrival, and redirect with a reason.'),
     scenes: [
@@ -59,6 +61,7 @@ const CAPSULES = [
   // ---------------------------------------------------------------- ⏱️ Chrono
   C('C1', 'chrono', '⏱️', 150, 'Marquer le triage et la civière libérée', 'Mark triage and stretcher released', {
     pret: true, compte: 'hopital.a@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez Chrono.', 'Open Chrono.') }, { scene: 3, consigne: ST('Enregistrez la prochaine étape de l’ambulance à la porte.', 'Record the next step for the ambulance at the door.') }],
     objectif: ST('Vous saurez enregistrer, d’un clic, les heures de triage et de civière libérée.', 'You will know how to record triage and stretcher-released times in one click.'),
     scenes: [
       { ecran: 'chrono', cible: '#onglets button[data-v="chrono"]', st: ST('Ouvrez Chrono : les ambulances en route, à la porte et terminées.', 'Open Chrono: ambulances en route, at the door and completed.') },
@@ -76,6 +79,7 @@ const CAPSULES = [
     ] }),
   C('C2', 'chrono', '⏱️', 120, 'Corriger une heure avec un motif', 'Correct a time with a reason', {
     pret: true, compte: 'hopital.a@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Une heure a été oubliée : ouvrez la correction.', 'A time was forgotten: open the correction.') }],
     objectif: ST('Vous saurez corriger une heure oubliée sans effacer l’originale.', 'You will know how to correct a forgotten time without erasing the original.'),
     scenes: [
       { ecran: 'chrono', cible: '[data-ch-corriger]', st: ST('Vous avez oublié de cliquer au bon moment ? Ouvrez « Corriger l’heure ».', 'Forgot to click at the right moment? Open “Correct the time”.') },
@@ -91,6 +95,7 @@ const CAPSULES = [
   // ---------------------------------------------------------------- 🚨 Urgences en direct
   C('U1', 'urgences_direct', '🚨', 120, 'Déclarer le statut de l’urgence', 'Declare the emergency department status', {
     pret: true, compte: 'hopital.a@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Déclarez le statut de votre urgence.', 'Declare your department’s status.') }],
     objectif: ST('Vous saurez déclarer l’état de votre urgence pour que les ambulances le voient avant de partir.', 'You will know how to declare your department’s status so ambulances see it before leaving.'),
     scenes: [
       { ecran: 'secours', sous: 'urgence', cible: '.chips:has([data-ls-urg])', st: ST('Dans Liaison Secours, déclarez l’état de votre urgence en un clic.', 'In Emergency liaison, declare your department’s status in one click.') },
@@ -105,6 +110,7 @@ const CAPSULES = [
   C('U2', 'urgences_direct', '🚨', 150, 'Planifier une fermeture', 'Plan a closure'),
   C('U3', 'urgences_direct', '🚨', 120, 'Consulter les urgences avant de partir', 'Check emergency departments before leaving', {
     pret: true, compte: 'ambulance.demo@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez la liste des urgences de la région.', 'Open the list of the region’s departments.') }],
     objectif: ST('Vous saurez voir l’état déclaré des urgences de la région avant de partir.', 'You will know how to see the declared status of the region’s emergency departments before leaving.'),
     scenes: [
       { onglet: 'urgences', cible: '[data-onglet="urgences"]', st: ST('Ouvrez « Urgences » : les urgences de votre région, de la plus proche à la plus loin.', 'Open “Emergencies”: your region’s departments, nearest first.') },
@@ -124,6 +130,7 @@ const CAPSULES = [
   // ---------------------------------------------------------------- 🚐 Transport
   C('R1', 'transport_planifie', '🚐', 150, 'Réserver un transport non urgent', 'Book a non-urgent transport', {
     pret: true, compte: 'hopital.a@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez Transports.', 'Open Transports.') }, { scene: 2, consigne: ST('Réservez un transport.', 'Book a transport.') }],
     objectif: ST('Vous saurez réserver un retour à domicile ou un départ NSA, et suivre la plage confirmée.', 'You will know how to book a return home or an ALC departure, and follow the confirmed time slot.'),
     scenes: [
       { ecran: 'transports-planifies', cible: '#onglets button[data-v="transports-planifies"]', st: ST('Ouvrez Transports : les transports non urgents de votre établissement.', 'Open Transports: your facility’s non-urgent transports.') },
@@ -140,6 +147,7 @@ const CAPSULES = [
   // ---------------------------------------------------------------- 🏥 Hôpital et NSA
   C('H1', null, '🛏️', 150, 'Lits : réserver, occuper, libérer', 'Beds: reserve, occupy, release', {
     pret: true, compte: 'hopital.a@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez Lits.', 'Open Beds.') }],
     objectif: ST('Vous saurez changer l’état d’un lit, et pourquoi certaines actions vous sont refusées.', 'You will know how to change a bed’s status, and why some actions are refused.'),
     scenes: [
       { ecran: 'lits', cible: '#onglets button[data-v="lits"]', st: ST('Ouvrez Lits : chaque lit, unité par unité, avec son état.', 'Open Beds: every bed, unit by unit, with its status.') },
@@ -154,6 +162,7 @@ const CAPSULES = [
     ] }),
   C('H2', null, '🛏️', 150, 'Admissions et file d’attente', 'Admissions and queue', {
     pret: true, compte: 'hopital.a@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez Admissions.', 'Open Admissions.') }],
     objectif: ST('Vous saurez créer une demande d’admission et suivre la file priorisée.', 'You will know how to create an admission request and follow the prioritized queue.'),
     scenes: [
       { ecran: 'admissions', cible: '#onglets button[data-v="admissions"]', st: ST('Ouvrez Admissions : la file des patients qui attendent un lit.', 'Open Admissions: the queue of patients waiting for a bed.') },
@@ -168,6 +177,7 @@ const CAPSULES = [
   C('H3', 'nettoyage', '🧽', 120, 'Nettoyage prioritaire', 'Priority cleaning'),
   C('H4', 'nsa', '🏥', 180, 'Épisode NSA et orientation', 'ALC episode and orientation', {
     pret: true, compte: 'hopital.a@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez NSA.', 'Open ALC.') }],
     objectif: ST('Vous saurez déclarer un patient NSA et son orientation, sans diagnostic.', 'You will know how to declare an ALC patient and their orientation, with no diagnosis.'),
     scenes: [
       { ecran: 'nsa', cible: '#onglets button[data-v="nsa"]', st: ST('Ouvrez NSA : les patients qui n’ont plus besoin de soins aigus et attendent un autre milieu.', 'Open ALC: patients who no longer need acute care and wait for another setting.') },
@@ -182,6 +192,7 @@ const CAPSULES = [
     ] }),
   C('H5', 'nsa', '🏥', 180, 'Places compatibles et demande d’hébergement', 'Compatible places and placement request', {
     pret: true, compte: 'hopital.a@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez les places compatibles du patient NSA.', 'Open the ALC patient’s compatible places.') }],
     objectif: ST('Vous saurez trouver les places compatibles et envoyer une demande d’hébergement.', 'You will know how to find compatible places and send a placement request.'),
     scenes: [
       { ecran: 'nsa', cible: '#v-nsa', st: ST('Depuis le patient NSA, ouvrez « Places compatibles ».', 'From the ALC patient, open “Compatible places”.') },
@@ -199,6 +210,7 @@ const CAPSULES = [
   C('E1', null, '🏡', 150, 'Résidents et chambres', 'Residents and rooms'),
   C('E2', null, '🏡', 180, 'Recevoir une demande d’hébergement', 'Receive a placement request', {
     pret: true, compte: 'coordination.erables@chsld.example.invalid',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez les demandes d’hébergement.', 'Open placement requests.') }],
     objectif: ST('Vous saurez traiter une demande d’hébergement : documents, place proposée, réponse motivée.', 'You will know how to handle a placement request: documents, place offered, reasoned reply.'),
     scenes: [
       { ecran: 'c-demandes', cible: '#onglets button[data-v="c-demandes"]', st: ST('Ouvrez Demandes d’hébergement : les demandes reçues des hôpitaux.', 'Open Placement requests: requests received from hospitals.') },
@@ -213,6 +225,7 @@ const CAPSULES = [
     ] }),
   C('E3', null, '🏡', 150, 'Départ vers l’hôpital et retour', 'Departure to hospital and return', {
     pret: true, compte: 'coordination.erables@chsld.example.invalid',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez les mouvements des résidents.', 'Open resident movements.') }],
     objectif: ST('Vous saurez suivre un résident parti à l’hôpital et préparer son retour sans perdre sa chambre.', 'You will know how to follow a resident gone to hospital and prepare their return without losing their room.'),
     scenes: [
       { ecran: 'c-mouvements', cible: '#onglets button[data-v="c-mouvements"]', st: ST('Ouvrez Mouvements : les résidents partis à l’hôpital.', 'Open Movements: residents gone to hospital.') },
@@ -229,6 +242,7 @@ const CAPSULES = [
   // ---------------------------------------------------------------- 🛏️ Bourse
   C('B1', 'bourse_places', '🛏️', 150, 'Chercher une place avec les filtres', 'Search for a place with filters', {
     pret: true, compte: 'hopital.a@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez la Bourse.', 'Open the Exchange.') }, { scene: 3, consigne: ST('Cochez les besoins du patient.', 'Tick the patient’s needs.') }],
     objectif: ST('Vous saurez trouver la place qui convient et comprendre son classement.', 'You will know how to find the right place and understand its ranking.'),
     scenes: [
       { ecran: 'bourse', sous: 'places', cible: '#onglets button[data-v="bourse"]', st: ST('Ouvrez la Bourse : toutes les places libres et à venir, au même endroit.', 'Open the Exchange: every free and upcoming place, in one spot.') },
@@ -243,6 +257,7 @@ const CAPSULES = [
     ] }),
   C('B2', 'bourse_places', '🛏️', 120, 'Fiche de transfert d’une page', 'One-page transfer sheet', {
     pret: true, compte: 'hopital.a@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez la fiche de transfert.', 'Open the transfer sheet.') }],
     objectif: ST('Vous saurez imprimer une fiche de transfert claire, sans diagnostic.', 'You will know how to print a clear transfer sheet, with no diagnosis.'),
     scenes: [
       { ecran: 'bourse', sous: 'fiche', cible: '#v-bourse [data-so="fiche"]', st: ST('Ouvrez le sous-onglet « Fiche de transfert ».', 'Open the “Transfer sheet” sub-tab.') },
@@ -256,6 +271,7 @@ const CAPSULES = [
     ] }),
   C('B3', 'bourse_places', '🛏️', 120, 'Inviter un professionnel externe', 'Invite an external professional', {
     pret: true, compte: 'hopital.a@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez les accès invités.', 'Open guest access.') }],
     objectif: ST('Vous saurez donner un accès invité nominatif, limité dans le temps et révocable.', 'You will know how to give a named guest access, time-limited and revocable.'),
     scenes: [
       { ecran: 'bourse', sous: 'invites', cible: '#v-bourse [data-so="invites"]', st: ST('Ouvrez le sous-onglet « Accès invités ».', 'Open the “Guest access” sub-tab.') },
@@ -278,6 +294,7 @@ const CAPSULES = [
   C('D1', 'donnees_regionales', '📊', 150, 'Lire le tableau régional', 'Read the regional table'),
   C('D2', 'donnees_regionales', '📊', 120, 'Listes d’attente et export', 'Waiting lists and export', {
     pret: true, compte: 'hopital.a@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez Données.', 'Open Data.') }, { scene: 4, consigne: ST('Exportez en CSV.', 'Export as CSV.') }],
     objectif: ST('Vous saurez lire les listes d’attente par type de ressource et exporter les données.', 'You will know how to read waiting lists by resource type and export the data.'),
     scenes: [
       { ecran: 'donnees', sous: 'attente', cible: '#onglets button[data-v="donnees"]', st: ST('Ouvrez Données, sous-onglet « Listes d’attente ».', 'Open Data, “Waiting lists” sub-tab.') },
@@ -301,6 +318,7 @@ const CAPSULES = [
   // ---------------------------------------------------------------- ✨🧭👁️ Transversal
   C('O1', null, '✨', 120, 'Demander à OG', 'Ask OG', {
     pret: true, compte: 'hopital.a@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez OG.', 'Open OG.') }],
     objectif: ST('Vous saurez poser une question à OG et utiliser sa réponse, sans lui laisser la décision.', 'You will know how to ask OG a question and use its answer, without leaving the decision to it.'),
     scenes: [
       { ecran: 'copilote', cible: '#og-open', st: ST('OG est présent sur chaque écran : ouvrez-le avec ce bouton.', 'OG is on every screen: open it with this button.') },
@@ -314,6 +332,7 @@ const CAPSULES = [
     ] }),
   C('O2', null, '🧭', 120, 'Ouvrir le Sillage d’un parcours', 'Open a journey Trail', {
     pret: true, compte: 'hopital.a@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez le Sillage.', 'Open the Trail.') }],
     objectif: ST('Vous saurez retrouver toutes les étapes d’un parcours, d’un module à l’autre.', 'You will know how to find every step of a journey, across modules.'),
     scenes: [
       { ecran: 'chrono', cible: '[data-sillage]', st: ST('Le bouton Sillage est présent dans chaque module.', 'The Trail button is in every module.') },
@@ -327,6 +346,7 @@ const CAPSULES = [
     ] }),
   C('O3', null, '👁️', 120, 'Lire la Vigilance', 'Read the Watch list', {
     pret: true, compte: 'hopital.a@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Repérez les parcours à surveiller.', 'Find the paths to watch.') }],
     objectif: ST('Vous saurez repérer ce qui attend une action : confirmations manquantes et délais dépassés.', 'You will know how to spot what needs action: missing confirmations and passed deadlines.'),
     scenes: [
       { ecran: 'vigilance', sous: 'parcours', cible: '#sillage-vigilance', st: ST('Ouvrez Congés et alertes : la section « Parcours à surveiller » liste ce qui attend.', 'Open Discharges & alerts: “Paths to watch” lists what is waiting.') },

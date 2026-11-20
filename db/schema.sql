@@ -2202,6 +2202,8 @@ CREATE TABLE IF NOT EXISTS formation_progression (
   meilleur_score  int CHECK (meilleur_score BETWEEN 0 AND 100),
   essais          int NOT NULL DEFAULT 0,
   quiz_debut_le   timestamptz,                -- début du test, pour le chronométrer côté serveur
+  quiz_reussi_le  timestamptz,                -- mini-test réussi
+  exercice_etat   jsonb,                      -- exercice guidé en cours : étape, erreurs (état tenu par le serveur)
   maj_le          timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (utilisateur_id, capsule)
 );
@@ -2217,3 +2219,5 @@ CREATE TABLE IF NOT EXISTS formation_essais (
   cree_le         timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS formation_essais_utilisateur ON formation_essais (utilisateur_id, capsule, cree_le);
+ALTER TABLE formation_progression ADD COLUMN IF NOT EXISTS quiz_reussi_le timestamptz;
+ALTER TABLE formation_progression ADD COLUMN IF NOT EXISTS exercice_etat jsonb;

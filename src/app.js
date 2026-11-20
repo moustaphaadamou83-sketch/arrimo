@@ -235,6 +235,8 @@ function creerApp(pool, options = {}) {
   api.post('/formation/capsules/:code/vue', route((req) => fp.marquerVue(pool, req.utilisateur, req.params.code)));
   api.post('/formation/capsules/:code/quiz/debut', route((req) => fp.debutQuiz(pool, req.utilisateur, req.params.code)));
   api.post('/formation/capsules/:code/quiz', route((req) => fp.repondre(pool, req.utilisateur, req.params.code, req.body)));
+  api.post('/formation/capsules/:code/exercice/debut', route((req) => fp.debutExercice(pool, req.utilisateur, req.params.code, { langue: req.langue })));
+  api.post('/formation/capsules/:code/exercice/clic', route((req) => fp.clicExercice(pool, req.utilisateur, req.params.code, req.body)));
 
   // Rôles de secours (paramédic, superviseur, répartiteur) : écrans de secours seulement, jamais les lits, patients ni résidents
   api.use((req, res, next) => {

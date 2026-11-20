@@ -7,7 +7,7 @@
       etat: { a_faire: 'À faire', en_cours: 'En cours', reussi: 'Réussi', preparation: 'En préparation' }, min: '{d} min', score: '{s} %',
       inactif: 'La formation n’est pas encore activée pour votre établissement. Votre administrateur peut l’activer depuis Arrimo SH.', retour: '← Ma formation',
       etapes: ['1. Regarder', '2. À vous de jouer', '3. Mini-test'], precedent: 'Précédent', suivant: 'Suivant', lecture: 'Lecture', pause: 'Pause', fictif: 'Données fictives',
-      fin_scenes: 'Vous avez vu la capsule. Passez à la pratique.', exercice_titre: 'À vous de jouer', exercice_bientot: 'L’exercice guidé dans le bac à sable arrive bientôt : il se fera sur des données fictives, avec des bulles « cliquez ici ».',
+      fin_scenes: 'Vous avez vu la capsule. Passez à la pratique.', exercice_titre: 'À vous de jouer', exercice_intro: 'Faites les gestes sur l’écran de démonstration (données fictives). Cliquez au bon endroit ; une bulle vous aide si besoin.', exercice_debut: 'Commencer l’exercice', exercice_etape: 'Étape {n} sur {t}', cliquez_ici: 'Cliquez ici', montrer: 'Me montrer où', bravo_etape: 'Bien vu !', rate_clic: 'Pas tout à fait : la bulle vous montre où cliquer.', exercice_fini: 'Exercice réussi ({s} %).', exercice_rate: 'Exercice terminé avec trop d’erreurs ({s} %). Recommencez.', exercice_fait: 'Exercice réussi.', il_reste_exercice: 'Test réussi ! Faites aussi l’exercice pour valider la capsule.',
       test_titre: 'Mini-test', test_intro: '3 questions. Il faut 2 bonnes réponses sur 3.', test_chrono: 'Test chronométré : {s} secondes.', demarrer: 'Commencer le test', valider: 'Valider mes réponses',
       reussi: 'Capsule réussie !', rate: 'Pas encore : {s} %. Revoyez la capsule et recommencez.', hors_temps: 'Temps dépassé : recommencez quand vous êtes prêt.', recommencer: 'Recommencer', suivante: 'Capsule suivante', capsule_vue: 'Revoir la capsule',
       reponse_manquante: 'Répondez aux trois questions.', erreur: 'Une erreur est survenue. Réessayez.', voix: 'Voix' },
@@ -16,7 +16,7 @@
       etat: { a_faire: 'To do', en_cours: 'In progress', reussi: 'Passed', preparation: 'Coming soon' }, min: '{d} min', score: '{s}%',
       inactif: 'Training is not turned on for your facility yet. Your administrator can turn it on from Arrimo SH.', retour: '← My training',
       etapes: ['1. Watch', '2. Your turn', '3. Quick test'], precedent: 'Previous', suivant: 'Next', lecture: 'Play', pause: 'Pause', fictif: 'Fictitious data',
-      fin_scenes: 'You have watched the lesson. Time to practise.', exercice_titre: 'Your turn', exercice_bientot: 'The guided exercise in the sandbox is coming soon: it will use fictitious data, with “click here” bubbles.',
+      fin_scenes: 'You have watched the lesson. Time to practise.', exercice_titre: 'Your turn', exercice_intro: 'Do the actions on the demo screen (fictitious data). Click the right spot; a bubble helps you if needed.', exercice_debut: 'Start the exercise', exercice_etape: 'Step {n} of {t}', cliquez_ici: 'Click here', montrer: 'Show me where', bravo_etape: 'Well spotted!', rate_clic: 'Not quite: the bubble shows you where to click.', exercice_fini: 'Exercise passed ({s}%).', exercice_rate: 'Exercise finished with too many mistakes ({s}%). Try again.', exercice_fait: 'Exercise passed.', il_reste_exercice: 'Test passed! Do the exercise too to complete the lesson.',
       test_titre: 'Quick test', test_intro: '3 questions. You need 2 correct answers out of 3.', test_chrono: 'Timed test: {s} seconds.', demarrer: 'Start the test', valider: 'Submit my answers',
       reussi: 'Lesson passed!', rate: 'Not yet: {s}%. Review the lesson and try again.', hors_temps: 'Time is up: try again when you are ready.', recommencer: 'Try again', suivante: 'Next lesson', capsule_vue: 'Watch the lesson again',
       reponse_manquante: 'Answer all three questions.', erreur: 'Something went wrong. Please try again.', voix: 'Voice' },
@@ -98,12 +98,39 @@
   const duree = (s) => Math.max(4200, s.sous_titre.length * 62);
   function etape(n) { document.querySelectorAll('.fo-etape').forEach((e) => { const k = Number(e.dataset.etape); e.toggleAttribute('aria-current', k === n); if (k === n) e.setAttribute('aria-current', 'step'); e.classList.toggle('fait', k < n); }); }
   function finScenes() {
-    if (!lecture) return; lecture.joue = false; const b = document.getElementById('fo-joue'); if (b) b.textContent = X().lecture;
+    if (!lecture) return; clearTimeout(lecture.t); lecture.audio?.pause(); lecture.joue = false; const b = document.getElementById('fo-joue'); if (b) b.textContent = X().lecture;
+    if (document.getElementById('fo-test')) return;
     etape(1);
     document.getElementById('fo-suite').innerHTML = `<section class="fo-panneau"><p>${esc(X().fin_scenes)}</p></section>
-      <section class="fo-panneau"><h2>${esc(X().exercice_titre)}</h2><div class="fo-exercice"><span class="em" aria-hidden="true">🧪</span><p class="fo-note">${esc(X().exercice_bientot)}</p></div></section>
+      ${lecture.c.exercice.length ? `<section class="fo-panneau" id="fo-ex"><h2>${esc(X().exercice_titre)}</h2>${lecture.c.pratique ? `<p class="fo-resultat ok">✓ ${esc(X().exercice_fait)}</p>` : ''}<div class="fo-exercice"><span class="em" aria-hidden="true">🧪</span><p class="fo-note">${esc(X().exercice_intro)}</p></div>
+        <p style="margin-top:12px"><button class="fo-bouton" data-ex-debut>${esc(X().exercice_debut)}</button></p></section>` : ''}
       <section class="fo-panneau" id="fo-test"><h2>${esc(X().test_titre)}</h2><p class="fo-note">${esc(X().test_intro)} ${lecture.c.chrono_test_s ? esc(f(X().test_chrono, { s: lecture.c.chrono_test_s })) : ''}</p>
         <button class="fo-bouton" data-test-debut>${esc(X().demarrer)}</button></section>`;
+  }
+  async function debutExercice() {
+    const c = lecture.c; etape(1);
+    try { await api('POST', `/formation/capsules/${c.code}/exercice/debut`); } catch (e) { return alerte(e.message); }
+    lecture.ex = 0; afficherEtapeEx('');
+  }
+  function afficherEtapeEx(message, indice) {
+    const c = lecture.c; const e = c.exercice[lecture.ex]; const z = document.getElementById('fo-ex');
+    const bulle = indice ? `<button type="button" class="zone indice" data-ex-zone style="left:${indice.x}%;top:${indice.y}%;width:${indice.w}%;height:${indice.h}%" aria-label="${esc(X().cliquez_ici)}"><span class="bulle">👆 ${esc(X().cliquez_ici)}</span></button>` : '';
+    z.innerHTML = `<h2>${esc(X().exercice_titre)} <span class="fo-note" style="font-size:14px">${esc(f(X().exercice_etape, { n: lecture.ex + 1, t: c.exercice.length }))}</span></h2>
+      <p class="fo-consigne"><b>${esc(e.consigne)}</b></p>
+      <div class="fo-scene fo-cible" id="fo-cible" role="application" aria-label="${esc(e.consigne)}">${e.image ? `<img src="${esc(e.image)}" alt="" draggable="false">` : ''}${bulle}<span class="fo-etiquette">${esc(X().fictif)}</span></div>
+      <p class="fo-note" aria-live="polite" id="fo-ex-msg">${esc(message)}</p>
+      <p><button class="fo-bouton ligne" data-ex-montrer>${esc(X().montrer)}</button></p>`;
+  }
+  async function clicEx(x, y) {
+    const c = lecture.c; let r;
+    try { r = await api('POST', `/formation/capsules/${c.code}/exercice/clic`, { x, y }); } catch (e) { return alerte(e.message); }
+    if (!r.juste) { afficherEtapeEx(X().rate_clic, r.indice || { x: 0, y: 0, w: 0, h: 0 }); document.querySelector('[data-ex-zone]')?.focus(); return; }
+    if (!r.termine) { lecture.ex = r.etape; afficherEtapeEx(X().bravo_etape); return; }
+    lecture.c.pratique = r.reussi;
+    document.getElementById('fo-ex').innerHTML = `<h2>${esc(X().exercice_titre)}</h2><div class="fo-resultat ${r.reussi ? 'ok' : 'ko'}" role="status">${r.reussi ? `<span class="fo-confettis" aria-hidden="true">🎯</span>${esc(f(X().exercice_fini, { s: r.score }))}` : esc(f(X().exercice_rate, { s: r.score }))}
+      ${r.reussi ? '' : `<div class="fo-commandes"><button type="button" class="fo-bouton" data-ex-debut>${esc(X().recommencer)}</button></div>`}</div>`;
+    if (r.capsule_reussie) document.getElementById('fo-ex').insertAdjacentHTML('beforeend', `<p class="fo-resultat ok"><span class="fo-confettis" aria-hidden="true">🎉</span>${esc(X().reussi)}</p>`);
+    etape(r.reussi ? 2 : 1);
   }
   async function debutTest() {
     const c = lecture.c; etape(2);
@@ -127,7 +154,7 @@
     r.corrections.forEach((x, i) => { form.querySelectorAll(`.fo-choix[data-q="${i}"]`).forEach((l) => { const k = Number(l.dataset.k); if (k === x.bonne) l.classList.add('juste'); else if (l.querySelector('input').checked) l.classList.add('faux'); }); });
     form.querySelectorAll('input, button[type="submit"]').forEach((x) => { x.disabled = true; });
     const suivante = r.reussi ? prochaineApres(c.code) : null;
-    form.insertAdjacentHTML('beforeend', `<div class="fo-resultat ${r.reussi ? 'ok' : 'ko'}" role="status">${r.reussi ? `<span class="fo-confettis" aria-hidden="true">🎉</span>${esc(X().reussi)} (${r.score} %)` : esc(r.hors_temps ? X().hors_temps : f(X().rate, { s: r.score }))}
+    form.insertAdjacentHTML('beforeend', `<div class="fo-resultat ${r.reussi ? 'ok' : 'ko'}" role="status">${r.reussi ? (r.exercice_a_faire ? `${esc(X().il_reste_exercice)} (${r.score} %)` : `<span class="fo-confettis" aria-hidden="true">🎉</span>${esc(X().reussi)} (${r.score} %)`) : esc(r.hors_temps ? X().hors_temps : f(X().rate, { s: r.score }))}
       <div class="fo-commandes">${r.reussi ? '' : `<button type="button" class="fo-bouton" data-test-debut>${esc(X().recommencer)}</button><button type="button" class="fo-bouton ligne" data-revoir>${esc(X().capsule_vue)}</button>`}
         ${suivante ? `<button type="button" class="fo-bouton" data-capsule="${esc(suivante)}">${esc(X().suivante)} →</button>` : ''}<button type="button" class="fo-bouton ligne" data-accueil>${esc(X().retour)}</button></div></div>`);
     etape(r.reussi ? 3 : 2);
@@ -158,6 +185,11 @@
     const sc = ev.target.closest('[data-scene]');
     if (sc && lecture) { const n = lecture.i + Number(sc.dataset.scene); if (n >= 0 && n < lecture.c.scenes.length) { lecture.i = n; afficherScene(); } else if (n >= lecture.c.scenes.length) finScenes(); return; }
     if (ev.target.closest('[data-joue]') && lecture) { lecture.joue = !lecture.joue; ev.target.closest('[data-joue]').textContent = lecture.joue ? X().pause : X().lecture; afficherScene(); return; }
+    if (ev.target.closest('[data-ex-debut]') && lecture) { debutExercice(); return; }
+    if (ev.target.closest('[data-ex-zone]') && lecture) { const z = ev.target.closest('[data-ex-zone]'); clicEx(parseFloat(z.style.left) + parseFloat(z.style.width) / 2, parseFloat(z.style.top) + parseFloat(z.style.height) / 2); return; }
+    if (ev.target.closest('[data-ex-montrer]') && lecture) { clicEx(50, 0.5); return; }
+    const cible = ev.target.closest('#fo-cible');
+    if (cible && lecture) { const b = cible.getBoundingClientRect(); clicEx(Math.round(((ev.clientX - b.left) / b.width) * 1000) / 10, Math.round(((ev.clientY - b.top) / b.height) * 1000) / 10); return; }
     if (ev.target.closest('[data-test-debut]') && lecture) { debutTest(); return; }
     if (ev.target.closest('[data-revoir]') && lecture) { lecture.i = 0; lecture.joue = true; etape(0); document.getElementById('fo-suite').innerHTML = ''; afficherScene(); window.scrollTo(0, 0); }
   });
