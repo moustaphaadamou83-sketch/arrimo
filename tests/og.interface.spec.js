@@ -58,7 +58,7 @@ async function ouvrirOg(page) {
 test.before(async () => {
   restaurerRouteur = routeurTest.activer();
   const db = new URL(process.env.TEST_DATABASE_URL);
-  assert.equal(db.hostname, '127.0.0.1');
+  assert.ok(['127.0.0.1', 'localhost'].includes(db.hostname), 'base de test locale seulement (TCP ou socket)');
   assert.match(db.pathname, /^\/arrimo_(?:final|og)_[a-f0-9]{14}$/);
   pool = creerPool(db.href);
   // demoReseau refuse une base déjà peuplée ; aucune réinitialisation ici.
