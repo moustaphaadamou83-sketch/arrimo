@@ -2,10 +2,10 @@
    demandes en retard, établissements. Aucun lit, patient ni résident. */
 (() => {
   const TXT = {
-    fr: { sous: 'Direction régionale', sortir: 'Se déconnecter', o_donnees: 'Données', o_transferts: 'Transferts urgents', o_demandes: 'Demandes', o_region: 'Région',
+    fr: { sous: 'Direction régionale', sortir: 'Se déconnecter', o_donnees: 'Données', o_transferts: 'Transferts urgents', o_demandes: 'Demandes', o_region: 'Région', o_crise: 'Mode crise',
       centrale_vide: 'Aucun transfert urgent en cours.', attente: 'demandé il y a {n} min', retard: '{n} demandes en attente au-delà de leur échéance', circuit: 'Circuit', total: 'Total', en_retard: 'En retard',
       etablissements: 'Établissements', organisations: 'Organisations de secours', c: { transfert: 'Transferts', hebergement: 'Hébergement', transport: 'Transports', prealerte: 'Préalertes', mission_ccs: 'Missions CCS' } },
-    en: { sous: 'Regional directorate', sortir: 'Sign out', o_donnees: 'Data', o_transferts: 'Urgent transfers', o_demandes: 'Requests', o_region: 'Region',
+    en: { sous: 'Regional directorate', sortir: 'Sign out', o_donnees: 'Data', o_transferts: 'Urgent transfers', o_demandes: 'Requests', o_region: 'Region', o_crise: 'Crisis mode',
       centrale_vide: 'No urgent transfer in progress.', attente: 'requested {n} min ago', retard: '{n} requests waiting past their due time', circuit: 'Flow', total: 'Total', en_retard: 'Overdue',
       etablissements: 'Facilities', organisations: 'Emergency organizations', c: { transfert: 'Transfers', hebergement: 'Placement', transport: 'Transport', prealerte: 'Pre-alerts', mission_ccs: 'CCS missions' } },
   };
@@ -13,8 +13,8 @@
   let L = lire('arrimo-langue') === 'en' ? 'en' : 'fr'; const jeton = lire('arrimo-token'); let onglet = 'donnees';
   const e = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const T = (k, v = {}) => e(String(TXT[L][k]).replace(/\{(\w+)\}/g, (m, x) => v[x] ?? m));
-  async function api(methode, chemin) {
-    const r = await fetch(`/api${chemin}`, { method: methode, headers: { Authorization: `Bearer ${jeton}`, 'X-Langue': L } });
+  async function api(methode, chemin, corps) {
+    const r = await fetch(`/api${chemin}`, { method: methode, headers: { Authorization: `Bearer ${jeton}`, 'X-Langue': L, 'Content-Type': 'application/json' }, body: corps ? JSON.stringify(corps) : undefined });
     if (r.status === 401) { location.replace('/'); throw new Error('session'); }
     const d = await r.json().catch(() => null); if (!r.ok || d === null) throw new Error((d && d.erreur) || `Erreur ${r.status}`); return d;
   }
@@ -22,10 +22,11 @@
     document.documentElement.lang = L === 'en' ? 'en-CA' : 'fr-CA';
     document.querySelectorAll('[data-dr-langue]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.drLangue === L)));
     document.getElementById('dr-sous').textContent = TXT[L].sous; document.getElementById('dr-sortir').textContent = TXT[L].sortir;
-    document.getElementById('dr-onglets').innerHTML = ['donnees', 'transferts', 'demandes', 'region'].map((o) => `<button role="tab" type="button" data-dr-onglet="${o}" aria-selected="${o === onglet}">${T(`o_${o}`)}</button>`).join('');
+    document.getElementById('dr-onglets').innerHTML = ['donnees', 'transferts', 'demandes', 'crise', 'region'].map((o) => `<button role="tab" type="button" data-dr-onglet="${o}" aria-selected="${o === onglet}">${T(`o_${o}`)}</button>`).join('');
     const m = document.getElementById('dr-contenu');
     try {
       if (onglet === 'donnees') return window.ArrimoDonnees.afficher(m, { api, langue: L });
+      if (onglet === 'crise') { const r = await api('GET', '/direction/region'); return window.ArrimoCrise.afficher(m, { api, langue: L, etablissements: r.etablissements.filter((x) => x.type_etablissement === 'chsld') }); }
       if (onglet === 'transferts') {
         const c = await api('GET', '/transferts-suivi/centrale');
         m.innerHTML = `<h2>${T('o_transferts')}</h2>${c.transferts.length ? `<ul class="liste-simple">${c.transferts.map((x) => `<li><strong>${e(x.numero)}</strong> · ${e(x.origine)} → ${e(x.destination)} · ${T('attente', { n: x.attente_min })}</li>`).join('')}</ul>` : `<p class="note">${T('centrale_vide')}</p>`}`;

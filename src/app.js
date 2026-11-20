@@ -235,7 +235,7 @@ function creerApp(pool, options = {}) {
   // Direction régionale (lot 0, 19 nov. 2026) : lecture de sa région seulement, jamais les lits, patients ni résidents
   api.use((req, res, next) => {
     if (req.utilisateur.role !== 'direction_regionale') return next();
-    const ok = (req.method === 'GET' && (['/moi', '/demandes', '/demandes/synthese', '/direction/region', '/regions', '/meteo', '/donnees', '/donnees.csv'].includes(req.path) || /^\/transferts-suivi\/(centrale|\d+)$/.test(req.path))) || req.path.startsWith('/moi/')
+    const ok = (req.method === 'GET' && (['/moi', '/demandes', '/demandes/synthese', '/direction/region', '/regions', '/meteo', '/donnees', '/donnees.csv'].includes(req.path) || /^\/transferts-suivi\/(centrale|\d+)$/.test(req.path))) || req.path.startsWith('/moi/') || req.path.startsWith('/crise/')
       || (req.method === 'POST' && req.path === '/deconnexion');
     return ok ? next() : next(new ErreurHttp(403, 'role_direction_regionale'));
   });
@@ -262,6 +262,13 @@ function creerApp(pool, options = {}) {
   api.post('/urgences-direct/fermetures', route((req) => ud.planifier(pool, req.utilisateur, req.body)));
   api.post('/urgences-direct/fermetures/:id/action', route((req) => ud.changer(pool, req.utilisateur, req.params.id, req.body)));
   api.get('/secours/urgences-direct', route((req) => ud.vueSecours(pool, req.utilisateur)));
+  // Mode crise (20 nov. 2026) : évacuation d'un établissement d'hébergement
+  const crise = require('./crise');
+  api.get('/crise/evacuations', route((req) => crise.liste(pool, req.utilisateur, req.query)));
+  api.post('/crise/evacuations', route((req) => crise.declencher(pool, req.utilisateur, req.body)));
+  api.get('/crise/evacuations/:id', route((req) => crise.vue(pool, req.utilisateur, req.params.id)));
+  api.post('/crise/evacuations/:id/residents/:rid', route((req) => crise.agir(pool, req.utilisateur, req.params.id, req.params.rid, req.body)));
+  api.post('/crise/evacuations/:id/lever', route((req) => crise.lever(pool, req.utilisateur, req.params.id)));
   // Données (20 nov. 2026) : tableaux régionaux, listes d'attente, petits nombres masqués, CSV sans référence
   const donnees = require('./donnees');
   api.get('/donnees', route((req) => donnees.tableau(pool, req.utilisateur, req.query)));

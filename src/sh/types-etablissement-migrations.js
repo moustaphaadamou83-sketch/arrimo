@@ -206,5 +206,13 @@ async function migrerDonnees(c) {
   await c.query('INSERT INTO sh_migrations(version) VALUES($1)', [DONNEES_VERSION]);
   return true;
 }
+/* Migration 56 (20 nov. 2026) : module Mode crise livré, sa carte passe à « Disponible ». */
+const CRISE_VERSION = 56;
+async function migrerCrise(c) {
+  if ((await c.query('SELECT 1 FROM sh_migrations WHERE version=$1', [CRISE_VERSION])).rowCount) return false;
+  await c.query("UPDATE sh_modules_catalogue SET statut = 'disponible' WHERE code = 'mode_crise' AND statut = 'a_venir'");
+  await c.query('INSERT INTO sh_migrations(version) VALUES($1)', [CRISE_VERSION]);
+  return true;
+}
 const VERSION_SH = TYPES_AINES_VERSION;
-module.exports = { DONNEES_VERSION, migrerDonnees, BOURSE_VERSION, migrerBourse, TRANSPORT_PLANIFIE_VERSION, migrerTransportPlanifie, TRANSFERTS_VERSION, migrerTransferts, URGENCES_DIRECT_VERSION, migrerUrgencesDirect, CHRONO_VERSION, migrerChrono, MOTEUR_COMMUN_VERSION, MODULES_CHANTIER, migrerMoteurCommun, LIAISON_SECOURS_VERSION, migrerLiaisonSecours, TYPES_ETABLISSEMENT_VERSION, LIAISON_CHSLD_VERSION, PRODUCTIONS_VERSION, TYPES_LOCAUX_VERSION, DEMANDES_SITE_VERSION, VERSION_SH, migrerTypesEtablissement, migrerLiaisonChsld, migrerProductions, migrerTypesLocaux, migrerDemandesSite, migrerTypesAines };
+module.exports = { CRISE_VERSION, migrerCrise, DONNEES_VERSION, migrerDonnees, BOURSE_VERSION, migrerBourse, TRANSPORT_PLANIFIE_VERSION, migrerTransportPlanifie, TRANSFERTS_VERSION, migrerTransferts, URGENCES_DIRECT_VERSION, migrerUrgencesDirect, CHRONO_VERSION, migrerChrono, MOTEUR_COMMUN_VERSION, MODULES_CHANTIER, migrerMoteurCommun, LIAISON_SECOURS_VERSION, migrerLiaisonSecours, TYPES_ETABLISSEMENT_VERSION, LIAISON_CHSLD_VERSION, PRODUCTIONS_VERSION, TYPES_LOCAUX_VERSION, DEMANDES_SITE_VERSION, VERSION_SH, migrerTypesEtablissement, migrerLiaisonChsld, migrerProductions, migrerTypesLocaux, migrerDemandesSite, migrerTypesAines };

@@ -220,6 +220,12 @@ window.ARRIMO_I18N.fr.aide = {
       gestes: ['Choisissez la période.', 'Les cellules de 1 à 4 sont masquées (« < 5 ») pour protéger les personnes.', 'Exportez le tableau en CSV : aucune référence patient.'],
       erreurs: [['Module désactivé', 'Le module Données doit être activé par l’administration.']],
     },
+    crise: {
+      nom: 'Mode crise',
+      but: 'Évacuer l’établissement en sécurité : un lieu proposé par résident, confirmé par l’équipe ; suivi du départ, de l’arrivée et du retour ; familles avisées.',
+      gestes: ['Déclenchez l’évacuation avec son motif.', 'Confirmez le lieu proposé pour chaque résident : la place est réservée.', 'Notez le départ (mode de transport), l’arrivée, puis planifiez le retour ; levez l’évacuation à la fin.'],
+      erreurs: [['Plus aucun lit libre', 'Choisissez une autre destination dans la liste des places de la région.']],
+    },
     vigilance: {
       nom: 'Congés et alertes',
       but: 'Voir lit par lit les départs prévus (avec leur statut, l’heure et la source) et les blocages expliqués : origine, seuil, fait ou hypothèse, action proposée et responsable.',

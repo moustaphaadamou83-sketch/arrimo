@@ -220,6 +220,12 @@ window.ARRIMO_I18N.en.aide = {
       gestes: ['Choose the period.', 'Cells of 1 to 4 are masked (“< 5”) to protect people.', 'Export the table as CSV: no patient reference.'],
       erreurs: [['Module disabled', 'The Data module must be enabled by the administration.']],
     },
+    crise: {
+      nom: 'Crisis mode',
+      but: 'Evacuate the facility safely: one place proposed per resident, confirmed by the team; departure, arrival and return tracked; families notified.',
+      gestes: ['Start the evacuation with its reason.', 'Confirm the proposed place for each resident: the place is reserved.', 'Record the departure (transport mode), the arrival, then plan the return; lift the evacuation at the end.'],
+      erreurs: [['No free bed left', 'Choose another destination from the list of regional places.']],
+    },
     vigilance: {
       nom: 'Discharges and alerts',
       but: 'See planned departures bed by bed (status, time and source) and explained blockages: origin, threshold, fact or hypothesis, suggested action and owner.',

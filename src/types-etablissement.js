@@ -83,7 +83,7 @@ const MODULES = [
     note: 'Places libres et à venir, classement expliqué, lien invité', note_en: 'Free and upcoming places, explained ranking, guest link' },
   { code: 'donnees_regionales', categorie: 'optionnel', types: ['hopital', 'chsld'], statut: 'disponible', drapeau: 'donnees_regionales', nom: 'Données et listes d’attente', nom_en: 'Data and waiting lists',
     note: 'Tableaux régionaux, petits nombres masqués, CSV', note_en: 'Regional dashboards, small counts masked, CSV' },
-  { code: 'mode_crise', categorie: 'optionnel', types: ['hopital', 'chsld'], statut: 'a_venir', drapeau: 'mode_crise', nom: 'Mode crise (évacuation)', nom_en: 'Crisis mode (evacuation)',
+  { code: 'mode_crise', categorie: 'optionnel', types: ['hopital', 'chsld'], statut: 'disponible', drapeau: 'mode_crise', nom: 'Mode crise (évacuation)', nom_en: 'Crisis mode (evacuation)',
     note: 'Places de la région, lieu proposé par résident, suivi', note_en: 'Regional places, proposed site per resident, tracking' },
   { code: 'visites_confirmees', categorie: 'optionnel', types: ['chsld'], statut: 'a_venir', drapeau: 'visites_confirmees', nom: 'Visites confirmées', nom_en: 'Confirmed visits',
     note: 'Visites prévues du CLSC ou du prestataire, arrivée et départ', note_en: 'Planned CLSC or provider visits, arrival and departure' },
