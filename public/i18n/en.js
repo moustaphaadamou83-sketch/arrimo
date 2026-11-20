@@ -147,6 +147,7 @@ window.ARRIMO_I18N.en = {
     m_retour_domicile: 'Return home', m_transfert_stable: 'Stable transfer', m_depart_nsa: 'ALC departure', m_retour_chsld: 'Return to residence',
     v_ambulance: 'Ambulance', v_transport_adapte: 'Adapted transport', v_autre: 'Other', a_aucune: 'No particular need', a_fauteuil: 'Wheelchair', a_deambulateur: 'Walker', a_leve_personne: 'Patient lift', a_lit_electrique: 'Electric bed', a_malentendant: 'Hard of hearing', a_malvoyant: 'Visually impaired',
     c_non: 'No', c_oui: 'Yes',
+    s_a_valider: 'To check and send', transmettre: 'Check and send', transmettre_titre: 'Send to the carrier', transmettre_intro: 'Prepared from the scheduled departure. Check the time slot, vehicle and carrier: nothing is sent before you confirm, and no ambulance is assigned here.', transmis_ok: 'Transport sent to the carrier.', destination_recherche: 'Destination: partner facility or full address', destination_aide: 'Choose a facility from the list, or type a full address (external place).',
     s_demandee: 'Requested', s_acceptee: 'Confirmed', s_refusee: 'Declined', s_en_route: 'On the way', s_pris_en_charge: 'Picked up', s_arrivee: 'Arrived', s_annulee: 'Cancelled',
   },
   bourse: {
@@ -551,7 +552,7 @@ window.ARRIMO_I18N.en = {
     alerte: 'Step “{etape}” waiting for {min} — follow up with: {qui}.', chronologie: 'Timeline ({n} events)',
     src_aller: 'CHSLD liaison', src_retour: 'Return', src_transport: 'Transport', src_prealerte: 'Pre-alert', src_chrono: 'Chrono', src_evacuation: 'Evacuation',
   },
-  nsa: {
+  nsa: { transport_lie: 'Transport {numero}: {statut}{unite}', transport_a_valider: 'Transport {numero} prepared: to check and send (Transports tab)', 
     sortie_a_confirmer: 'Place accepted by the setting: confirm it with the patient or family and plan the departure', sortie_organisee: 'Departure planned {quand} · {transport}',
     famille_avisee: 'family informed', sortie_refusee: 'Declined · {motif}', sortie_attente_depuis: 'Waiting for an answer for {duree}', reponse_en: 'answered in {duree}',
     confirmer_place: 'Confirm the place and plan the departure', modifier_depart: 'Change the departure', proposer_suivante: 'Suggest the next place',

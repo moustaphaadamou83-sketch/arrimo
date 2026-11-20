@@ -147,6 +147,7 @@ window.ARRIMO_I18N.fr = {
     m_retour_domicile: 'Retour à domicile', m_transfert_stable: 'Transfert stable', m_depart_nsa: 'Départ NSA', m_retour_chsld: 'Retour en résidence',
     v_ambulance: 'Ambulance', v_transport_adapte: 'Transport adapté', v_autre: 'Autre', a_aucune: 'Aucun besoin particulier', a_fauteuil: 'Fauteuil roulant', a_deambulateur: 'Déambulateur', a_leve_personne: 'Lève-personne', a_lit_electrique: 'Lit électrique', a_malentendant: 'Malentendant', a_malvoyant: 'Malvoyant',
     c_non: 'Non', c_oui: 'Oui',
+    s_a_valider: 'À vérifier et transmettre', transmettre: 'Vérifier et transmettre', transmettre_titre: 'Transmettre au transporteur', transmettre_intro: 'Préparé à partir du départ programmé. Vérifiez la plage, le véhicule et le transporteur : rien n’est envoyé avant votre confirmation, et aucune ambulance n’est affectée ici.', transmis_ok: 'Transport transmis au transporteur.', destination_recherche: 'Destination : établissement partenaire ou adresse complète', destination_aide: 'Choisissez un établissement de la liste, ou écrivez une adresse complète (lieu externe).',
     s_demandee: 'Demandé', s_acceptee: 'Confirmé', s_refusee: 'Refusé', s_en_route: 'En route', s_pris_en_charge: 'Pris en charge', s_arrivee: 'Arrivé', s_annulee: 'Annulé',
   },
   bourse: {
@@ -552,7 +553,7 @@ window.ARRIMO_I18N.fr = {
     alerte: 'Étape « {etape} » en attente depuis {min} — à relancer : {qui}.', chronologie: 'Chronologie ({n} événements)',
     src_aller: 'Liaison CHSLD', src_retour: 'Retour', src_transport: 'Transport', src_prealerte: 'Préalerte', src_chrono: 'Chrono', src_evacuation: 'Évacuation',
   },
-  nsa: {
+  nsa: { transport_lie: 'Transport {numero} : {statut}{unite}', transport_a_valider: 'Transport {numero} préparé : à vérifier et transmettre (onglet Transports)', 
     sortie_a_confirmer: 'Place acceptée par la ressource : confirmez-la avec l’usager ou la famille et organisez le départ', sortie_organisee: 'Départ prévu {quand} · {transport}',
     famille_avisee: 'famille avisée', sortie_refusee: 'Refusée · {motif}', sortie_attente_depuis: 'En attente de réponse depuis {duree}', reponse_en: 'réponse en {duree}',
     confirmer_place: 'Confirmer la place et organiser le départ', modifier_depart: 'Modifier le départ', proposer_suivante: 'Proposer la place suivante',

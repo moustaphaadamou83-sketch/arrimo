@@ -2203,7 +2203,9 @@ async function vueNsa() {
     if (o.statut === 'admise') return S('sortie_arrivee', { quand: o.arrivee_le ? heure(o.arrivee_le) : '' });
     if (o.depart_hopital_le) return S('sortie_partie', { quand: heure(o.depart_hopital_le) });
     if (o.statut === 'acceptee' && o.acceptation_equipe_le) return S('sortie_organisee', { quand: heure(o.depart_prevu_le), transport: t(`nsa.transport_${o.transport_mode}`) })
-      + (o.famille_avisee_le ? ` · ${S('famille_avisee')}` : '');
+      + (o.famille_avisee_le ? ` · ${S('famille_avisee')}` : '')
+      // COR-001 : transport partagé, préparé au départ programmé ; « à valider » tant que l'hôpital ne l'a pas transmis
+      + (o.transport ? ` · <b>${o.transport.statut === 'a_valider' ? esc(t('nsa.transport_a_valider', { numero: o.transport.numero })) : esc(t('nsa.transport_lie', { numero: o.transport.numero, statut: t(`transport_planifie.s_${o.transport.statut}`), unite: o.transport.unite ? ` · ${o.transport.unite}` : '' }))}</b>` : '');
     if (o.statut === 'acceptee') return S('sortie_a_confirmer');
     if (o.statut === 'refusee') return S('sortie_refusee', { motif: o.motif_refus_code ? t(`motifs_refus_hebergement.${o.motif_refus_code}`) : '—' });
     if (o.statut === 'annulee') return S('sortie_close');

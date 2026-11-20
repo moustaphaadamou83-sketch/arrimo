@@ -28,6 +28,39 @@ async function organisationsRegion(db, etabId) {
       OR c.code = regexp_replace((SELECT c2.code FROM config_pays c2 JOIN etablissements e ON e.config_id = c2.id WHERE e.id = $1), '-CHSLD$', ''))
     ORDER BY o.nom`, [etabId])).rows;
 }
+/** Destinations proposées au formulaire : les établissements partenaires connectés (même configuration ou même région). */
+async function destinations(pool, u, etabId) {
+  const id = entier(etabId); if (!id) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'etablissement_id' });
+  exigerEtablissement(u, id);
+  if (!ROLES_ETAB.includes(u.role)) throw new ErreurHttp(403, 'role_insuffisant');
+  return (await pool.query(`SELECT e.id, e.nom, e.ville, e.type_etablissement, e.type_local_code FROM etablissements e, etablissements moi
+    WHERE moi.id = $1 AND e.id <> moi.id AND e.actif AND e.module_actif
+      AND (e.region_id = moi.region_id OR e.config_id = moi.config_id OR e.profil_config_id = moi.config_id OR moi.profil_config_id = e.config_id)
+    ORDER BY e.nom LIMIT 300`, [id])).rows;
+}
+/**
+ * COR-001 (audit du 20 nov. 2026) : départ programmé d'un patient NSA vers une ressource → UNE demande de transport partagée, préremplie
+ * (patient, origine, destination, horaire, véhicule, lit), au statut « à valider » : rien n'est transmis au transporteur avant qu'une personne
+ * de l'hôpital la vérifie et la transmette. Aucune affectation d'ambulance n'est faite ici. Sans transporteur connecté : rien n'est créé,
+ * l'étape le dit (cas négatif). Appelé dans la transaction de la confirmation de place.
+ */
+async function preparerDepuisHebergement(c, d, u) {
+  if (!['ambulance', 'transport_adapte'].includes(d.transport_mode) || !d.depart_prevu_le || !d.hopital_id) return { statut: 'sans_objet' };
+  const existe = (await c.query(`SELECT id, numero FROM demandes_transport WHERE demande_hebergement_id = $1 AND statut IN ('a_valider', 'demandee', 'acceptee', 'en_route', 'pris_en_charge')`, [d.id])).rows[0];
+  if (existe) return { statut: 'existant', ...existe };
+  const orgs = await organisationsRegion(c, d.hopital_id);
+  if (!orgs.length) return { statut: 'aucun_transporteur' };
+  const depart = new Date(d.depart_prevu_le);
+  const lit = d.hopital_lit_id ? (await c.query("SELECT id FROM lits WHERE id = $1 AND etat = 'occupe'", [d.hopital_lit_id])).rows[0] : null;
+  const ouvertLit = lit ? (await c.query(`SELECT 1 FROM demandes_transport WHERE lit_id = $1 AND statut IN ('a_valider', 'demandee', 'acceptee', 'en_route', 'pris_en_charge')`, [lit.id])).rowCount : 0;
+  const r = (await c.query(`INSERT INTO demandes_transport (numero, organisation_id, origine_id, destination_id, resident_ref, heure_souhaitee, infos, motif_transport, type_vehicule,
+      plage_debut, plage_fin, lit_id, statut, demande_hebergement_id, cree_par) VALUES ($1, $2, $3, $4, $5, $6, '{}', 'depart_nsa', $7, $8, $9, $10, 'a_valider', $11, $12) RETURNING *`,
+  [await numero(c), orgs[0].id, d.hopital_id, d.etablissement_id, d.reference_externe || d.numero, depart, d.transport_mode, new Date(depart.getTime() - 30 * 60000), new Date(depart.getTime() + 30 * 60000),
+    lit && !ouvertLit ? lit.id : null, d.id, u.id])).rows[0];
+  await evenement(c, r, 'preparee', u, { demande_hebergement: d.numero });
+  return { statut: 'prepare', id: r.id, numero: r.numero };
+}
+
 async function organisations(pool, u, etabId) {
   const id = entier(etabId); if (!id) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'etablissement_id' });
   exigerEtablissement(u, id);
@@ -169,13 +202,16 @@ async function liste(pool, u, q = {}) {
     filtre = '(d.origine_id = $1 OR d.destination_id = $1)'; args = [id];
   }
   const rows = (await pool.query(`SELECT ${CHAMPS} ${FROM} WHERE ${filtre} AND (d.statut = ANY($2) OR d.modifie_le > now() - interval '24 hours')
-    ORDER BY (d.statut = ANY($2)) DESC, d.heure_souhaitee NULLS LAST, d.id`, [...args, OUVERTES])).rows;
+    ORDER BY (d.statut = ANY($2)) DESC, d.heure_souhaitee NULLS LAST, d.id`, [...args, ['a_valider', ...OUVERTES]])).rows
+    // COR-001 : une demande « à valider » n'est visible que des établissements, jamais du transporteur ni du CCS avant sa transmission
+    .filter((d) => d.statut !== 'a_valider' || !(pa.ROLES_AMBULANCE.includes(u.role) || pa.ROLES_CCS.includes(u.role)));
   const cote = pa.ROLES_AMBULANCE.includes(u.role) ? 'ambulance' : pa.ROLES_CCS.includes(u.role) ? 'ccs' : 'etablissement';
   // L'état du véhicule n'est montré que pendant ce transport (ou la préalerte qui le prolonge) : jamais une autre mission
   const enCours = (d) => OUVERTES.includes(d.statut) || (d.prealerte && pa.OUVERTES.includes(d.prealerte.statut));
   return rows.map((d) => ({ ...d, ...(enCours(d) ? {} : { etat_vehicule: null, etat_vehicule_le: null }), actions: actions(d, u, cote, q.etablissement_id) }));
 }
 function actions(d, u, cote, etabId) {
+  if (d.statut === 'a_valider') return cote === 'etablissement' && Number(etabId) === d.origine_id ? ['transmettre', 'annuler'] : [];
   if (!OUVERTES.includes(d.statut)) return [];
   if (cote === 'ambulance') {
     return d.statut === 'demandee' ? ['accepter', 'refuser'] : d.statut === 'acceptee' ? ['en_route'] : d.statut === 'en_route' ? ['pris_en_charge'] : ['arrivee'];
@@ -185,7 +221,7 @@ function actions(d, u, cote, etabId) {
 }
 const MOTIFS = ['aucune_unite', 'hors_territoire', 'autre'];
 // Libellés du journal (traduits par l'interface : journal_actions)
-const ACTIONS_JOURNAL = { accepter: 'Transport accepté', refuser: 'Transport refusé', en_route: 'Ambulance en route', pris_en_charge: 'Résident pris en charge', arrivee: 'Transport arrivé', annuler: 'Transport annulé' };
+const ACTIONS_JOURNAL = { transmettre: 'Transport transmis au transporteur', accepter: 'Transport accepté', refuser: 'Transport refusé', en_route: 'Ambulance en route', pris_en_charge: 'Résident pris en charge', arrivee: 'Transport arrivé', annuler: 'Transport annulé' };
 /** Étapes du transport : l'ambulance accepte (unité), part, prend en charge, arrive ; l'établissement d'origine peut annuler avant la prise en charge. */
 async function agir(pool, u, id, b) {
   const d0 = (await pool.query('SELECT * FROM demandes_transport WHERE id = $1', [entier(id)])).rows[0];
@@ -200,7 +236,7 @@ async function agir(pool, u, id, b) {
   const a = String(b.action || '');
   return transaction(pool, async (c) => {
     const d = (await c.query('SELECT * FROM demandes_transport WHERE id = $1 FOR UPDATE', [d0.id])).rows[0];
-    if (!OUVERTES.includes(d.statut)) throw new ErreurHttp(409, 'transport_clos');
+    if (!OUVERTES.includes(d.statut) && !(d.statut === 'a_valider' && cote === 'etablissement')) throw new ErreurHttp(409, 'transport_clos');
     if (b.version != null && Number(b.version) !== d.version) throw new ErreurHttp(409, 'version_perimee');
     const maj = async (sql, vals = []) => (await c.query(`UPDATE demandes_transport SET ${sql}, version = version + 1, modifie_le = now() WHERE id = $1 RETURNING *`, [d.id, ...vals])).rows[0];
     const attendu = { accepter: 'demandee', refuser: 'demandee', en_route: 'acceptee', pris_en_charge: 'en_route', arrivee: 'pris_en_charge' };
@@ -246,9 +282,22 @@ async function agir(pool, u, id, b) {
         await fixer(c, n.unite_id, 'disponible', { source: 'transport_termine', utilisateurId: u.id || null });
       }
     } else {
-      if (a !== 'annuler') throw new ErreurHttp(400, 'action_inconnue');
-      if (d.statut === 'pris_en_charge') throw new ErreurHttp(409, 'transport_statut_incompatible');
-      n = await maj("statut = 'annulee'");
+      if (a === 'transmettre') {
+        // COR-001 : validation humaine avant transmission ; l'établissement peut ajuster la plage, le véhicule et le transporteur autorisé
+        if (d.statut !== 'a_valider') throw new ErreurHttp(409, 'transport_statut_incompatible');
+        const pd = b.plage_debut ? new Date(b.plage_debut) : d.plage_debut; const pf = b.plage_fin ? new Date(b.plage_fin) : d.plage_fin;
+        if (Number.isNaN(new Date(pd).getTime()) || Number.isNaN(new Date(pf).getTime()) || new Date(pf) <= new Date(pd)) throw new ErreurHttp(400, 'plage_invalide');
+        const veh = b.type_vehicule ? String(b.type_vehicule) : d.type_vehicule; if (!TYPES_VEHICULE.includes(veh)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'type_vehicule' });
+        const orgId = b.organisation_id ? entier(b.organisation_id) : d.organisation_id;
+        if (!(await organisationsRegion(c, d.origine_id)).some((o) => o.id === orgId)) throw new ErreurHttp(404, 'organisation_introuvable');
+        n = await maj("statut = 'demandee', plage_debut = $2, plage_fin = $3, heure_souhaitee = $2, type_vehicule = $4, organisation_id = $5", [pd, pf, veh, orgId]);
+        await require('./horloge').marquer(c, { objet: 'demande_transport', objetId: n.id, etape: 'demande', source: 'clic', auteurId: u.id });
+        detail = { transmis: true };
+      } else {
+        if (a !== 'annuler') throw new ErreurHttp(400, 'action_inconnue');
+        if (d.statut === 'pris_en_charge') throw new ErreurHttp(409, 'transport_statut_incompatible');
+        n = await maj("statut = 'annulee'");
+      }
     }
     await evenement(c, n, a, u, detail);
     await emettre(c, n, `transport.${a}`);
@@ -275,4 +324,4 @@ async function fiche(pool, u, id, q = {}) {
     WHERE ev.demande_id = $1 ORDER BY ev.id`, [d.id])).rows;
   return { ...d, evenements };
 }
-module.exports = { organisations, demander, planifier, liste, agir, fiche, OUVERTES, MOTIFS_TRANSPORT, TYPES_VEHICULE };
+module.exports = { destinations, preparerDepuisHebergement, organisations, demander, planifier, liste, agir, fiche, OUVERTES, MOTIFS_TRANSPORT, TYPES_VEHICULE };

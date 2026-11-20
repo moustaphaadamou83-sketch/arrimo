@@ -111,7 +111,9 @@ async function liste(pool, u, etabId) {
       d.motif_refus_code, d.transitoire, d.acceptation_equipe_le, d.depart_prevu_le, d.transport_mode, d.documents_transmis, d.famille_avisee_le, d.documents,
       (SELECT EXTRACT(EPOCH FROM (min(x.date) - d.cree_le)) / 3600 FROM demande_hebergement_etapes x WHERE x.demande_id = d.id AND x.date > d.cree_le
         AND x.statut IN ('en_verification', 'place_proposee', 'acceptee', 'refusee'))::float AS reponse_heures,
-      (l.etat = 'occupe' AND l.patient_ref = d.reference_externe) AS patient_present
+      (l.etat = 'occupe' AND l.patient_ref = d.reference_externe) AS patient_present,
+      (SELECT json_build_object('id', t.id, 'numero', t.numero, 'statut', t.statut, 'unite', (SELECT un.numero FROM unites_secours un WHERE un.id = t.unite_id), 'transporteur', (SELECT o.nom FROM organisations_secours o WHERE o.id = t.organisation_id))
+        FROM demandes_transport t WHERE t.demande_hebergement_id = d.id ORDER BY t.id DESC LIMIT 1) AS transport
     FROM demandes_hebergement d JOIN etablissements e ON e.id = d.etablissement_id LEFT JOIN lits l ON l.id = d.hopital_lit_id
     LEFT JOIN residents r ON r.id = d.resident_id AND r.statut NOT IN ('preadmission', 'sorti')
     WHERE d.hopital_id = $1 AND (d.statut <> ALL($2) OR d.modifie_le > now() - interval '7 days')
@@ -179,7 +181,10 @@ async function confirmerPlace(pool, u, demandeId, b = {}) {
     await notifier(c, d.etablissement_id, null, 'nsa_place_confirmee', { numero: d.numero, origine: h.nom, quand });
     // Arrimo Famille : les proches autorisés (catégorie « Mouvements ») sont avisés qu'une étape a changé, sans aucun détail médical
     if (d.resident_id) await require('./portail-notifications').signaler(c, d.resident_id, 'mouvements');
-    return n;
+    // COR-001 : une demande de transport partagée est préparée (« à valider ») ; elle n'est transmise qu'après vérification humaine
+    const tr = await require('./transports').preparerDepuisHebergement(c, n, u);
+    if (tr.statut === 'aucun_transporteur') await c.query('INSERT INTO demande_hebergement_etapes (demande_id, statut, detail, par) VALUES ($1, $2, $3, $4)', [d.id, n.statut, 'Aucun transporteur connecté : transport à organiser hors d’Arrimo', u.id]);
+    return { ...n, transport: tr };
   });
 }
 

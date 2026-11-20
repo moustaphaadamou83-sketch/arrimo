@@ -457,7 +457,9 @@ async function listeDemandes(pool, u, etabId, q = {}) {
   return (await pool.query(`SELECT d.*, t.nom AS type_nom, r.reference AS resident_ref, l.code AS lit_propose, h.nom AS hopital_nom, h.ville AS hopital_ville,
       CASE WHEN d.date_naissance IS NOT NULL THEN date_part('year', age(d.date_naissance))::int END AS age, hl.code AS lit_hopital,
       ep.debut_le AS nsa_depuis, floor(EXTRACT(EPOCH FROM (now() - ep.debut_le)) / 86400)::int AS nsa_jours, ep.orientation AS nsa_orientation, ep.transitoire AS nsa_transitoire,
-      nb.codes AS besoins, nb.chambre_sexe, nb.langue AS langue_usager
+      nb.codes AS besoins, nb.chambre_sexe, nb.langue AS langue_usager,
+      (SELECT json_build_object('numero', x.numero, 'statut', x.statut, 'unite', (SELECT un.numero FROM unites_secours un WHERE un.id = x.unite_id), 'plage_debut', COALESCE(x.plage_confirmee_debut, x.plage_debut))
+        FROM demandes_transport x WHERE x.demande_hebergement_id = d.id AND x.statut <> 'a_valider' ORDER BY x.id DESC LIMIT 1) AS transport
     FROM demandes_hebergement d LEFT JOIN types_unite t ON t.id = d.type_id LEFT JOIN residents r ON r.id = d.resident_id LEFT JOIN lits l ON l.id = d.lit_propose_id
     LEFT JOIN etablissements h ON h.id = d.hopital_id LEFT JOIN lits hl ON hl.id = d.hopital_lit_id
     LEFT JOIN nsa_episodes ep ON ep.lit_id = d.hopital_lit_id AND ep.patient_ref = d.reference_externe AND ep.statut = 'actif'

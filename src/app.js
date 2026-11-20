@@ -614,6 +614,7 @@ function creerApp(pool, options = {}) {
   /* ---------- Liaison Établissements : demandes de transport (établissement ↔ ambulance), cahier 3 ---------- */
   const tr = require('./transports');
   api.get('/transports/organisations', route((req) => tr.organisations(pool, req.utilisateur, req.query.etablissement_id)));
+  api.get('/transports/destinations', route((req) => tr.destinations(pool, req.utilisateur, req.query.etablissement_id)));
   api.post('/transports-planifies', route((req) => tr.planifier(pool, req.utilisateur, req.body)));   // Transport non urgent (20 nov. 2026)
   api.get('/transports', route((req) => tr.liste(pool, req.utilisateur, req.query)));
   api.get('/transports/:id', route((req) => tr.fiche(pool, req.utilisateur, entier(req.params.id, 'id'), req.query)));

@@ -428,6 +428,7 @@
           <div>${pastille(d.statut, t(`chsld.demande_statut.${d.statut}`))} ${d.type_nom ? `· ${esc(d.type_nom)}` : ''} ${d.arrivee_souhaitee ? `· ${C('demandes.arrivee')} ${esc(jour(d.arrivee_souhaitee))}` : ''} ${d.lit_propose ? `· ${esc(d.lit_propose)}` : ''} ${d.resident_ref ? `· ${esc(d.resident_ref)}` : ''}</div>
           ${d.hopital_nom ? `<div class="note">${C('demandes.venant_de', { hopital: d.hopital_nom })}${d.statut === 'acceptee' ? ` · <b>${C(d.depart_hopital_le ? 'demandes.depart_confirme' : 'demandes.depart_attendu')}</b>` : ''}</div>` : ''}
           ${d.hopital_nom && d.acceptation_equipe_le && !d.depart_hopital_le ? `<div class="note">${C('demandes.place_confirmee', { quand: dateHeure(d.depart_prevu_le), transport: t(`nsa.transport_${d.transport_mode}`) })}</div>` : ''}
+          ${d.transport ? `<div class="note"><b>${esc(t('nsa.transport_lie', { numero: d.transport.numero, statut: t(`transport_planifie.s_${d.transport.statut}`), unite: d.transport.unite ? ` · ${d.transport.unite}` : '' }))}</b></div>` : ''}
           ${d.hopital_nom ? `<div class="note">${[d.age != null ? C('demandes.age', { n: d.age }) : '', d.lit_hopital ? C('demandes.lit_hopital', { lit: d.lit_hopital, hopital: d.hopital_nom }) : '',
             d.nsa_jours != null ? C('demandes.nsa_jours', { n: d.nsa_jours }) : '', d.nsa_orientation ? C('demandes.orientation', { o: t(`orientations.${d.nsa_orientation}`) }) : '',
             d.transitoire ? C('demandes.transitoire') : ''].filter(Boolean).join(' · ')}</div>
