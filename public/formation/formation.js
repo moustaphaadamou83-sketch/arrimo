@@ -10,7 +10,7 @@
       fin_scenes: 'Vous avez vu la capsule. Passez à la pratique.', exercice_titre: 'À vous de jouer', exercice_intro: 'Faites les gestes sur l’écran de démonstration (données fictives). Cliquez au bon endroit ; une bulle vous aide si besoin.', exercice_debut: 'Commencer l’exercice', exercice_etape: 'Étape {n} sur {t}', cliquez_ici: 'Cliquez ici', montrer: 'Me montrer où', bravo_etape: 'Bien vu !', rate_clic: 'Pas tout à fait : la bulle vous montre où cliquer.', exercice_fini: 'Exercice réussi ({s} %).', exercice_rate: 'Exercice terminé avec trop d’erreurs ({s} %). Recommencez.', exercice_fait: 'Exercice réussi.', il_reste_exercice: 'Test réussi ! Faites aussi l’exercice pour valider la capsule.',
       test_titre: 'Mini-test', test_intro: '3 questions. Il faut 2 bonnes réponses sur 3.', test_chrono: 'Test chronométré : {s} secondes.', demarrer: 'Commencer le test', valider: 'Valider mes réponses',
       reussi: 'Capsule réussie !', rate: 'Pas encore : {s} %. Revoyez la capsule et recommencez.', hors_temps: 'Temps dépassé : recommencez quand vous êtes prêt.', recommencer: 'Recommencer', suivante: 'Capsule suivante', capsule_vue: 'Revoir la capsule',
-      reponse_manquante: 'Répondez aux trois questions.', erreur: 'Une erreur est survenue. Réessayez.', voix: 'Voix' },
+      reponse_manquante: 'Répondez aux trois questions.', attestation: 'Télécharger mon attestation', parcours_fini: 'Parcours réussi !', avis: 'Votre avis sur ce parcours', avis_envoyer: 'Envoyer', avis_merci: 'Merci pour votre avis.', commentaire: 'Un commentaire ? (facultatif)', etoiles: '{n} sur 5', aide_su: 'Une question ? Demandez d’abord à : {noms}', suivi: 'Suivi de l’équipe', suivi_intro: 'Qui a vu, pratiqué et réussi ; qui a besoin d’aide.', csv: 'Exporter en CSV', col_nom: 'Nom', col_role: 'Rôle', col_vues: 'Vues', col_prat: 'Pratiquées', col_reussies: 'Réussies', col_aide: 'Besoin d’aide', col_su: 'Superutilisateur', oui: 'Oui', satisfaction_moy: 'Satisfaction moyenne : {m} sur 5 ({n} avis)', erreur: 'Une erreur est survenue. Réessayez.', voix: 'Voix' },
     en: { titre_barre: '🎓 My training', evitement: 'Skip to content', bonjour: 'My training', reussies: 'Lessons passed: {r} of {t}', aucune: 'Well done: all your lessons are passed.',
       continuer: 'Continue: {t} · {d} min', commencer: 'Start: {t} · {d} min', mes_parcours: 'My paths', ajouter: 'Choose your paths (based on your role):',
       etat: { a_faire: 'To do', en_cours: 'In progress', reussi: 'Passed', preparation: 'Coming soon' }, min: '{d} min', score: '{s}%',
@@ -19,7 +19,7 @@
       fin_scenes: 'You have watched the lesson. Time to practise.', exercice_titre: 'Your turn', exercice_intro: 'Do the actions on the demo screen (fictitious data). Click the right spot; a bubble helps you if needed.', exercice_debut: 'Start the exercise', exercice_etape: 'Step {n} of {t}', cliquez_ici: 'Click here', montrer: 'Show me where', bravo_etape: 'Well spotted!', rate_clic: 'Not quite: the bubble shows you where to click.', exercice_fini: 'Exercise passed ({s}%).', exercice_rate: 'Exercise finished with too many mistakes ({s}%). Try again.', exercice_fait: 'Exercise passed.', il_reste_exercice: 'Test passed! Do the exercise too to complete the lesson.',
       test_titre: 'Quick test', test_intro: '3 questions. You need 2 correct answers out of 3.', test_chrono: 'Timed test: {s} seconds.', demarrer: 'Start the test', valider: 'Submit my answers',
       reussi: 'Lesson passed!', rate: 'Not yet: {s}%. Review the lesson and try again.', hors_temps: 'Time is up: try again when you are ready.', recommencer: 'Try again', suivante: 'Next lesson', capsule_vue: 'Watch the lesson again',
-      reponse_manquante: 'Answer all three questions.', erreur: 'Something went wrong. Please try again.', voix: 'Voice' },
+      reponse_manquante: 'Answer all three questions.', attestation: 'Download my certificate', parcours_fini: 'Path completed!', avis: 'Your feedback on this path', avis_envoyer: 'Send', avis_merci: 'Thank you for your feedback.', commentaire: 'A comment? (optional)', etoiles: '{n} out of 5', aide_su: 'A question? Ask first: {noms}', suivi: 'Team progress', suivi_intro: 'Who watched, practised and passed; who needs help.', csv: 'Export as CSV', col_nom: 'Name', col_role: 'Role', col_vues: 'Watched', col_prat: 'Practised', col_reussies: 'Passed', col_aide: 'Needs help', col_su: 'Super-user', oui: 'Yes', satisfaction_moy: 'Average satisfaction: {m} out of 5 ({n} answers)', erreur: 'Something went wrong. Please try again.', voix: 'Voice' },
   };
   window.ArrimoFormation = { TXT };
   const lire = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -63,7 +63,15 @@
     main.innerHTML = `<section class="fo-heros">${anneau(donnees.progression)}<div><h1>${esc(X().bonjour)}</h1><p>${esc(donnees.total ? f(X().reussies, { r: donnees.reussies, t: donnees.total }) : '')}</p>
         ${p ? `<button class="fo-bouton" data-capsule="${esc(p.code)}">${p.emoji} ${esc(f(donnees.reussies ? X().continuer : X().commencer, { t: p.titre, d: Math.max(1, Math.round(p.duree / 60)) }))}</button>` : `<p>${esc(X().aucune)}</p>`}</div></section>
       <div class="fo-puces" role="group" aria-label="${esc(X().mes_parcours)}"><span class="fo-note">${esc(X().ajouter)}</span>${donnees.eligibles.map((e) => `<button type="button" class="fo-puce" data-parcours="${esc(e.code)}" aria-pressed="${e.choisi}">${e.emoji} ${esc(e.nom)}</button>`).join('')}</div>
-      ${donnees.parcours.map((pc) => `<section class="fo-section"><div class="fo-section-tete"><h2>${pc.emoji} ${esc(pc.nom)}</h2><span>${pc.reussies}/${pc.total}</span></div><div class="fo-grille">${pc.capsules.map(carte).join('')}</div></section>`).join('')}`;
+      ${donnees.parcours.map((pc) => `<section class="fo-section"><div class="fo-section-tete"><h2>${pc.emoji} ${esc(pc.nom)}</h2><span>${pc.reussies}/${pc.total}</span></div>
+        ${pc.total && pc.reussies === pc.total ? `<div class="fo-panneau fo-fini"><p><span class="fo-confettis" aria-hidden="true">🏅</span><b>${esc(X().parcours_fini)}</b></p>
+          <p><button class="fo-bouton" data-attestation="${esc(pc.code)}">📄 ${esc(X().attestation)}</button></p>
+          <form class="fo-avis" data-avis="${esc(pc.code)}"><fieldset><legend>${esc(X().avis)}</legend><div class="fo-etoiles">${[1, 2, 3, 4, 5].map((n) => `<label><input type="radio" name="note" value="${n}" required><span aria-hidden="true">★</span><span class="lecteur">${esc(f(X().etoiles, { n }))}</span></label>`).join('')}</div>
+            <label class="fo-com">${esc(X().commentaire)}<textarea name="commentaire" maxlength="500" rows="2"></textarea></label><button class="fo-bouton ligne" type="submit">${esc(X().avis_envoyer)}</button></fieldset></form></div>` : ''}
+        <div class="fo-grille">${pc.capsules.map(carte).join('')}</div></section>`).join('')}
+      <div id="fo-suivi-lien"></div>`;
+    api('GET', '/formation/superutilisateurs').then((su) => { if (su.length) document.querySelector('.fo-heros > div')?.insertAdjacentHTML('beforeend', `<p class="fo-note">💬 ${esc(f(X().aide_su, { noms: su.map((x) => x.nom).join(', ') }))}</p>`); }).catch(() => {});
+    if (etabSuivi) api('GET', `/formation/suivi?etablissement_id=${etabSuivi}`).then(() => { const z = document.getElementById('fo-suivi-lien'); if (z) z.innerHTML = `<p style="margin-top:28px"><a class="fo-bouton ligne" href="#suivi">📋 ${esc(X().suivi)}</a></p>`; }).catch(() => {});
   }
 
   // ---------------------------------------------------------------- capsule
@@ -165,10 +173,29 @@
   }
   const alerte = (m) => { const z = document.getElementById('fo-retour-test') || document.getElementById('fo-st'); if (z) z.textContent = m; };
 
+  // ---------------------------------------------------------------- suivi du formateur
+  let etabSuivi = null; let moiCompte = null;
+  async function suivi() {
+    arreter();
+    let d; try { d = await api('GET', `/formation/suivi?etablissement_id=${etabSuivi}`); } catch (e) { main.innerHTML = `<button class="fo-retour" data-accueil>${esc(X().retour)}</button><p role="alert">${esc(e.message)}</p>`; return; }
+    const peutDesigner = moiCompte && (moiCompte.gestionnaire || moiCompte.role === 'admin_etab');
+    main.innerHTML = `<button class="fo-retour" data-accueil>${esc(X().retour)}</button><h1 style="margin:8px 0 6px">📋 ${esc(X().suivi)}</h1><p class="fo-note">${esc(X().suivi_intro)}${d.satisfaction.n ? ` · ${esc(f(X().satisfaction_moy, { m: d.satisfaction.moyenne, n: d.satisfaction.n }))}` : ''}</p>
+      <p style="margin:12px 0"><button class="fo-bouton ligne" data-suivi-csv>⬇ ${esc(X().csv)}</button></p>
+      <div class="fo-tableau"><table><thead><tr><th>${esc(X().col_nom)}</th><th>${esc(X().col_role)}</th><th>${esc(X().col_vues)}</th><th>${esc(X().col_prat)}</th><th>${esc(X().col_reussies)}</th><th>${esc(X().col_aide)}</th><th>${esc(X().col_su)}</th></tr></thead><tbody>
+      ${d.personnes.map((x) => `<tr><td>${esc(x.nom)}<div class="fo-note">${esc(x.parcours.join(' · '))}</div></td><td>${esc(x.role)}</td><td>${x.vues}/${x.total}</td><td>${x.pratiquees}/${x.total}</td><td><b>${x.reussies}/${x.total}</b></td>
+        <td>${x.besoin_aide ? `<span class="fo-etat en_cours">⚠ ${esc(x.capsules_bloquees.join(', '))}</span>` : ''}</td>
+        <td>${peutDesigner ? `<input type="checkbox" data-su="${x.id}"${x.superutilisateur ? ' checked' : ''} aria-label="${esc(X().col_su)} · ${esc(x.nom)}">` : x.superutilisateur ? esc(X().oui) : ''}</td></tr>`).join('')}</tbody></table></div>`;
+  }
+  async function telecharger(chemin, nom) {
+    const r = await fetch(`/api${chemin}`, { headers: { Authorization: `Bearer ${jeton}`, 'X-Langue': L } });
+    if (!r.ok) { const d = await r.json().catch(() => null); alert((d && d.erreur) || X().erreur); return; }
+    const url = URL.createObjectURL(await r.blob()); const a = document.createElement('a'); a.href = url; a.download = nom; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+
   // ---------------------------------------------------------------- navigation
   function router() {
     const h = location.hash.slice(1);
-    if (h.startsWith('capsule/')) capsule(h.slice(8)); else accueil();
+    if (h.startsWith('capsule/')) capsule(h.slice(8)); else if (h === 'suivi' && etabSuivi) suivi(); else accueil();
   }
   document.addEventListener('click', async (ev) => {
     const lg = ev.target.closest('[data-fo-langue]'); if (lg) { L = lg.dataset.foLangue; ecrire('arrimo-langue', L); entete(); router(); return; }
@@ -185,6 +212,8 @@
     const sc = ev.target.closest('[data-scene]');
     if (sc && lecture) { const n = lecture.i + Number(sc.dataset.scene); if (n >= 0 && n < lecture.c.scenes.length) { lecture.i = n; afficherScene(); } else if (n >= lecture.c.scenes.length) finScenes(); return; }
     if (ev.target.closest('[data-joue]') && lecture) { lecture.joue = !lecture.joue; ev.target.closest('[data-joue]').textContent = lecture.joue ? X().pause : X().lecture; afficherScene(); return; }
+    const at = ev.target.closest('[data-attestation]'); if (at) { telecharger(`/formation/parcours/${at.dataset.attestation}/attestation.pdf`, `attestation-${at.dataset.attestation}.pdf`); return; }
+    if (ev.target.closest('[data-suivi-csv]')) { telecharger(`/formation/suivi.csv?etablissement_id=${etabSuivi}`, 'formation-suivi.csv'); return; }
     if (ev.target.closest('[data-ex-debut]') && lecture) { debutExercice(); return; }
     if (ev.target.closest('[data-ex-zone]') && lecture) { const z = ev.target.closest('[data-ex-zone]'); clicEx(parseFloat(z.style.left) + parseFloat(z.style.width) / 2, parseFloat(z.style.top) + parseFloat(z.style.height) / 2); return; }
     if (ev.target.closest('[data-ex-montrer]') && lecture) { clicEx(50, 0.5); return; }
@@ -193,7 +222,15 @@
     if (ev.target.closest('[data-test-debut]') && lecture) { debutTest(); return; }
     if (ev.target.closest('[data-revoir]') && lecture) { lecture.i = 0; lecture.joue = true; etape(0); document.getElementById('fo-suite').innerHTML = ''; afficherScene(); window.scrollTo(0, 0); }
   });
-  document.addEventListener('submit', (ev) => { if (ev.target.id === 'fo-quiz') { ev.preventDefault(); valider(ev.target); } });
+  document.addEventListener('submit', async (ev) => {
+    if (ev.target.id === 'fo-quiz') { ev.preventDefault(); valider(ev.target); return; }
+    const av = ev.target.closest('[data-avis]');
+    if (av) { ev.preventDefault(); const fd = new FormData(av); try { await api('POST', `/formation/parcours/${av.dataset.avis}/satisfaction`, { note: Number(fd.get('note')), commentaire: fd.get('commentaire') }); av.innerHTML = `<p class="fo-resultat ok">${esc(X().avis_merci)}</p>`; } catch (e) { alert(e.message); } }
+  });
+  document.addEventListener('change', async (ev) => {
+    const su = ev.target.closest('[data-su]'); if (!su) return;
+    try { await api('PUT', '/formation/superutilisateurs', { etablissement_id: etabSuivi, utilisateur_id: Number(su.dataset.su), actif: su.checked }); } catch (e) { su.checked = !su.checked; alert(e.message); }
+  });
   document.addEventListener('keydown', (ev) => {
     if (!lecture || ev.target.closest('input, textarea, select')) return;
     if (ev.key === 'ArrowRight') document.querySelector('[data-scene="1"]')?.click();
@@ -202,6 +239,6 @@
   window.addEventListener('hashchange', router);
   if (!jeton) { location.replace('/'); return; }
   // Retour vers l'écran de la personne (secours, intervenant, direction régionale ou application)
-  api('GET', '/moi').then((m) => { const r = m.utilisateur?.role; const lien = ['paramedic', 'superviseur_secours', 'repartiteur'].includes(r) ? '/secours' : r === 'intervenant' ? '/intervenant' : r === 'direction_regionale' ? '/direction' : '/'; document.getElementById('fo-retour').href = lien; }).catch(() => {});
+  api('GET', '/moi').then((m) => { moiCompte = m.utilisateur; etabSuivi = (m.etablissements || [])[0]?.id || null; if (etabSuivi && !location.hash) accueil(); const r = m.utilisateur?.role; const lien = ['paramedic', 'superviseur_secours', 'repartiteur'].includes(r) ? '/secours' : r === 'intervenant' ? '/intervenant' : r === 'direction_regionale' ? '/direction' : '/'; document.getElementById('fo-retour').href = lien; }).catch(() => {});
   entete(); router();
 })();

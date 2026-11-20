@@ -230,6 +230,7 @@ function creerApp(pool, options = {}) {
   // Module Formation (22 nov. 2026) : ouvert à tous les rôles connectés, AVANT les filtres des rôles limités ; chacun ne voit que ses parcours
   const fp = require('./formation-parcours');
   api.get('/formation/moi', route((req) => fp.moi(pool, req.utilisateur, req.langue)));
+  api.get('/formation/aide', route((req) => fp.aideEcrans(pool, req.utilisateur, req.langue)));
   api.put('/formation/parcours', route((req) => fp.choisir(pool, req.utilisateur, req.body)));
   api.get('/formation/capsules/:code', route((req) => fp.contenu(pool, req.utilisateur, req.params.code, req.langue)));
   api.post('/formation/capsules/:code/vue', route((req) => fp.marquerVue(pool, req.utilisateur, req.params.code)));
@@ -237,6 +238,17 @@ function creerApp(pool, options = {}) {
   api.post('/formation/capsules/:code/quiz', route((req) => fp.repondre(pool, req.utilisateur, req.params.code, req.body)));
   api.post('/formation/capsules/:code/exercice/debut', route((req) => fp.debutExercice(pool, req.utilisateur, req.params.code, { langue: req.langue })));
   api.post('/formation/capsules/:code/exercice/clic', route((req) => fp.clicExercice(pool, req.utilisateur, req.params.code, req.body)));
+  const fs2 = require('./formation-suivi');
+  api.get('/formation/parcours/:code/attestation.pdf', async (req, res, next) => {
+    try { const a = await fs2.attestation(pool, req.utilisateur, req.params.code, req.langue); res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${a.nom_fichier}"`, 'Cache-Control': 'no-store' }).send(a.pdf); } catch (e) { next(e); }
+  });
+  api.post('/formation/parcours/:code/satisfaction', route((req) => fs2.satisfaction(pool, req.utilisateur, req.params.code, req.body)));
+  api.get('/formation/superutilisateurs', route((req) => fs2.mesSuperutilisateurs(pool, req.utilisateur)));
+  api.put('/formation/superutilisateurs', route((req) => fs2.designer(pool, req.utilisateur, req.body)));
+  api.get('/formation/suivi', route((req) => fs2.suivi(pool, req.utilisateur, req.query.etablissement_id, req.langue)));
+  api.get('/formation/suivi.csv', async (req, res, next) => {
+    try { const s = await fs2.suivi(pool, req.utilisateur, req.query.etablissement_id, req.langue); res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="formation-suivi.csv"', 'Cache-Control': 'no-store' }).send(fs2.csv(s, req.langue)); } catch (e) { next(e); }
+  });
 
   // Rôles de secours (paramédic, superviseur, répartiteur) : écrans de secours seulement, jamais les lits, patients ni résidents
   api.use((req, res, next) => {

@@ -186,4 +186,22 @@ async function clicExercice(pool, u, code, b = {}) {
   return { juste: true, termine: true, score, reussi, erreurs: etat.erreurs, capsule_reussie: !!maj.reussi_le };
 }
 
-module.exports = { moi, choisir, contenu, marquerVue, debutQuiz, repondre, debutExercice, clicExercice, SEUIL, _contexte: contexte, _actif: actif };
+/** Capsules accessibles (parcours choisis d'abord) : pour le bouton « ? » de chaque écran et pour OG « comment faire… ». */
+async function accessibles(pool, u, langue) {
+  const l = L(langue); const x = await contexte(pool, u); if (!actif(x)) return [];
+  const { elig, codes } = await parcoursDe(pool, x);
+  const ordre = [...elig.filter((p) => codes.includes(p.code)), ...elig.filter((p) => !codes.includes(p.code))];
+  const vus = new Set(); const out = [];
+  for (const p of ordre) for (const k of p.capsules) {
+    const c = CAT.capsule(k); if (!c.pret || vus.has(k) || !moduleVisible(x, c.module)) continue; vus.add(k);
+    out.push({ code: c.code, titre: c.titre[l], duree: c.duree, emoji: c.emoji, ecran: c.scenes[0].ecran || null, onglet: c.scenes[0].onglet || null });
+  }
+  return out;
+}
+async function aideEcrans(pool, u, langue) {
+  const m = {};
+  for (const c of await accessibles(pool, u, langue)) { const k = c.ecran || (c.onglet && `secours:${c.onglet}`); if (k && !m[k]) m[k] = { code: c.code, titre: c.titre, duree: c.duree }; }
+  return m;
+}
+
+module.exports = { accessibles, aideEcrans, moi, choisir, contenu, marquerVue, debutQuiz, repondre, debutExercice, clicExercice, SEUIL, _contexte: contexte, _actif: actif };

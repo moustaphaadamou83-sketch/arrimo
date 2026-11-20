@@ -123,3 +123,46 @@ test('exercice guidé : état tenu par le serveur, clic faux → bulle, clic jus
   assert.strictEqual(m.parcours[0].capsules.find((x) => x.code === 'H2').etat, 'reussi');
   assert.strictEqual((await appel('soins.a', 'POST', '/formation/capsules/H2/exercice/clic', { x: -5, y: 2 })).s, 409, 'exercice terminé');
 });
+
+async function reussirCapsule(qui, code) {
+  const man = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'public', 'formation', 'captures', 'manifeste.json'), 'utf8'));
+  const c = CAT.capsule(code);
+  await appel(qui, 'POST', `/formation/capsules/${code}/quiz/debut`);
+  await appel(qui, 'POST', `/formation/capsules/${code}/quiz`, { reponses: c.quiz.map((q) => q.bonne) });
+  await appel(qui, 'POST', `/formation/capsules/${code}/exercice/debut`);
+  for (const e of c.exercice) { const z = man[code][e.scene].fr; await appel(qui, 'POST', `/formation/capsules/${code}/exercice/clic`, { x: z.x + z.w / 2, y: z.y + z.h / 2 }); }
+}
+
+test('attestation PDF FR/EN seulement après le parcours, satisfaction, suivi du formateur (CSV), superutilisateurs', async () => {
+  await compte('admin.a', 'admin_etab', { etab: ids.a });
+  assert.strictEqual((await appel('soins.a', 'GET', '/formation/parcours/triage/attestation.pdf')).s, 409, 'parcours non terminé');
+  const m = (await appel('soins.a', 'GET', '/formation/moi')).d;
+  for (const c of m.parcours[0].capsules.filter((x) => x.etat !== 'preparation' && x.etat !== 'reussi')) await reussirCapsule('soins.a', c.code);
+  const fini = (await appel('soins.a', 'GET', '/formation/moi')).d.parcours[0]; assert.strictEqual(fini.reussies, fini.total);
+  for (const L of ['fr', 'en']) {
+    const r = await fetch(`${base}/api/formation/parcours/triage/attestation.pdf`, { headers: { Authorization: `Bearer ${tok['soins.a']}`, 'X-Langue': L } });
+    assert.strictEqual(r.status, 200); assert.match(r.headers.get('content-type'), /pdf/); assert.strictEqual((await r.arrayBuffer()).byteLength > 1000, true);
+  }
+  assert.strictEqual((await pool.query("SELECT count(*)::int n FROM formation_attestations WHERE parcours = 'triage'")).rows[0].n, 1, 'une seule attestation par parcours');
+  assert.strictEqual((await appel('soins.a', 'POST', '/formation/parcours/triage/satisfaction', { note: 7 })).s, 400);
+  assert.strictEqual((await appel('soins.a', 'POST', '/formation/parcours/triage/satisfaction', { note: 5, commentaire: 'Clair et court' })).s, 200);
+  // Suivi : administrateur oui, coordonnateur non (tant qu'il n'est pas superutilisateur)
+  assert.strictEqual((await appel('coord.a', 'GET', `/formation/suivi?etablissement_id=${ids.a}`)).s, 403);
+  const s = (await appel('admin.a', 'GET', `/formation/suivi?etablissement_id=${ids.a}`)).d;
+  const ligne = s.personnes.find((x) => x.nom === 'soins.a'); assert.strictEqual(ligne.reussies, ligne.total); assert.strictEqual(s.satisfaction.n, 1);
+  const r = await fetch(`${base}/api/formation/suivi.csv?etablissement_id=${ids.a}`, { headers: { Authorization: `Bearer ${tok['admin.a']}` } });
+  assert.match(await r.text(), /Nom;Rôle;Parcours;Capsules;Vues;Pratiquées;Réussies/);
+  const coord = s.personnes.find((x) => x.nom === 'coord.a');
+  assert.strictEqual((await appel('coord.a', 'PUT', '/formation/superutilisateurs', { etablissement_id: ids.a, utilisateur_id: coord.id, actif: true })).s, 403, 'seul l’administrateur désigne');
+  assert.strictEqual((await appel('admin.a', 'PUT', '/formation/superutilisateurs', { etablissement_id: ids.a, utilisateur_id: coord.id, actif: true })).s, 200);
+  assert.strictEqual((await appel('coord.a', 'GET', `/formation/suivi?etablissement_id=${ids.a}`)).s, 200, 'le superutilisateur suit son établissement');
+  assert.deepStrictEqual((await appel('soins.a', 'GET', '/formation/superutilisateurs')).d.map((x) => x.nom), ['coord.a']);
+});
+
+test('aide en contexte : capsule de chaque écran ; OG « comment faire… » renvoie vers la capsule', async () => {
+  const a = (await appel('soins.a', 'GET', '/formation/aide')).d;
+  assert.strictEqual(a.chrono.code, 'C1'); assert.ok(a.lits && a.secours);
+  assert.deepStrictEqual((await appel('coord.b', 'GET', '/formation/aide')).d, {}, 'formation non activée : rien');
+  const og = (await appel('soins.a', 'POST', '/copilote/question', { etablissement_id: ids.a, question: 'Comment corriger une heure dans le Chrono ?', langue: 'fr' })).d;
+  assert.match(og.reponse, /Corriger une heure/); assert.strictEqual(og.lien, '/formation#capsule/C2');
+});

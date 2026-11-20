@@ -41,6 +41,18 @@ async function repondre(pool, u, etabId, question, langue) {
         : T(L, 'Rien en attente : aucune confirmation manquante ni étape en retard.', 'Nothing pending: no missing confirmation or overdue step.'), 'attention', 'vigilance');
     }
   }
+  // Formation (22 nov. 2026) : « comment faire… ? » → la capsule qui le montre (2 à 3 min), si la formation est activée
+  if (/\b(comment|how (do|to|can))\b/.test(qn)) {
+    const caps = await require('./formation-parcours').accessibles(pool, u, require('./og-localisation').langueDemandee(question, langue)).catch(() => []);
+    const mots = qn.split(/[^a-z0-9]+/).filter((m) => m.length > 3 && !['comment', 'faire', 'puis', 'avec', 'pour', 'dans'].includes(m));
+    const score = (c) => { const t = norm(c.titre); return mots.filter((m) => t.includes(m) || t.includes(m.slice(0, 5))).length; };
+    const meilleure = caps.map((c) => ({ c, s: score(c) })).filter((x) => x.s > 0).sort((a, b) => b.s - a.s)[0];
+    if (meilleure) {
+      const L = require('./og-localisation').langueDemandee(question, langue); const c = meilleure.c; const min = Math.max(1, Math.round(c.duree / 60));
+      return { ...reponse(T(L, `La capsule « ${c.titre} » (${min} min) vous le montre pas à pas, avec un exercice guidé : /formation#capsule/${c.code}`,
+        `The lesson “${c.titre}” (${min} min) shows you step by step, with a guided exercise: /formation#capsule/${c.code}`), 'formation'), lien: `/formation#capsule/${c.code}` };
+    }
+  }
   const intention = INTENTIONS.find(([, re]) => re.test(qn))?.[0];
   if (!intention) return null;
   const L = require('./og-localisation').langueDemandee(question, langue);
