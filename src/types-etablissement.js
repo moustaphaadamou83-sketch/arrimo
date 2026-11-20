@@ -79,7 +79,7 @@ const MODULES = [
     note: 'Fiche de transfert unique, centrale régionale, rapatriements proposés', note_en: 'Single transfer record, regional hub, proposed repatriations' },
   { code: 'transport_planifie', categorie: 'optionnel', types: ['hopital', 'chsld', ...TYPES_SECOURS], statut: 'disponible', drapeau: 'transport_planifie', nom: 'Transport non urgent', nom_en: 'Non-urgent transport',
     note: 'Réservation, plage confirmée, lit à libérer', note_en: 'Booking, confirmed time slot, bed to free' },
-  { code: 'bourse_places', categorie: 'optionnel', types: ['hopital', 'chsld'], statut: 'a_venir', drapeau: 'bourse_places', nom: 'Bourse des places', nom_en: 'Placement exchange',
+  { code: 'bourse_places', categorie: 'optionnel', types: ['hopital', 'chsld'], statut: 'disponible', drapeau: 'bourse_places', nom: 'Bourse des places', nom_en: 'Placement exchange',
     note: 'Places libres et à venir, classement expliqué, lien invité', note_en: 'Free and upcoming places, explained ranking, guest link' },
   { code: 'donnees_regionales', categorie: 'optionnel', types: ['hopital', 'chsld'], statut: 'a_venir', drapeau: 'donnees_regionales', nom: 'Données et listes d’attente', nom_en: 'Data and waiting lists',
     note: 'Tableaux régionaux, petits nombres masqués, CSV', note_en: 'Regional dashboards, small counts masked, CSV' },

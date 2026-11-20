@@ -66,6 +66,7 @@ function creerApp(pool, options = {}) {
   app.get('/demo-guide', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'demo-guide.html')));
   app.get(['/confidentialite', '/conditions', '/privacy', '/terms'], (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'legal.html')));
   // Urgences en direct, page publique (20 nov. 2026) : DÉMONSTRATION SEULEMENT (décision 4 de Moustafa : accord des urgences et avis juridique d'abord)
+  app.get('/bourse-invite', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'bourse-invite.html')));
   app.get(['/urgences', '/emergencies'], (req, res) => (require('./urgences-direct').publicActif()
     ? res.sendFile(path.join(__dirname, '..', 'public', 'urgences-direct.html')) : res.status(404).send('Not found')));
 
@@ -119,6 +120,10 @@ function creerApp(pool, options = {}) {
     res.set('Cache-Control', 'public, max-age=60').set('Access-Control-Allow-Origin', '*');
     return require('./urgences-direct').apiPublique(pool, req.ip);
   }));
+
+  // Bourse des places, accès invité (20 nov. 2026) : jeton nominatif dans l'en-tête X-Invitation, limité à la bourse et à l'envoi d'une demande
+  api.get('/invite/bourse', route((req) => require('./bourse').placesInvite(pool, req.get('x-invitation'), req.query)));
+  api.post('/invite/bourse/demandes', route((req) => require('./bourse').demandeInvite(pool, req.get('x-invitation'), req.body)));
 
   /* ---------- informations publiques : serveur de démonstration, champs des pages légales ---------- */
   const CHAMPS_LEGAUX = ['entite', 'adresse', 'responsable', 'contact', 'duree_comptes', 'duree_journaux', 'duree_references', 'hebergeur', 'entente'];
@@ -256,6 +261,15 @@ function creerApp(pool, options = {}) {
   api.post('/urgences-direct/fermetures', route((req) => ud.planifier(pool, req.utilisateur, req.body)));
   api.post('/urgences-direct/fermetures/:id/action', route((req) => ud.changer(pool, req.utilisateur, req.params.id, req.body)));
   api.get('/secours/urgences-direct', route((req) => ud.vueSecours(pool, req.utilisateur)));
+  // Bourse des places (20 nov. 2026)
+  const bourse = require('./bourse');
+  api.get('/bourse', route((req) => bourse.places(pool, req.utilisateur, req.query)));
+  api.get('/bourse/groupe', route((req) => bourse.groupe(pool, req.utilisateur, req.query)));
+  api.get('/bourse/fiche/:lit', route((req) => bourse.fiche(pool, req.utilisateur, req.params.lit)));
+  api.post('/bourse/demandes/:id/proposer-groupe', route((req) => bourse.proposerDansGroupe(pool, req.utilisateur, req.params.id, req.body)));
+  api.get('/bourse/invitations', route((req) => bourse.invitations(pool, req.utilisateur, req.query.etablissement_id)));
+  api.post('/bourse/invitations', route((req) => bourse.inviter(pool, req.utilisateur, req.body)));
+  api.post('/bourse/invitations/:id/revoquer', route((req) => bourse.revoquer(pool, req.utilisateur, req.params.id)));
   // Transferts (20 nov. 2026) : fiche unique, centrale régionale, rapatriement proposé ; transporteur et CCS par /secours/*
   const ts = require('./transferts-suivi');
   api.get('/transferts-suivi/centrale', route((req) => ts.centrale(pool, req.utilisateur)));

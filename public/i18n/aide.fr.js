@@ -208,6 +208,12 @@ window.ARRIMO_I18N.fr.aide = {
       ],
       erreurs: [['Plage invalide', 'La fin doit suivre le début, sans dépasser 12 h.']],
     },
+    bourse: {
+      nom: 'Bourse des places',
+      but: 'Voir les places libres et à venir des ressources d’hébergement, classées par besoins couverts et proximité, avec la raison du classement.',
+      gestes: ['Filtrez par type de ressource, besoins et distance.', 'Imprimez la fiche d’une page (sans diagnostic) d’un patient NSA.', 'Invitez un professionnel sans compte avec un lien nominatif de 7 jours, révocable.'],
+      erreurs: [['Courriel professionnel requis', 'Les adresses personnelles ne sont pas acceptées pour un lien invité.']],
+    },
     vigilance: {
       nom: 'Congés et alertes',
       but: 'Voir lit par lit les départs prévus (avec leur statut, l’heure et la source) et les blocages expliqués : origine, seuil, fait ou hypothèse, action proposée et responsable.',

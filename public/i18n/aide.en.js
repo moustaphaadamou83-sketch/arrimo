@@ -208,6 +208,12 @@ window.ARRIMO_I18N.en.aide = {
       ],
       erreurs: [['Invalid time slot', 'The end must follow the start, within 12 h.']],
     },
+    bourse: {
+      nom: 'Placement exchange',
+      but: 'See free and upcoming places of residential resources, ranked by needs covered and proximity, with the reason for the ranking.',
+      gestes: ['Filter by resource type, needs and distance.', 'Print the one-page sheet (no diagnosis) of an ALC patient.', 'Invite a professional without an account with a named 7-day link, revocable.'],
+      erreurs: [['Work email required', 'Personal addresses are not accepted for a guest link.']],
+    },
     vigilance: {
       nom: 'Discharges and alerts',
       but: 'See planned departures bed by bed (status, time and source) and explained blockages: origin, threshold, fact or hypothesis, suggested action and owner.',
