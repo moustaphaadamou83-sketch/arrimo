@@ -247,6 +247,10 @@ function creerApp(pool, options = {}) {
   api.post('/dsn/patients/:id/transitions', route((req) => dsn.creerTransition(pool, req.utilisateur, req.params.id, req.body)));
   api.post('/dsn/transitions/:id/valider', route((req) => dsn.validerTransition(pool, req.utilisateur, req.params.id)));
   api.post('/dsn/transitions/:id/envoyer', route((req) => dsn.envoyerTransition(pool, req.utilisateur, req.params.id, req.body)));
+  api.post('/dsn/transitions/:id/depart', route((req) => dsn.depart(pool, req.utilisateur, req.params.id)));
+  // Lits libres de l'établissement (admission DSN sur un vrai lit) : code et unité seulement
+  api.get('/dsn/lits-libres', route(async (req) => { await dsn.contexte(pool, req.utilisateur, req.query.etablissement_id);
+    return (await pool.query("SELECT l.code, u.nom AS unite FROM lits l JOIN unites u ON u.id = l.unite_id WHERE l.etablissement_id = $1 AND l.etat = 'libre' AND l.actif ORDER BY u.nom, l.code", [Number(req.query.etablissement_id)])).rows; }));
   api.get('/dsn/transitions/recues', route((req) => dsn.transitionsRecues(pool, req.utilisateur, req.query.etablissement_id)));
   api.post('/dsn/transitions/:id/decision', route((req) => dsn.deciderTransition(pool, req.utilisateur, req.params.id, req.body)));
   api.post('/dsn/transitions/:id/dossier', route((req) => dsn.ouvrirDossierDepuisTransition(pool, req.utilisateur, req.params.id)));

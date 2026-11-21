@@ -9,6 +9,7 @@
  * Rejouable : ne refait rien si les comptes existent. Refusé hors démo.
  */
 const { creerPool } = require('../src/db');
+const { changerEtat } = require('../src/regles');
 if (process.env.ARRIMO_ENV !== 'demo') { console.error('Refusé : démonstration seulement.'); process.exit(1); }
 const FONCTIONS = [['admission', 'coordonnateur'], ['infirmier', 'equipe_soins'], ['medecin', 'equipe_soins'], ['sortie', 'coordonnateur'], ['auditeur', 'coordonnateur']];
 const PATIENTS = [['Alice', 'Démo-Arsenault', '1941-02-11'], ['Bernard', 'Démo-Bélanger', '1938-07-30'], ['Chantal', 'Démo-Côté', '1950-11-04'], ['Daniel', 'Démo-Dion', '1946-05-19'],
@@ -16,6 +17,27 @@ const PATIENTS = [['Alice', 'Démo-Arsenault', '1941-02-11'], ['Bernard', 'Démo
   ['Irène', 'Démo-Isabelle', '1955-06-02'], ['Jacques', 'Démo-Jolicoeur', '1944-10-10']];
 const ALLERGIES = ['Pénicilline (fictif)', 'Arachides (fictif)', 'Latex (fictif)', 'Sulfamides (fictif)', 'Iode (fictif)'];
 const ANTECEDENTS = ['Hypertension (fictif)', 'Diabète de type 2 (fictif)', 'Fracture de la hanche (fictif)', 'Insuffisance cardiaque (fictif)', 'MPOC (fictif)'];
+/** Séjours DSN « en cours » sans vrai lit : les 4 premiers occupent un lit libre réel par les règles des lits (un lit reste libre pour une
+    admission en direct) ; les autres sont terminés (historique). La synchronisation Lits → DSN relie le séjour au lit. */
+async function relierLits(c, pool, hb) {
+  const sejours = (await c.query(`SELECT x.id, x.patient_id, p.reference FROM dsn_elements x JOIN patients p ON p.id = x.patient_id
+    WHERE x.etablissement_id = $1 AND x.genre = 'sejour' AND x.statut = 'en_cours' AND x.remplace_par IS NULL AND NOT (x.donnees ? 'lit_id') ORDER BY p.id`, [hb])).rows;
+  let relies = 0; let termines = 0;
+  for (const s of sejours) {
+    const occupes = (await c.query(`SELECT count(*)::int n FROM dsn_elements WHERE etablissement_id = $1 AND genre = 'sejour' AND statut = 'en_cours' AND remplace_par IS NULL AND donnees ? 'lit_id'`, [hb])).rows[0].n;
+    const libre = occupes < 4 ? (await c.query("SELECT id FROM lits WHERE etablissement_id = $1 AND etat = 'libre' AND actif ORDER BY code LIMIT 1 OFFSET 1", [hb])).rows[0] : null;
+    if (libre) {
+      await changerEtat(c, pool, null, libre.id, 'reserve', { patientRef: s.reference, detail: 'Démo DSN' });
+      await changerEtat(c, pool, null, libre.id, 'occupe', { patientRef: s.reference, detail: 'Démo DSN' });
+      relies += 1;
+    } else {
+      await c.query("UPDATE dsn_elements SET statut = 'termine', modifie_le = now() WHERE id = $1", [s.id]);
+      await c.query("UPDATE patients SET parcours = 'enregistre', modifie_le = now() WHERE id = $1 AND parcours = 'hospitalise'", [s.patient_id]);
+      termines += 1;
+    }
+  }
+  return { relies, termines };
+}
 (async () => {
   const pool = creerPool(process.env.DATABASE_URL); const c = await pool.connect();
   try {
@@ -28,7 +50,8 @@ const ANTECEDENTS = ['Hypertension (fictif)', 'Diabète de type 2 (fictif)', 'Fr
     const era0 = (await c.query("SELECT id FROM etablissements WHERE code = 'CHSLD-ERA'")).rows[0].id;
     const ue = (await c.query("SELECT id FROM utilisateurs WHERE email = 'coordination.erables@chsld.example.invalid'")).rows[0]?.id;
     if (ue) for (const f of ['admission', 'infirmier', 'medecin']) await c.query('INSERT INTO dsn_habilitations (etablissement_id, utilisateur_id, fonction) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING', [era0, ue, f]);
-    if ((await c.query("SELECT 1 FROM utilisateurs WHERE email = 'dsn.medecin@demo.arrimo'")).rowCount) { console.log('Déjà en place (fonctions de hopital.b vérifiées)'); await c.query('COMMIT'); return; }
+    if ((await c.query("SELECT 1 FROM utilisateurs WHERE email = 'dsn.medecin@demo.arrimo'")).rowCount) {
+      const n = await relierLits(c, pool, hb0); console.log(`Déjà en place (fonctions vérifiées ; séjours reliés à un vrai lit : ${n.relies}, terminés : ${n.termines})`); await c.query('COMMIT'); return; }
     const hb = (await c.query("SELECT id FROM etablissements WHERE code = 'HY'")).rows[0].id;
     const era = (await c.query("SELECT id FROM etablissements WHERE code = 'CHSLD-ERA'")).rows[0].id;
     await c.query(`UPDATE etablissements SET modules = COALESCE(modules, '{}'::jsonb) || '{"dsn": true}' WHERE id = ANY($1)`, [[hb, era]]);
@@ -49,7 +72,7 @@ const ANTECEDENTS = ['Hypertension (fictif)', 'Diabète de type 2 (fictif)', 'Fr
       const al = await el(p.id, 'allergie', { substance: ALLERGIES[i % 5], gravite: i % 3 === 0 ? 'severe' : 'moderee', verification: 'confirmee' }, 'actif', u.infirmier);
       await el(p.id, 'antecedent', { libelle: ANTECEDENTS[i % 5], type: 'medical' }, 'actif', u.medecin);
       const ren = await el(p.id, 'rencontre', { type: 'hospitalisation', motif: 'Séjour de démonstration (fictif)', equipe: 'Médecine' }, 'ouverte', u.admission);
-      const sej = await el(p.id, 'sejour', { service: 'Médecine', lit: `MED-2${String(10 + i)}` }, 'en_cours', u.admission);
+      const sej = await el(p.id, 'sejour', { service: 'Médecine' }, 'en_cours', u.admission);   // relié à un vrai lit (ou terminé) par relierLits
       await el(p.id, 'observation', { type: 'ta', valeur: `${120 + i}/${75 + (i % 4)}`, unite: 'mmHg' }, 'finale', u.infirmier);
       await el(p.id, 'observation', { type: 'temperature', valeur: (36.6 + (i % 4) / 10).toFixed(1), unite: '°C' }, 'finale', u.infirmier);
       await el(p.id, 'note', { titre: 'Note d’évolution (fictive)', texte: 'Patient synthétique de démonstration. Aucune donnée réelle.' }, 'signee', u.infirmier, { rencontre: ren, signe: true });
@@ -64,6 +87,7 @@ const ANTECEDENTS = ['Hypertension (fictif)', 'Diabète de type 2 (fictif)', 'Fr
       VALUES ($1, $2, $3, $4, $5, $6, $7, 'envoye', $8, $8, now() - interval '2 hours', now() - interval '90 minutes') RETURNING id, numero`,
     [await num('TRX'), premier.p.id, hb, era, premier.sej, [premier.al, premier.rx], JSON.stringify({ note_transition: 'Consignes de transition fictives.', patient: pr, elements: contenus, fige_le: new Date().toISOString() }), u.medecin])).rows[0];
     await c.query("INSERT INTO horodatages (objet, objet_id, etape, heure, source, auteur_id) VALUES ('dsn_transition', $1, 'demande', now() - interval '90 minutes', 'clic', $2)", [t.id, u.medecin]);
+    await relierLits(c, pool, hb);
     await c.query("INSERT INTO journal (etablissement_id, utilisateur_id, action, detail) VALUES ($1, NULL, 'Démo : DSN préparé', '10 patients synthétiques, 5 comptes, 1 transition')", [hb]);
     await c.query('COMMIT'); console.log('DSN démo prêt : 10 patients synthétiques, 5 comptes par fonction, transition', t.numero, 'vers le CHSLD des Érables');
   } catch (err) { await c.query('ROLLBACK'); throw err; } finally { c.release(); await pool.end(); }

@@ -13,6 +13,8 @@ const { ErreurHttp, transaction } = require('./db');
 const TE = require('./types-etablissement');
 const env = require('./environnement');
 const horloge = require('./horloge');
+const sync = require('./dsn-sync');
+const { changerEtat } = require('./regles');
 
 const FONCTIONS = ['admission', 'infirmier', 'medecin', 'sortie', 'auditeur'];
 const CLINIQUES = ['infirmier', 'medecin'];
@@ -26,7 +28,7 @@ const GENRES = {
   diagnostic: { champs: { libelle: 200, code: 20 }, listes: { certitude: ['provisoire', 'confirme'] }, requis: ['libelle'], statut: 'actif', creer: ['medecin'] },
   prescription: { champs: { substance: 120, dose: 60, voie: 40, frequence: 60, duree: 60, indication: 200 }, listes: {}, requis: ['substance', 'dose', 'voie', 'frequence'], statut: 'brouillon', creer: CLINIQUES },
   examen: { champs: { type_examen: 120, prestataire: 120, resultat: 2000 }, listes: { priorite: ['routine', 'urgente'] }, requis: ['type_examen'], statut: 'demande', creer: ['medecin'] },
-  sejour: { champs: { service: 80, lit: 30, destination: 160, synthese: 4000, consignes: 2000 }, listes: {}, requis: ['service'], statut: 'en_cours', creer: ['admission', 'medecin'] },
+  sejour: { champs: { service: 80, lit: 30, destination: 160, synthese: 4000, consignes: 2000 }, listes: {}, requis: ['service', 'lit'], statut: 'en_cours', creer: ['admission', 'medecin'] },
 };
 // Ce qu'un paquet de transition peut contenir : résumé minimal choisi (jamais les notes ni le dossier complet)
 const PARTAGEABLES = ['allergie', 'antecedent', 'diagnostic', 'prescription', 'observation', 'sejour'];
@@ -103,8 +105,13 @@ async function dossier(pool, u, patientId) {
     WHERE x.patient_id = $1 ORDER BY x.cree_le DESC`, [p.id])).rows;
   const docs = (await pool.query(`SELECT d.id, d.numero, d.type_doc, d.titre, d.mime, d.taille, d.version, d.statut, d.cree_le, a.nom AS auteur FROM dsn_documents d JOIN utilisateurs a ON a.id = d.auteur_id
     WHERE d.patient_id = $1 ORDER BY d.cree_le DESC`, [p.id])).rows;
-  const tr = (await pool.query(`SELECT t.id, t.numero, t.statut, t.destination_id, e.nom AS destination, t.cree_le, t.envoye_le, t.recu_le FROM dsn_transitions t JOIN etablissements e ON e.id = t.destination_id
+  const tr = (await pool.query(`SELECT t.id, t.numero, t.statut, t.destination_id, e.nom AS destination, t.cree_le, t.envoye_le, t.decision_le, t.depart_le, t.recu_le, t.motif_refus,
+      dt.numero AS transport, dt.statut AS transport_statut, un.numero AS transport_unite, dh.numero AS demande_hebergement, dh.statut AS demande_hebergement_statut, tf.numero AS transfert, tf.statut AS transfert_statut
+    FROM dsn_transitions t JOIN etablissements e ON e.id = t.destination_id LEFT JOIN demandes_transport dt ON dt.id = t.demande_transport_id LEFT JOIN unites_secours un ON un.id = dt.unite_id
+      LEFT JOIN demandes_hebergement dh ON dh.id = t.demande_hebergement_id LEFT JOIN transferts tf ON tf.id = t.transfert_id
     WHERE t.patient_id = $1 ORDER BY t.cree_le DESC`, [p.id])).rows;
+  const evts = (await pool.query(`SELECT v.type, v.source, v.objet, v.statut, v.cree_le, a.nom AS auteur FROM dsn_evenements v LEFT JOIN utilisateurs a ON a.id = v.auteur_id
+    WHERE v.patient_id = $1 ORDER BY v.cree_le DESC LIMIT 200`, [p.id])).rows;
   const passages = (await pool.query('SELECT reference, type, arrivee_le, sortie_le, resultat FROM patient_passages WHERE patient_id = $1 ORDER BY arrivee_le DESC', [p.id])).rows;
   await tracer(pool, u, { patient: p.id, etab: p.etablissement_id, action: 'lecture', objet: 'dossier' });
   const enVigueur = el.filter((x) => !x.remplace_par);
@@ -114,10 +121,11 @@ async function dossier(pool, u, patientId) {
     ...docs.map((d) => ({ quand: d.cree_le, genre: 'document', numero: d.numero, statut: d.statut, auteur: d.auteur, version: d.version })),
     ...tr.map((t) => ({ quand: t.cree_le, genre: 'transition', numero: t.numero, statut: t.statut })),
     ...passages.map((x) => ({ quand: x.arrivee_le, genre: 'passage', numero: x.reference, statut: x.resultat })),
+    ...evts.map((v) => ({ quand: v.cree_le, genre: 'evenement', numero: v.objet, statut: `${v.type} · ${v.statut}`, source: v.source, auteur: v.auteur || 'système' })),
   ].sort((a, b) => new Date(b.quand) - new Date(a.quand));
   return { patient: p, fonctions: ctx.fonctions, allergies: par('allergie'), antecedents: par('antecedent'), rencontres: par('rencontre'), notes: par('note'),
     observations: par('observation'), diagnostics: par('diagnostic'), prescriptions: par('prescription'), examens: par('examen'), sejours: par('sejour'),
-    versions: el.filter((x) => x.remplace_par), documents: docs, transitions: tr, chronologie, demo: true };
+    versions: el.filter((x) => x.remplace_par), documents: docs, transitions: tr, evenements: evts, chronologie, demo: true };
 }
 
 // ---------------------------------------------------------------- éléments cliniques
@@ -140,9 +148,24 @@ async function ajouter(pool, u, patientId, b = {}) {
     if (!rencontre) throw new ErreurHttp(404, 'objet_introuvable');
   } else if (g.rencontre) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'rencontre_id' });
   return transaction(pool, async (c) => {
+    let lit = null;
+    if (b.genre === 'sejour') {
+      // Admission initiée dans le DSN : un vrai lit libre de l'établissement, réservé puis occupé par les règles des lits (verrou, version, journal)
+      await sync.verrouPatient(c, p.id);
+      if (await sync.sejourActif(c, p.id)) throw new ErreurHttp(409, 'dsn_sejour_deja_actif');
+      lit = (await c.query('SELECT id, code, etat, unite_id FROM lits WHERE etablissement_id = $1 AND upper(code) = upper($2) AND actif', [p.etablissement_id, donnees.lit])).rows[0];
+      if (!lit) throw new ErreurHttp(404, 'lit_introuvable');
+      if (lit.etat !== 'libre') throw new ErreurHttp(409, 'dsn_lit_non_disponible', { code: lit.code, etat: lit.etat });
+      donnees.lit = lit.code; donnees.lit_id = lit.id;
+    }
     const x = (await c.query(`INSERT INTO dsn_elements (numero, patient_id, etablissement_id, genre, rencontre_id, donnees, statut, auteur_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
       [await numero(c, 'DSN'), p.id, p.etablissement_id, b.genre, rencontre?.id || null, JSON.stringify(donnees), g.statut, u.id])).rows[0];
-    if (b.genre === 'sejour') await c.query("UPDATE patients SET parcours = 'hospitalise', modifie_le = now() WHERE id = $1", [p.id]);
+    if (lit) {
+      await changerEtat(c, pool, u.id, lit.id, 'reserve', { patientRef: p.reference, detail: `Admission DSN ${x.numero}` });
+      await changerEtat(c, pool, u.id, lit.id, 'occupe', { patientRef: p.reference, detail: `Admission DSN ${x.numero}` });
+      await sync.recalculerParcours(c, p.id);
+      await sync.evenement(c, { patientId: p.id, etabId: p.etablissement_id, type: 'admission', source: 'dsn', objet: `lit ${lit.code}`, statut: 'lit_occupe', auteurId: u.id });
+    }
     await tracer(c, u, { patient: p.id, etab: p.etablissement_id, action: 'ecriture', objet: `${b.genre} ${x.numero}` });
     return x;
   });
@@ -190,7 +213,8 @@ async function agir(pool, u, id, b = {}) {
     if (a === 'amender') {
       exigerFonction(ctx, GENRES[x.genre].creer);
       const motif = String(b.motif || '').trim(); if (motif.length < 5) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'motif' });
-      const d = valider(x.genre, { ...x.donnees, ...b.donnees });
+      if (x.genre === 'sejour' && b.donnees?.lit && String(b.donnees.lit).toUpperCase() !== String(x.donnees.lit || '').toUpperCase()) throw new ErreurHttp(409, 'dsn_lit_par_lits');
+      const d = { ...valider(x.genre, { ...x.donnees, ...b.donnees }), ...(x.donnees.lit_id ? { lit: x.donnees.lit, lit_id: x.donnees.lit_id } : {}) };
       const n = (await c.query(`INSERT INTO dsn_elements (numero, patient_id, etablissement_id, genre, rencontre_id, donnees, statut, version, remplace_id, auteur_id, motif)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`, [x.numero.replace(/(-v\d+)?$/, `-v${x.version + 1}`), x.patient_id, x.etablissement_id, x.genre, x.rencontre_id, JSON.stringify(d),
         x.genre === 'note' ? 'brouillon' : x.statut, x.version + 1, x.id, u.id, motif])).rows[0];
@@ -201,17 +225,27 @@ async function agir(pool, u, id, b = {}) {
     if (a === 'annuler') {
       exigerFonction(ctx, GENRES[x.genre].creer);
       const motif = String(b.motif || '').trim(); if (motif.length < 5) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'motif' });
-      const r = await maj("statut = 'annule', motif = $2", [motif.slice(0, 300)]); await tracer(c, u, { patient: x.patient_id, etab: x.etablissement_id, action: 'ecriture', objet: `annulation ${x.numero}`, justification: motif }); return r;
+      const r = await maj("statut = 'annule', motif = $2", [motif.slice(0, 300)]); await tracer(c, u, { patient: x.patient_id, etab: x.etablissement_id, action: 'ecriture', objet: `annulation ${x.numero}`, justification: motif });
+      if (x.genre === 'sejour' && sync.ACTIFS.includes(x.statut)) {
+        const lit = x.donnees.lit_id ? (await c.query('SELECT id, etat, patient_ref FROM lits WHERE id = $1', [x.donnees.lit_id])).rows[0] : null;
+        const ref = (await c.query('SELECT reference FROM patients WHERE id = $1', [x.patient_id])).rows[0].reference;
+        if (lit && lit.etat === 'occupe' && lit.patient_ref === ref) await changerEtat(c, pool, u.id, lit.id, 'nettoyage', { detail: `Séjour DSN annulé (${x.numero})` });
+        await sync.recalculerParcours(c, x.patient_id);
+        await sync.evenement(c, { patientId: x.patient_id, etabId: x.etablissement_id, type: 'admission_annulee', source: 'dsn', objet: x.numero, statut: 'sejour_annule', auteurId: u.id });
+      }
+      return r;
     }
     throw new ErreurHttp(400, 'parametre_invalide', { nom: 'action' });
   });
 }
 
 // ---------------------------------------------------------------- documents
+const TYPES_DOC = ['rapport', 'resultat', 'imagerie', 'lettre', 'consentement', 'autre'];
 const SIGNATURES = { 'application/pdf': '%PDF', 'image/png': '\x89PNG', 'image/jpeg': '\xff\xd8\xff' };
 async function deposer(pool, u, patientId, b = {}) {
   const { p, ctx } = await patientLisible(pool, u, patientId); exigerFonction(ctx, [...CLINIQUES, 'admission', 'sortie']);
   if (!SIGNATURES[b.mime]) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'mime' });
+  if (!TYPES_DOC.includes(b.type_doc)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'type_doc' });
   const contenu = Buffer.from(String(b.contenu_base64 || ''), 'base64');
   if (!contenu.length || contenu.length > 5242880) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'taille' });
   // Contrôle du type réel (signature du fichier), pas seulement de l'extension
@@ -275,25 +309,108 @@ async function validerTransition(pool, u, id) {
     return r;
   });
 }
-/** Envoi : la destination est avisée (sans contenu clinique), l'Horloge marque la demande ; transport non urgent réservé si demandé. */
+/**
+ * Envoi (DSN natif, 23 nov. 2026) : la transition est d'abord RÉSERVÉE de façon atomique (valide → envoye) : deux envois simultanés
+ * ou un renvoi n'en font qu'un. Ensuite, dans la même transaction : demande d'hébergement (destination = ressource d'hébergement)
+ * ou demande de transfert (destination = hôpital, lit RÉSERVÉ et non occupé : jamais de séjour actif), avis à la destination sans
+ * contenu clinique, Horloge, historique. Le transport non urgent éventuel est créé après ; s'il échoue, tout est remis à « valide ».
+ */
 async function envoyerTransition(pool, u, id, b = {}) {
-  const t = (await pool.query('SELECT * FROM dsn_transitions WHERE id = $1', [entier(id, 'id')])).rows[0];
-  if (!t) throw new ErreurHttp(404, 'objet_introuvable');
-  const { p, ctx } = await patientLisible(pool, u, t.patient_id); exigerFonction(ctx, ['medecin', 'sortie']);
-  if (t.statut !== 'valide') throw new ErreurHttp(409, 'dsn_action_impossible');
+  const t0 = (await pool.query('SELECT * FROM dsn_transitions WHERE id = $1', [entier(id, 'id')])).rows[0];
+  if (!t0) throw new ErreurHttp(404, 'objet_introuvable');
+  const { p, ctx } = await patientLisible(pool, u, t0.patient_id); exigerFonction(ctx, ['medecin', 'sortie']);
+  const t = await transaction(pool, async (c) => {
+    const r = (await c.query("UPDATE dsn_transitions SET statut = 'envoye', envoye_le = now(), version = version + 1 WHERE id = $1 AND statut = 'valide' RETURNING *", [t0.id])).rows[0];
+    if (!r) throw new ErreurHttp(409, 'dsn_action_impossible');
+    const dest = (await c.query('SELECT id, nom, type_etablissement, config_id FROM etablissements WHERE id = $1', [r.destination_id])).rows[0];
+    const origine = (await c.query('SELECT nom FROM etablissements WHERE id = $1', [r.etablissement_id])).rows[0].nom;
+    const sejour = await sync.sejourActif(c, p.id);
+    const litId = sejour?.donnees?.lit_id ? Number(sejour.donnees.lit_id) : null;
+    if (dest.type_etablissement === 'chsld') {
+      // Hébergement : demande d'hébergement liée, sans ressaisie (identité du dossier, lit d'hôpital, documents à compléter par la ressource)
+      const dh = (await c.query(`INSERT INTO demandes_hebergement (etablissement_id, numero, provenance, reference_externe, prenom, nom, date_naissance, statut, documents, cree_par, hopital_id, hopital_lit_id)
+        VALUES ($1, 'DH-' || lpad(nextval('demande_hebergement_seq')::text, 5, '0'), 'hopital', $2, $3, $4, $5, 'recue', '[]', $6, $7, $8) RETURNING id, numero`,
+      [dest.id, p.reference, p.prenom, p.nom, p.date_naissance, u.id, r.etablissement_id, litId])).rows[0];
+      await c.query('INSERT INTO demande_hebergement_etapes (demande_id, statut, detail, par) VALUES ($1, $2, $3, $4)', [dh.id, 'recue', `Reçue de ${origine} (transition ${r.numero})`, u.id]);
+      await c.query('UPDATE dsn_transitions SET demande_hebergement_id = $2 WHERE id = $1', [r.id, dh.id]);
+      await sync.evenement(c, { patientId: p.id, etabId: r.etablissement_id, type: 'demande_hebergement', source: 'hebergement', objet: `${dh.numero} · ${r.numero}`, statut: 'creee', auteurId: u.id });
+    } else if (dest.type_etablissement === 'hopital' && litId) {
+      // Hôpital : demande de transfert (lit RÉSERVÉ chez la destination) ; si aucun lit n'est disponible, la transition part quand même et l'écart est historisé
+      const typeId = (await c.query('SELECT type_id FROM lits WHERE id = $1', [litId])).rows[0].type_id;
+      await c.query('SAVEPOINT dsn_transfert');
+      try {
+        const tr = await require('./services').creerTransfert(pool, u, { origine_id: r.etablissement_id, destination_id: dest.id, type_id: typeId, patient_ref: p.reference, hors_rayon: true }, c);
+        await c.query('RELEASE SAVEPOINT dsn_transfert');
+        await c.query('UPDATE dsn_transitions SET transfert_id = $2 WHERE id = $1', [r.id, tr.id]);
+        await sync.evenement(c, { patientId: p.id, etabId: r.etablissement_id, type: 'demande_transfert', source: 'transferts', objet: `${tr.numero} · ${r.numero}`, statut: 'creee', auteurId: u.id });
+      } catch (err) {
+        await c.query('ROLLBACK TO SAVEPOINT dsn_transfert');
+        await sync.evenement(c, { patientId: p.id, etabId: r.etablissement_id, type: 'demande_transfert', source: 'transferts', objet: r.numero, statut: `non_creee:${err.code || 'erreur'}`.slice(0, 40), auteurId: u.id });
+      }
+    }
+    await horloge.marquer(c, { objet: 'dsn_transition', objetId: r.id, etape: 'demande', source: 'clic', auteurId: u.id });
+    await tracer(c, u, { patient: p.id, etab: p.etablissement_id, action: 'partage', objet: r.numero });
+    await sync.evenement(c, { patientId: p.id, etabId: r.etablissement_id, type: 'transition', source: 'dsn', objet: r.numero, statut: 'envoyee', auteurId: u.id });
+    // Avis à la destination : numéro et provenance seulement, jamais de contenu clinique
+    await require('./services').notifier(c, r.destination_id, null, 'dsn_transition', { numero: r.numero, origine });
+    return r;
+  });
   let transportId = null;
   if (b.transport) {
-    const r = await require('./transports').planifier(pool, u, { ...b.transport, etablissement_id: t.etablissement_id, destination_id: t.destination_id, motif_transport: b.transport.motif_transport || 'transfert_stable', reference: p.reference });
-    transportId = r.id;
+    try {
+      const r = await require('./transports').planifier(pool, u, { ...b.transport, etablissement_id: t.etablissement_id, destination_id: t.destination_id, motif_transport: b.transport.motif_transport || 'transfert_stable', reference: p.reference });
+      transportId = r.id;
+      await transaction(pool, async (c) => {
+        await c.query('UPDATE dsn_transitions SET demande_transport_id = $2 WHERE id = $1', [t.id, transportId]);
+        await sync.evenement(c, { patientId: p.id, etabId: t.etablissement_id, type: 'transport', source: 'transport', objet: `${r.numero} · ${t.numero}`, statut: 'demande', auteurId: u.id });
+      });
+    } catch (err) {
+      // Compensation : rien d'orphelin ; la transition redevient « valide » (demandes d'hébergement/transfert liées annulées)
+      await transaction(pool, async (c) => {
+        const x = (await c.query('SELECT * FROM dsn_transitions WHERE id = $1 FOR UPDATE', [t.id])).rows[0];
+        if (x.demande_hebergement_id) await c.query("UPDATE demandes_hebergement SET statut = 'annulee', modifie_le = now() WHERE id = $1", [x.demande_hebergement_id]).catch(() => {});
+        if (x.transfert_id) {
+          const tf = (await c.query("UPDATE transferts SET statut = 'refuse', motif_refus = 'Transition DSN non envoyée (transport impossible)', date_refus = now() WHERE id = $1 AND statut = 'demande' RETURNING lit_id", [x.transfert_id])).rows[0];
+          const l = tf?.lit_id ? (await c.query('SELECT etat FROM lits WHERE id = $1', [tf.lit_id])).rows[0] : null;
+          if (l?.etat === 'reserve') await changerEtat(c, pool, u.id, tf.lit_id, 'libre', { detail: `Transition ${t.numero} non envoyée` });
+        }
+        await c.query("UPDATE dsn_transitions SET statut = 'valide', envoye_le = NULL, demande_hebergement_id = NULL, transfert_id = NULL, version = version + 1 WHERE id = $1", [t.id]);
+        await sync.evenement(c, { patientId: p.id, etabId: t.etablissement_id, type: 'transition', source: 'dsn', objet: t.numero, statut: 'envoi_annule', auteurId: u.id });
+      });
+      throw err;
+    }
   }
-  await transaction(pool, async (c) => {
-    await c.query("UPDATE dsn_transitions SET statut = 'envoye', envoye_le = now(), demande_transport_id = $2, version = version + 1 WHERE id = $1", [t.id, transportId]);
-    await horloge.marquer(c, { objet: 'dsn_transition', objetId: t.id, etape: 'demande', source: 'clic', auteurId: u.id });
-    await tracer(c, u, { patient: p.id, etab: p.etablissement_id, action: 'partage', objet: t.numero });
-    // Avis à la destination : numéro et provenance seulement, jamais de contenu clinique
-    await require('./services').notifier(c, t.destination_id, null, 'dsn_transition', { numero: t.numero, origine: (await c.query('SELECT nom FROM etablissements WHERE id = $1', [t.etablissement_id])).rows[0].nom });
-  });
   return { ...(await pool.query('SELECT * FROM dsn_transitions WHERE id = $1', [t.id])).rows[0], demande_transport_id: transportId };
+}
+/** Départ du patient (origine, ou fait constaté par la prise en charge du transport) : Horloge « départ », séjour terminé, lit au nettoyage. */
+async function departTransition(c, pool, t, auteur, source) {
+  if (t.depart_le || !['accepte', 'envoye'].includes(t.statut)) return false;
+  await c.query('UPDATE dsn_transitions SET depart_le = now(), version = version + 1 WHERE id = $1', [t.id]);
+  await horloge.marquer(c, { objet: 'dsn_transition', objetId: t.id, etape: 'depart', source: source === 'transport' ? 'connecteur' : 'clic', auteurId: auteur?.id || null });
+  const s = await sync.sejourActif(c, t.patient_id);
+  if (s?.donnees?.lit_id) {
+    const lit = (await c.query('SELECT id, etat FROM lits WHERE id = $1', [s.donnees.lit_id])).rows[0];
+    if (lit?.etat === 'occupe') await changerEtat(c, pool, auteur?.id || null, lit.id, 'nettoyage', { detail: `Départ (transition ${t.numero})` });   // le séjour se termine par la synchronisation des lits
+  }
+  await sync.evenement(c, { patientId: t.patient_id, etabId: t.etablissement_id, type: 'depart', source, objet: t.numero, statut: 'parti', auteurId: auteur?.id || null });
+  return true;
+}
+async function depart(pool, u, id) {
+  return transaction(pool, async (c) => {
+    const t = (await c.query('SELECT * FROM dsn_transitions WHERE id = $1 FOR UPDATE', [entier(id, 'id')])).rows[0];
+    if (!t) throw new ErreurHttp(404, 'objet_introuvable');
+    const { ctx } = await patientLisible(c, u, t.patient_id); exigerFonction(ctx, ['medecin', 'sortie', 'infirmier']);
+    if (!(await departTransition(c, pool, t, u, 'dsn'))) throw new ErreurHttp(409, 'dsn_action_impossible');
+    await tracer(c, u, { patient: t.patient_id, etab: t.etablissement_id, action: 'ecriture', objet: `départ ${t.numero}` });
+    return (await c.query('SELECT id, numero, statut, depart_le FROM dsn_transitions WHERE id = $1', [t.id])).rows[0];
+  });
+}
+/** Appelé par src/transports.js : la prise en charge par le transporteur vaut départ ; l'arrivée est historisée (la réception reste confirmée par la destination). */
+async function apresTransport(c, pool, d, action) {
+  const t = (await c.query('SELECT * FROM dsn_transitions WHERE demande_transport_id = $1 FOR UPDATE', [d.id])).rows[0];
+  if (!t) return;
+  if (action === 'pris_en_charge') await departTransition(c, pool, t, null, 'transport');
+  await sync.evenement(c, { patientId: t.patient_id, etabId: t.etablissement_id, type: 'transport', source: 'transport', objet: `${d.numero} · ${t.numero}`, statut: action, auteurId: null });
 }
 /** Côté destination (avec ou sans DSN) : SEULEMENT le paquet de transition, jamais le dossier source. */
 async function transitionsRecues(pool, u, etabId) {
@@ -327,22 +444,33 @@ async function deciderTransition(pool, u, id, b = {}) {
       await c.query("UPDATE patients SET parcours = 'transfere', modifie_le = now() WHERE id = $1", [t.patient_id]);
     } else throw new ErreurHttp(409, 'dsn_action_impossible');
     await tracer(c, u, { etab: t.destination_id, action: b.decision === 'refuser' ? 'refus' : 'reception', objet: t.numero });
+    // L'origine est avisée de la décision (sans contenu clinique) ; chaque décision est historisée
+    const dest = (await c.query('SELECT nom FROM etablissements WHERE id = $1', [t.destination_id])).rows[0].nom;
+    if (b.decision !== 'reception') await require('./services').notifier(c, t.etablissement_id, null, b.decision === 'accepter' ? 'dsn_transition_acceptee' : 'dsn_transition_refusee', { numero: t.numero, destination: dest });
+    await sync.evenement(c, { patientId: t.patient_id, etabId: t.etablissement_id, type: 'transition', source: 'dsn', objet: t.numero, statut: { accepter: 'acceptee', refuser: 'refusee', reception: 'recue' }[b.decision], auteurId: u.id });
     return (await c.query('SELECT id, numero, statut, decision_le, recu_le, arrivee_prevue_le FROM dsn_transitions WHERE id = $1', [t.id])).rows[0];
   });
 }
 /** La destination qui a le DSN peut ouvrir son propre dossier à partir du paquet reçu (identité + éléments, source « transition »). */
 async function ouvrirDossierDepuisTransition(pool, u, id) {
-  const t = (await pool.query("SELECT * FROM dsn_transitions WHERE id = $1 AND statut = 'recu'", [entier(id, 'id')])).rows[0];
-  if (!t) throw new ErreurHttp(404, 'objet_introuvable');
-  const ctx = await contexte(pool, u, t.destination_id); exigerFonction(ctx, ['admission', 'infirmier', 'medecin']);
-  const id0 = t.contenu.patient;
-  const p = await require('./patients').creerPatient(pool, u, t.destination_id, { prenom: id0.prenom, nom: id0.nom, date_naissance: String(id0.date_naissance).slice(0, 10), confirmer_doublon: true });
-  for (const x of t.contenu.elements || []) {
-    await pool.query(`INSERT INTO dsn_elements (numero, patient_id, etablissement_id, genre, donnees, statut, auteur_id, source) SELECT $1, $2, $3, $4, $5, $6, $7, 'transition'`,
-      [`${x.numero}-${t.numero}`, p.id, t.destination_id, x.genre, JSON.stringify(x.donnees), x.statut, u.id]);
-  }
-  await tracer(pool, u, { patient: p.id, etab: t.destination_id, action: 'ecriture', objet: `dossier depuis ${t.numero}` });
-  return p;
+  const t0 = (await pool.query("SELECT destination_id FROM dsn_transitions WHERE id = $1 AND statut = 'recu'", [entier(id, 'id')])).rows[0];
+  if (!t0) throw new ErreurHttp(404, 'objet_introuvable');
+  const ctx = await contexte(pool, u, t0.destination_id); exigerFonction(ctx, ['admission', 'infirmier', 'medecin']);
+  return transaction(pool, async (c) => {
+    const t = (await c.query('SELECT * FROM dsn_transitions WHERE id = $1 FOR UPDATE', [entier(id, 'id')])).rows[0];
+    // Idempotent : un deuxième appel (double clic, reprise réseau) rend le MÊME dossier
+    if (t.dossier_patient_id) return { ...(await c.query('SELECT * FROM patients WHERE id = $1', [t.dossier_patient_id])).rows[0], deja_ouvert: true };
+    const id0 = t.contenu.patient;
+    const p = await require('./patients').creerPatient(c, u, t.destination_id, { prenom: id0.prenom, nom: id0.nom, date_naissance: String(id0.date_naissance).slice(0, 10), confirmer_doublon: true });
+    for (const x of t.contenu.elements || []) {
+      await c.query(`INSERT INTO dsn_elements (numero, patient_id, etablissement_id, genre, donnees, statut, auteur_id, source) VALUES ($1, $2, $3, $4, $5, $6, $7, 'transition')`,
+        [await numero(c, 'DSN'), p.id, t.destination_id, x.genre, JSON.stringify({ ...x.donnees, origine: x.numero }), x.statut, u.id]);
+    }
+    await c.query('UPDATE dsn_transitions SET dossier_patient_id = $2 WHERE id = $1', [t.id, p.id]);
+    await tracer(c, u, { patient: p.id, etab: t.destination_id, action: 'ecriture', objet: `dossier depuis ${t.numero}` });
+    await sync.evenement(c, { patientId: p.id, etabId: t.destination_id, type: 'dossier_ouvert', source: 'dsn', objet: t.numero, statut: 'cree', auteurId: u.id });
+    return p;
+  });
 }
 
 // ---------------------------------------------------------------- habilitations et journal d'accès
@@ -375,4 +503,4 @@ async function journalAcces(pool, u, q = {}) {
 }
 
 module.exports = { FONCTIONS, GENRES, PARTAGEABLES, exigerEnvironnement, contexte, patientLisible, creerPatient, rechercher, corrigerIdentite, dossier, ajouter, agir, deposer, telecharger,
-  accesUrgence, creerTransition, validerTransition, envoyerTransition, transitionsRecues, deciderTransition, ouvrirDossierDepuisTransition, habilitations, habiliter, journalAcces };
+  accesUrgence, creerTransition, validerTransition, envoyerTransition, depart, apresTransport, transitionsRecues, deciderTransition, ouvrirDossierDepuisTransition, habilitations, habiliter, journalAcces };

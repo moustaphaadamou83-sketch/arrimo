@@ -21,7 +21,7 @@ const SEQUENCES = {
   mission_ccs: ['demande', 'decision', 'arrivee'],
   coordination: ['demande', 'depart', 'arrivee'],
   visite: ['arrivee', 'depart'],
-  dsn_transition: ['demande', 'decision', 'arrivee'],
+  dsn_transition: ['demande', 'decision', 'depart', 'arrivee'],
 };
 // Écran du module qui porte l'objet (pour « ouvrir dans le module »)
 const ECRANS = { passage_chrono: 'chrono', prealerte: 'secours', transfert: 'transferts', demande_transport: 'transports-planifies', demande_hebergement: 'c-demandes',

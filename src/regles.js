@@ -165,6 +165,8 @@ async function changerEtat(client, pool, utilisateurId, litId, nouveau, opts = {
     detail: opts.detail || (nouveau === 'reserve' ? `Référence ${patientRef}` : nouveau === 'indispo' ? `Motif : ${opts.motif}` : null),
     transfertId: opts.transfertId || lit.transfert_id,
   });
+  // DSN natif (23 nov. 2026) : séjour créé ou terminé d'après l'état réel du lit (démo et recette, module actif ; jamais bloquant)
+  await require('./dsn-sync').apresLit(client, lit, rows[0], utilisateurId);
   return rows[0];
 }
 

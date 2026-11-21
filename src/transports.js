@@ -310,6 +310,8 @@ async function agir(pool, u, id, b) {
       }
       if (dh && a === 'arrivee') await c.query('INSERT INTO demande_hebergement_etapes (demande_id, statut, detail, par) VALUES ($1, $2, $3, NULL)', [dh.id, dh.statut, `Arrivée signalée par le transport ${n.numero} : admission à confirmer par la ressource`]);
     }
+    // DSN natif : la prise en charge vaut départ de la transition liée ; chaque étape est historisée dans le dossier
+    if (cote === 'ambulance' && ['accepter', 'en_route', 'pris_en_charge', 'arrivee', 'refuser'].includes(a)) await require('./dsn').apresTransport(c, pool, n, a);
     await evenement(c, n, a, u, detail);
     await emettre(c, n, `transport.${a}`);
     require('./flux').signaler();
