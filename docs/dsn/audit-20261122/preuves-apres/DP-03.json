@@ -1,0 +1,34 @@
+{
+ "id": "DP-03",
+ "module": "Dossier patient",
+ "titre": "Recherche par nom, référence et date de naissance",
+ "etapes": [
+  "GET /dsn/patients?q=…"
+ ],
+ "attendu": "Le patient est trouvé par chacun des trois critères ; date affichée = 1950-06-15",
+ "obtenu": "démo-test → trouvé (1950-06-15) ; p-01042 → trouvé (1950-06-15) ; 1950-06-15 → trouvé (1950-06-15)",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "med",
+   "requete": "GET /dsn/patients?etablissement_id=2&q=d%C3%A9mo-test",
+   "statut": 200,
+   "reponse": "{\"patients\":[{\"id\":19,\"reference\":\"P-01042\",\"prenom\":\"Audit\",\"nom\":\"Démo-Test\",\"date_naissance\":\"1950-06-15\",\"parcours\":\"enregistre\",\"allergies\":0}],\"fonctions\":[\"medecin\"]}"
+  },
+  {
+   "qui": "med",
+   "requete": "GET /dsn/patients?etablissement_id=2&q=p-01042",
+   "statut": 200,
+   "reponse": "{\"patients\":[{\"id\":19,\"reference\":\"P-01042\",\"prenom\":\"Audit\",\"nom\":\"Démo-Test\",\"date_naissance\":\"1950-06-15\",\"parcours\":\"enregistre\",\"allergies\":0}],\"fonctions\":[\"medecin\"]}"
+  },
+  {
+   "qui": "med",
+   "requete": "GET /dsn/patients?etablissement_id=2&q=1950-06-15",
+   "statut": 200,
+   "reponse": "{\"patients\":[{\"id\":19,\"reference\":\"P-01042\",\"prenom\":\"Audit\",\"nom\":\"Démo-Test\",\"date_naissance\":\"1950-06-15\",\"parcours\":\"enregistre\",\"allergies\":0}],\"fonctions\":[\"medecin\"]}"
+  }
+ ],
+ "base": null
+}

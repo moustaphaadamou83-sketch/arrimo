@@ -1,0 +1,29 @@
+{
+ "id": "TR-04",
+ "module": "Transport",
+ "titre": "Synchronisation des statuts transport ↔ DSN ↔ Sillage",
+ "etapes": [
+  "dossier DSN (transitions)",
+  "Sillage de la transition"
+ ],
+ "attendu": "Le DSN montre l’état du transport (accepté, en route, arrivé) ; Sillage relie transition et transport",
+ "obtenu": "transition dans le DSN : {\"id\":5,\"numero\":\"TRX-001106\",\"statut\":\"envoye\",\"destination_id\":22,\"destination\":\"CHSLD 1 — des Érables\",\"cree_le\":\"2026-11-21T05:00:35.419Z\",\"envoye_le\":\"2026 ; Sillage relie le transport : true ; statut transition après arrivée du transport : envoye",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "med",
+   "requete": "GET /dsn/patients/19",
+   "statut": 200,
+   "reponse": "{\"patient\":{\"id\":19,\"etablissement_id\":2,\"reference\":\"P-01042\",\"prenom\":\"Audit\",\"nom\":\"Démo-Test\",\"date_naissance\":\"1950-06-15\",\"reference_locale\":null,\"source\":\"manuel\",\"arrivee_le\":null,\"parcours\":\"transfere\",\"cree_par\":25,\"cree_le\":\"2026-11-21T05:00:32.388Z\",\"modifie_le\":\"2026-11-21T05:00:35.060Z\"},\"fonctions\":[\"medecin\"],\"allergies\":[{\"id\":104,\"numero\":\"DSN-001091-v2\",\"patient_id\":19,\"etablissement_id\":2,\"genre\":\"allergie\",\"rencontre_id\":null,\"donnees\":{\"gravite\":\"severe\",\"reaction\":\"Œdème (fictif)\",\"substance\":\"Arachides (fictif)\",\"verification\":\"confirmee\"},\"statut\":\"annule\",\"version\":2,"
+  },
+  {
+   "qui": "med",
+   "requete": "GET /sillage?objet=dsn_transition&id=5",
+   "statut": 200,
+   "reponse": "{\"parcours\":\"TRX-001106\",\"objet\":\"dsn_transition\",\"id\":5,\"objets\":[{\"objet\":\"dsn_transition\",\"id\":5,\"numero\":\"TRX-001106\",\"statut\":\"envoye\",\"cree_le\":\"2026-11-21T05:00:35.419Z\",\"lieu\":\"Hôpital B — Mont-Clair → CHSLD 1 — des Érables\"},{\"objet\":\"demande_transport\",\"id\":4,\"numero\":\"DT-000004\",\"statut\":\"arrivee\",\"cree_le\":\"2026-11-21T05:00:35.489Z\",\"lieu\":\"Hôpital B — Mont-Clair → CHSLD 1 — des Érables\",\"ecran\":\"transports-planifies\"}],\"evenements\":[{\"heure\":\"2026-11-21T05:00:35.475Z\",\"objet\":\"dsn_transition\",\"numero\":\"TRX-001106\",\"etape\":\"demande\",\"source\":\"clic\",\"auteur\":\"DSN medecin (démo)\",\"co"
+  }
+ ],
+ "base": null
+}

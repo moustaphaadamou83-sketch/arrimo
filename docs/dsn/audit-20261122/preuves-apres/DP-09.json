@@ -1,0 +1,40 @@
+{
+ "id": "DP-09",
+ "module": "Dossier patient",
+ "titre": "Examen : demande (médecin) puis résultat",
+ "etapes": [
+  "examen (médecin)",
+  "resultat (infirmier)"
+ ],
+ "attendu": "demande puis resultat",
+ "obtenu": "demande → resultat",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "med",
+   "requete": "POST /dsn/patients/19/elements",
+   "corps": {
+    "genre": "examen",
+    "donnees": {
+     "type_examen": "Radiographie (fictif)",
+     "priorite": "routine"
+    }
+   },
+   "statut": 200,
+   "reponse": "{\"id\":102,\"numero\":\"DSN-001098\",\"patient_id\":19,\"etablissement_id\":2,\"genre\":\"examen\",\"rencontre_id\":null,\"donnees\":{\"priorite\":\"routine\",\"type_examen\":\"Radiographie (fictif)\"},\"statut\":\"demande\",\"version\":1,\"remplace_id\":null,\"remplace_par\":null,\"auteur_id\":27,\"signe_par\":null,\"signe_le\":null,\"motif\":null,\"source\":\"saisie\",\"cree_le\":\"2026-11-21T05:00:33.127Z\",\"modifie_le\":\"2026-11-21T05:00:33.127Z\"}"
+  },
+  {
+   "qui": "inf",
+   "requete": "POST /dsn/elements/102/action",
+   "corps": {
+    "action": "resultat",
+    "resultat": "Résultat fictif normal"
+   },
+   "statut": 200,
+   "reponse": "{\"id\":102,\"numero\":\"DSN-001098\",\"patient_id\":19,\"etablissement_id\":2,\"genre\":\"examen\",\"rencontre_id\":null,\"donnees\":{\"priorite\":\"routine\",\"resultat\":\"Résultat fictif normal\",\"resultat_le\":\"2026-11-21T05:00:33.160Z\",\"type_examen\":\"Radiographie (fictif)\"},\"statut\":\"resultat\",\"version\":1,\"remplace_id\":null,\"remplace_par\":null,\"auteur_id\":27,\"signe_par\":null,\"signe_le\":null,\"motif\":null,\"source\":\"saisie\",\"cree_le\":\"2026-11-21T05:00:33.127Z\",\"modifie_le\":\"2026-11-21T05:00:33.150Z\"}"
+  }
+ ],
+ "base": null
+}

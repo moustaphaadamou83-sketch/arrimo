@@ -1,0 +1,712 @@
+[
+ {
+  "id": "DP-01",
+  "module": "Dossier patient",
+  "titre": "Création d’un patient fictif (fonction admission)",
+  "etapes": [
+   "POST /dsn/patients (admission)"
+  ],
+  "attendu": "200 ; référence unique P-xxxxx ; date de naissance exacte",
+  "obtenu": "statut 200, référence P-01042, naissance en base 1950-06-15",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "DP-01.json"
+ },
+ {
+  "id": "DP-02",
+  "module": "Dossier patient",
+  "titre": "Doublon d’identité refusé sans confirmation",
+  "etapes": [
+   "POST /dsn/patients même identité"
+  ],
+  "attendu": "409 patient_doublon_possible",
+  "obtenu": "statut 409 patient_doublon_possible",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "DP-02.json"
+ },
+ {
+  "id": "DP-03",
+  "module": "Dossier patient",
+  "titre": "Recherche par nom, référence et date de naissance",
+  "etapes": [
+   "GET /dsn/patients?q=…"
+  ],
+  "attendu": "Le patient est trouvé par chacun des trois critères ; date affichée = 1950-06-15",
+  "obtenu": "démo-test → trouvé (1950-06-15) ; p-01042 → trouvé (1950-06-15) ; 1950-06-15 → trouvé (1950-06-15)",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "DP-03.json"
+ },
+ {
+  "id": "DP-04",
+  "module": "Dossier patient",
+  "titre": "Modification de l’identité : motif exigé, réservée à l’admission",
+  "etapes": [
+   "PUT identite sans motif (admission)",
+   "PUT avec motif (admission)",
+   "PUT avec motif (médecin)"
+  ],
+  "attendu": "400 ; 200 ; 403",
+  "obtenu": "sans motif 400 ; avec motif 200 (naissance 1950-06-16) ; médecin 403",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "DP-04.json"
+ },
+ {
+  "id": "DP-05",
+  "module": "Dossier patient",
+  "titre": "Allergie (infirmier) : enregistrée, alerte dans la liste et l’en-tête",
+  "etapes": [
+   "POST élément allergie",
+   "GET liste patients",
+   "GET dossier"
+  ],
+  "attendu": "Allergie active ; compteur d’allergies = 1",
+  "obtenu": "création 200 ; compteur 1 ; allergies du dossier 1",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "DP-05.json"
+ },
+ {
+  "id": "DP-06",
+  "module": "Dossier patient",
+  "titre": "Antécédent, diagnostic (médecin seulement), observation",
+  "etapes": [
+   "antécédent (médecin)",
+   "diagnostic (infirmier) refusé",
+   "diagnostic (médecin)",
+   "observation (infirmier)",
+   "diagnostic (admission) refusé"
+  ],
+  "attendu": "200 ; 403 ; 200 ; 200 ; 403",
+  "obtenu": "200 ; 403 ; 200 ; 200 ; 403",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "DP-06.json"
+ },
+ {
+  "id": "DP-07",
+  "module": "Dossier patient",
+  "titre": "Consultation (rencontre), note liée et signée",
+  "etapes": [
+   "rencontre ambulatoire",
+   "note sans rencontre refusée",
+   "note liée",
+   "signer"
+  ],
+  "attendu": "200 ; 400 ; 200 ; statut signee",
+  "obtenu": "rencontre 200 ; note sans rencontre 400 ; note 200 ; signature signee",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "DP-07.json"
+ },
+ {
+  "id": "DP-08",
+  "module": "Dossier patient",
+  "titre": "Prescription simulée : brouillon, validation par le médecin seulement, jamais envoyée",
+  "etapes": [
+   "prescription (infirmier)",
+   "valider (infirmier) refusé",
+   "valider (médecin)"
+  ],
+  "attendu": "brouillon ; 403 ; validee + simulee=true + envoyee=false",
+  "obtenu": "brouillon ; 403 ; validee simulee=true envoyee=false",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "DP-08.json"
+ },
+ {
+  "id": "DP-09",
+  "module": "Dossier patient",
+  "titre": "Examen : demande (médecin) puis résultat",
+  "etapes": [
+   "examen (médecin)",
+   "resultat (infirmier)"
+  ],
+  "attendu": "demande puis resultat",
+  "obtenu": "demande → resultat",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "DP-09.json"
+ },
+ {
+  "id": "DP-10",
+  "module": "Dossier patient",
+  "titre": "Hospitalisation (séjour) : parcours « hospitalisé »",
+  "etapes": [
+   "séjour (admission)"
+  ],
+  "attendu": "200 ; patient hospitalise",
+  "obtenu": "séjour 200 ; parcours hospitalise",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "DP-10.json"
+ },
+ {
+  "id": "DP-11",
+  "module": "Dossier patient",
+  "titre": "Documents : PDF valide accepté ; faux PDF et > 5 Mo refusés ; téléchargement journalisé",
+  "etapes": [
+   "PDF valide",
+   "texte déclaré PDF",
+   "6 Mo",
+   "GET document"
+  ],
+  "attendu": "200 ; 400 ; 400 ; 200 + empreinte identique + accès « export »",
+  "obtenu": "valide 200 (rapport) ; faux 400 ; 6 Mo 413 ; téléchargement 200 identique=true ; accès ecriture,export",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "DP-11.json"
+ },
+ {
+  "id": "DP-11b",
+  "module": "Dossier patient",
+  "titre": "Type de document hors liste : refus propre",
+  "etapes": [
+   "POST document type_doc inconnu"
+  ],
+  "attendu": "400 parametre_invalide (pas d’erreur serveur)",
+  "obtenu": "statut 400 parametre_invalide",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "DP-11b.json"
+ },
+ {
+  "id": "DP-12",
+  "module": "Dossier patient",
+  "titre": "Amendement (nouvelle version) et annulation tracée ; aucune suppression",
+  "etapes": [
+   "amender allergie",
+   "annuler version remplacée",
+   "annuler version courante sans motif",
+   "annuler avec motif",
+   "DELETE élément"
+  ],
+  "attendu": "v2 ; 409 ; 400 ; annule ; 404/405 (aucune route)",
+  "obtenu": "v2 ; 409 ; 400 ; annule ; DELETE 404 ; lignes conservées 2/2",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "DP-12.json"
+ },
+ {
+  "id": "DP-13",
+  "module": "Dossier patient",
+  "titre": "Historique chronologique du dossier",
+  "etapes": [
+   "GET dossier"
+  ],
+  "attendu": "Chronologie triée du plus récent au plus ancien, avec éléments, documents",
+  "obtenu": "12 entrées, triées=true, genres : allergie, document, sejour, evenement, examen, prescription, note, rencontre, observation, diagnostic, antecedent",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "DP-13.json"
+ },
+ {
+  "id": "DP-14",
+  "module": "Dossier patient",
+  "titre": "Journal d’accès : auditeur seulement, complet, sans contenu clinique, immuable",
+  "etapes": [
+   "GET /dsn/acces (médecin)",
+   "GET /dsn/acces (auditeur)",
+   "UPDATE et DELETE en base"
+  ],
+  "attendu": "403 ; lecture/écriture/signature/export présents, aucun libellé clinique ; refus de modification",
+  "obtenu": "médecin 403 ; auditeur 200, actions : lecture,ecriture,export,signature ; contenu clinique : aucun ; UPDATE refusé ; DELETE refusé (même par un superutilisateur)",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "DP-14.json"
+ },
+ {
+  "id": "DP-15",
+  "module": "Dossier patient",
+  "titre": "Accès non autorisés : sans fonction, autre établissement, autre organisation, sans session",
+  "etapes": [
+   "réseau (gestionnaire)",
+   "hopital.a",
+   "ambulance",
+   "CCS",
+   "entretien",
+   "sans jeton"
+  ],
+  "attendu": "Aucun ne lit le dossier (403/404/401)",
+  "obtenu": "{\"res\":404,\"ha\":404,\"amb\":404,\"ccs\":404,\"ent\":403,\"stl\":404,\"sans\":401}",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "DP-15.json"
+ },
+ {
+  "id": "DP-16",
+  "module": "Dossier patient",
+  "titre": "Habilitations : l’administrateur ne s’ouvre pas les dossiers ; accès d’urgence justifié",
+  "etapes": [
+   "admin_etab s’habilite",
+   "urgence sans justification",
+   "urgence justifiée par un compte sans fonction puis lecture"
+  ],
+  "attendu": "403 ; 400 ; 200 + lecture permise + journal « urgence »",
+  "obtenu": "auto-habilitation : dsn_auto_habilitation ; avant urgence 403 ; sans justification 400 ; justifiée 200 ; lecture ensuite 200 ; journal urgence 1",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "DP-16.json"
+ },
+ {
+  "id": "AD-01",
+  "module": "Admissions",
+  "titre": "Admission DSN avec unité et lit : le lit d’Arrimo est-il réservé/occupé ?",
+  "etapes": [
+   "choisir un lit libre de l’Hôpital B",
+   "séjour DSN sur ce lit",
+   "lire l’état du lit"
+  ],
+  "attendu": "Le lit passe à « occupé » (ou réservé) par les règles des lits ; capacités mises à jour",
+  "obtenu": "séjour 200 sur MED-201B ; état du lit avant « libre », après « occupe » (patient_ref P-01043)",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "AD-01.json"
+ },
+ {
+  "id": "AD-02",
+  "module": "Admissions",
+  "titre": "Affectation d’un lit déjà occupé refusée",
+  "etapes": [
+   "lit occupé de l’Hôpital B",
+   "séjour DSN sur ce lit"
+  ],
+  "attendu": "409 (lit occupé)",
+  "obtenu": "lit CHIR-301A (occupé) : statut 409",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "AD-02.json"
+ },
+ {
+  "id": "AD-03",
+  "module": "Admissions",
+  "titre": "Admission visible dans les modules autorisés (Patients, Lits)",
+  "etapes": [
+   "GET /patients (hopital.b)",
+   "GET lits"
+  ],
+  "attendu": "Le patient DSN apparaît dans Patients ; son lit dans Lits",
+  "obtenu": "module Patients : visible ; lit relié dans Lits : oui",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": "haute",
+  "preuve": "AD-03.json"
+ },
+ {
+  "id": "AD-04",
+  "module": "Admissions",
+  "titre": "Modification et annulation d’un séjour",
+  "etapes": [
+   "amender le séjour (service)",
+   "annuler avec motif"
+  ],
+  "attendu": "v2 ; annule ; parcours patient cohérent",
+  "obtenu": "amendement v2 ; annulation annule ; parcours du patient après annulation : enregistre",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "AD-04.json"
+ },
+ {
+  "id": "ST-01",
+  "module": "Sorties et transferts",
+  "titre": "Préparer la sortie (fonction sortie) avec destination et synthèse",
+  "etapes": [
+   "action sortie sur le séjour"
+  ],
+  "attendu": "sortie_preparee",
+  "obtenu": "statut 200 sortie_preparee",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "ST-01.json"
+ },
+ {
+  "id": "ST-02",
+  "module": "Sorties et transferts",
+  "titre": "Transition vers un partenaire : création, validation (figée), envoi",
+  "etapes": [
+   "créer (médecin) avec allergie + prescription",
+   "envoyer avant validation",
+   "valider",
+   "envoyer"
+  ],
+  "attendu": "200 ; 409 ; valide ; envoye",
+  "obtenu": "200 ; 409 ; valide ; envoye",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "ST-02.json"
+ },
+ {
+  "id": "ST-03",
+  "module": "Sorties et transferts",
+  "titre": "Une demande de transfert (ou d’hébergement) Arrimo est générée par la transition",
+  "etapes": [
+   "lire transferts et demandes_hebergement liés"
+  ],
+  "attendu": "Une demande dans le module Transferts ou Demandes d’hébergement, sans ressaisie",
+  "obtenu": "transferts : 0 ; demandes d’hébergement : 1",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "ST-03.json"
+ },
+ {
+  "id": "ST-04",
+  "module": "Sorties et transferts",
+  "titre": "Réception par le destinataire : avis sans contenu clinique, paquet seul visible",
+  "etapes": [
+   "notifications du CHSLD",
+   "GET transitions reçues (Érables)",
+   "GET dossier source (Érables)"
+  ],
+  "attendu": "Avis présent sans clinique ; paquet = éléments choisis ; dossier source 404",
+  "obtenu": "avis : « Transition TRX-001102 reçue de Hôpital B — Mont-Clair : ouvrez le paquet de transition pour l’accepter ou la refuser. » ; paquet : diagnostic, prescription ; dossier source 404",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "ST-04.json"
+ },
+ {
+  "id": "ST-05",
+  "module": "Sorties et transferts",
+  "titre": "Refus motivé, puis nouvelle transition acceptée et reçue ; ordre imposé",
+  "etapes": [
+   "réception avant acceptation",
+   "refus sans motif",
+   "refus motivé",
+   "nouvelle transition",
+   "accepter",
+   "accepter deux fois",
+   "réception"
+  ],
+  "attendu": "409 ; 400 ; refuse ; accepte ; 409 ; recu",
+  "obtenu": "409 ; 400 ; refuse ; accepte ; 409 ; recu",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "ST-05.json"
+ },
+ {
+  "id": "ST-06",
+  "module": "Sorties et transferts",
+  "titre": "Avis à l’origine après refus / acceptation",
+  "etapes": [
+   "notifications de l’Hôpital B"
+  ],
+  "attendu": "L’Hôpital B est avisé du refus et de l’acceptation",
+  "obtenu": "2 avis : dsn_transition_acceptee, dsn_transition_refusee",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "ST-06.json"
+ },
+ {
+  "id": "ST-07",
+  "module": "Sorties et transferts",
+  "titre": "Départ, arrivée, clôture : Horloge et Sillage",
+  "etapes": [
+   "horodatages de la transition",
+   "GET /sillage?objet=dsn_transition",
+   "chronologie du dossier"
+  ],
+  "attendu": "demande, décision, départ, arrivée ; Sillage lisible par l’origine et la destination",
+  "obtenu": "Horloge : demande → decision → depart → arrivee ; Sillage origine 200, destination 200 ; chronologie DSN : recu, refuse",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "ST-07.json"
+ },
+ {
+  "id": "ST-08",
+  "module": "Sorties et transferts",
+  "titre": "Le destinataire ouvre son propre dossier depuis le paquet ; pas de doublon si on recommence",
+  "etapes": [
+   "ouvrir le dossier (Érables) deux fois"
+  ],
+  "attendu": "1er : patient créé ; 2e : refus ou même patient",
+  "obtenu": "1er 200 ; 2e 200 ; dossiers créés aux Érables : 1",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "ST-08.json"
+ },
+ {
+  "id": "PA-01",
+  "module": "Partenaires",
+  "titre": "Hôpital A (sans DSN) destinataire : reçoit seulement le paquet",
+  "etapes": [
+   "transition vers Hôpital A",
+   "GET transitions reçues (hopital.a)",
+   "GET dossier source (hopital.a)"
+  ],
+  "attendu": "Paquet visible ; dossier 404",
+  "obtenu": "transitions reçues 200 (1) ; dossier source 404",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "PA-01.json"
+ },
+ {
+  "id": "PA-02",
+  "module": "Partenaires",
+  "titre": "CCS et ambulance : aucun accès DSN",
+  "etapes": [
+   "GET /dsn/* avec jetons ambulance et CCS"
+  ],
+  "attendu": "401/403 partout",
+  "obtenu": "403,403,403,403,403,403,403,403,403",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "PA-02.json"
+ },
+ {
+  "id": "TR-01",
+  "module": "Transport",
+  "titre": "Envoi de transition avec transport : demande créée et préremplie (origine, destination, horaire, référence)",
+  "etapes": [
+   "nouvelle transition validée",
+   "envoyer avec transport"
+  ],
+  "attendu": "Une demande_transport liée, origine/destination/plage/référence corrects, statut « demandée » (pas d’unité affectée)",
+  "obtenu": "envoi 200  ; demande DT-000004 demandee, origine 2, destination 22, réf P-01042, unité aucune",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "TR-01.json"
+ },
+ {
+  "id": "TR-02",
+  "module": "Transport",
+  "titre": "Échec de la demande de transport : pas de transport orphelin, transition inchangée",
+  "etapes": [
+   "envoyer avec une organisation invalide"
+  ],
+  "attendu": "Refus ; transition toujours « valide » ; aucune demande créée",
+  "obtenu": "envoi 404 organisation_introuvable ; demandes avant 4, après 4 ; transition valide",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "TR-02.json"
+ },
+ {
+  "id": "TR-03",
+  "module": "Transport",
+  "titre": "Le répartiteur compétent reçoit la demande ; acceptation, affectation, suivi ; aucun doublon",
+  "etapes": [
+   "liste ambulance",
+   "accepter avec unité",
+   "en route",
+   "pris en charge",
+   "arrivée"
+  ],
+  "attendu": "Visible côté ambulance sans données cliniques ; statuts successifs ; une seule demande",
+  "obtenu": "vue ambulance : oui, données cliniques : aucune ; accepter:200 en_route:200 pris_en_charge:200 arrivee:200 ; demandes actives pour ce patient : 1",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "TR-03.json"
+ },
+ {
+  "id": "TR-04",
+  "module": "Transport",
+  "titre": "Synchronisation des statuts transport ↔ DSN ↔ Sillage",
+  "etapes": [
+   "dossier DSN (transitions)",
+   "Sillage de la transition"
+  ],
+  "attendu": "Le DSN montre l’état du transport (accepté, en route, arrivé) ; Sillage relie transition et transport",
+  "obtenu": "transition dans le DSN : {\"id\":5,\"numero\":\"TRX-001106\",\"statut\":\"envoye\",\"destination_id\":22,\"destination\":\"CHSLD 1 — des Érables\",\"cree_le\":\"2026-11-21T05:00:35.419Z\",\"envoye_le\":\"2026 ; Sillage relie le transport : true ; statut transition après arrivée du transport : envoye",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "TR-04.json"
+ },
+ {
+  "id": "TR-05",
+  "module": "Transport",
+  "titre": "Double envoi (clic répété / reprise réseau) : une seule demande de transport",
+  "etapes": [
+   "renvoyer la même transition avec transport"
+  ],
+  "attendu": "409 ; pas de seconde demande",
+  "obtenu": "renvoi 409 ; demandes avant 4, après 4",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "TR-05.json"
+ },
+ {
+  "id": "TR-06",
+  "module": "Transport",
+  "titre": "Envois simultanés de la même transition (course)",
+  "etapes": [
+   "2 envois en parallèle avec transport"
+  ],
+  "attendu": "Une seule demande créée",
+  "obtenu": "réponses 200 / 409 ; demandes créées : 1",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "TR-06.json"
+ },
+ {
+  "id": "TRR-01",
+  "module": "Transitions reçues",
+  "titre": "Seul le destinataire voit le paquet ; rôle entretien refusé ; autre établissement refusé",
+  "etapes": [
+   "Saint-Laurent lit les reçues des Érables",
+   "entretien des Érables",
+   "Saint-Laurent décide sur une transition des Érables"
+  ],
+  "attendu": "403 ; 403 ; 404",
+  "obtenu": "403 ; 403 ; 404",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "TRR-01.json"
+ },
+ {
+  "id": "TRR-02",
+  "module": "Transitions reçues",
+  "titre": "Admission confirmée dans Lits → séjour DSN créé une seule fois ; une simple réservation (demande) n’en crée aucun",
+  "etapes": [
+   "patient DSN sans séjour",
+   "Lits : réserver",
+   "Lits : admettre",
+   "Lits : admettre à nouveau"
+  ],
+  "attendu": "aucun séjour après réservation ; 1 séjour (source lits) après admission ; 2e admission refusée, toujours 1 séjour",
+  "obtenu": "réservation 200 → séjours 0 ; admission 200 → 1 séjour (en_cours, source lits) ; 2e admission 409",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "TRR-02.json"
+ },
+ {
+  "id": "SYNC-01",
+  "module": "Synchronisation",
+  "titre": "Sortie faite dans Lits → séjour DSN terminé, parcours recalculé, événement historisé",
+  "etapes": [
+   "Lits : libérer le lit du patient Lits/Démo-Sync"
+  ],
+  "attendu": "séjour termine ; parcours enregistre ; événement sortie_lit (source lits, auteur)",
+  "obtenu": "libérer 200 ; séjour termine ; parcours enregistre ; événements : admission/lits/sejour_cree/hopital.b@demo.arrimo, sortie_lit/lits/sejour_termine/hopital.b@demo.arrimo",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "SYNC-01.json"
+ },
+ {
+  "id": "SYNC-02",
+  "module": "Synchronisation",
+  "titre": "Historique des événements : auteur, source, statut, heure ; immuable ; sans clinique",
+  "etapes": [
+   "lecture dsn_evenements",
+   "UPDATE/DELETE"
+  ],
+  "attendu": "champs remplis ; modification refusée ; aucun terme clinique",
+  "obtenu": "33 événements ; types : changement_lit, admission, admission_annulee, demande_hebergement, transition, depart, dossier_ouvert, transport, sortie_lit ; modification refusée ; clinique : aucun",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "SYNC-02.json"
+ },
+ {
+  "id": "TRR-03",
+  "module": "Transitions reçues",
+  "titre": "Messages ADT dans le désordre / en double (connecteur)",
+  "etapes": [
+   "lecture des tests connecteur existants"
+  ],
+  "attendu": "Idempotence et ordre gérés",
+  "obtenu": "Le connecteur HL7 (A01…A22) alimente Lits et Civières, pas le DSN clinique ; aucun flux entrant vers le DSN à tester. Idempotence du connecteur déjà couverte par tests/dsn.test.cjs (hors périmètre DSN clinique).",
+  "statut": "NON TESTÉ",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "TRR-03.json"
+ },
+ {
+  "id": "SEC-01",
+  "module": "Sécurité",
+  "titre": "DSN refusé hors démo/recette (serveur en mode « pilote » sur la même copie)",
+  "etapes": [
+   "connexion hopital.b sur 3098",
+   "GET /dsn/patients",
+   "GET /dsn/transitions/recues"
+  ],
+  "attendu": "403 dsn_reserve_demo partout",
+  "obtenu": "patients 403 dsn_reserve_demo ; reçues 403 dsn_reserve_demo ; page /dsn 200",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "SEC-01.json"
+ },
+ {
+  "id": "SEC-02",
+  "module": "Sécurité",
+  "titre": "Appels directs sans jeton, jeton falsifié, identifiants devinés",
+  "etapes": [
+   "sans jeton",
+   "jeton falsifié",
+   "élément d’un autre patient via action"
+  ],
+  "attendu": "401 ; 401 ; 403/404",
+  "obtenu": "401 ; 401 ; 404",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "SEC-02.json"
+ },
+ {
+  "id": "SEC-03",
+  "module": "Sécurité",
+  "titre": "Messages d’erreur en anglais (X-Langue: en)",
+  "etapes": [
+   "GET dossier interdit en EN"
+  ],
+  "attendu": "Message anglais",
+  "obtenu": "403 « Vous n'avez pas accès à cet établissement. » (code etab_interdit)",
+  "statut": "ÉCHEC",
+  "anomalie": "Constat général (pas propre au DSN) : les messages d’erreur du serveur restent en français ; l’interface DSN traduit les refus principaux par leur code",
+  "gravite": "faible",
+  "preuve": "SEC-03.json"
+ },
+ {
+  "id": "SEC-04",
+  "module": "Sécurité",
+  "titre": "Notifications et journal général sans donnée clinique",
+  "etapes": [
+   "recherche de termes cliniques dans notifications et journal"
+  ],
+  "attendu": "Aucun terme clinique",
+  "obtenu": "notifications : 0 ; journal : 0",
+  "statut": "RÉUSSI",
+  "anomalie": null,
+  "gravite": null,
+  "preuve": "SEC-04.json"
+ }
+]

@@ -1,0 +1,76 @@
+{
+ "id": "TR-03",
+ "module": "Transport",
+ "titre": "Le répartiteur compétent reçoit la demande ; acceptation, affectation, suivi ; aucun doublon",
+ "etapes": [
+  "liste ambulance",
+  "accepter avec unité",
+  "en route",
+  "pris en charge",
+  "arrivée"
+ ],
+ "attendu": "Visible côté ambulance sans données cliniques ; statuts successifs ; une seule demande",
+ "obtenu": "vue ambulance : oui, données cliniques : aucune ; accepter:200 en_route:200 pris_en_charge:200 arrivee:200 ; demandes actives pour ce patient : 1",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "amb",
+   "requete": "GET /secours/transports",
+   "statut": 200,
+   "reponse": "[{\"id\":4,\"numero\":\"DT-000004\",\"coordination_id\":null,\"organisation_id\":1,\"unite_id\":null,\"origine_id\":2,\"destination_id\":22,\"resident_ref\":\"P-01042\",\"heure_souhaitee\":\"2026-11-21T08:00:35.453Z\",\"infos\":{},\"statut\":\"demandee\",\"acceptee_le\":null,\"en_route_le\":null,\"pris_en_charge_le\":null,\"arrivee_le\":null,\"motif_refus\":null,\"cle_idempotence\":null,\"version\":1,\"cree_par\":27,\"cree_le\":\"2026-11-21T05:00:35.489Z\",\"modifie_le\":\"2026-11-21T05:00:35.489Z\",\"destination_libelle\":null,\"motif_transport\":\"transfert_stable\",\"type_vehicule\":\"ambulance\",\"plage_debut\":\"2026-11-21T08:00:35.453Z\",\"plage_fin\":\"202"
+  },
+  {
+   "qui": "amb",
+   "requete": "GET /secours/unites",
+   "statut": 200,
+   "reponse": "[{\"id\":1,\"numero\":\"DM-101\",\"plaque\":\"DEMO 101\",\"organisation\":\"Ambulances de démonstration\",\"position\":null},{\"id\":2,\"numero\":\"DM-102\",\"plaque\":\"DEMO 102\",\"organisation\":\"Ambulances de démonstration\",\"position\":null},{\"id\":3,\"numero\":\"DM-103\",\"plaque\":\"DEMO 103\",\"organisation\":\"Ambulances de démonstration\",\"position\":null}]"
+  },
+  {
+   "qui": "amb",
+   "requete": "POST /secours/transports/4/action",
+   "corps": {
+    "action": "accepter",
+    "version": 1,
+    "unite_id": 1
+   },
+   "statut": 200,
+   "reponse": "{\"id\":4,\"numero\":\"DT-000004\",\"coordination_id\":null,\"organisation_id\":1,\"unite_id\":1,\"origine_id\":2,\"destination_id\":22,\"resident_ref\":\"P-01042\",\"heure_souhaitee\":\"2026-11-21T08:00:35.453Z\",\"infos\":{},\"statut\":\"acceptee\",\"acceptee_le\":\"2026-11-21T05:00:35.677Z\",\"en_route_le\":null,\"pris_en_charge_le\":null,\"arrivee_le\":null,\"motif_refus\":null,\"cle_idempotence\":null,\"version\":2,\"cree_par\":27,\"cree_le\":\"2026-11-21T05:00:35.489Z\",\"modifie_le\":\"2026-11-21T05:00:35.677Z\",\"destination_libelle\":null,\"motif_transport\":\"transfert_stable\",\"type_vehicule\":\"ambulance\",\"plage_debut\":\"2026-11-21T08:00:35.453Z"
+  },
+  {
+   "qui": "amb",
+   "requete": "POST /secours/transports/4/action",
+   "corps": {
+    "action": "en_route",
+    "version": 2,
+    "unite_id": 1
+   },
+   "statut": 200,
+   "reponse": "{\"id\":4,\"numero\":\"DT-000004\",\"coordination_id\":null,\"organisation_id\":1,\"unite_id\":1,\"origine_id\":2,\"destination_id\":22,\"resident_ref\":\"P-01042\",\"heure_souhaitee\":\"2026-11-21T08:00:35.453Z\",\"infos\":{},\"statut\":\"en_route\",\"acceptee_le\":\"2026-11-21T05:00:35.677Z\",\"en_route_le\":\"2026-11-21T05:00:35.711Z\",\"pris_en_charge_le\":null,\"arrivee_le\":null,\"motif_refus\":null,\"cle_idempotence\":null,\"version\":3,\"cree_par\":27,\"cree_le\":\"2026-11-21T05:00:35.489Z\",\"modifie_le\":\"2026-11-21T05:00:35.711Z\",\"destination_libelle\":null,\"motif_transport\":\"transfert_stable\",\"type_vehicule\":\"ambulance\",\"plage_debut\":\"20"
+  },
+  {
+   "qui": "amb",
+   "requete": "POST /secours/transports/4/action",
+   "corps": {
+    "action": "pris_en_charge",
+    "version": 3,
+    "unite_id": 1
+   },
+   "statut": 200,
+   "reponse": "{\"id\":4,\"numero\":\"DT-000004\",\"coordination_id\":null,\"organisation_id\":1,\"unite_id\":1,\"origine_id\":2,\"destination_id\":22,\"resident_ref\":\"P-01042\",\"heure_souhaitee\":\"2026-11-21T08:00:35.453Z\",\"infos\":{},\"statut\":\"pris_en_charge\",\"acceptee_le\":\"2026-11-21T05:00:35.677Z\",\"en_route_le\":\"2026-11-21T05:00:35.711Z\",\"pris_en_charge_le\":\"2026-11-21T05:00:35.740Z\",\"arrivee_le\":null,\"motif_refus\":null,\"cle_idempotence\":null,\"version\":4,\"cree_par\":27,\"cree_le\":\"2026-11-21T05:00:35.489Z\",\"modifie_le\":\"2026-11-21T05:00:35.740Z\",\"destination_libelle\":null,\"motif_transport\":\"transfert_stable\",\"type_vehicule\":\""
+  },
+  {
+   "qui": "amb",
+   "requete": "POST /secours/transports/4/action",
+   "corps": {
+    "action": "arrivee",
+    "version": 4,
+    "unite_id": 1
+   },
+   "statut": 200,
+   "reponse": "{\"id\":4,\"numero\":\"DT-000004\",\"coordination_id\":null,\"organisation_id\":1,\"unite_id\":1,\"origine_id\":2,\"destination_id\":22,\"resident_ref\":\"P-01042\",\"heure_souhaitee\":\"2026-11-21T08:00:35.453Z\",\"infos\":{},\"statut\":\"arrivee\",\"acceptee_le\":\"2026-11-21T05:00:35.677Z\",\"en_route_le\":\"2026-11-21T05:00:35.711Z\",\"pris_en_charge_le\":\"2026-11-21T05:00:35.740Z\",\"arrivee_le\":\"2026-11-21T05:00:35.777Z\",\"motif_refus\":null,\"cle_idempotence\":null,\"version\":5,\"cree_par\":27,\"cree_le\":\"2026-11-21T05:00:35.489Z\",\"modifie_le\":\"2026-11-21T05:00:35.777Z\",\"destination_libelle\":null,\"motif_transport\":\"transfert_stable\",\"t"
+  }
+ ],
+ "base": null
+}

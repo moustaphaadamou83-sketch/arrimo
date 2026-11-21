@@ -1,0 +1,28 @@
+{
+ "id": "DP-11b",
+ "module": "Dossier patient",
+ "titre": "Type de document hors liste : refus propre",
+ "etapes": [
+  "POST document type_doc inconnu"
+ ],
+ "attendu": "400 parametre_invalide (pas d’erreur serveur)",
+ "obtenu": "statut 400 parametre_invalide",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "med",
+   "requete": "POST /dsn/patients/19/documents",
+   "corps": {
+    "type_doc": "compte_rendu",
+    "titre": "X",
+    "mime": "application/pdf",
+    "contenu_base64": "JVBERi0xLjQ="
+   },
+   "statut": 400,
+   "reponse": "{\"erreur\":\"Paramètre type_doc invalide.\",\"code\":\"parametre_invalide\",\"vars\":{\"nom\":\"type_doc\"}}"
+  }
+ ],
+ "base": null
+}

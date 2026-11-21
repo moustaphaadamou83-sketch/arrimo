@@ -1,0 +1,110 @@
+{
+ "id": "ST-05",
+ "module": "Sorties et transferts",
+ "titre": "Refus motivé, puis nouvelle transition acceptée et reçue ; ordre imposé",
+ "etapes": [
+  "réception avant acceptation",
+  "refus sans motif",
+  "refus motivé",
+  "nouvelle transition",
+  "accepter",
+  "accepter deux fois",
+  "réception"
+ ],
+ "attendu": "409 ; 400 ; refuse ; accepte ; 409 ; recu",
+ "obtenu": "409 ; 400 ; refuse ; accepte ; 409 ; recu",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "era",
+   "requete": "POST /dsn/transitions/2/decision",
+   "corps": {
+    "decision": "reception"
+   },
+   "statut": 409,
+   "reponse": "{\"erreur\":\"Cette action n’est pas possible dans l’état actuel.\",\"code\":\"dsn_action_impossible\"}"
+  },
+  {
+   "qui": "era",
+   "requete": "POST /dsn/transitions/2/decision",
+   "corps": {
+    "decision": "refuser"
+   },
+   "statut": 400,
+   "reponse": "{\"erreur\":\"Paramètre motif invalide.\",\"code\":\"parametre_invalide\",\"vars\":{\"nom\":\"motif\"}}"
+  },
+  {
+   "qui": "era",
+   "requete": "POST /dsn/transitions/2/decision",
+   "corps": {
+    "decision": "refuser",
+    "motif": "Pas de place adaptée (fictif)"
+   },
+   "statut": 200,
+   "reponse": "{\"id\":2,\"numero\":\"TRX-001102\",\"statut\":\"refuse\",\"decision_le\":\"2026-11-21T05:00:34.797Z\",\"recu_le\":null,\"arrivee_prevue_le\":null}"
+  },
+  {
+   "qui": "med",
+   "requete": "POST /dsn/patients/19/transitions",
+   "corps": {
+    "destination_id": 22,
+    "elements": [
+     101
+    ],
+    "sejour_id": 103
+   },
+   "statut": 200,
+   "reponse": "{\"id\":3,\"numero\":\"TRX-001103\",\"patient_id\":19,\"etablissement_id\":2,\"destination_id\":22,\"sejour_id\":103,\"contenu\":{\"note_transition\":\"\"},\"elements\":[101],\"statut\":\"brouillon\",\"valide_par\":null,\"valide_le\":null,\"envoye_le\":null,\"decision_par\":null,\"decision_le\":null,\"motif_refus\":null,\"recu_par\":null,\"recu_le\":null,\"arrivee_prevue_le\":null,\"demande_transport_id\":null,\"version\":1,\"cree_par\":27,\"cree_le\":\"2026-11-21T05:00:34.851Z\",\"dossier_patient_id\":null,\"demande_hebergement_id\":null,\"transfert_id\":null,\"depart_le\":null}"
+  },
+  {
+   "qui": "med",
+   "requete": "POST /dsn/transitions/3/valider",
+   "statut": 200,
+   "reponse": "{\"id\":3,\"numero\":\"TRX-001103\",\"patient_id\":19,\"etablissement_id\":2,\"destination_id\":22,\"sejour_id\":103,\"contenu\":{\"fige_le\":\"2026-11-21T05:00:34.868Z\",\"patient\":{\"nom\":\"Démo-Test\",\"prenom\":\"Audit\",\"reference\":\"P-01042\",\"date_naissance\":\"1950-06-15\"},\"elements\":[{\"genre\":\"prescription\",\"numero\":\"DSN-001097\",\"statut\":\"validee\",\"cree_le\":\"2026-11-21T05:00:33.026Z\",\"donnees\":{\"dose\":\"1\",\"voie\":\"orale\",\"frequence\":\"matin\",\"substance\":\"Produit fictif\"}}],\"note_transition\":\"\"},\"elements\":[101],\"statut\":\"valide\",\"valide_par\":27,\"valide_le\":\"2026-11-21T05:00:34.863Z\",\"envoye_le\":null,\"decision_par\":nul"
+  },
+  {
+   "qui": "med",
+   "requete": "POST /dsn/transitions/3/envoyer",
+   "corps": {},
+   "statut": 200,
+   "reponse": "{\"id\":3,\"numero\":\"TRX-001103\",\"patient_id\":19,\"etablissement_id\":2,\"destination_id\":22,\"sejour_id\":103,\"contenu\":{\"fige_le\":\"2026-11-21T05:00:34.868Z\",\"patient\":{\"nom\":\"Démo-Test\",\"prenom\":\"Audit\",\"reference\":\"P-01042\",\"date_naissance\":\"1950-06-15\"},\"elements\":[{\"genre\":\"prescription\",\"numero\":\"DSN-001097\",\"statut\":\"validee\",\"cree_le\":\"2026-11-21T05:00:33.026Z\",\"donnees\":{\"dose\":\"1\",\"voie\":\"orale\",\"frequence\":\"matin\",\"substance\":\"Produit fictif\"}}],\"note_transition\":\"\"},\"elements\":[101],\"statut\":\"envoye\",\"valide_par\":27,\"valide_le\":\"2026-11-21T05:00:34.863Z\",\"envoye_le\":\"2026-11-21T05:00:34.91"
+  },
+  {
+   "qui": "era",
+   "requete": "POST /dsn/transitions/3/decision",
+   "corps": {
+    "decision": "accepter",
+    "arrivee_prevue_le": "2026-11-22T05:00:34.961Z"
+   },
+   "statut": 200,
+   "reponse": "{\"id\":3,\"numero\":\"TRX-001103\",\"statut\":\"accepte\",\"decision_le\":\"2026-11-21T05:00:34.968Z\",\"recu_le\":null,\"arrivee_prevue_le\":\"2026-11-22T05:00:34.961Z\"}"
+  },
+  {
+   "qui": "era",
+   "requete": "POST /dsn/transitions/3/decision",
+   "corps": {
+    "decision": "accepter"
+   },
+   "statut": 409,
+   "reponse": "{\"erreur\":\"Cette action n’est pas possible dans l’état actuel.\",\"code\":\"dsn_action_impossible\"}"
+  },
+  {
+   "qui": "med",
+   "requete": "POST /dsn/transitions/3/depart",
+   "statut": 200,
+   "reponse": "{\"id\":3,\"numero\":\"TRX-001103\",\"statut\":\"accepte\",\"depart_le\":\"2026-11-21T05:00:35.035Z\"}"
+  },
+  {
+   "qui": "era",
+   "requete": "POST /dsn/transitions/3/decision",
+   "corps": {
+    "decision": "reception"
+   },
+   "statut": 200,
+   "reponse": "{\"id\":3,\"numero\":\"TRX-001103\",\"statut\":\"recu\",\"decision_le\":\"2026-11-21T05:00:34.968Z\",\"recu_le\":\"2026-11-21T05:00:35.060Z\",\"arrivee_prevue_le\":\"2026-11-22T05:00:34.961Z\"}"
+  }
+ ],
+ "base": null
+}

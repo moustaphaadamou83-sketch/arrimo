@@ -1,0 +1,68 @@
+{
+ "id": "TRR-02",
+ "module": "Transitions reçues",
+ "titre": "Admission confirmée dans Lits → séjour DSN créé une seule fois ; une simple réservation (demande) n’en crée aucun",
+ "etapes": [
+  "patient DSN sans séjour",
+  "Lits : réserver",
+  "Lits : admettre",
+  "Lits : admettre à nouveau"
+ ],
+ "attendu": "aucun séjour après réservation ; 1 séjour (source lits) après admission ; 2e admission refusée, toujours 1 séjour",
+ "obtenu": "réservation 200 → séjours 0 ; admission 200 → 1 séjour (en_cours, source lits) ; 2e admission 409",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "adm",
+   "requete": "POST /dsn/patients",
+   "corps": {
+    "etablissement_id": 2,
+    "prenom": "Lits",
+    "nom": "Démo-Sync",
+    "date_naissance": "1949-09-09"
+   },
+   "statut": 200,
+   "reponse": "{\"id\":22,\"etablissement_id\":2,\"reference\":\"P-01045\",\"prenom\":\"Lits\",\"nom\":\"Démo-Sync\",\"date_naissance\":\"1949-09-08T22:00:00.000Z\",\"reference_locale\":null,\"source\":\"manuel\",\"arrivee_le\":null,\"parcours\":\"enregistre\",\"cree_par\":25,\"cree_le\":\"2026-11-21T05:00:36.299Z\",\"modifie_le\":\"2026-11-21T05:00:36.299Z\",\"groupe_age\":\"adulte\",\"nom_court\":\"Lits D.\"}"
+  },
+  {
+   "qui": "hb",
+   "requete": "POST /lits/71/action",
+   "corps": {
+    "action": "reserver",
+    "version": 5,
+    "patient_ref": "P-01045"
+   },
+   "statut": 200,
+   "reponse": "{\"id\":71,\"chambre_id\":44,\"unite_id\":6,\"type_id\":2,\"etablissement_id\":2,\"code\":\"MED-204A\",\"etat\":\"reserve\",\"patient_ref\":\"P-01045\",\"version\":6,\"etat_depuis\":\"2026-11-21T05:00:36.315Z\",\"disponibilite_confirmee_le\":null,\"disponibilite_confirmee_par\":null,\"sortie_prevue\":null,\"transfert_id\":null,\"blocage_niveau\":null,\"blocage_motif\":null,\"isolement\":false,\"pression_negative\":false,\"ventilation\":false,\"telemetrie\":false,\"motif_indispo\":null,\"nsa_depuis\":null,\"nsa_orientation\":null,\"conge_statut\":null,\"nettoyage_debut\":null,\"blocage_code\":null,\"blocage_vars\":null,\"categorie\":null,\"attributs\":{},\"act"
+  },
+  {
+   "qui": "hb",
+   "requete": "POST /lits/71/action",
+   "corps": {
+    "action": "admettre",
+    "version": 6
+   },
+   "statut": 200,
+   "reponse": "{\"id\":71,\"chambre_id\":44,\"unite_id\":6,\"type_id\":2,\"etablissement_id\":2,\"code\":\"MED-204A\",\"etat\":\"occupe\",\"patient_ref\":\"P-01045\",\"version\":7,\"etat_depuis\":\"2026-11-21T05:00:36.340Z\",\"disponibilite_confirmee_le\":null,\"disponibilite_confirmee_par\":null,\"sortie_prevue\":null,\"transfert_id\":null,\"blocage_niveau\":null,\"blocage_motif\":null,\"isolement\":false,\"pression_negative\":false,\"ventilation\":false,\"telemetrie\":false,\"motif_indispo\":null,\"nsa_depuis\":null,\"nsa_orientation\":null,\"conge_statut\":null,\"nettoyage_debut\":null,\"blocage_code\":null,\"blocage_vars\":null,\"categorie\":null,\"attributs\":{},\"acti"
+  },
+  {
+   "qui": "hb",
+   "requete": "POST /lits/71/action",
+   "corps": {
+    "action": "admettre",
+    "version": 7
+   },
+   "statut": 409,
+   "reponse": "{\"erreur\":\"Le lit MED-204A est déjà occupé : l’admission est déjà faite, aucune action n’est nécessaire.\",\"code\":\"lit_deja_occupe\",\"vars\":{\"code\":\"MED-204A\"}}"
+  }
+ ],
+ "base": [
+  {
+   "statut": "en_cours",
+   "source": "lits",
+   "lit": "71"
+  }
+ ]
+}

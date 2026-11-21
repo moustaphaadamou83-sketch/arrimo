@@ -1,0 +1,55 @@
+{
+ "id": "PA-01",
+ "module": "Partenaires",
+ "titre": "Hôpital A (sans DSN) destinataire : reçoit seulement le paquet",
+ "etapes": [
+  "transition vers Hôpital A",
+  "GET transitions reçues (hopital.a)",
+  "GET dossier source (hopital.a)"
+ ],
+ "attendu": "Paquet visible ; dossier 404",
+ "obtenu": "transitions reçues 200 (1) ; dossier source 404",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "med",
+   "requete": "POST /dsn/patients/19/transitions",
+   "corps": {
+    "destination_id": 1,
+    "elements": [
+     101
+    ]
+   },
+   "statut": 200,
+   "reponse": "{\"id\":4,\"numero\":\"TRX-001105\",\"patient_id\":19,\"etablissement_id\":2,\"destination_id\":1,\"sejour_id\":null,\"contenu\":{\"note_transition\":\"\"},\"elements\":[101],\"statut\":\"brouillon\",\"valide_par\":null,\"valide_le\":null,\"envoye_le\":null,\"decision_par\":null,\"decision_le\":null,\"motif_refus\":null,\"recu_par\":null,\"recu_le\":null,\"arrivee_prevue_le\":null,\"demande_transport_id\":null,\"version\":1,\"cree_par\":27,\"cree_le\":\"2026-11-21T05:00:35.249Z\",\"dossier_patient_id\":null,\"demande_hebergement_id\":null,\"transfert_id\":null,\"depart_le\":null}"
+  },
+  {
+   "qui": "med",
+   "requete": "POST /dsn/transitions/4/valider",
+   "statut": 200,
+   "reponse": "{\"id\":4,\"numero\":\"TRX-001105\",\"patient_id\":19,\"etablissement_id\":2,\"destination_id\":1,\"sejour_id\":null,\"contenu\":{\"fige_le\":\"2026-11-21T05:00:35.267Z\",\"patient\":{\"nom\":\"Démo-Test\",\"prenom\":\"Audit\",\"reference\":\"P-01042\",\"date_naissance\":\"1950-06-15\"},\"elements\":[{\"genre\":\"prescription\",\"numero\":\"DSN-001097\",\"statut\":\"validee\",\"cree_le\":\"2026-11-21T05:00:33.026Z\",\"donnees\":{\"dose\":\"1\",\"voie\":\"orale\",\"frequence\":\"matin\",\"substance\":\"Produit fictif\"}}],\"note_transition\":\"\"},\"elements\":[101],\"statut\":\"valide\",\"valide_par\":27,\"valide_le\":\"2026-11-21T05:00:35.263Z\",\"envoye_le\":null,\"decision_par\":nul"
+  },
+  {
+   "qui": "med",
+   "requete": "POST /dsn/transitions/4/envoyer",
+   "corps": {},
+   "statut": 200,
+   "reponse": "{\"id\":4,\"numero\":\"TRX-001105\",\"patient_id\":19,\"etablissement_id\":2,\"destination_id\":1,\"sejour_id\":null,\"contenu\":{\"fige_le\":\"2026-11-21T05:00:35.267Z\",\"patient\":{\"nom\":\"Démo-Test\",\"prenom\":\"Audit\",\"reference\":\"P-01042\",\"date_naissance\":\"1950-06-15\"},\"elements\":[{\"genre\":\"prescription\",\"numero\":\"DSN-001097\",\"statut\":\"validee\",\"cree_le\":\"2026-11-21T05:00:33.026Z\",\"donnees\":{\"dose\":\"1\",\"voie\":\"orale\",\"frequence\":\"matin\",\"substance\":\"Produit fictif\"}}],\"note_transition\":\"\"},\"elements\":[101],\"statut\":\"envoye\",\"valide_par\":27,\"valide_le\":\"2026-11-21T05:00:35.263Z\",\"envoye_le\":\"2026-11-21T05:00:35.28"
+  },
+  {
+   "qui": "ha",
+   "requete": "GET /dsn/transitions/recues?etablissement_id=1",
+   "statut": 200,
+   "reponse": "[{\"id\":4,\"numero\":\"TRX-001105\",\"statut\":\"envoye\",\"contenu\":{\"fige_le\":\"2026-11-21T05:00:35.267Z\",\"patient\":{\"nom\":\"Démo-Test\",\"prenom\":\"Audit\",\"reference\":\"P-01042\",\"date_naissance\":\"1950-06-15\"},\"elements\":[{\"genre\":\"prescription\",\"numero\":\"DSN-001097\",\"statut\":\"validee\",\"cree_le\":\"2026-11-21T05:00:33.026Z\",\"donnees\":{\"dose\":\"1\",\"voie\":\"orale\",\"frequence\":\"matin\",\"substance\":\"Produit fictif\"}}],\"note_transition\":\"\"},\"envoye_le\":\"2026-11-21T05:00:35.283Z\",\"decision_le\":null,\"recu_le\":null,\"arrivee_prevue_le\":null,\"motif_refus\":null,\"source\":\"Hôpital B — Mont-Clair\"}]"
+  },
+  {
+   "qui": "ha",
+   "requete": "GET /dsn/patients/19",
+   "statut": 404,
+   "reponse": "{\"erreur\":\"Introuvable ou hors de votre périmètre.\",\"code\":\"objet_introuvable\"}"
+  }
+ ],
+ "base": null
+}

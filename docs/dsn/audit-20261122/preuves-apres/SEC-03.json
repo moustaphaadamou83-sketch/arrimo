@@ -1,0 +1,22 @@
+{
+ "id": "SEC-03",
+ "module": "Sécurité",
+ "titre": "Messages d’erreur en anglais (X-Langue: en)",
+ "etapes": [
+  "GET dossier interdit en EN"
+ ],
+ "attendu": "Message anglais",
+ "obtenu": "403 « Vous n'avez pas accès à cet établissement. » (code etab_interdit)",
+ "statut": "ÉCHEC",
+ "anomalie": "Constat général (pas propre au DSN) : les messages d’erreur du serveur restent en français ; l’interface DSN traduit les refus principaux par leur code",
+ "gravite": "faible",
+ "echanges": [
+  {
+   "qui": "ha",
+   "requete": "GET /dsn/patients?etablissement_id=2",
+   "statut": 403,
+   "reponse": "{\"erreur\":\"Vous n'avez pas accès à cet établissement.\",\"code\":\"etab_interdit\"}"
+  }
+ ],
+ "base": null
+}

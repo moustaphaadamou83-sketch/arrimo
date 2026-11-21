@@ -1,0 +1,58 @@
+{
+ "id": "DP-16",
+ "module": "Dossier patient",
+ "titre": "Habilitations : l’administrateur ne s’ouvre pas les dossiers ; accès d’urgence justifié",
+ "etapes": [
+  "admin_etab s’habilite",
+  "urgence sans justification",
+  "urgence justifiée par un compte sans fonction puis lecture"
+ ],
+ "attendu": "403 ; 400 ; 200 + lecture permise + journal « urgence »",
+ "obtenu": "auto-habilitation : dsn_auto_habilitation ; avant urgence 403 ; sans justification 400 ; justifiée 200 ; lecture ensuite 200 ; journal urgence 1",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "admhb",
+   "requete": "PUT /dsn/habilitations",
+   "corps": {
+    "etablissement_id": 2,
+    "utilisateur_id": 30,
+    "fonction": "medecin",
+    "actif": true
+   },
+   "statut": 403,
+   "reponse": "{\"erreur\":\"Un administrateur ne peut pas s’accorder lui-même l’accès aux dossiers.\",\"code\":\"dsn_auto_habilitation\"}"
+  },
+  {
+   "qui": "sf",
+   "requete": "GET /dsn/patients/19",
+   "statut": 403,
+   "reponse": "{\"erreur\":\"Une habilitation DSN est requise : admission, infirmier, medecin, sortie, auditeur.\",\"code\":\"dsn_habilitation_requise\",\"vars\":{\"fonctions\":\"admission, infirmier, medecin, sortie, auditeur\"}}"
+  },
+  {
+   "qui": "sf",
+   "requete": "POST /dsn/patients/19/urgence",
+   "corps": {},
+   "statut": 400,
+   "reponse": "{\"erreur\":\"Paramètre justification invalide.\",\"code\":\"parametre_invalide\",\"vars\":{\"nom\":\"justification\"}}"
+  },
+  {
+   "qui": "sf",
+   "requete": "POST /dsn/patients/19/urgence",
+   "corps": {
+    "justification": "Patient inconscient aux urgences (fictif)"
+   },
+   "statut": 200,
+   "reponse": "{\"expire_dans_h\":4}"
+  },
+  {
+   "qui": "sf",
+   "requete": "GET /dsn/patients/19",
+   "statut": 200,
+   "reponse": "{\"patient\":{\"id\":19,\"etablissement_id\":2,\"reference\":\"P-01042\",\"prenom\":\"Audit\",\"nom\":\"Démo-Test\",\"date_naissance\":\"1950-06-15\",\"reference_locale\":null,\"source\":\"manuel\",\"arrivee_le\":null,\"parcours\":\"hospitalise\",\"cree_par\":25,\"cree_le\":\"2026-11-21T05:00:32.388Z\",\"modifie_le\":\"2026-11-21T05:00:33.194Z\"},\"fonctions\":[\"urgence\"],\"allergies\":[{\"id\":104,\"numero\":\"DSN-001091-v2\",\"patient_id\":19,\"etablissement_id\":2,\"genre\":\"allergie\",\"rencontre_id\":null,\"donnees\":{\"gravite\":\"severe\",\"reaction\":\"Œdème (fictif)\",\"substance\":\"Arachides (fictif)\",\"verification\":\"confirmee\"},\"statut\":\"annule\",\"version\":"
+  }
+ ],
+ "base": null
+}

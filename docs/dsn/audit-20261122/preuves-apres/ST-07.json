@@ -1,0 +1,36 @@
+{
+ "id": "ST-07",
+ "module": "Sorties et transferts",
+ "titre": "Départ, arrivée, clôture : Horloge et Sillage",
+ "etapes": [
+  "horodatages de la transition",
+  "GET /sillage?objet=dsn_transition",
+  "chronologie du dossier"
+ ],
+ "attendu": "demande, décision, départ, arrivée ; Sillage lisible par l’origine et la destination",
+ "obtenu": "Horloge : demande → decision → depart → arrivee ; Sillage origine 200, destination 200 ; chronologie DSN : recu, refuse",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "med",
+   "requete": "GET /sillage?objet=dsn_transition&id=3",
+   "statut": 200,
+   "reponse": "{\"parcours\":\"TRX-001103\",\"objet\":\"dsn_transition\",\"id\":3,\"objets\":[{\"objet\":\"dsn_transition\",\"id\":3,\"numero\":\"TRX-001103\",\"statut\":\"recu\",\"cree_le\":\"2026-11-21T05:00:34.851Z\",\"lieu\":\"Hôpital B — Mont-Clair → CHSLD 1 — des Érables\"}],\"evenements\":[{\"heure\":\"2026-11-21T05:00:34.933Z\",\"objet\":\"dsn_transition\",\"numero\":\"TRX-001103\",\"etape\":\"demande\",\"source\":\"clic\",\"auteur\":\"DSN medecin (démo)\",\"corrigee\":false,\"motif_correction\":null,\"lieu\":\"Hôpital B — Mont-Clair → CHSLD 1 — des Érables\"},{\"heure\":\"2026-11-21T05:00:34.972Z\",\"objet\":\"dsn_transition\",\"numero\":\"TRX-001103\",\"etape\":\"decision\",\"sourc"
+  },
+  {
+   "qui": "era",
+   "requete": "GET /sillage?objet=dsn_transition&id=3",
+   "statut": 200,
+   "reponse": "{\"parcours\":\"TRX-001103\",\"objet\":\"dsn_transition\",\"id\":3,\"objets\":[{\"objet\":\"dsn_transition\",\"id\":3,\"numero\":\"TRX-001103\",\"statut\":\"recu\",\"cree_le\":\"2026-11-21T05:00:34.851Z\",\"lieu\":\"Hôpital B — Mont-Clair → CHSLD 1 — des Érables\"}],\"evenements\":[{\"heure\":\"2026-11-21T05:00:34.933Z\",\"objet\":\"dsn_transition\",\"numero\":\"TRX-001103\",\"etape\":\"demande\",\"source\":\"clic\",\"auteur\":\"DSN medecin (démo)\",\"corrigee\":false,\"motif_correction\":null,\"lieu\":\"Hôpital B — Mont-Clair → CHSLD 1 — des Érables\"},{\"heure\":\"2026-11-21T05:00:34.972Z\",\"objet\":\"dsn_transition\",\"numero\":\"TRX-001103\",\"etape\":\"decision\",\"sourc"
+  },
+  {
+   "qui": "med",
+   "requete": "GET /dsn/patients/19",
+   "statut": 200,
+   "reponse": "{\"patient\":{\"id\":19,\"etablissement_id\":2,\"reference\":\"P-01042\",\"prenom\":\"Audit\",\"nom\":\"Démo-Test\",\"date_naissance\":\"1950-06-15\",\"reference_locale\":null,\"source\":\"manuel\",\"arrivee_le\":null,\"parcours\":\"transfere\",\"cree_par\":25,\"cree_le\":\"2026-11-21T05:00:32.388Z\",\"modifie_le\":\"2026-11-21T05:00:35.060Z\"},\"fonctions\":[\"medecin\"],\"allergies\":[{\"id\":104,\"numero\":\"DSN-001091-v2\",\"patient_id\":19,\"etablissement_id\":2,\"genre\":\"allergie\",\"rencontre_id\":null,\"donnees\":{\"gravite\":\"severe\",\"reaction\":\"Œdème (fictif)\",\"substance\":\"Arachides (fictif)\",\"verification\":\"confirmee\"},\"statut\":\"annule\",\"version\":2,"
+  }
+ ],
+ "base": null
+}

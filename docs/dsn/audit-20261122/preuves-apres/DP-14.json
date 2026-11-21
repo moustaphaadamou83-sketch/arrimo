@@ -1,0 +1,30 @@
+{
+ "id": "DP-14",
+ "module": "Dossier patient",
+ "titre": "Journal d’accès : auditeur seulement, complet, sans contenu clinique, immuable",
+ "etapes": [
+  "GET /dsn/acces (médecin)",
+  "GET /dsn/acces (auditeur)",
+  "UPDATE et DELETE en base"
+ ],
+ "attendu": "403 ; lecture/écriture/signature/export présents, aucun libellé clinique ; refus de modification",
+ "obtenu": "médecin 403 ; auditeur 200, actions : lecture,ecriture,export,signature ; contenu clinique : aucun ; UPDATE refusé ; DELETE refusé (même par un superutilisateur)",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "med",
+   "requete": "GET /dsn/acces?etablissement_id=2&patient_id=19",
+   "statut": 403,
+   "reponse": "{\"erreur\":\"Une habilitation DSN est requise : auditeur.\",\"code\":\"dsn_habilitation_requise\",\"vars\":{\"fonctions\":\"auditeur\"}}"
+  },
+  {
+   "qui": "aud",
+   "requete": "GET /dsn/acces?etablissement_id=2&patient_id=19",
+   "statut": 200,
+   "reponse": "[{\"cree_le\":\"2026-11-21T05:00:33.843Z\",\"action\":\"lecture\",\"objet\":\"dossier\",\"justification\":null,\"utilisateur\":\"DSN medecin (démo)\",\"reference\":\"P-01042\"},{\"cree_le\":\"2026-11-21T05:00:33.771Z\",\"action\":\"ecriture\",\"objet\":\"annulation DSN-001091-v2\",\"justification\":\"Saisie en double (fictif)\",\"utilisateur\":\"DSN infirmier (démo)\",\"reference\":\"P-01042\"},{\"cree_le\":\"2026-11-21T05:00:33.650Z\",\"action\":\"ecriture\",\"objet\":\"amendement DSN-001091\",\"justification\":\"Précision réaction\",\"utilisateur\":\"DSN infirmier (démo)\",\"reference\":\"P-01042\"},{\"cree_le\":\"2026-11-21T05:00:33.607Z\",\"action\":\"export\",\"obje"
+  }
+ ],
+ "base": null
+}

@@ -1,0 +1,68 @@
+{
+ "id": "DP-12",
+ "module": "Dossier patient",
+ "titre": "Amendement (nouvelle version) et annulation tracée ; aucune suppression",
+ "etapes": [
+  "amender allergie",
+  "annuler version remplacée",
+  "annuler version courante sans motif",
+  "annuler avec motif",
+  "DELETE élément"
+ ],
+ "attendu": "v2 ; 409 ; 400 ; annule ; 404/405 (aucune route)",
+ "obtenu": "v2 ; 409 ; 400 ; annule ; DELETE 404 ; lignes conservées 2/2",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "inf",
+   "requete": "POST /dsn/elements/95/action",
+   "corps": {
+    "action": "amender",
+    "motif": "Précision réaction",
+    "donnees": {
+     "reaction": "Œdème (fictif)"
+    }
+   },
+   "statut": 200,
+   "reponse": "{\"id\":104,\"numero\":\"DSN-001091-v2\",\"patient_id\":19,\"etablissement_id\":2,\"genre\":\"allergie\",\"rencontre_id\":null,\"donnees\":{\"gravite\":\"severe\",\"reaction\":\"Œdème (fictif)\",\"substance\":\"Arachides (fictif)\",\"verification\":\"confirmee\"},\"statut\":\"actif\",\"version\":2,\"remplace_id\":95,\"remplace_par\":null,\"auteur_id\":26,\"signe_par\":null,\"signe_le\":null,\"motif\":\"Précision réaction\",\"source\":\"saisie\",\"cree_le\":\"2026-11-21T05:00:33.650Z\",\"modifie_le\":\"2026-11-21T05:00:33.650Z\"}"
+  },
+  {
+   "qui": "inf",
+   "requete": "POST /dsn/elements/95/action",
+   "corps": {
+    "action": "annuler",
+    "motif": "essai"
+   },
+   "statut": 409,
+   "reponse": "{\"erreur\":\"Cet élément a été remplacé par une version plus récente.\",\"code\":\"dsn_version_remplacee\"}"
+  },
+  {
+   "qui": "inf",
+   "requete": "POST /dsn/elements/104/action",
+   "corps": {
+    "action": "annuler"
+   },
+   "statut": 400,
+   "reponse": "{\"erreur\":\"Paramètre motif invalide.\",\"code\":\"parametre_invalide\",\"vars\":{\"nom\":\"motif\"}}"
+  },
+  {
+   "qui": "inf",
+   "requete": "POST /dsn/elements/104/action",
+   "corps": {
+    "action": "annuler",
+    "motif": "Saisie en double (fictif)"
+   },
+   "statut": 200,
+   "reponse": "{\"id\":104,\"numero\":\"DSN-001091-v2\",\"patient_id\":19,\"etablissement_id\":2,\"genre\":\"allergie\",\"rencontre_id\":null,\"donnees\":{\"gravite\":\"severe\",\"reaction\":\"Œdème (fictif)\",\"substance\":\"Arachides (fictif)\",\"verification\":\"confirmee\"},\"statut\":\"annule\",\"version\":2,\"remplace_id\":95,\"remplace_par\":null,\"auteur_id\":26,\"signe_par\":null,\"signe_le\":null,\"motif\":\"Saisie en double (fictif)\",\"source\":\"saisie\",\"cree_le\":\"2026-11-21T05:00:33.650Z\",\"modifie_le\":\"2026-11-21T05:00:33.771Z\"}"
+  },
+  {
+   "qui": "inf",
+   "requete": "DELETE /dsn/elements/104",
+   "statut": 404,
+   "reponse": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>Error</title>\n</head>\n<body>\n<pre>Cannot DELETE /api/dsn/elements/104</pre>\n</body>\n</html>\n"
+  }
+ ],
+ "base": null
+}

@@ -1,0 +1,57 @@
+{
+ "id": "DP-15",
+ "module": "Dossier patient",
+ "titre": "Accès non autorisés : sans fonction, autre établissement, autre organisation, sans session",
+ "etapes": [
+  "réseau (gestionnaire)",
+  "hopital.a",
+  "ambulance",
+  "CCS",
+  "entretien",
+  "sans jeton"
+ ],
+ "attendu": "Aucun ne lit le dossier (403/404/401)",
+ "obtenu": "{\"res\":404,\"ha\":404,\"amb\":404,\"ccs\":404,\"ent\":403,\"stl\":404,\"sans\":401}",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "res",
+   "requete": "GET /dsn/patients/19",
+   "statut": 404,
+   "reponse": "{\"erreur\":\"Introuvable ou hors de votre périmètre.\",\"code\":\"objet_introuvable\"}"
+  },
+  {
+   "qui": "ha",
+   "requete": "GET /dsn/patients/19",
+   "statut": 404,
+   "reponse": "{\"erreur\":\"Introuvable ou hors de votre périmètre.\",\"code\":\"objet_introuvable\"}"
+  },
+  {
+   "qui": "amb",
+   "requete": "GET /dsn/patients/19",
+   "statut": 404,
+   "reponse": "{\"erreur\":\"Introuvable ou hors de votre périmètre.\",\"code\":\"objet_introuvable\"}"
+  },
+  {
+   "qui": "ccs",
+   "requete": "GET /dsn/patients/19",
+   "statut": 404,
+   "reponse": "{\"erreur\":\"Introuvable ou hors de votre périmètre.\",\"code\":\"objet_introuvable\"}"
+  },
+  {
+   "qui": "ent",
+   "requete": "GET /dsn/patients/19",
+   "statut": 403,
+   "reponse": "{\"erreur\":\"Votre rôle donne accès à l’écran Nettoyage seulement.\",\"code\":\"role_entretien\"}"
+  },
+  {
+   "qui": "stl",
+   "requete": "GET /dsn/patients/19",
+   "statut": 404,
+   "reponse": "{\"erreur\":\"Introuvable ou hors de votre périmètre.\",\"code\":\"objet_introuvable\"}"
+  }
+ ],
+ "base": null
+}

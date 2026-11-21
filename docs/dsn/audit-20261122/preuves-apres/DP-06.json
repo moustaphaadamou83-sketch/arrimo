@@ -1,0 +1,84 @@
+{
+ "id": "DP-06",
+ "module": "Dossier patient",
+ "titre": "Antécédent, diagnostic (médecin seulement), observation",
+ "etapes": [
+  "antécédent (médecin)",
+  "diagnostic (infirmier) refusé",
+  "diagnostic (médecin)",
+  "observation (infirmier)",
+  "diagnostic (admission) refusé"
+ ],
+ "attendu": "200 ; 403 ; 200 ; 200 ; 403",
+ "obtenu": "200 ; 403 ; 200 ; 200 ; 403",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "med",
+   "requete": "POST /dsn/patients/19/elements",
+   "corps": {
+    "genre": "antecedent",
+    "donnees": {
+     "libelle": "HTA (fictif)",
+     "type": "medical"
+    }
+   },
+   "statut": 200,
+   "reponse": "{\"id\":96,\"numero\":\"DSN-001092\",\"patient_id\":19,\"etablissement_id\":2,\"genre\":\"antecedent\",\"rencontre_id\":null,\"donnees\":{\"type\":\"medical\",\"libelle\":\"HTA (fictif)\"},\"statut\":\"actif\",\"version\":1,\"remplace_id\":null,\"remplace_par\":null,\"auteur_id\":27,\"signe_par\":null,\"signe_le\":null,\"motif\":null,\"source\":\"saisie\",\"cree_le\":\"2026-11-21T05:00:32.714Z\",\"modifie_le\":\"2026-11-21T05:00:32.714Z\"}"
+  },
+  {
+   "qui": "inf",
+   "requete": "POST /dsn/patients/19/elements",
+   "corps": {
+    "genre": "diagnostic",
+    "donnees": {
+     "libelle": "Essai (fictif)"
+    }
+   },
+   "statut": 403,
+   "reponse": "{\"erreur\":\"Une habilitation DSN est requise : medecin.\",\"code\":\"dsn_habilitation_requise\",\"vars\":{\"fonctions\":\"medecin\"}}"
+  },
+  {
+   "qui": "med",
+   "requete": "POST /dsn/patients/19/elements",
+   "corps": {
+    "genre": "diagnostic",
+    "donnees": {
+     "libelle": "Pneumonie (fictif)",
+     "certitude": "provisoire"
+    }
+   },
+   "statut": 200,
+   "reponse": "{\"id\":97,\"numero\":\"DSN-001093\",\"patient_id\":19,\"etablissement_id\":2,\"genre\":\"diagnostic\",\"rencontre_id\":null,\"donnees\":{\"libelle\":\"Pneumonie (fictif)\",\"certitude\":\"provisoire\"},\"statut\":\"actif\",\"version\":1,\"remplace_id\":null,\"remplace_par\":null,\"auteur_id\":27,\"signe_par\":null,\"signe_le\":null,\"motif\":null,\"source\":\"saisie\",\"cree_le\":\"2026-11-21T05:00:32.764Z\",\"modifie_le\":\"2026-11-21T05:00:32.764Z\"}"
+  },
+  {
+   "qui": "inf",
+   "requete": "POST /dsn/patients/19/elements",
+   "corps": {
+    "genre": "observation",
+    "donnees": {
+     "type": "spo2",
+     "valeur": "95",
+     "unite": "%"
+    }
+   },
+   "statut": 200,
+   "reponse": "{\"id\":98,\"numero\":\"DSN-001094\",\"patient_id\":19,\"etablissement_id\":2,\"genre\":\"observation\",\"rencontre_id\":null,\"donnees\":{\"type\":\"spo2\",\"unite\":\"%\",\"valeur\":\"95\"},\"statut\":\"finale\",\"version\":1,\"remplace_id\":null,\"remplace_par\":null,\"auteur_id\":26,\"signe_par\":null,\"signe_le\":null,\"motif\":null,\"source\":\"saisie\",\"cree_le\":\"2026-11-21T05:00:32.787Z\",\"modifie_le\":\"2026-11-21T05:00:32.787Z\"}"
+  },
+  {
+   "qui": "adm",
+   "requete": "POST /dsn/patients/19/elements",
+   "corps": {
+    "genre": "diagnostic",
+    "donnees": {
+     "libelle": "Essai (fictif)"
+    }
+   },
+   "statut": 403,
+   "reponse": "{\"erreur\":\"Une habilitation DSN est requise : medecin.\",\"code\":\"dsn_habilitation_requise\",\"vars\":{\"fonctions\":\"medecin\"}}"
+  }
+ ],
+ "base": null
+}

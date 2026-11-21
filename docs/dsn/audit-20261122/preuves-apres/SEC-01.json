@@ -1,0 +1,30 @@
+{
+ "id": "SEC-01",
+ "module": "Sécurité",
+ "titre": "DSN refusé hors démo/recette (serveur en mode « pilote » sur la même copie)",
+ "etapes": [
+  "connexion hopital.b sur 3098",
+  "GET /dsn/patients",
+  "GET /dsn/transitions/recues"
+ ],
+ "attendu": "403 dsn_reserve_demo partout",
+ "obtenu": "patients 403 dsn_reserve_demo ; reçues 403 dsn_reserve_demo ; page /dsn 200",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "v",
+   "requete": "GET /dsn/patients?etablissement_id=2",
+   "statut": 403,
+   "reponse": "{\"erreur\":\"Le dossier clinique (DSN) n’est disponible qu’en démonstration et en recette, avec des patients fictifs.\",\"code\":\"dsn_reserve_demo\"}"
+  },
+  {
+   "qui": "v",
+   "requete": "GET /dsn/transitions/recues?etablissement_id=22",
+   "statut": 403,
+   "reponse": "{\"erreur\":\"Le dossier clinique (DSN) n’est disponible qu’en démonstration et en recette, avec des patients fictifs.\",\"code\":\"dsn_reserve_demo\"}"
+  }
+ ],
+ "base": null
+}

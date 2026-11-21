@@ -1,0 +1,48 @@
+{
+ "id": "TR-02",
+ "module": "Transport",
+ "titre": "Échec de la demande de transport : pas de transport orphelin, transition inchangée",
+ "etapes": [
+  "envoyer avec une organisation invalide"
+ ],
+ "attendu": "Refus ; transition toujours « valide » ; aucune demande créée",
+ "obtenu": "envoi 404 organisation_introuvable ; demandes avant 4, après 4 ; transition valide",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "med",
+   "requete": "POST /dsn/patients/19/transitions",
+   "corps": {
+    "destination_id": 23,
+    "elements": [
+     101
+    ]
+   },
+   "statut": 200,
+   "reponse": "{\"id\":6,\"numero\":\"TRX-001107\",\"patient_id\":19,\"etablissement_id\":2,\"destination_id\":23,\"sejour_id\":null,\"contenu\":{\"note_transition\":\"\"},\"elements\":[101],\"statut\":\"brouillon\",\"valide_par\":null,\"valide_le\":null,\"envoye_le\":null,\"decision_par\":null,\"decision_le\":null,\"motif_refus\":null,\"recu_par\":null,\"recu_le\":null,\"arrivee_prevue_le\":null,\"demande_transport_id\":null,\"version\":1,\"cree_par\":27,\"cree_le\":\"2026-11-21T05:00:35.538Z\",\"dossier_patient_id\":null,\"demande_hebergement_id\":null,\"transfert_id\":null,\"depart_le\":null}"
+  },
+  {
+   "qui": "med",
+   "requete": "POST /dsn/transitions/6/valider",
+   "statut": 200,
+   "reponse": "{\"id\":6,\"numero\":\"TRX-001107\",\"patient_id\":19,\"etablissement_id\":2,\"destination_id\":23,\"sejour_id\":null,\"contenu\":{\"fige_le\":\"2026-11-21T05:00:35.559Z\",\"patient\":{\"nom\":\"Démo-Test\",\"prenom\":\"Audit\",\"reference\":\"P-01042\",\"date_naissance\":\"1950-06-15\"},\"elements\":[{\"genre\":\"prescription\",\"numero\":\"DSN-001097\",\"statut\":\"validee\",\"cree_le\":\"2026-11-21T05:00:33.026Z\",\"donnees\":{\"dose\":\"1\",\"voie\":\"orale\",\"frequence\":\"matin\",\"substance\":\"Produit fictif\"}}],\"note_transition\":\"\"},\"elements\":[101],\"statut\":\"valide\",\"valide_par\":27,\"valide_le\":\"2026-11-21T05:00:35.551Z\",\"envoye_le\":null,\"decision_par\":nu"
+  },
+  {
+   "qui": "med",
+   "requete": "POST /dsn/transitions/6/envoyer",
+   "corps": {
+    "transport": {
+     "organisation_id": 999999,
+     "type_vehicule": "ambulance",
+     "plage_debut": "2026-11-21T08:00:35.569Z",
+     "plage_fin": "2026-11-21T09:00:35.569Z"
+    }
+   },
+   "statut": 404,
+   "reponse": "{\"erreur\":\"Entreprise ambulancière introuvable dans votre région.\",\"code\":\"organisation_introuvable\"}"
+  }
+ ],
+ "base": null
+}

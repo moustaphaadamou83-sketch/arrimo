@@ -1,0 +1,28 @@
+{
+ "id": "SEC-02",
+ "module": "Sécurité",
+ "titre": "Appels directs sans jeton, jeton falsifié, identifiants devinés",
+ "etapes": [
+  "sans jeton",
+  "jeton falsifié",
+  "élément d’un autre patient via action"
+ ],
+ "attendu": "401 ; 401 ; 403/404",
+ "obtenu": "401 ; 401 ; 404",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "ha",
+   "requete": "POST /dsn/elements/1/action",
+   "corps": {
+    "action": "annuler",
+    "motif": "Tentative non autorisée"
+   },
+   "statut": 404,
+   "reponse": "{\"erreur\":\"Introuvable ou hors de votre périmètre.\",\"code\":\"objet_introuvable\"}"
+  }
+ ],
+ "base": null
+}

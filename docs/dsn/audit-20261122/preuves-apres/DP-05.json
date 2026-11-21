@@ -1,0 +1,44 @@
+{
+ "id": "DP-05",
+ "module": "Dossier patient",
+ "titre": "Allergie (infirmier) : enregistrée, alerte dans la liste et l’en-tête",
+ "etapes": [
+  "POST élément allergie",
+  "GET liste patients",
+  "GET dossier"
+ ],
+ "attendu": "Allergie active ; compteur d’allergies = 1",
+ "obtenu": "création 200 ; compteur 1 ; allergies du dossier 1",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "inf",
+   "requete": "POST /dsn/patients/19/elements",
+   "corps": {
+    "genre": "allergie",
+    "donnees": {
+     "substance": "Arachides (fictif)",
+     "gravite": "severe",
+     "verification": "confirmee"
+    }
+   },
+   "statut": 200,
+   "reponse": "{\"id\":95,\"numero\":\"DSN-001091\",\"patient_id\":19,\"etablissement_id\":2,\"genre\":\"allergie\",\"rencontre_id\":null,\"donnees\":{\"gravite\":\"severe\",\"substance\":\"Arachides (fictif)\",\"verification\":\"confirmee\"},\"statut\":\"actif\",\"version\":1,\"remplace_id\":null,\"remplace_par\":null,\"auteur_id\":26,\"signe_par\":null,\"signe_le\":null,\"motif\":null,\"source\":\"saisie\",\"cree_le\":\"2026-11-21T05:00:32.625Z\",\"modifie_le\":\"2026-11-21T05:00:32.625Z\"}"
+  },
+  {
+   "qui": "med",
+   "requete": "GET /dsn/patients?etablissement_id=2&q=démo-test",
+   "statut": 200,
+   "reponse": "{\"patients\":[{\"id\":19,\"reference\":\"P-01042\",\"prenom\":\"Audit\",\"nom\":\"Démo-Test\",\"date_naissance\":\"1950-06-15\",\"parcours\":\"enregistre\",\"allergies\":1}],\"fonctions\":[\"medecin\"]}"
+  },
+  {
+   "qui": "med",
+   "requete": "GET /dsn/patients/19",
+   "statut": 200,
+   "reponse": "{\"patient\":{\"id\":19,\"etablissement_id\":2,\"reference\":\"P-01042\",\"prenom\":\"Audit\",\"nom\":\"Démo-Test\",\"date_naissance\":\"1950-06-15\",\"reference_locale\":null,\"source\":\"manuel\",\"arrivee_le\":null,\"parcours\":\"enregistre\",\"cree_par\":25,\"cree_le\":\"2026-11-21T05:00:32.388Z\",\"modifie_le\":\"2026-11-21T05:00:32.592Z\"},\"fonctions\":[\"medecin\"],\"allergies\":[{\"id\":95,\"numero\":\"DSN-001091\",\"patient_id\":19,\"etablissement_id\":2,\"genre\":\"allergie\",\"rencontre_id\":null,\"donnees\":{\"gravite\":\"severe\",\"substance\":\"Arachides (fictif)\",\"verification\":\"confirmee\"},\"statut\":\"actif\",\"version\":1,\"remplace_id\":null,\"remplace_par"
+  }
+ ],
+ "base": null
+}

@@ -1,0 +1,28 @@
+{
+ "id": "ST-08",
+ "module": "Sorties et transferts",
+ "titre": "Le destinataire ouvre son propre dossier depuis le paquet ; pas de doublon si on recommence",
+ "etapes": [
+  "ouvrir le dossier (Érables) deux fois"
+ ],
+ "attendu": "1er : patient créé ; 2e : refus ou même patient",
+ "obtenu": "1er 200 ; 2e 200 ; dossiers créés aux Érables : 1",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "era",
+   "requete": "POST /dsn/transitions/3/dossier",
+   "statut": 200,
+   "reponse": "{\"id\":21,\"etablissement_id\":22,\"reference\":\"P-01044\",\"prenom\":\"Audit\",\"nom\":\"Démo-Test\",\"date_naissance\":\"1950-06-14T23:00:00.000Z\",\"reference_locale\":null,\"source\":\"manuel\",\"arrivee_le\":null,\"parcours\":\"enregistre\",\"cree_par\":11,\"cree_le\":\"2026-11-21T05:00:35.190Z\",\"modifie_le\":\"2026-11-21T05:00:35.190Z\",\"groupe_age\":\"adulte\",\"nom_court\":\"Audit D.\"}"
+  },
+  {
+   "qui": "era",
+   "requete": "POST /dsn/transitions/3/dossier",
+   "statut": 200,
+   "reponse": "{\"id\":21,\"etablissement_id\":22,\"reference\":\"P-01044\",\"prenom\":\"Audit\",\"nom\":\"Démo-Test\",\"date_naissance\":\"1950-06-14T23:00:00.000Z\",\"reference_locale\":null,\"source\":\"manuel\",\"arrivee_le\":null,\"parcours\":\"enregistre\",\"cree_par\":11,\"cree_le\":\"2026-11-21T05:00:35.190Z\",\"modifie_le\":\"2026-11-21T05:00:35.190Z\",\"deja_ouvert\":true}"
+  }
+ ],
+ "base": null
+}

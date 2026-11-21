@@ -1,0 +1,40 @@
+{
+ "id": "AD-04",
+ "module": "Admissions",
+ "titre": "Modification et annulation d’un séjour",
+ "etapes": [
+  "amender le séjour (service)",
+  "annuler avec motif"
+ ],
+ "attendu": "v2 ; annule ; parcours patient cohérent",
+ "obtenu": "amendement v2 ; annulation annule ; parcours du patient après annulation : enregistre",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "adm",
+   "requete": "POST /dsn/elements/105/action",
+   "corps": {
+    "action": "amender",
+    "motif": "Changement de service",
+    "donnees": {
+     "service": "Chirurgie"
+    }
+   },
+   "statut": 200,
+   "reponse": "{\"id\":106,\"numero\":\"DSN-001101-v2\",\"patient_id\":20,\"etablissement_id\":2,\"genre\":\"sejour\",\"rencontre_id\":null,\"donnees\":{\"lit\":\"MED-201B\",\"lit_id\":66,\"service\":\"Chirurgie\"},\"statut\":\"en_cours\",\"version\":2,\"remplace_id\":105,\"remplace_par\":null,\"auteur_id\":25,\"signe_par\":null,\"signe_le\":null,\"motif\":\"Changement de service\",\"source\":\"saisie\",\"cree_le\":\"2026-11-21T05:00:34.535Z\",\"modifie_le\":\"2026-11-21T05:00:34.535Z\"}"
+  },
+  {
+   "qui": "adm",
+   "requete": "POST /dsn/elements/106/action",
+   "corps": {
+    "action": "annuler",
+    "motif": "Admission annulée (fictif)"
+   },
+   "statut": 200,
+   "reponse": "{\"id\":106,\"numero\":\"DSN-001101-v2\",\"patient_id\":20,\"etablissement_id\":2,\"genre\":\"sejour\",\"rencontre_id\":null,\"donnees\":{\"lit\":\"MED-201B\",\"lit_id\":66,\"service\":\"Chirurgie\"},\"statut\":\"annule\",\"version\":2,\"remplace_id\":105,\"remplace_par\":null,\"auteur_id\":25,\"signe_par\":null,\"signe_le\":null,\"motif\":\"Admission annulée (fictif)\",\"source\":\"saisie\",\"cree_le\":\"2026-11-21T05:00:34.535Z\",\"modifie_le\":\"2026-11-21T05:00:34.558Z\"}"
+  }
+ ],
+ "base": null
+}

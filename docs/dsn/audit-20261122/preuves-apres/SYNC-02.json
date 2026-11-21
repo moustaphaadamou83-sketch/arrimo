@@ -1,0 +1,16 @@
+{
+ "id": "SYNC-02",
+ "module": "Synchronisation",
+ "titre": "Historique des événements : auteur, source, statut, heure ; immuable ; sans clinique",
+ "etapes": [
+  "lecture dsn_evenements",
+  "UPDATE/DELETE"
+ ],
+ "attendu": "champs remplis ; modification refusée ; aucun terme clinique",
+ "obtenu": "33 événements ; types : changement_lit, admission, admission_annulee, demande_hebergement, transition, depart, dossier_ouvert, transport, sortie_lit ; modification refusée ; clinique : aucun",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [],
+ "base": null
+}

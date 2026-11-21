@@ -1,0 +1,30 @@
+{
+ "id": "TR-05",
+ "module": "Transport",
+ "titre": "Double envoi (clic répété / reprise réseau) : une seule demande de transport",
+ "etapes": [
+  "renvoyer la même transition avec transport"
+ ],
+ "attendu": "409 ; pas de seconde demande",
+ "obtenu": "renvoi 409 ; demandes avant 4, après 4",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "med",
+   "requete": "POST /dsn/transitions/5/envoyer",
+   "corps": {
+    "transport": {
+     "organisation_id": 1,
+     "type_vehicule": "ambulance",
+     "plage_debut": "2026-11-21T08:00:35.994Z",
+     "plage_fin": "2026-11-21T09:00:35.994Z"
+    }
+   },
+   "statut": 409,
+   "reponse": "{\"erreur\":\"Cette action n’est pas possible dans l’état actuel.\",\"code\":\"dsn_action_impossible\"}"
+  }
+ ],
+ "base": null
+}

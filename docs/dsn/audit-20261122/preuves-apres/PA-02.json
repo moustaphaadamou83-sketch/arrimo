@@ -1,0 +1,70 @@
+{
+ "id": "PA-02",
+ "module": "Partenaires",
+ "titre": "CCS et ambulance : aucun accès DSN",
+ "etapes": [
+  "GET /dsn/* avec jetons ambulance et CCS"
+ ],
+ "attendu": "401/403 partout",
+ "obtenu": "403,403,403,403,403,403,403,403,403",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "amb",
+   "requete": "GET /dsn/patients?etablissement_id=2",
+   "statut": 403,
+   "reponse": "{\"erreur\":\"Vous n'avez pas accès à cet établissement.\",\"code\":\"etab_interdit\"}"
+  },
+  {
+   "qui": "amb",
+   "requete": "GET /dsn/transitions/recues?etablissement_id=2",
+   "statut": 403,
+   "reponse": "{\"erreur\":\"Vous n'avez pas accès à cet établissement.\",\"code\":\"etab_interdit\"}"
+  },
+  {
+   "qui": "amb",
+   "requete": "GET /dsn/acces?etablissement_id=2",
+   "statut": 403,
+   "reponse": "{\"erreur\":\"Vous n'avez pas accès à cet établissement.\",\"code\":\"etab_interdit\"}"
+  },
+  {
+   "qui": "ccs",
+   "requete": "GET /dsn/patients?etablissement_id=2",
+   "statut": 403,
+   "reponse": "{\"erreur\":\"Vous n'avez pas accès à cet établissement.\",\"code\":\"etab_interdit\"}"
+  },
+  {
+   "qui": "ccs",
+   "requete": "GET /dsn/transitions/recues?etablissement_id=2",
+   "statut": 403,
+   "reponse": "{\"erreur\":\"Vous n'avez pas accès à cet établissement.\",\"code\":\"etab_interdit\"}"
+  },
+  {
+   "qui": "ccs",
+   "requete": "GET /dsn/acces?etablissement_id=2",
+   "statut": 403,
+   "reponse": "{\"erreur\":\"Vous n'avez pas accès à cet établissement.\",\"code\":\"etab_interdit\"}"
+  },
+  {
+   "qui": "sup",
+   "requete": "GET /dsn/patients?etablissement_id=2",
+   "statut": 403,
+   "reponse": "{\"erreur\":\"Vous n'avez pas accès à cet établissement.\",\"code\":\"etab_interdit\"}"
+  },
+  {
+   "qui": "sup",
+   "requete": "GET /dsn/transitions/recues?etablissement_id=2",
+   "statut": 403,
+   "reponse": "{\"erreur\":\"Vous n'avez pas accès à cet établissement.\",\"code\":\"etab_interdit\"}"
+  },
+  {
+   "qui": "sup",
+   "requete": "GET /dsn/acces?etablissement_id=2",
+   "statut": 403,
+   "reponse": "{\"erreur\":\"Vous n'avez pas accès à cet établissement.\",\"code\":\"etab_interdit\"}"
+  }
+ ],
+ "base": null
+}

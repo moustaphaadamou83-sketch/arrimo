@@ -1,0 +1,30 @@
+{
+ "id": "ST-01",
+ "module": "Sorties et transferts",
+ "titre": "Préparer la sortie (fonction sortie) avec destination et synthèse",
+ "etapes": [
+  "action sortie sur le séjour"
+ ],
+ "attendu": "sortie_preparee",
+ "obtenu": "statut 200 sortie_preparee",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "sor",
+   "requete": "POST /dsn/elements/103/action",
+   "corps": {
+    "action": "sortie",
+    "donnees": {
+     "destination": "CHSLD des Érables",
+     "synthese": "Synthèse fictive",
+     "consignes": "Consignes fictives"
+    }
+   },
+   "statut": 200,
+   "reponse": "{\"id\":103,\"numero\":\"DSN-001099\",\"patient_id\":19,\"etablissement_id\":2,\"genre\":\"sejour\",\"rencontre_id\":null,\"donnees\":{\"lit\":\"CHIR-303A\",\"service\":\"Médecine\",\"synthese\":\"Synthèse fictive\",\"consignes\":\"Consignes fictives\",\"destination\":\"CHSLD des Érables\"},\"statut\":\"sortie_preparee\",\"version\":1,\"remplace_id\":null,\"remplace_par\":null,\"auteur_id\":25,\"signe_par\":null,\"signe_le\":null,\"motif\":null,\"source\":\"saisie\",\"cree_le\":\"2026-11-21T05:00:33.194Z\",\"modifie_le\":\"2026-11-21T05:00:34.597Z\"}"
+  }
+ ],
+ "base": null
+}

@@ -1,0 +1,22 @@
+{
+ "id": "DP-13",
+ "module": "Dossier patient",
+ "titre": "Historique chronologique du dossier",
+ "etapes": [
+  "GET dossier"
+ ],
+ "attendu": "Chronologie triée du plus récent au plus ancien, avec éléments, documents",
+ "obtenu": "12 entrées, triées=true, genres : allergie, document, sejour, evenement, examen, prescription, note, rencontre, observation, diagnostic, antecedent",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "med",
+   "requete": "GET /dsn/patients/19",
+   "statut": 200,
+   "reponse": "{\"patient\":{\"id\":19,\"etablissement_id\":2,\"reference\":\"P-01042\",\"prenom\":\"Audit\",\"nom\":\"Démo-Test\",\"date_naissance\":\"1950-06-15\",\"reference_locale\":null,\"source\":\"manuel\",\"arrivee_le\":null,\"parcours\":\"hospitalise\",\"cree_par\":25,\"cree_le\":\"2026-11-21T05:00:32.388Z\",\"modifie_le\":\"2026-11-21T05:00:33.194Z\"},\"fonctions\":[\"medecin\"],\"allergies\":[{\"id\":104,\"numero\":\"DSN-001091-v2\",\"patient_id\":19,\"etablissement_id\":2,\"genre\":\"allergie\",\"rencontre_id\":null,\"donnees\":{\"gravite\":\"severe\",\"reaction\":\"Œdème (fictif)\",\"substance\":\"Arachides (fictif)\",\"verification\":\"confirmee\"},\"statut\":\"annule\",\"version\":"
+  }
+ ],
+ "base": null
+}

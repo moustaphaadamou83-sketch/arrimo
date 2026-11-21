@@ -1,0 +1,65 @@
+[
+ {
+  "id": "UI-01",
+  "module": "Interface",
+  "titre": "Hôpital B : onglet « Dossier santé » dans la barre, liste des patients",
+  "attendu": "Onglet visible ; patients listés ; aucune erreur",
+  "obtenu": "16 patients ; erreurs : aucune",
+  "statut": "RÉUSSI",
+  "preuve": "UI-01.png"
+ },
+ {
+  "id": "UI-02",
+  "module": "Interface",
+  "titre": "Ouvrir un dossier : alerte d’allergie, sections, sous-onglets",
+  "attendu": "Dossier affiché avec l’alerte d’allergie",
+  "obtenu": "alerte allergie : 1 ; en-tête patient : 1",
+  "statut": "RÉUSSI",
+  "preuve": "UI-02.png"
+ },
+ {
+  "id": "UI-03",
+  "module": "Interface",
+  "titre": "Ajouter une allergie depuis l’interface (formulaire)",
+  "attendu": "Allergie ajoutée et affichée",
+  "obtenu": "occurrences avant 0, après 2",
+  "statut": "RÉUSSI",
+  "preuve": "UI-03.png"
+ },
+ {
+  "id": "UI-04",
+  "module": "Interface",
+  "titre": "Interface DSN en anglais",
+  "attendu": "Libellés anglais (Patients/Record/Received transitions), statuts traduits",
+  "obtenu": "onglets : Patients Dashboard Record Received transitions Settings ; texte français restant : non",
+  "statut": "RÉUSSI",
+  "preuve": "UI-04.png"
+ },
+ {
+  "id": "UI-07",
+  "module": "Interface",
+  "titre": "Admission depuis le DSN : choix d’un lit libre réel, puis le lit apparaît occupé dans l’onglet Lits",
+  "attendu": "Lit proposé dans la liste ; après enregistrement, lit occupé dans Lits",
+  "obtenu": "lits proposés : 4 ; colonne « Occupé » : MED-202A 0 min Médecine · chambre 202 Patient P-01046 · Interface D. ISO TÉLÉ Libérer (dép ; base : lit occupe, P-01046, séjour en_cours sur MED-202A ; erreurs : aucune",
+  "statut": "RÉUSSI",
+  "preuve": "UI-07.png"
+ },
+ {
+  "id": "UI-05",
+  "module": "Interface",
+  "titre": "CHSLD des Érables : transitions reçues et acceptation à l’écran",
+  "attendu": "Paquet visible ; « Accepter » change le statut",
+  "obtenu": "après acceptation : bouton « Confirmer la réception » proposé ; erreurs : aucune",
+  "statut": "RÉUSSI",
+  "preuve": "UI-05.png"
+ },
+ {
+  "id": "UI-06",
+  "module": "Interface",
+  "titre": "Tablette (820 px) : DSN sans débordement horizontal",
+  "attendu": "Aucun débordement",
+  "obtenu": "débordement 0 px",
+  "statut": "RÉUSSI",
+  "preuve": "UI-06.png"
+ }
+]

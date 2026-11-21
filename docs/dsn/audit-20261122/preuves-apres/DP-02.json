@@ -1,0 +1,28 @@
+{
+ "id": "DP-02",
+ "module": "Dossier patient",
+ "titre": "Doublon d’identité refusé sans confirmation",
+ "etapes": [
+  "POST /dsn/patients même identité"
+ ],
+ "attendu": "409 patient_doublon_possible",
+ "obtenu": "statut 409 patient_doublon_possible",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "adm",
+   "requete": "POST /dsn/patients",
+   "corps": {
+    "etablissement_id": 2,
+    "prenom": "Audit",
+    "nom": "Démo-Test",
+    "date_naissance": "1950-06-15"
+   },
+   "statut": 409,
+   "reponse": "{\"erreur\":\"Un patient fictif semblable existe déjà (P-01042). Vérifiez avant d’en créer un autre, ou confirmez la création.\",\"code\":\"patient_doublon_possible\",\"vars\":{\"ref\":\"P-01042\"}}"
+  }
+ ],
+ "base": null
+}

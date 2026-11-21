@@ -1,0 +1,34 @@
+{
+ "id": "DP-01",
+ "module": "Dossier patient",
+ "titre": "Création d’un patient fictif (fonction admission)",
+ "etapes": [
+  "POST /dsn/patients (admission)"
+ ],
+ "attendu": "200 ; référence unique P-xxxxx ; date de naissance exacte",
+ "obtenu": "statut 200, référence P-01042, naissance en base 1950-06-15",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "adm",
+   "requete": "POST /dsn/patients",
+   "corps": {
+    "etablissement_id": 2,
+    "prenom": "Audit",
+    "nom": "Démo-Test",
+    "date_naissance": "1950-06-15"
+   },
+   "statut": 200,
+   "reponse": "{\"id\":19,\"etablissement_id\":2,\"reference\":\"P-01042\",\"prenom\":\"Audit\",\"nom\":\"Démo-Test\",\"date_naissance\":\"1950-06-14T23:00:00.000Z\",\"reference_locale\":null,\"source\":\"manuel\",\"arrivee_le\":null,\"parcours\":\"enregistre\",\"cree_par\":25,\"cree_le\":\"2026-11-21T05:00:32.388Z\",\"modifie_le\":\"2026-11-21T05:00:32.388Z\",\"groupe_age\":\"adulte\",\"nom_court\":\"Audit D.\"}"
+  }
+ ],
+ "base": [
+  {
+   "reference": "P-01042",
+   "dn": "1950-06-15",
+   "parcours": "enregistre"
+  }
+ ]
+}

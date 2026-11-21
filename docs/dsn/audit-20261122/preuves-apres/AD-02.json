@@ -1,0 +1,30 @@
+{
+ "id": "AD-02",
+ "module": "Admissions",
+ "titre": "Affectation d’un lit déjà occupé refusée",
+ "etapes": [
+  "lit occupé de l’Hôpital B",
+  "séjour DSN sur ce lit"
+ ],
+ "attendu": "409 (lit occupé)",
+ "obtenu": "lit CHIR-301A (occupé) : statut 409",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "adm",
+   "requete": "POST /dsn/patients/20/elements",
+   "corps": {
+    "genre": "sejour",
+    "donnees": {
+     "service": "Médecine",
+     "lit": "CHIR-301A"
+    }
+   },
+   "statut": 409,
+   "reponse": "{\"erreur\":\"Ce patient a déjà un séjour en cours : terminez-le ou changez de lit dans Lits.\",\"code\":\"dsn_sejour_deja_actif\"}"
+  }
+ ],
+ "base": null
+}

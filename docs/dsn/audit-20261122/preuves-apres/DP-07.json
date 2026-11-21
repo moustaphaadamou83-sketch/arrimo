@@ -1,0 +1,67 @@
+{
+ "id": "DP-07",
+ "module": "Dossier patient",
+ "titre": "Consultation (rencontre), note liée et signée",
+ "etapes": [
+  "rencontre ambulatoire",
+  "note sans rencontre refusée",
+  "note liée",
+  "signer"
+ ],
+ "attendu": "200 ; 400 ; 200 ; statut signee",
+ "obtenu": "rencontre 200 ; note sans rencontre 400 ; note 200 ; signature signee",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "med",
+   "requete": "POST /dsn/patients/19/elements",
+   "corps": {
+    "genre": "rencontre",
+    "donnees": {
+     "type": "ambulatoire",
+     "motif": "Consultation (fictif)"
+    }
+   },
+   "statut": 200,
+   "reponse": "{\"id\":99,\"numero\":\"DSN-001095\",\"patient_id\":19,\"etablissement_id\":2,\"genre\":\"rencontre\",\"rencontre_id\":null,\"donnees\":{\"type\":\"ambulatoire\",\"motif\":\"Consultation (fictif)\"},\"statut\":\"ouverte\",\"version\":1,\"remplace_id\":null,\"remplace_par\":null,\"auteur_id\":27,\"signe_par\":null,\"signe_le\":null,\"motif\":null,\"source\":\"saisie\",\"cree_le\":\"2026-11-21T05:00:32.847Z\",\"modifie_le\":\"2026-11-21T05:00:32.847Z\"}"
+  },
+  {
+   "qui": "med",
+   "requete": "POST /dsn/patients/19/elements",
+   "corps": {
+    "genre": "note",
+    "donnees": {
+     "texte": "Sans rencontre"
+    }
+   },
+   "statut": 400,
+   "reponse": "{\"erreur\":\"Paramètre rencontre_id invalide.\",\"code\":\"parametre_invalide\",\"vars\":{\"nom\":\"rencontre_id\"}}"
+  },
+  {
+   "qui": "med",
+   "requete": "POST /dsn/patients/19/elements",
+   "corps": {
+    "genre": "note",
+    "rencontre_id": 99,
+    "donnees": {
+     "titre": "Évolution",
+     "texte": "Note fictive"
+    }
+   },
+   "statut": 200,
+   "reponse": "{\"id\":100,\"numero\":\"DSN-001096\",\"patient_id\":19,\"etablissement_id\":2,\"genre\":\"note\",\"rencontre_id\":99,\"donnees\":{\"texte\":\"Note fictive\",\"titre\":\"Évolution\"},\"statut\":\"brouillon\",\"version\":1,\"remplace_id\":null,\"remplace_par\":null,\"auteur_id\":27,\"signe_par\":null,\"signe_le\":null,\"motif\":null,\"source\":\"saisie\",\"cree_le\":\"2026-11-21T05:00:32.970Z\",\"modifie_le\":\"2026-11-21T05:00:32.970Z\"}"
+  },
+  {
+   "qui": "med",
+   "requete": "POST /dsn/elements/100/action",
+   "corps": {
+    "action": "signer"
+   },
+   "statut": 200,
+   "reponse": "{\"id\":100,\"numero\":\"DSN-001096\",\"patient_id\":19,\"etablissement_id\":2,\"genre\":\"note\",\"rencontre_id\":99,\"donnees\":{\"texte\":\"Note fictive\",\"titre\":\"Évolution\"},\"statut\":\"signee\",\"version\":1,\"remplace_id\":null,\"remplace_par\":null,\"auteur_id\":27,\"signe_par\":27,\"signe_le\":\"2026-11-21T05:00:32.989Z\",\"motif\":null,\"source\":\"saisie\",\"cree_le\":\"2026-11-21T05:00:32.970Z\",\"modifie_le\":\"2026-11-21T05:00:32.989Z\"}"
+  }
+ ],
+ "base": null
+}

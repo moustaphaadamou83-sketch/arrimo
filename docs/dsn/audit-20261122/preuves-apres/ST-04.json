@@ -1,0 +1,30 @@
+{
+ "id": "ST-04",
+ "module": "Sorties et transferts",
+ "titre": "Réception par le destinataire : avis sans contenu clinique, paquet seul visible",
+ "etapes": [
+  "notifications du CHSLD",
+  "GET transitions reçues (Érables)",
+  "GET dossier source (Érables)"
+ ],
+ "attendu": "Avis présent sans clinique ; paquet = éléments choisis ; dossier source 404",
+ "obtenu": "avis : « Transition TRX-001102 reçue de Hôpital B — Mont-Clair : ouvrez le paquet de transition pour l’accepter ou la refuser. » ; paquet : diagnostic, prescription ; dossier source 404",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "era",
+   "requete": "GET /dsn/transitions/recues?etablissement_id=22",
+   "statut": 200,
+   "reponse": "[{\"id\":2,\"numero\":\"TRX-001102\",\"statut\":\"envoye\",\"contenu\":{\"fige_le\":\"2026-11-21T05:00:34.663Z\",\"patient\":{\"nom\":\"Démo-Test\",\"prenom\":\"Audit\",\"reference\":\"P-01042\",\"date_naissance\":\"1950-06-15\"},\"elements\":[{\"genre\":\"diagnostic\",\"numero\":\"DSN-001093\",\"statut\":\"actif\",\"cree_le\":\"2026-11-21T05:00:32.764Z\",\"donnees\":{\"libelle\":\"Pneumonie (fictif)\",\"certitude\":\"provisoire\"}},{\"genre\":\"prescription\",\"numero\":\"DSN-001097\",\"statut\":\"validee\",\"cree_le\":\"2026-11-21T05:00:33.026Z\",\"donnees\":{\"dose\":\"1\",\"voie\":\"orale\",\"frequence\":\"matin\",\"substance\":\"Produit fictif\"}}],\"note_transition\":\"Note fictive\"},"
+  },
+  {
+   "qui": "era",
+   "requete": "GET /dsn/patients/19",
+   "statut": 404,
+   "reponse": "{\"erreur\":\"Introuvable ou hors de votre périmètre.\",\"code\":\"objet_introuvable\"}"
+  }
+ ],
+ "base": null
+}

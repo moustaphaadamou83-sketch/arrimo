@@ -1,0 +1,23 @@
+{
+ "id": "AD-03",
+ "module": "Admissions",
+ "titre": "Admission visible dans les modules autorisés (Patients, Lits)",
+ "etapes": [
+  "GET /patients (hopital.b)",
+  "GET lits"
+ ],
+ "attendu": "Le patient DSN apparaît dans Patients ; son lit dans Lits",
+ "obtenu": "module Patients : visible ; lit relié dans Lits : oui",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": "haute",
+ "echanges": [
+  {
+   "qui": "hb",
+   "requete": "GET /patients?etablissement_id=2&q=Démo-Lit",
+   "statut": 200,
+   "reponse": "[{\"id\":20,\"etablissement_id\":2,\"reference\":\"P-01043\",\"prenom\":\"Admission\",\"nom\":\"Démo-Lit\",\"date_naissance\":\"1947-02-01T23:00:00.000Z\",\"reference_locale\":null,\"source\":\"manuel\",\"arrivee_le\":null,\"parcours\":\"hospitalise\",\"cree_par\":25,\"cree_le\":\"2026-11-21T05:00:34.406Z\",\"modifie_le\":\"2026-11-21T05:00:34.438Z\",\"civiere_code\":null,\"lit_code\":\"MED-201B\",\"groupe_age\":\"adulte\",\"nom_court\":\"Admission D.\"}]"
+  }
+ ],
+ "base": null
+}

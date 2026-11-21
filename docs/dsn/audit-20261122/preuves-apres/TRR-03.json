@@ -1,0 +1,15 @@
+{
+ "id": "TRR-03",
+ "module": "Transitions reçues",
+ "titre": "Messages ADT dans le désordre / en double (connecteur)",
+ "etapes": [
+  "lecture des tests connecteur existants"
+ ],
+ "attendu": "Idempotence et ordre gérés",
+ "obtenu": "Le connecteur HL7 (A01…A22) alimente Lits et Civières, pas le DSN clinique ; aucun flux entrant vers le DSN à tester. Idempotence du connecteur déjà couverte par tests/dsn.test.cjs (hors périmètre DSN clinique).",
+ "statut": "NON TESTÉ",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [],
+ "base": null
+}

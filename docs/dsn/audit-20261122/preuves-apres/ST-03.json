@@ -1,0 +1,15 @@
+{
+ "id": "ST-03",
+ "module": "Sorties et transferts",
+ "titre": "Une demande de transfert (ou d’hébergement) Arrimo est générée par la transition",
+ "etapes": [
+  "lire transferts et demandes_hebergement liés"
+ ],
+ "attendu": "Une demande dans le module Transferts ou Demandes d’hébergement, sans ressaisie",
+ "obtenu": "transferts : 0 ; demandes d’hébergement : 1",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [],
+ "base": null
+}

@@ -29,6 +29,24 @@ const O = 'http://127.0.0.1:3099'; const OUT = process.argv[2]; const res = [];
     const t = await hb.locator('#ds-nav').innerText(); const corps = await hb.locator('#ds-main').innerText(); await hb.screenshot({ path: `${OUT}/UI-04.png` });
     const fr = /Hospitalisé|Rechercher|Ouvrir\b/.test(corps); await hb.click('[data-ds-langue="fr"]');
     return [/Record/.test(t) && !fr ? 'RÉUSSI' : 'ÉCHEC', `onglets : ${t.replace(/\s+/g, ' ')} ; texte français restant : ${fr ? 'oui' : 'non'}`]; });
+  await cas('UI-07', 'Admission depuis le DSN : choix d’un lit libre réel, puis le lit apparaît occupé dans l’onglet Lits', 'Lit proposé dans la liste ; après enregistrement, lit occupé dans Lits', async () => {
+    const pg = await ouvrir('hopital.b@demo.arrimo'); await pg.goto(`${O}/dsn`); await pg.waitForTimeout(2500);
+    // nouveau patient fictif, puis séjour
+    await pg.click('#ds-nouveau'); await pg.waitForTimeout(600); await pg.fill('#ds-modale [name="prenom"]', 'Interface'); await pg.fill('#ds-modale [name="nom"]', 'Démo-Admission'); await pg.fill('#ds-modale [name="date_naissance"]', '1951-01-01');
+    await pg.locator('#ds-modale button.pri').first().click(); await pg.waitForTimeout(2500);
+    await pg.click('[data-sous="hospitalisations"]'); await pg.waitForTimeout(1500);
+    await pg.locator('[data-ajout="sejour"]').first().click(); await pg.waitForTimeout(1200);
+    const options = await pg.locator('#ds-lits option').evaluateAll((o) => o.map((x) => x.value)); if (!options.length) return ['ÉCHEC', 'aucun lit libre proposé'];
+    await pg.fill('#ds-modale [name="service"]', 'Médecine'); await pg.fill('#ds-modale [name="lit"]', options[0]); await pg.screenshot({ path: `${OUT}/UI-07a.png` });
+    await pg.locator('#ds-modale button.pri').first().click(); await pg.waitForTimeout(2500); await pg.screenshot({ path: `${OUT}/UI-07b.png`, fullPage: true });
+    await pg.goto(O); await pg.waitForSelector('body[data-pret="1"]'); await pg.click('#onglets button[data-v="lits"]'); await pg.waitForTimeout(3000);
+    // Colonne « Occupé » de l'écran Lits : la carte du lit choisi doit y figurer avec la référence du patient
+    const occ = await pg.evaluate((code) => { const col = [...document.querySelectorAll('#v-lits section, #v-lits .colonne, #v-lits [data-colonne], #v-lits div')].find((x) => /^\s*Occupé/.test(x.innerText || '') && x.innerText.length < 20000);
+      const t = col ? col.innerText : ''; const k = t.indexOf(code); return k >= 0 ? t.slice(k, k + 90) : null; }, options[0]);
+    const { Pool } = require('/root/arrimo-sh-erp/node_modules/pg'); const db = new Pool({ connectionString: 'postgresql://root@localhost/audit_dsn?host=/var/run/postgresql' });
+    const base = (await db.query("SELECT l.etat, l.patient_ref, x.statut, x.donnees->>'lit' lit FROM lits l JOIN patients p ON p.reference = l.patient_ref AND p.etablissement_id = l.etablissement_id JOIN dsn_elements x ON x.patient_id = p.id AND x.genre = 'sejour' AND x.remplace_par IS NULL WHERE l.code = $1 AND p.nom = 'Démo-Admission'", [options[0]])).rows[0]; await db.end();
+    await pg.screenshot({ path: `${OUT}/UI-07c.png`, fullPage: true });
+    return [occ && base?.etat === 'occupe' && base?.statut === 'en_cours' ? 'RÉUSSI' : 'ÉCHEC', `lits proposés : ${options.length} ; colonne « Occupé » : ${occ ? occ.replace(/\s+/g, ' ') : 'absent'} ; base : lit ${base?.etat}, ${base?.patient_ref}, séjour ${base?.statut} sur ${base?.lit} ; erreurs : ${pg.err.join(' | ') || 'aucune'}`]; });
   const era = await ouvrir('coordination.erables@chsld.example.invalid');
   await cas('UI-05', 'CHSLD des Érables : transitions reçues et acceptation à l’écran', 'Paquet visible ; « Accepter » change le statut', async () => {
     await era.goto(`${O}/dsn`); await era.waitForTimeout(2500); await era.click('#ds-nav [data-vue="recues"]'); await era.waitForTimeout(2500); await era.screenshot({ path: `${OUT}/UI-05a.png`, fullPage: true });

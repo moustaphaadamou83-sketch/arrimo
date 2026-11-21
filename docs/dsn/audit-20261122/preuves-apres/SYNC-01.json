@@ -1,0 +1,39 @@
+{
+ "id": "SYNC-01",
+ "module": "Synchronisation",
+ "titre": "Sortie faite dans Lits → séjour DSN terminé, parcours recalculé, événement historisé",
+ "etapes": [
+  "Lits : libérer le lit du patient Lits/Démo-Sync"
+ ],
+ "attendu": "séjour termine ; parcours enregistre ; événement sortie_lit (source lits, auteur)",
+ "obtenu": "libérer 200 ; séjour termine ; parcours enregistre ; événements : admission/lits/sejour_cree/hopital.b@demo.arrimo, sortie_lit/lits/sejour_termine/hopital.b@demo.arrimo",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "hb",
+   "requete": "POST /lits/71/action",
+   "corps": {
+    "action": "liberer",
+    "version": 7
+   },
+   "statut": 200,
+   "reponse": "{\"id\":71,\"chambre_id\":44,\"unite_id\":6,\"type_id\":2,\"etablissement_id\":2,\"code\":\"MED-204A\",\"etat\":\"nettoyage\",\"patient_ref\":null,\"version\":8,\"etat_depuis\":\"2026-11-21T05:00:36.459Z\",\"disponibilite_confirmee_le\":null,\"disponibilite_confirmee_par\":null,\"sortie_prevue\":null,\"transfert_id\":null,\"blocage_niveau\":null,\"blocage_motif\":null,\"isolement\":false,\"pression_negative\":false,\"ventilation\":false,\"telemetrie\":false,\"motif_indispo\":null,\"nsa_depuis\":null,\"nsa_orientation\":null,\"conge_statut\":null,\"nettoyage_debut\":null,\"blocage_code\":null,\"blocage_vars\":null,\"categorie\":null,\"attributs\":{},\"actif\""
+  }
+ ],
+ "base": [
+  {
+   "type": "admission",
+   "source": "lits",
+   "statut": "sejour_cree",
+   "email": "hopital.b@demo.arrimo"
+  },
+  {
+   "type": "sortie_lit",
+   "source": "lits",
+   "statut": "sejour_termine",
+   "email": "hopital.b@demo.arrimo"
+  }
+ ]
+}

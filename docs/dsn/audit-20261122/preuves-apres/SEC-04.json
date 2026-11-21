@@ -1,0 +1,15 @@
+{
+ "id": "SEC-04",
+ "module": "Sécurité",
+ "titre": "Notifications et journal général sans donnée clinique",
+ "etapes": [
+  "recherche de termes cliniques dans notifications et journal"
+ ],
+ "attendu": "Aucun terme clinique",
+ "obtenu": "notifications : 0 ; journal : 0",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [],
+ "base": null
+}

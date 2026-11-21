@@ -33,6 +33,10 @@ const ok = (cond, obtenu, anomalie, gravite = 'moyenne', base) => (cond ? { stat
     ent: 'entretien.erables@chsld.example.invalid', amb: 'ambulance.demo@demo.arrimo', ccs: 'ccs.demo@demo.arrimo', sup: 'superviseur.demo@demo.arrimo', res: 'reseau@demo.arrimo' };
   for (const [k, e] of Object.entries(comptes)) await connecter(k, e);
   const X = {};   // identifiants produits par les cas
+  // Préparation de la copie : les lits « nettoyage » de l'Hôpital B sont remis en service par l'action normale de Lits (règles des lits)
+  for (const l of await q("SELECT id, version FROM lits WHERE etablissement_id = $1 AND etat = 'nettoyage' ORDER BY code", [E.HY])) await api('hb', 'POST', `/lits/${l.id}/action`, { action: 'nettoyage_ok', version: l.version });
+  for (const l of await q("SELECT id, version FROM lits WHERE etablissement_id = $1 AND etat = 'indispo' ORDER BY code LIMIT 6", [E.HY])) await api('hb', 'POST', `/lits/${l.id}/action`, { action: 'remettre', version: l.version });
+  console.log('lits libres à l’Hôpital B :', (await q("SELECT count(*)::int n FROM lits WHERE etablissement_id = $1 AND etat = 'libre'", [E.HY]))[0].n);
 
   // ===================== 1. DOSSIER PATIENT
   await cas('DP-01', 'Dossier patient', 'Création d’un patient fictif (fonction admission)', ['POST /dsn/patients (admission)'], '200 ; référence unique P-xxxxx ; date de naissance exacte', async () => {
@@ -89,7 +93,8 @@ const ok = (cond, obtenu, anomalie, gravite = 'moyenne', base) => (cond ? { stat
     return ok(e.d.statut === 'demande' && r.d.statut === 'resultat', `${e.d.statut} → ${r.d.statut}`, 'Cycle d’examen défaillant', 'moyenne');
   });
   await cas('DP-10', 'Dossier patient', 'Hospitalisation (séjour) : parcours « hospitalisé »', ['séjour (admission)'], '200 ; patient hospitalise', async () => {
-    const s = await api('adm', 'POST', `/dsn/patients/${X.p}/elements`, { genre: 'sejour', donnees: { service: 'Médecine', lit: 'MED-299' } }); X.sej = s.d.id;
+    const lit0 = (await q("SELECT code FROM lits WHERE etablissement_id = $1 AND etat = 'libre' AND actif ORDER BY code LIMIT 1", [E.HY]))[0].code;
+    const s = await api('adm', 'POST', `/dsn/patients/${X.p}/elements`, { genre: 'sejour', donnees: { service: 'Médecine', lit: lit0 } }); X.sej = s.d.id;
     const p = await q('SELECT parcours FROM patients WHERE id = $1', [X.p]);
     return ok(s.s === 200 && p[0].parcours === 'hospitalise', `séjour ${s.s} ; parcours ${p[0].parcours}`, 'Séjour non reflété', 'moyenne');
   });
@@ -201,6 +206,7 @@ const ok = (cond, obtenu, anomalie, gravite = 'moyenne', base) => (cond ? { stat
     const t2 = await api('med', 'POST', `/dsn/patients/${X.p}/transitions`, { destination_id: E['CHSLD-ERA'], elements: el, sejour_id: X.sej }); X.t2 = t2.d.id;
     await api('med', 'POST', `/dsn/transitions/${X.t2}/valider`); await api('med', 'POST', `/dsn/transitions/${X.t2}/envoyer`, {});
     const d = await api('era', 'POST', `/dsn/transitions/${X.t2}/decision`, { decision: 'accepter', arrivee_prevue_le: new Date(Date.now() + 86400000).toISOString() }); const d2 = await api('era', 'POST', `/dsn/transitions/${X.t2}/decision`, { decision: 'accepter' });
+    X.dep = await api('med', 'POST', `/dsn/transitions/${X.t2}/depart`);
     const e = await api('era', 'POST', `/dsn/transitions/${X.t2}/decision`, { decision: 'reception' });
     return ok(a.s === 409 && b.s === 400 && c.d.statut === 'refuse' && d.d.statut === 'accepte' && d2.s === 409 && e.d.statut === 'recu', `${a.s} ; ${b.s} ; ${c.d.statut} ; ${d.d.statut} ; ${d2.s} ; ${e.d.statut}`, 'Décisions de transition non conformes', 'haute');
   });
@@ -288,9 +294,27 @@ const ok = (cond, obtenu, anomalie, gravite = 'moyenne', base) => (cond ? { stat
     const c = await api('stl', 'POST', `/dsn/transitions/${X.t4}/decision`, { decision: 'accepter' });
     return ok(a.s === 403 && b.s === 403 && c.s === 404, `${a.s} ; ${b.s} ; ${c.s}`, 'Paquet visible par un acteur non autorisé', 'critique');
   });
-  await cas('TRR-02', 'Transitions reçues', 'Admission/sortie/transfert émis par un module opérationnel (Transferts, NSA, Liaison CHSLD) reçu dans le DSN', ['transfert inter-hôpitaux existant', 'dossier DSN correspondant'], 'Le DSN reçoit l’événement (séjour/sortie) du module émetteur', async () => {
-    const n = (await q("SELECT count(*)::int n FROM dsn_elements WHERE source IS NOT NULL AND source <> 'transition'"))[0].n;
-    return { statut: 'ÉCHEC', obtenu: `aucun lien : les admissions, sorties et transferts des modules Lits/Transferts/NSA/Liaison ne créent aucun élément DSN (éléments d’autre source : ${n})`, anomalie: 'Pas de réception dans le DSN des événements des autres modules (seuls les paquets DSN→DSN existent)', gravite: 'haute' };
+  await cas('TRR-02', 'Transitions reçues', 'Admission confirmée dans Lits → séjour DSN créé une seule fois ; une simple réservation (demande) n’en crée aucun', ['patient DSN sans séjour', 'Lits : réserver', 'Lits : admettre', 'Lits : admettre à nouveau'], 'aucun séjour après réservation ; 1 séjour (source lits) après admission ; 2e admission refusée, toujours 1 séjour', async () => {
+    const p = await api('adm', 'POST', '/dsn/patients', { etablissement_id: E.HY, prenom: 'Lits', nom: 'Démo-Sync', date_naissance: '1949-09-09' }); X.p4 = p.d;
+    const lit = (await q("SELECT id, version FROM lits WHERE etablissement_id = $1 AND etat = 'libre' AND actif ORDER BY code DESC LIMIT 1", [E.HY]))[0]; X.lit4 = lit.id;
+    const r = await api('hb', 'POST', `/lits/${lit.id}/action`, { action: 'reserver', version: lit.version, patient_ref: p.d.reference });
+    const n0 = (await q("SELECT count(*)::int n FROM dsn_elements WHERE patient_id = $1 AND genre = 'sejour'", [p.d.id]))[0].n;
+    const v = (await q('SELECT version FROM lits WHERE id = $1', [lit.id]))[0].version; const a = await api('hb', 'POST', `/lits/${lit.id}/action`, { action: 'admettre', version: v });
+    const a2 = await api('hb', 'POST', `/lits/${lit.id}/action`, { action: 'admettre', version: v + 1 });
+    const s1 = await q("SELECT statut, source, donnees->>'lit_id' AS lit FROM dsn_elements WHERE patient_id = $1 AND genre = 'sejour' AND remplace_par IS NULL", [p.d.id]);
+    return ok(r.s === 200 && n0 === 0 && a.s === 200 && a2.s >= 400 && s1.length === 1 && s1[0].source === 'lits' && Number(s1[0].lit) === lit.id,
+      `réservation ${r.s} → séjours ${n0} ; admission ${a.s} → ${s1.length} séjour (${s1[0]?.statut}, source ${s1[0]?.source}) ; 2e admission ${a2.s}`, 'Synchronisation Lits → DSN défaillante', 'haute', s1);
+  });
+  await cas('SYNC-01', 'Synchronisation', 'Sortie faite dans Lits → séjour DSN terminé, parcours recalculé, événement historisé', ['Lits : libérer le lit du patient Lits/Démo-Sync'], 'séjour termine ; parcours enregistre ; événement sortie_lit (source lits, auteur)', async () => {
+    const v = (await q('SELECT version FROM lits WHERE id = $1', [X.lit4]))[0].version; const r = await api('hb', 'POST', `/lits/${X.lit4}/action`, { action: 'liberer', version: v });
+    const s1 = (await q("SELECT statut FROM dsn_elements WHERE patient_id = $1 AND genre = 'sejour' AND remplace_par IS NULL", [X.p4.id]))[0]; const pa = (await q('SELECT parcours FROM patients WHERE id = $1', [X.p4.id]))[0].parcours;
+    const ev = await q("SELECT v.type, v.source, v.statut, u.email FROM dsn_evenements v LEFT JOIN utilisateurs u ON u.id = v.auteur_id WHERE v.patient_id = $1 ORDER BY v.id", [X.p4.id]);
+    return ok(r.s === 200 && s1.statut === 'termine' && pa === 'enregistre' && ev.some((x) => x.type === 'sortie_lit' && x.source === 'lits' && x.email === 'hopital.b@demo.arrimo'), `libérer ${r.s} ; séjour ${s1.statut} ; parcours ${pa} ; événements : ${ev.map((x) => `${x.type}/${x.source}/${x.statut}/${x.email}`).join(', ')}`, 'Sortie Lits non synchronisée', 'haute', ev);
+  });
+  await cas('SYNC-02', 'Synchronisation', 'Historique des événements : auteur, source, statut, heure ; immuable ; sans clinique', ['lecture dsn_evenements', 'UPDATE/DELETE'], 'champs remplis ; modification refusée ; aucun terme clinique', async () => {
+    const ev = await q('SELECT * FROM dsn_evenements'); let mod = 'acceptée'; try { await db.query("UPDATE dsn_evenements SET statut = 'x'"); } catch { mod = 'refusée'; }
+    const clin = /Arachides|Pneumonie|Produit fictif|Latex/.test(JSON.stringify(ev));
+    return ok(ev.length > 0 && ev.every((x) => x.cree_le && x.source && x.statut) && mod === 'refusée' && !clin, `${ev.length} événements ; types : ${[...new Set(ev.map((x) => x.type))].join(', ')} ; modification ${mod} ; clinique : ${clin ? 'OUI' : 'aucun'}`, 'Historique non conforme', 'haute');
   });
   await cas('TRR-03', 'Transitions reçues', 'Messages ADT dans le désordre / en double (connecteur)', ['lecture des tests connecteur existants'], 'Idempotence et ordre gérés', async () => ({ statut: 'NON TESTÉ', obtenu: 'Le connecteur HL7 (A01…A22) alimente Lits et Civières, pas le DSN clinique ; aucun flux entrant vers le DSN à tester. Idempotence du connecteur déjà couverte par tests/dsn.test.cjs (hors périmètre DSN clinique).' }));
 

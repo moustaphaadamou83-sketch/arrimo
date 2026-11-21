@@ -1,0 +1,39 @@
+{
+ "id": "TRR-01",
+ "module": "Transitions reçues",
+ "titre": "Seul le destinataire voit le paquet ; rôle entretien refusé ; autre établissement refusé",
+ "etapes": [
+  "Saint-Laurent lit les reçues des Érables",
+  "entretien des Érables",
+  "Saint-Laurent décide sur une transition des Érables"
+ ],
+ "attendu": "403 ; 403 ; 404",
+ "obtenu": "403 ; 403 ; 404",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "stl",
+   "requete": "GET /dsn/transitions/recues?etablissement_id=22",
+   "statut": 403,
+   "reponse": "{\"erreur\":\"Vous n'avez pas accès à cet établissement.\",\"code\":\"etab_interdit\"}"
+  },
+  {
+   "qui": "ent",
+   "requete": "GET /dsn/transitions/recues?etablissement_id=22",
+   "statut": 403,
+   "reponse": "{\"erreur\":\"Votre rôle donne accès à l’écran Nettoyage seulement.\",\"code\":\"role_entretien\"}"
+  },
+  {
+   "qui": "stl",
+   "requete": "POST /dsn/transitions/5/decision",
+   "corps": {
+    "decision": "accepter"
+   },
+   "statut": 404,
+   "reponse": "{\"erreur\":\"Introuvable ou hors de votre périmètre.\",\"code\":\"objet_introuvable\"}"
+  }
+ ],
+ "base": null
+}

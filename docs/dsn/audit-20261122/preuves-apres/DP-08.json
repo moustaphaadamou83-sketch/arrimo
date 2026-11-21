@@ -1,0 +1,51 @@
+{
+ "id": "DP-08",
+ "module": "Dossier patient",
+ "titre": "Prescription simulée : brouillon, validation par le médecin seulement, jamais envoyée",
+ "etapes": [
+  "prescription (infirmier)",
+  "valider (infirmier) refusé",
+  "valider (médecin)"
+ ],
+ "attendu": "brouillon ; 403 ; validee + simulee=true + envoyee=false",
+ "obtenu": "brouillon ; 403 ; validee simulee=true envoyee=false",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "inf",
+   "requete": "POST /dsn/patients/19/elements",
+   "corps": {
+    "genre": "prescription",
+    "donnees": {
+     "substance": "Produit fictif",
+     "dose": "1",
+     "voie": "orale",
+     "frequence": "matin"
+    }
+   },
+   "statut": 200,
+   "reponse": "{\"id\":101,\"numero\":\"DSN-001097\",\"patient_id\":19,\"etablissement_id\":2,\"genre\":\"prescription\",\"rencontre_id\":null,\"donnees\":{\"dose\":\"1\",\"voie\":\"orale\",\"frequence\":\"matin\",\"substance\":\"Produit fictif\"},\"statut\":\"brouillon\",\"version\":1,\"remplace_id\":null,\"remplace_par\":null,\"auteur_id\":26,\"signe_par\":null,\"signe_le\":null,\"motif\":null,\"source\":\"saisie\",\"cree_le\":\"2026-11-21T05:00:33.026Z\",\"modifie_le\":\"2026-11-21T05:00:33.026Z\"}"
+  },
+  {
+   "qui": "inf",
+   "requete": "POST /dsn/elements/101/action",
+   "corps": {
+    "action": "valider"
+   },
+   "statut": 403,
+   "reponse": "{\"erreur\":\"Une habilitation DSN est requise : medecin.\",\"code\":\"dsn_habilitation_requise\",\"vars\":{\"fonctions\":\"medecin\"}}"
+  },
+  {
+   "qui": "med",
+   "requete": "POST /dsn/elements/101/action",
+   "corps": {
+    "action": "valider"
+   },
+   "statut": 200,
+   "reponse": "{\"id\":101,\"numero\":\"DSN-001097\",\"patient_id\":19,\"etablissement_id\":2,\"genre\":\"prescription\",\"rencontre_id\":null,\"donnees\":{\"dose\":\"1\",\"voie\":\"orale\",\"frequence\":\"matin\",\"substance\":\"Produit fictif\"},\"statut\":\"validee\",\"version\":1,\"remplace_id\":null,\"remplace_par\":null,\"auteur_id\":26,\"signe_par\":27,\"signe_le\":\"2026-11-21T05:00:33.063Z\",\"motif\":null,\"source\":\"saisie\",\"cree_le\":\"2026-11-21T05:00:33.026Z\",\"modifie_le\":\"2026-11-21T05:00:33.063Z\",\"simulee\":true,\"envoyee\":false}"
+  }
+ ],
+ "base": null
+}

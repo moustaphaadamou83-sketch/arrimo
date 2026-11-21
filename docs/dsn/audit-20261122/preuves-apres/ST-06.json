@@ -1,0 +1,15 @@
+{
+ "id": "ST-06",
+ "module": "Sorties et transferts",
+ "titre": "Avis à l’origine après refus / acceptation",
+ "etapes": [
+  "notifications de l’Hôpital B"
+ ],
+ "attendu": "L’Hôpital B est avisé du refus et de l’acceptation",
+ "obtenu": "2 avis : dsn_transition_acceptee, dsn_transition_refusee",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [],
+ "base": null
+}

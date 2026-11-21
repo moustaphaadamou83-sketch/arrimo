@@ -1,0 +1,50 @@
+{
+ "id": "DP-11",
+ "module": "Dossier patient",
+ "titre": "Documents : PDF valide accepté ; faux PDF et > 5 Mo refusés ; téléchargement journalisé",
+ "etapes": [
+  "PDF valide",
+  "texte déclaré PDF",
+  "6 Mo",
+  "GET document"
+ ],
+ "attendu": "200 ; 400 ; 400 ; 200 + empreinte identique + accès « export »",
+ "obtenu": "valide 200 (rapport) ; faux 400 ; 6 Mo 413 ; téléchargement 200 identique=true ; accès ecriture,export",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "med",
+   "requete": "POST /dsn/patients/19/documents",
+   "corps": {
+    "type_doc": "rapport",
+    "titre": "CR fictif",
+    "mime": "application/pdf",
+    "contenu_base64": "JVBERi0xLjQKJSBkb2N1bWVudCBmaWN0aWYKJSVFT0Y="
+   },
+   "statut": 200,
+   "reponse": "{\"id\":1,\"numero\":\"DOC-001100\",\"type_doc\":\"rapport\",\"titre\":\"CR fictif\",\"mime\":\"application/pdf\",\"taille\":32,\"sha256\":\"f365ebd880cedeb3f0eb9d901488ce2bcf208da3026aaa930ba0b37e2786de5f\",\"version\":1,\"statut\":\"actif\",\"cree_le\":\"2026-11-21T05:00:33.336Z\"}"
+  },
+  {
+   "qui": "med",
+   "requete": "POST /dsn/patients/19/documents",
+   "corps": {
+    "type_doc": "rapport",
+    "titre": "Faux",
+    "mime": "application/pdf",
+    "contenu_base64": "Y2VjaSBu4oCZZXN0IHBhcyB1biBQREY="
+   },
+   "statut": 400,
+   "reponse": "{\"erreur\":\"Paramètre type_reel invalide.\",\"code\":\"parametre_invalide\",\"vars\":{\"nom\":\"type_reel\"}}"
+  },
+  {
+   "qui": "med",
+   "requete": "POST /dsn/patients/19/documents",
+   "corps": "(volumineux)",
+   "statut": 413,
+   "reponse": "{\"erreur\":\"Requête trop volumineuse.\",\"code\":\"requete_trop_grosse\"}"
+  }
+ ],
+ "base": null
+}

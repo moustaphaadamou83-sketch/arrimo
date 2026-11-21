@@ -1,0 +1,63 @@
+{
+ "id": "TR-01",
+ "module": "Transport",
+ "titre": "Envoi de transition avec transport : demande créée et préremplie (origine, destination, horaire, référence)",
+ "etapes": [
+  "nouvelle transition validée",
+  "envoyer avec transport"
+ ],
+ "attendu": "Une demande_transport liée, origine/destination/plage/référence corrects, statut « demandée » (pas d’unité affectée)",
+ "obtenu": "envoi 200  ; demande DT-000004 demandee, origine 2, destination 22, réf P-01042, unité aucune",
+ "statut": "RÉUSSI",
+ "anomalie": null,
+ "gravite": null,
+ "echanges": [
+  {
+   "qui": "med",
+   "requete": "POST /dsn/patients/19/transitions",
+   "corps": {
+    "destination_id": 22,
+    "elements": [
+     101
+    ]
+   },
+   "statut": 200,
+   "reponse": "{\"id\":5,\"numero\":\"TRX-001106\",\"patient_id\":19,\"etablissement_id\":2,\"destination_id\":22,\"sejour_id\":null,\"contenu\":{\"note_transition\":\"\"},\"elements\":[101],\"statut\":\"brouillon\",\"valide_par\":null,\"valide_le\":null,\"envoye_le\":null,\"decision_par\":null,\"decision_le\":null,\"motif_refus\":null,\"recu_par\":null,\"recu_le\":null,\"arrivee_prevue_le\":null,\"demande_transport_id\":null,\"version\":1,\"cree_par\":27,\"cree_le\":\"2026-11-21T05:00:35.419Z\",\"dossier_patient_id\":null,\"demande_hebergement_id\":null,\"transfert_id\":null,\"depart_le\":null}"
+  },
+  {
+   "qui": "med",
+   "requete": "POST /dsn/transitions/5/valider",
+   "statut": 200,
+   "reponse": "{\"id\":5,\"numero\":\"TRX-001106\",\"patient_id\":19,\"etablissement_id\":2,\"destination_id\":22,\"sejour_id\":null,\"contenu\":{\"fige_le\":\"2026-11-21T05:00:35.435Z\",\"patient\":{\"nom\":\"Démo-Test\",\"prenom\":\"Audit\",\"reference\":\"P-01042\",\"date_naissance\":\"1950-06-15\"},\"elements\":[{\"genre\":\"prescription\",\"numero\":\"DSN-001097\",\"statut\":\"validee\",\"cree_le\":\"2026-11-21T05:00:33.026Z\",\"donnees\":{\"dose\":\"1\",\"voie\":\"orale\",\"frequence\":\"matin\",\"substance\":\"Produit fictif\"}}],\"note_transition\":\"\"},\"elements\":[101],\"statut\":\"valide\",\"valide_par\":27,\"valide_le\":\"2026-11-21T05:00:35.431Z\",\"envoye_le\":null,\"decision_par\":nu"
+  },
+  {
+   "qui": "hb",
+   "requete": "GET /transports/organisations?etablissement_id=2",
+   "statut": 200,
+   "reponse": "[{\"id\":1,\"nom\":\"Ambulances de démonstration\"}]"
+  },
+  {
+   "qui": "med",
+   "requete": "POST /dsn/transitions/5/envoyer",
+   "corps": {
+    "transport": {
+     "organisation_id": 1,
+     "type_vehicule": "ambulance",
+     "plage_debut": "2026-11-21T08:00:35.453Z",
+     "plage_fin": "2026-11-21T09:00:35.453Z"
+    }
+   },
+   "statut": 200,
+   "reponse": "{\"id\":5,\"numero\":\"TRX-001106\",\"patient_id\":19,\"etablissement_id\":2,\"destination_id\":22,\"sejour_id\":null,\"contenu\":{\"fige_le\":\"2026-11-21T05:00:35.435Z\",\"patient\":{\"nom\":\"Démo-Test\",\"prenom\":\"Audit\",\"reference\":\"P-01042\",\"date_naissance\":\"1950-06-15\"},\"elements\":[{\"genre\":\"prescription\",\"numero\":\"DSN-001097\",\"statut\":\"validee\",\"cree_le\":\"2026-11-21T05:00:33.026Z\",\"donnees\":{\"dose\":\"1\",\"voie\":\"orale\",\"frequence\":\"matin\",\"substance\":\"Produit fictif\"}}],\"note_transition\":\"\"},\"elements\":[101],\"statut\":\"envoye\",\"valide_par\":27,\"valide_le\":\"2026-11-21T05:00:35.431Z\",\"envoye_le\":\"2026-11-21T05:00:35.4"
+  }
+ ],
+ "base": {
+  "numero": "DT-000004",
+  "origine_id": 2,
+  "destination_id": 22,
+  "resident_ref": "P-01042",
+  "statut": "demandee",
+  "unite_id": null,
+  "plage_debut": "2026-11-21T08:00:35.453Z"
+ }
+}
