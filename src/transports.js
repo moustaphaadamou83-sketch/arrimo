@@ -299,6 +299,17 @@ async function agir(pool, u, id, b) {
         n = await maj("statut = 'annulee'");
       }
     }
+    // Liens automatiques (faits constatés, jamais une décision) : la prise en charge d'un départ NSA par le transporteur vaut départ de
+    // l'hôpital, vu par l'hôpital et la ressource ; l'arrivée est signalée à la ressource qui confirme l'admission elle-même.
+    if (n.demande_hebergement_id && cote === 'ambulance' && ['pris_en_charge', 'arrivee'].includes(a)) {
+      const dh = (await c.query('SELECT * FROM demandes_hebergement WHERE id = $1 FOR UPDATE', [n.demande_hebergement_id])).rows[0];
+      if (dh && a === 'pris_en_charge' && !dh.depart_hopital_le) {
+        await c.query('UPDATE demandes_hebergement SET depart_hopital_le = now(), version = version + 1, modifie_le = now() WHERE id = $1', [dh.id]);
+        await c.query('INSERT INTO demande_hebergement_etapes (demande_id, statut, detail, par) VALUES ($1, $2, $3, NULL)', [dh.id, dh.statut, `Départ de l’hôpital : pris en charge par le transport ${n.numero}`]);
+        await require('./services').notifier(c, dh.etablissement_id, null, 'nsa_depart', { numero: dh.numero, origine: (await c.query('SELECT nom FROM etablissements WHERE id = $1', [dh.hopital_id])).rows[0]?.nom || '' });
+      }
+      if (dh && a === 'arrivee') await c.query('INSERT INTO demande_hebergement_etapes (demande_id, statut, detail, par) VALUES ($1, $2, $3, NULL)', [dh.id, dh.statut, `Arrivée signalée par le transport ${n.numero} : admission à confirmer par la ressource`]);
+    }
     await evenement(c, n, a, u, detail);
     await emettre(c, n, `transport.${a}`);
     require('./flux').signaler();

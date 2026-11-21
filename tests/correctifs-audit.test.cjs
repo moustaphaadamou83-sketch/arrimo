@@ -143,3 +143,13 @@ test('COR-002 : la décision « transfert » ne demande aucune ambulance ; la de
   l = (await appel('coord.c', 'GET', `/eviter?etablissement_id=${ids.c}`)).d.decisions[0];
   assert.deepStrictEqual([l.transport, l.accuse, l.vehicule_affecte], ['DT-COR2', false, false]);
 });
+
+test('Liens automatiques : la prise en charge par le transporteur d’un départ NSA vaut départ de l’hôpital (lit au nettoyage, ressource avisée)', async () => {
+  const unite = (await pool.query("SELECT id FROM unites_secours WHERE organisation_id = $1 LIMIT 1", [ids.org])).rows[0].id;
+  assert.strictEqual((await appel('para', 'POST', `/secours/transports/${ids.t}/action`, { action: 'en_route', unite_id: unite })).s, 200);
+  const r = await appel('para', 'POST', `/secours/transports/${ids.t}/action`, { action: 'pris_en_charge' }); assert.strictEqual(r.s, 200, JSON.stringify(r.d));
+  const dh = (await pool.query('SELECT depart_hopital_le FROM demandes_hebergement WHERE id = $1', [ids.d])).rows[0];
+  assert.ok(dh.depart_hopital_le, 'départ de l’hôpital enregistré automatiquement');
+  assert.strictEqual((await pool.query('SELECT etat FROM lits WHERE id = $1', [ids.lit.id])).rows[0].etat, 'nettoyage');
+  assert.ok((await pool.query("SELECT 1 FROM notifications WHERE etablissement_id = $1 AND code = 'nsa_depart'", [ids.c])).rowCount, 'ressource avisée');
+});
