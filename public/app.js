@@ -1780,7 +1780,7 @@ function modaleArrivee(libres, cfg) {
 /* ---------------- Patients fictifs : recherche, vérification d'identité, historique des passages ---------------- */
 // Démonstration et recette seulement (fiches fictives) ; historique administratif, aucune donnée clinique.
 /** Arrimo Flux : dépendances de l'application (même session, établissement courant, ouverture d'un onglet). */
-function optsFlux() { return { api, etablissement_id: etat.ctx, toast, modale, ouvrir: (v) => { const b = document.querySelector(`#onglets button[data-v="${v}"]`); if (b) b.click(); } }; }
+function optsFlux() { return { api, etablissement_id: etat.ctx, toast, modale, bourse: ((etabCtx() && etabCtx().modules) || {}).bourse_places === true, ouvrir: (v) => { const b = document.querySelector(`#onglets button[data-v="${v}"]`); if (b) b.click(); } }; }
 /** DSN (22 nov. 2026) : le module s'ouvre dans l'onglet, pour l'établissement courant ; démo et recette seulement (refus côté serveur ailleurs). */
 function vueDsn() {
   const v = $('#v-dsn');
@@ -2227,7 +2227,7 @@ async function vueNettoyage() {
   }
   // Tableau de bord Entretien (cahier ultime, 4.3) : bonjour, mon travail aujourd'hui, prochaines échéances ; jamais une page vide
   if (role === 'entretien' || etat.moi.utilisateur.role === 'entretien') {
-    const toutes = (await api('GET', `/chsld/taches?etablissement_id=${etat.ctx}&toutes=1`).catch(() => null)) || [];
+    const toutes = etabCtx()?.type_etablissement === 'chsld' ? ((await api('GET', `/chsld/taches?etablissement_id=${etat.ctx}&toutes=1`).catch(() => null)) || []) : [];
     const lt = Array.isArray(toutes) ? toutes : toutes.taches || [];
     const auj = new Date().toDateString();
     const ouvertes = lt.filter((x) => ['a_faire', 'en_cours'].includes(x.statut));

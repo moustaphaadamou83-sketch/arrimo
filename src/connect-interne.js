@@ -60,6 +60,8 @@ async function envoyer(pool, u, b = {}) {
 const NON_LU = `NOT EXISTS (SELECT 1 FROM connect_lectures cl WHERE cl.message_id = m.id AND cl.utilisateur_id = $2)`;
 /** Fils de la personne (participant) et, pour l'administration, la boîte partagée ; avec non-lus. */
 async function fils(pool, u, q = {}) {
+  // Gestionnaire réseau hors de l'établissement : aucune conversation (la messagerie reste propre à chaque établissement), sans erreur
+  if (u.gestionnaire && !(u.etabs || []).map(Number).includes(Number(q.etablissement_id))) return { fils: [], non_lus: 0, administration: false };
   const e = etab(u, q.etablissement_id);
   const rows = (await pool.query(`SELECT f.id, f.sujet, f.categorie, f.priorite, f.statut, f.boite, f.cree_le, f.expediteur_id, ex.nom AS expediteur, de.nom AS destinataire,
       (SELECT max(m.cree_le) FROM connect_messages m WHERE m.id = f.id OR m.fil_id = f.id) AS dernier_le,

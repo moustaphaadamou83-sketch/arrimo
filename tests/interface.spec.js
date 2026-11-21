@@ -1052,7 +1052,7 @@ for (const L of LARGEURS.filter((l) => l.nom !== 'tablette')) {
     await x.click('#og-enregistrer'); await toast(x, /Configuration (OG|Charles) enregistrée/);   // le nom choisi s'affiche partout, y compris dans les messages
     // Nom appliqué sans rechargement à toute l'interface de l'établissement : menu, bouton de l'assistant, paramètres.
     await x.waitForFunction(() => document.querySelector('#og-open [data-og-nom]')?.textContent === 'Charles'
-      && document.querySelector('#onglets button[data-v="copilote"]').textContent.includes('Charles') && document.querySelector('#og-open').getAttribute('aria-label').includes('Charles'));
+      && document.querySelector('#og-open').getAttribute('aria-label').includes('Charles'));   // l'onglet principal s'appelle « Accueil » (décision du 21 nov.) ; OG garde son nom
     const cfg = (await pool.query(`SELECT o.reglages FROM og_configurations o JOIN utilisateur_etablissements ue ON ue.etablissement_id=o.etablissement_id JOIN utilisateurs u ON u.id=ue.utilisateur_id WHERE u.email=$1`, [email])).rows[0].reglages;
     assert.deepStrictEqual([cfg.personnalisation.nom, cfg.personnalisation.avatar.modele, cfg.personnalisation.voix], ['Charles', 'humain', 'masculine']);
     await verifier(x, L, 'params-og');

@@ -72,7 +72,7 @@
   async function panneau(zone, o) {
     let d; try { d = await o.api('GET', `/arrimo-flux?etablissement_id=${o.etablissement_id}`); } catch { zone.innerHTML = ''; return; }
     // Bourse des places (si le module est activé) : à droite des mouvements ; lits réellement libres distingués des places déclarées
-    const b = await o.api('GET', `/bourse?etablissement_id=${o.etablissement_id}`).catch(() => null);
+    const b = o.bourse ? await o.api('GET', `/bourse?etablissement_id=${o.etablissement_id}`).catch(() => null) : null;
     const pa = d.mouvements.filter((l) => l.prealerte || l.type === 'prealerte').filter((l) => !['arrive', 'termine', 'annule'].includes(l.statut));
     const proch = d.mouvements.filter((l) => !['arrive', 'termine', 'annule', 'refuse'].includes(l.statut)).slice(0, 6);
     zone.innerHTML = `<div class="flux-accueil">
