@@ -32,7 +32,7 @@ const GENRES = {
 const PARTAGEABLES = ['allergie', 'antecedent', 'diagnostic', 'prescription', 'observation', 'sejour'];
 
 function exigerEnvironnement() {
-  if (!['demo', 'recette'].includes(env.environnement()) && process.env.ARRIMO_DSN_FICTIF !== '1') throw new ErreurHttp(403, 'dsn_reserve_demo');
+  if (!['demo', 'recette'].includes(env.environnement())) throw new ErreurHttp(403, 'dsn_reserve_demo');   // aucune exception, aucune variable de contournement
 }
 const entier = (v, nom) => { const n = Number(v); if (!Number.isSafeInteger(n) || n < 1) throw new ErreurHttp(400, 'parametre_invalide', { nom }); return n; };
 async function numero(c, p) { return `${p}-${String((await c.query("SELECT nextval('dsn_numero_seq') AS n")).rows[0].n).padStart(6, '0')}`; }
