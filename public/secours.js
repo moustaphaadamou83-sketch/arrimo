@@ -662,7 +662,7 @@
       const a = b.dataset.tr; const u0 = uniteCourante();
       if (a === 'refuser' && !confirm(t('tr_confirmer_refus'))) return;
       etat.erreur = null; etat.message = null;
-      try { await api('POST', `/secours/transports/${b.dataset.id}/action`, { action: a, version: Number(b.dataset.version), ...(a === 'accepter' ? { unite_id: u0.id } : {}), ...(a === 'refuser' ? { motif: 'aucune_unite' } : {}) }); etat.message = t('fait'); }
+      try { await api('POST', `/secours/transports/${b.dataset.id}/action`, { action: a, version: Number(b.dataset.version), ...(['accepter', 'en_route'].includes(a) && u0 ? { unite_id: u0.id } : {}), ...(a === 'refuser' ? { motif: 'aucune_unite' } : {}) }); etat.message = t('fait'); }
       catch (e) { etat.erreur = estReseau(e) ? t('hors_ligne') : e.message; }
       return charger();
     }

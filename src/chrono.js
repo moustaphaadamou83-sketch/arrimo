@@ -107,7 +107,11 @@ async function arriveeSignalee(c, pa, u) {
   if (!e || !actifChrono(e)) return null;
   const unite = (await c.query('SELECT id, organisation_id FROM unites_secours WHERE id = $1', [pa.unite_id])).rows[0];
   let p = await passageOuvert(c, unite.id, e.id);
-  if (!p) p = await creerPassage(c, { etabId: e.id, unite, prealerteId: pa.id, source: 'clic' });
+  if (!p) {
+    // Un véhicule n'est qu'à une porte à la fois : un passage resté ouvert ailleurs est abandonné (journalisé par l'horloge du passage)
+    await c.query("UPDATE passages_chrono SET statut = 'abandonne', version = version + 1, modifie_le = now() WHERE unite_id = $1 AND etablissement_id <> $2 AND statut IN ('detecte', 'a_la_porte')", [unite.id, e.id]);
+    p = await creerPassage(c, { etabId: e.id, unite, prealerteId: pa.id, source: 'clic' });
+  }
   else if (!p.prealerte_id) await c.query('UPDATE passages_chrono SET prealerte_id = $2 WHERE id = $1', [p.id, pa.id]);
   const maintenant = new Date();
   const recente = p.premiere_position_le && maintenant - new Date(p.premiere_position_le) <= 30 * 60000;

@@ -153,3 +153,15 @@ test('Liens automatiques : la prise en charge par le transporteur d’un départ
   assert.strictEqual((await pool.query('SELECT etat FROM lits WHERE id = $1', [ids.lit.id])).rows[0].etat, 'nettoyage');
   assert.ok((await pool.query("SELECT 1 FROM notifications WHERE etablissement_id = $1 AND code = 'nsa_depart'", [ids.c])).rowCount, 'ressource avisée');
 });
+
+test('Chrono : un passage resté ouvert ailleurs n’empêche pas l’arrivée confirmée du même véhicule dans un autre hôpital', async () => {
+  const unite = (await pool.query('SELECT id, organisation_id FROM unites_secours WHERE organisation_id = $1 LIMIT 1', [ids.org])).rows[0];
+  const [h1, h2] = (await pool.query("SELECT id FROM etablissements WHERE type_etablissement = 'hopital' ORDER BY id LIMIT 2")).rows.map((r) => r.id);
+  await pool.query(`UPDATE etablissements SET modules = modules || '{"chrono": true}' WHERE id IN ($1, $2)`, [h1, h2]);
+  await pool.query("UPDATE passages_chrono SET statut = 'termine' WHERE unite_id = $1 AND statut IN ('detecte', 'a_la_porte')", [unite.id]);
+  await pool.query("INSERT INTO passages_chrono (numero, unite_id, organisation_id, etablissement_id, statut, source) VALUES ('PC-TEST1', $1, $2, $3, 'a_la_porte', 'clic')", [unite.id, unite.organisation_id, h1]);
+  const chrono = require('../src/chrono'); const c = await pool.connect();
+  try { await c.query('BEGIN'); const p = await chrono.arriveeSignalee(c, { id: null, unite_id: unite.id, destination_id: h2 }, { id: null }); await c.query('COMMIT'); assert.strictEqual(p.etablissement_id, h2); }
+  finally { c.release(); }
+  assert.strictEqual((await pool.query("SELECT count(*)::int n FROM passages_chrono WHERE unite_id = $1 AND statut IN ('detecte', 'a_la_porte')", [unite.id])).rows[0].n, 1);
+});
