@@ -1,7 +1,7 @@
 'use strict';
 /**
  * Module 🎓 Formation (22 nov. 2026, cahier « Formation » ; plan : docs/plan-module-formation.md).
- * Catalogue versionné avec le code : 17 parcours par rôle, 42 capsules (une tâche, 2 à 3 min), FR et EN.
+ * Catalogue versionné avec le code : 17 parcours par rôle, 50 capsules (dont 6 du cahier ultime : X1 à X6) (une tâche, 2 à 3 min), FR et EN.
  * Une capsule : scènes (écran de la démo, élément mis en évidence, sous-titres FR/EN ; la voix viendra du service de synthèse vocale),
  * exercice « À vous de jouer » dans le bac à sable (lot 2), mini-test (3 questions ; certaines chronométrées).
  * Une capsule `pret: false` est annoncée « en préparation » : son contenu arrive au lot 4 ou 7.
@@ -644,25 +644,113 @@ const CAPSULES = [
       Q('« Confirmation manquante » veut dire :', '“Missing confirmation” means:', ['Une demande attend au-delà de son délai configuré', 'Le patient est absent', 'Une erreur informatique'], ['A request is waiting beyond its configured delay', 'The patient is absent', 'A computer error'], 0),
       Q('La Vigilance envoie-t-elle la même alerte plusieurs fois ?', 'Does Watch send the same alert several times?', ['Oui, toutes les minutes', 'Non, une ligne par fait'], ['Yes, every minute', 'No, one line per fact'], 1),
     ] }),
+
+  // ---------------------------------------------------------------- Cahier ultime (21 nov. 2026) : Flux, préalerte d'arrivée, Connect, Dossier santé, transport, Entretien
+  C('X1', null, '⇄', 150, 'Arrimo Flux : arrivées et départs', 'Arrimo Flow: arrivals and departures', {
+    pret: true, compte: 'hopital.b@demo.arrimo',
+    exercice: [{ scene: 2, consigne: ST('Filtrez les arrivées d’aujourd’hui.', 'Filter today’s arrivals.') }],
+    objectif: ST('Vous saurez voir qui arrive et qui part, avec l’heure prévue, l’heure réelle et l’arrivée estimée quand elle est connue.', 'You will know who arrives and who leaves, with scheduled time, actual time and estimated arrival when known.'),
+    scenes: [
+      { ecran: 'copilote', cible: '#flux-accueil-h', st: ST('Dès l’Accueil : préalertes reçues, prochains mouvements et Bourse des places.', 'Right from Home: received pre-alerts, next movements and the placement exchange.') },
+      { ecran: 'flux', cible: '.flux-filtres', st: ST('Dans Flux, filtrez les arrivées, les départs, aujourd’hui ou demain.', 'In Flow, filter arrivals, departures, today or tomorrow.') },
+      { ecran: 'flux', cible: '#v-flux', st: ST('Chaque ligne distingue le créneau, l’heure prévue, l’heure réelle et l’arrivée estimée. Sans donnée : « ETA indisponible ».', 'Each row separates the slot, scheduled time, actual time and estimated arrival. Without data: “ETA unavailable”.') },
+      { ecran: 'flux', cible: '#v-flux', st: ST('« Fiche » ouvre la chronologie complète du mouvement, avec l’auteur de chaque étape.', '“Record” opens the movement’s full timeline, with the author of each step.') },
+    ],
+    quiz: [
+      Q('Un créneau de 16 h 10 à 17 h 10 signifie :', 'A 4:10–5:10 pm slot means:', ['Que le trajet dure une heure', 'La fenêtre de prise en charge demandée, pas la durée du trajet', 'Que le patient arrive à 17 h 10'], ['The trip lasts one hour', 'The requested pick-up window, not the trip duration', 'The patient arrives at 5:10 pm'], 1),
+      Q('Aucune préalerte ni position n’est disponible. Flux affiche :', 'No pre-alert or position is available. Flow shows:', ['Une heure estimée par défaut', '« ETA indisponible »', 'L’heure de fin du créneau'], ['A default estimated time', '“ETA unavailable”', 'The end of the slot'], 1),
+      Q('Où voir qui a fait chaque étape ?', 'Where do you see who did each step?', ['Nulle part', 'Dans la fiche du mouvement', 'Dans les notifications seulement'], ['Nowhere', 'In the movement’s record', 'In notifications only'], 1),
+    ] }),
+  C('X2', 'transport_planifie', '📣', 150, 'Recevoir une préalerte d’arrivée et préparer la chambre', 'Receive an arrival pre-alert and prepare the room', {
+    pret: true, compte: 'coordination.erables@chsld.example.invalid',
+    exercice: [{ scene: 1, consigne: ST('Repérez le panneau « Préalertes reçues ».', 'Find the “Received pre-alerts” panel.') }],
+    objectif: ST('Vous saurez repérer une ambulance annoncée, accuser réception et vérifier la préparation de la chambre.', 'You will know how to spot an announced ambulance, acknowledge it and check the room preparation.'),
+    scenes: [
+      { ecran: 'c-accueil', cible: '#flux-accueil-c', st: ST('L’équipage annonce son arrivée : la préalerte apparaît en tête de l’Accueil, avec l’heure estimée.', 'The crew announces its arrival: the pre-alert appears at the top of Home, with the estimated time.') },
+      { ecran: 'c-accueil', cible: '#flux-accueil-c', st: ST('Cliquez « Accuser réception » : l’équipage voit que vous l’attendez.', 'Click “Acknowledge”: the crew sees you are expecting them.') },
+      { ecran: 'c-taches', cible: '#v-c-taches', st: ST('La tâche de préparation de la chambre est créée une seule fois pour l’entretien, avec l’échéance de l’arrivée.', 'The room preparation task is created once for housekeeping, due at the arrival time.') },
+      { ecran: 'c-taches', cible: '#v-c-taches', st: ST('La chambre n’est prête que lorsque l’entretien le confirme : jamais automatiquement.', 'The room is ready only when housekeeping confirms it: never automatically.') },
+    ],
+    quiz: [
+      Q('Une préalerte d’arrivée signifie que :', 'An arrival pre-alert means:', ['Le patient est admis', 'L’équipage annonce son arrivée ; rien n’est confirmé automatiquement', 'La chambre est prête'], ['The patient is admitted', 'The crew announces its arrival; nothing is confirmed automatically', 'The room is ready'], 1),
+      Q('Qui déclare la chambre prête ?', 'Who declares the room ready?', ['Arrimo', 'L’équipe d’entretien', 'L’ambulancier'], ['Arrimo', 'Housekeeping', 'The paramedic'], 1),
+      Q('Deux préalertes successives pour le même transport créent :', 'Two successive pre-alerts for the same transport create:', ['Deux tâches', 'Une seule tâche de préparation', 'Aucune tâche'], ['Two tasks', 'A single preparation task', 'No task'], 1),
+    ] }),
+  C('X3', null, '✉', 120, 'Arrimo Connect : contacter l’administration', 'Arrimo Connect: contact the administration', {
+    pret: true, compte: 'coordination.erables@chsld.example.invalid',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez Arrimo Connect.', 'Open Arrimo Connect.') }],
+    objectif: ST('Vous saurez écrire à l’administration, suivre votre demande et lire les annonces, sans quitter votre écran.', 'You will know how to write to the administration, follow your request and read announcements, without leaving your screen.'),
+    scenes: [
+      { ecran: 'c-accueil', cible: '#b-messagerie', st: ST('L’icône ✉ ouvre Arrimo Connect ; le badge compte les messages non lus.', 'The ✉ icon opens Arrimo Connect; the badge counts unread messages.') },
+      { ecran: 'c-accueil', cible: '#b-messagerie', st: ST('« Contacter l’administration » : catégorie, priorité, sujet et message. La demande est suivie jusqu’à sa résolution.', '“Contact the administration”: category, priority, subject and message. The request is followed until resolved.') },
+      { ecran: 'c-accueil', cible: '#b-messagerie', st: ST('Les messages directs restent privés : même l’administration ne les lit pas.', 'Direct messages stay private: even the administration cannot read them.') },
+    ],
+    quiz: [
+      Q('Arrimo Connect remplace-t-il les appels d’urgence ?', 'Does Arrimo Connect replace emergency calls?', ['Oui', 'Non : utilisez les canaux d’urgence officiels'], ['Yes', 'No: use the official emergency channels'], 1),
+      Q('Qui lit un message direct entre deux collègues ?', 'Who reads a direct message between two colleagues?', ['Tout l’établissement', 'Les deux collègues seulement', 'L’administration aussi'], ['The whole facility', 'The two colleagues only', 'The administration too'], 1),
+      Q('Où suivre votre demande de matériel ?', 'Where do you follow your equipment request?', ['Dans « Mes communications »', 'Par courriel seulement', 'Nulle part'], ['In “My communications”', 'By email only', 'Nowhere'], 0),
+    ] }),
+  C('X4', 'dsn', '🩺', 150, 'Dossier santé (démo) : admission sur un vrai lit', 'Health record (demo): admission on a real bed', {
+    pret: true, compte: 'hopital.b@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez l’onglet Dossier santé.', 'Open the Health record tab.') }],
+    objectif: ST('Vous saurez ouvrir un dossier fictif, admettre sur un lit libre réel et préparer une transition.', 'You will know how to open a fictitious record, admit on a real free bed and prepare a transition.'),
+    scenes: [
+      { ecran: 'dsn', cible: '#onglets button[data-v="dsn"]', st: ST('Le Dossier santé est un onglet de l’établissement, en démonstration seulement (patients fictifs).', 'The Health record is a facility tab, in demonstration only (fictitious patients).') },
+      { ecran: 'dsn', cible: '#v-dsn', st: ST('Une admission se fait sur un lit libre réel : il est réservé puis occupé dans Lits, sans double occupation possible.', 'An admission uses a real free bed: it is reserved then occupied in Beds, with no double occupancy possible.') },
+      { ecran: 'lits', cible: '#v-lits', st: ST('Une admission confirmée dans Lits crée aussi le séjour dans le dossier ; une sortie le termine.', 'An admission confirmed in Beds also creates the stay in the record; a discharge ends it.') },
+    ],
+    quiz: [
+      Q('Une simple demande de transfert crée-t-elle un séjour ?', 'Does a mere transfer request create a stay?', ['Oui', 'Non : seul un lit occupé crée un séjour'], ['Yes', 'No: only an occupied bed creates a stay'], 1),
+      Q('Le lit d’un séjour se change :', 'A stay’s bed is changed:', ['Dans le dossier', 'Dans Lits ; le dossier suit', 'Nulle part'], ['In the record', 'In Beds; the record follows', 'Nowhere'], 1),
+      Q('Les données du Dossier santé de démonstration sont :', 'Demo Health record data is:', ['Réelles', 'Entièrement fictives'], ['Real', 'Entirely fictitious'], 1),
+    ] }),
+  C('X5', 'transport_ambulancier', '🚐', 150, 'Transport : étapes réelles et incident', 'Transport: real steps and incidents', {
+    pret: true, compte: 'ambulance.demo@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Ouvrez vos transports.', 'Open your transports.') }],
+    objectif: ST('Vous saurez déclarer chaque étape réelle de la mission, avec une confirmation explicite, et signaler un incident.', 'You will know how to declare each real step of the mission, with explicit confirmation, and report an incident.'),
+    scenes: [
+      { onglet: 'mission', cible: '#contenu', st: ST('« Mes missions » : à accepter, acceptées, en cours, terminées, retards et incidents.', '“My missions”: to accept, accepted, in progress, done, late and incidents.') },
+      { onglet: 'transports', cible: '#contenu', st: ST('Sur place, pris en charge, arrivé, patient remis, mission terminée : chaque étape demande une confirmation et est horodatée.', 'On site, picked up, arrived, patient handed over, mission complete: each step asks for confirmation and is time-stamped.') },
+      { onglet: 'transports', cible: '#contenu', st: ST('Un problème ? « Signaler un incident » avec un motif : l’établissement est avisé. Une préalerte n’est jamais une prise en charge.', 'A problem? “Report an incident” with a reason: the facility is notified. A pre-alert is never a pick-up.') },
+    ],
+    quiz: [
+      Q('Arrivée du véhicule et remise du patient sont :', 'Vehicle arrival and patient handover are:', ['La même étape', 'Deux étapes distinctes'], ['The same step', 'Two distinct steps'], 1),
+      Q('Pour signaler un incident, il faut :', 'To report an incident, you need:', ['Rien', 'Un motif', 'L’accord du CCS'], ['Nothing', 'A reason', 'The centre’s approval'], 1),
+      Q('Envoyer une préalerte vaut-il prise en charge ?', 'Does sending a pre-alert count as pick-up?', ['Oui', 'Non'], ['Yes', 'No'], 1),
+    ] }),
+  C('X6', null, '🧽', 120, 'Mon tableau de bord Entretien', 'My housekeeping dashboard', {
+    pret: true, compte: 'entretien.erables@chsld.example.invalid',
+    exercice: [{ scene: 1, consigne: ST('Repérez vos tâches en retard.', 'Find your overdue tasks.') }],
+    objectif: ST('Vous saurez voir votre travail du jour, les préparations de chambres et les échéances à respecter.', 'You will know your work for the day, room preparations and due times.'),
+    scenes: [
+      { ecran: 'nettoyage', cible: '.kpis-ent', st: ST('« Mon travail aujourd’hui » : à nettoyer, en cours, préparations, en retard, terminées.', '“My work today”: to clean, in progress, preparations, overdue, done.') },
+      { ecran: 'nettoyage', cible: '#v-nettoyage', st: ST('Les préparations de chambres pour les arrivées apparaissent aussi dans Nettoyage.', 'Room preparations for arrivals also appear in Cleaning.') },
+      { ecran: 'c-taches', cible: '#v-c-taches', st: ST('Terminez la tâche pour déclarer la chambre prête : l’admission peut alors être confirmée.', 'Complete the task to declare the room ready: the admission can then be confirmed.') },
+    ],
+    quiz: [
+      Q('Où voir une préparation de chambre ?', 'Where do you see a room preparation?', ['Dans Nettoyage et Personnel et tâches', 'Nulle part'], ['In Cleaning and Staff and tasks', 'Nowhere'], 0),
+      Q('Une admission est bloquée « chambre non prête ». Qui agit ?', 'An admission is blocked “room not ready”. Who acts?', ['L’entretien, en terminant la préparation', 'L’ambulancier'], ['Housekeeping, by completing the preparation', 'The paramedic'], 0),
+      Q('Les réglages du module (protocoles, habilitations) sont visibles par :', 'Module settings (protocols, authorizations) are visible to:', ['Tout le monde', 'Les responsables et l’administration'], ['Everyone', 'Managers and administration'], 1),
+    ] }),
 ];
 
-const TRANSVERSAL = ['O1', 'O2', 'O3'];
+const TRANSVERSAL = ['O1', 'O2', 'O3', 'X3'];
 const ROLES_HOPITAL = ['coordonnateur', 'admin_etab', 'equipe_soins', 'gestionnaire'];
 const P = (code, emoji, fr, en, { roles, types = null, locaux = null, capsules, defaut = null }) => ({ code, emoji, nom: { fr, en }, roles, types, locaux, capsules, defaut });
 const PARCOURS = [
-  P('triage', '🚨', 'Triage / AIC', 'Triage nurse', { roles: ROLES_HOPITAL, types: ['hopital'], capsules: ['S2', 'C1', 'C2', 'U1', 'H1', 'H2', ...TRANSVERSAL], defaut: ['equipe_soins'] }),
-  P('lits', '🛏️', 'Gestion des lits', 'Bed management', { roles: ROLES_HOPITAL, types: ['hopital'], capsules: ['T1', 'T2', 'T3', 'R1', 'H1', 'H2', 'H6', ...TRANSVERSAL], defaut: ['coordonnateur'] }),
-  P('nsa', '🏥', 'Coordination NSA et liaison', 'ALC coordination and liaison', { roles: ROLES_HOPITAL, types: ['hopital'], capsules: ['R1', 'H4', 'H5', 'E2', 'E3', 'B1', 'B2', 'B3', 'D2', ...TRANSVERSAL] }),
-  P('chef_unite', '🩺', 'Chef d’unité', 'Unit manager', { roles: ROLES_HOPITAL, types: ['hopital'], capsules: ['C3', 'U1', 'U2', 'T2', 'H1', 'H4', 'H6', 'D1', ...TRANSVERSAL] }),
-  P('hygiene', '🧽', 'Hygiène et salubrité', 'Housekeeping', { roles: ['entretien'], capsules: ['H3', 'E4', ...TRANSVERSAL], defaut: ['entretien'] }),
-  P('chsld', '🏡', 'Coordination CHSLD', 'Long-term care coordination', { roles: ROLES_HOPITAL, types: ['chsld'], locaux: [null, 'chsld', 'chsld_prive', 'maison_aines'], capsules: ['R1', 'E1', 'E2', 'E3', 'E4', 'B1', 'V1', 'V3', 'A1', 'K1', 'K2', 'F2', ...TRANSVERSAL], defaut: ['coordonnateur', 'equipe_soins'] }),
-  P('rpa', '🏘️', 'RPA, RI, RTF', 'Seniors’ residences and resources', { roles: ROLES_HOPITAL, types: ['chsld'], locaux: ['rpa', 'ri', 'rtf', 'maison_retraite', 'soins_palliatifs', 'hospitalisation_domicile', 'sante_mentale'], capsules: ['R1', 'E1', 'E2', 'E3', 'V1', 'V3', 'A1', 'K1', 'K2', 'F2', ...TRANSVERSAL], defaut: ['coordonnateur', 'equipe_soins'] }),
+  P('triage', '🚨', 'Triage / AIC', 'Triage nurse', { roles: ROLES_HOPITAL, types: ['hopital'], capsules: ['X4', 'S2', 'C1', 'C2', 'U1', 'H1', 'H2', ...TRANSVERSAL], defaut: ['equipe_soins'] }),
+  P('lits', '🛏️', 'Gestion des lits', 'Bed management', { roles: ROLES_HOPITAL, types: ['hopital'], capsules: ['X1', 'X4', 'T1', 'T2', 'T3', 'R1', 'H1', 'H2', 'H6', ...TRANSVERSAL], defaut: ['coordonnateur'] }),
+  P('nsa', '🏥', 'Coordination NSA et liaison', 'ALC coordination and liaison', { roles: ROLES_HOPITAL, types: ['hopital'], capsules: ['X1', 'R1', 'H4', 'H5', 'E2', 'E3', 'B1', 'B2', 'B3', 'D2', ...TRANSVERSAL] }),
+  P('chef_unite', '🩺', 'Chef d’unité', 'Unit manager', { roles: ROLES_HOPITAL, types: ['hopital'], capsules: ['X1', 'X4', 'C3', 'U1', 'U2', 'T2', 'H1', 'H4', 'H6', 'D1', ...TRANSVERSAL] }),
+  P('hygiene', '🧽', 'Hygiène et salubrité', 'Housekeeping', { roles: ['entretien'], capsules: ['X6', 'H3', 'E4', ...TRANSVERSAL], defaut: ['entretien'] }),
+  P('chsld', '🏡', 'Coordination CHSLD', 'Long-term care coordination', { roles: ROLES_HOPITAL, types: ['chsld'], locaux: [null, 'chsld', 'chsld_prive', 'maison_aines'], capsules: ['X1', 'X2', 'R1', 'E1', 'E2', 'E3', 'E4', 'B1', 'V1', 'V3', 'A1', 'K1', 'K2', 'F2', ...TRANSVERSAL], defaut: ['coordonnateur', 'equipe_soins'] }),
+  P('rpa', '🏘️', 'RPA, RI, RTF', 'Seniors’ residences and resources', { roles: ROLES_HOPITAL, types: ['chsld'], locaux: ['rpa', 'ri', 'rtf', 'maison_retraite', 'soins_palliatifs', 'hospitalisation_domicile', 'sante_mentale'], capsules: ['X1', 'X2', 'R1', 'E1', 'E2', 'E3', 'V1', 'V3', 'A1', 'K1', 'K2', 'F2', ...TRANSVERSAL], defaut: ['coordonnateur', 'equipe_soins'] }),
   P('intervenant', '✅', 'Intervenant CLSC', 'CLSC worker', { roles: ['intervenant'], capsules: ['V2', ...TRANSVERSAL], defaut: ['intervenant'] }),
   P('repartiteur', '📡', 'Répartiteur CCS', 'Communication centre dispatcher', { roles: ['repartiteur'], capsules: ['S3', 'S4', 'C3', 'U3', ...TRANSVERSAL], defaut: ['repartiteur'] }),
-  P('ambulancier', '🚑', 'Ambulancier', 'Paramedic', { roles: ['paramedic'], capsules: ['S1', 'C1', 'C2', 'U3', ...TRANSVERSAL], defaut: ['paramedic'] }),
-  P('superviseur', '🧑‍✈️', 'Superviseur ambulancier', 'Paramedic supervisor', { roles: ['superviseur_secours'], capsules: ['S1', 'S3', 'S4', 'C2', 'C3', ...TRANSVERSAL], defaut: ['superviseur_secours'] }),
-  P('transporteur', '🚐', 'Transporteur', 'Carrier', { roles: ['paramedic', 'superviseur_secours'], capsules: ['R2', ...TRANSVERSAL] }),
-  P('transferts', '🔁', 'Coordination des transferts', 'Transfer coordination', { roles: ROLES_HOPITAL, types: ['hopital'], capsules: ['T1', 'T2', 'T3', 'T4', 'R1', 'B1', ...TRANSVERSAL] }),
+  P('ambulancier', '🚑', 'Ambulancier', 'Paramedic', { roles: ['paramedic'], capsules: ['X5', 'S1', 'C1', 'C2', 'U3', ...TRANSVERSAL], defaut: ['paramedic'] }),
+  P('superviseur', '🧑‍✈️', 'Superviseur ambulancier', 'Paramedic supervisor', { roles: ['superviseur_secours'], capsules: ['X5', 'S1', 'S3', 'S4', 'C2', 'C3', ...TRANSVERSAL], defaut: ['superviseur_secours'] }),
+  P('transporteur', '🚐', 'Transporteur', 'Carrier', { roles: ['paramedic', 'superviseur_secours'], capsules: ['X5', 'R2', ...TRANSVERSAL] }),
+  P('transferts', '🔁', 'Coordination des transferts', 'Transfer coordination', { roles: ROLES_HOPITAL, types: ['hopital'], capsules: ['X1', 'T1', 'T2', 'T3', 'T4', 'R1', 'B1', ...TRANSVERSAL] }),
   P('direction', '🗺️', 'Direction régionale', 'Regional health authority', { roles: ['direction_regionale'], capsules: ['C3', 'T3', 'B1', 'D1', 'D2', 'K2', ...TRANSVERSAL], defaut: ['direction_regionale'] }),
   P('famille', '👨‍👩‍👧', 'Famille', 'Family', { roles: [], capsules: ['F1'] }),
   P('admin', '🧩', 'Administrateur d’établissement', 'Facility administrator', { roles: ['admin_etab', 'gestionnaire'], capsules: ['U2', 'B3', 'A2', 'K1', 'SH1', ...TRANSVERSAL], defaut: ['admin_etab'] }),
