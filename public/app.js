@@ -20,6 +20,7 @@ const etat = {
   recherche: { type_id: null, patient_ref: '', urgent: true, res: null, choix: null, besoins: {} },
   question: '', reponse: '',
 };
+window.etat = etat;   // lecture seule pour les modules annexes (Arrimo Connect, Flux) : établissement courant et compte
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 /** Icône de la bibliothèque (public/icones.svg, Lucide), décorative. */
@@ -591,6 +592,8 @@ function appliquerModules() {
   else { placer('bourse', 'vigilance'); placer('transports-planifies', 'vigilance'); placer('donnees', 'national'); }
   // DSN (22 nov. 2026) : module clinique à côté des patients (hôpital) ou des résidents (hébergement)
   placer('dsn', type === 'chsld' ? 'c-residents' : 'patients');
+  // Arrimo Flux : juste après l'Accueil
+  placer('flux', type === 'chsld' ? 'c-accueil' : 'copilote');
   const accueil = type === 'chsld' ? 'c-accueil' : 'copilote';
   const cur = document.querySelector(`#onglets button[data-v="${etat.vue}"]`);
   if (cur && cur.hidden && !entretien) { etat.vue = accueil; document.querySelectorAll('#onglets button[data-v]').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.v === accueil))); document.querySelectorAll('.contenu > section').forEach((sec) => { sec.hidden = sec.id !== `v-${accueil}`; }); }
@@ -642,7 +645,7 @@ async function rafraichir() {
     await Promise.all([e ? majCompteurs() : null, ({
       copilote: vueCopilote, reseau: vueReseau, national: vueNational, lits: vueLits, urgence: vueUrgence, admissions: vueAdmissions, transferts: vueTransferts,
       nettoyage: vueNettoyage, vigilance: async () => { await vueVigilance(); await window.ArrimoSillage?.vigilance($('#v-vigilance'), etat.ctx); }, nsa: vueNsa, indicateurs: vueIndicateurs, journal: vueJournal, params: vueParams,
-      admin: vueAdmin, compte: vueCompte, support:vueSupportClient, patients: vuePatients, continuite: vueContinuite, ...(window.ArrimoChsld?.vues || {}), ...(window.ArrimoSecours?.vues || {}), ...(window.ArrimoChrono?.vues || {}), ...(window.ArrimoTransportPlanifie?.vues || {}), ...(window.ArrimoBourse?.vues || {}), donnees: () => window.ArrimoDonnees.afficher($('#v-donnees'), { api, langue, etablissement_id: etat.ctx }), dsn: vueDsn, ...(window.ArrimoVisitesEviter?.vues || {}), crise: () => window.ArrimoCrise.afficher($('#v-crise'), { api, langue, etablissement_id: etat.ctx }),
+      admin: vueAdmin, compte: vueCompte, support:vueSupportClient, patients: vuePatients, continuite: vueContinuite, ...(window.ArrimoChsld?.vues || {}), ...(window.ArrimoSecours?.vues || {}), ...(window.ArrimoChrono?.vues || {}), ...(window.ArrimoTransportPlanifie?.vues || {}), ...(window.ArrimoBourse?.vues || {}), flux: () => window.ArrimoFluxVue.afficher($('#v-flux'), optsFlux()), donnees: () => window.ArrimoDonnees.afficher($('#v-donnees'), { api, langue, etablissement_id: etat.ctx }), dsn: vueDsn, ...(window.ArrimoVisitesEviter?.vues || {}), crise: () => window.ArrimoCrise.afficher($('#v-crise'), { api, langue, etablissement_id: etat.ctx }),
     })[etat.vue]()]);
     poserMenuParametres();
     majInfosLieu();
@@ -672,7 +675,7 @@ setInterval(() => {
   if (etat.token && etat.moi && !fluxApp && window.ArrimoFlux) {
     fluxApp = window.ArrimoFlux.ecouter(() => etat.token, () => {
       window.ArrimoSecours?.veille?.();
-      if ($('#modale').hidden && document.visibilityState === 'visible' && ['secours', 'chrono', 'transports-planifies', 'c-urgences', 'c-mouvements', 'liaison', 'urgence'].includes(etat.vue)) rafraichir();
+      if ($('#modale').hidden && document.visibilityState === 'visible' && ['secours', 'chrono', 'transports-planifies', 'c-urgences', 'c-mouvements', 'liaison', 'urgence', 'flux'].includes(etat.vue)) rafraichir();
     });
     fluxApp.jeton = etat.token;
   }
@@ -1636,6 +1639,17 @@ async function vueCopilote() {
   });
   $('#f-copilote').onsubmit = (ev) => { ev.preventDefault(); const q = $('#q').value.trim(); if (q) poser(q); };
   v.querySelectorAll('[data-ex]').forEach((c) => { c.onclick = () => poser(exemples[Number(c.dataset.ex)]); });
+  // Accueil personnalisé (cahier ultime, addendum) : bonjour, rôle, établissement, date ; puis préalertes et prochains mouvements (Arrimo Flux)
+  v.insertAdjacentHTML('afterbegin', `${bandeauAccueil()}<div id="flux-accueil-h"></div>`);
+  window.ArrimoFluxVue?.panneau($('#flux-accueil-h'), optsFlux());
+}
+/** Bandeau d'accueil : nom réel, rôle, établissement, date et heure locales de l'établissement (jamais d'horaire inventé). */
+function bandeauAccueil() {
+  const u = etat.moi.utilisateur; const e = etabCtx();
+  const maintenant = new Date();
+  const date = maintenant.toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: fuseau() });
+  return `<section class="bandeau-accueil" aria-label="${esc(t('accueil.bandeau'))}"><div><p class="ba-bonjour">${esc(t('accueil.bonjour', { nom: u.nom }))}</p>
+    <p class="ba-role">${esc(t(`roles.${u.role}`))} — ${esc(e?.nom || '')}</p></div><p class="ba-date">${esc(date)}</p></section>`;
 }
 
 /* ---------------- Urgence : civières ---------------- */
@@ -1764,6 +1778,8 @@ function modaleArrivee(libres, cfg) {
 
 /* ---------------- Patients fictifs : recherche, vérification d'identité, historique des passages ---------------- */
 // Démonstration et recette seulement (fiches fictives) ; historique administratif, aucune donnée clinique.
+/** Arrimo Flux : dépendances de l'application (même session, établissement courant, ouverture d'un onglet). */
+function optsFlux() { return { api, etablissement_id: etat.ctx, toast, ouvrir: (v) => { const b = document.querySelector(`#onglets button[data-v="${v}"]`); if (b) b.click(); } }; }
 /** DSN (22 nov. 2026) : le module s'ouvre dans l'onglet, pour l'établissement courant ; démo et recette seulement (refus côté serveur ailleurs). */
 function vueDsn() {
   const v = $('#v-dsn');
@@ -2196,7 +2212,33 @@ async function vueNettoyage() {
       <div class="note">${l.nettoyage_debut ? N('commence_il_y_a', { duree: depuis(l.nettoyage_debut) }) : N('attente_depuis', { duree: depuis(l.etat_depuis) })}</div></div>
       <div class="actions">${l.precautions?.length || l.intervention ? actionsSous(l) : l.nettoyage_debut || l.genre === 'civiere' ? '' : `<button class="btn" data-debut="${l.id}">${N('commencer')}</button>`}
         ${l.precautions?.length || l.intervention ? '' : `<button class="btn pri" data-fini="${l.id}" data-genre="${l.genre}" data-version="${l.version}" data-code="${esc(l.code)}">${N('termine')}</button>`}</div></div>`).join('') || `<p class="note">${N('aucun')}</p>`}</div>`;
-  if (role !== 'entretien') { v.insertAdjacentHTML('beforeend', `<details class="panneau-c" id="net-config"${etat.netConfigOuverte ? ' open' : ''}><summary><b>${N('config')}</b></summary><div id="net-config-corps"></div></details>`);
+  // Cahier ultime (section 9) : les préparations de chambres (tâches de l'entretien) sont visibles ici aussi, même source que « Personnel et tâches »
+  const taches = (await api('GET', `/chsld/taches?etablissement_id=${etat.ctx}`).catch(() => null)) || [];
+  const prep = (Array.isArray(taches) ? taches : taches.taches || []).filter((x) => ['preparation_chambre', 'entretien'].includes(x.type) && ['a_faire', 'en_cours'].includes(x.statut));
+  if (prep.length) {
+    v.querySelector('.liste').insertAdjacentHTML('beforebegin', `<section class="panneau-c"><h3>${N('preparations', { n: prep.length })}</h3><p class="note">${N('preparations_aide')}</p><div class="liste">${prep.map((x) => `<div class="net-item" style="--c:${x.en_retard || (x.echeance && new Date(x.echeance) < new Date()) ? 'var(--critique)' : 'var(--attention)'}"><div>
+      <div class="grand">${esc(x.lit || x.titre)}</div><div style="font-size:13px">${esc(x.titre)}</div><div class="note">${N(`st_${x.statut}`)}${x.echeance ? ` · ${N('echeance', { h: new Date(x.echeance).toLocaleString(locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: fuseau() }) })}` : ''}</div></div>
+      <div class="actions"><button class="btn pri" type="button" data-net-tache>${N('ouvrir_tache')}</button></div></div>`).join('')}</div></section>`);
+    v.querySelectorAll('[data-net-tache]').forEach((b) => { b.onclick = () => document.querySelector('#onglets button[data-v="c-taches"]')?.click(); });
+  }
+  // Tableau de bord Entretien (cahier ultime, 4.3) : bonjour, mon travail aujourd'hui, prochaines échéances ; jamais une page vide
+  if (role === 'entretien' || etat.moi.utilisateur.role === 'entretien') {
+    const toutes = (await api('GET', `/chsld/taches?etablissement_id=${etat.ctx}&toutes=1`).catch(() => null)) || [];
+    const lt = Array.isArray(toutes) ? toutes : toutes.taches || [];
+    const auj = new Date().toDateString();
+    const ouvertes = lt.filter((x) => ['a_faire', 'en_cours'].includes(x.statut));
+    const retard = ouvertes.filter((x) => x.echeance && new Date(x.echeance) < new Date());
+    const faites = lt.filter((x) => x.statut === 'faite' && x.fait_le && new Date(x.fait_le).toDateString() === auj);
+    const prochaines = ouvertes.filter((x) => x.echeance).sort((a, b) => new Date(a.echeance) - new Date(b.echeance)).slice(0, 4);
+    const k = (lib, n, ton) => `<div class="kpi-ent${ton ? ` ${ton}` : ''}"><span class="v num">${n}</span><span class="lbl">${lib}</span></div>`;
+    v.insertAdjacentHTML('afterbegin', `${bandeauAccueil()}<section class="panneau-c"><h3>${N('mon_travail')}</h3><div class="kpis-ent">
+      ${k(N('k_a_nettoyer'), liste.filter((l) => !l.nettoyage_debut).length)}${k(N('k_en_cours'), liste.filter((l) => l.nettoyage_debut).length + ouvertes.filter((x) => x.statut === 'en_cours').length)}
+      ${k(N('k_preparations'), ouvertes.filter((x) => x.type === 'preparation_chambre').length)}${k(N('k_retard'), retard.length, retard.length ? 'alerte' : '')}${k(N('k_faites'), faites.length, 'ok')}</div>
+      ${prochaines.length ? `<h4>${N('prochaines')}</h4><ul class="liste-simple">${prochaines.map((x) => `<li><b>${esc(x.lit || '')}</b> · ${esc(x.titre)} · ${N('echeance', { h: new Date(x.echeance).toLocaleString(locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: fuseau() }) })}</li>`).join('')}</ul>` : ''}
+      ${!liste.length && !ouvertes.length ? `<p class="note">${N('rien_a_faire')}${faites.length ? ` ${N('dernieres', { liste: faites.slice(0, 3).map((x) => x.lit || x.titre).join(', ') })}` : ''}</p>` : ''}</section>`);
+  }
+  // Réglages du module : administration et responsables seulement (cahier ultime, section 15) ; les consignes restent sur chaque tâche
+  if (superviseur) { v.insertAdjacentHTML('beforeend', `<details class="panneau-c" id="net-config"${etat.netConfigOuverte ? ' open' : ''}><summary><b>${N('config')}</b></summary><div id="net-config-corps"></div></details>`);
     const cfg = $('#net-config'); cfg.ontoggle = () => { etat.netConfigOuverte = cfg.open; if (cfg.open) chargerConfigNettoyage(superviseur); }; if (cfg.open) chargerConfigNettoyage(superviseur); }
   for (const a of ['terminer', 'valider', 'reprendre']) v.querySelectorAll(`[data-${a}]`).forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/nettoyage/${b.dataset[a]}/${a}`), t('nettoyage.ok')); });
   v.querySelectorAll('[data-debut]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/nettoyage/${b.dataset.debut}/debut`), t('nettoyage.commence_ok')); });
@@ -2216,7 +2258,11 @@ async function vueNsa() {
   const enCours = new Map((sorties || []).filter((o) => !CLOS_DH.includes(o.statut)).map((o) => [`${o.lit}|${o.patient_ref}`, o]));
   const etapeSortie = (o) => {
     if (o.statut === 'admise') return S('sortie_arrivee', { quand: o.arrivee_le ? heure(o.arrivee_le) : '' });
-    if (o.depart_hopital_le) return S('sortie_partie', { quand: heure(o.depart_hopital_le) });
+    if (o.depart_hopital_le) {
+      // Cahier ultime (11.2) : départ prévu et départ réel affichés séparément ; un écart notable est signalé, jamais masqué
+      const ecart = o.depart_prevu_le ? Math.round((new Date(o.depart_hopital_le) - new Date(o.depart_prevu_le)) / 60000) : null;
+      return `${S('sortie_partie', { quand: heure(o.depart_hopital_le) })}${o.depart_prevu_le ? ` · ${S('depart_prevu_a', { quand: heure(o.depart_prevu_le) })}` : ''}${ecart != null && Math.abs(ecart) > 30 ? ` · ⚠ ${S(ecart < 0 ? 'depart_avance' : 'depart_retard', { min: Math.abs(ecart) })}` : ''}`;
+    }
     if (o.statut === 'acceptee' && o.acceptation_equipe_le) return S('sortie_organisee', { quand: heure(o.depart_prevu_le), transport: t(`nsa.transport_${o.transport_mode}`) })
       + (o.famille_avisee_le ? ` · ${S('famille_avisee')}` : '')
       // COR-001 : transport partagé, préparé au départ programmé ; « à valider » tant que l'hôpital ne l'a pas transmis

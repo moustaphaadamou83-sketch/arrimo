@@ -28,7 +28,7 @@
   .secours .btn { min-height: 56px; font-size: 18px; padding: 8px 14px; white-space: normal; height: auto; line-height: 1.25; }
   .secours .grille { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
   .secours .choix button { min-height: 56px; font-size: 17px; border: 2px solid var(--bordure); background: var(--carte); color: var(--texte); border-radius: 10px; padding: 6px 10px; }
-  .secours .choix button[aria-pressed="true"] { border-color: var(--principal); background: var(--principal); color: #fff; }
+  .secours .choix button[aria-pressed="true"] { border-color: var(--principal); background: var(--principal); color: var(--fond); }
   .secours .prio-immediate { border-left: 8px solid #DC2626; }
   .secours .prio-urgente { border-left: 8px solid #F59E0B; }
   .secours .prio-non_urgente { border-left: 8px solid #94A3B8; }
@@ -37,7 +37,7 @@
   .secours .etapes li.fait { background: var(--principal); color: #fff; border-color: var(--principal); }
   .secours .gros { font-size: 30px; font-weight: 700; margin: 4px 0; }
   .secours .reseau-s { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 14px; font-weight: 600; color: #fff; }
-  .secours .reseau-s.en-ligne { background: #16A34A; } .secours .reseau-s.hors-ligne { background: #DC2626; } .secours .reseau-s.attente { background: #B45309; }
+  .secours .reseau-s.en-ligne { background: #16A34A; color: #0B1220; } .secours .reseau-s.hors-ligne { background: #DC2626; } .secours .reseau-s.attente { background: #B45309; }
   .secours .pt-niveau { display: inline-block; width: 14px; height: 14px; border-radius: 50%; vertical-align: middle; margin-right: 6px; flex: none; }
   .secours .pt-niveau.vert { background: #16A34A; } .secours .pt-niveau.jaune, .secours .pt-niveau.orange { background: #F59E0B; } .secours .pt-niveau.rouge { background: #DC2626; } .secours .pt-niveau.inconnu { background: #94A3B8; }
   .secours .ligne-s > div { min-width: 0; overflow-wrap: anywhere; }
@@ -54,7 +54,7 @@
   .secours table.classe td { padding: 10px 6px; border-bottom: 1px solid var(--bordure); vertical-align: middle; }
   .secours table.classe tr.meilleur td { background: rgba(21,152,149,.10); }
   .secours table.classe tr.meilleur td:first-child { box-shadow: inset 4px 0 0 #159895; }
-  .secours .badge-og { display: inline-block; font-size: 12px; font-weight: 700; color: #fff; background: #159895; border-radius: 10px; padding: 2px 8px; margin-left: 4px; }
+  .secours .badge-og { display: inline-block; font-size: 12px; font-weight: 700; color: #fff; background: #0E5E6F; border-radius: 10px; padding: 2px 8px; margin-left: 4px; }
   .secours .pastille-r { display: inline-block; border-radius: 12px; padding: 3px 10px; font-size: 14px; font-weight: 600; }
   .secours .puce { display: inline-block; border: 1px solid var(--bordure); border-radius: 10px; padding: 1px 7px; font-size: 13px; margin: 1px 0; }
   .secours .og-phrase { display: flex; gap: 8px; align-items: flex-start; background: rgba(21,152,149,.08); border-left: 4px solid #159895; border-radius: 8px; padding: 8px 10px; margin: 8px 0 10px; }

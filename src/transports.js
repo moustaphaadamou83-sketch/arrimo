@@ -121,7 +121,7 @@ async function demander(pool, u, coordinationId, b) {
 }
 
 const CHAMPS = `d.*, o.nom AS organisation, un.numero AS unite, un.plaque, eo.nom AS origine, eo.adresse AS origine_adresse, eo.ville AS origine_ville,
-  COALESCE(ed.nom, d.destination_libelle) AS destination, ed.ville AS destination_ville, l.code AS lit_code, co.numero AS coordination, co.type AS coordination_type, co.statut AS coordination_statut,
+  COALESCE(ed.nom, d.destination_libelle) AS destination, ed.ville AS destination_ville, ed.type_etablissement AS destination_type, l.code AS lit_code, co.numero AS coordination, co.type AS coordination_type, co.statut AS coordination_statut,
   pref.categorie AS categorie_urgence, pref.hopital_prefere_id, hp.nom AS hopital_prefere, ev.etat AS etat_vehicule, ev.modifie_le AS etat_vehicule_le,
   (SELECT json_build_object('numero', p.numero, 'statut', p.statut, 'destination_id', p.destination_id, 'destination', e2.nom, 'heure_prevue', p.heure_prevue,
      'arrivee_confirmee_le', p.arrivee_confirmee_le, 'eta_minutes', (SELECT ea.minutes FROM eta_prealertes ea WHERE ea.prealerte_id = p.id),
@@ -210,12 +210,30 @@ async function liste(pool, u, q = {}) {
   const enCours = (d) => OUVERTES.includes(d.statut) || (d.prealerte && pa.OUVERTES.includes(d.prealerte.statut));
   return rows.map((d) => ({ ...d, ...(enCours(d) ? {} : { etat_vehicule: null, etat_vehicule_le: null }), actions: actions(d, u, cote, q.etablissement_id) }));
 }
+/**
+ * Préalerte d'arrivée → préparation de la chambre attribuée (si une place est réservée pour ce résident à la destination) :
+ * crée la tâche de préparation pour l'entretien, une seule fois (jamais de doublon), avec l'échéance de l'arrivée prévue.
+ */
+async function preparerChambre(c, d, u, eta) {
+  const dh = d.demande_hebergement_id ? (await c.query('SELECT resident_id, lit_propose_id FROM demandes_hebergement WHERE id = $1', [d.demande_hebergement_id])).rows[0] : null;
+  const r = dh?.resident_id ? (await c.query('SELECT id, reference, lit_id FROM residents WHERE id = $1', [dh.resident_id])).rows[0]
+    : (await c.query('SELECT id, reference, lit_id FROM residents WHERE etablissement_id = $1 AND reference = $2', [d.destination_id, d.resident_ref])).rows[0];
+  const litId = r?.lit_id || dh?.lit_propose_id; if (!litId) return null;
+  const ouverte = (await c.query(`SELECT id FROM taches_etab WHERE lit_id = $1 AND type IN ('preparation_chambre', 'entretien') AND statut IN ('a_faire', 'en_cours')`, [litId])).rows[0];
+  if (ouverte) return ouverte;   // déjà prévue : pas de doublon
+  const l = (await c.query('SELECT code, entretien_statut FROM lits WHERE id = $1', [litId])).rows[0];
+  if (l.entretien_statut === 'propre') return null;   // chambre déjà déclarée prête par l'entretien
+  const echeance = new Date(Date.now() + (eta == null ? 60 : eta) * 60000);
+  return require('./chsld').tache(c, d.destination_id, u, { type: 'preparation_chambre', titre: `Préparer ${l.code} pour l’arrivée de ${r?.reference || d.resident_ref} (préalerte ${d.numero})`, lit_id: litId, resident_id: r?.id || null, assigne_role: 'entretien', echeance });
+}
 function actions(d, u, cote, etabId) {
   if (d.statut === 'a_valider') return cote === 'etablissement' && Number(etabId) === d.origine_id ? ['transmettre', 'annuler'] : [];
   if (!OUVERTES.includes(d.statut)) return [];
   if (cote === 'ambulance') {
-    return d.statut === 'demandee' ? ['accepter', 'refuser'] : d.statut === 'acceptee' ? ['en_route'] : d.statut === 'en_route' ? ['pris_en_charge'] : ['arrivee'];
+    const base = d.statut === 'demandee' ? ['accepter', 'refuser'] : d.statut === 'acceptee' ? ['en_route'] : d.statut === 'en_route' ? ['pris_en_charge'] : ['arrivee'];
+    return ['en_route', 'pris_en_charge'].includes(d.statut) && d.destination_id && d.destination_type && d.destination_type !== 'hopital' ? [...base, 'prealerter'] : base;
   }
+  if (cote === 'etablissement' && Number(etabId) === d.destination_id && d.prealerte_le && !d.prealerte_recue_le) return ['accuser_prealerte'];
   if (cote === 'etablissement' && Number(etabId) === d.origine_id && ['demandee', 'acceptee', 'en_route'].includes(d.statut)) return ['annuler'];
   return [];
 }
@@ -232,6 +250,7 @@ async function agir(pool, u, id, b) {
     if (!ok) throw new ErreurHttp(404, 'transport_introuvable');
     cote = 'ambulance';
   } else if (ROLES_ETAB.includes(u.role) && Number(b.etablissement_id) === d0.origine_id) { exigerEtablissement(u, d0.origine_id); cote = 'etablissement'; }
+  else if (ROLES_ETAB.includes(u.role) && b.action === 'accuser_prealerte' && Number(b.etablissement_id) === d0.destination_id) { exigerEtablissement(u, d0.destination_id); cote = 'destination'; }
   else throw new ErreurHttp(403, 'role_insuffisant');
   const a = String(b.action || '');
   return transaction(pool, async (c) => {
@@ -241,6 +260,30 @@ async function agir(pool, u, id, b) {
     const maj = async (sql, vals = []) => (await c.query(`UPDATE demandes_transport SET ${sql}, version = version + 1, modifie_le = now() WHERE id = $1 RETURNING *`, [d.id, ...vals])).rows[0];
     const attendu = { accepter: 'demandee', refuser: 'demandee', en_route: 'acceptee', pris_en_charge: 'en_route', arrivee: 'pris_en_charge' };
     let n; let detail = {};
+    if (cote === 'destination') {
+      // Préalerte d'arrivée acquittée par la destination (accusé de réception humain, historisé)
+      if (!d.prealerte_le) throw new ErreurHttp(409, 'transport_statut_incompatible');
+      if (d.prealerte_recue_le) return { ...d, deja: true };
+      n = await maj('prealerte_recue_le = now(), prealerte_recue_par = $2', [u.id]);
+      await evenement(c, n, 'prealerte_recue', u, {});
+      return n;
+    }
+    if (cote === 'ambulance' && a === 'prealerter') {
+      // Préalerte d'arrivée vers un milieu d'hébergement (CHSLD, RPA…) : information de l'équipage, PAS une preuve de prise en charge ;
+      // l'état du véhicule et celui du transport ne changent pas ; la chambre n'est jamais déclarée prête ici.
+      if (!['en_route', 'pris_en_charge'].includes(d.statut) || !d.destination_id) throw new ErreurHttp(409, 'transport_statut_incompatible');
+      const eta = b.eta_min == null || b.eta_min === '' ? null : Number(b.eta_min);
+      if (eta != null && !(Number.isInteger(eta) && eta >= 0 && eta <= 600)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'eta_min' });
+      const premiere = !d.prealerte_le;
+      n = await maj('prealerte_le = COALESCE(prealerte_le, now()), prealerte_eta_min = $2, prealerte_eta_le = now()', [eta]);
+      await evenement(c, n, premiere ? 'prealerte' : 'prealerte_maj', u, { eta_min: eta });
+      if (premiere) {
+        const orig = (await c.query('SELECT nom FROM etablissements WHERE id = $1', [d.origine_id])).rows[0]?.nom || '';
+        await require('./services').notifier(c, d.destination_id, null, 'transport_prealerte', { numero: d.numero, origine: orig, eta: eta == null ? '—' : String(eta) });
+        await preparerChambre(c, n, u, eta);
+      }
+      return n;
+    }
     if (cote === 'ambulance') {
       if (!attendu[a]) throw new ErreurHttp(400, 'action_inconnue');
       if (d.statut !== attendu[a]) throw new ErreurHttp(409, 'transport_statut_incompatible');

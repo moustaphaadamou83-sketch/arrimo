@@ -24,6 +24,9 @@ const INTENTIONS = [
 const NUMERO = /\b(TRX|PA|CH|DT|VI|DH|MC|CO|TR)-\d{3,6}\b/i;
 const ATTENTE = /(qu.?est.?ce qui est en attente|qu.?y a.?t.?il en attente|quoi (est )?en attente|actions? en attente|confirmations? manquantes?|parcours a surveiller|what.?s pending|what is pending|what needs attention|pending actions?|paths? to watch)/;
 async function repondre(pool, u, etabId, question, langue) {
+  // OG central (21 nov. 2026) : transport, chambre, préalertes, arrivées et départs, préparations, admission bloquée (src/og-flux.js)
+  const central = await require('./og-flux').repondre(pool, u, etabId, question, langue).catch((e) => { if (e && e.statut) return null; throw e; });
+  if (central) return central;
   const qn = norm(question);
   // Sillage transversal : « explique le parcours PA-000123 », « qu'est-ce qui est en attente ? »
   const num = String(question || '').match(NUMERO);

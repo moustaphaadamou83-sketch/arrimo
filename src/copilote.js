@@ -382,6 +382,14 @@ async function questionIa(contexte, question, fetchImpl = fetch, langue = 'fr') 
 /** Réponse d'OG, dans la langue de la question ; `langue` indique au navigateur la langue du texte (et donc de la voix). */
 async function question(pool, utilisateur, etabId, q, fetchImpl, patientContexteId) {
   const L = require('./og-localisation').langueDemandee(q, utilisateur.langue);
+  // Entretien : OG répond sur les chambres, préparations et messages seulement (permissions minimales), jamais sur le reste
+  if (utilisateur.role === 'entretien') {
+    const r0 = await require('./og-flux').repondre(pool, { ...utilisateur, langue: L }, etabId, q, L);
+    return { ...(r0 || { mode: 'local', reponse: L === 'en' ? 'I can answer about rooms to prepare, a room’s status and your messages. Other information is not available to your role.' : 'Je peux répondre sur les chambres à préparer, l’état d’une chambre et vos messages. Les autres informations ne sont pas accessibles à votre rôle.', sources: ['arrimo'], intentions: ['hors_role'] }), langue: L };
+  }
+  // OG central : réponses opérationnelles transverses (Flux, transport, chambres, préalertes, admissions, Connect), pour tous les établissements
+  const central = await require('./og-flux').repondre(pool, { ...utilisateur, langue: L }, etabId, q, L).catch((e) => { if (e && e.statut) return null; throw e; });
+  if (central) return { ...central, langue: L };
   const r = await repondreQuestion(pool, { ...utilisateur, langue: L }, etabId, q, fetchImpl, patientContexteId, L);
   return r && typeof r === 'object' ? { ...r, langue: L } : r;
 }

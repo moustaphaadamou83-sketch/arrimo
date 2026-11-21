@@ -224,6 +224,8 @@ function creerApp(pool, options = {}) {
     // La météo de l'en-tête et le nom de l'assistant (lecture seule, propres à l'établissement) s'affichent aussi pour l'entretien.
     const ok = (req.method === 'GET' && ['/moi', '/nettoyage', '/meteo', '/og/configuration', '/chsld/taches', '/chsld/places'].includes(req.path)) || req.path.startsWith('/moi/')
       || req.path.startsWith('/formation/')   // Module Formation : son parcours Hygiène et salubrité
+      || req.path.startsWith('/messagerie/')   // Arrimo Connect : communications internes (mêmes droits que tout employé)
+      || (req.method === 'POST' && req.path === '/copilote/question')   // OG : chambres et préparations seulement (src/copilote.js)
       || (req.method === 'POST' && /^\/chsld\/taches\/\d+\/statut$/.test(req.path))
       || (req.method === 'POST' && (req.path === '/deconnexion' || /^\/nettoyage\/\d+\/(debut|terminer)$/.test(req.path)
         || (/^\/(lits|civieres)\/\d+\/action$/.test(req.path) && req.body && req.body.action === 'nettoyage_ok')));
@@ -293,6 +295,17 @@ function creerApp(pool, options = {}) {
   // Sillage transversal (22 nov. 2026) : chronologie d'un parcours depuis n'importe quel module, mêmes droits ; Vigilance des parcours
   api.get('/sillage', route((req) => require('./sillage').fil(pool, req.utilisateur, String(req.query.objet || ''), req.query.id)));
   api.get('/secours/sillage', route((req) => require('./sillage').fil(pool, req.utilisateur, String(req.query.objet || ''), req.query.id)));
+  // Arrimo Connect — messagerie interne (addendum du 21 nov. 2026)
+  const msg = require('./connect-interne');
+  api.get('/messagerie/fils', route((req) => msg.fils(pool, req.utilisateur, req.query)));
+  api.get('/messagerie/fils/:id', route((req) => msg.fil(pool, req.utilisateur, req.params.id)));
+  api.post('/messagerie/messages', route((req) => msg.envoyer(pool, req.utilisateur, req.body)));
+  api.post('/messagerie/fils/:id/statut', route((req) => msg.statut(pool, req.utilisateur, req.params.id, req.body)));
+  api.get('/messagerie/annuaire', route((req) => msg.annuaire(pool, req.utilisateur, req.query)));
+  api.get('/messagerie/annonces', route((req) => msg.annonces(pool, req.utilisateur, req.query)));
+  api.post('/messagerie/annonces', route((req) => msg.publier(pool, req.utilisateur, req.body)));
+  // Arrimo Flux (cahier ultime, 21 nov. 2026) : arrivées et départs de l'établissement
+  api.get('/arrimo-flux', route((req) => require('./arrimo-flux').mouvements(pool, req.utilisateur, req.query)));
   api.get('/sillage/attention', route((req) => require('./sillage').attention(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
 
   // Intervenant d'un prestataire (21 nov. 2026) : ses visites seulement

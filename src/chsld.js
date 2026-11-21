@@ -364,9 +364,14 @@ async function reserverPlace(pool, u, residentId, b) {
  */
 async function exigerChambrePrete(c, litId) {
   if (!litId) return;
-  const t = (await c.query(`SELECT count(*)::int n FROM taches_etab WHERE lit_id = $1 AND type IN ('preparation_chambre', 'entretien') AND statut IN ('a_faire', 'en_cours')`, [litId])).rows[0].n;
-  const i = (await c.query(`SELECT count(*)::int n FROM nettoyage_interventions WHERE lit_id = $1 AND statut IN ('en_cours', 'controle_requis')`, [litId])).rows[0].n;
-  if (t || i) throw new ErreurHttp(409, 'chambre_non_prete');
+  const t = (await c.query(`SELECT statut, echeance FROM taches_etab WHERE lit_id = $1 AND type IN ('preparation_chambre', 'entretien') AND statut IN ('a_faire', 'en_cours') ORDER BY id DESC LIMIT 1`, [litId])).rows[0];
+  const i = (await c.query(`SELECT statut FROM nettoyage_interventions WHERE lit_id = $1 AND statut IN ('en_cours', 'controle_requis') LIMIT 1`, [litId])).rows[0];
+  if (t || i) {
+    // Refus expliqué (cahier ultime, section 10) : chambre, étape en cours, responsable de la prochaine action
+    const code = (await c.query('SELECT code FROM lits WHERE id = $1', [litId])).rows[0]?.code || '';
+    const etape = i ? (i.statut === 'controle_requis' ? 'controle' : 'nettoyage') : (t.statut === 'en_cours' ? 'preparation_en_cours' : 'preparation_a_faire');
+    throw new ErreurHttp(409, 'chambre_non_prete', { code, etape });
+  }
 }
 /** Tâche de préparation terminée par l'entretien : le retour ou le transfert qui attend cette place passe à « Chambre prête ». */
 async function chambrePrete(c, u, litId) {
@@ -1297,7 +1302,7 @@ async function libererPlacementHopital(c, pool, u, retour) {
   }
 }
 
-module.exports = { etapeParcours, chronologie, etatReintegration, libererPlace, OCCUPATION_SQL, hopitauxLiaison, listeHopitauxLiaison, accueil, listeResidents, ficheResident, creerResident, modifierResident, ajouterContact, modifierContact, verifierRepresentant,
+module.exports = { tache, etapeParcours, chronologie, etatReintegration, libererPlace, OCCUPATION_SQL, hopitauxLiaison, listeHopitauxLiaison, accueil, listeResidents, ficheResident, creerResident, modifierResident, ajouterContact, modifierContact, verifierRepresentant,
   reserverPlace, confirmerArrivee, changerChambre, sortie, absence, listeDemandes, creerDemande, actionDemande, preparerHospitalisation, actionCoordination,
   preparerRetour, preparerTransfertChsld, preparerTransfertHopital, listeCoordinations, reseau, listeTaches, creerTache, statutTache, creerCommunication, statutCommunication,
   places, indicateurs, etabChsld, statutAffiche, milieuxTransfert, transfererDemande, CATEGORIES, RELATIONS, DOCUMENTS, DOCUMENTS_DIRECT, documentsPour, MOTIFS_REFUS, LIBELLES_REFUS, ACCESSIBILITE, exigerFictifs, lireContact, insererContact, mouvement, verrouResident };

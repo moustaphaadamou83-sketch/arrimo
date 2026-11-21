@@ -714,7 +714,7 @@ table.classe th { text-align: left; font-size: 12px; text-transform: uppercase; 
 table.classe td { padding: 9px 6px; border-bottom: 1px solid var(--bordure); vertical-align: middle; }
 table.classe tr.meilleur td { background: rgba(21,152,149,.10); }
 table.classe tr.meilleur td:first-child { box-shadow: inset 4px 0 0 #159895; }
-.badge-og { display: inline-block; font-size: 12px; font-weight: 700; color: #fff; background: #159895; border-radius: 10px; padding: 2px 8px; margin-left: 4px; }
+.badge-og { display: inline-block; font-size: 12px; font-weight: 700; color: #fff; background: #0E5E6F; border-radius: 10px; padding: 2px 8px; margin-left: 4px; }
 .pastille-r { display: inline-block; border-radius: 12px; padding: 2px 10px; font-size: 13px; font-weight: 600; }
 .puce { display: inline-block; border: 1px solid var(--bordure); border-radius: 10px; padding: 1px 7px; font-size: 12px; margin: 1px 0; }
 .og-phrase { background: rgba(21,152,149,.08); border-left: 4px solid #159895; border-radius: 8px; padding: 8px 10px; margin: 6px 0 10px; }
@@ -732,7 +732,7 @@ details.voir-carte summary::-webkit-details-marker { display: none; }
 /* Arrimo Continuité (16 nov. 2026) : étapes du parcours ; couleurs de statut seulement */
 .ct-parcours { margin-bottom: 14px; }
 .ct-alerte { border-left: 4px solid #DC2626; }
-.ct-msg { color: #DC2626; font-weight: 600; margin: 4px 0 8px; }
+.ct-msg { color: var(--critique-texte); font-weight: 600; margin: 4px 0 8px; }
 .ct-etapes { list-style: none; padding: 0; margin: 8px 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
 .ct-etapes li { border: 1px solid var(--bordure, #E2E8F0); border-radius: 10px; padding: 8px 10px; border-top-width: 4px; min-width: 0; overflow-wrap: anywhere; }
 .ct-etapes li.ct-fait { border-top-color: #16A34A; }
@@ -814,3 +814,42 @@ a.menu-item { text-decoration: none; color: inherit; }
 .aide-capsule { display: inline-grid; place-items: center; width: 26px; height: 26px; margin-left: 8px; border-radius: 50%; font-size: 15px; font-weight: 800; text-decoration: none; vertical-align: middle; color: var(--principal); background: var(--doux); border: 1px solid var(--bordure); }
 .aide-capsule:hover { background: var(--principal); color: #fff; }
 @media (max-width: 600px) { .aide-capsule { width: 40px; height: 40px; } }
+
+/* Accueil personnalisé et Arrimo Flux (cahier ultime, 21 nov. 2026) : variables de thème seulement (jour et nuit) */
+.bandeau-accueil { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 24px; padding: 16px 20px; margin: 0 0 14px;
+  background: var(--carte); border: 1px solid var(--bordure); border-left: 6px solid var(--principal); border-radius: 14px; box-shadow: var(--ombre); }
+.bandeau-accueil p { margin: 0; }
+.ba-bonjour { font-size: 1.35rem; font-weight: 700; color: var(--texte); }
+.ba-role { color: var(--texte-2-fond); font-weight: 600; }
+.ba-date { color: var(--texte); font-weight: 600; text-transform: capitalize; }
+.flux-accueil { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 14px; margin-bottom: 14px; }
+.flux-accueil .panneau-c { margin: 0; }
+.flux-filtres { gap: 8px; margin: 8px 0; } .flux-filtres .sep { width: 1px; align-self: stretch; background: var(--bordure); margin: 0 4px; }
+.badge-flux { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: .85rem; font-weight: 700; border: 1px solid var(--bordure); color: var(--texte); background: var(--fond); }
+.badge-flux.ok { color: var(--succes-texte); border-color: currentColor; }
+.badge-flux.ko { color: var(--critique-texte); border-color: currentColor; }
+.badge-flux.cours { color: var(--principal); border-color: currentColor; }
+.badge-flux.retard { color: var(--attention-texte); background: var(--attention-fond); border-color: currentColor; }
+.flux-tableau tr.flux-retard td:first-child { box-shadow: inset 4px 0 0 var(--attention-texte); }
+.flux-tableau td { vertical-align: top; }
+/* Arrimo Connect : panneau latéral (le travail en cours reste visible) */
+.messagerie-panneau { position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100vw); z-index: 900; background: var(--carte); color: var(--texte);
+  border-left: 1px solid var(--bordure); box-shadow: var(--ombre); display: flex; flex-direction: column; overflow: hidden; }
+.messagerie-panneau[hidden] { display: none; }
+.msg-tete { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--bordure); }
+.msg-tete h2 { margin: 0; font-size: 1.15rem; }
+.msg-onglets { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 16px; border-bottom: 1px solid var(--bordure); }
+.msg-onglets button { min-height: 40px; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--bordure); background: var(--fond); color: var(--texte); font-weight: 600; cursor: pointer; }
+.msg-onglets button[aria-selected="true"] { background: var(--principal-plein); color: #fff; border-color: transparent; }
+.msg-corps { padding: 14px 16px; overflow-y: auto; flex: 1; }
+.msg-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.msg-ligne { width: 100%; text-align: left; display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--bordure); border-radius: 10px; background: var(--fond); color: var(--texte); cursor: pointer; }
+.msg-ligne.non-lu { border-left: 5px solid var(--principal); }
+.msg-bulle { padding: 10px 12px; border: 1px solid var(--bordure); border-radius: 10px; background: var(--fond); margin-bottom: 8px; }
+.msg-bulle p { margin: 4px 0 0; white-space: pre-wrap; }
+/* Tableau de bord Entretien */
+.kpis-ent { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin: 8px 0; }
+.kpi-ent { display: grid; gap: 2px; padding: 12px 14px; border: 1px solid var(--bordure); border-radius: 12px; background: var(--fond); }
+.kpi-ent .v { font-size: 1.8rem; font-weight: 800; color: var(--texte); } .kpi-ent .lbl { color: var(--texte-2-fond); font-weight: 600; }
+.kpi-ent.alerte { border-color: var(--critique-texte); } .kpi-ent.alerte .v { color: var(--critique-texte); }
+.kpi-ent.ok .v { color: var(--succes-texte); }

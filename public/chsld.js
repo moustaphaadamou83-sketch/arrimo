@@ -126,8 +126,13 @@
       <h3 class="titre-section">${C('accueil.raccourcis')}</h3>
       <div class="ch-raccourcis">${raccourci('c-residents', 'users', t('chsld.nav.residents'))}${raccourci('c-chambres', 'bed-double', t('chsld.nav.chambres'))}${raccourci('c-demandes', 'clipboard-list', t('chsld.nav.demandes'))}
         ${raccourci('c-taches', 'clipboard-check', t('chsld.nav.taches'))}${raccourci('c-mouvements', 'ambulance', t('chsld.nav.mouvements'))}<button class="ch-raccourci" type="button" data-ch-og>${icone('sparkles')}<span>${esc(window.ArrimoNomOg?.nom() || 'OG')}</span></button></div>`;
-    panneauMessagesFamilles(v);
-    panneauRattachements(v);
+    // Cahier ultime : accueil d'abord opérationnel (bandeau, préalertes, mouvements) ; communications des proches repliées en bas, sans encombrer
+    v.insertAdjacentHTML('afterbegin', `${window.bandeauAccueil ? window.bandeauAccueil() : ''}<div id="flux-accueil-c"></div>`);
+    if (window.ArrimoFluxVue && window.optsFlux) window.ArrimoFluxVue.panneau(v.querySelector('#flux-accueil-c'), window.optsFlux());
+    v.insertAdjacentHTML('beforeend', `<details class="panneau-c ch-communications" id="ch-comm"><summary><b>✉ ${esc(t('chsld.accueil.communications'))}</b></summary><div id="ch-comm-zone"></div></details>`);
+    const zc = v.querySelector('#ch-comm-zone');
+    panneauMessagesFamilles(zc);
+    panneauRattachements(zc);
     v.querySelectorAll('[data-ch-aller]').forEach((b) => { b.onclick = () => allerA(b.dataset.chAller); });
     const og = v.querySelector('[data-ch-og]'); if (og) og.onclick = () => document.querySelector('#og-open')?.click();
   }

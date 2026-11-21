@@ -73,7 +73,7 @@
       return `<tr data-urgence="${h.id}" class="${meilleur && meilleur.id === h.id ? 'meilleur' : ''}"><td data-l="${T('c_urgence')}"><b>${esc(ArrimoCarte.court(h.nom))}</b>${meilleur && meilleur.id === h.id ? ` <span class="badge-og">${T('og_meilleur')}</span>` : ''}</td>
         <td data-l="${T('c_temps')}" class="num">${h.temps_min != null ? `<b>${h.temps_min} min</b>` : '—'}</td><td data-l="${T('c_dist')}" class="num">${h.distance_km != null ? `${h.distance_km} km` : '—'}</td>
         <td data-l="${T('c_civ')}" class="num">${h.urgence ? `<b>${h.urgence.civieres_libres}</b>` : '—'}</td>
-        <td data-l="${T('c_statut')}"><span class="pastille-r" style="background:${COUL_RANG[h.rang ?? 3]};color:${h.rang === 1 ? '#1F2937' : '#fff'}">${st}</span></td>
+        <td data-l="${T('c_statut')}"><span class="pastille-r" style="background:${COUL_RANG[h.rang ?? 3]};color:${['#16A34A', '#F59E0B', '#94A3B8'].includes(COUL_RANG[h.rang ?? 3]) ? '#0B1220' : '#fff'}">${st}</span></td>
         <td data-l="${T('c_services')}">${h.services_ouverts?.length ? h.services_ouverts.map((c) => `<span class="puce">${T(`up_sv.${c}`)}</span>`).join(' ') : '—'}${h.soins_intensifs ? `<div class="note">${T('up_si', h.soins_intensifs)}</div>` : ''}</td></tr>`;
     };
     const lignesTr = trs.filter((d) => d.origine_id === etat.ctx).map((d) => `<article class="item" data-transport="${d.id}"><div><div><b class="num">${esc(d.numero)}</b> · ${esc(d.resident_ref)} · ${esc(d.coordination)}</div>
