@@ -1640,6 +1640,7 @@ async function vueCopilote() {
   $('#f-copilote').onsubmit = (ev) => { ev.preventDefault(); const q = $('#q').value.trim(); if (q) poser(q); };
   v.querySelectorAll('[data-ex]').forEach((c) => { c.onclick = () => poser(exemples[Number(c.dataset.ex)]); });
   // Accueil personnalisé (cahier ultime, addendum) : bonjour, rôle, établissement, date ; puis préalertes et prochains mouvements (Arrimo Flux)
+  v.querySelectorAll('[data-aller]').forEach((c) => { c.onclick = () => document.querySelector(`#onglets button[data-v="${c.dataset.aller}"]`)?.click(); });
   v.insertAdjacentHTML('afterbegin', `${bandeauAccueil()}<div id="flux-accueil-h"></div>`);
   window.ArrimoFluxVue?.panneau($('#flux-accueil-h'), optsFlux());
 }
@@ -1779,7 +1780,7 @@ function modaleArrivee(libres, cfg) {
 /* ---------------- Patients fictifs : recherche, vérification d'identité, historique des passages ---------------- */
 // Démonstration et recette seulement (fiches fictives) ; historique administratif, aucune donnée clinique.
 /** Arrimo Flux : dépendances de l'application (même session, établissement courant, ouverture d'un onglet). */
-function optsFlux() { return { api, etablissement_id: etat.ctx, toast, ouvrir: (v) => { const b = document.querySelector(`#onglets button[data-v="${v}"]`); if (b) b.click(); } }; }
+function optsFlux() { return { api, etablissement_id: etat.ctx, toast, modale, ouvrir: (v) => { const b = document.querySelector(`#onglets button[data-v="${v}"]`); if (b) b.click(); } }; }
 /** DSN (22 nov. 2026) : le module s'ouvre dans l'onglet, pour l'établissement courant ; démo et recette seulement (refus côté serveur ailleurs). */
 function vueDsn() {
   const v = $('#v-dsn');
@@ -1920,9 +1921,12 @@ function vueEnsemble(v, alerte = {}) {
     { id: 'nsa', ic: 'users', libelle: C('v_nsa'), valeur: nb(v.nsa), note: C('v_nettoyage', { n: v.nettoyage }) },
     { id: 'proches', ic: 'map-pin', libelle: C('v_proches'), valeur: nb(v.proches.avec_place), note: C('v_proches_note', { n: v.proches.etablissements, km: v.proches.rayon_km, libres: v.proches.libres }) },
   ];
-  const carte = (x) => `<div class="case-ens${x.vedette ? ' kpi-vedette' : ''}${x.niveau ? ` kpi-${x.niveau}` : ''}" data-kpi="${x.id}">
+  // Cahier ultime (section 17) : un indicateur qui semble cliquable ouvre réellement l'écran correspondant
+  const ALLER = { lits: 'lits', urgence: 'urgence', attente: 'admissions', transferts: 'transferts', chambres: 'lits', nsa: 'nsa', proches: 'national' };
+  const carte = (x) => { const cible = ALLER[x.id] && document.querySelector(`#onglets button[data-v="${ALLER[x.id]}"]:not([hidden])`) ? ALLER[x.id] : null; const tag = cible ? 'button' : 'div';
+    return `<${tag}${cible ? ` type="button" data-aller="${cible}"` : ''} class="case-ens${x.vedette ? ' kpi-vedette' : ''}${x.niveau ? ` kpi-${x.niveau}` : ''}" data-kpi="${x.id}">
     <div class="kpi-tete"><span class="kpi-icone" aria-hidden="true">${icone(x.ic)}</span><span class="lbl">${esc(x.libelle)}</span>${x.niveau ? `<span class="kpi-niveau">${esc(t(`niveaux.${x.niveau}`))}</span>` : ''}</div>
-    <span class="v">${esc(x.valeur)}</span><span class="note">${esc(x.note)}</span></div>`;
+    <span class="v">${esc(x.valeur)}</span><span class="note">${esc(x.note)}</span></${tag}>`; };
   return `<section class="ensemble" aria-label="${esc(C('vue_titre'))}"><h3 class="titre-section">${esc(C('vue_titre'))}</h3>
     <div class="ensemble-cases kpi-principaux">${principales.map(carte).join('')}</div><div class="ensemble-cases kpi-secondaires">${secondaires.map(carte).join('')}</div></section>`;
 }
@@ -2213,7 +2217,7 @@ async function vueNettoyage() {
       <div class="actions">${l.precautions?.length || l.intervention ? actionsSous(l) : l.nettoyage_debut || l.genre === 'civiere' ? '' : `<button class="btn" data-debut="${l.id}">${N('commencer')}</button>`}
         ${l.precautions?.length || l.intervention ? '' : `<button class="btn pri" data-fini="${l.id}" data-genre="${l.genre}" data-version="${l.version}" data-code="${esc(l.code)}">${N('termine')}</button>`}</div></div>`).join('') || `<p class="note">${N('aucun')}</p>`}</div>`;
   // Cahier ultime (section 9) : les préparations de chambres (tâches de l'entretien) sont visibles ici aussi, même source que « Personnel et tâches »
-  const taches = (await api('GET', `/chsld/taches?etablissement_id=${etat.ctx}`).catch(() => null)) || [];
+  const taches = etabCtx()?.type_etablissement === 'chsld' ? ((await api('GET', `/chsld/taches?etablissement_id=${etat.ctx}`).catch(() => null)) || []) : [];
   const prep = (Array.isArray(taches) ? taches : taches.taches || []).filter((x) => ['preparation_chambre', 'entretien'].includes(x.type) && ['a_faire', 'en_cours'].includes(x.statut));
   if (prep.length) {
     v.querySelector('.liste').insertAdjacentHTML('beforebegin', `<section class="panneau-c"><h3>${N('preparations', { n: prep.length })}</h3><p class="note">${N('preparations_aide')}</p><div class="liste">${prep.map((x) => `<div class="net-item" style="--c:${x.en_retard || (x.echeance && new Date(x.echeance) < new Date()) ? 'var(--critique)' : 'var(--attention)'}"><div>

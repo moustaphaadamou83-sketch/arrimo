@@ -37,6 +37,9 @@
   .secours .etapes li.fait { background: var(--principal); color: #fff; border-color: var(--principal); }
   .secours .gros { font-size: 30px; font-weight: 700; margin: 4px 0; }
   .secours .reseau-s { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 14px; font-weight: 600; color: #fff; }
+  .secours .kpis-amb { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+  .secours .kpi-amb { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--bordure); border-radius: 12px; }
+  .secours .kpi-amb b { font-size: 1.7rem; } .secours .kpi-amb.kpi-alerte { border-color: var(--critique-texte); } .secours .kpi-amb.kpi-alerte b { color: var(--critique-texte); }
   .secours .reseau-s.en-ligne { background: #16A34A; color: #0B1220; } .secours .reseau-s.hors-ligne { background: #DC2626; } .secours .reseau-s.attente { background: #B45309; }
   .secours .pt-niveau { display: inline-block; width: 14px; height: 14px; border-radius: 50%; vertical-align: middle; margin-right: 6px; flex: none; }
   .secours .pt-niveau.vert { background: #16A34A; } .secours .pt-niveau.jaune, .secours .pt-niveau.orange { background: #F59E0B; } .secours .pt-niveau.rouge { background: #DC2626; } .secours .pt-niveau.inconnu { background: #94A3B8; }

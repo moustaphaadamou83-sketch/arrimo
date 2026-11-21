@@ -120,3 +120,26 @@ test('Arrimo Connect : demande à l’administration suivie ; message direct pri
   // OG oriente vers Arrimo Connect
   const o = await og('coord', ids.c, 'Ai-je reçu un message de l’administration ?'); assert.match(o.d.reponse, /Arrimo Connect/);
 });
+
+test('Transport : étapes horodatées (sur place, pris en charge, arrivée, remis, terminé), incident signalé ; fiche interactive avec chronologie et acteurs, réservée aux établissements concernés', async () => {
+  const org = ids.org; const h = ids.h;
+  const dt = (await pool.query(`INSERT INTO demandes_transport (numero, organisation_id, origine_id, destination_id, resident_ref, statut, heure_souhaitee, unite_id, motif_transport, type_vehicule)
+    VALUES ('DT-000777', $1, $2, $3, 'P-77777', 'en_route', now(), $4, 'transfert_stable', 'ambulance') RETURNING id`, [org, h, ids.c, ids.unite])).rows[0].id;
+  const act = async (a, extra = {}) => { const v = (await pool.query('SELECT version FROM demandes_transport WHERE id = $1', [dt])).rows[0].version; return appel('para', 'POST', `/secours/transports/${dt}/action`, { action: a, version: v, unite_id: ids.unite, ...extra }); };
+  assert.strictEqual((await act('remis')).s, 409, 'pas de remise avant l’arrivée');
+  for (const a of ['sur_place', 'pris_en_charge', 'arrivee']) { const r = await act(a); assert.strictEqual(r.s, 200, `${a} ${JSON.stringify(r.d)}`); }
+  assert.strictEqual((await act('terminer')).s, 409, 'terminer exige la remise');
+  assert.strictEqual((await act('incident', { motif: 'x' })).s, 400, 'motif obligatoire');
+  assert.strictEqual((await act('incident', { motif: 'Porte d’accès fermée (fictif)' })).s, 200);
+  assert.ok((await pool.query("SELECT 1 FROM notifications WHERE etablissement_id = $1 AND code = 'transport_incident'", [h])).rowCount, 'origine avisée de l’incident');
+  for (const a of ['remis', 'terminer']) assert.strictEqual((await act(a)).s, 200);
+  const d = (await pool.query('SELECT sur_place_le, pris_en_charge_le, arrivee_le, remis_le, terminee_le, incident_motif FROM demandes_transport WHERE id = $1', [dt])).rows[0];
+  assert.ok(d.sur_place_le && d.pris_en_charge_le && d.arrivee_le && d.remis_le && d.terminee_le && d.incident_motif);
+  const f = await appel('coord', 'GET', `/arrimo-flux/fiche?type=transport&id=${dt}`); assert.strictEqual(f.s, 200, JSON.stringify(f.d));
+  const etapes = f.d.chronologie.map((x) => x.etape);
+  for (const e of ['sur_place', 'depart', 'arrivee', 'reception', 'cloture', 'incident']) assert.ok(etapes.includes(e), `étape ${e}`);
+  assert.ok(f.d.chronologie.some((x) => x.acteur === 'Nom para'), 'acteur de chaque étape');
+  const autre = (await pool.query("INSERT INTO etablissements (code, nom, ville, latitude, longitude, config_id, module_actif) SELECT 'AUTRE-U', 'Autre', 'V', latitude, longitude, config_id, true FROM etablissements WHERE id = $1 RETURNING id", [h])).rows[0].id;
+  await compte('autre', 'coordonnateur', { etab: autre });
+  assert.strictEqual((await appel('autre', 'GET', `/arrimo-flux/fiche?type=transport&id=${dt}`)).s, 404, 'fiche réservée à l’origine et à la destination');
+});

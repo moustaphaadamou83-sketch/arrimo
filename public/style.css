@@ -853,3 +853,9 @@ a.menu-item { text-decoration: none; color: inherit; }
 .kpi-ent .v { font-size: 1.8rem; font-weight: 800; color: var(--texte); } .kpi-ent .lbl { color: var(--texte-2-fond); font-weight: 600; }
 .kpi-ent.alerte { border-color: var(--critique-texte); } .kpi-ent.alerte .v { color: var(--critique-texte); }
 .kpi-ent.ok .v { color: var(--succes-texte); }
+.flux-accueil .flux-pleine { grid-column: 1 / -1; }
+.fiche-flux { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; } .fiche-flux dt { color: var(--texte-2-fond); font-weight: 600; } .fiche-flux dd { margin: 0; }
+.chrono-flux { padding-left: 20px; } .chrono-flux li { margin: 4px 0; }
+/* Indicateurs cliquables : vrais boutons (clavier, focus visible), même apparence que les cartes */
+button.case-ens { font: inherit; color: inherit; text-align: left; width: 100%; cursor: pointer; }
+button.case-ens:hover { border-color: var(--principal); } button.case-ens:focus-visible { outline: 3px solid var(--principal); outline-offset: 2px; }

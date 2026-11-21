@@ -51,7 +51,7 @@ async function repondre(pool, u, etabId, question, langue) {
   if (dt && /\b(ou en est|transport|ambulance|vehicule|arrive\w*|heure|statut|status|where|vehicle|eta|when)\b/.test(qn)) return rep(await transport(pool, u, etabs, dt[0].toUpperCase(), L), 'transport', 'transports-planifies');
   // 2. Chambre par code (ERA-309, MED-202A…)
   const code = String(question || '').match(/\b[A-Z]{2,6}-\d{2,4}[A-Z]?\b/);
-  if (code && !/^(DT|PA|TR|TRX|DH|CH|VI|MC|CO|EV|SIM|DSN|DOC|P|R)-/i.test(code[0]) && /\b(chambre|lit|prete?|pret|nettoy\w*|libre|statut|room|bed|ready|clean\w*|free|status)\b/.test(qn)) {
+  if (code && !/^(DT|PA|TR|TRX|DH|CH|VI|MC|CO|EV|SIM|DSN|DOC|P|R)-/i.test(code[0]) && /\b(prete?s?|pret|nettoy\w*|propre|preparee?s?|ready|clean\w*|prepared)\b/.test(qn) && !/\b(conge|sortie|compatibles?|nsa|orient\w*|discharge)\b/.test(qn)) {
     const r = await chambre(pool, etabs, code[0].toUpperCase(), L); if (r) return rep(r, 'chambre', 'c-chambres');
   }
   if (!etabId || !etabs.includes(Number(etabId))) return null;
@@ -69,6 +69,10 @@ async function repondre(pool, u, etabId, question, langue) {
   const prealertes = /\b(prealertes?|pre-?alerts?)\b/.test(qn);
   const arrivees = /\b(arriv\w*|qui arrive|attendu\w*|expected|incoming)\b/.test(qn); const departs = /\b(depart\w*|qui part|departures?|leaving)\b/.test(qn);
   const retard = /\b(retard\w*|late|delay\w*|overdue)\b/.test(qn) && /\b(transports?|ambulances?|arriv\w*|depart\w*|mouvements?)\b/.test(qn);
+  // À l'hôpital, les préalertes d'ambulances d'urgence relèvent de Liaison Secours (src/og-secours.js) ; ici : préalertes d'arrivée, reçues ou non acquittées
+  const typeEtab = (await pool.query('SELECT type_etablissement FROM etablissements WHERE id = $1', [etabId])).rows[0]?.type_etablissement;
+  if (typeEtab !== 'chsld' && prealertes && !/\b(non acquitt\w*|recues?|d.?arrivee|transports?|flux|unacknowledged|received|arrival)\b/.test(qn)) return null;
+  if (typeEtab !== 'chsld' && (arrivees || departs) && !prealertes && /\b(ambulances?|urgences?|emergency)\b/.test(qn)) return null;
   if (prealertes || arrivees || departs || retard) {
     if (u.role === 'entretien' && !/\b(chambres?|rooms?)\b/.test(qn)) return null;
     const f = await require('./arrimo-flux').mouvements(pool, u, { etablissement_id: etabId });

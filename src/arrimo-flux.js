@@ -43,7 +43,7 @@ async function mouvements(pool, u, q = {}) {
       vehicule: d.unite, statut: ETAPES_TR[d.statut] || d.statut, statut_brut: d.statut,
       prealerte: d.prealerte_le ? { le: d.prealerte_le, recue_le: d.prealerte_recue_le, eta_min: d.prealerte_eta_min } : null,
       preparation: arrivee && d.destination_type !== 'hopital' ? await preparation(pool, d.resident_lit || d.lit_propose_id) : null,
-      ecran: 'transports-planifies', actions: arrivee && d.prealerte_le && !d.prealerte_recue_le ? ['accuser_prealerte'] : [], transport_id: d.id });
+      ecran: 'transports-planifies', fiche: { type: 'transport', id: d.id }, actions: arrivee && d.prealerte_le && !d.prealerte_recue_le ? ['accuser_prealerte'] : [], transport_id: d.id });
   }
   // 2. Transferts entre hôpitaux (sans transport planifié lié)
   for (const t of (await pool.query(`SELECT t.*, eo.nom AS origine, ed.nom AS destination FROM transferts t JOIN etablissements eo ON eo.id = t.origine_id JOIN etablissements ed ON ed.id = t.destination_id
@@ -53,7 +53,7 @@ async function mouvements(pool, u, q = {}) {
     lignes.push({ cle: `transfert:${t.id}`, mouvement: arrivee ? 'arrivee' : 'depart', type: 'transfert', reference: t.numero, personne: t.patient_ref, origine: t.origine, destination: t.destination,
       creneau: null, prevue: t.date_validation || t.date_demande, depart_reel: t.date_depart, eta, eta_source: eta ? 'itineraire' : null, arrivee_reelle: t.date_reception,
       vehicule: null, statut: { demande: 'demande', validee: 'accepte', transport: 'en_route_depart', en_route: 'en_transport', recu: 'arrive', refuse: 'refuse' }[t.statut] || t.statut, statut_brut: t.statut,
-      preparation: arrivee && t.lit_id ? { etat: t.date_chambre_prete ? 'prete' : 'a_verifier' } : null, ecran: 'transferts', actions: [] });
+      preparation: arrivee && t.lit_id ? { etat: t.date_chambre_prete ? 'prete' : 'a_verifier' } : null, ecran: 'transferts', fiche: { type: 'transfert', id: t.id }, actions: [] });
   }
   // 3. Hébergement : départs/arrivées programmés sans transport lié
   for (const h of (await pool.query(`SELECT dh.*, eo.nom AS origine, ed.nom AS destination, r.lit_id AS resident_lit FROM demandes_hebergement dh JOIN etablissements ed ON ed.id = dh.etablissement_id
@@ -89,4 +89,29 @@ async function mouvements(pool, u, q = {}) {
       prealertes_a_acquitter: res.filter((l) => l.actions.includes('accuser_prealerte')).length, preparations: res.filter((l) => l.preparation && ['a_faire', 'en_cours'].includes(l.preparation.etat)).length } };
 }
 
-module.exports = { mouvements };
+/**
+ * Fiche opérationnelle interactive (cahier ultime, section 13) : transport ou transfert, origine/destination autorisées seulement.
+ * Chronologie : demande → acceptation → préparation → départ → transport → arrivée → réception → clôture, avec acteur et heure.
+ */
+async function fiche(pool, u, q = {}) {
+  const id = Number(q.id); if (!Number.isSafeInteger(id) || id < 1) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'id' });
+  const etabs = (u.etabs || []).map(Number);
+  if (q.type === 'transfert') {
+    const t = (await pool.query(`SELECT t.*, eo.nom AS origine, ed.nom AS destination, l.code AS lit FROM transferts t JOIN etablissements eo ON eo.id = t.origine_id JOIN etablissements ed ON ed.id = t.destination_id LEFT JOIN lits l ON l.id = t.lit_id WHERE t.id = $1`, [id])).rows[0];
+    if (!t || !(u.gestionnaire || etabs.includes(t.origine_id) || etabs.includes(t.destination_id))) throw new ErreurHttp(404, 'objet_introuvable');
+    const etapes = [['demande', t.date_demande], ['acceptation', t.date_validation], ['preparation', t.date_chambre_prete], ['depart', t.date_depart], ['reception', t.date_reception], ['refus', t.date_refus]];
+    return { type: 'transfert', reference: t.numero, personne: t.patient_ref, origine: t.origine, destination: t.destination, statut: t.statut, lit: t.lit, vehicule: null,
+      chronologie: etapes.filter(([, d]) => d).map(([etape, quand]) => ({ etape, quand, acteur: null })).sort((a, b) => new Date(a.quand) - new Date(b.quand)), incident: null };
+  }
+  const d = (await pool.query(`SELECT d.*, eo.nom AS origine, COALESCE(ed.nom, d.destination_libelle) AS destination, un.numero AS unite FROM demandes_transport d JOIN etablissements eo ON eo.id = d.origine_id
+    LEFT JOIN etablissements ed ON ed.id = d.destination_id LEFT JOIN unites_secours un ON un.id = d.unite_id WHERE d.id = $1`, [id])).rows[0];
+  if (!d || !(u.gestionnaire || etabs.includes(d.origine_id) || etabs.includes(d.destination_id))) throw new ErreurHttp(404, 'objet_introuvable');
+  const ev = (await pool.query(`SELECT e.type, e.cree_le, x.nom AS acteur FROM demande_transport_evenements e LEFT JOIN utilisateurs x ON x.id = e.utilisateur_id WHERE e.demande_id = $1 ORDER BY e.cree_le, e.id`, [d.id])).rows;
+  const NOM = { preparee: 'demande', demandee: 'demande', transmettre: 'demande_transmise', accepter: 'acceptation', refuser: 'refus', en_route: 'en_route', sur_place: 'sur_place', pris_en_charge: 'depart', prealerte: 'prealerte',
+    prealerte_maj: 'prealerte', prealerte_recue: 'prealerte_recue', arrivee: 'arrivee', remis: 'reception', terminer: 'cloture', incident: 'incident', annuler: 'annulation' };
+  return { type: 'transport', reference: d.numero, personne: d.resident_ref, origine: d.origine, destination: d.destination, statut: d.statut, vehicule: d.unite,
+    creneau: d.plage_debut ? { debut: d.plage_confirmee_debut || d.plage_debut, fin: d.plage_confirmee_fin || d.plage_fin, confirme: !!d.plage_confirmee_debut } : null,
+    chronologie: ev.map((x) => ({ etape: NOM[x.type] || x.type, quand: x.cree_le, acteur: x.acteur || null })), incident: d.incident_le ? { le: d.incident_le, motif: d.incident_motif } : null };
+}
+
+module.exports = { mouvements, fiche };

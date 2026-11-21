@@ -28,6 +28,27 @@ window.ARRIMO_I18N.en.aide = {
     },
   },
   ecrans: {
+    flux: {
+      nom: 'Arrimo Flow',
+      but: 'See at a glance who arrives and who leaves: transports, transfers, departures to housing and ambulances, with scheduled time, actual time and estimated arrival when known.',
+      gestes: [
+        'Filter by arrivals, departures, today or tomorrow.',
+        'An arrival pre-alert to acknowledge appears at the top: click “Acknowledge”.',
+        'The Preparation column shows whether the room is ready, being prepared or to check.',
+        'Open a movement’s record to see its full timeline, with the author of each step.',
+      ],
+      erreurs: [['ETA unavailable', 'No pre-alert or position allows an estimate: nothing is invented.']],
+    },
+    dsn: {
+      nom: 'Health record (demo)',
+      but: 'Demonstration clinical record (entirely fictitious patients): allergies, history, encounters, stays on real beds, simulated prescriptions and transition packages.',
+      gestes: [
+        'Open a patient, then the tab you need (Hospital stays, Prescriptions…).',
+        'An admission is made on a real free bed: it is reserved then occupied in Beds.',
+        'Prepare a transition: choose what to share, validate it, then send it.',
+      ],
+      erreurs: [['Bed not available', 'Choose a free bed; a stay’s bed is changed in Beds.']],
+    },
     patients: {
       nom: 'Patients',
       but: 'Find a fictitious patient (demo and acceptance testing), verify their identity and review their visits: arrivals, bed requests, transfers and movements. Administrative history only, no clinical data.',

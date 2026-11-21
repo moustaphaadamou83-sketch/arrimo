@@ -2469,3 +2469,9 @@ CREATE TABLE IF NOT EXISTS connect_annonces (
   roles            text[] NOT NULL DEFAULT '{}',
   cree_le          timestamptz NOT NULL DEFAULT now()
 );
+-- États complets d'une mission de transport (cahier ultime, 11.3) : étapes horodatées, sans changer les statuts existants
+ALTER TABLE demandes_transport ADD COLUMN IF NOT EXISTS sur_place_le timestamptz;
+ALTER TABLE demandes_transport ADD COLUMN IF NOT EXISTS remis_le timestamptz;
+ALTER TABLE demandes_transport ADD COLUMN IF NOT EXISTS terminee_le timestamptz;
+ALTER TABLE demandes_transport ADD COLUMN IF NOT EXISTS incident_le timestamptz;
+ALTER TABLE demandes_transport ADD COLUMN IF NOT EXISTS incident_motif text CHECK (incident_motif IS NULL OR length(incident_motif) <= 300);

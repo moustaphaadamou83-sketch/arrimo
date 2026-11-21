@@ -28,6 +28,27 @@ window.ARRIMO_I18N.fr.aide = {
     },
   },
   ecrans: {
+    flux: {
+      nom: 'Arrimo Flux',
+      but: 'Voir d’un coup d’œil qui arrive et qui part : transports, transferts, départs vers l’hébergement et ambulances, avec l’heure prévue, l’heure réelle et l’arrivée estimée quand elle est connue.',
+      gestes: [
+        'Filtrez par arrivées, départs, aujourd’hui ou demain.',
+        'Une préalerte d’arrivée à acquitter apparaît en tête : cliquez sur « Accuser réception ».',
+        'La colonne Préparation indique si la chambre est prête, en préparation ou à vérifier.',
+        'Ouvrez la fiche d’un mouvement pour voir sa chronologie complète, avec l’auteur de chaque étape.',
+      ],
+      erreurs: [['ETA indisponible', 'Aucune préalerte ni position ne permet d’estimer l’arrivée : rien n’est inventé.']],
+    },
+    dsn: {
+      nom: 'Dossier santé (démo)',
+      but: 'Dossier clinique de démonstration (patients entièrement fictifs) : allergies, antécédents, consultations, séjours sur de vrais lits, prescriptions simulées et paquets de transition.',
+      gestes: [
+        'Ouvrez un patient, puis le sous-onglet voulu (Hospitalisations, Prescriptions…).',
+        'Une admission se fait sur un lit libre réel : il est réservé puis occupé dans Lits.',
+        'Préparez une transition : choisissez les éléments à partager, validez-la, puis envoyez-la.',
+      ],
+      erreurs: [['Lit non disponible', 'Choisissez un lit libre ; le lit d’un séjour se change dans Lits.']],
+    },
     patients: {
       nom: 'Patients',
       but: 'Retrouver un patient fictif (démonstration et recette), vérifier son identité et consulter ses passages : arrivées, demandes de lit, transferts et mouvements. Historique administratif seulement, sans donnée clinique.',

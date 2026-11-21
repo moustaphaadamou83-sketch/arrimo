@@ -57,6 +57,8 @@
       ch_porte: 'À la porte', ch_route: 'En route', ch_termines: 'Passages terminés', ch_aucun: 'Aucun passage.', ch_min: '{n} min à la porte', ch_depart: 'Départ de l’hôpital',
       ch_H11: 'Arrivée', ch_H12: 'Début triage', ch_H13: 'Fin triage', ch_H14: 'Civière libérée', ch_H15: 'Départ', ch_corrigee: 'corrigée', ch_total: 'total {n} min', ch_inactif: 'Aucun hôpital de votre secteur n’utilise encore le Chrono.',
       o_regional: 'Vue régionale', o_flotte: 'Flotte', o_prealertes: 'Préalertes', o_demandes: 'Demandes des établissements', o_historique: 'Historique', o_og: 'OG', o_mission: 'Mission', o_urgences: 'Urgences classées', o_transports: 'Transports',
+      k_dispo: 'Véhicules disponibles', k_retards: 'Prises en charge en retard', k_incidents: 'Incidents en cours', k_frais: 'Données actualisées à {h} (mise à jour en direct).', rm_titre: 'Mes missions', rm_a_accepter: 'À accepter', rm_acceptees: 'Acceptées', rm_en_cours: 'En cours', rm_terminees: 'Terminées aujourd’hui', rm_retards: 'En retard', rm_incidents: 'Incidents',
+      tr_sur_place: 'Sur place au départ', tr_remis: 'Patient remis à la destination', tr_terminer: 'Mission terminée', tr_incident: 'Signaler un incident', tr_incident_motif: 'Motif de l’incident', tr_confirmer_sur_place: 'Confirmer : sur place', tr_confirmer_remis: 'Confirmer : patient remis', tr_confirmer_terminer: 'Confirmer : mission terminée', tr_fait_sur_place: 'sur place', tr_fait_pris: 'pris en charge', tr_fait_arrivee: 'arrivé', tr_fait_remis: 'remis', tr_fait_terminee: 'terminé', tr_incident_le: 'Incident signalé à {h}',
       pa_eta: 'Arrivée estimée', pa_eta_inconnue: 'ETA indisponible', pa_envoyer: 'Préalerte d’arrivée à {dest}', pa_maj: 'Mettre à jour la préalerte', pa_envoyee: 'Préalerte d’arrivée envoyée : la destination prépare l’accueil.', pa_etat: 'Préalerte envoyée à {h} · arrivée estimée : {eta}', pa_recue: 'reçue par la destination', pa_attente: 'accusé de réception attendu', tr_confirmer_pris_en_charge: 'Confirmer : résident à bord', tr_confirmer_arrivee: 'Confirmer l’arrivée à {dest}',
       cr_titre: '🆘 Évacuation {numero} · {lieu}', cr_sim: 'SIMULATION', cr_detail: '{motif} · gravité {gravite} · {n} résidents ({a} à placer)', cr_point: 'Point de rassemblement : {p}', cr_accuser: 'Accuser réception', cr_accepter: 'Accepter la mission', cr_refuser: 'Refuser', cr_affecter: 'Affecter ce véhicule', cr_eta: 'Arrivée estimée (min)', cr_unite: 'Véhicule', cr_st_envoyee: 'Alerte envoyée', cr_st_recue: 'Alerte reçue', cr_st_acceptee: 'Mission acceptée', cr_st_vehicule_affecte: 'Véhicule affecté', cr_st_refusee: 'Refusée', cr_st_escaladee: 'Sans réponse : escaladée', cr_note: 'L’affectation reste une décision du répartiteur compétent ; en danger immédiat, les appels d’urgence officiels restent prioritaires.',
       profil_ccs: 'Profil CCS', profil_amb: 'Profil Ambulance', role_repartiteur: 'Répartiteur', role_paramedic: 'Paramédic', role_superviseur_secours: 'Superviseur', fictif: 'Données fictives',
@@ -132,6 +134,8 @@
       ch_porte: 'At the door', ch_route: 'On the way', ch_termines: 'Completed visits', ch_aucun: 'No visit.', ch_min: '{n} min at the door', ch_depart: 'Leaving the hospital',
       ch_H11: 'Arrival', ch_H12: 'Triage start', ch_H13: 'Triage end', ch_H14: 'Stretcher released', ch_H15: 'Departure', ch_corrigee: 'corrected', ch_total: 'total {n} min', ch_inactif: 'No hospital in your area uses Chrono yet.',
       o_regional: 'Regional view', o_flotte: 'Fleet', o_prealertes: 'Pre-alerts', o_demandes: 'Requests from facilities', o_historique: 'History', o_og: 'OG', o_mission: 'Mission', o_urgences: 'Ranked emergencies', o_transports: 'Transports',
+      k_dispo: 'Vehicles available', k_retards: 'Late pick-ups', k_incidents: 'Ongoing incidents', k_frais: 'Data updated at {h} (live updates).', rm_titre: 'My missions', rm_a_accepter: 'To accept', rm_acceptees: 'Accepted', rm_en_cours: 'In progress', rm_terminees: 'Done today', rm_retards: 'Late', rm_incidents: 'Incidents',
+      tr_sur_place: 'On site at pick-up', tr_remis: 'Patient handed over', tr_terminer: 'Mission complete', tr_incident: 'Report an incident', tr_incident_motif: 'Incident reason', tr_confirmer_sur_place: 'Confirm: on site', tr_confirmer_remis: 'Confirm: patient handed over', tr_confirmer_terminer: 'Confirm: mission complete', tr_fait_sur_place: 'on site', tr_fait_pris: 'picked up', tr_fait_arrivee: 'arrived', tr_fait_remis: 'handed over', tr_fait_terminee: 'complete', tr_incident_le: 'Incident reported at {h}',
       pa_eta: 'Estimated arrival', pa_eta_inconnue: 'ETA unavailable', pa_envoyer: 'Arrival pre-alert to {dest}', pa_maj: 'Update the pre-alert', pa_envoyee: 'Arrival pre-alert sent: the destination prepares the reception.', pa_etat: 'Pre-alert sent at {h} · estimated arrival: {eta}', pa_recue: 'received by the destination', pa_attente: 'acknowledgement pending', tr_confirmer_pris_en_charge: 'Confirm: resident on board', tr_confirmer_arrivee: 'Confirm arrival at {dest}',
       cr_titre: '🆘 Evacuation {numero} · {lieu}', cr_sim: 'SIMULATION', cr_detail: '{motif} · severity {gravite} · {n} residents ({a} to place)', cr_point: 'Assembly point: {p}', cr_accuser: 'Acknowledge', cr_accepter: 'Accept the mission', cr_refuser: 'Decline', cr_affecter: 'Assign this vehicle', cr_eta: 'Estimated arrival (min)', cr_unite: 'Vehicle', cr_st_envoyee: 'Alert sent', cr_st_recue: 'Alert received', cr_st_acceptee: 'Mission accepted', cr_st_vehicule_affecte: 'Vehicle assigned', cr_st_refusee: 'Declined', cr_st_escaladee: 'No answer: escalated', cr_note: 'Assignment remains the competent dispatcher’s decision; in immediate danger, official emergency calls come first.',
       profil_ccs: 'CCS profile', profil_amb: 'Ambulance profile', role_repartiteur: 'Dispatcher', role_paramedic: 'Paramedic', role_superviseur_secours: 'Supervisor', fictif: 'Fictitious data',
@@ -417,9 +421,14 @@
     const civ = d.reduce((n, h) => n + (h.urgence?.civieres_libres || 0), 0);
     const mission = etat.vehicules.filter((v) => ['en_route', 'sur_place', 'transport_hopital'].includes(v.etat)).length;
     const pa = etat.prealertes.filter((p) => OUVERTES.includes(p.statut)).length;
+    // Retards de prise en charge (créneau dépassé de 15 min sans départ) et incidents signalés : à surveiller par le coordonnateur
+    const now = Date.now(); const tr = etat.transports || [];
+    const retardsTr = tr.filter((x) => ['demandee', 'acceptee'].includes(x.statut) && (x.plage_confirmee_debut || x.plage_debut) && new Date(x.plage_confirmee_debut || x.plage_debut).getTime() < now - 15 * 60000).length;
+    const incidents = tr.filter((x) => x.incident_le && !x.terminee_le).length;
     const tuile = (n, l, rouge) => `<div class="tuile-c"><div class="gros"${rouge ? ' style="color:#DC2626"' : ''}>${n}</div><div class="note">${esc(l)}</div></div>`;
     return `<div class="tuiles-c">${tuile(d.length, t('k_urgences'))}${tuile(sat.length, sat.length ? t('k_sat_noms', { noms: sat.map((h) => ArrimoCarte.court(h.nom)).join(', ') }) : t('k_sat'), sat.length > 0)}
-      ${tuile(civ, t('k_civ'))}${tuile(`${mission} / ${etat.vehicules.length}`, t('k_mission'))}${tuile(pa, t('k_pa'))}</div>`;
+      ${tuile(civ, t('k_civ'))}${tuile(`${mission} / ${etat.vehicules.length}`, t('k_mission'))}${tuile(etat.vehicules.filter((v) => v.etat === 'disponible').length, t('k_dispo'))}${tuile(pa, t('k_pa'))}
+      ${tuile(retardsTr, t('k_retards'), retardsTr > 0)}${tuile(incidents, t('k_incidents'), incidents > 0)}</div><p class="note">${esc(t('k_frais', { h: heure(new Date()) }))}</p>`;
   }
   function resumeOg() {
     const d = etat.destinations;
@@ -550,7 +559,11 @@
           ${d.statut === 'pris_en_charge' && amb && (!d.destination_type || d.destination_type === 'hopital') ? `<button class="btn pri" data-tr-pa="${d.id}">${esc(t('tr_prealerte', { dest: d.hopital_prefere || d.destination }))}</button>` : ''}
           ${a.includes('prealerter') ? `<label class="lbl" for="tr-eta-${d.id}">${t('pa_eta')}</label><select id="tr-eta-${d.id}">${['', 5, 10, 15, 20, 30, 45, 60, 90].map((m) => `<option value="${m}">${m === '' ? t('pa_eta_inconnue') : `${m} min`}</option>`).join('')}</select>
             <button class="btn" data-tr-prealerter="${d.id}" data-version="${d.version}">${esc(t(d.prealerte_le ? 'pa_maj' : 'pa_envoyer', { dest: d.destination }))}</button>` : ''}
+          ${['sur_place', 'remis', 'terminer'].filter((x) => a.includes(x)).map((x) => `<button class="btn pri" data-tr-etape="${x}" data-id="${d.id}" data-version="${d.version}">${t('tr_' + x)}</button>`).join('')}
+          ${a.includes('incident') ? `<input id="tr-inc-${d.id}" maxlength="300" placeholder="${esc(t('tr_incident_motif'))}" aria-label="${esc(t('tr_incident_motif'))}" style="max-width:220px"><button class="btn" data-tr-etape="incident" data-id="${d.id}" data-version="${d.version}">${t('tr_incident')}</button>` : ''}
           ${['en_route', 'pris_en_charge', 'arrivee'].filter((x) => a.includes(x)).map((x) => `<button class="btn${x === 'arrivee' ? '' : ' pri'}" data-tr="${x}" data-id="${d.id}" data-version="${d.version}" data-confirmer="${esc(t('tr_confirmer_' + x, { dest: d.destination }))}">${t('tr_' + x)}</button>`).join('')}</div>` : ''}
+        ${[['sur_place_le', 'tr_fait_sur_place'], ['pris_en_charge_le', 'tr_fait_pris'], ['arrivee_le', 'tr_fait_arrivee'], ['remis_le', 'tr_fait_remis'], ['terminee_le', 'tr_fait_terminee']].filter(([k]) => d[k]).length ? `<p class="note">${[['sur_place_le', 'tr_fait_sur_place'], ['pris_en_charge_le', 'tr_fait_pris'], ['arrivee_le', 'tr_fait_arrivee'], ['remis_le', 'tr_fait_remis'], ['terminee_le', 'tr_fait_terminee']].filter(([k]) => d[k]).map(([k, l]) => `${t(l)} ${heure(d[k])}`).join(' · ')}</p>` : ''}
+        ${d.incident_le ? `<p class="erreur">⚠ ${esc(t('tr_incident_le', { h: heure(d.incident_le) }))} : ${esc(d.incident_motif || '')}</p>` : ''}
         ${d.prealerte_le ? `<p class="note">${esc(t('pa_etat', { h: heure(d.prealerte_le), eta: d.prealerte_eta_min == null ? t('pa_eta_inconnue') : `${d.prealerte_eta_min} min` }))} · <b>${t(d.prealerte_recue_le ? 'pa_recue' : 'pa_attente')}</b></p>` : ''}</div>`;
     });
     return `<section class="carte-s"><h2>${t('transports')}</h2><p class="note">${t('tr_aide')}</p>${lignes.join('') || `<p class="note">${t('tr_aucune')}</p>`}</section>`;
@@ -564,6 +577,16 @@
     const champ = document.getElementById('og-q');
     if (champ && saisie) champ.value = saisie;
     if (champ && actif === 'og-q') champ.focus();
+  }
+  /** Tableau de bord de l'équipage (cahier ultime, 4.4) : missions à accepter, acceptées, en cours, terminées aujourd'hui, retards, incidents. */
+  function resumeMissions() {
+    const tr = etat.transports || []; const auj = new Date().toDateString(); const now = Date.now();
+    const n = (f) => tr.filter(f).length;
+    const retard = n((d) => ['demandee', 'acceptee'].includes(d.statut) && (d.plage_confirmee_debut || d.plage_debut) && new Date(d.plage_confirmee_debut || d.plage_debut).getTime() < now - 15 * 60000);
+    const k = (lib, v, ton) => `<div class="kpi-amb${ton ? ` kpi-${ton}` : ''}"><b class="num">${v}</b><span>${esc(t(lib))}</span></div>`;
+    return `<section class="carte-s"><h2>${esc(t('rm_titre'))}</h2><div class="kpis-amb">${k('rm_a_accepter', n((d) => d.statut === 'demandee'), n((d) => d.statut === 'demandee') ? 'alerte' : '')}${k('rm_acceptees', n((d) => d.statut === 'acceptee'))}
+      ${k('rm_en_cours', n((d) => ['en_route', 'pris_en_charge'].includes(d.statut)))}${k('rm_terminees', n((d) => d.statut === 'arrivee' && d.arrivee_le && new Date(d.arrivee_le).toDateString() === auj))}
+      ${k('rm_retards', retard, retard ? 'alerte' : '')}${k('rm_incidents', n((d) => d.incident_le && !d.terminee_le), n((d) => d.incident_le && !d.terminee_le) ? 'alerte' : '')}</div></section>`;
   }
   function rendreEcran() {
     if (!etat.moi) return;
@@ -612,7 +635,7 @@
     const superviseur = etat.moi.utilisateur.role === 'superviseur_secours';
     const r = etat.classees; const o = ongletCourant(true);
     const sections = {
-      mission: `${carteMissionAmb(u)}${carteVehicule(u)}${enCours ? carteEnCours(enCours) : enAttente ? '' : formulaire(u)}`,
+      mission: `${resumeMissions()}${carteMissionAmb(u)}${carteVehicule(u)}${enCours ? carteEnCours(enCours) : enAttente ? '' : formulaire(u)}`,
       urgences: `<section class="carte-s"><h2>${t('classees')}</h2>${positionCarte(u)}
         ${r?.depuis_etab ? `<label for="depart-amb">${t('depuis_attente')}</label><select id="depart-amb" style="min-height:48px;font-size:17px;max-width:100%">${(etat.hebergements || []).map((e) => `<option value="e:${e.id}"${`e:${e.id}` === etat.departAmb ? ' selected' : ''}>${esc(ArrimoCarte.court(e.nom))}</option>`).join('')}</select>` : ''}
         ${r?.depart ? `<p class="note">${esc(r.depart.le ? t('classees_aide', { depart: u.numero, heure: heure(r.depart.le) }) : t('classees_aide_lieu', { depart: ArrimoCarte.court(r.depart.nom || '') }))}</p>` : ''}${tableauClasse(r, { choisir: !enCours })}
@@ -664,6 +687,13 @@
       const souhaite = d.hopital_prefere_id && etat.destinations.some((x) => x.id === d.hopital_prefere_id) ? d.hopital_prefere_id : d.destination_id;
       etat.formulaire = { ...etat.formulaire, destination: String(souhaite), transport: d.id };
       rendre(); document.querySelector('[data-choix="priorite"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
+    }
+    if (b.dataset.trEtape) {
+      const a = b.dataset.trEtape; const id = b.dataset.id; const corps = { action: a, version: Number(b.dataset.version) };
+      if (a === 'incident') { corps.motif = document.getElementById(`tr-inc-${id}`)?.value || ''; }
+      else if (!b.dataset.arme) { b.dataset.arme = '1'; b.textContent = t('tr_confirmer_' + a); return; }   // confirmation explicite
+      try { await api('POST', `/secours/transports/${id}/action`, corps); etat.message = t('fait'); } catch (e) { etat.erreur = estReseau(e) ? t('hors_ligne') : e.message; }
+      return charger();
     }
     if (b.dataset.trPrealerter) {
       const id = b.dataset.trPrealerter; const eta = document.getElementById(`tr-eta-${id}`)?.value;

@@ -306,6 +306,7 @@ function creerApp(pool, options = {}) {
   api.post('/messagerie/annonces', route((req) => msg.publier(pool, req.utilisateur, req.body)));
   // Arrimo Flux (cahier ultime, 21 nov. 2026) : arrivées et départs de l'établissement
   api.get('/arrimo-flux', route((req) => require('./arrimo-flux').mouvements(pool, req.utilisateur, req.query)));
+  api.get('/arrimo-flux/fiche', route((req) => require('./arrimo-flux').fiche(pool, req.utilisateur, req.query)));
   api.get('/sillage/attention', route((req) => require('./sillage').attention(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
 
   // Intervenant d'un prestataire (21 nov. 2026) : ses visites seulement

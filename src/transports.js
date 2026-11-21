@@ -228,9 +228,10 @@ async function preparerChambre(c, d, u, eta) {
 }
 function actions(d, u, cote, etabId) {
   if (d.statut === 'a_valider') return cote === 'etablissement' && Number(etabId) === d.origine_id ? ['transmettre', 'annuler'] : [];
-  if (!OUVERTES.includes(d.statut)) return [];
+  if (!OUVERTES.includes(d.statut) && !(cote === 'ambulance' && d.statut === 'arrivee')) return [];
   if (cote === 'ambulance') {
-    const base = d.statut === 'demandee' ? ['accepter', 'refuser'] : d.statut === 'acceptee' ? ['en_route'] : d.statut === 'en_route' ? ['pris_en_charge'] : ['arrivee'];
+    if (d.statut === 'arrivee') return [...(!d.remis_le ? ['remis'] : []), ...(d.remis_le && !d.terminee_le ? ['terminer'] : []), ...(!d.terminee_le ? ['incident'] : [])];
+    const base = d.statut === 'demandee' ? ['accepter', 'refuser'] : d.statut === 'acceptee' ? ['en_route', 'incident'] : d.statut === 'en_route' ? [...(!d.sur_place_le ? ['sur_place'] : []), 'pris_en_charge', 'incident'] : ['arrivee', 'incident'];
     return ['en_route', 'pris_en_charge'].includes(d.statut) && d.destination_id && d.destination_type && d.destination_type !== 'hopital' ? [...base, 'prealerter'] : base;
   }
   if (cote === 'etablissement' && Number(etabId) === d.destination_id && d.prealerte_le && !d.prealerte_recue_le) return ['accuser_prealerte'];
@@ -255,7 +256,8 @@ async function agir(pool, u, id, b) {
   const a = String(b.action || '');
   return transaction(pool, async (c) => {
     const d = (await c.query('SELECT * FROM demandes_transport WHERE id = $1 FOR UPDATE', [d0.id])).rows[0];
-    if (!OUVERTES.includes(d.statut) && !(d.statut === 'a_valider' && cote === 'etablissement')) throw new ErreurHttp(409, 'transport_clos');
+    const apresArrivee = cote === 'ambulance' && d.statut === 'arrivee' && ['remis', 'terminer', 'incident'].includes(a);
+    if (!OUVERTES.includes(d.statut) && !(d.statut === 'a_valider' && cote === 'etablissement') && !apresArrivee) throw new ErreurHttp(409, 'transport_clos');
     if (b.version != null && Number(b.version) !== d.version) throw new ErreurHttp(409, 'version_perimee');
     const maj = async (sql, vals = []) => (await c.query(`UPDATE demandes_transport SET ${sql}, version = version + 1, modifie_le = now() WHERE id = $1 RETURNING *`, [d.id, ...vals])).rows[0];
     const attendu = { accepter: 'demandee', refuser: 'demandee', en_route: 'acceptee', pris_en_charge: 'en_route', arrivee: 'pris_en_charge' };
@@ -282,6 +284,27 @@ async function agir(pool, u, id, b) {
         await require('./services').notifier(c, d.destination_id, null, 'transport_prealerte', { numero: d.numero, origine: orig, eta: eta == null ? '—' : String(eta) });
         await preparerChambre(c, n, u, eta);
       }
+      return n;
+    }
+    if (cote === 'ambulance' && ['sur_place', 'remis', 'terminer', 'incident'].includes(a)) {
+      // Étapes physiques déclarées par l'équipage (cahier ultime, 11.3 et 11.5) : chacune horodatée, sans changer le statut principal
+      if (a === 'sur_place') {
+        if (d.statut !== 'en_route' || d.sur_place_le) throw new ErreurHttp(409, 'transport_statut_incompatible');
+        n = await maj('sur_place_le = now()');
+        if (n.unite_id) await require('./vehicules').fixer(c, n.unite_id, 'sur_place', { source: 'transport', utilisateurId: u.id || null });
+      } else if (a === 'remis') {
+        if (d.statut !== 'arrivee' || d.remis_le) throw new ErreurHttp(409, 'transport_statut_incompatible');
+        n = await maj('remis_le = now()');
+      } else if (a === 'terminer') {
+        if (d.statut !== 'arrivee' || !d.remis_le || d.terminee_le) throw new ErreurHttp(409, 'transport_statut_incompatible');
+        n = await maj('terminee_le = now()');
+      } else {
+        const motif = String(b.motif || '').trim(); if (motif.length < 3 || motif.length > 300) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'motif' });
+        n = await maj('incident_le = now(), incident_motif = $2', [motif]);
+        for (const e of [d.origine_id, d.destination_id].filter(Boolean)) await require('./services').notifier(c, e, null, 'transport_incident', { numero: d.numero });
+      }
+      await evenement(c, n, a, u, a === 'incident' ? { motif: n.incident_motif } : {});
+      await emettre(c, n, `transport.${a}`);
       return n;
     }
     if (cote === 'ambulance') {
