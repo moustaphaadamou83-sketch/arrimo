@@ -84,8 +84,8 @@ test('migration SH 59 : les types du catalogue en base contiennent ceux du code 
   }
 });
 
-test('cartes : 17 au total, seules celles du type apparaissent, état et filtre', () => {
-  assert.strictEqual(cartes.CARTES.length, 17);
+test('cartes : 18 au total (DSN compris), seules celles du type apparaissent, état et filtre', () => {
+  assert.strictEqual(cartes.CARTES.length, 18);
   const catalogue = (type) => TE.catalogue(type).map((m) => ({ ...m, licence: 'non_selectionne' }));
   const hop = cartes.cartesDuType(catalogue('hopital')).map((c) => c.id);
   assert.ok(hop.includes('hopital') && hop.includes('chrono') && !hop.includes('hebergement') && !hop.includes('visites_confirmees'));

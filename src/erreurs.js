@@ -150,6 +150,11 @@ const MESSAGES = {
   // transferts
   etab_introuvable: 'Établissement introuvable.',
   objet_introuvable: 'Introuvable ou hors de votre périmètre.',
+  dsn_reserve_demo: 'Le dossier clinique (DSN) n’est disponible qu’en démonstration et en recette, avec des patients fictifs.',
+  dsn_habilitation_requise: 'Une habilitation DSN est requise : {fonctions}.',
+  dsn_version_remplacee: 'Cet élément a été remplacé par une version plus récente.',
+  dsn_action_impossible: 'Cette action n’est pas possible dans l’état actuel.',
+  dsn_auto_habilitation: 'Un administrateur ne peut pas s’accorder lui-même l’accès aux dossiers.',
   autre_etab: 'Choisissez un autre établissement que le vôtre.',
   etab_ne_partage_pas: 'Cet établissement ne partage pas sa capacité.',
   hors_rayon: 'Établissement hors du rayon de suggestion.',

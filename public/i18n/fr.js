@@ -61,7 +61,7 @@ window.ARRIMO_I18N.fr = {
     reinit_titre: 'Nouveau mot de passe', reinit_aide: 'Choisissez un mot de passe d’au moins 12 caractères, avec des lettres et des chiffres.',
     reinit_ok: 'Mot de passe enregistré. Connectez-vous avec votre nouveau mot de passe.',
   },
-  barre: { formation: 'Ma formation',
+  barre: { dsn: 'Dossier santé (démo)', formation: 'Ma formation',
     recette: 'Recette · données de test, pas d’usage réel',
     menu: 'Compte',
     etablissement: 'Établissement', notifications: 'Notifications', mon_compte: 'Mon compte', deconnexion: 'Déconnexion', aide: 'Aide',

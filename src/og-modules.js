@@ -21,7 +21,7 @@ const INTENTIONS = [
   ['bourse', /\b(bourse|placement exchange)\b/],
 ];
 
-const NUMERO = /\b(PA|CH|DT|VI|DH|MC|CO|TR)-\d{3,6}\b/i;
+const NUMERO = /\b(TRX|PA|CH|DT|VI|DH|MC|CO|TR)-\d{3,6}\b/i;
 const ATTENTE = /(qu.?est.?ce qui est en attente|qu.?y a.?t.?il en attente|quoi (est )?en attente|actions? en attente|confirmations? manquantes?|parcours a surveiller|what.?s pending|what is pending|what needs attention|pending actions?|paths? to watch)/;
 async function repondre(pool, u, etabId, question, langue) {
   const qn = norm(question);
@@ -40,6 +40,24 @@ async function repondre(pool, u, etabId, question, langue) {
       return reponse(a.items.length ? `${T(L, 'À regarder maintenant :', 'To look at now:')}\n${a.items.map((i) => `• ${i.numero} · ${lib[i.code]}${i.etapes ? ` (${i.etapes.join(', ')})` : ''}${i.chez_nous ? '' : T(L, ' · chez le partenaire', ' · at the partner')}`).join('\n')}\n${T(L, 'Demandez-moi « explique le parcours <numéro> » pour le détail. L’équipe décide.', 'Ask me “explain path <number>” for details. The team decides.')}`
         : T(L, 'Rien en attente : aucune confirmation manquante ni étape en retard.', 'Nothing pending: no missing confirmation or overdue step.'), 'attention', 'vigilance');
     }
+  }
+  // DSN (22 nov. 2026) : résumé SOURCÉ du dossier autorisé (« résume le dossier P-00123 ») ; jamais de diagnostic posé par OG, aucune écriture
+  const refPatient = String(question || '').match(/\bP-\d{4,6}\b/i);
+  if (refPatient && /\b(resume|resumer|dossier|summary|summarize|record)\b/.test(qn) && etabId) {
+    const L = require('./og-localisation').langueDemandee(question, langue);
+    const p = (await pool.query('SELECT id FROM patients WHERE etablissement_id = $1 AND upper(reference) = $2', [etabId, refPatient[0].toUpperCase()])).rows[0];
+    if (!p) return null;
+    let d; try { d = await require('./dsn').dossier(pool, u, p.id); } catch (e) { if ([403, 404].includes(e.statut)) return reponse(T(L, 'Je n’ai pas accès à ce dossier avec vos habilitations.', 'I cannot access this record with your authorizations.'), 'dsn'); throw e; }
+    const src = (x) => `${x.numero}, ${x.auteur || ''}, ${new Date(x.cree_le).toLocaleDateString(L === 'en' ? 'en-CA' : 'fr-CA')}`;
+    const liste = (titre, xs, f) => (xs.length ? `${titre} :\n${xs.map((x) => `• ${f(x.donnees)} [${src(x)}]`).join('\n')}` : `${titre} : ${T(L, 'aucun élément enregistré', 'nothing recorded')}`);
+    const actives = d.prescriptions.filter((x) => x.statut === 'validee');
+    const texte = [`${T(L, 'Résumé du dossier', 'Record summary')} ${d.patient.reference} (${T(L, 'démonstration, données fictives', 'demo, fictitious data')}) :`,
+      liste(T(L, 'Allergies', 'Allergies'), d.allergies.filter((x) => x.statut === 'actif'), (v) => `${v.substance}${v.gravite ? ` (${v.gravite})` : ''}`),
+      liste(T(L, 'Antécédents', 'History'), d.antecedents, (v) => v.libelle),
+      liste(T(L, 'Diagnostics inscrits par l’équipe', 'Diagnoses recorded by the team'), d.diagnostics.filter((x) => x.statut === 'actif'), (v) => `${v.libelle}${v.certitude ? ` (${v.certitude})` : ''}`),
+      liste(T(L, 'Prescriptions validées (simulées)', 'Validated prescriptions (simulated)'), actives, (v) => `${v.substance} ${v.dose} ${v.voie} ${v.frequence}`),
+      T(L, 'Chaque ligne cite sa source. OG résume ; il ne pose aucun diagnostic et ne modifie pas le dossier.', 'Each line cites its source. OG summarizes; it makes no diagnosis and does not change the record.')].join('\n\n');
+    return reponse(texte, 'dsn', 'dsn');
   }
   // Formation (22 nov. 2026) : « comment faire… ? » → la capsule qui le montre (2 à 3 min), si la formation est activée
   if (/\b(comment|how (do|to|can))\b/.test(qn)) {

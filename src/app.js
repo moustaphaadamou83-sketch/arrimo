@@ -228,6 +228,31 @@ function creerApp(pool, options = {}) {
     return ok ? next() : next(new ErreurHttp(403, 'role_entretien'));
   });
 
+  // DSN international (22 nov. 2026) : démonstration et recette seulement ; habilitations par établissement ; paquets de transition
+  const dsn = require('./dsn');
+  api.get('/dsn/schema', route(() => { dsn.exigerEnvironnement(); return { genres: Object.fromEntries(Object.entries(dsn.GENRES).map(([k, g]) => [k, { champs: Object.keys(g.champs), listes: g.listes, requis: g.requis, creer: g.creer }])), partageables: dsn.PARTAGEABLES, fonctions: dsn.FONCTIONS }; }));
+  api.get('/dsn/patients', route((req) => dsn.rechercher(pool, req.utilisateur, req.query)));
+  api.post('/dsn/patients', route((req) => dsn.creerPatient(pool, req.utilisateur, req.body)));
+  api.get('/dsn/patients/:id', route((req) => dsn.dossier(pool, req.utilisateur, req.params.id)));
+  api.put('/dsn/patients/:id/identite', route((req) => dsn.corrigerIdentite(pool, req.utilisateur, req.params.id, req.body)));
+  api.post('/dsn/patients/:id/elements', route((req) => dsn.ajouter(pool, req.utilisateur, req.params.id, req.body)));
+  api.post('/dsn/elements/:id/action', route((req) => dsn.agir(pool, req.utilisateur, req.params.id, req.body)));
+  api.post('/dsn/patients/:id/documents', route((req) => dsn.deposer(pool, req.utilisateur, req.params.id, req.body)));
+  api.get('/dsn/documents/:id', async (req, res, next) => {
+    try { const d = await dsn.telecharger(pool, req.utilisateur, req.params.id); res.set({ 'Content-Type': d.mime, 'Content-Disposition': `attachment; filename="${d.numero}${d.mime === 'application/pdf' ? '.pdf' : d.mime === 'image/png' ? '.png' : '.jpg'}"`, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }).send(d.contenu); } catch (e) { next(e); }
+  });
+  api.post('/dsn/patients/:id/urgence', route((req) => dsn.accesUrgence(pool, req.utilisateur, req.params.id, req.body)));
+  api.post('/dsn/patients/:id/transitions', route((req) => dsn.creerTransition(pool, req.utilisateur, req.params.id, req.body)));
+  api.post('/dsn/transitions/:id/valider', route((req) => dsn.validerTransition(pool, req.utilisateur, req.params.id)));
+  api.post('/dsn/transitions/:id/envoyer', route((req) => dsn.envoyerTransition(pool, req.utilisateur, req.params.id, req.body)));
+  api.get('/dsn/transitions/recues', route((req) => dsn.transitionsRecues(pool, req.utilisateur, req.query.etablissement_id)));
+  api.post('/dsn/transitions/:id/decision', route((req) => dsn.deciderTransition(pool, req.utilisateur, req.params.id, req.body)));
+  api.post('/dsn/transitions/:id/dossier', route((req) => dsn.ouvrirDossierDepuisTransition(pool, req.utilisateur, req.params.id)));
+  api.get('/dsn/habilitations', route((req) => dsn.habilitations(pool, req.utilisateur, req.query.etablissement_id)));
+  api.put('/dsn/habilitations', route((req) => dsn.habiliter(pool, req.utilisateur, req.body)));
+  api.get('/dsn/acces', route((req) => dsn.journalAcces(pool, req.utilisateur, req.query)));
+  app.get(['/dsn', '/dsn/'], (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'dsn', 'index.html')));
+
   // Module Formation (22 nov. 2026) : ouvert à tous les rôles connectés, AVANT les filtres des rôles limités ; chacun ne voit que ses parcours
   const fp = require('./formation-parcours');
   api.get('/formation/moi', route((req) => fp.moi(pool, req.utilisateur, req.langue)));

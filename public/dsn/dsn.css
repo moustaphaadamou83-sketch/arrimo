@@ -1,0 +1,54 @@
+/* DSN (22 nov. 2026) — charte Arrimo : principal #0E5E6F, secondaire #159895, accent #57C5B6 ; rouge/orange/vert : statuts seulement. */
+@font-face { font-family: "Public Sans"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("/polices/public-sans-latin-wght-normal.woff2") format("woff2"); }
+:root { --p: #0E5E6F; --s: #159895; --a: #57C5B6; --fond: #F5F8FA; --carte: #fff; --t: #1F2937; --t2: #64748B; --b: #E2E8F0; --doux: #E6F4F2; --rouge: #DC2626; --orange: #F59E0B; --vert: #16A34A; color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --fond: #0B1A1F; --carte: #11252B; --t: #E5EEF0; --t2: #9DB2B8; --b: #23404A; --doux: #163A40; color-scheme: dark; } }
+* { box-sizing: border-box; }
+body { margin: 0; font: 400 15.5px/1.5 "Public Sans", system-ui, sans-serif; color: var(--t); background: var(--fond); }
+button, input, select, textarea { font: inherit; }
+:focus-visible { outline: 3px solid var(--a); outline-offset: 2px; }
+.ds-demo { position: sticky; top: 0; z-index: 20; text-align: center; font-weight: 800; letter-spacing: .08em; font-size: 12.5px; padding: 6px; background: #FEF3C7; color: #78350F; border-bottom: 1px solid #F59E0B; }
+.ds-barre { background: linear-gradient(110deg, #0B3B46, #0E5E6F 60%, #159895); color: #fff; position: sticky; top: 29px; z-index: 19; }
+.ds-barre-in { max-width: 1240px; margin: 0 auto; padding: 10px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.ds-logo { display: inline-flex; gap: 8px; align-items: center; color: #fff; text-decoration: none; font-weight: 800; }
+.ds-titre { font-weight: 700; }
+.ds-barre select { margin-left: auto; background: #fff; color: #1F2937; border: 0; border-radius: 8px; padding: 7px 10px; min-height: 40px; max-width: 280px; }
+.ds-langue { display: inline-flex; border: 1px solid rgba(255, 255, 255, .4); border-radius: 8px; overflow: hidden; }
+.ds-langue button { background: none; border: 0; color: #fff; padding: 6px 11px; min-height: 40px; font-weight: 700; cursor: pointer; }
+.ds-langue button[aria-pressed="true"] { background: #fff; color: #0E5E6F; }
+.ds-nav { max-width: 1240px; margin: 0 auto; padding: 0 16px; display: flex; gap: 4px; overflow-x: auto; }
+.ds-nav button { background: none; border: 0; color: rgba(255, 255, 255, .85); padding: 10px 12px; border-bottom: 3px solid transparent; cursor: pointer; font-weight: 600; white-space: nowrap; min-height: 44px; }
+.ds-nav button[aria-selected="true"] { color: #fff; border-bottom-color: var(--a); }
+.ds-main { max-width: 1240px; margin: 0 auto; padding: 20px 16px 60px; outline: none; }
+h1, h2, h3 { margin: 0 0 10px; line-height: 1.2; }
+h1 { font-size: 24px; } h2 { font-size: 19px; } h3 { font-size: 16px; }
+.note { color: var(--t2); font-size: 14px; }
+.carte { background: var(--carte); border: 1px solid var(--b); border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+.grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 10px; border: 1px solid var(--b); background: var(--carte); color: var(--t); cursor: pointer; font-weight: 600; min-height: 40px; }
+.btn.pri { background: var(--p); border-color: var(--p); color: #fff; }
+.btn.dan { color: var(--rouge); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.ligne { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--b); vertical-align: top; font-size: 14.5px; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--t2); }
+.tableau { overflow-x: auto; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; background: var(--doux); color: var(--p); }
+.badge.ok { background: rgba(22, 163, 74, .14); color: var(--vert); } .badge.att { background: rgba(245, 158, 11, .16); color: #92400E; } .badge.ko { background: rgba(220, 38, 38, .12); color: var(--rouge); }
+.allergie { display: inline-flex; gap: 6px; align-items: center; padding: 4px 10px; border-radius: 999px; background: rgba(220, 38, 38, .1); color: var(--rouge); font-weight: 700; font-size: 13px; margin: 2px; }
+.entete-patient { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: space-between; }
+.entete-patient .id { font-size: 22px; font-weight: 800; }
+.sous { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0; }
+.sous button { border: 1px solid var(--b); background: var(--carte); color: var(--t); border-radius: 999px; padding: 7px 14px; font-weight: 600; cursor: pointer; min-height: 38px; }
+.sous button[aria-selected="true"] { background: var(--p); color: #fff; border-color: var(--p); }
+.champ { display: grid; gap: 4px; margin-bottom: 10px; }
+.champ label { font-weight: 600; font-size: 14px; }
+.champ input, .champ select, .champ textarea { padding: 9px 11px; border: 1px solid var(--b); border-radius: 9px; background: var(--fond); color: var(--t); min-height: 40px; }
+.ds-modale { border: 1px solid var(--b); border-radius: 14px; padding: 0; width: min(620px, calc(100vw - 32px)); background: var(--carte); color: var(--t); }
+.ds-modale form { padding: 18px; }
+.ds-modale::backdrop { background: rgba(15, 23, 42, .45); }
+.vide { padding: 20px; text-align: center; color: var(--t2); }
+.erreur { color: var(--rouge); font-weight: 600; }
+.chrono li { margin-bottom: 6px; }
+.cases label { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; }
+@media (max-width: 700px) { .ds-barre select { margin-left: 0; max-width: 100%; flex: 1 1 100%; } }

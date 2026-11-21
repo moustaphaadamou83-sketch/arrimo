@@ -87,6 +87,8 @@ const MODULES = [
     note: 'Tableaux régionaux, petits nombres masqués, CSV', note_en: 'Regional dashboards, small counts masked, CSV' },
   { code: 'mode_crise', categorie: 'optionnel', types: ['hopital', 'chsld'], statut: 'disponible', drapeau: 'mode_crise', nom: 'Mode crise (évacuation)', nom_en: 'Crisis mode (evacuation)',
     note: 'Places de la région, lieu proposé par résident, suivi', note_en: 'Regional places, proposed site per resident, tracking' },
+  { code: 'dsn', categorie: 'optionnel', types: ['hopital', 'chsld'], statut: 'disponible', drapeau: 'dsn', nom: 'Dossier santé numérique (DSN)', nom_en: 'Electronic health record (EHR)',
+    note: 'Dossier clinique : démonstration et recette seulement, patients synthétiques', note_en: 'Clinical record: demo and testing only, synthetic patients' },
   { code: 'formation', categorie: 'optionnel', types: ['hopital', 'chsld', ...Object.keys(TYPES).filter((t) => TYPES[t].famille === 'secours')], statut: 'disponible', drapeau: 'formation', nom: 'Formation', nom_en: 'Training',
     note: 'Parcours par rôle, capsules courtes, exercices et attestations', note_en: 'Role-based paths, short lessons, exercises and certificates' },
   { code: 'visites_confirmees', categorie: 'optionnel', types: ['chsld'], statut: 'disponible', drapeau: 'visites_confirmees', nom: 'Visites confirmées', nom_en: 'Confirmed visits',

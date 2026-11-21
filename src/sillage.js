@@ -21,6 +21,7 @@ const SEQUENCES = {
   mission_ccs: ['demande', 'decision', 'arrivee'],
   coordination: ['demande', 'depart', 'arrivee'],
   visite: ['arrivee', 'depart'],
+  dsn_transition: ['demande', 'decision', 'arrivee'],
 };
 // Écran du module qui porte l'objet (pour « ouvrir dans le module »)
 const ECRANS = { passage_chrono: 'chrono', prealerte: 'secours', transfert: 'transferts', demande_transport: 'transports-planifies', demande_hebergement: 'c-demandes',
@@ -50,6 +51,9 @@ const FICHES = {
   coordination: `SELECT c.numero, c.statut, c.cree_le, ARRAY[c.origine_id, c.destination_id] AS etabs, '{}'::int[] AS orgs,
       ARRAY(SELECT 'demande_transport:' || d.id FROM demandes_transport d WHERE d.coordination_id = c.id) || ARRAY(SELECT 'prealerte:' || p.id FROM prealertes p WHERE p.coordination_id = c.id) AS liens,
       (SELECT o.nom || ' → ' || d.nom FROM etablissements o, etablissements d WHERE o.id = c.origine_id AND d.id = c.destination_id) AS lieu FROM coordinations c WHERE c.id = $1`,
+  dsn_transition: `SELECT t.numero, t.statut, t.cree_le, ARRAY[t.etablissement_id, t.destination_id] AS etabs, '{}'::int[] AS orgs,
+      array_remove(ARRAY[CASE WHEN t.demande_transport_id IS NOT NULL THEN 'demande_transport:' || t.demande_transport_id END], NULL) AS liens,
+      (SELECT o.nom || ' → ' || d.nom FROM etablissements o, etablissements d WHERE o.id = t.etablissement_id AND d.id = t.destination_id) AS lieu FROM dsn_transitions t WHERE t.id = $1`,
   visite: `SELECT v.numero, v.statut, v.cree_le, ARRAY[v.etablissement_id] AS etabs, ARRAY[v.prestataire_id] AS orgs, '{}'::text[] AS liens,
       (SELECT e.nom FROM etablissements e WHERE e.id = v.etablissement_id) AS lieu FROM visites v WHERE v.id = $1`,
 };
@@ -130,6 +134,11 @@ async function attention(pool, u, etabId) {
   for (const p of porte) items.push({ cle: `passage_chrono:${p.id}:porte`, code: 'civiere_au_dela_cible', objet: 'passage_chrono', id: p.id, numero: p.numero, depuis: p.heure, chez_nous: true, ecran: 'chrono' });
   const manquees = (await pool.query("SELECT id, numero, fin_prevue FROM visites WHERE etablissement_id = $1 AND statut = 'manquee' AND soin_rpa IS NULL AND fin_prevue > now() - interval '7 days'", [id])).rows;
   for (const v of manquees) items.push({ cle: `visite:${v.id}:manquee`, code: 'visite_manquee', objet: 'visite', id: v.id, numero: v.numero, depuis: v.fin_prevue, chez_nous: true, ecran: 'visites' });
+  // DSN : paquet de transition envoyé sans décision depuis 24 h, ou accepté sans réception 2 h après l'arrivée prévue
+  const trx = (await pool.query(`SELECT id, numero, envoye_le, arrivee_prevue_le, statut, destination_id FROM dsn_transitions WHERE (etablissement_id = $1 OR destination_id = $1)
+    AND ((statut = 'envoye' AND envoye_le < now() - interval '24 hours') OR (statut = 'accepte' AND arrivee_prevue_le < now() - interval '2 hours'))`, [id]).catch(() => ({ rows: [] }))).rows;
+  for (const t of trx) items.push({ cle: `dsn_transition:${t.id}:confirmation`, code: t.statut === 'envoye' ? 'confirmation_manquante' : 'reception_manquante', objet: 'dsn_transition', id: t.id, numero: t.numero,
+    depuis: t.statut === 'envoye' ? t.envoye_le : t.arrivee_prevue_le, chez_nous: Number(t.destination_id) === id, ecran: 'dsn' });
   // Étapes sautées (48 h) sur les objets de l'établissement
   const recents = (await pool.query(`SELECT DISTINCT h.objet, h.objet_id FROM horodatages h WHERE h.enregistre_le > now() - interval '48 hours' AND h.objet = ANY($2)
       AND ((h.objet = 'passage_chrono' AND EXISTS (SELECT 1 FROM passages_chrono p WHERE p.id = h.objet_id AND p.etablissement_id = $1))
@@ -152,7 +161,7 @@ async function attention(pool, u, etabId) {
 async function expliquer(pool, u, numero, langue = 'fr') {
   const en = langue === 'en';
   const num = String(numero || '').trim().toUpperCase();
-  const TABLES = [['PA-', 'prealerte', 'prealertes'], ['CH-', 'passage_chrono', 'passages_chrono'], ['DT-', 'demande_transport', 'demandes_transport'], ['VI-', 'visite', 'visites'],
+  const TABLES = [['TRX-', 'dsn_transition', 'dsn_transitions'], ['PA-', 'prealerte', 'prealertes'], ['CH-', 'passage_chrono', 'passages_chrono'], ['DT-', 'demande_transport', 'demandes_transport'], ['VI-', 'visite', 'visites'],
     ['DH-', 'demande_hebergement', 'demandes_hebergement'], ['MC-', 'mission_ccs', 'missions_ccs'], ['CO-', 'coordination', 'coordinations'], ['TR-', 'transfert', 'transferts'], ['T-', 'transfert', 'transferts']];
   const t = TABLES.find(([p]) => num.startsWith(p)); if (!t) return null;
   const r = (await pool.query(`SELECT id FROM ${t[2]} WHERE upper(numero) = $1`, [num])).rows[0]; if (!r) return null;

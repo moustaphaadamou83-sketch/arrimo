@@ -579,6 +579,8 @@ function appliquerModules() {
   document.querySelectorAll('#onglets .onglets-groupe[data-type]').forEach((g) => { g.hidden = g.dataset.type !== type || entretien; });
   // Formation (22 nov. 2026) : entrée « Ma formation » si le module est activé pour l'établissement courant
   const bf = $('#b-formation'); if (bf) bf.hidden = !(mods.formation === true || etat.moi.utilisateur.gestionnaire);
+  // DSN (22 nov. 2026) : entrée « Dossier santé » si le module est activé pour l'établissement courant (démo et recette seulement côté serveur)
+  const bd = $('#b-dsn'); if (bd) bd.hidden = mods.dsn !== true;
   // Nettoyage (commun) : dans le groupe Hébergement d'un CHSLD, dans Opérations d'un hôpital
   const net = $('#onglets button[data-v="nettoyage"]');
   const ancre = type === 'chsld' ? $('#onglets button[data-v="c-admissions"]') : $('#onglets button[data-v="transferts"]');
