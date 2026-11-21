@@ -589,6 +589,8 @@ function appliquerModules() {
   const placer = (v, apres) => { const x = $(`#onglets button[data-v="${v}"]`); const y = $(`#onglets button[data-v="${apres}"]`); if (x && y && y.nextElementSibling !== x) y.after(x); };
   if (type === 'chsld') { placer('donnees', 'c-indicateurs'); placer('bourse', 'c-indicateurs'); placer('transports-planifies', 'c-indicateurs'); }
   else { placer('bourse', 'vigilance'); placer('transports-planifies', 'vigilance'); placer('donnees', 'national'); }
+  // DSN (22 nov. 2026) : module clinique à côté des patients (hôpital) ou des résidents (hébergement)
+  placer('dsn', type === 'chsld' ? 'c-residents' : 'patients');
   const accueil = type === 'chsld' ? 'c-accueil' : 'copilote';
   const cur = document.querySelector(`#onglets button[data-v="${etat.vue}"]`);
   if (cur && cur.hidden && !entretien) { etat.vue = accueil; document.querySelectorAll('#onglets button[data-v]').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.v === accueil))); document.querySelectorAll('.contenu > section').forEach((sec) => { sec.hidden = sec.id !== `v-${accueil}`; }); }
@@ -640,7 +642,7 @@ async function rafraichir() {
     await Promise.all([e ? majCompteurs() : null, ({
       copilote: vueCopilote, reseau: vueReseau, national: vueNational, lits: vueLits, urgence: vueUrgence, admissions: vueAdmissions, transferts: vueTransferts,
       nettoyage: vueNettoyage, vigilance: async () => { await vueVigilance(); await window.ArrimoSillage?.vigilance($('#v-vigilance'), etat.ctx); }, nsa: vueNsa, indicateurs: vueIndicateurs, journal: vueJournal, params: vueParams,
-      admin: vueAdmin, compte: vueCompte, support:vueSupportClient, patients: vuePatients, continuite: vueContinuite, ...(window.ArrimoChsld?.vues || {}), ...(window.ArrimoSecours?.vues || {}), ...(window.ArrimoChrono?.vues || {}), ...(window.ArrimoTransportPlanifie?.vues || {}), ...(window.ArrimoBourse?.vues || {}), donnees: () => window.ArrimoDonnees.afficher($('#v-donnees'), { api, langue, etablissement_id: etat.ctx }), ...(window.ArrimoVisitesEviter?.vues || {}), crise: () => window.ArrimoCrise.afficher($('#v-crise'), { api, langue, etablissement_id: etat.ctx }),
+      admin: vueAdmin, compte: vueCompte, support:vueSupportClient, patients: vuePatients, continuite: vueContinuite, ...(window.ArrimoChsld?.vues || {}), ...(window.ArrimoSecours?.vues || {}), ...(window.ArrimoChrono?.vues || {}), ...(window.ArrimoTransportPlanifie?.vues || {}), ...(window.ArrimoBourse?.vues || {}), donnees: () => window.ArrimoDonnees.afficher($('#v-donnees'), { api, langue, etablissement_id: etat.ctx }), dsn: vueDsn, ...(window.ArrimoVisitesEviter?.vues || {}), crise: () => window.ArrimoCrise.afficher($('#v-crise'), { api, langue, etablissement_id: etat.ctx }),
     })[etat.vue]()]);
     poserMenuParametres();
     majInfosLieu();
@@ -1762,6 +1764,14 @@ function modaleArrivee(libres, cfg) {
 
 /* ---------------- Patients fictifs : recherche, vérification d'identité, historique des passages ---------------- */
 // Démonstration et recette seulement (fiches fictives) ; historique administratif, aucune donnée clinique.
+/** DSN (22 nov. 2026) : le module s'ouvre dans l'onglet, pour l'établissement courant ; démo et recette seulement (refus côté serveur ailleurs). */
+function vueDsn() {
+  const v = $('#v-dsn');
+  if (v.dataset.etab === String(etat.ctx) && v.querySelector('iframe')) return;
+  v.dataset.etab = String(etat.ctx);
+  v.innerHTML = `<div class="entete"><div><h2>${t('onglets.dsn')}</h2><p class="note">${t('dsn.intro')}</p></div><a class="btn" href="/dsn?etablissement_id=${etat.ctx}" target="_blank" rel="noopener">${t('dsn.plein_ecran')}</a></div>
+    <iframe src="/dsn?etablissement_id=${etat.ctx}&integre=1" title="${t('onglets.dsn')}" style="width:100%;min-height:78vh;border:1px solid var(--bordure);border-radius:12px;background:#fff"></iframe>`;
+}
 async function vuePatients() {
   const v = $('#v-patients');
   const P = (k, vars) => esc(t(`patients.${k}`, vars));

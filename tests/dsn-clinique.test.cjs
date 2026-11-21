@@ -95,3 +95,8 @@ test('DSN : transition Hôpital → Maison de retraite ; la destination ne voit 
   const h = (await pool.query("SELECT etape FROM horodatages WHERE objet = 'dsn_transition' AND objet_id = $1 ORDER BY etape", [t.d.id])).rows.map((x) => x.etape);
   assert.deepStrictEqual(h.sort(), ['arrivee', 'decision', 'demande']);
 });
+
+test('DSN : affichable dans l’onglet de l’application (même origine seulement) ; toutes les autres pages restent interdites dans un cadre', async () => {
+  const d = await fetch(`${base}/dsn/`); assert.strictEqual(d.headers.get('x-frame-options'), 'SAMEORIGIN'); assert.match(d.headers.get('content-security-policy'), /frame-ancestors 'self'/);
+  for (const p of ['/', '/formation', '/secours']) { const r = await fetch(`${base}${p}`); assert.strictEqual(r.headers.get('x-frame-options'), 'DENY', p); assert.match(r.headers.get('content-security-policy'), /frame-ancestors 'none'/); }
+});

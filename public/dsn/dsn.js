@@ -218,8 +218,11 @@
   document.addEventListener('keydown', (ev) => { if (ev.target.id === 'ds-q' && ev.key === 'Enter') { etat.q = ev.target.value; rendre(); } });
   if (!jeton) { location.replace('/'); return; }
   api('GET', '/moi').then((m) => {
-    etat.moi = m; const e = m.etablissements || []; etat.etab = e[0]?.id || null;
-    document.getElementById('ds-etab').innerHTML = e.map((x) => `<option value="${x.id}">${esc(x.nom)}</option>`).join('');
+    // Établissement transmis par l'onglet de l'application (?etablissement_id=…) ; intégré (?integre=1) : sans la barre d'en-tête d'Arrimo
+    const q = new URLSearchParams(location.search); const voulu = Number(q.get('etablissement_id'));
+    etat.moi = m; const e = m.etablissements || []; etat.etab = e.some((x) => x.id === voulu) ? voulu : e[0]?.id || null;
+    document.getElementById('ds-etab').innerHTML = e.map((x) => `<option value="${x.id}"${x.id === etat.etab ? ' selected' : ''}>${esc(x.nom)}</option>`).join('');
+    if (q.get('integre') === '1') { document.getElementById('ds-retour').hidden = true; document.getElementById('ds-etab').hidden = true; }
     rendre();
   }).catch(() => location.replace('/'));
 })();

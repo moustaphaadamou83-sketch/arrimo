@@ -36,9 +36,11 @@ function creerApp(pool, options = {}) {
   // Arrimo Connect : le corps brut est gardé pour vérifier la signature HMAC des systèmes partenaires
   app.use(express.json({ limit: '50kb', verify: (req, res, buf) => { if (req.originalUrl.startsWith('/api/connect/')) req.rawBody = buf.toString('utf8'); } }));
   app.use((req, res, next) => {
+    // DSN (22 nov. 2026) : affiché dans l'onglet de l'application, donc dans un cadre de la MÊME origine seulement ; tout le reste : jamais dans un cadre
+    const cadre = req.path === '/dsn' || req.path.startsWith('/dsn/');
     res.set({
       'X-Content-Type-Options': 'nosniff',
-      'X-Frame-Options': 'DENY',
+      'X-Frame-Options': cadre ? 'SAMEORIGIN' : 'DENY',
       'Referrer-Policy': 'no-referrer',
       // Géolocalisation : écran Ambulance seulement (position facultative, partagée par l'équipe)
       'Permissions-Policy': `camera=(), geolocation=(${['/secours', '/intervenant'].includes(req.path) ? 'self' : ''}), payment=(), microphone=(self)`,
@@ -47,7 +49,7 @@ function creerApp(pool, options = {}) {
       // Police hébergée ici (aucun appel à un service tiers)
       // Tuiles de la carte nationale : OpenStreetMap (images seulement)
       'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; "
-        + "font-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none'; frame-ancestors 'none'",
+        + `font-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none'; frame-ancestors ${cadre ? "'self'" : "'none'"}`,
     });
     next();
   });
