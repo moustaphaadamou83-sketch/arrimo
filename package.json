@@ -20,7 +20,7 @@
     "demo:trio:reset": "node db/reset-demo-trio.js",
     "test:demo-trio": "node scripts/verifier-runtime-tests.cjs && node --test --test-concurrency=1 tests/demo-trio.test.cjs",
     "demo:reset": "node db/reset.js demo",
-    "test:interface": "node scripts/verifier-runtime-tests.cjs && node --test --test-concurrency=1 tests/interface.spec.js",
+    "test:interface": "node scripts/verifier-runtime-tests.cjs && node --test --test-concurrency=1 tests/interface.spec.js tests/temps-reel.interface.spec.cjs",
     "test:structure-ui": "node scripts/verifier-runtime-tests.cjs && node --test --test-concurrency=1 tests/structure-ui.spec.cjs",
     "mesures": "node scripts/mesures.js",
     "charge": "node scripts/charge.js",

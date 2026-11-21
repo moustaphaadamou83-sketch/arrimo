@@ -859,3 +859,10 @@ a.menu-item { text-decoration: none; color: inherit; }
 /* Indicateurs cliquables : vrais boutons (clavier, focus visible), même apparence que les cartes */
 button.case-ens { font: inherit; color: inherit; text-align: left; width: 100%; cursor: pointer; }
 button.case-ens:hover { border-color: var(--principal); } button.case-ens:focus-visible { outline: 3px solid var(--principal); outline-offset: 2px; }
+/* Bourse des places (refonte) */
+.bo-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin: 10px 0 14px; }
+.bo-kpi { display: grid; gap: 2px; padding: 12px 14px; border: 1px solid var(--bordure); border-radius: 12px; background: var(--carte); }
+.bo-kpi .v { font-size: 1.7rem; font-weight: 800; color: var(--texte); } .bo-kpi .lbl { color: var(--texte-2-fond); font-weight: 600; }
+.bo-kpi.ok .v { color: var(--succes-texte); } .bo-kpi.attente .v { color: var(--attention-texte); }
+.bo-barre { height: 6px; background: var(--fond); border: 1px solid var(--bordure); border-radius: 99px; margin-top: 4px; overflow: hidden; min-width: 60px; }
+.bo-barre span { display: block; height: 100%; background: var(--principal); }

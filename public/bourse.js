@@ -3,7 +3,7 @@
    liens invités nominatifs (7 jours, révocables). */
 (() => {
   const B = (k, v) => esc(t(`bourse.${k}`, v));
-  const F = { genre: '', besoins: [], distance_max: '' };
+  const F = { genre: '', besoins: [], distance_max: '', onglet: 'places' };
   async function vue() {
     const v = $('#v-bourse');
     const q = new URLSearchParams({ etablissement_id: etat.ctx, ...(F.genre ? { genre: F.genre } : {}), ...(F.besoins.length ? { besoins: F.besoins.join(',') } : {}), ...(F.distance_max ? { distance_max: F.distance_max } : {}) });
@@ -12,18 +12,25 @@
     const hopital = (etabCtx().type_etablissement || 'hopital') === 'hopital';
     const lits = hopital ? ((await api('GET', `/lits?etablissement_id=${etat.ctx}`).catch(() => [])) || []).filter((l) => l.nsa_depuis) : [];
     const raison = (p) => B(p.raison.besoins_demandes ? 'raison' : 'raison_sans_besoin', { couverts: p.raison.besoins_couverts, demandes: p.raison.besoins_demandes, pb: p.raison.points_besoins, km: p.raison.km ?? '—', pp: p.raison.points_proximite });
-    v.innerHTML = `<div class="entete"><div><h2>${B('titre')}</h2><p class="note">${B('intro', { besoins: d.formule.besoins, proximite: d.formule.proximite })}</p></div></div>
+    // Refonte (cahier ultime, section 6) : résumé, sous-onglets, statut explicite de chaque place (jamais « disponible » sans lit réel)
+    const somme = (f) => d.places.reduce((n, p) => n + (f(p) || 0), 0);
+    const reels = somme((p) => p.lits_libres); const declarees = somme((p) => Math.max(0, p.libres - (p.lits_libres || 0))); const venir = somme((p) => p.a_venir);
+    const statut = (p) => ((p.lits_libres || 0) > 0 ? ['ok', B('st_confirme', { n: p.lits_libres })] : p.libres > 0 ? ['attente', B('st_declaree', { n: p.libres })] : ['info', B('st_a_venir')]);
+    const k = (lib, n, ton) => `<div class="bo-kpi${ton ? ` ${ton}` : ''}"><span class="v num">${n}</span><span class="lbl">${lib}</span></div>`;
+    v.innerHTML = `<div class="entete"><div><h2>${B('titre')}</h2><p class="note">${B('intro', { besoins: d.formule.besoins, proximite: d.formule.proximite })}</p></div><p class="note">${B('actualise', { h: new Date().toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit', timeZone: fuseau() }) })}</p></div>
+      <div class="bo-kpis">${k(B('k_etabs'), d.places.length)}${k(B('k_reels'), reels, 'ok')}${k(B('k_declarees'), declarees, declarees ? 'attente' : '')}${k(B('k_venir'), venir)}</div>
+      <div data-bo-zone="places">
       <section class="panneau-c"><div class="ligne">
         <div class="champ"><label class="lbl" for="bo-genre">${B('type')}</label><select id="bo-genre"><option value="">${B('tous')}</option>${d.genres.map((g) => `<option value="${g}"${F.genre === g ? ' selected' : ''}>${B(`g_${g}`)}</option>`).join('')}</select></div>
         <div class="champ"><label class="lbl" for="bo-dist">${B('distance')}</label><select id="bo-dist">${['', '10', '25', '50', '100'].map((x) => `<option value="${x}"${F.distance_max === x ? ' selected' : ''}>${x ? B('km', { n: x }) : B('toute_distance')}</option>`).join('')}</select></div></div>
         <fieldset class="cases"><legend class="lbl">${B('besoins')}</legend>${['marchette', 'fauteuil', 'leve_personne', 'unite_securisee', 'oxygene', 'soins_particuliers'].map((c) => `<label class="case"><input type="checkbox" data-bo-besoin="${c}"${F.besoins.includes(c) ? ' checked' : ''}> ${B(`b_${c}`)}</label>`).join('')}</fieldset></section>
       <section class="panneau-c">${d.places.length ? `<div class="tableau"><table><thead><tr><th>${B('ressource')}</th><th>${B('type')}</th><th>${B('libres')}</th><th>${B('a_venir')}</th><th>${B('distance')}</th><th>${B('score')}</th><th>${B('pourquoi')}</th></tr></thead><tbody>
-        ${d.places.map((p) => `<tr><td><strong>${esc(p.nom)}</strong>${p.groupe ? ` <span class="note">${B('groupe', { g: p.groupe })}</span>` : ''}</td><td>${B(`g_${p.genre}`)}</td><td>${p.libres}</td><td>${p.a_venir}${p.prochaine ? ` · ${esc(p.prochaine)}` : ''}</td>
-          <td>${p.distance_km ?? '—'}</td><td><strong>${p.score}</strong>/100</td><td class="note">${raison(p)}${p.raison.manquants.length ? ` · ${B('manque', { liste: p.raison.manquants.map((m) => t(`bourse.b_${m}`)).join(', ') })}` : ''}</td></tr>`).join('')}</tbody></table></div>` : `<p class="note">${B('aucune')}</p>`}
-        <p class="note">${B('neutralite')}</p></section>
-      ${hopital ? `<section class="panneau-c"><h3>${B('fiche_titre')}</h3>${lits.length ? `<div class="ligne"><select id="bo-lit">${lits.map((l) => `<option value="${l.id}">${esc(l.code)} · ${esc(l.patient_ref)}</option>`).join('')}</select><button class="btn" id="bo-fiche">${B('imprimer')}</button></div>` : `<p class="note">${B('aucun_nsa')}</p>`}</section>` : ''}
-      <section class="panneau-c"><h3>${B('invites')}</h3><p class="note">${B('invites_aide')}</p><div class="ligne"><button class="btn" id="bo-inviter">${B('inviter')}</button></div>
-        ${inv.length ? `<ul class="liste-simple">${inv.map((i) => `<li>${esc(i.nom)} · ${esc(i.organisation)} · ${esc(i.courriel)} · ${i.active ? B('expire', { d: heure(i.expire_le) }) : B('inactive')}${i.active ? ` <button class="btn discret" data-bo-revoquer="${i.id}">${B('revoquer')}</button>` : ''}</li>`).join('')}</ul>` : ''}</section>`;
+        ${d.places.map((p) => `<tr><td><strong>${esc(p.nom)}</strong>${p.groupe ? ` <span class="note">${B('groupe', { g: p.groupe })}</span>` : ''}</td><td>${B(`g_${p.genre}`)}<div><span class="badge-flux ${statut(p)[0] === 'ok' ? 'ok' : statut(p)[0] === 'attente' ? 'retard' : ''}">${statut(p)[1]}</span></div></td><td>${p.lits_libres ?? 0}${p.libres !== (p.lits_libres ?? 0) ? ` <span class="note">(${B('declarees_n', { n: p.libres })})</span>` : ''}</td><td>${p.a_venir}${p.prochaine ? ` · ${esc(p.prochaine)}` : ''}</td>
+          <td>${p.distance_km ?? '—'}</td><td><strong>${p.score}</strong>/100<div class="bo-barre" role="img" aria-label="${p.score}/100"><span style="width:${Math.max(0, Math.min(100, p.score))}%"></span></div></td><td class="note">${raison(p)}${p.raison.manquants.length ? ` · ${B('manque', { liste: p.raison.manquants.map((m) => t(`bourse.b_${m}`)).join(', ') })}` : ''}</td></tr>`).join('')}</tbody></table></div>` : `<p class="note">${B('aucune')}</p>`}
+        <p class="note">${B('neutralite')}</p></section></div>
+      ${hopital ? `<div data-bo-zone="fiche"><section class="panneau-c"><h3>${B('fiche_titre')}</h3>${lits.length ? `<div class="ligne"><select id="bo-lit">${lits.map((l) => `<option value="${l.id}">${esc(l.code)} · ${esc(l.patient_ref)}</option>`).join('')}</select><button class="btn" id="bo-fiche">${B('imprimer')}</button></div>` : `<p class="note">${B('aucun_nsa')}</p>`}</section></div>` : ''}
+      <div data-bo-zone="invites"><section class="panneau-c"><h3>${B('invites')}</h3><p class="note">${B('invites_aide')}</p><div class="ligne"><button class="btn" id="bo-inviter">${B('inviter')}</button></div>
+        ${inv.length ? `<ul class="liste-simple">${inv.map((i) => `<li>${esc(i.nom)} · ${esc(i.organisation)} · ${esc(i.courriel)} · ${i.active ? B('expire', { d: heure(i.expire_le) }) : B('inactive')}${i.active ? ` <button class="btn discret" data-bo-revoquer="${i.id}">${B('revoquer')}</button>` : ''}</li>`).join('')}</ul>` : ''}</section></div>`;
     $('#bo-genre').onchange = (e) => { F.genre = e.target.value; vue(); };
     $('#bo-dist').onchange = (e) => { F.distance_max = e.target.value; vue(); };
     v.querySelectorAll('[data-bo-besoin]').forEach((c) => { c.onchange = () => { F.besoins = [...v.querySelectorAll('[data-bo-besoin]:checked')].map((x) => x.dataset.boBesoin); vue(); }; });

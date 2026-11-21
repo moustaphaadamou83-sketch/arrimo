@@ -105,3 +105,7 @@
   .ch-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ch-raccourcis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+/* Indicateurs cliquables (cahier ultime, section 17) : ouvrent l'écran correspondant */
+button.ch-kpi { font: inherit; text-align: left; cursor: pointer; width: 100%; }
+button.ch-kpi:hover { filter: brightness(0.98); outline: 2px solid var(--principal, #0E5E6F); outline-offset: -2px; }
+button.ch-kpi:focus-visible { outline: 3px solid var(--principal, #0E5E6F); outline-offset: 2px; }

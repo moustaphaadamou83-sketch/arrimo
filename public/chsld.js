@@ -93,7 +93,7 @@
     const a = await api('GET', `/chsld/accueil?etablissement_id=${ctx()}`);
     const p = a.places, r = a.residents;
     // Carte d'indicateur : fond légèrement teinté, bordure et icône de la famille (thème CHSLD)
-    const kpi = (lib, val, ton, ic) => `<div class="ch-kpi ch-k-${ton}"><span class="ch-kpi-ic">${icone(ic)}</span><span class="lbl">${lib}</span><span class="v num">${esc(String(val ?? 0))}</span></div>`;
+    const kpi = (lib, val, ton, ic, vue) => `<${vue ? `button type="button" data-ch-aller="${vue}"` : 'div'} class="ch-kpi ch-k-${ton}"><span class="ch-kpi-ic">${icone(ic)}</span><span class="lbl">${lib}</span><span class="v num">${esc(String(val ?? 0))}</span></${vue ? 'button' : 'div'}>`;
     const taux = p.dotees ? Math.round((p.occupees + p.conservees + p.reservees) / p.dotees * 100) : 0;
     const actions = a.alertes.map((x) => C(`accueil.alerte_${x.code}`, { n: x.n }));
     const lignesSup = `<p class="note" id="ch-accueil-sup">${C('accueil.a_nettoyer', { n: a.entretien.a_nettoyer })} · ${C('accueil.nettoyes_jour', { n: a.entretien.termines_jour })} · ${C('accueil.messages_familles', { n: a.familles.messages })} · ${C('accueil.visites_familles', { n: a.familles.visites })}</p>`;
@@ -110,11 +110,11 @@
         ${actions.length ? `<ul>${actions.map((x) => `<li>${x}</li>`).join('')}</ul>` : `<p class="note">${C('accueil.aucune_action')}</p>`}
         <p class="note">${C('accueil.taches', { n: a.taches.ouvertes })} · ${C('accueil.en_retard', { n: a.taches.en_retard })}</p></section>
       <h3 class="titre-section">${C('accueil.capacites')}</h3>
-      <div class="ch-kpis">${kpi(C('accueil.dotees'), p.dotees, 'petrole', 'bed-double')}${kpi(C('accueil.libres'), p.libres, 'vert', 'check')}${kpi(C('accueil.reservees'), p.reservees, 'turquoise', 'log-in')}
-        ${kpi(C('accueil.occupees'), p.occupees, 'bleu', 'house')}${kpi(C('accueil.conservees'), p.conservees, 'violet', 'shield-check')}${kpi(C('accueil.preparation'), p.preparation, 'ambre', 'spray-can')}${kpi(C('accueil.bloquees'), p.bloquees, 'rouge', 'x')}</div>
+      <div class="ch-kpis">${kpi(C('accueil.dotees'), p.dotees, 'petrole', 'bed-double', 'c-chambres')}${kpi(C('accueil.libres'), p.libres, 'vert', 'check', 'c-chambres')}${kpi(C('accueil.reservees'), p.reservees, 'turquoise', 'log-in', 'c-chambres')}
+        ${kpi(C('accueil.occupees'), p.occupees, 'bleu', 'house', 'c-chambres')}${kpi(C('accueil.conservees'), p.conservees, 'violet', 'shield-check', 'c-chambres')}${kpi(C('accueil.preparation'), p.preparation, 'ambre', 'spray-can', 'c-taches')}${kpi(C('accueil.bloquees'), p.bloquees, 'rouge', 'x', 'c-chambres')}</div>
       <h3 class="titre-section">${C('accueil.residents')}</h3>
-      <div class="ch-kpis">${kpi(C('accueil.present'), r.present, 'vert', 'users')}${kpi(C('accueil.hospitalise'), r.hospitalise, 'violet', 'ambulance')}${kpi(C('accueil.absent'), r.absent, 'petrole', 'clock')}
-        ${kpi(C('accueil.preadmission'), r.preadmission, 'ambre', 'hourglass')}${kpi(C('accueil.transfert_en_cours'), r.transfert_en_cours, 'turquoise', 'arrow-right-left')}</div>
+      <div class="ch-kpis">${kpi(C('accueil.present'), r.present, 'vert', 'users', 'c-residents')}${kpi(C('accueil.hospitalise'), r.hospitalise, 'violet', 'ambulance', 'c-mouvements')}${kpi(C('accueil.absent'), r.absent, 'petrole', 'clock', 'c-residents')}
+        ${kpi(C('accueil.preadmission'), r.preadmission, 'ambre', 'hourglass', 'c-admissions')}${kpi(C('accueil.transfert_en_cours'), r.transfert_en_cours, 'turquoise', 'arrow-right-left', 'c-mouvements')}</div>
       <h3 class="titre-section">${C('accueil.mouvements')}</h3>
       <div class="deux"><div class="pile">
         <div class="panneau-c"><h3>${C('accueil.retours')}</h3>${a.retours.length ? `<ul class="liste-simple">${a.retours.map((x) => `<li><b>${esc(x.resident_ref)}</b> · ${esc(x.hopital)} · ${x.retour_prevu_le ? esc(dateHeure(x.retour_prevu_le)) : ''} · ${esc(t(`chsld.coord_statut.${x.statut}`))}</li>`).join('')}</ul>` : `<p class="note">${C('accueil.aucun_retour')}</p>`}</div>
