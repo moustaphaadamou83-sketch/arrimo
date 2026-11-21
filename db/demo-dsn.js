@@ -24,6 +24,10 @@ const ANTECEDENTS = ['Hypertension (fictif)', 'Diabète de type 2 (fictif)', 'Fr
     const hb0 = (await c.query("SELECT id FROM etablissements WHERE code = 'HY'")).rows[0].id;
     const ub = (await c.query("SELECT id FROM utilisateurs WHERE email = 'hopital.b@demo.arrimo'")).rows[0]?.id;
     if (ub) for (const f of ['admission', 'infirmier', 'medecin', 'sortie']) await c.query('INSERT INTO dsn_habilitations (etablissement_id, utilisateur_id, fonction) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING', [hb0, ub, f]);
+    // Compte partagé du CHSLD des Érables : il reçoit les paquets et peut ouvrir son propre dossier à partir d'un paquet reçu
+    const era0 = (await c.query("SELECT id FROM etablissements WHERE code = 'CHSLD-ERA'")).rows[0].id;
+    const ue = (await c.query("SELECT id FROM utilisateurs WHERE email = 'coordination.erables@chsld.example.invalid'")).rows[0]?.id;
+    if (ue) for (const f of ['admission', 'infirmier', 'medecin']) await c.query('INSERT INTO dsn_habilitations (etablissement_id, utilisateur_id, fonction) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING', [era0, ue, f]);
     if ((await c.query("SELECT 1 FROM utilisateurs WHERE email = 'dsn.medecin@demo.arrimo'")).rowCount) { console.log('Déjà en place (fonctions de hopital.b vérifiées)'); await c.query('COMMIT'); return; }
     const hb = (await c.query("SELECT id FROM etablissements WHERE code = 'HY'")).rows[0].id;
     const era = (await c.query("SELECT id FROM etablissements WHERE code = 'CHSLD-ERA'")).rows[0].id;

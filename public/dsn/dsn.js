@@ -13,7 +13,7 @@
       valider_trx: 'Valider (figer le contenu)', envoyer: 'Envoyer', avec_transport: 'Réserver aussi un transport', transporteur: 'Transporteur', plage: 'Plage (début, fin)', vehicule: 'Véhicule',
       accepter: 'Accepter', refuser: 'Refuser', reception: 'Confirmer la réception', arrivee_prevue: 'Arrivée prévue', ouvrir_dossier: 'Ouvrir notre dossier', source: 'Source', paquet: 'Paquet de transition (seulement ce qui a été partagé)',
       habilitations: 'Habilitations DSN', journal: 'Journal d’accès', utilisateur: 'Utilisateur', action: 'Action', objet: 'Objet', prescription_simulee: 'Prescription SIMULÉE : jamais envoyée à une pharmacie.',
-      tableau_txt: 'Patients du DSN : {p} · séjours en cours : {s} · transitions en attente : {t}', inactif: 'Le DSN n’est pas activé pour cet établissement, ou vous n’y avez pas d’habilitation.', ok: 'Enregistré.', telecharger: 'Télécharger',
+      tableau_txt: 'Patients du DSN : {p} · séjours en cours : {s} · transitions en attente : {t}', inactif: 'Le DSN n’est pas activé pour cet établissement, ou vous n’y avez pas d’habilitation.', r_module: 'Le DSN n’est pas activé pour {e}. Il s’active établissement par établissement depuis Arrimo SH.', r_habilitation: 'Votre compte n’a aucune fonction DSN à {e} (admission, infirmier, médecin, sortie ou auditeur) : les dossiers ne vous sont pas ouverts. Vous pouvez consulter les transitions reçues ; l’administrateur local accorde les fonctions dans Paramètres.', r_demo: 'Le DSN est réservé à la démonstration et à la recette.', voir_recues: 'Voir les transitions reçues', ok: 'Enregistré.', telecharger: 'Télécharger',
       deposer: 'Déposer un document (PDF, PNG, JPEG, 5 Mo)', titre_doc: 'Titre', type_doc: 'Type', fichier: 'Fichier',
       g: { allergie: 'Allergie', antecedent: 'Antécédent', rencontre: 'Rencontre', note: 'Note', observation: 'Observation', diagnostic: 'Diagnostic', prescription: 'Prescription', examen: 'Examen', sejour: 'Séjour' },
       c: { substance: 'Substance', reaction: 'Réaction', gravite: 'Gravité', verification: 'Vérification', libelle: 'Libellé', type: 'Type', motif: 'Motif', equipe: 'Équipe', titre: 'Titre', texte: 'Texte', valeur: 'Valeur', unite: 'Unité', code: 'Code', certitude: 'Certitude', dose: 'Dose', voie: 'Voie', frequence: 'Fréquence', duree: 'Durée', indication: 'Indication', type_examen: 'Examen', prestataire: 'Prestataire', resultat: 'Résultat', priorite: 'Priorité', service: 'Service', lit: 'Lit', destination: 'Destination', synthese: 'Synthèse de sortie', consignes: 'Consignes' } },
@@ -28,7 +28,7 @@
       valider_trx: 'Validate (freeze the content)', envoyer: 'Send', avec_transport: 'Also book a transport', transporteur: 'Carrier', plage: 'Time slot (start, end)', vehicule: 'Vehicle',
       accepter: 'Accept', refuser: 'Decline', reception: 'Confirm receipt', arrivee_prevue: 'Expected arrival', ouvrir_dossier: 'Open our record', source: 'Source', paquet: 'Transition package (only what was shared)',
       habilitations: 'EHR authorizations', journal: 'Access log', utilisateur: 'User', action: 'Action', objet: 'Object', prescription_simulee: 'SIMULATED prescription: never sent to a pharmacy.',
-      tableau_txt: 'EHR patients: {p} · ongoing stays: {s} · pending transitions: {t}', inactif: 'The EHR is not turned on for this facility, or you have no authorization there.', ok: 'Saved.', telecharger: 'Download',
+      tableau_txt: 'EHR patients: {p} · ongoing stays: {s} · pending transitions: {t}', inactif: 'The EHR is not turned on for this facility, or you have no authorization there.', r_module: 'The EHR is not turned on for {e}. It is turned on facility by facility from Arrimo SH.', r_habilitation: 'Your account has no EHR function at {e} (admission, nurse, physician, discharge or auditor): records are not open to you. You can view received transitions; the local administrator grants functions in Settings.', r_demo: 'The EHR is reserved for demonstration and acceptance testing.', voir_recues: 'View received transitions', ok: 'Saved.', telecharger: 'Download',
       deposer: 'Upload a document (PDF, PNG, JPEG, 5 MB)', titre_doc: 'Title', type_doc: 'Type', fichier: 'File',
       g: { allergie: 'Allergy', antecedent: 'History item', rencontre: 'Encounter', note: 'Note', observation: 'Observation', diagnostic: 'Diagnosis', prescription: 'Prescription', examen: 'Test', sejour: 'Stay' },
       c: { substance: 'Substance', reaction: 'Reaction', gravite: 'Severity', verification: 'Verification', libelle: 'Label', type: 'Type', motif: 'Reason', equipe: 'Team', titre: 'Title', texte: 'Text', valeur: 'Value', unite: 'Unit', code: 'Code', certitude: 'Certainty', dose: 'Dose', voie: 'Route', frequence: 'Frequency', duree: 'Duration', indication: 'Indication', type_examen: 'Test', prestataire: 'Provider', resultat: 'Result', priorite: 'Priority', service: 'Service', lit: 'Bed', destination: 'Destination', synthese: 'Discharge summary', consignes: 'Instructions' } },
@@ -109,14 +109,20 @@
   const ajout = (genre, fon) => (etat.schema.genres[genre].creer.some((x) => fon.includes(x)) ? `<button class="btn pri" data-ajout="${genre}">+ ${esc(X().g[genre])}</button>` : '');
 
   // ---------------------------------------------------------------- vues
+  // Refus expliqué : la cause exacte et ce que la personne peut faire (jamais un message générique)
+  const refus = (e) => {
+    const nom = esc(document.querySelector(`#ds-etab option[value="${etat.etab}"]`)?.textContent || '');
+    const k = e.code === 'module_desactive' ? 'r_module' : e.code === 'dsn_habilitation_requise' ? 'r_habilitation' : e.code === 'dsn_reserve_demo' ? 'r_demo' : 'inactif';
+    main.innerHTML = `<div class="carte"><p>${esc(X()[k]).replace('{e}', `<b>${nom}</b>`)}</p>${k === 'r_habilitation' ? `<p><button class="btn pri" type="button" data-vue="recues">${esc(X().voir_recues)}</button></p>` : ''}</div>`;
+  };
   async function vuePatients() {
-    let d; try { d = await api('GET', `/dsn/patients?etablissement_id=${etat.etab}&q=${encodeURIComponent(etat.q)}`); } catch (e) { main.innerHTML = `<p class="carte">${esc(X().inactif)}<br><span class="note">${esc(e.message)}</span></p>`; return; }
+    let d; try { d = await api('GET', `/dsn/patients?etablissement_id=${etat.etab}&q=${encodeURIComponent(etat.q)}`); } catch (e) { refus(e); return; }
     main.innerHTML = `<div class="carte"><div class="ligne"><input id="ds-q" type="search" value="${esc(etat.q)}" placeholder="${esc(X().rechercher)}" aria-label="${esc(X().rechercher)}" style="flex:1 1 320px;padding:9px 11px;border:1px solid var(--b);border-radius:9px;min-height:40px;background:var(--fond);color:var(--t)">${d.fonctions.includes('admission') ? `<button class="btn pri" id="ds-nouveau">+ ${esc(X().nouveau)}</button>` : ''}</div></div>
       <div class="carte tableau"><table><thead><tr><th>Ref.</th><th>${X().nom}</th><th>${X().naissance}</th><th>${X().allergies}</th><th>${X().statut}</th><th></th></tr></thead><tbody>
       ${d.patients.map((p) => `<tr><td><b>${esc(p.reference)}</b></td><td>${esc(p.nom)}, ${esc(p.prenom)}</td><td>${esc(String(p.date_naissance).slice(0, 10))}</td><td>${p.allergies ? `<span class="allergie">⚠ ${p.allergies}</span>` : ''}</td><td>${badge(p.parcours)}</td><td><button class="btn" data-ouvrir="${p.id}">${esc(X().ouvrir)}</button></td></tr>`).join('') || `<tr><td colspan="6" class="vide">${esc(X().aucun)}</td></tr>`}</tbody></table></div>`;
   }
   async function vueTableau() {
-    let d; try { d = await api('GET', `/dsn/patients?etablissement_id=${etat.etab}`); } catch (e) { main.innerHTML = `<p class="carte">${esc(X().inactif)}</p>`; return; }
+    let d; try { d = await api('GET', `/dsn/patients?etablissement_id=${etat.etab}`); } catch (e) { refus(e); return; }
     const r = await api('GET', `/dsn/transitions/recues?etablissement_id=${etat.etab}`).catch(() => []);
     main.innerHTML = `<div class="carte"><h1>${esc(X().nav.tableau)}</h1><p>${esc(f(X().tableau_txt, { p: d.patients.length, s: d.patients.filter((p) => p.parcours === 'hospitalise').length, t: r.filter((x) => x.statut === 'envoye').length }))}</p></div>`;
   }
