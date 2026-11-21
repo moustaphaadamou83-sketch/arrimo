@@ -321,7 +321,10 @@ function creerApp(pool, options = {}) {
   // Mode crise (20 nov. 2026) : évacuation d'un établissement d'hébergement
   const crise = require('./crise');
   api.get('/crise/evacuations', route((req) => crise.liste(pool, req.utilisateur, req.query)));
+  api.post('/crise/apercu', route((req) => crise.apercu(pool, req.utilisateur, req.body)));
   api.post('/crise/evacuations', route((req) => crise.declencher(pool, req.utilisateur, req.body)));
+  api.get('/secours/crise/alertes', route((req) => crise.alertesSecours(pool, req.utilisateur)));
+  api.post('/secours/crise/alertes/:id/action', route((req) => crise.agirAlerte(pool, req.utilisateur, req.params.id, req.body)));
   api.get('/crise/evacuations/:id', route((req) => crise.vue(pool, req.utilisateur, req.params.id)));
   api.post('/crise/evacuations/:id/residents/:rid', route((req) => crise.agir(pool, req.utilisateur, req.params.id, req.params.rid, req.body)));
   api.post('/crise/evacuations/:id/lever', route((req) => crise.lever(pool, req.utilisateur, req.params.id)));

@@ -97,3 +97,37 @@ test('COR-004 : le compteur des civières libres suit « hors service » et « r
   const st = await require('../src/civieres').statsUrgence(pool, [ids.h]);
   assert.strictEqual(st.get(ids.h).libres, avant.stats.libres);
 });
+
+test('COR-003 : aperçu sans effet, simulation isolée (aucune réservation ni notification), alertes reçue → acceptée → véhicule affecté par le répartiteur', async () => {
+  await pool.query(`UPDATE etablissements SET modules = modules || '{"mode_crise": true}' WHERE id = $1`, [ids.c]);
+  for (const n of [1, 2, 3]) await pool.query("INSERT INTO residents (etablissement_id, reference, prenom, nom, date_naissance, statut) VALUES ($1, $2, 'Démo', $3, '1940-01-01', 'present')", [ids.c, `R-9900${n}`, `Résident ${n}`]);
+  const corps = { etablissement_id: ids.c, motif: 'panne_chauffage', gravite: 'elevee', unites_touchees: 'Aile B', point_rassemblement: 'Hall d’entrée', simulation: true };
+  const avant = (await pool.query('SELECT count(*)::int n FROM evacuations')).rows[0].n;
+  const a = await appel('coord.c', 'POST', '/crise/apercu', corps);
+  assert.strictEqual(a.s, 200, JSON.stringify(a.d)); assert.strictEqual(a.d.residents, 3); assert.ok(a.d.alertes.some((x) => x.role === 'coordination') && a.d.alertes.some((x) => x.role === 'transport'));
+  assert.strictEqual((await pool.query('SELECT count(*)::int n FROM evacuations')).rows[0].n, avant, 'aperçu : rien n’est créé');
+  assert.strictEqual((await appel('coord.c', 'POST', '/crise/apercu', { ...corps, gravite: 'xx' })).s, 400);
+  const notifAvant = (await pool.query('SELECT count(*)::int n FROM notifications')).rows[0].n;
+  const ev = await appel('coord.c', 'POST', '/crise/evacuations', corps);
+  assert.strictEqual(ev.s, 200, JSON.stringify(ev.d)); assert.match(ev.d.numero, /^SIM-/); assert.strictEqual(ev.d.simulation, true);
+  assert.strictEqual((await pool.query('SELECT count(*)::int n FROM notifications')).rows[0].n, notifAvant, 'simulation : aucune notification');
+  const v = (await appel('coord.c', 'GET', `/crise/evacuations/${ev.d.id}`)).d;
+  assert.strictEqual(v.alertes.length, 2); assert.ok(v.alertes.every((x) => x.statut === 'envoyee' && x.simulation));
+  // Côté secours : l'ambulance accuse réception et accepte ; seul le répartiteur affecte un véhicule
+  const al = (await appel('para', 'GET', '/secours/crise/alertes')).d; assert.strictEqual(al.length, 1); assert.ok(!JSON.stringify(al).includes('Résident 1'), 'aucun nom');
+  assert.strictEqual((await appel('para', 'POST', `/secours/crise/alertes/${al[0].id}/action`, { action: 'accuser' })).d.statut, 'recue');
+  assert.strictEqual((await appel('para', 'POST', `/secours/crise/alertes/${al[0].id}/action`, { action: 'accepter' })).d.statut, 'acceptee');
+  const unite = (await pool.query("SELECT id FROM unites_secours WHERE organisation_id = $1 LIMIT 1", [ids.org])).rows[0].id;
+  assert.strictEqual((await appel('para', 'POST', `/secours/crise/alertes/${al[0].id}/action`, { action: 'affecter', unite_id: unite })).s, 403, 'l’équipage n’affecte pas');
+  await compte('sup', 'superviseur_secours', { org: ids.org });
+  const aff = (await appel('sup', 'POST', `/secours/crise/alertes/${al[0].id}/action`, { action: 'affecter', unite_id: unite, eta_min: 12 })).d;
+  assert.deepStrictEqual([aff.statut, aff.eta_min], ['vehicule_affecte', 12]);
+  // Escalade : jamais en simulation
+  await pool.query("UPDATE crise_alertes SET envoyee_le = now() - interval '10 minutes' WHERE evacuation_id = $1", [ev.d.id]);
+  assert.strictEqual(await require('../src/crise').echeances(pool), 0);
+  // Une simulation n'empêche pas une vraie évacuation ; la vraie alerte sans réponse est escaladée
+  const reel = await appel('coord.c', 'POST', '/crise/evacuations', { ...corps, simulation: false });
+  assert.strictEqual(reel.s, 200, JSON.stringify(reel.d)); assert.match(reel.d.numero, /^EV-/);
+  await pool.query("UPDATE crise_alertes SET envoyee_le = now() - interval '10 minutes' WHERE evacuation_id = $1", [reel.d.id]);
+  assert.strictEqual(await require('../src/crise').echeances(pool), 2);
+});

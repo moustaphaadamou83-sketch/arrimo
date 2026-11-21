@@ -52,6 +52,7 @@ setInterval(() => require('./msss-urgences').lire(pool).catch((e) => console.err
 require('./demo-vivante').entretenir(pool).catch((e) => console.error('Démo vivante :', e.code || e.name));
 setInterval(() => require('./demo-vivante').entretenir(pool).catch((e) => console.error('Démo vivante :', e.code || e.name)), 5 * 60000).unref();
 setInterval(() => require('./visites').manquees(pool).catch((e) => console.error('Visites manquées :', e.code || e.name)), 5 * 60000).unref();
+setInterval(() => require('./crise').echeances(pool).catch((e) => console.error('Mode crise, escalade :', e.code || e.name)), 60000).unref();
 setInterval(() => require('./urgences-direct').echeances(pool).catch((e) => console.error('Urgences en direct :', e.code || e.name)), 60000).unref();
 setInterval(() => require('./reservations').echeances(pool).catch((e) => console.error('Confirmation rapide :', e.code || e.name)), 5000).unref();
 setInterval(() => require('./prealertes').purgerPositions(pool).catch((e) => console.error('Positions des unités :', e.code || e.name)), 60 * 60000).unref();

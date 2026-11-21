@@ -57,6 +57,7 @@
       ch_porte: 'À la porte', ch_route: 'En route', ch_termines: 'Passages terminés', ch_aucun: 'Aucun passage.', ch_min: '{n} min à la porte', ch_depart: 'Départ de l’hôpital',
       ch_H11: 'Arrivée', ch_H12: 'Début triage', ch_H13: 'Fin triage', ch_H14: 'Civière libérée', ch_H15: 'Départ', ch_corrigee: 'corrigée', ch_total: 'total {n} min', ch_inactif: 'Aucun hôpital de votre secteur n’utilise encore le Chrono.',
       o_regional: 'Vue régionale', o_flotte: 'Flotte', o_prealertes: 'Préalertes', o_demandes: 'Demandes des établissements', o_historique: 'Historique', o_og: 'OG', o_mission: 'Mission', o_urgences: 'Urgences classées', o_transports: 'Transports',
+      cr_titre: '🆘 Évacuation {numero} · {lieu}', cr_sim: 'SIMULATION', cr_detail: '{motif} · gravité {gravite} · {n} résidents ({a} à placer)', cr_point: 'Point de rassemblement : {p}', cr_accuser: 'Accuser réception', cr_accepter: 'Accepter la mission', cr_refuser: 'Refuser', cr_affecter: 'Affecter ce véhicule', cr_eta: 'Arrivée estimée (min)', cr_unite: 'Véhicule', cr_st_envoyee: 'Alerte envoyée', cr_st_recue: 'Alerte reçue', cr_st_acceptee: 'Mission acceptée', cr_st_vehicule_affecte: 'Véhicule affecté', cr_st_refusee: 'Refusée', cr_st_escaladee: 'Sans réponse : escaladée', cr_note: 'L’affectation reste une décision du répartiteur compétent ; en danger immédiat, les appels d’urgence officiels restent prioritaires.',
       profil_ccs: 'Profil CCS', profil_amb: 'Profil Ambulance', role_repartiteur: 'Répartiteur', role_paramedic: 'Paramédic', role_superviseur_secours: 'Superviseur', fictif: 'Données fictives',
       theme_clair: 'Clair', theme_sombre: 'Sombre', theme_automatique: 'Auto', theme_aide: 'Apparence : clair, sombre ou automatique (selon l’appareil)',
       ccs_consult: 'Consultation seulement.', ccs_consult_suite: 'Votre système de répartition reste la référence : Arrimo affiche la capacité des urgences et l’état des véhicules, il n’attribue aucune mission.', depuis_attente: 'Depuis (en attendant la position de l’unité)', k_urgences: 'urgences de la région', k_sat: 'aucune urgence saturée', k_sat_noms: 'en saturation ({noms})', k_civ: 'civières libres au total',
@@ -130,6 +131,7 @@
       ch_porte: 'At the door', ch_route: 'On the way', ch_termines: 'Completed visits', ch_aucun: 'No visit.', ch_min: '{n} min at the door', ch_depart: 'Leaving the hospital',
       ch_H11: 'Arrival', ch_H12: 'Triage start', ch_H13: 'Triage end', ch_H14: 'Stretcher released', ch_H15: 'Departure', ch_corrigee: 'corrected', ch_total: 'total {n} min', ch_inactif: 'No hospital in your area uses Chrono yet.',
       o_regional: 'Regional view', o_flotte: 'Fleet', o_prealertes: 'Pre-alerts', o_demandes: 'Requests from facilities', o_historique: 'History', o_og: 'OG', o_mission: 'Mission', o_urgences: 'Ranked emergencies', o_transports: 'Transports',
+      cr_titre: '🆘 Evacuation {numero} · {lieu}', cr_sim: 'SIMULATION', cr_detail: '{motif} · severity {gravite} · {n} residents ({a} to place)', cr_point: 'Assembly point: {p}', cr_accuser: 'Acknowledge', cr_accepter: 'Accept the mission', cr_refuser: 'Decline', cr_affecter: 'Assign this vehicle', cr_eta: 'Estimated arrival (min)', cr_unite: 'Vehicle', cr_st_envoyee: 'Alert sent', cr_st_recue: 'Alert received', cr_st_acceptee: 'Mission accepted', cr_st_vehicule_affecte: 'Vehicle assigned', cr_st_refusee: 'Declined', cr_st_escaladee: 'No answer: escalated', cr_note: 'Assignment remains the competent dispatcher’s decision; in immediate danger, official emergency calls come first.',
       profil_ccs: 'CCS profile', profil_amb: 'Ambulance profile', role_repartiteur: 'Dispatcher', role_paramedic: 'Paramedic', role_superviseur_secours: 'Supervisor', fictif: 'Fictitious data',
       theme_clair: 'Light', theme_sombre: 'Dark', theme_automatique: 'Auto', theme_aide: 'Appearance: light, dark or automatic (from the device)',
       ccs_consult: 'View only.', ccs_consult_suite: 'Your dispatch system remains the reference: Arrimo shows emergency capacity and vehicle status; it assigns no mission.', depuis_attente: 'From (until the unit position is sent)', k_urgences: 'emergencies in the region', k_sat: 'no saturated emergency', k_sat_noms: 'saturated ({noms})', k_civ: 'free stretchers in total',
@@ -211,6 +213,7 @@
       const avant = new Set((etat.missions || []).map((m) => m.id));
       etat.missions = await api('GET', '/secours/missions').catch(() => []);
       etat.chrono = await api('GET', '/secours/chrono').catch(() => null);
+      etat.alertesCrise = await api('GET', '/secours/crise/alertes').catch(() => []);   // COR-003 : alertes d'évacuation
       // Nouvelle mission proposée à l'équipage : alerte sonore (une fois)
       if (ROLES_AMB.includes(etat.moi.utilisateur.role) && etat.missionsVues && etat.missions.some((m) => m.statut === 'proposee' && !avant.has(m.id))) bipMission();
       etat.missionsVues = true;
@@ -225,7 +228,7 @@
   let derniereSignature = null; let dernierAppui = 0; let renduDiffere = null;
   document.addEventListener('pointerdown', () => { dernierAppui = Date.now(); }, true);
   function rendreSiChange() {
-    const sig = JSON.stringify([etat.chrono, etat.prealertes, etat.vehicules, etat.transports, etat.destinations, etat.classees, etat.unites, etat.erreur, etat.message, etat.enLigne, L, etat.onglet, etat.alternatives]);
+    const sig = JSON.stringify([etat.alertesCrise, etat.chrono, etat.prealertes, etat.vehicules, etat.transports, etat.destinations, etat.classees, etat.unites, etat.erreur, etat.message, etat.enLigne, L, etat.onglet, etat.alternatives]);
     if (sig === derniereSignature) { enTete(); return; }
     const attente = 1000 - (Date.now() - dernierAppui);
     if (attente > 0) { clearTimeout(renduDiffere); renduDiffere = setTimeout(rendreSiChange, attente); return; }
@@ -559,7 +562,16 @@
     if (!etat.moi) return;
     enTete();
     const m = $('#contenu'); const amb = ROLES_AMB.includes(etat.moi.utilisateur.role);
-    const msg = `${etat.erreur ? `<p class="erreur" role="alert">${esc(etat.erreur)}</p>` : ''}${etat.message ? `<p class="bandeau" role="status">${esc(etat.message)}</p>` : ''}`;
+    const repartiteur = ['repartiteur', 'superviseur_secours'].includes(etat.moi.utilisateur.role);
+    const alertesCrise = (etat.alertesCrise || []).map((x) => `<section class="carte-s" style="border-left:6px solid #DC2626"><h2>${esc(t('cr_titre', { numero: x.numero, lieu: x.lieu }))}${x.simulation ? ` <span class="pastille-n">${t('cr_sim')}</span>` : ''}</h2>
+      <p>${esc(t('cr_detail', { motif: x.motif.replaceAll('_', ' '), gravite: x.gravite || '—', n: x.residents, a: x.a_placer }))}</p>${x.point_rassemblement ? `<p>${esc(t('cr_point', { p: x.point_rassemblement }))}</p>` : ''}
+      <p><b>${esc(t(`cr_st_${x.statut}`))}</b>${x.unite ? ` · ${esc(x.unite)}` : ''}</p>
+      <div class="actions">${['envoyee', 'escaladee'].includes(x.statut) ? `<button class="btn pri" data-crise-act="accuser" data-id="${x.id}">${t('cr_accuser')}</button>` : ''}
+        ${x.statut === 'recue' ? `<button class="btn pri" data-crise-act="accepter" data-id="${x.id}">${t('cr_accepter')}</button><button class="btn" data-crise-act="refuser" data-id="${x.id}">${t('cr_refuser')}</button>` : ''}
+        ${x.statut === 'acceptee' && repartiteur ? `<label for="cr-u-${x.id}">${t('cr_unite')}</label><select id="cr-u-${x.id}">${(etat.vehicules || []).map((v) => `<option value="${v.id}">${esc(v.numero)}${v.etat ? ` · ${esc(t('ev.' + v.etat))}` : ''}</option>`).join('')}</select>
+          <label for="cr-eta-${x.id}">${t('cr_eta')}</label><input id="cr-eta-${x.id}" type="number" min="0" max="600" style="max-width:110px"><button class="btn pri" data-crise-act="affecter" data-id="${x.id}">${t('cr_affecter')}</button>` : ''}</div>
+      <p class="note">${t('cr_note')}</p></section>`).join('');
+    const msg = `${alertesCrise}${etat.erreur ? `<p class="erreur" role="alert">${esc(etat.erreur)}</p>` : ''}${etat.message ? `<p class="bandeau" role="status">${esc(etat.message)}</p>` : ''}`;
     if (!amb) {
       const ouvertes = etat.prealertes.filter((p) => OUVERTES.includes(p.statut));
       // CCS simplifié (13 nov. 2026) : état des véhicules (carte et liste) et disponibilité des urgences ; aucune attribution
@@ -633,6 +645,12 @@
     const b = ev.target.closest('button'); if (!b) return;
     if (b.dataset.langue) { L = b.dataset.langue; ecrire('arrimo-langue', L); document.documentElement.lang = L === 'en' ? 'en-CA' : 'fr-CA'; rendre(); return; }
     if (b.dataset.og) return demanderOg(t(b.dataset.og));
+    if (b.dataset.criseAct) {   // COR-003 : accusé de réception, acceptation, refus, affectation par le répartiteur
+      const id = b.dataset.id; const corps = { action: b.dataset.criseAct };
+      if (corps.action === 'affecter') { corps.unite_id = Number(document.getElementById(`cr-u-${id}`)?.value); const eta = document.getElementById(`cr-eta-${id}`)?.value; if (eta !== '') corps.eta_min = Number(eta); }
+      try { await api('POST', `/secours/crise/alertes/${id}/action`, corps); etat.message = t('fait'); } catch (e) { etat.erreur = e.message; }
+      await charger(); return;
+    }
     if (b.dataset.trPa) { etat.onglet = 'mission';
       // Préalerte qui prolonge le transport : hôpital de destination prérempli ; l'équipe choisit priorité et catégorie
       const d = etat.transports.find((x) => String(x.id) === b.dataset.trPa); if (!d) return;
