@@ -131,3 +131,15 @@ test('COR-003 : aperçu sans effet, simulation isolée (aucune réservation ni n
   await pool.query("UPDATE crise_alertes SET envoyee_le = now() - interval '10 minutes' WHERE evacuation_id = $1", [reel.d.id]);
   assert.strictEqual(await require('../src/crise').echeances(pool), 2);
 });
+
+test('COR-002 : la décision « transfert » ne demande aucune ambulance ; la demande, l’accusé et l’affectation apparaissent à part', async () => {
+  await pool.query(`UPDATE etablissements SET modules = modules || '{"eviter_transferts": true}' WHERE id = $1`, [ids.c]);
+  const d = (await appel('coord.c', 'POST', '/eviter/decisions', { etablissement_id: ids.c, decision: 'transfert_fait', resident_ref: 'R-99001' })).d;
+  assert.deepStrictEqual([d.ambulance_demandee, d.prochaine_etape], [false, 'demander_transport']);
+  let l = (await appel('coord.c', 'GET', `/eviter?etablissement_id=${ids.c}`)).d.decisions[0];
+  assert.deepStrictEqual([l.transport, l.accuse, l.vehicule_affecte], [null, false, false], 'aucune demande liée tant qu’elle n’est pas faite');
+  // Demande réelle du même résident : elle apparaît comme suite de la décision
+  await pool.query(`INSERT INTO demandes_transport (numero, organisation_id, origine_id, destination_libelle, resident_ref, statut, heure_souhaitee) VALUES ('DT-COR2', $1, $2, 'Urgence', 'R-99001', 'demandee', now())`, [ids.org, ids.c]);
+  l = (await appel('coord.c', 'GET', `/eviter?etablissement_id=${ids.c}`)).d.decisions[0];
+  assert.deepStrictEqual([l.transport, l.accuse, l.vehicule_affecte], ['DT-COR2', false, false]);
+});

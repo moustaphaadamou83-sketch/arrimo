@@ -31,7 +31,14 @@ async function lire(pool, u, etabId) {
     GROUP BY decision, alternative`, [e.id])).rows;
   const evites = c.filter((x) => x.decision === 'transfert_evite').reduce((s, x) => s + x.n, 0);
   const faits = c.filter((x) => x.decision === 'transfert_fait').reduce((s, x) => s + x.n, 0);
-  return { ...l, alternatives_possibles: ALTERNATIVES, mois: { evites, faits, par_alternative: Object.fromEntries(c.filter((x) => x.alternative).map((x) => [x.alternative, x.n])) }, peut_regler: GERER.includes(u.role) || u.gestionnaire };
+  // COR-002 : la décision de l'équipe n'est PAS une demande d'ambulance. Pour chaque décision « transfert », on montre séparément :
+  // demande de transport transmise ? accusé (acceptée) ? véhicule affecté ? — d'après la demande réelle du même résident (6 h suivantes).
+  const decisions = (await pool.query(`SELECT d.id, d.decision, d.alternative, d.resident_ref, d.cree_le,
+      t.numero AS transport, t.statut AS transport_statut, t.acceptee_le IS NOT NULL AS accuse, t.unite_id IS NOT NULL AS vehicule_affecte
+    FROM eviter_decisions d LEFT JOIN LATERAL (SELECT x.* FROM demandes_transport x WHERE d.decision = 'transfert_fait' AND d.resident_ref IS NOT NULL AND x.origine_id = d.etablissement_id
+      AND x.resident_ref = d.resident_ref AND x.cree_le BETWEEN d.cree_le - interval '30 minutes' AND d.cree_le + interval '6 hours' AND x.statut NOT IN ('a_valider', 'annulee') ORDER BY x.cree_le LIMIT 1) t ON true
+    WHERE d.etablissement_id = $1 AND d.cree_le > now() - interval '7 days' ORDER BY d.cree_le DESC LIMIT 20`, [e.id])).rows;
+  return { ...l, decisions, alternatives_possibles: ALTERNATIVES, mois: { evites, faits, par_alternative: Object.fromEntries(c.filter((x) => x.alternative).map((x) => [x.alternative, x.n])) }, peut_regler: GERER.includes(u.role) || u.gestionnaire };
 }
 /** L'établissement écrit sa liste (texte de son protocole, 12 points au plus) et ses alternatives (code fermé + coordonnées). */
 async function regler(pool, u, b = {}) {
@@ -58,7 +65,9 @@ async function decider(pool, u, b = {}) {
   if (b.decision === 'transfert_evite' && !ALTERNATIVES.includes(alt)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'alternative' });
   const ref = b.resident_ref ? String(b.resident_ref).trim() : null;
   if (ref && !/^[A-Z]{1,3}-\d{4,6}$/.test(ref)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'resident_ref' });
-  return (await pool.query('INSERT INTO eviter_decisions (etablissement_id, resident_ref, decision, alternative, cree_par) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+  const d = (await pool.query('INSERT INTO eviter_decisions (etablissement_id, resident_ref, decision, alternative, cree_par) VALUES ($1, $2, $3, $4, $5) RETURNING *',
     [e.id, ref, b.decision, alt, u.id])).rows[0];
+  // COR-002 : enregistrer la décision ne sollicite aucune ambulance ; l'interface propose ensuite de faire la demande de transport
+  return { ...d, ambulance_demandee: false, prochaine_etape: b.decision === 'transfert_fait' ? 'demander_transport' : null };
 }
 module.exports = { lire, regler, decider, ALTERNATIVES };

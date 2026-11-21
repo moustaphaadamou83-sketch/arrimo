@@ -173,10 +173,10 @@ window.ARRIMO_I18N.en = {
     t_aide_hygiene: 'Hygiene assistance', t_soins_infirmiers: 'Nursing care', t_medication: 'Medication', t_readaptation: 'Rehabilitation', t_autre: 'Other',
     s_prevue: 'Planned', s_en_cours: 'In progress', s_terminee: 'Done', s_manquee: 'Missed', s_annulee: 'Cancelled', src_clic: 'by click', src_position: 'by position',
   },
-  eviter: {
+  eviter: { transfert_fait: 'Decision: transfer to hospital needed', ref_resident: 'Resident reference', decision_seule: 'Decision recorded. No ambulance has been requested yet: make the transport request now.', demander_transport: 'Make the transport request', decisions_titre: 'Decisions and follow-up', d_quand: 'When', d_decision: 'Decision', d_demande: 'Request sent', d_accuse: 'Acknowledged', d_vehicule: 'Vehicle assigned', dec_transfert: 'Transfer needed', dec_evite: 'Transfer avoided', pas_de_demande: 'No linked request', aucune_decision: 'No decision in the last 7 days.', 
     titre: 'Before calling', intro: 'The checklist and alternatives come from your facility (your protocol). Arrimo gives no clinical recommendation and never blocks the call: the team decides.',
     verifications: 'Checklist', alternatives: 'Alternatives', vide: 'Your facility has not written its checklist yet.', vide_alt: 'No alternative recorded.',
-    evite_grace: 'Transfer avoided thanks to it', transfert_fait: 'Transfer made (ambulance called)', jamais_bloquant: 'Nothing prevents the call: in a life-threatening emergency, call 911.',
+    evite_grace: 'Transfer avoided thanks to it', jamais_bloquant: 'Nothing prevents the call: in a life-threatening emergency, call 911.',
     mois_titre: 'This month', mois: '{e} transfers avoided · {f} transfers made', note: 'Decision recorded.', regler: 'Set the checklist (administration)', regler_aide: 'One check per line, taken from your protocol. Tick the available alternatives and their contact details.',
     contact: 'Contact details', enregistrer: 'Save', enregistre: 'Checklist saved.',
     a_medecin_garde: 'On-call physician', a_infirmiere_praticienne: 'Nurse practitioner', a_info_sante: 'Info-Santé', a_soutien_domicile: 'Home support', a_telesoins: 'Telehealth', a_autre: 'Other',

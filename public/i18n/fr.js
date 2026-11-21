@@ -173,10 +173,10 @@ window.ARRIMO_I18N.fr = {
     t_aide_hygiene: 'Aide à l’hygiène', t_soins_infirmiers: 'Soins infirmiers', t_medication: 'Médication', t_readaptation: 'Réadaptation', t_autre: 'Autre',
     s_prevue: 'Prévue', s_en_cours: 'En cours', s_terminee: 'Faite', s_manquee: 'Manquée', s_annulee: 'Annulée', src_clic: 'au clic', src_position: 'par la position',
   },
-  eviter: {
+  eviter: { transfert_fait: 'Décision : transfert vers l’hôpital nécessaire', ref_resident: 'Référence du résident', decision_seule: 'Décision enregistrée. Aucune ambulance n’a encore été demandée : faites maintenant la demande de transport.', demander_transport: 'Faire la demande de transport', decisions_titre: 'Décisions et suites', d_quand: 'Quand', d_decision: 'Décision', d_demande: 'Demande transmise', d_accuse: 'Accusé de réception', d_vehicule: 'Véhicule affecté', dec_transfert: 'Transfert nécessaire', dec_evite: 'Transfert évité', pas_de_demande: 'Aucune demande liée', aucune_decision: 'Aucune décision depuis 7 jours.', 
     titre: 'Avant l’appel', intro: 'La liste et les alternatives viennent de votre établissement (votre protocole). Arrimo ne donne aucune recommandation clinique et ne bloque jamais l’appel : l’équipe décide.',
     verifications: 'Liste de vérification', alternatives: 'Alternatives', vide: 'Votre établissement n’a pas encore écrit sa liste.', vide_alt: 'Aucune alternative enregistrée.',
-    evite_grace: 'Transfert évité grâce à elle', transfert_fait: 'Transfert fait (appel de l’ambulance)', jamais_bloquant: 'Rien n’empêche l’appel : en cas d’urgence vitale, appelez le 911.',
+    evite_grace: 'Transfert évité grâce à elle', jamais_bloquant: 'Rien n’empêche l’appel : en cas d’urgence vitale, appelez le 911.',
     mois_titre: 'Ce mois-ci', mois: '{e} transferts évités · {f} transferts faits', note: 'Décision notée.', regler: 'Régler la liste (administration)', regler_aide: 'Une vérification par ligne, tirée de votre protocole. Cochez les alternatives disponibles et leurs coordonnées.',
     contact: 'Coordonnées', enregistrer: 'Enregistrer', enregistre: 'Liste enregistrée.',
     a_medecin_garde: 'Médecin de garde', a_infirmiere_praticienne: 'Infirmière praticienne', a_info_sante: 'Info-Santé', a_soutien_domicile: 'Soutien à domicile', a_telesoins: 'Télésoins', a_autre: 'Autre',
