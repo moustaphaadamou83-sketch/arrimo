@@ -165,3 +165,12 @@ test('Chrono : un passage resté ouvert ailleurs n’empêche pas l’arrivée c
   finally { c.release(); }
   assert.strictEqual((await pool.query("SELECT count(*)::int n FROM passages_chrono WHERE unite_id = $1 AND statut IN ('detecte', 'a_la_porte')", [unite.id])).rows[0].n, 1);
 });
+
+test('Mode crise : seuls les lieux qui ont un lit réellement libre sont proposés (jamais une place déclarée sans lit)', async () => {
+  const a = await appel('coord.c', 'POST', '/crise/apercu', { etablissement_id: ids.c, motif: 'autre', gravite: 'moderee', simulation: true });
+  assert.strictEqual(a.s, 200, JSON.stringify(a.d));
+  for (const p of a.d.propositions.filter((x) => x.lieu)) {
+    const n = (await pool.query("SELECT count(*)::int n FROM lits WHERE etablissement_id = $1 AND etat = 'libre' AND actif", [p.lieu.id])).rows[0].n;
+    assert.ok(n > 0, `${p.lieu.nom} proposé sans lit libre`);
+  }
+});

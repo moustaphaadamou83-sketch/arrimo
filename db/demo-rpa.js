@@ -25,7 +25,7 @@ const NOMS = [['Huguette', 'Lapointe'], ['Réal', 'Dufresne'], ['Monique', 'Caro
       lits.push((await c.query('INSERT INTO lits (chambre_id, unite_id, type_id, etablissement_id, code, categorie) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, code', [ch, u, modele.lt, e.id, code, modele.categorie])).rows[0]);
     }
     for (const [i, [p, n]] of NOMS.entries()) {
-      const r = `R-T${String(i + 1).padStart(4, '0')}`;
+      const r = `R-${10001 + i}`;
       await c.query("UPDATE lits SET etat = 'occupe', patient_ref = $2, etat_depuis = now() WHERE id = $1", [lits[i].id, r]);
       await c.query("INSERT INTO residents (etablissement_id, reference, prenom, nom, date_naissance, statut, lit_id, admis_le) VALUES ($1, $2, $3, $4, $5, 'present', $6, now() - interval '200 days')",
         [e.id, r, p, n, `19${35 + i}-0${(i % 9) + 1}-1${i}`, lits[i].id]);

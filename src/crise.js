@@ -50,7 +50,7 @@ async function lireDeclaration(db, u, b) {
 /** COR-003 : APERÇU avant toute activation — lieux d'accueil proposés (capacité, besoins, proximité) et acteurs qui seraient alertés. Rien n'est créé. */
 async function apercu(pool, u, b = {}) {
   const d = await lireDeclaration(pool, u, b);
-  const places = (await require('./bourse').classer(pool, d.e, {})).places.filter((p) => p.libres > 0);
+  const places = (await require('./bourse').classer(pool, d.e, {})).places.map((p) => ({ ...p, libres: Math.min(p.libres, p.lits_libres ?? 0) })).filter((p) => p.libres > 0);   // lits réellement libres seulement
   const restantes = new Map(places.map((p) => [p.id, p.libres]));
   const propositions = d.residents.map((r) => { const p = places.find((x) => restantes.get(x.id) > 0); if (p) restantes.set(p.id, restantes.get(p.id) - 1); return { resident_ref: r.reference, lieu: p ? { id: p.id, nom: p.nom, distance_km: p.distance_km } : null }; });
   const alertes = (await destinatairesAlerte(pool, d.e.id)).map((o) => ({ organisation: o.nom, role: o.role }));
@@ -84,7 +84,7 @@ async function vue(pool, u, id) {
   if (!ev) throw new ErreurHttp(404, 'evacuation_introuvable');
   const e = await droit(pool, u, ev.etablissement_id);
   const interne = (u.etabs || []).map(Number).includes(e.id);
-  const places = (await require('./bourse').classer(pool, e, {})).places.filter((p) => p.libres > 0);
+  const places = (await require('./bourse').classer(pool, e, {})).places.map((p) => ({ ...p, libres: Math.min(p.libres, p.lits_libres ?? 0) })).filter((p) => p.libres > 0);   // lits réellement libres seulement
   const residents = (await pool.query(`SELECT er.*, d.nom AS destination, l.code AS lit ${interne ? ', r.prenom, r.nom' : ''}
     FROM evacuation_residents er LEFT JOIN etablissements d ON d.id = er.destination_id LEFT JOIN lits l ON l.id = er.lit_id
     ${interne ? 'JOIN residents r ON r.id = er.resident_id' : ''} WHERE er.evacuation_id = $1 ORDER BY er.resident_ref`, [ev.id])).rows;

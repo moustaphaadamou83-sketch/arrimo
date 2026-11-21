@@ -60,7 +60,7 @@ async function classer(db, depart, q = {}) {
     const couverts = besoins.filter((b) => r.capacites.includes(b));
     const pBesoins = besoins.length ? Math.round((POIDS.besoins * couverts.length) / besoins.length) : POIDS.besoins;
     const pProx = km == null ? 0 : Math.round(POIDS.proximite * Math.max(0, 1 - km / RAYON_KM));
-    lignes.push({ id: r.id, nom: r.nom, ville: r.ville, genre: g, type: TE.nomCourt(r), groupe: r.groupe, groupe_id: r.groupe_id, libres, a_venir: r.a_venir, prochaine: r.prochaine,
+    lignes.push({ id: r.id, nom: r.nom, ville: r.ville, genre: g, type: TE.nomCourt(r), groupe: r.groupe, groupe_id: r.groupe_id, libres, lits_libres: r.lits_libres, a_venir: r.a_venir, prochaine: r.prochaine,
       distance_km: km, delai_admission_jours: r.delai, langues: r.langues,
       score: pBesoins + pProx, raison: { besoins_couverts: couverts.length, besoins_demandes: besoins.length, manquants: besoins.filter((b) => !r.capacites.includes(b)), km, points_besoins: pBesoins, points_proximite: pProx } });
   }
