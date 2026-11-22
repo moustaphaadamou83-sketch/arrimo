@@ -86,7 +86,9 @@ test.after(async () => {
 test('SH : le type d’établissement vient en premier et commande les modules proposés', async () => {
   const hop = await sh('GET', '/catalogue-modules?type=hopital');
   const chs = await sh('GET', '/catalogue-modules?type=chsld');
-  assert.deepStrictEqual(hop.types.map((t) => [t.code, t.statut]), [['hopital', 'operationnel'], ['chsld', 'operationnel'], ['maison_aines', 'a_venir'], ['rpa', 'a_venir'], ['ressource_intermediaire', 'a_venir']]);
+  // Établissements de santé d'abord ; puis les organisations préhospitalières ajoutées le 12 nov. 2026 (CCS, ambulances, etc.)
+  assert.deepStrictEqual(hop.types.slice(0, 5).map((t) => [t.code, t.statut]), [['hopital', 'operationnel'], ['chsld', 'operationnel'], ['maison_aines', 'a_venir'], ['rpa', 'a_venir'], ['ressource_intermediaire', 'a_venir']]);
+  assert.ok(['ccs', 'entreprise_ambulanciere'].every((c) => hop.types.some((t) => t.code === c && t.statut === 'operationnel')));
   const codes = (r, cat) => r.modules.filter((m) => m.categorie === cat).map((m) => m.code);
   assert.ok(codes(chs, 'commun').includes('og') && codes(hop, 'commun').includes('og'), 'socle commun pour les deux types');
   assert.deepStrictEqual(codes(chs, 'hopital'), [], 'aucun module hospitalier proposé à un CHSLD');

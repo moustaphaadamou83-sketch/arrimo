@@ -122,13 +122,16 @@ async function peuplerDemoRpa(pool, base) {
       AND NOT EXISTS (SELECT 1 FROM utilisateur_etablissements ue WHERE ue.utilisateur_id = u.id AND ue.etablissement_id <> $3)`, [courriels, await hacherAsync(mdp), e.id]);
   if (maj.rowCount !== courriels.length) throw new ErreurHttp(409, 'demo_chsld_comptes_incomplets');
   let jeton = null;
-  const appel = async (methode, chemin, corps, sans) => {
-    const r = await fetch(`${base}/api${chemin}`, { method: methode, headers: { 'Content-Type': 'application/json', ...(jeton && !sans ? { Authorization: `Bearer ${jeton}` } : {}) }, body: corps ? JSON.stringify(corps) : undefined });
+  const appel = async (methode, chemin, corps, sans, autreJeton) => {
+    const j = autreJeton || jeton;
+    const r = await fetch(`${base}/api${chemin}`, { method: methode, headers: { 'Content-Type': 'application/json', ...(j && !sans ? { Authorization: `Bearer ${j}` } : {}) }, body: corps ? JSON.stringify(corps) : undefined });
     const d = await r.json().catch(() => null);
     if (!r.ok) throw new ErreurHttp(r.status === 401 ? 409 : r.status, d?.code || 'demo_chsld_echec', d?.vars || {});
     return d;
   };
   jeton = (await appel('POST', '/connexion', { email: courrielDe(c, 'coordination'), mot_de_passe: mdp }, true)).token;
+  // Chambre propre confirmée par l'entretien (décision du 17 nov. 2026) : les préparations sont terminées avec le compte d'entretien
+  const jetonEntretien = (await appel('POST', '/connexion', { email: courrielDe(c, 'entretien'), mot_de_passe: mdp }, true)).token;
   try {
     const PRENOMS = ['Huguette', 'Réal', 'Monique', 'Jean-Guy', 'Claudette', 'Normand', 'Denise', 'Rosaire', 'Lise', 'Fernand', 'Ginette', 'Laurent'];
     const NOMS = ['Lachance', 'Poirier', 'Dion', 'Boivin', 'Caron', 'Nadeau', 'Hamel', 'Plante', 'Vachon', 'Thibault', 'Leclerc', 'Martel'];
@@ -138,7 +141,7 @@ async function peuplerDemoRpa(pool, base) {
       const r2 = await appel('POST', `/chsld/residents/${r.id}/reserver-place`, { lit_id: libre.id, version: libre.version, version_resident: r.version });
       if (!arrivee) return r2;
       for (const t of (await appel('GET', `/chsld/taches?etablissement_id=${e.id}`)).filter((x) => x.lit_id === libre.id && ['preparation_chambre', 'entretien'].includes(x.type))) {
-        await appel('POST', `/chsld/taches/${t.id}/statut`, { statut: 'faite', version: t.version });
+        await appel('POST', `/chsld/taches/${t.id}/statut`, { statut: 'faite', version: t.version }, false, jetonEntretien);
       }
       return appel('POST', `/chsld/residents/${r.id}/arrivee`, { version: r2.version });
     };
