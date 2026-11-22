@@ -31,7 +31,8 @@
       onglets().forEach((b) => b.classList.remove('hors-barre'));
       nav.querySelectorAll('.onglets-groupe').forEach((g) => g.classList.remove('hors-barre'));
       plus.hidden = true;
-      if (etroit.matches || document.body.classList.contains('nav-verticale') || nav.scrollWidth <= nav.clientWidth + 1) { basculer(false); return; }
+      // Navigation par espaces (cahier directeur) : les espaces remplacent le menu « Plus »
+      if (nav.classList.contains('avec-espaces') || etroit.matches || document.body.classList.contains('nav-verticale') || nav.scrollWidth <= nav.clientWidth + 1) { basculer(false); return; }
       plus.hidden = false;
       const visibles = onglets().filter((b) => !b.hidden);
       for (let i = visibles.length - 1; i >= 0 && nav.scrollWidth > nav.clientWidth + 1; i -= 1) {

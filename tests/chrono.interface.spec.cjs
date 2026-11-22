@@ -51,7 +51,7 @@ for (const L of [{ nom: 'ordinateur', width: 1366, height: 800 }, { nom: 'teleph
       await pg.waitForSelector('body[data-pret="1"]');
       if (await pg.locator('#b-premiers-pas-ok').isVisible().catch(() => false)) await pg.click('#b-premiers-pas-ok');
       if (await pg.locator('#b-nav').isVisible().catch(() => false)) await pg.click('#b-nav');
-      await pg.click('#onglets button[data-v="chrono"]');
+      await pg.evaluate((v) => window.ArrimoEspaces?.reveler(v), 'chrono').then(() => pg.click('#onglets button[data-v="chrono"]'));
       await pg.waitForSelector('#v-chrono .ch-porte');
       const carte = pg.locator('#v-chrono .ch-porte').first();
       assert.match(await carte.getAttribute('class'), /niveau-rouge/);

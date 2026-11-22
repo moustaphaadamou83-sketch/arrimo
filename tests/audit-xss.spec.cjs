@@ -61,7 +61,7 @@ async function parcourir(email) {
   const b = page.locator('#b-premiers-pas-ok'); if (await b.isVisible().catch(() => false)) await b.click();
   const vues = await page.$$eval('#onglets button[data-v]', (bs) => bs.filter((x) => !x.hidden).map((x) => x.dataset.v));
   for (const v of vues) {
-    await page.click(`#onglets button[data-v="${v}"]`);
+    await page.evaluate((v) => window.ArrimoEspaces?.reveler(v), v).then(() => page.click(`#onglets button[data-v="${v}"]`));
     await page.waitForTimeout(700);
     // Ouvre tout ce qui se déplie (détails, sections repliées) pour rendre un maximum de contenu
     await page.evaluate(() => document.querySelectorAll('details').forEach((d) => { d.open = true; }));

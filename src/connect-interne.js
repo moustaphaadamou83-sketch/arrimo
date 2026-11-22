@@ -21,7 +21,7 @@ function etab(u, id) { const e = entier(id, 'etablissement_id'); exigerEtablisse
 async function filLisible(db, u, filId) {
   const r = (await db.query('SELECT * FROM connect_messages WHERE id = $1 AND fil_id IS NULL', [entier(filId, 'id')])).rows[0];
   if (!r || !(u.etabs || []).map(Number).includes(r.etablissement_id)) throw new ErreurHttp(404, 'objet_introuvable');
-  const participant = (await db.query('SELECT 1 FROM connect_messages WHERE (id = $1 OR fil_id = $1) AND (expediteur_id = $2 OR destinataire_id = $2) LIMIT 1', [r.id, u.id])).rowCount;
+  const participant = (await db.query('SELECT 1 FROM connect_messages WHERE (id = $1 OR fil_id = $1) AND (expediteur_id = $2 OR destinataire_id = $2) UNION ALL SELECT 1 FROM connect_participants WHERE fil_id = $1 AND utilisateur_id = $2 LIMIT 1', [r.id, u.id])).rowCount;
   if (participant || (r.boite === 'administration' && estAdmin(u))) return r;
   throw new ErreurHttp(404, 'objet_introuvable');
 }
@@ -33,7 +33,8 @@ async function envoyer(pool, u, b = {}) {
     if (b.fil_id) {
       // Réponse dans un fil existant : mêmes droits que la lecture
       const f = await filLisible(c, u, b.fil_id);
-      const autre = f.boite === 'administration' ? (f.expediteur_id === u.id ? null : f.expediteur_id) : (f.expediteur_id === u.id ? f.destinataire_id : f.expediteur_id);
+      const groupe = (await c.query('SELECT 1 FROM connect_participants WHERE fil_id = $1 LIMIT 1', [f.id])).rowCount;
+      const autre = groupe ? null : f.boite === 'administration' ? (f.expediteur_id === u.id ? null : f.expediteur_id) : (f.expediteur_id === u.id ? f.destinataire_id : f.expediteur_id);
       const m = (await c.query('INSERT INTO connect_messages (etablissement_id, fil_id, expediteur_id, destinataire_id, corps) VALUES ($1, $2, $3, $4, $5) RETURNING *', [f.etablissement_id, f.id, u.id, autre, corps])).rows[0];
       if (f.boite === 'administration' && estAdmin(u) && f.statut === 'ouverte') await c.query("UPDATE connect_messages SET statut = 'en_cours', traite_par = $2 WHERE id = $1", [f.id, u.id]);
       await c.query('INSERT INTO connect_lectures (message_id, utilisateur_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [m.id, u.id]);
@@ -42,15 +43,23 @@ async function envoyer(pool, u, b = {}) {
     const categorie = CATEGORIES.includes(b.categorie) ? b.categorie : 'message';
     const priorite = b.priorite === 'haute' ? 'haute' : 'normale';
     const sujet = texte(b.sujet, 120, 'sujet', 2);
-    let dest = null; let boite = null;
+    let dest = null; let boite = null; let membres = null;
     if (b.boite === 'administration') boite = 'administration';
-    else {
+    else if (Array.isArray(b.destinataires) && b.destinataires.length > 1) {
+      // Conversation de groupe : 2 à 20 membres actifs de l'établissement (en plus de l'expéditeur)
+      membres = [...new Set(b.destinataires.map((x) => entier(x, 'destinataires')))].filter((x) => x !== u.id);
+      if (membres.length < 2 || membres.length > 20) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'destinataires' });
+      const ok = (await c.query('SELECT count(*)::int n FROM utilisateur_etablissements ue JOIN utilisateurs x ON x.id = ue.utilisateur_id WHERE ue.utilisateur_id = ANY($1) AND ue.etablissement_id = $2 AND x.actif', [membres, e])).rows[0].n;
+      if (ok !== membres.length) throw new ErreurHttp(404, 'objet_introuvable');
+      dest = membres[0];   // contrainte existante (un destinataire ou une boîte) ; tous les membres sont dans connect_participants
+    } else {
       dest = entier(b.destinataire_id, 'destinataire_id');
       if (dest === u.id || !(await c.query('SELECT 1 FROM utilisateur_etablissements ue JOIN utilisateurs x ON x.id = ue.utilisateur_id WHERE ue.utilisateur_id = $1 AND ue.etablissement_id = $2 AND x.actif', [dest, e])).rowCount) throw new ErreurHttp(404, 'objet_introuvable');
     }
     const m = (await c.query(`INSERT INTO connect_messages (etablissement_id, expediteur_id, destinataire_id, boite, categorie, sujet, corps, priorite, statut) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
       [e, u.id, dest, boite, categorie, sujet, corps, priorite, boite ? 'ouverte' : null])).rows[0];
     await c.query('INSERT INTO connect_lectures (message_id, utilisateur_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [m.id, u.id]);
+    if (membres) for (const x of [u.id, ...membres]) await c.query('INSERT INTO connect_participants (fil_id, utilisateur_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [m.id, x]);
     // Journal : opération administrative (sans contenu du message)
     if (boite) await c.query("INSERT INTO journal (etablissement_id, utilisateur_id, action, detail) VALUES ($1, $2, 'Connect : demande à l’administration', $3)", [e, u.id, `${categorie} · priorité ${priorite}`]);
     return m;
@@ -65,10 +74,12 @@ async function fils(pool, u, q = {}) {
   const e = etab(u, q.etablissement_id);
   const rows = (await pool.query(`SELECT f.id, f.sujet, f.categorie, f.priorite, f.statut, f.boite, f.cree_le, f.expediteur_id, ex.nom AS expediteur, de.nom AS destinataire,
       (SELECT max(m.cree_le) FROM connect_messages m WHERE m.id = f.id OR m.fil_id = f.id) AS dernier_le,
+      (SELECT count(*)::int FROM connect_participants cp WHERE cp.fil_id = f.id) AS membres,
       (SELECT count(*)::int FROM connect_messages m WHERE (m.id = f.id OR m.fil_id = f.id) AND m.expediteur_id <> $2 AND ${NON_LU}) AS non_lus
     FROM connect_messages f JOIN utilisateurs ex ON ex.id = f.expediteur_id LEFT JOIN utilisateurs de ON de.id = f.destinataire_id
     WHERE f.fil_id IS NULL AND f.etablissement_id = $1 AND (
       EXISTS (SELECT 1 FROM connect_messages m WHERE (m.id = f.id OR m.fil_id = f.id) AND (m.expediteur_id = $2 OR m.destinataire_id = $2))
+      OR EXISTS (SELECT 1 FROM connect_participants cp WHERE cp.fil_id = f.id AND cp.utilisateur_id = $2)
       OR (f.boite = 'administration' AND $3))
     ORDER BY dernier_le DESC LIMIT 100`, [e, u.id, estAdmin(u)])).rows;
   return { fils: rows, non_lus: rows.reduce((s, r) => s + r.non_lus, 0), administration: estAdmin(u) };

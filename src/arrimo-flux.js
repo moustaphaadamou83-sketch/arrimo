@@ -83,10 +83,52 @@ async function mouvements(pool, u, q = {}) {
   for (const l of res) {
     const repere = l.mouvement === 'arrivee' ? (l.eta || l.prevue) : l.prevue; const fait = l.mouvement === 'arrivee' ? l.arrivee_reelle : l.depart_reel;
     l.retard = !!(repere && !fait && !['refuse', 'annule', 'termine', 'arrive'].includes(l.statut) && now - new Date(repere).getTime() > 15 * 60000);
+    // Préparation en retard (cahier Personnel & Tâches, 15) : chambre pas prête à moins de 30 min de l'arrivée prévue ou estimée
+    if (l.preparation && ['a_faire', 'en_cours'].includes(l.preparation.etat) && l.mouvement === 'arrivee' && !l.arrivee_reelle && repere && new Date(repere).getTime() - now < 30 * 60000) l.preparation.retard = true;
   }
   return { genere_le: new Date().toISOString(), mouvements: res,
     resume: { arrivees: res.filter((l) => l.mouvement === 'arrivee').length, departs: res.filter((l) => l.mouvement === 'depart').length, retards: res.filter((l) => l.retard).length,
       prealertes_a_acquitter: res.filter((l) => l.actions.includes('accuser_prealerte')).length, preparations: res.filter((l) => l.preparation && ['a_faire', 'en_cours'].includes(l.preparation.etat)).length } };
+}
+
+/** Historique des disponibilités (cahier directeur, 9) : par jour, d'après le journal immuable des lits (source unique) ; état actuel. */
+async function historiqueCapacites(pool, u, q = {}) {
+  const id = Number(q.etablissement_id); if (!Number.isSafeInteger(id) || id < 1) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'etablissement_id' });
+  exigerEtablissement(u, id);
+  if (u.role === 'entretien') throw new ErreurHttp(403, 'role_insuffisant');
+  const jours = Math.min(Math.max(Number(q.jours) || 14, 1), 90);
+  const fz = (await pool.query('SELECT c.fuseau FROM etablissements e JOIN config_pays c ON c.id = e.config_id WHERE e.id = $1', [id])).rows[0]?.fuseau || 'America/Toronto';
+  const parJour = (await pool.query(`SELECT to_char(j.date AT TIME ZONE $3, 'YYYY-MM-DD') AS jour,
+      count(*) FILTER (WHERE j.nouvel_etat = 'libre')::int AS liberes, count(*) FILTER (WHERE j.nouvel_etat = 'occupe')::int AS occupes,
+      count(*) FILTER (WHERE j.nouvel_etat = 'nettoyage')::int AS a_nettoyer, count(*) FILTER (WHERE j.nouvel_etat = 'reserve')::int AS reserves,
+      count(*) FILTER (WHERE j.nouvel_etat = 'indispo')::int AS bloques
+    FROM journal j WHERE j.etablissement_id = $1 AND j.lit_id IS NOT NULL AND NOT j.refuse AND j.date > now() - make_interval(days => $2)
+    GROUP BY 1 ORDER BY 1 DESC`, [id, jours, fz])).rows;
+  const actuel = (await pool.query(`SELECT etat, count(*)::int n FROM lits WHERE etablissement_id = $1 AND actif GROUP BY etat`, [id])).rows;
+  return { jours, par_jour: parJour, actuel: Object.fromEntries(actuel.map((x) => [x.etat, x.n])) };
+}
+
+/**
+ * Historique des transferts (cahier directeur, 8.6) : mouvements clos (arrivés, terminés, refusés, annulés) des N derniers jours, pour
+ * l'établissement seulement (origine ou destination). Références seulement, aucune identité, aucune donnée clinique.
+ */
+async function historique(pool, u, q = {}) {
+  const id = Number(q.etablissement_id); if (!Number.isSafeInteger(id) || id < 1) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'etablissement_id' });
+  exigerEtablissement(u, id);
+  if (u.role === 'entretien') throw new ErreurHttp(403, 'role_insuffisant');
+  const jours = Math.min(Math.max(Number(q.jours) || 30, 1), 365);
+  const tr = (await pool.query(`SELECT 'transport' AS type, d.id, d.numero AS reference, d.resident_ref AS personne, eo.nom AS origine, COALESCE(ed.nom, d.destination_libelle) AS destination,
+      CASE WHEN d.destination_id = $1 THEN 'arrivee' ELSE 'depart' END AS mouvement, CASE WHEN d.statut = 'annulee' THEN 'annule' WHEN d.statut = 'refusee' THEN 'refuse' WHEN d.remis_le IS NOT NULL THEN 'termine' ELSE 'arrive' END AS statut,
+      d.cree_le AS debut, COALESCE(d.remis_le, d.arrivee_le, d.modifie_le) AS fin, un.numero AS vehicule
+    FROM demandes_transport d JOIN etablissements eo ON eo.id = d.origine_id LEFT JOIN etablissements ed ON ed.id = d.destination_id LEFT JOIN unites_secours un ON un.id = d.unite_id
+    WHERE (d.origine_id = $1 OR d.destination_id = $1) AND d.statut IN ('annulee', 'refusee', 'arrivee') AND d.modifie_le > now() - make_interval(days => $2)`, [id, jours]).catch(() => ({ rows: [] }))).rows;
+  const tf = (await pool.query(`SELECT 'transfert' AS type, t.id, t.numero AS reference, t.patient_ref AS personne, eo.nom AS origine, ed.nom AS destination,
+      CASE WHEN t.destination_id = $1 THEN 'arrivee' ELSE 'depart' END AS mouvement, CASE t.statut WHEN 'recu' THEN 'arrive' WHEN 'refuse' THEN 'refuse' ELSE 'annule' END AS statut,
+      t.date_demande AS debut, COALESCE(t.date_reception, t.date_demande) AS fin, NULL AS vehicule
+    FROM transferts t JOIN etablissements eo ON eo.id = t.origine_id JOIN etablissements ed ON ed.id = t.destination_id
+    WHERE (t.origine_id = $1 OR t.destination_id = $1) AND t.statut IN ('recu', 'refuse', 'annule') AND COALESCE(t.date_reception, t.date_demande) > now() - make_interval(days => $2)`, [id, jours]).catch(() => ({ rows: [] }))).rows;
+  const l = [...tr, ...tf].sort((a, b) => new Date(b.fin) - new Date(a.fin)).slice(0, 300);
+  return { jours, mouvements: l };
 }
 
 /**
@@ -114,4 +156,4 @@ async function fiche(pool, u, q = {}) {
     chronologie: ev.map((x) => ({ etape: NOM[x.type] || x.type, quand: x.cree_le, acteur: x.acteur || null })), incident: d.incident_le ? { le: d.incident_le, motif: d.incident_motif } : null };
 }
 
-module.exports = { mouvements, fiche };
+module.exports = { historiqueCapacites, historique, mouvements, fiche };

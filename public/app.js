@@ -571,7 +571,8 @@ function appliquerModules() {
     const mod = Object.keys(MODULE_ONGLET).find((k) => MODULE_ONGLET[k] === b.dataset.v);
     const autreType = b.dataset.type && b.dataset.type !== type;
     // Entretien : nettoyage (et ses tâches en CHSLD) seulement
-    const entretienInterdit = entretien && !(b.dataset.v === 'nettoyage' || (type === 'chsld' && b.dataset.v === 'c-taches'));
+    // Entretien : Nettoyage et Mes tâches (vue personnelle unique ; le tableau des tâches de l'établissement reste aux responsables : pas de doublon)
+    const entretienInterdit = entretien && !(b.dataset.v === 'nettoyage' || b.dataset.v === 'mes-taches');
     b.hidden = autreType || entretienInterdit || (b.dataset.v === 'admin' && !etat.moi.utilisateur.admin) || (mod && mods[mod] === false)
       || (b.dataset.module && mods[b.dataset.module] === false) || (b.dataset.v === 'patients' && !etat.moi.patients_fictifs)
       // Module optionnel (Liaison Secours) : visible seulement s'il a été activé pour cet établissement
@@ -645,7 +646,7 @@ async function rafraichir() {
     await Promise.all([e ? majCompteurs() : null, ({
       copilote: vueCopilote, reseau: vueReseau, national: vueNational, lits: vueLits, urgence: vueUrgence, admissions: vueAdmissions, transferts: vueTransferts,
       nettoyage: vueNettoyage, vigilance: async () => { await vueVigilance(); await window.ArrimoSillage?.vigilance($('#v-vigilance'), etat.ctx); }, nsa: vueNsa, indicateurs: vueIndicateurs, journal: vueJournal, params: vueParams,
-      admin: vueAdmin, compte: vueCompte, support:vueSupportClient, patients: vuePatients, continuite: vueContinuite, ...(window.ArrimoChsld?.vues || {}), ...(window.ArrimoSecours?.vues || {}), ...(window.ArrimoChrono?.vues || {}), ...(window.ArrimoTransportPlanifie?.vues || {}), ...(window.ArrimoBourse?.vues || {}), flux: () => window.ArrimoFluxVue.afficher($('#v-flux'), optsFlux()), donnees: () => window.ArrimoDonnees.afficher($('#v-donnees'), { api, langue, etablissement_id: etat.ctx }), dsn: vueDsn, ...(window.ArrimoVisitesEviter?.vues || {}), crise: () => window.ArrimoCrise.afficher($('#v-crise'), { api, langue, etablissement_id: etat.ctx }),
+      admin: vueAdmin, compte: vueCompte, support:vueSupportClient, patients: vuePatients, continuite: vueContinuite, ...(window.ArrimoChsld?.vues || {}), ...(window.ArrimoSecours?.vues || {}), ...(window.ArrimoChrono?.vues || {}), ...(window.ArrimoTransportPlanifie?.vues || {}), ...(window.ArrimoBourse?.vues || {}), flux: () => window.ArrimoFluxVue.afficher($('#v-flux'), optsFlux()), 'mes-taches': () => window.ArrimoMesTaches.afficher($('#v-mes-taches'), optsFlux()), donnees: () => window.ArrimoDonnees.afficher($('#v-donnees'), { api, langue, etablissement_id: etat.ctx }), dsn: vueDsn, ...(window.ArrimoVisitesEviter?.vues || {}), crise: () => window.ArrimoCrise.afficher($('#v-crise'), { api, langue, etablissement_id: etat.ctx }),
     })[etat.vue]()]);
     poserMenuParametres();
     majInfosLieu();
@@ -675,7 +676,7 @@ setInterval(() => {
   if (etat.token && etat.moi && !fluxApp && window.ArrimoFlux) {
     fluxApp = window.ArrimoFlux.ecouter(() => etat.token, () => {
       window.ArrimoSecours?.veille?.();
-      if ($('#modale').hidden && document.visibilityState === 'visible' && ['secours', 'chrono', 'transports-planifies', 'c-urgences', 'c-mouvements', 'liaison', 'urgence', 'flux'].includes(etat.vue)) rafraichir();
+      if ($('#modale').hidden && document.visibilityState === 'visible' && ['secours', 'chrono', 'transports-planifies', 'c-urgences', 'c-mouvements', 'liaison', 'urgence', 'flux', 'mes-taches'].includes(etat.vue)) rafraichir();
     });
     fluxApp.jeton = etat.token;
   }
@@ -1156,6 +1157,18 @@ async function vueLits() {
   v.querySelectorAll('[data-confirmer-libre]').forEach((b) => { b.onclick = () => agir(b,
     () => api('POST', `/lits/${b.dataset.confirmerLibre}/confirmer-disponibilite`), t('lits.confirmation_lit_ok', { code: b.dataset.code })); });
   brancherActionsLit(v);
+  // Historique des disponibilités (cahier directeur, Capacités) : journal immuable des lits, par jour ; chargé à l'ouverture seulement
+  v.insertAdjacentHTML('beforeend', `<details class="panneau-c" id="hist-dispo"><summary><b>${esc(t('lits.hist_titre'))}</b></summary><div id="hist-dispo-z"><p class="note">…</p></div></details>`);
+  $('#hist-dispo').addEventListener('toggle', async (ev) => {
+    if (!ev.target.open || ev.target.dataset.charge) return; ev.target.dataset.charge = '1';
+    const z = $('#hist-dispo-z');
+    try {
+      const hd = await api('GET', `/capacites/historique?etablissement_id=${etat.ctx}`);
+      const H = (k) => esc(t(`lits.hist_${k}`));
+      z.innerHTML = `<p class="note">${esc(t('lits.hist_intro', { n: hd.jours }))}</p>${hd.par_jour.length ? `<div class="tableau"><table><thead><tr><th>${H('jour')}</th><th>${H('liberes')}</th><th>${H('occupes')}</th><th>${H('a_nettoyer')}</th><th>${H('reserves')}</th><th>${H('bloques')}</th></tr></thead><tbody>
+        ${hd.par_jour.map((r) => `<tr><td>${esc(new Date(`${r.jour}T12:00:00`).toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' }))}</td><td class="num">${r.liberes}</td><td class="num">${r.occupes}</td><td class="num">${r.a_nettoyer}</td><td class="num">${r.reserves}</td><td class="num">${r.bloques}</td></tr>`).join('')}</tbody></table></div>` : `<p class="note">${H('aucun')}</p>`}`;
+    } catch (err) { z.innerHTML = `<p class="note">${esc(err.message)}</p>`; }
+  });
 }
 
 /* ---------------- Transferts ---------------- */
@@ -1639,10 +1652,27 @@ async function vueCopilote() {
   });
   $('#f-copilote').onsubmit = (ev) => { ev.preventDefault(); const q = $('#q').value.trim(); if (q) poser(q); };
   v.querySelectorAll('[data-ex]').forEach((c) => { c.onclick = () => poser(exemples[Number(c.dataset.ex)]); });
-  // Accueil personnalisé (cahier ultime, addendum) : bonjour, rôle, établissement, date ; puis préalertes et prochains mouvements (Arrimo Flux)
   v.querySelectorAll('[data-aller]').forEach((c) => { c.onclick = () => document.querySelector(`#onglets button[data-v="${c.dataset.aller}"]`)?.click(); });
-  v.insertAdjacentHTML('afterbegin', `${bandeauAccueil()}<div id="flux-accueil-h"></div>`);
-  window.ArrimoFluxVue?.panneau($('#flux-accueil-h'), optsFlux());
+  // Accueil universel (cahier directeur) : le grand bandeau de présentation disparaît ; niveau compact ; 6 indicateurs ; Flux | Bourse ;
+  // Chrono ; préalertes et priorités ; Mes tâches ; prévisions compactes ; l'analyse détaillée d'OG reste disponible, repliée.
+  v.querySelector('.copilote-hero')?.remove();
+  const niv = v.querySelector('.alerte-copilote'); const detailsNiveau = niv ? niv.innerHTML : '';
+  const ancien = document.createElement('div'); while (v.firstChild) ancien.appendChild(v.firstChild);
+  const mods = etabCtx().modules || {};
+  const [fx, ch] = await Promise.all([api('GET', `/arrimo-flux?etablissement_id=${etat.ctx}`).catch(() => null), mods.chrono === true ? api('GET', `/chrono?etablissement_id=${etat.ctx}`).catch(() => null) : null]);
+  const A = (k, vars) => t(`accueil.${k}`, vars);
+  const kpis = [
+    { lib: A('k_lits'), val: b.vue?.lits?.libres, aller: 'lits', ton: b.vue?.lits?.libres === 0 ? 'alerte' : '' },
+    b.vue?.civieres ? { lib: A('k_urgence'), val: pct(b.vue.civieres.taux), aller: 'urgence', ton: ['orange', 'rouge'].includes(b.alerte?.urgence?.niveau) ? 'alerte' : '' } : null,
+    fx ? { lib: A('k_arrivees'), val: fx.resume.arrivees, aller: 'flux' } : null,
+    fx ? { lib: A('k_prealertes'), val: fx.mouvements.filter((l) => (l.prealerte || l.type === 'prealerte') && !['arrive', 'termine', 'annule'].includes(l.statut)).length, aller: 'secours' } : null,
+    ch ? { lib: A('k_porte'), val: (ch.a_la_porte || []).length, aller: 'chrono', ton: (ch.a_la_porte || []).some((p) => p.a_la_porte_min > (ch.cibles?.porte || 20)) ? 'alerte' : '' } : null,
+    { lib: A('k_transferts'), val: (b.vue?.transferts?.entrants || 0) + (b.vue?.transferts?.sortants || 0), aller: 'transferts' },
+  ];
+  await window.ArrimoAccueil.construire(v, { ...optsFlux(), bandeau: bandeauAccueil(), kpis,
+    niveau: b.alerte?.niveau ? { code: b.alerte.niveau, details: detailsNiveau, le: b.genere_le, question: A('q_niveau', { niveau: t(`niveaux.${b.alerte.niveau}`) }) } : null,
+    chrono: mods.chrono === true, taches: true, previsions: b.previsions,
+    priorites: (b.recommandations || []).slice(0, 3).map((x) => ({ texte: x.titre })), details: ancien });
 }
 /** Bandeau d'accueil : nom réel, rôle, établissement, date et heure locales de l'établissement (jamais d'horaire inventé). */
 function bandeauAccueil() {
@@ -1780,7 +1810,7 @@ function modaleArrivee(libres, cfg) {
 /* ---------------- Patients fictifs : recherche, vérification d'identité, historique des passages ---------------- */
 // Démonstration et recette seulement (fiches fictives) ; historique administratif, aucune donnée clinique.
 /** Arrimo Flux : dépendances de l'application (même session, établissement courant, ouverture d'un onglet). */
-function optsFlux() { return { api, etablissement_id: etat.ctx, toast, modale, bourse: ((etabCtx() && etabCtx().modules) || {}).bourse_places === true, ouvrir: (v) => { const b = document.querySelector(`#onglets button[data-v="${v}"]`); if (b) b.click(); } }; }
+function optsFlux() { return { api, etablissement_id: etat.ctx, toast, modale, rafraichir: () => (typeof rafraichir === 'function' ? rafraichir() : null), bourse: ((etabCtx() && etabCtx().modules) || {}).bourse_places === true, ouvrir: (v) => { const b = document.querySelector(`#onglets button[data-v="${v}"]`); if (b) b.click(); } }; }
 /** DSN (22 nov. 2026) : le module s'ouvre dans l'onglet, pour l'établissement courant ; démo et recette seulement (refus côté serveur ailleurs). */
 function vueDsn() {
   const v = $('#v-dsn');

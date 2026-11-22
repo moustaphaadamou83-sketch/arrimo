@@ -89,6 +89,7 @@ async function menu(page, element) {
 }
 
 async function onglet(page, vue) {
+  await page.evaluate((v) => window.ArrimoEspaces?.reveler(v), vue).catch(() => {});
   if (process.env.SH_RECETTE_FILTRE) page.on('pageerror', (e) => console.log('ERREUR PAGE', vue, String(e).slice(0, 300)));
   // Journal et Support client ne sont plus dans la barre principale : on y va par Paramètres, comme un utilisateur.
   if (await page.locator(`#onglets button[data-v="${vue}"].hors-menu`).count()) {
@@ -231,13 +232,15 @@ for (const L of LARGEURS) {
     // 1. Le problème : Copilote de l'Hôpital X
     const x = await ouvrir(L, 'hopital.x@demo.arrimo');
     await verifierAide(x, L, '01b-aide-coordination', 'coordonnateur');
-    await x.waitForSelector('#v-copilote .niveau');
-    assert.match(await x.textContent('#v-copilote .niveau'), /Rouge|Orange/);
+    await x.waitForSelector('#v-copilote .acc-niveau');
+    assert.match(await x.textContent('#v-copilote .acc-niveau'), /rouge|orange/i);
     await verifier(x, L, '01-copilote-x');
 
     // 2. Le Copilote propose, l'humain décide : assigner le lit de maternité
     // Les 5 plus importantes d'abord ; les autres sur demande
     assert.ok(await x.locator('#v-copilote .reco').count() <= 5);
+    // Accueil universel : l'analyse détaillée d'OG (recommandations) est repliée ; on l'ouvre comme un utilisateur
+    await x.evaluate(() => { const d = document.querySelector('#v-copilote .acc-details'); if (d) d.open = true; });
     await x.click('#b-recos-plus');
     await x.waitForFunction(() => document.querySelectorAll('#v-copilote .reco').length > 5);
     await x.locator('#v-copilote details.groupe summary').first().click();
@@ -388,7 +391,7 @@ for (const L of LARGEURS) {
 
     // 6. Le réseau
     const r = await ouvrir(L, 'reseau@demo.arrimo');
-    await r.waitForSelector('#v-copilote .niveau');
+    await r.waitForSelector('#v-copilote .acc-niveau');
     await verifier(r, L, '17-copilote-reseau');
     await verifierAide(r, L, '17b-aide-administration', 'gestionnaire');
 
@@ -520,7 +523,7 @@ test('interface en anglais : aucun texte français restant (noms propres except�
   await accueil.context().close();
 
   const x = await ouvrir(L, 'hopital.x@demo.arrimo', 'en');
-  await x.waitForSelector('#v-copilote .niveau');
+  await x.waitForSelector('#v-copilote .acc-niveau');
   await ecran(x, '01-copilot');
   for (let i = 0; i < 6; i += 1) {
     await x.click(`#v-copilote [data-ex="${i}"]`);
@@ -585,7 +588,7 @@ test('interface en anglais : aucun texte français restant (noms propres except�
   await ecran(e, '11-cleaning');
 
   const r = await ouvrir(L, 'reseau@demo.arrimo', 'en');
-  await r.waitForSelector('#v-copilote .niveau');
+  await r.waitForSelector('#v-copilote .acc-niveau');
   await ecran(r, '12-copilot-network');
   await onglet(r, 'admin');
   await r.waitForSelector('#b-creer-compte');
@@ -645,7 +648,7 @@ for (const L of LARGEURS.slice(1)) {
       .rows.map((r) => r.nom).filter(Boolean).sort((a, b) => b.length - a.length);
     const ecran = async (page, nom) => { await sansFrancais(page, noms, `${L.nom}/${nom}`); await verifier(page, { ...L, nom: `anglais-${L.nom}` }, nom); };
     const x = await ouvrir(L, 'hopital.x@demo.arrimo', 'en');
-    await x.waitForSelector('#v-copilote .niveau');
+    await x.waitForSelector('#v-copilote .acc-niveau');
     await ecran(x, '01-copilot');
     for (const vue of ['reseau', 'national', 'lits', 'urgence', 'admissions', 'transferts', 'nettoyage', 'vigilance', 'nsa', 'indicateurs', 'journal', 'params']) {
       await onglet(x, vue);
@@ -966,7 +969,7 @@ for (const L of LARGEURS) {
     assert.strictEqual((await pool.query("SELECT apparence FROM utilisateurs WHERE email='hopital.x@demo.arrimo'")).rows[0].apparence, 'sombre');
     assert.strictEqual((await pool.query("SELECT count(*)::int n FROM utilisateurs WHERE apparence<>'automatique'")).rows[0].n, 1, 'les autres comptes ne changent pas');
     await x.keyboard.press('Escape');
-    const vues = await x.evaluate(() => [...document.querySelectorAll('#onglets button[data-v]')].filter((b) => !b.hidden && (b.offsetParent !== null || b.classList.contains('hors-barre'))).map((b) => b.dataset.v));
+    const vues = await x.evaluate(() => [...document.querySelectorAll('#onglets button[data-v]')].filter((b) => !b.hidden && (b.offsetParent !== null || b.classList.contains('hors-barre') || b.classList.contains('hors-espace'))).map((b) => b.dataset.v));
     assert.ok(vues.length >= 8, `onglets visibles : ${vues}`);
     for (const v of vues) { await onglet(x, v); await verifier(x, L, `sombre-${v}`); }
     await x.context().close();

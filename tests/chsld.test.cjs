@@ -1486,12 +1486,12 @@ test('audit de sécurité : attaques automatiques sur toutes les routes, isolati
       await pg2.goto(basePilote); await pg2.waitForSelector('body[data-pret="1"]'); if (await pg2.locator('#b-premiers-pas-ok').isVisible().catch(() => false)) await pg2.click('#b-premiers-pas-ok'); return pg2; };
     const propre = async (pg2, ou) => { await pg2.waitForTimeout(300); assert.strictEqual(await pg2.evaluate(() => window.__xss), undefined, `XSS exécutée : ${ou}`); assert.strictEqual(await pg2.locator('img[src="x"]').count(), 0, `balise injectée : ${ou}`); };
     const e = await ouvrir('era', ids.era);
-    await e.click('#onglets button[data-v="c-residents"]'); await e.waitForSelector('#v-c-residents table'); await e.fill('#ch-q', 'Essai'); await e.waitForFunction(() => document.querySelectorAll('#v-c-residents tbody tr').length >= 1); await propre(e, 'liste des résidents');
+    await e.evaluate((v) => window.ArrimoEspaces?.reveler(v), 'c-residents').then(() => e.click('#onglets button[data-v="c-residents"]')); await e.waitForSelector('#v-c-residents table'); await e.fill('#ch-q', 'Essai'); await e.waitForFunction(() => document.querySelectorAll('#v-c-residents tbody tr').length >= 1); await propre(e, 'liste des résidents');
     await e.click('#v-c-residents [data-res]'); await e.waitForSelector('[data-ch-action]'); await propre(e, 'fiche');
-    await e.click('#onglets button[data-v="c-taches"]'); await e.waitForSelector('#v-c-taches'); await propre(e, 'tâches');
-    await e.click('#onglets button[data-v="c-mouvements"]'); await e.waitForSelector(`#v-c-mouvements [data-co][data-id="${coX.id}"]`); await propre(e, 'mouvements');
+    await e.evaluate((v) => window.ArrimoEspaces?.reveler(v), 'c-taches').then(() => e.click('#onglets button[data-v="c-taches"]')); await e.waitForSelector('#v-c-taches'); await propre(e, 'tâches');
+    await e.evaluate((v) => window.ArrimoEspaces?.reveler(v), 'c-mouvements').then(() => e.click('#onglets button[data-v="c-mouvements"]')); await e.waitForSelector(`#v-c-mouvements [data-co][data-id="${coX.id}"]`); await propre(e, 'mouvements');
     const b = await ouvrir('b', L.B);
-    await b.click('#onglets button[data-v="liaison"]'); await b.waitForSelector(`#v-liaison [data-coordination="${coX.id}"]`); await propre(b, 'Liaison CHSLD');
+    await b.evaluate((v) => window.ArrimoEspaces?.reveler(v), 'liaison').then(() => b.click('#onglets button[data-v="liaison"]')); await b.waitForSelector(`#v-liaison [data-coordination="${coX.id}"]`); await propre(b, 'Liaison CHSLD');
     assert.ok((await b.locator(`#v-liaison [data-coordination="${coX.id}"]`).innerText()).includes('<img'), 'le texte reste affiché tel quel');
   } finally { await nav.close(); }
   // Remise en état
@@ -2441,13 +2441,13 @@ test('captures : formulaire SH (type puis modules), liste SH, écrans CHSLD rée
       assert.strictEqual(await pg.locator('#onglets button[data-v="urgence"]').isHidden(), true, 'aucun onglet d’urgence en CHSLD');
       await pg.screenshot({ path: `${dossier}/chsld-accueil-${nom}.png`, fullPage: nom === 'ordinateur' });
       if (nom === 'ordinateur') {
-        await pg.click('#onglets button[data-v="c-residents"]'); await pg.waitForSelector('#v-c-residents table');
+        await pg.evaluate((v) => window.ArrimoEspaces?.reveler(v), 'c-residents').then(() => pg.click('#onglets button[data-v="c-residents"]')); await pg.waitForSelector('#v-c-residents table');
         await pg.fill('#ch-q', 'Dupont'); await pg.waitForFunction(() => document.querySelectorAll('#v-c-residents tbody tr').length === 1);
         await pg.click('#v-c-residents [data-res]'); await pg.waitForSelector('#v-c-residents .ch-contact-item');
         await pg.screenshot({ path: `${dossier}/chsld-fiche-resident.png`, fullPage: true });
-        await pg.click('#onglets button[data-v="c-chambres"]'); await pg.waitForSelector('#v-c-chambres .ch-place');
+        await pg.evaluate((v) => window.ArrimoEspaces?.reveler(v), 'c-chambres').then(() => pg.click('#onglets button[data-v="c-chambres"]')); await pg.waitForSelector('#v-c-chambres .ch-place');
         await pg.screenshot({ path: `${dossier}/chsld-chambres.png` });
-        await pg.click('#onglets button[data-v="c-mouvements"]'); await pg.waitForSelector('#v-c-mouvements .panneau-c');
+        await pg.evaluate((v) => window.ArrimoEspaces?.reveler(v), 'c-mouvements').then(() => pg.click('#onglets button[data-v="c-mouvements"]')); await pg.waitForSelector('#v-c-mouvements .panneau-c');
         await pg.screenshot({ path: `${dossier}/chsld-transferts-hospitalisations.png`, fullPage: true });
       }
       await ctx.close();
@@ -2464,14 +2464,14 @@ test('captures : formulaire SH (type puis modules), liste SH, écrans CHSLD rée
         await pg.goto(basePilote); await pg.waitForSelector('body[data-pret="1"]');
         if (await pg.locator('#b-premiers-pas-ok').isVisible().catch(() => false)) await pg.click('#b-premiers-pas-ok');
         if (nom === 'telephone' && await pg.locator('#b-nav').isVisible()) await pg.click('#b-nav');
-        await pg.click('#onglets button[data-v="liaison"]'); await pg.waitForSelector('#v-liaison .li-onglets');
+        await pg.evaluate((v) => window.ArrimoEspaces?.reveler(v), 'liaison').then(() => pg.click('#onglets button[data-v="liaison"]')); await pg.waitForSelector('#v-liaison .li-onglets');
         if (lettre === 'A') { await pg.click('#v-liaison [data-li-onglet="historique"]'); await pg.waitForSelector('#v-liaison [data-li-onglet="historique"][aria-selected="true"]'); }
         else assert.ok(await pg.locator('#v-liaison .li-carte').count() >= 1, `demande visible dans l’Hôpital ${lettre}`);
         assert.ok(await pg.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), `pas de défilement horizontal (${lettre}, ${nom})`);
         await pg.screenshot({ path: `${dossier}/liaison-chsld-hopital-${lettre}-${nom}.png`, fullPage: true });
         if (lettre === 'B' && nom === 'ordinateur') {
           // Le panneau CHSLD ne figure plus dans les transferts interhospitaliers
-          await pg.click('#onglets button[data-v="transferts"]'); await pg.waitForSelector('#v-transferts .kanban');
+          await pg.evaluate((v) => window.ArrimoEspaces?.reveler(v), 'transferts').then(() => pg.click('#onglets button[data-v="transferts"]')); await pg.waitForSelector('#v-transferts .kanban');
           assert.strictEqual(await pg.locator('#v-transferts .ch-hopital, #v-transferts .li-carte').count(), 0, 'transferts sans résidents de CHSLD');
         }
         await ctx.close();
@@ -2499,7 +2499,7 @@ test('interface réelle : parcours CHSLD A → Hôpital B → CHSLD A dans le na
     return pg;
   };
   const confirmer = async (pg) => { await pg.click('#modale button.pri'); await pg.waitForFunction(() => !document.querySelector('#modale')?.open && document.querySelector('#modale')?.hidden !== false || !document.querySelector('#modale button.pri')); };
-  const onglet = async (pg, v, sel) => { await pg.click(`#onglets button[data-v="${v}"]`); await pg.waitForSelector(sel); };
+  const onglet = async (pg, v, sel) => { await pg.evaluate((x) => window.ArrimoEspaces?.reveler(x), v); await pg.evaluate((v) => window.ArrimoEspaces?.reveler(v), v).then(() => pg.click(`#onglets button[data-v="${v}"]`)); await pg.waitForSelector(sel); };
   try {
     const x = await residentPresent('era', ids.era, [p.dupont]);
     const era = await ouvrir('era', ids.era); const b = await ouvrir('b', L.B);
@@ -2546,11 +2546,14 @@ test('interface réelle : parcours CHSLD A → Hôpital B → CHSLD A dans le na
     await era.click(`[data-co="accepter"][data-id="${ret0.id}"]`); await era.waitForSelector(`[data-co="verifier_chambre"][data-id="${ret0.id}"]`);
     const litCode = (await api('era', 'GET', `/coordinations?etablissement_id=${ids.era}`)).find((c) => c.id === ret0.id).reintegration.lit.code;
     const ent = await ouvrir('era_entretien', ids.era);
-    await ent.click('#onglets button[data-v="c-taches"]'); await ent.waitForSelector('#v-c-taches');
+    // Vue personnelle unique (cahier Personnel & Tâches) : l'entretien n'a plus le tableau des tâches de l'établissement, seulement « Mes tâches »
+    assert.strictEqual(await ent.locator('#onglets button[data-v="c-taches"]').isHidden(), true, 'pas de doublon : tableau des tâches réservé aux responsables');
+    await ent.evaluate((v) => window.ArrimoEspaces?.reveler(v), 'mes-taches').then(() => ent.click('#onglets button[data-v="mes-taches"]')); await ent.waitForSelector('#v-mes-taches .mt-liste');
     assert.strictEqual(await ent.locator('#onglets button[data-v="c-accueil"]').isHidden(), true, 'aucun tableau de bord général pour l’entretien');
     // L'entretien déclare la chambre prête à l'écran (bouton « Chambre prête »)
     for (const tt of (await api('era_entretien', 'GET', `/chsld/taches?etablissement_id=${ids.era}`)).filter((y) => y.lit === litCode)) {
-      await ent.click(`[data-ta="faite"][data-id="${tt.id}"]`); await ent.waitForSelector(`[data-ta="faite"][data-id="${tt.id}"]`, { state: 'detached' });
+      if (tt.statut === 'a_faire') { await ent.click(`[data-mt-statut="en_cours"][data-id="${tt.id}"]`); await ent.waitForSelector(`[data-mt-statut="faite"][data-id="${tt.id}"]`); }
+      await ent.click(`[data-mt-statut="faite"][data-id="${tt.id}"]`); await ent.waitForSelector(`[data-mt-statut="faite"][data-id="${tt.id}"]`, { state: 'detached' });
     }
     await ent.context().close();
     // La coordination n'a plus à vérifier : la chambre est déjà déclarée prête, avec l'étape dans la chronologie
@@ -2579,7 +2582,7 @@ test('interface réelle : parcours CHSLD A → Hôpital B → CHSLD A dans le na
     // Téléphone : modules lisibles sans défilement horizontal
     const tel = await ouvrir('b', L.B, { width: 390, height: 844 });
     if (await tel.locator('#b-nav').isVisible()) await tel.click('#b-nav');
-    await tel.click('#onglets button[data-v="liaison"]'); await tel.waitForSelector('#v-liaison .li-onglets');
+    await tel.evaluate((v) => window.ArrimoEspaces?.reveler(v), 'liaison').then(() => tel.click('#onglets button[data-v="liaison"]')); await tel.waitForSelector('#v-liaison .li-onglets');
     assert.ok(await tel.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'pas de défilement horizontal');
   } finally { await navigateur.close(); }
   assert.deepStrictEqual(erreurs, [], 'aucune erreur JavaScript dans les pages');

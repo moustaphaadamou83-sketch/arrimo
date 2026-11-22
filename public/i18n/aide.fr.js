@@ -28,6 +28,17 @@ window.ARRIMO_I18N.fr.aide = {
     },
   },
   ecrans: {
+    'mes-taches': {
+      nom: 'Mes tâches',
+      but: 'Retrouver en un seul endroit toutes vos tâches : préparation de chambre, nettoyage, administratif, transmissions et relances.',
+      gestes: [
+        'Choisissez une catégorie : à faire, en cours, en retard, prioritaires ou terminées aujourd’hui.',
+        'Chaque carte indique quoi faire, où, quand et la priorité ; « Commencer » puis « Terminer ».',
+        'Responsable : attribuez une tâche à une personne ou remettez-la dans la file du rôle.',
+        'Responsable : les paramètres du module (échéance par défaut, priorité, délai de nettoyage, types d’intervention) sont en bas de l’écran.',
+      ],
+      erreurs: [['Chambre propre confirmée par l’entretien', 'Quand un compte d’entretien est actif, seule l’équipe d’entretien confirme qu’une chambre est propre.']],
+    },
     flux: {
       nom: 'Arrimo Flux',
       but: 'Voir d’un coup d’œil qui arrive et qui part : transports, transferts, départs vers l’hébergement et ambulances, avec l’heure prévue, l’heure réelle et l’arrivée estimée quand elle est connue.',

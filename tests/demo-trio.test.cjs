@@ -189,7 +189,7 @@ test('sessions navigateur séparées : tableaux A, B, C et réseau', async () =>
     const ok = page.locator('#b-premiers-pas-ok');
     if (await ok.isVisible().catch(() => false)) await ok.click();
     if (key === 'reseau') {
-      await page.locator('#onglets button[data-v="reseau"]').click();
+      await page.evaluate((v) => window.ArrimoEspaces?.reveler(v), 'reseau'); await page.locator('#onglets button[data-v="reseau"]').click();
       await page.waitForFunction(() => !enCours);
     } else {
       assert.ok(await page.locator('#v-copilote').isVisible());
@@ -229,7 +229,7 @@ test('interface A/B/C : OG voit le blocage puis le lit confirmé après nettoyag
     if (await welcome.isVisible().catch(() => false)) await welcome.click();
   }
   const ouvrir = async (page, name) => {
-    await page.locator(`#onglets button[data-v="${name}"]`).click();
+    await page.evaluate((v) => window.ArrimoEspaces?.reveler(v), name); await page.locator(`#onglets button[data-v="${name}"]`).click();
     await page.waitForFunction(() => !enCours);
   };
   try {

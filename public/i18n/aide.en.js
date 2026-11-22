@@ -28,6 +28,17 @@ window.ARRIMO_I18N.en.aide = {
     },
   },
   ecrans: {
+    'mes-taches': {
+      nom: 'My tasks',
+      but: 'Find all your tasks in one place: room preparation, cleaning, administrative work, handovers and follow-ups.',
+      gestes: [
+        'Pick a category: to do, in progress, overdue, priority or done today.',
+        'Each card says what to do, where, when and the priority; “Start” then “Finish”.',
+        'Manager: assign a task to a person or put it back in the role queue.',
+        'Manager: module settings (default due time, priority, cleaning time, intervention types) are at the bottom of the screen.',
+      ],
+      erreurs: [['Clean room confirmed by housekeeping', 'When a housekeeping account is active, only the housekeeping team confirms a room is clean.']],
+    },
     flux: {
       nom: 'Arrimo Flow',
       but: 'See at a glance who arrives and who leaves: transports, transfers, departures to housing and ambulances, with scheduled time, actual time and estimated arrival when known.',

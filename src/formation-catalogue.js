@@ -1,7 +1,7 @@
 'use strict';
 /**
  * Module 🎓 Formation (22 nov. 2026, cahier « Formation » ; plan : docs/plan-module-formation.md).
- * Catalogue versionné avec le code : 17 parcours par rôle, 50 capsules (dont 6 du cahier ultime : X1 à X6) (une tâche, 2 à 3 min), FR et EN.
+ * Catalogue versionné avec le code : 17 parcours par rôle, 52 capsules (dont 8 du cahier ultime et du cahier directeur : X1 à X8) (une tâche, 2 à 3 min), FR et EN.
  * Une capsule : scènes (écran de la démo, élément mis en évidence, sous-titres FR/EN ; la voix viendra du service de synthèse vocale),
  * exercice « À vous de jouer » dans le bac à sable (lot 2), mini-test (3 questions ; certaines chronométrées).
  * Une capsule `pret: false` est annoncée « en préparation » : son contenu arrive au lot 4 ou 7.
@@ -725,12 +725,40 @@ const CAPSULES = [
     scenes: [
       { ecran: 'nettoyage', cible: '.kpis-ent', st: ST('« Mon travail aujourd’hui » : à nettoyer, en cours, préparations, en retard, terminées.', '“My work today”: to clean, in progress, preparations, overdue, done.') },
       { ecran: 'nettoyage', cible: '#v-nettoyage', st: ST('Les préparations de chambres pour les arrivées apparaissent aussi dans Nettoyage.', 'Room preparations for arrivals also appear in Cleaning.') },
-      { ecran: 'c-taches', cible: '#v-c-taches', st: ST('Terminez la tâche pour déclarer la chambre prête : l’admission peut alors être confirmée.', 'Complete the task to declare the room ready: the admission can then be confirmed.') },
+      { ecran: 'mes-taches', cible: '#v-mes-taches', st: ST('Dans « Mes tâches », commencez puis terminez la tâche pour déclarer la chambre prête : l’admission peut alors être confirmée.', 'In “My tasks”, start then finish the task to declare the room ready: the admission can then be confirmed.') },
     ],
     quiz: [
-      Q('Où voir une préparation de chambre ?', 'Where do you see a room preparation?', ['Dans Nettoyage et Personnel et tâches', 'Nulle part'], ['In Cleaning and Staff and tasks', 'Nowhere'], 0),
+      Q('Où voir une préparation de chambre ?', 'Where do you see a room preparation?', ['Dans Nettoyage et Mes tâches', 'Nulle part'], ['In Cleaning and My tasks', 'Nowhere'], 0),
       Q('Une admission est bloquée « chambre non prête ». Qui agit ?', 'An admission is blocked “room not ready”. Who acts?', ['L’entretien, en terminant la préparation', 'L’ambulancier'], ['Housekeeping, by completing the preparation', 'The paramedic'], 0),
       Q('Les réglages du module (protocoles, habilitations) sont visibles par :', 'Module settings (protocols, authorizations) are visible to:', ['Tout le monde', 'Les responsables et l’administration'], ['Everyone', 'Managers and administration'], 1),
+    ] }),
+  C('X7', null, '🏠', 150, 'Accueil universel et les 8 espaces', 'Universal Home and the 8 spaces', {
+    pret: true, compte: 'hopital.a@demo.arrimo',
+    exercice: [{ scene: 1, consigne: ST('Cliquez sur le niveau de situation pour voir pourquoi il est vert, orange ou rouge.', 'Click the situation level to see why it is green, orange or red.') }],
+    objectif: ST('Vous saurez lire l’Accueil en un coup d’œil et trouver chaque module dans son espace.', 'You will read Home at a glance and find each module in its space.'),
+    scenes: [
+      { ecran: 'copilote', cible: '.acc-vue', st: ST('Vue d’ensemble : le niveau de situation (cliquable, avec ses raisons) et 6 indicateurs qui ouvrent le bon module.', 'Overview: the situation level (clickable, with its reasons) and 6 indicators that open the right module.') },
+      { ecran: 'copilote', cible: '#acc-flux', st: ST('Arrimo Flux et la Bourse des places côte à côte, puis Chrono, préalertes, Mes tâches et prévisions ; l’analyse détaillée d’OG reste repliée.', 'Arrimo Flow and the placement exchange side by side, then Chrono, pre-alerts, My tasks and forecasts; OG’s detailed analysis stays folded.') },
+      { ecran: 'flux', cible: '#onglets', st: ST('8 espaces : Accueil, Patients et DSN, Transferts, Capacités, Urgences, Opérations, Pilotage, Administration. Chacun ne montre que vos modules.', '8 spaces: Home, Patients and EHR, Transfers, Capacity, Emergency, Operations, Steering, Administration. Each shows only your modules.') },
+    ],
+    quiz: [
+      Q('Pour savoir pourquoi le niveau est orange :', 'To know why the level is orange:', ['Cliquer sur le niveau ou demander à OG', 'Appeler le support'], ['Click the level or ask OG', 'Call support'], 0),
+      Q('Un module absent de votre espace est :', 'A module missing from your space is:', ['Supprimé', 'Non activé ou non autorisé pour votre rôle'], ['Deleted', 'Not enabled or not authorized for your role'], 1),
+      Q('Le mode supervision affiche-t-il des données personnelles ?', 'Does wall display mode show personal data?', ['Oui', 'Non'], ['Yes', 'No'], 1),
+    ] }),
+  C('X8', null, '✔', 150, 'Mes tâches, attribution et paramètres du module', 'My tasks, assignment and module settings', {
+    pret: true, compte: 'coordination.erables@chsld.example.invalid',
+    exercice: [{ scene: 2, consigne: ST('Attribuez une tâche non attribuée à une personne de l’équipe.', 'Assign an unassigned task to a team member.') }],
+    objectif: ST('Vous saurez suivre vos tâches, attribuer celles de la file et régler le module pour votre établissement.', 'You will follow your tasks, assign queued ones and set the module for your facility.'),
+    scenes: [
+      { ecran: 'mes-taches', cible: '.flux-groupes', st: ST('Une seule vue : à faire, en cours, en retard, prioritaires, terminées aujourd’hui et, pour un responsable, non attribuées.', 'One view: to do, in progress, overdue, priority, done today and, for a manager, unassigned.') },
+      { ecran: 'mes-taches', cible: '#v-mes-taches', st: ST('Chaque carte dit quoi, où, quand et la priorité ; le responsable attribue, réattribue ou remet dans la file du rôle.', 'Each card says what, where, when and the priority; the manager assigns, reassigns or returns it to the role queue.') },
+      { ecran: 'mes-taches', cible: '#mt-params', st: ST('Paramètres du module (responsables seulement) : échéance par défaut, seuil de priorité, délai de nettoyage, types d’intervention.', 'Module settings (managers only): default due time, priority threshold, cleaning time, intervention types.') },
+    ],
+    quiz: [
+      Q('Qui peut attribuer une tâche ?', 'Who can assign a task?', ['Tout le monde', 'Un responsable (coordination, administration)'], ['Everyone', 'A manager (coordination, administration)'], 1),
+      Q('Une chambre propre est confirmée par :', 'A clean room is confirmed by:', ['L’entretien', 'L’ambulancier'], ['Housekeeping', 'The paramedic'], 0),
+      Q('Les paramètres du module sont :', 'Module settings are:', ['Les mêmes partout', 'Propres à chaque établissement'], ['The same everywhere', 'Specific to each facility'], 1),
     ] }),
 ];
 
@@ -739,11 +767,11 @@ const ROLES_HOPITAL = ['coordonnateur', 'admin_etab', 'equipe_soins', 'gestionna
 const P = (code, emoji, fr, en, { roles, types = null, locaux = null, capsules, defaut = null }) => ({ code, emoji, nom: { fr, en }, roles, types, locaux, capsules, defaut });
 const PARCOURS = [
   P('triage', '🚨', 'Triage / AIC', 'Triage nurse', { roles: ROLES_HOPITAL, types: ['hopital'], capsules: ['X4', 'S2', 'C1', 'C2', 'U1', 'H1', 'H2', ...TRANSVERSAL], defaut: ['equipe_soins'] }),
-  P('lits', '🛏️', 'Gestion des lits', 'Bed management', { roles: ROLES_HOPITAL, types: ['hopital'], capsules: ['X1', 'X4', 'T1', 'T2', 'T3', 'R1', 'H1', 'H2', 'H6', ...TRANSVERSAL], defaut: ['coordonnateur'] }),
+  P('lits', '🛏️', 'Gestion des lits', 'Bed management', { roles: ROLES_HOPITAL, types: ['hopital'], capsules: ['X7', 'X8', 'X1', 'X4', 'T1', 'T2', 'T3', 'R1', 'H1', 'H2', 'H6', ...TRANSVERSAL], defaut: ['coordonnateur'] }),
   P('nsa', '🏥', 'Coordination NSA et liaison', 'ALC coordination and liaison', { roles: ROLES_HOPITAL, types: ['hopital'], capsules: ['X1', 'R1', 'H4', 'H5', 'E2', 'E3', 'B1', 'B2', 'B3', 'D2', ...TRANSVERSAL] }),
-  P('chef_unite', '🩺', 'Chef d’unité', 'Unit manager', { roles: ROLES_HOPITAL, types: ['hopital'], capsules: ['X1', 'X4', 'C3', 'U1', 'U2', 'T2', 'H1', 'H4', 'H6', 'D1', ...TRANSVERSAL] }),
-  P('hygiene', '🧽', 'Hygiène et salubrité', 'Housekeeping', { roles: ['entretien'], capsules: ['X6', 'H3', 'E4', ...TRANSVERSAL], defaut: ['entretien'] }),
-  P('chsld', '🏡', 'Coordination CHSLD', 'Long-term care coordination', { roles: ROLES_HOPITAL, types: ['chsld'], locaux: [null, 'chsld', 'chsld_prive', 'maison_aines'], capsules: ['X1', 'X2', 'R1', 'E1', 'E2', 'E3', 'E4', 'B1', 'V1', 'V3', 'A1', 'K1', 'K2', 'F2', ...TRANSVERSAL], defaut: ['coordonnateur', 'equipe_soins'] }),
+  P('chef_unite', '🩺', 'Chef d’unité', 'Unit manager', { roles: ROLES_HOPITAL, types: ['hopital'], capsules: ['X7', 'X8', 'X1', 'X4', 'C3', 'U1', 'U2', 'T2', 'H1', 'H4', 'H6', 'D1', ...TRANSVERSAL] }),
+  P('hygiene', '🧽', 'Hygiène et salubrité', 'Housekeeping', { roles: ['entretien'], capsules: ['X6', 'X8', 'H3', 'E4', ...TRANSVERSAL], defaut: ['entretien'] }),
+  P('chsld', '🏡', 'Coordination CHSLD', 'Long-term care coordination', { roles: ROLES_HOPITAL, types: ['chsld'], locaux: [null, 'chsld', 'chsld_prive', 'maison_aines'], capsules: ['X7', 'X8', 'X1', 'X2', 'R1', 'E1', 'E2', 'E3', 'E4', 'B1', 'V1', 'V3', 'A1', 'K1', 'K2', 'F2', ...TRANSVERSAL], defaut: ['coordonnateur', 'equipe_soins'] }),
   P('rpa', '🏘️', 'RPA, RI, RTF', 'Seniors’ residences and resources', { roles: ROLES_HOPITAL, types: ['chsld'], locaux: ['rpa', 'ri', 'rtf', 'maison_retraite', 'soins_palliatifs', 'hospitalisation_domicile', 'sante_mentale'], capsules: ['X1', 'X2', 'R1', 'E1', 'E2', 'E3', 'V1', 'V3', 'A1', 'K1', 'K2', 'F2', ...TRANSVERSAL], defaut: ['coordonnateur', 'equipe_soins'] }),
   P('intervenant', '✅', 'Intervenant CLSC', 'CLSC worker', { roles: ['intervenant'], capsules: ['V2', ...TRANSVERSAL], defaut: ['intervenant'] }),
   P('repartiteur', '📡', 'Répartiteur CCS', 'Communication centre dispatcher', { roles: ['repartiteur'], capsules: ['S3', 'S4', 'C3', 'U3', ...TRANSVERSAL], defaut: ['repartiteur'] }),

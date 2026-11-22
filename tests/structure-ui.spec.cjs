@@ -47,7 +47,7 @@ test('formulaires de structure et dashboards A/B/C isolés', {timeout:180000}, a
   const premiersPas=page.locator('#b-premiers-pas-ok');if(await premiersPas.isVisible().catch(()=>false))await premiersPas.click();
   const token=await page.evaluate(()=>localStorage.getItem('arrimo-token'));
   const horsScope=await fetch(`${base}/api/admin/structure/detaillee?etablissement_id=${(await pool.query("SELECT id FROM etablissements WHERE code='HY'")).rows[0].id}`,{headers:{Authorization:`Bearer ${token}`}});assert.equal(horsScope.status,403,'administrateur A isolé des ressources B');
-  await page.locator('#onglets button[data-v="admin"]').click();await page.waitForTimeout(700);
+  await page.evaluate((v) => window.ArrimoEspaces?.reveler(v), 'admin'); await page.locator('#onglets button[data-v="admin"]').click();await page.waitForTimeout(700);
   await page.waitForFunction(()=>document.querySelector('#v-admin').hidden===false,{timeout:10000}).catch(async()=>{throw new Error(`admin non visible; utilisateur=${await page.locator('#nom-utilisateur').innerText().catch(()=>'?')}; tabs=${await page.locator('#onglets').innerText().catch(()=>'?')}; statut=${await page.locator('#onglets button[data-v="admin"]').getAttribute('hidden')}`)});
   await page.waitForSelector('[data-ao="structure"]',{timeout:6000});
   await page.click('[data-ao="structure"]');await page.locator('#admin-corps > details.panneau-c:not(.nouvel-etab)').evaluate(x=>{x.open=true});await page.waitForSelector('#b-dept');
@@ -78,7 +78,7 @@ test('formulaires de structure et dashboards A/B/C isolés', {timeout:180000}, a
   // Chaque compte A/B/C ouvre son propre établissement et ne voit pas la ressource de l'autre.
   for(const [letter,email,code] of [['A','hopital.a@demo.arrimo','HX'],['B','hopital.b@demo.arrimo','HY'],['C','hopital.c@demo.arrimo','HC']]){
     const c=await browser.newContext({viewport:{width:1365,height:900}});const p=await c.newPage();await p.goto(base);await p.fill('#c-email',email);await p.fill('#c-mdp',MDP);await p.click('#f-connexion button[type=submit]');await p.waitForSelector('body[data-pret="1"]');const premier=p.locator('#b-premiers-pas-ok');if(await premier.isVisible().catch(()=>false))await premier.click();
-    await p.click('#onglets button[data-v="lits"]');await p.waitForFunction(()=>document.querySelector('#v-lits').hidden===false);await p.waitForSelector('#v-lits .structure-resume',{state:'attached'});
+    await p.evaluate((v) => window.ArrimoEspaces?.reveler(v), 'lits').then(() => p.click('#onglets button[data-v="lits"]'));await p.waitForFunction(()=>document.querySelector('#v-lits').hidden===false);await p.waitForSelector('#v-lits .structure-resume',{state:'attached'});
     await p.locator('#v-lits > details.panneau-c').evaluate(x=>{x.open=true});
     const cible=code==='HX'?p.locator('#v-lits .structure-resume').filter({hasText:'Unité Démonstration'}):p.locator('#v-lits .structure-resume').first();
     await cible.evaluate(x=>{x.open=true;x.scrollIntoView()});

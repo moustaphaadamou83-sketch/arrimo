@@ -137,6 +137,7 @@
   <div class="voile-nav" id="voile-nav" hidden></div>
   <nav class="onglets" id="onglets" role="tablist" data-i18n-attr="aria-label:nav.principale">
       <button role="tab" data-type="hopital" data-v="copilote" aria-selected="true"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-house"/></svg><span data-i18n="onglets.copilote"></span></button>
+      <button role="tab" data-v="mes-taches" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-check"/></svg><span data-i18n="onglets.mes-taches"></span></button>
       <button role="tab" data-v="flux" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-arrow-right-left"/></svg><span data-i18n="onglets.flux"></span></button>
       <span class="onglets-groupe" data-type="hopital" aria-hidden="true" data-i18n="nav.operations">Opérations</span>
       <button role="tab" data-type="hopital" data-v="lits" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-bed-double"/></svg><span data-i18n="onglets.lits"></span></button>
@@ -188,6 +189,7 @@
   <main class="contenu">
     <section id="v-copilote"></section>
     <section id="v-flux" hidden></section>
+    <section id="v-mes-taches" hidden></section>
     <aside id="messagerie-panneau" class="messagerie-panneau" role="dialog" aria-modal="false" aria-labelledby="msg-titre" hidden></aside>
     <section id="v-reseau" hidden></section>
     <section id="v-national" hidden></section>
@@ -251,9 +253,12 @@
 <script src="support-client.js"></script>
 <script src="app.js"></script>
 <script src="nav-plus.js"></script>
+<script src="espaces.js"></script>
 <script src="sillage.js"></script>
 <script src="sous-onglets.js"></script>
 <script src="arrimo-flux.js"></script>
+<script src="accueil.js"></script>
+<script src="mes-taches.js"></script>
 <script src="messagerie.js"></script>
 <script src="formation-aide.js"></script>
 <script src="chsld.js"></script>

@@ -143,3 +143,60 @@ test('Transport : étapes horodatées (sur place, pris en charge, arrivée, remi
   await compte('autre', 'coordonnateur', { etab: autre });
   assert.strictEqual((await appel('autre', 'GET', `/arrimo-flux/fiche?type=transport&id=${dt}`)).s, 404, 'fiche réservée à l’origine et à la destination');
 });
+
+test('Cahier directeur : OG explique le niveau (règles réelles), Chrono, « Mes tâches », parcours d’un patient ; attribution des tâches par un responsable', async () => {
+  let r = await og('hop', ids.h, 'Pourquoi sommes-nous en niveau vert ?'); assert.strictEqual(r.s, 200, JSON.stringify(r.d)); assert.match(r.d.reponse, /pression/); assert.match(r.d.reponse, /seuils/);
+  r = await og('coord', ids.c, 'Quelles sont mes tâches ?'); assert.match(r.d.reponse, /Vos tâches ouvertes/);
+  r = await og('coord', ids.c, 'Le patient P-64673 est-il arrivé ? Quelle ambulance l’a transporté ?'); assert.match(r.d.reponse, /DH-ULT1/); assert.match(r.d.reponse, /DT-000003/);
+  // Mes tâches et attribution
+  const m = await appel('coord', 'GET', `/taches/miennes?etablissement_id=${ids.c}`); assert.strictEqual(m.s, 200, JSON.stringify(m.d));
+  const t = (await pool.query("INSERT INTO taches_etab (etablissement_id, type, titre, assigne_role, cree_par) VALUES ($1, 'entretien', 'Vérifier la chambre ULT-309', 'entretien', $2) RETURNING id", [ids.c, ids.coord])).rows[0].id;
+  const ent = (await pool.query("SELECT id FROM utilisateurs WHERE email = 'ent@demo.arrimo'")).rows[0].id;
+  assert.strictEqual((await appel('ent', 'POST', `/taches/${t}/attribuer`, { utilisateur_id: ent })).s, 403, 'l’entretien n’attribue pas');
+  assert.strictEqual((await appel('coord', 'POST', `/taches/${t}/attribuer`, { utilisateur_id: ent })).s, 200);
+  const mine = (await appel('ent', 'GET', `/taches/miennes?etablissement_id=${ids.c}`)).d.taches; assert.ok(mine.some((x) => x.id === t));
+  assert.ok(!(await appel('coord2', 'GET', `/taches/miennes?etablissement_id=${ids.c}`)).d.taches.some((x) => x.id === t), 'attribuée nominativement : plus dans la file des autres');
+  assert.strictEqual((await appel('hop', 'GET', `/taches/miennes?etablissement_id=${ids.c}`)).s, 403, 'autre établissement refusé');
+});
+
+test('Personnel & Tâches : le responsable voit le personnel pour attribuer ; l’entretien ne le voit pas', async () => {
+  const c = await appel('coord', 'GET', `/taches/miennes?etablissement_id=${ids.c}`); assert.ok(Array.isArray(c.d.personnel) && c.d.personnel.length > 0);
+  assert.ok(c.d.personnel.every((p) => Object.keys(p).sort().join() === 'id,nom,role'), 'nom et rôle seulement');
+  const en = await appel('ent', 'GET', `/taches/miennes?etablissement_id=${ids.c}`); assert.strictEqual(en.d.personnel, undefined);
+});
+
+test('Paramètres propres aux modules (Personnel & Tâches, Nettoyage) : responsables seulement, bornes, effet réel ; historique des transferts', async () => {
+  assert.strictEqual((await appel('ent', 'GET', `/parametres-modules/taches?etablissement_id=${ids.c}`)).s, 403);
+  assert.strictEqual((await appel('hop', 'GET', `/parametres-modules/taches?etablissement_id=${ids.c}`)).s, 403, 'autre établissement');
+  const p = await appel('coord', 'GET', `/parametres-modules/nettoyage?etablissement_id=${ids.c}`); assert.strictEqual(p.s, 200); assert.ok(p.d.valeurs.types_intervention.length === 6);
+  assert.strictEqual((await appel('coord', 'PUT', '/parametres-modules/taches', { etablissement_id: ids.c, valeurs: { echeance_defaut_min: 99999, prioritaire_avant_min: 10 } })).s, 400);
+  assert.strictEqual((await appel('coord', 'PUT', '/parametres-modules/nettoyage', { etablissement_id: ids.c, valeurs: { delai_nettoyage_min: 30, types_intervention: [] } })).s, 400);
+  assert.strictEqual((await appel('coord', 'PUT', '/parametres-modules/taches', { etablissement_id: ids.c, valeurs: { echeance_defaut_min: 45, prioritaire_avant_min: 1440, notifier_attribution: false } })).s, 200);
+  // Effet : une nouvelle tâche sans échéance reçoit l'échéance par défaut ; elle est prioritaire (seuil 24 h)
+  const t = await appel('coord', 'POST', '/chsld/taches', { etablissement_id: ids.c, type: 'administratif', titre: 'Classer les formulaires', assigne_role: 'coordonnateur' }); assert.strictEqual(t.s, 200, JSON.stringify(t.d));
+  const ech = (await pool.query('SELECT echeance FROM taches_etab WHERE id = $1', [t.d.id])).rows[0].echeance; assert.ok(ech && Math.abs(new Date(ech) - Date.now() - 45 * 60000) < 120000);
+  const m = (await appel('coord', 'GET', `/taches/miennes?etablissement_id=${ids.c}`)).d; assert.ok(m.taches.find((x) => x.id === t.d.id).prioritaire); assert.ok(Array.isArray(m.terminees));
+  const h = await appel('hop', 'GET', `/arrimo-flux/historique?etablissement_id=${ids.h}`); assert.strictEqual(h.s, 200); assert.ok(Array.isArray(h.d.mouvements));
+  assert.strictEqual((await appel('ent', 'GET', `/arrimo-flux/historique?etablissement_id=${ids.c}`)).s, 403);
+});
+
+test('Arrimo Connect : conversation de groupe — participants seulement ; l’administration n’y a pas accès d’office ; autre établissement refusé', async () => {
+  const ent = (await pool.query("SELECT id FROM utilisateurs WHERE email = 'ent@demo.arrimo'")).rows[0].id;
+  const hop = (await pool.query("SELECT id FROM utilisateurs WHERE email = 'hop@demo.arrimo'")).rows[0].id;
+  assert.strictEqual((await appel('coord', 'POST', '/messagerie/messages', { etablissement_id: ids.c, destinataires: [ids.coord2, hop], sujet: 'Groupe', corps: 'Bonjour' })).s, 404, 'membre d’un autre établissement');
+  const g = await appel('coord', 'POST', '/messagerie/messages', { etablissement_id: ids.c, destinataires: [ids.coord2, ent], sujet: 'Relève de 15 h', corps: 'Point sur les chambres' }); assert.strictEqual(g.s, 200, JSON.stringify(g.d));
+  const f = (await appel('ent', 'GET', `/messagerie/fils?etablissement_id=${ids.c}`)).d.fils.find((x) => x.id === g.d.id); assert.ok(f && f.membres === 3);
+  assert.strictEqual((await appel('coord2', 'POST', '/messagerie/messages', { etablissement_id: ids.c, fil_id: g.d.id, corps: 'Reçu' })).s, 200);
+  assert.strictEqual((await appel('ent', 'GET', `/messagerie/fils/${g.d.id}`)).d.messages.length, 2);
+  assert.strictEqual((await appel('admin', 'GET', `/messagerie/fils/${g.d.id}`)).s, 404, 'pas d’accès d’office pour l’administration');
+});
+
+test('Attribution automatique (règle activée) : à la seule personne active du rôle ; sinon file du rôle', async () => {
+  assert.strictEqual((await appel('coord', 'PUT', '/parametres-modules/taches', { etablissement_id: ids.c, valeurs: { echeance_defaut_min: 0, prioritaire_avant_min: 60, attribution_auto: 'seul_agent' } })).s, 200);
+  const ent = (await pool.query("SELECT id FROM utilisateurs WHERE email = 'ent@demo.arrimo'")).rows[0].id;
+  const t1 = await appel('coord', 'POST', '/chsld/taches', { etablissement_id: ids.c, type: 'entretien', titre: 'Désinfecter la salle commune', assigne_role: 'entretien' }); assert.strictEqual(t1.s, 200, JSON.stringify(t1.d));
+  assert.strictEqual((await pool.query('SELECT assigne_a FROM taches_etab WHERE id = $1', [t1.d.id])).rows[0].assigne_a, ent, 'un seul agent d’entretien actif');
+  const t2 = await appel('coord', 'POST', '/chsld/taches', { etablissement_id: ids.c, type: 'administratif', titre: 'Mettre à jour le registre', assigne_role: 'coordonnateur' });
+  assert.strictEqual((await pool.query('SELECT assigne_a FROM taches_etab WHERE id = $1', [t2.d.id])).rows[0].assigne_a, null, 'deux coordonnateurs : reste dans la file');
+  await appel('coord', 'PUT', '/parametres-modules/taches', { etablissement_id: ids.c, valeurs: { echeance_defaut_min: 0, prioritaire_avant_min: 60, attribution_auto: 'aucune' } });
+});

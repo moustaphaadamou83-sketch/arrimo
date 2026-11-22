@@ -127,14 +127,27 @@
       <div class="ch-raccourcis">${raccourci('c-residents', 'users', t('chsld.nav.residents'))}${raccourci('c-chambres', 'bed-double', t('chsld.nav.chambres'))}${raccourci('c-demandes', 'clipboard-list', t('chsld.nav.demandes'))}
         ${raccourci('c-taches', 'clipboard-check', t('chsld.nav.taches'))}${raccourci('c-mouvements', 'ambulance', t('chsld.nav.mouvements'))}<button class="ch-raccourci" type="button" data-ch-og>${icone('sparkles')}<span>${esc(window.ArrimoNomOg?.nom() || 'OG')}</span></button></div>`;
     // Cahier ultime : accueil d'abord opérationnel (bandeau, préalertes, mouvements) ; communications des proches repliées en bas, sans encombrer
-    v.insertAdjacentHTML('afterbegin', `${window.bandeauAccueil ? window.bandeauAccueil() : ''}<div id="flux-accueil-c"></div>`);
-    if (window.ArrimoFluxVue && window.optsFlux) window.ArrimoFluxVue.panneau(v.querySelector('#flux-accueil-c'), window.optsFlux());
+    v.querySelectorAll('[data-ch-aller]').forEach((b) => { b.onclick = () => allerA(b.dataset.chAller); });
+    const og = v.querySelector('[data-ch-og]'); if (og) og.onclick = () => document.querySelector('#og-open')?.click();
+    // Accueil universel (cahier directeur) : même moteur que l'hôpital ; l'ancien détail reste disponible, replié ; communications en bas
+    if (window.ArrimoAccueil && window.optsFlux) {
+      v.querySelector('.ch-situation')?.remove();
+      const ancien = document.createElement('div'); while (v.firstChild) ancien.appendChild(v.firstChild);
+      const fx = await api('GET', `/arrimo-flux?etablissement_id=${ctx()}`).catch(() => null);
+      const A = (k) => t(`accueil.${k}`);
+      const prep = fx ? fx.resume.preparations : null;
+      await window.ArrimoAccueil.construire(v, { ...window.optsFlux(), bandeau: window.bandeauAccueil(), taches: true,
+        kpis: [{ lib: A('k_places'), val: p.libres, aller: 'c-chambres', ton: p.libres ? '' : 'alerte' },
+          fx ? { lib: A('k_arrivees'), val: fx.resume.arrivees, aller: 'flux' } : null, fx ? { lib: A('k_departs'), val: fx.resume.departs, aller: 'flux' } : null,
+          { lib: A('k_preparer'), val: prep ?? a.entretien.a_nettoyer, aller: 'c-taches' },
+          fx ? { lib: A('k_prealertes'), val: fx.resume.prealertes_a_acquitter, aller: 'flux', ton: fx.resume.prealertes_a_acquitter ? 'alerte' : '' } : null,
+          { lib: A('k_taches'), val: a.taches.en_retard, aller: 'c-taches', ton: a.taches.en_retard ? 'alerte' : '' }],
+        priorites: actions.slice(0, 3).map((x) => ({ texte: String(x).replace(/<[^>]+>/g, '') })), details: ancien });
+    }
     v.insertAdjacentHTML('beforeend', `<details class="panneau-c ch-communications" id="ch-comm"><summary><b>✉ ${esc(t('chsld.accueil.communications'))}</b></summary><div id="ch-comm-zone"></div></details>`);
     const zc = v.querySelector('#ch-comm-zone');
     panneauMessagesFamilles(zc);
     panneauRattachements(zc);
-    v.querySelectorAll('[data-ch-aller]').forEach((b) => { b.onclick = () => allerA(b.dataset.chAller); });
-    const og = v.querySelector('[data-ch-og]'); if (og) og.onclick = () => document.querySelector('#og-open')?.click();
   }
 
   /* ------------------------------------------------------------------ Résidents */

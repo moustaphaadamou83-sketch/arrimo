@@ -3,13 +3,13 @@
 (() => {
   const TXT = {
     fr: { titre: 'Arrimo Connect', fermer: 'Fermer', mes: 'Mes communications', contacter: 'Contacter l’administration', nouveau: 'Nouveau message', annonces: 'Annonces',
-      aucun: 'Aucune communication pour le moment.', sujet: 'Sujet', categorie: 'Catégorie', priorite: 'Priorité', message: 'Message', envoyer: 'Envoyer', destinataire: 'Destinataire',
+      aucun: 'Aucune communication pour le moment.', sujet: 'Sujet', categorie: 'Catégorie', priorite: 'Priorité', message: 'Message', envoyer: 'Envoyer', destinataire: 'Destinataire', groupe_aide: 'Plusieurs destinataires (Ctrl ou Cmd) : conversation de groupe.', groupe: 'Groupe de {n}',
       normale: 'Normale', haute: 'Haute', envoye: 'Message envoyé.', repondre: 'Répondre', retour: '← Retour', administration: 'Administration', non_lus: 'non lus : {n}',
       st: { ouverte: 'Ouverte', en_cours: 'En cours', resolue: 'Résolue' }, marquer: 'Marquer', publier: 'Publier une annonce', titre_a: 'Titre', publie: 'Annonce publiée.', aucune_a: 'Aucune annonce.',
       urgence: 'Pour une urgence médicale, utilisez les canaux d’urgence officiels : Arrimo Connect ne les remplace pas.',
       cat: { message: 'Message', materiel: 'Demande de matériel', technique: 'Problème technique', administratif: 'Question administrative', planning: 'Problème de planning', soutien: 'Demande de soutien', signalement: 'Signalement opérationnel', autre: 'Autre demande' } },
     en: { titre: 'Arrimo Connect', fermer: 'Close', mes: 'My communications', contacter: 'Contact the administration', nouveau: 'New message', annonces: 'Announcements',
-      aucun: 'No communication yet.', sujet: 'Subject', categorie: 'Category', priorite: 'Priority', message: 'Message', envoyer: 'Send', destinataire: 'Recipient',
+      aucun: 'No communication yet.', sujet: 'Subject', categorie: 'Category', priorite: 'Priority', message: 'Message', envoyer: 'Send', destinataire: 'Recipient', groupe_aide: 'Several recipients (Ctrl or Cmd): group conversation.', groupe: 'Group of {n}',
       normale: 'Normal', haute: 'High', envoye: 'Message sent.', repondre: 'Reply', retour: '← Back', administration: 'Administration', non_lus: '{n} unread',
       st: { ouverte: 'Open', en_cours: 'In progress', resolue: 'Resolved' }, marquer: 'Set', publier: 'Publish an announcement', titre_a: 'Title', publie: 'Announcement published.', aucune_a: 'No announcement.',
       urgence: 'For a medical emergency, use the official emergency channels: Arrimo Connect does not replace them.',
@@ -46,11 +46,11 @@
     } else if (onglet === 'mes') {
       const d = await badge();
       corps = d?.fils.length ? `<ul class="msg-liste">${d.fils.map((f) => `<li><button type="button" data-msg-fil="${f.id}" class="msg-ligne${f.non_lus ? ' non-lu' : ''}"><b>${e(f.sujet || '—')}</b>
-        <span class="note">${f.boite ? T('administration') : e(f.expediteur_id === window.etat?.moi?.utilisateur?.id ? f.destinataire : f.expediteur)} · ${quand(f.dernier_le)}${f.statut ? ` · ${e(X().st[f.statut])}` : ''}${f.non_lus ? ` · <b>${T('non_lus', { n: f.non_lus })}</b>` : ''}</span></button></li>`).join('')}</ul>` : `<p class="note">${T('aucun')}</p>`;
+        <span class="note">${f.membres ? T('groupe', { n: f.membres }) : f.boite ? T('administration') : e(f.expediteur_id === window.etat?.moi?.utilisateur?.id ? f.destinataire : f.expediteur)} · ${quand(f.dernier_le)}${f.statut ? ` · ${e(X().st[f.statut])}` : ''}${f.non_lus ? ` · <b>${T('non_lus', { n: f.non_lus })}</b>` : ''}</span></button></li>`).join('')}</ul>` : `<p class="note">${T('aucun')}</p>`;
     } else if (onglet === 'contacter' || onglet === 'nouveau') {
       const annu = onglet === 'nouveau' ? await appel('GET', `/messagerie/annuaire?etablissement_id=${c}`).catch(() => []) : [];
       corps = `<form data-msg-envoyer><p class="note">${T('urgence')}</p>
-        ${onglet === 'nouveau' ? `<div class="champ"><label class="lbl" for="msg-dest">${T('destinataire')}</label><select id="msg-dest" required>${annu.map((x) => `<option value="${x.id}">${e(x.nom)} · ${e(typeof t === 'function' ? t(`roles.${x.role}`) : x.role)}</option>`).join('')}</select></div>`
+        ${onglet === 'nouveau' ? `<div class="champ"><label class="lbl" for="msg-dest">${T('destinataire')}</label><select id="msg-dest" required multiple size="5" aria-describedby="msg-dest-aide">${annu.map((x) => `<option value="${x.id}">${e(x.nom)} · ${e(typeof t === 'function' ? t(`roles.${x.role}`) : x.role)}</option>`).join('')}</select><p class="note" id="msg-dest-aide">${T('groupe_aide')}</p></div>`
           : `<div class="champ"><label class="lbl" for="msg-cat">${T('categorie')}</label><select id="msg-cat">${Object.entries(X().cat).filter(([k]) => k !== 'message').map(([k, v]) => `<option value="${k}">${e(v)}</option>`).join('')}</select></div>
           <div class="champ"><label class="lbl" for="msg-prio">${T('priorite')}</label><select id="msg-prio"><option value="normale">${T('normale')}</option><option value="haute">${T('haute')}</option></select></div>`}
         <div class="champ"><label class="lbl" for="msg-sujet">${T('sujet')}</label><input id="msg-sujet" maxlength="120" required></div>
@@ -74,7 +74,8 @@
     p.querySelector('[data-msg-statut]')?.addEventListener('click', async () => { try { await appel('POST', `/messagerie/fils/${filOuvert}/statut`, { statut: p.querySelector('#msg-st').value }); } catch (err) { window.toast?.(err.message, true); } rendre(); });
     p.querySelector('[data-msg-envoyer]')?.addEventListener('submit', async (ev) => {
       ev.preventDefault();
-      const corps = onglet === 'nouveau' ? { destinataire_id: Number(p.querySelector('#msg-dest').value) } : { boite: 'administration', categorie: p.querySelector('#msg-cat').value, priorite: p.querySelector('#msg-prio').value };
+      const choisis = onglet === 'nouveau' ? [...p.querySelector('#msg-dest').selectedOptions].map((o) => Number(o.value)) : [];
+      const corps = onglet === 'nouveau' ? (choisis.length > 1 ? { destinataires: choisis } : { destinataire_id: choisis[0] }) : { boite: 'administration', categorie: p.querySelector('#msg-cat').value, priorite: p.querySelector('#msg-prio').value };
       try { await appel('POST', '/messagerie/messages', { etablissement_id: ctx(), ...corps, sujet: p.querySelector('#msg-sujet').value, corps: p.querySelector('#msg-corps').value }); window.toast?.(X().envoye); onglet = 'mes'; } catch (err) { window.toast?.(err.message, true); }
       rendre();
     });

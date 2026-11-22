@@ -54,6 +54,7 @@ async function ouvrir(L, email, langue) {
   return page;
 }
 async function onglet(page, vue) {
+  await page.evaluate((v) => window.ArrimoEspaces?.reveler(v), vue).catch(() => {});
   await allerOnglet(page, vue);
   await page.waitForFunction((v) => !document.querySelector(`#v-${v}`).hidden && document.querySelector(`#v-${v}`).children.length > 0, vue, { timeout: 60000 });
   await page.waitForTimeout(200);

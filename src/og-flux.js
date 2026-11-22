@@ -55,6 +55,63 @@ async function repondre(pool, u, etabId, question, langue) {
     const r = await chambre(pool, etabs, code[0].toUpperCase(), L); if (r) return rep(r, 'chambre', 'c-chambres');
   }
   if (!etabId || !etabs.includes(Number(etabId))) return null;
+  // N. Niveau opérationnel : expliqué d'après le moteur existant (terrain.niveauAlerte) et les seuils configurés ; rien d'inventé
+  if (/\b(niveau|level)\b/.test(qn) && /\b(pourquoi|why|explique\w*|explain|passer|faire passer|pourrai\w*|could)\b/.test(qn) && u.role !== 'entretien') {
+    const n = await require('./terrain').niveauAlerte(pool, etabId, L); if (!n) return null;
+    const c = (await pool.query('SELECT c.seuil_jaune, c.seuil_orange, c.seuil_rouge, c.attente_admission_max_min FROM etablissements e JOIN config_pays c ON c.id = e.config_id WHERE e.id = $1', [etabId])).rows[0];
+    const NOM = { vert: T(L, 'vert', 'green'), jaune: T(L, 'jaune', 'yellow'), orange: 'orange', rouge: T(L, 'rouge', 'red') };
+    const lignes = [T(L, `Niveau ${NOM[n.niveau]} (le plus élevé des niveaux lits et urgence).`, `${NOM[n.niveau]} level (the higher of the bed and emergency levels).`),
+      T(L, `Lits : pression ${n.pression} % (lits non libres + patients en attente d’un lit, sur ${n.dotes} lits en service) → niveau ${NOM[n.niveau_lits]} ; seuils : jaune ${c.seuil_jaune} %, orange ${c.seuil_orange} %, rouge ${c.seuil_rouge} %.`,
+        `Beds: pressure ${n.pression}% (non-free beds + patients waiting for a bed, out of ${n.dotes} beds in service) → ${NOM[n.niveau_lits]} level; thresholds: yellow ${c.seuil_jaune}%, orange ${c.seuil_orange}%, red ${c.seuil_rouge}%.`),
+      T(L, `Patients en attente d’un lit : ${n.en_attente} (dont ${n.attente_longue} au-delà de ${c.attente_admission_max_min} min ; une seule attente longue suffit pour l’orange).`, `Patients waiting for a bed: ${n.en_attente} (${n.attente_longue} beyond ${c.attente_admission_max_min} min; one long wait is enough for orange).`)];
+    if (n.urgence) lignes.push(T(L, `Urgence : ${n.urgence.occupees}/${n.urgence.fonctionnelles} civières occupées (${n.urgence.taux} %) → niveau ${NOM[n.urgence.niveau] || n.urgence.niveau}.`, `Emergency: ${n.urgence.occupees}/${n.urgence.fonctionnelles} stretchers occupied (${n.urgence.taux}%) → ${NOM[n.urgence.niveau] || n.urgence.niveau} level.`));
+    const prochain = n.pression < c.seuil_jaune ? ['jaune', c.seuil_jaune] : n.pression < c.seuil_orange ? ['orange', c.seuil_orange] : n.pression < c.seuil_rouge ? ['rouge', c.seuil_rouge] : null;
+    if (prochain && n.dotes) { const lits = Math.max(1, Math.ceil(((prochain[1] - n.pression) / 100) * n.dotes)); lignes.push(T(L, `Passage au ${NOM[prochain[0]]} : environ ${lits} ${lits > 1 ? 'lits libres de moins ou patients' : 'lit libre de moins ou patient'} en attente de plus, ou une attente au-delà du délai.`, `Moving to ${NOM[prochain[0]]}: about ${lits} fewer free ${lits > 1 ? 'beds or more waiting patients' : 'bed or one more waiting patient'}, or one wait beyond the limit.`)); }
+    if (n.protocole) lignes.push(T(L, `Protocole de l’établissement : ${n.protocole}`, `Facility protocol: ${n.protocole}`));
+    return rep(lignes.join('\n') + pied(L, T(L, 'Lits, Urgence (règles de niveau de l’établissement)', 'Beds, Emergency (facility level rules)')), 'niveau', 'copilote');
+  }
+  // C. Chrono : ambulances à la porte, attentes, dépassements, tendance (moteur Chrono existant, événements enregistrés)
+  if (/\b(ambulances?|chrono)\b/.test(qn) && /\b(depasse\w*|seuil|threshold|overrun\w*|tendance|trend|liberables?|freeable)\b/.test(qn) && !/\b(combien|how many)\b/.test(qn) && u.role !== 'entretien') {
+    const e = (await pool.query('SELECT modules FROM etablissements WHERE id = $1', [etabId])).rows[0];
+    if (!require('./types-etablissement').moduleActif(e, 'chrono')) return null;
+    const c = await require('./chrono').tableau(pool, u, { etablissement_id: etabId });
+    const s = c.cibles?.porte || 20; const porte = c.a_la_porte || [];
+    const lignes = [T(L, `Ambulances à la porte : ${porte.length}${porte.length ? ` — ${porte.map((p) => `${p.unite || p.numero} depuis ${p.a_la_porte_min ?? '—'} min${p.a_la_porte_min > s ? ' (au-delà du seuil)' : ''}`).join(' ; ')}` : ''}.`,
+      `Ambulances at the door: ${porte.length}${porte.length ? ` — ${porte.map((p) => `${p.unite || p.numero} for ${p.a_la_porte_min ?? '—'} min${p.a_la_porte_min > s ? ' (over threshold)' : ''}`).join('; ')}` : ''}.`)];
+    lignes.push(T(L, `Seuil configuré (H11 → H14) : ${s} min ; dépassements en cours : ${porte.filter((p) => p.a_la_porte_min > s).length}.`, `Configured threshold (H11 → H14): ${s} min; current overruns: ${porte.filter((p) => p.a_la_porte_min > s).length}.`));
+    const fini = (c.termines || []).filter((p) => p.durees?.porte != null);
+    lignes.push(fini.length ? T(L, `Tendance aujourd’hui : ${fini.length} ${fini.length > 1 ? 'prises en charge terminées' : 'prise en charge terminée'}, délai moyen ${Math.round(fini.reduce((a, p) => a + p.durees.porte, 0) / fini.length)} min.`, `Trend today: ${fini.length} completed ${fini.length > 1 ? 'handovers' : 'handover'}, average ${Math.round(fini.reduce((a, p) => a + p.durees.porte, 0) / fini.length)} min.`) : T(L, 'Tendance aujourd’hui : aucune prise en charge terminée enregistrée.', 'Trend today: no completed handover recorded.'));
+    lignes.push(T(L, `Annoncées en route : ${(c.en_route || []).length}.`, `Announced on the way: ${(c.en_route || []).length}.`));
+    if (/civiere|stretcher|liberable|freeable/.test(qn)) { const cv = (await pool.query("SELECT code FROM civieres WHERE etablissement_id = $1 AND etat = 'nettoyage' ORDER BY code", [etabId]).catch(() => ({ rows: [] }))).rows; lignes.push(T(L, `Civières qui peuvent être remises en service après nettoyage : ${cv.map((x) => x.code).join(', ') || 'aucune'}. Une civière occupée n’est libérée que par l’équipe, au départ réel du patient.`, `Stretchers that can return to service after cleaning: ${cv.map((x) => x.code).join(', ') || 'none'}. An occupied stretcher is freed only by the team, at the patient’s actual departure.`)); }
+    return rep(lignes.join('\n') + pied(L, 'Chrono'), 'chrono', 'chrono');
+  }
+  // T. Mes tâches (moteur unique)
+  if (/\b(mes taches|my tasks|taches? (prioritaires?|en retard)|taches? sont (prioritaires?|en retard)|tasks? (overdue|priority)|quelles? taches?)\b/.test(qn)) {
+    const m = await require('./taches').miennes(pool, u, { etablissement_id: etabId }); const now = Date.now();
+    const retard = m.taches.filter((x) => x.en_retard || (x.echeance && new Date(x.echeance).getTime() < now));
+    if (/retard|overdue|late/.test(qn)) return rep(`${T(L, 'Tâches en retard', 'Overdue tasks')} (${retard.length}) :\n${retard.length ? retard.slice(0, 10).map((x) => `• ${x.lieu ? `${x.lieu} · ` : ''}${x.titre} · ${T(L, 'échéance', 'due')} ${dh(L, x.echeance)}`).join('\n') : T(L, 'aucune.', 'none.')}` + pied(L, T(L, 'Personnel et tâches, Nettoyage', 'Staff and tasks, Cleaning')), 'taches', m.ecran);
+    const l = m.taches;
+    return rep(`${T(L, 'Vos tâches ouvertes', 'Your open tasks')} (${l.length}) :\n${l.length ? l.slice(0, 10).map((x) => `• ${x.lieu ? `${x.lieu} · ` : ''}${x.titre} · ${x.statut === 'en_cours' ? T(L, 'en cours', 'in progress') : T(L, 'à faire', 'to do')}${x.echeance ? ` · ${T(L, 'échéance', 'due')} ${dh(L, x.echeance)}` : ''}`).join('\n') : T(L, 'aucune.', 'none.')}${retard.length ? `\n${T(L, `En retard : ${retard.length}.`, `Overdue: ${retard.length}.`)}` : ''}` + pied(L, T(L, 'Personnel et tâches, Nettoyage', 'Staff and tasks, Cleaning')), 'taches', m.ecran);
+  }
+  // P. Parcours d'un patient (référence P-…) : demande d'hébergement, transport, préparation de la chambre, arrivée — sources réelles, droits
+  const refP = String(question || '').match(/\bP-\d{4,6}\b/i);
+  if (refP && /\b(arrive|parti|ambulance|chambre|parcours|transport|qui|prete|path|trip|arrived|left|room|who)\b/.test(qn) && u.role !== 'entretien') {
+    const ref = refP[0].toUpperCase(); const lignes = [];
+    const dhs = (await pool.query(`SELECT d.*, ed.nom AS destination, eo.nom AS origine FROM demandes_hebergement d JOIN etablissements ed ON ed.id = d.etablissement_id LEFT JOIN etablissements eo ON eo.id = d.hopital_id
+      WHERE upper(d.reference_externe) = $1 AND (d.etablissement_id = ANY($2) OR d.hopital_id = ANY($2)) ORDER BY d.id DESC LIMIT 1`, [ref, etabs])).rows[0];
+    const tr = (await pool.query(`SELECT d.*, un.numero AS unite FROM demandes_transport d LEFT JOIN unites_secours un ON un.id = d.unite_id WHERE upper(d.resident_ref) = $1 AND (d.origine_id = ANY($2) OR d.destination_id = ANY($2)) AND d.statut <> 'annulee' ORDER BY d.id DESC LIMIT 1`, [ref, etabs])).rows[0];
+    if (!dhs && !tr) return rep(T(L, `Aucun parcours enregistré pour ${ref} dans vos établissements.`, `No recorded path for ${ref} in your facilities.`), 'parcours');
+    if (dhs) lignes.push(T(L, `Demande d’hébergement ${dhs.numero} : ${dhs.origine || '—'} → ${dhs.destination} (statut ${dhs.statut}).`, `Housing request ${dhs.numero}: ${dhs.origine || '—'} → ${dhs.destination} (status ${dhs.statut}).`));
+    if (dhs?.depart_prevu_le) lignes.push(T(L, `Départ prévu : ${dh(L, dhs.depart_prevu_le)} ; départ réel : ${dhs.depart_hopital_le ? dh(L, dhs.depart_hopital_le) : 'non enregistré'}.`, `Planned departure: ${dh(L, dhs.depart_prevu_le)}; actual departure: ${dhs.depart_hopital_le ? dh(L, dhs.depart_hopital_le) : 'not recorded'}.`));
+    if (tr) lignes.push(T(L, `Transport ${tr.numero} : ${ST_TR.fr[tr.statut] || tr.statut}${tr.unite ? `, ambulance ${tr.unite}` : ', aucune ambulance affectée'}${tr.pris_en_charge_le ? `, pris en charge ${dh(L, tr.pris_en_charge_le)}` : ''}${tr.arrivee_le ? `, arrivé ${dh(L, tr.arrivee_le)}` : ''}${tr.remis_le ? `, patient remis ${dh(L, tr.remis_le)}` : ''}.`,
+      `Transport ${tr.numero}: ${ST_TR.en[tr.statut] || tr.statut}${tr.unite ? `, ambulance ${tr.unite}` : ', no ambulance assigned'}${tr.pris_en_charge_le ? `, picked up ${dh(L, tr.pris_en_charge_le)}` : ''}${tr.arrivee_le ? `, arrived ${dh(L, tr.arrivee_le)}` : ''}${tr.remis_le ? `, handed over ${dh(L, tr.remis_le)}` : ''}.`));
+    const litId = dhs?.lit_propose_id || (dhs?.resident_id ? (await pool.query('SELECT lit_id FROM residents WHERE id = $1', [dhs.resident_id])).rows[0]?.lit_id : null);
+    if (litId) { const t = (await pool.query(`SELECT t.statut, t.fait_le, x.nom, l.code FROM taches_etab t JOIN lits l ON l.id = t.lit_id LEFT JOIN utilisateurs x ON x.id = t.fait_par WHERE t.lit_id = $1 AND t.type = 'preparation_chambre' ORDER BY t.id DESC LIMIT 1`, [litId])).rows[0];
+      if (t) lignes.push(t.statut === 'faite' ? T(L, `Chambre ${t.code} : déclarée prête ${t.nom ? `par ${t.nom} ` : ''}le ${dh(L, t.fait_le)}.`, `Room ${t.code}: declared ready ${t.nom ? `by ${t.nom} ` : ''}on ${dh(L, t.fait_le)}.`) : T(L, `Chambre ${t.code} : préparation ${t.statut === 'en_cours' ? 'en cours' : 'à faire'} (pas encore prête).`, `Room ${t.code}: preparation ${t.statut === 'en_cours' ? 'in progress' : 'to do'} (not ready yet).`)); }
+    if (dhs) { const arr = (await pool.query(`SELECT e.date AS cree_le, x.nom, e.detail FROM demande_hebergement_etapes e LEFT JOIN utilisateurs x ON x.id = e.par WHERE e.demande_id = $1 AND (e.statut IN ('admise', 'arrivee') OR e.detail ILIKE '%arriv%') ORDER BY e.id DESC LIMIT 1`, [dhs.id])).rows[0];
+      lignes.push(arr ? T(L, `Arrivée : ${arr.detail || 'confirmée'} ${arr.nom ? `par ${arr.nom} ` : ''}le ${dh(L, arr.cree_le)}.`, `Arrival: ${arr.detail || 'confirmed'} ${arr.nom ? `by ${arr.nom} ` : ''}on ${dh(L, arr.cree_le)}.`) : T(L, 'Arrivée à destination : non confirmée à ce jour.', 'Arrival at destination: not confirmed yet.')); }
+    return rep(lignes.join('\n') + pied(L, T(L, 'Hébergement, Transport, Personnel et tâches', 'Housing, Transport, Staff and tasks')), 'parcours', 'flux');
+  }
   // 0. Arrimo Connect : messages et demandes (seulement les fils de la personne, ou la boîte de l'administration pour l'administration)
   if (/\b(messages?|administration|responsable|demandes? administratives?|annonces?|contacter|manager|admin\w*|announcements?)\b/.test(qn) && /\b(recu|non lus?|ouvert\w*|contacter|comment|ai-je|en attente|unread|open|received|how|contact|any)\b/.test(qn)) {
     const f = await require('./connect-interne').fils(pool, u, { etablissement_id: etabId });
@@ -88,12 +145,24 @@ async function repondre(pool, u, etabId, question, langue) {
     const titre = prealertes ? T(L, 'Préalertes', 'Pre-alerts') : retard ? T(L, 'Mouvements en retard', 'Delayed movements') : arrivees && !departs ? T(L, 'Arrivées', 'Arrivals') : departs && !arrivees ? T(L, 'Départs', 'Departures') : T(L, 'Arrivées et départs', 'Arrivals and departures');
     return rep(`${titre} (${l.length}) :\n${l.length ? l.slice(0, 12).map(lib).join('\n') : T(L, 'aucun pour le moment.', 'none at the moment.')}${l.some((x) => x.actions.includes('accuser_prealerte')) ? `\n${T(L, 'Action : accuser réception dans l’Accueil ou dans Arrimo Flux.', 'Action: acknowledge from Home or Arrimo Flow.')}` : ''}` + pied(L, 'Arrimo Flux'), 'flux', 'flux');
   }
+  // 4b. Lits qui viennent de se libérer (journal immuable des lits, 12 dernières heures) ; un lit libre est prêt, un lit en nettoyage ne l'est pas
+  if (/\b(lits?|beds?|chambres?|rooms?)\b.*\b(viennent? de se liberer|liberee?s? recemment|recently freed|just freed|freed up)\b/.test(qn)) {
+    const l = (await pool.query(`SELECT DISTINCT ON (l.id) l.code, l.etat, j.date FROM journal j JOIN lits l ON l.id = j.lit_id
+      WHERE j.etablissement_id = $1 AND NOT j.refuse AND j.ancien_etat = 'occupe' AND j.date > now() - interval '12 hours' ORDER BY l.id, j.date DESC`, [etabId])).rows.sort((a, b) => new Date(b.date) - new Date(a.date));
+    const ET = { libre: T(L, 'libre et prêt', 'free and ready'), nettoyage: T(L, 'en nettoyage (pas encore prêt)', 'being cleaned (not ready yet)'), occupe: T(L, 'de nouveau occupé', 'occupied again'), reserve: T(L, 'réservé', 'reserved'), indispo: T(L, 'bloqué', 'blocked') };
+    return rep(`${T(L, 'Lits libérés dans les 12 dernières heures', 'Beds freed in the last 12 hours')} (${l.length}) :\n${l.length ? l.map((x) => `• ${x.code} · ${T(L, 'libéré à', 'freed at')} ${h(L, x.date)} · ${ET[x.etat] || x.etat}`).join('\n') : T(L, 'aucun.', 'none.')}`
+      + pied(L, T(L, 'Lits (journal)', 'Beds (log)')), 'lits_liberes', 'lits');
+  }
   // 5. Chambres à préparer (avant une heure donnée)
   if (/\b(chambres?|rooms?)\b.*\b(prepar\w*|nettoy\w*|clean\w*)\b|\b(prepar\w*|nettoy\w*|clean\w*)\b.*\b(chambres?|rooms?)\b/.test(qn)) {
     const avant = qn.match(/\b(?:avant|before)\s+(\d{1,2})\s*h?\s*(\d{2})?/);
     let limite = null; if (avant) { limite = new Date(); limite.setHours(Number(avant[1]), Number(avant[2] || 0), 0, 0); }
     const t = (await pool.query(`SELECT t.statut, t.echeance, l.code FROM taches_etab t LEFT JOIN lits l ON l.id = t.lit_id WHERE t.etablissement_id = $1 AND t.type IN ('preparation_chambre', 'entretien') AND t.statut IN ('a_faire', 'en_cours')
       AND ($2::timestamptz IS NULL OR t.echeance <= $2) ORDER BY t.echeance NULLS LAST`, [etabId, limite])).rows;
+    // Lits à l'état « nettoyage » (source unique tenue par regles.js) sans tâche ouverte : aussi en attente de nettoyage
+    const deja = new Set(t.map((x) => x.code));
+    for (const l of (await pool.query(`SELECT code, nettoyage_debut, etat_depuis FROM lits WHERE etablissement_id = $1 AND etat = 'nettoyage' AND actif ORDER BY etat_depuis`, [etabId])).rows)
+      if (!deja.has(l.code)) t.push({ code: l.code, statut: l.nettoyage_debut ? 'en_cours' : 'a_faire', echeance: null });
     return rep(`${T(L, 'Chambres à préparer', 'Rooms to prepare')}${limite ? T(L, ` avant ${h(L, limite)}`, ` before ${h(L, limite)}`) : ''} (${t.length}) :\n${t.length ? t.map((x) => `• ${x.code || '—'} · ${x.statut === 'en_cours' ? T(L, 'en cours', 'in progress') : T(L, 'à faire', 'to do')}${x.echeance ? ` · ${T(L, 'échéance', 'due')} ${dh(L, x.echeance)}` : ` · ${T(L, 'sans échéance', 'no due time')}`}`).join('\n') : T(L, 'aucune.', 'none.')}\n${T(L, 'La chambre est déclarée prête par l’entretien, jamais automatiquement.', 'A room is declared ready by housekeeping, never automatically.')}` + pied(L, T(L, 'Personnel et tâches', 'Staff and tasks')), 'preparations', 'c-taches');
   }
   // 6. Admission bloquée (résident R-xxxxx)

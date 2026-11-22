@@ -74,6 +74,12 @@ async function tache(c, etabId, u, t) {
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`, [etabId, t.type, t.titre, t.detail || null, t.lit_id || null, t.resident_id || null, t.assigne_role || null, t.echeance || null, u?.id || null])).rows[0];
   // Une préparation de place conservée ou réservée la marque « à nettoyer » sans changer son attribution.
   if (t.type === 'preparation_chambre' && n.lit_id) await c.query(`UPDATE lits SET entretien_statut = 'a_nettoyer' WHERE id = $1 AND etat IN ('occupe', 'reserve')`, [n.lit_id]);
+  // Attribution automatique (cahier Personnel & Tâches, 6 et 8) : seulement si la règle est activée ET qu'une seule personne active a le rôle
+  // demandé dans l'établissement ; sinon la tâche reste dans la file du rôle (jamais à une personne non autorisée ou inactive).
+  if (n.assigne_role && (await require('./taches').lireParametres(c, etabId, 'taches')).attribution_auto === 'seul_agent') {
+    const x = (await c.query(`SELECT x.id FROM utilisateurs x JOIN utilisateur_etablissements ue ON ue.utilisateur_id = x.id WHERE ue.etablissement_id = $1 AND x.role = $2 AND x.actif`, [etabId, n.assigne_role])).rows;
+    if (x.length === 1) { await c.query('UPDATE taches_etab SET assigne_a = $2 WHERE id = $1', [n.id, x[0].id]); n.assigne_a = x[0].id; }
+  }
   return n;
 }
 const codeLit = async (c, litId) => (await c.query('SELECT code FROM lits WHERE id = $1', [litId])).rows[0]?.code;
@@ -1083,7 +1089,9 @@ async function creerTache(pool, u, b) {
   if (b.lit_id && !(await pool.query('SELECT 1 FROM lits WHERE id = $1 AND etablissement_id = $2', [Number(b.lit_id), e.id])).rowCount) throw new ErreurHttp(404, 'lit_introuvable');
   if (b.resident_id && !(await pool.query('SELECT 1 FROM residents WHERE id = $1 AND etablissement_id = $2', [Number(b.resident_id), e.id])).rowCount) throw new ErreurHttp(404, 'resident_introuvable');
   const assigne = ['coordonnateur', 'entretien', 'admin_etab', 'equipe_soins'].includes(b.assigne_role) ? b.assigne_role : null;
-  const echeance = b.echeance ? new Date(b.echeance) : null;
+  // Échéance par défaut : paramètre du module Personnel & Tâches (0 = aucune)
+  const defMin = b.echeance ? 0 : (await require('./taches').lireParametres(pool, Number(b.etablissement_id), 'taches')).echeance_defaut_min;
+  const echeance = b.echeance ? new Date(b.echeance) : defMin ? new Date(Date.now() + defMin * 60000) : null;
   if (echeance && Number.isNaN(echeance.getTime())) throw new ErreurHttp(400, 'date_invalide');
   return transaction(pool, async (c) => {
     const t = await tache(c, e.id, u, { type: b.type, titre, detail: texte(b.detail, 1000), lit_id: Number(b.lit_id) || null, resident_id: Number(b.resident_id) || null, assigne_role: assigne, echeance });

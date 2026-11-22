@@ -224,6 +224,7 @@ function creerApp(pool, options = {}) {
     // La météo de l'en-tête et le nom de l'assistant (lecture seule, propres à l'établissement) s'affichent aussi pour l'entretien.
     const ok = (req.method === 'GET' && ['/moi', '/nettoyage', '/meteo', '/og/configuration', '/chsld/taches', '/chsld/places'].includes(req.path)) || req.path.startsWith('/moi/')
       || req.path.startsWith('/formation/')   // Module Formation : son parcours Hygiène et salubrité
+      || (req.method === 'GET' && req.path === '/taches/miennes')
       || req.path.startsWith('/messagerie/')   // Arrimo Connect : communications internes (mêmes droits que tout employé)
       || (req.method === 'POST' && req.path === '/copilote/question')   // OG : chambres et préparations seulement (src/copilote.js)
       || (req.method === 'POST' && /^\/chsld\/taches\/\d+\/statut$/.test(req.path))
@@ -304,8 +305,15 @@ function creerApp(pool, options = {}) {
   api.get('/messagerie/annuaire', route((req) => msg.annuaire(pool, req.utilisateur, req.query)));
   api.get('/messagerie/annonces', route((req) => msg.annonces(pool, req.utilisateur, req.query)));
   api.post('/messagerie/annonces', route((req) => msg.publier(pool, req.utilisateur, req.body)));
+  // Personnel & Tâches : « Mes tâches » (moteur unique) et attribution
+  api.get('/taches/miennes', route((req) => require('./taches').miennes(pool, req.utilisateur, req.query)));
+  api.get('/parametres-modules/:module', route((req) => require('./taches').parametres(pool, req.utilisateur, req.params.module, req.query)));
+  api.put('/parametres-modules/:module', route((req) => require('./taches').enregistrerParametres(pool, req.utilisateur, req.params.module, req.body)));
+  api.post('/taches/:id/attribuer', route((req) => require('./taches').attribuer(pool, req.utilisateur, req.params.id, req.body)));
   // Arrimo Flux (cahier ultime, 21 nov. 2026) : arrivées et départs de l'établissement
   api.get('/arrimo-flux', route((req) => require('./arrimo-flux').mouvements(pool, req.utilisateur, req.query)));
+  api.get('/capacites/historique', route((req) => require('./arrimo-flux').historiqueCapacites(pool, req.utilisateur, req.query)));
+  api.get('/arrimo-flux/historique', route((req) => require('./arrimo-flux').historique(pool, req.utilisateur, req.query)));
   api.get('/arrimo-flux/fiche', route((req) => require('./arrimo-flux').fiche(pool, req.utilisateur, req.query)));
   api.get('/sillage/attention', route((req) => require('./sillage').attention(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
 

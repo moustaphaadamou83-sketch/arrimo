@@ -2475,3 +2475,22 @@ ALTER TABLE demandes_transport ADD COLUMN IF NOT EXISTS remis_le timestamptz;
 ALTER TABLE demandes_transport ADD COLUMN IF NOT EXISTS terminee_le timestamptz;
 ALTER TABLE demandes_transport ADD COLUMN IF NOT EXISTS incident_le timestamptz;
 ALTER TABLE demandes_transport ADD COLUMN IF NOT EXISTS incident_motif text CHECK (incident_motif IS NULL OR length(incident_motif) <= 300);
+ALTER TABLE taches_etab ADD COLUMN IF NOT EXISTS assigne_a int REFERENCES utilisateurs(id);
+ALTER TABLE taches_etab ADD COLUMN IF NOT EXISTS assigne_a int REFERENCES utilisateurs(id);
+-- Paramètres propres aux modules (cahier Personnel & Tâches, section 19) : par établissement, distincts des paramètres généraux
+CREATE TABLE IF NOT EXISTS parametres_modules (
+  etablissement_id int  NOT NULL REFERENCES etablissements(id),
+  module           text NOT NULL CHECK (module IN ('taches', 'nettoyage')),
+  valeurs          jsonb NOT NULL DEFAULT '{}'::jsonb,
+  maj_par          int REFERENCES utilisateurs(id),
+  maj_le           timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (etablissement_id, module)
+);
+-- Arrimo Connect : conversations de groupe autorisées (membres du même établissement) ; lisibles par les participants seulement
+CREATE TABLE IF NOT EXISTS connect_participants (
+  fil_id         int NOT NULL REFERENCES connect_messages(id),
+  utilisateur_id int NOT NULL REFERENCES utilisateurs(id),
+  PRIMARY KEY (fil_id, utilisateur_id)
+);
+-- Personnel & Tâches : notification de retard envoyée une seule fois par tâche (pas de répétition)
+ALTER TABLE taches_etab ADD COLUMN IF NOT EXISTS retard_notifie_le timestamptz;

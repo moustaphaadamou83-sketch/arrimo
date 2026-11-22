@@ -441,6 +441,7 @@ const MESSAGES = {
   tache_invalide: "Tâche invalide.",
   tache_introuvable: "Tâche introuvable.",
   tache_close: "Cette tâche est close.",
+  tache_role_incompatible: "Le rôle de cette personne ne correspond pas à la tâche.",
   communication_invalide: "Communication invalide.",
   proche_non_autorise: "Ce proche n’est pas autorisé à recevoir des informations de la catégorie « {categorie} ». Rien n’a été préparé.",
   communication_introuvable: "Communication introuvable.",
