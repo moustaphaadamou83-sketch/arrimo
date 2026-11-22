@@ -123,6 +123,8 @@ async function verifier(page, L, nom) {
       if (el.closest('.kanban, .tableau, .onglets')) return;
       // Les tuiles Leaflet hors du cadre sont intentionnellement masquées par le conteneur de carte.
       if (el.matches('.leaflet-tile') && el.closest('.leaflet-container')) return;
+      // Même chose pour la couche de dessin (svg) de Leaflet : elle déborde par conception, masquée par le cadre de la carte
+      if (el.closest('.leaflet-overlay-pane') && el.closest('.leaflet-container')) return;
       if (r.right > vw + 1 || r.left < -1) debordent.push(`${el.tagName.toLowerCase()}.${el.className} (${Math.round(r.left)}→${Math.round(r.right)})`);
     });
     const boutons = [...document.querySelectorAll('button, .btn, select, input:not([type=checkbox]):not([type=radio])')]
@@ -525,6 +527,8 @@ test('interface en anglais : aucun texte français restant (noms propres except�
   const x = await ouvrir(L, 'hopital.x@demo.arrimo', 'en');
   await x.waitForSelector('#v-copilote .acc-niveau');
   await ecran(x, '01-copilot');
+  // Accueil universel : les questions suggérées sont dans l'analyse détaillée d'OG (repliée) ; on l'ouvre comme un utilisateur
+  await x.evaluate(() => { const d = document.querySelector('#v-copilote .acc-details'); if (d) d.open = true; window.__accDetailsOuvert = true; });
   for (let i = 0; i < 6; i += 1) {
     await x.click(`#v-copilote [data-ex="${i}"]`);
     await x.waitForSelector('#v-copilote .reponse');

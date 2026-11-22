@@ -43,6 +43,9 @@ async function peuplerDemo(pool, base) {
     await connecter('era', courrielDe(CHSLD[0], 'coordination'));
     await connecter('stl', courrielDe(CHSLD[1], 'coordination'));
     await connecter('b', 'hopital.b@demo.arrimo');
+    // Comptes d'entretien : ce sont eux qui confirment les chambres propres (règle du 17 nov. 2026)
+    await connecter('era_ent', courrielDe(CHSLD[0], 'entretien'));
+    await connecter('stl_ent', courrielDe(CHSLD[1], 'entretien'));
     const r = await peupler(appel, { hopitalB: hopitalB.id });
     // Portail des proches (si activé pour les Érables) : Marie Dupont invitée, accès avec le mot de passe de démonstration
     let proche = null;

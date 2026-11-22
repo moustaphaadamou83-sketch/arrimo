@@ -107,8 +107,8 @@ async function peupler(api, { erables, stLaurent, hopitalB }) {
     const r = await api(qui, 'POST', '/chsld/residents', { etablissement_id: e, ...identite, contacts });
     const r2 = await api(qui, 'POST', `/chsld/residents/${r.id}/reserver-place`, { lit_id: libre.id, version: libre.version, version_resident: r.version });
     if (!arrivee) return r2;
-    // La chambre doit être prête avant l'arrivée : préparation terminée (ici par la coordination, faute d'agent d'entretien)
-    for (const t of (await api(qui, 'GET', `/chsld/taches?etablissement_id=${e}`)).filter((x) => x.lit_id === libre.id && ['preparation_chambre', 'entretien'].includes(x.type))) await api(qui, 'POST', `/chsld/taches/${t.id}/statut`, { statut: 'faite', version: t.version });
+    // La chambre doit être prête avant l'arrivée : préparation terminée par l'entretien de l'établissement (règle du 17 nov. 2026)
+    for (const t of (await api(qui, 'GET', `/chsld/taches?etablissement_id=${e}`)).filter((x) => x.lit_id === libre.id && ['preparation_chambre', 'entretien'].includes(x.type))) await api(`${qui}_ent`, 'POST', `/chsld/taches/${t.id}/statut`, { statut: 'faite', version: t.version });
     return api(qui, 'POST', `/chsld/residents/${r.id}/arrivee`, { version: r2.version });
   }
   const naissance = (i) => `19${30 + (i % 15)}-${String((i % 12) + 1).padStart(2, '0')}-${String((i % 27) + 1).padStart(2, '0')}`;

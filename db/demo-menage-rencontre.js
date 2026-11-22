@@ -12,10 +12,10 @@
 const { creerPool } = require('../src/db');
 const { estDemo } = require('../src/environnement');
 
-async function utilisateurDe(pool, etabId) {
+async function utilisateurDe(pool, etabId, roles = ['coordonnateur', 'admin_etab', 'gestionnaire']) {
   const u = (await pool.query(`SELECT u.id, u.nom, u.email, u.role, COALESCE(array_agg(ue.etablissement_id), '{}') AS etabs FROM utilisateurs u
-    JOIN utilisateur_etablissements ue ON ue.utilisateur_id = u.id WHERE u.actif AND u.role IN ('coordonnateur', 'admin_etab', 'gestionnaire')
-    AND u.id IN (SELECT utilisateur_id FROM utilisateur_etablissements WHERE etablissement_id = $1) GROUP BY u.id ORDER BY u.id LIMIT 1`, [etabId])).rows[0];
+    JOIN utilisateur_etablissements ue ON ue.utilisateur_id = u.id WHERE u.actif AND u.role = ANY($2)
+    AND u.id IN (SELECT utilisateur_id FROM utilisateur_etablissements WHERE etablissement_id = $1) GROUP BY u.id ORDER BY u.id LIMIT 1`, [etabId, roles])).rows[0];
   if (!u) throw new Error(`Aucun compte de coordination pour l'établissement ${etabId}`);
   return { ...u, gestionnaire: u.role === 'gestionnaire', admin: ['gestionnaire', 'admin_etab'].includes(u.role), langue: 'fr' };
 }
@@ -44,7 +44,9 @@ async function menage(pool, { journal = console.log } = {}) {
           // Préparation de la chambre terminée (tâches ouvertes du lit), chambre vérifiée, réintégration
           const r = (await pool.query('SELECT lit_id FROM residents WHERE id = $1', [c0.resident_id])).rows[0];
           for (const t of (await pool.query(`SELECT id, version FROM taches_etab WHERE lit_id = $1 AND statut IN ('a_faire', 'en_cours')`, [r.lit_id])).rows) {
-            await ch.statutTache(pool, dest, t.id, { statut: 'faite', version: t.version });
+            // Chambre propre confirmée par l'entretien quand l'établissement en a un (règle du 17 nov. 2026), sinon par la coordination
+            const ent = await utilisateurDe(pool, c0.destination_id, ['entretien']).catch(() => dest);
+            await ch.statutTache(pool, ent, t.id, { statut: 'faite', version: t.version });
           }
           let c = await co(c0.id);
           if (!c.chambre_verifiee_le) c = await ch.actionCoordination(pool, dest, c.id, { etablissement_id: c.destination_id, action: 'verifier_chambre', version: c.version }).catch(() => c);

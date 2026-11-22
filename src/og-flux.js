@@ -86,7 +86,7 @@ async function repondre(pool, u, etabId, question, langue) {
     return rep(lignes.join('\n') + pied(L, 'Chrono'), 'chrono', 'chrono');
   }
   // T. Mes tâches (moteur unique)
-  if (/\b(mes taches|my tasks|taches? (prioritaires?|en retard)|taches? sont (prioritaires?|en retard)|tasks? (overdue|priority)|quelles? taches?)\b/.test(qn)) {
+  if (/\b(mes taches|my tasks|taches? (prioritaires?|en retard)|taches? sont (prioritaires?|en retard)|tasks? (overdue|priority)|dois-je|should i|ai-je a faire)\b/.test(qn)) {
     const m = await require('./taches').miennes(pool, u, { etablissement_id: etabId }); const now = Date.now();
     const retard = m.taches.filter((x) => x.en_retard || (x.echeance && new Date(x.echeance).getTime() < now));
     if (/retard|overdue|late/.test(qn)) return rep(`${T(L, 'Tâches en retard', 'Overdue tasks')} (${retard.length}) :\n${retard.length ? retard.slice(0, 10).map((x) => `• ${x.lieu ? `${x.lieu} · ` : ''}${x.titre} · ${T(L, 'échéance', 'due')} ${dh(L, x.echeance)}`).join('\n') : T(L, 'aucune.', 'none.')}` + pied(L, T(L, 'Personnel et tâches, Nettoyage', 'Staff and tasks, Cleaning')), 'taches', m.ecran);
@@ -112,8 +112,9 @@ async function repondre(pool, u, etabId, question, langue) {
       lignes.push(arr ? T(L, `Arrivée : ${arr.detail || 'confirmée'} ${arr.nom ? `par ${arr.nom} ` : ''}le ${dh(L, arr.cree_le)}.`, `Arrival: ${arr.detail || 'confirmed'} ${arr.nom ? `by ${arr.nom} ` : ''}on ${dh(L, arr.cree_le)}.`) : T(L, 'Arrivée à destination : non confirmée à ce jour.', 'Arrival at destination: not confirmed yet.')); }
     return rep(lignes.join('\n') + pied(L, T(L, 'Hébergement, Transport, Personnel et tâches', 'Housing, Transport, Staff and tasks')), 'parcours', 'flux');
   }
+  const typeEtabConnect = (await pool.query('SELECT type_etablissement FROM etablissements WHERE id = $1', [etabId])).rows[0]?.type_etablissement;
   // 0. Arrimo Connect : messages et demandes (seulement les fils de la personne, ou la boîte de l'administration pour l'administration)
-  if (/\b(messages?|administration|responsable|demandes? administratives?|annonces?|contacter|manager|admin\w*|announcements?)\b/.test(qn) && /\b(recu|non lus?|ouvert\w*|contacter|comment|ai-je|en attente|unread|open|received|how|contact|any)\b/.test(qn)) {
+  if (!/\b(famil\w*|proches?|relatives?)\b/.test(qn) && !(typeEtabConnect === 'chsld' && !/\b(administration|admin\w*|connect|collegues?|colleagues?|responsable|manager|annonces?|announcements?)\b/.test(qn)) && /\b(messages?|administration|responsable|demandes? administratives?|annonces?|contacter|manager|admin\w*|announcements?)\b/.test(qn) && /\b(recu|non lus?|ouvert\w*|contacter|comment|ai-je|en attente|unread|open|received|how|contact|any)\b/.test(qn)) {
     const f = await require('./connect-interne').fils(pool, u, { etablissement_id: etabId });
     const ouvertes = f.fils.filter((x) => x.boite === 'administration' && x.statut !== 'resolue');
     const lignes = [T(L, `Messages non lus : ${f.non_lus}.`, `Unread messages: ${f.non_lus}.`)];
@@ -130,6 +131,15 @@ async function repondre(pool, u, etabId, question, langue) {
   const typeEtab = (await pool.query('SELECT type_etablissement FROM etablissements WHERE id = $1', [etabId])).rows[0]?.type_etablissement;
   if (typeEtab !== 'chsld' && prealertes && !/\b(non acquitt\w*|recues?|d.?arrivee|transports?|flux|unacknowledged|received|arrival)\b/.test(qn)) return null;
   if (typeEtab !== 'chsld' && (arrivees || departs) && !prealertes && /\b(ambulances?|urgences?|emergency)\b/.test(qn)) return null;
+  // Résidents de CHSLD attendus ou partis : réponse plus précise de Liaison CHSLD (référence, établissement, dernière confirmation)
+  if (typeEtab !== 'chsld' && (arrivees || departs) && /\b(residents?|chslds?|long-term care|erables|saint-laurent)\b/.test(qn)) return null;
+  // Demande d'action (« confirme… », « valide… ») : jamais une liste ; le garde-fou d'OG (aucune confirmation à la place d'un humain) répond
+  if (/^(confirme\w*|valide\w*|marque\w*|declare\w*|accepte\w*|annule\w*|confirm|validate|mark|accept|cancel)\b/.test(qn.trim())) return null;
+  // Liste générale seulement : une question sur une personne (référence, nom, il/elle…) ou, en CHSLD, sur les admissions et résidents
+  // reste aux réponses spécialisées (Liaison CHSLD, admissions, hospitalisations)
+  const personne = /\b[RP]-\d{4,6}\b/i.test(String(question || '')) || /\b(il|elle|lui|son|sa|ses|he|she|him|his|her)\b/.test(qn) || /\b(hopital|hospital)\b/.test(qn) && /\b(est[- ]il|est[- ]elle|has|is)\b/.test(qn);
+  if ((arrivees || departs) && !prealertes && personne) return null;
+  if (typeEtab === 'chsld' && (arrivees || departs) && !prealertes && !/\b(flux|mouvements?|movements?|transports?|ambulances?|vehicules?|vehicles?|aujourd\w*|demain|today|tomorrow)\b/.test(qn)) return null;
   if (prealertes || arrivees || departs || retard) {
     if (u.role === 'entretien' && !/\b(chambres?|rooms?)\b/.test(qn)) return null;
     const f = await require('./arrimo-flux').mouvements(pool, u, { etablissement_id: etabId });
@@ -154,7 +164,10 @@ async function repondre(pool, u, etabId, question, langue) {
       + pied(L, T(L, 'Lits (journal)', 'Beds (log)')), 'lits_liberes', 'lits');
   }
   // 5. Chambres à préparer (avant une heure donnée)
-  if (/\b(chambres?|rooms?)\b.*\b(prepar\w*|nettoy\w*|clean\w*)\b|\b(prepar\w*|nettoy\w*|clean\w*)\b.*\b(chambres?|rooms?)\b/.test(qn)) {
+  // Liste générale seulement : pas une demande d'action (« prépare une tâche… »), ni une question sur une chambre ou un résident précis
+  const precis = /\b[A-Z]{2,5}-\d{2,4}[A-Z]?\b|\b[RP]-\d{4,6}\b|\bchambre \d{2,4}\b|\broom \d{2,4}\b/i.test(String(question || ''));
+  const demandeAction = /^(prepare|cree|creer|propose|ajoute|lance|planifie|programme|create|add|draft|start|schedule|plan|launch)\b/.test(qn.trim()) || /\b(sa|son|cette|his|her|this) (chambre|room)\b/.test(qn) || /\b(conserv\w*|held|gardee?s?|kept)\b/.test(qn);
+  if (!precis && !demandeAction && (/\b(chambres?|rooms?)\b.*\b(prepar\w*|nettoy\w*|clean\w*)\b|\b(prepar\w*|nettoy\w*|clean\w*)\b.*\b(chambres?|rooms?)\b/.test(qn))) {
     const avant = qn.match(/\b(?:avant|before)\s+(\d{1,2})\s*h?\s*(\d{2})?/);
     let limite = null; if (avant) { limite = new Date(); limite.setHours(Number(avant[1]), Number(avant[2] || 0), 0, 0); }
     const t = (await pool.query(`SELECT t.statut, t.echeance, l.code FROM taches_etab t LEFT JOIN lits l ON l.id = t.lit_id WHERE t.etablissement_id = $1 AND t.type IN ('preparation_chambre', 'entretien') AND t.statut IN ('a_faire', 'en_cours')
@@ -170,6 +183,8 @@ async function repondre(pool, u, etabId, question, langue) {
   if (res && /\b(bloque\w*|pourquoi|admission|arrivee|blocked|why|admit\w*)\b/.test(qn)) {
     const r = (await pool.query('SELECT r.*, l.code AS lit FROM residents r LEFT JOIN lits l ON l.id = r.lit_id WHERE r.etablissement_id = $1 AND upper(r.reference) = $2', [etabId, res[0].toUpperCase()])).rows[0];
     if (!r) return rep(T(L, `Je ne trouve pas ${res[0]} dans cet établissement.`, `I cannot find ${res[0]} in this facility.`), 'admission');
+    // Résident qui n'est pas en préadmission (retour, réintégration, hospitalisation) : la réponse spécialisée du CHSLD prend le relais
+    if (r.statut !== 'preadmission' && /\b(reintegr\w*|retour|return|hospitalis\w*)\b/.test(qn)) return null;
     if (r.statut !== 'preadmission') return rep(T(L, `${r.reference} n’est pas en attente d’admission (statut : ${r.statut}).`, `${r.reference} is not awaiting admission (status: ${r.statut}).`) + pied(L, T(L, 'Admissions et sorties', 'Admissions and discharges')), 'admission', 'c-admissions');
     if (!r.lit_id) return rep(T(L, `${r.reference} : aucune chambre attribuée. Action : attribuer une chambre (Admissions et sorties).`, `${r.reference}: no room assigned. Action: assign a room (Admissions and discharges).`) + pied(L, T(L, 'Admissions et sorties', 'Admissions and discharges')), 'admission', 'c-admissions');
     const c = await chambre(pool, etabs, r.lit, L);

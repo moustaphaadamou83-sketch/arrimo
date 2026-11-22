@@ -145,6 +145,7 @@
         priorites: actions.slice(0, 3).map((x) => ({ texte: String(x).replace(/<[^>]+>/g, '') })), details: ancien });
     }
     v.insertAdjacentHTML('beforeend', `<details class="panneau-c ch-communications" id="ch-comm"><summary><b>✉ ${esc(t('chsld.accueil.communications'))}</b></summary><div id="ch-comm-zone"></div></details>`);
+    const comm = v.querySelector('#ch-comm'); comm.open = window.__chCommOuvert === true; comm.addEventListener('toggle', () => { window.__chCommOuvert = comm.open; });
     const zc = v.querySelector('#ch-comm-zone');
     panneauMessagesFamilles(zc);
     panneauRattachements(zc);

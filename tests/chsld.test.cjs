@@ -94,7 +94,9 @@ test('SH : le type d’établissement vient en premier et commande les modules p
   assert.deepStrictEqual(codes(chs, 'hopital'), [], 'aucun module hospitalier proposé à un CHSLD');
   assert.ok(['residents', 'chambres', 'demandes_hebergement', 'entretien_chsld', 'taches', 'proches', 'hospitalisations', 'reseau_chsld'].every((c) => codes(chs, 'chsld').includes(c)));
   assert.ok(codes(hop, 'hopital').includes('civieres') && !codes(hop, 'chsld').length, 'urgence et civières (code historique « civieres ») pour l’hôpital');
-  assert.deepStrictEqual(chs.modules.filter((m) => m.categorie === 'optionnel').map((m) => [m.code, m.statut]), [['portail_proches', 'disponible'], ['messagerie_securisee', 'disponible'], ['appels_video', 'etude']]);
+  // Modules optionnels : la liste s'est enrichie depuis (transport, Bourse, DSN…) ; les trois d'origine restent avec leur statut
+  const opt = chs.modules.filter((m) => m.categorie === 'optionnel').map((m) => [m.code, m.statut]);
+  for (const x of [['portail_proches', 'disponible'], ['messagerie_securisee', 'disponible'], ['appels_video', 'etude']]) assert.ok(opt.some((o) => o[0] === x[0] && o[1] === x[1]), x[0]);
   RESULTATS.sh.catalogue = { hopital: hop.modules.map((m) => `${m.categorie}:${m.code}:${m.statut}`), chsld: chs.modules.map((m) => `${m.categorie}:${m.code}:${m.statut}`) };
   // Types futurs : prévus mais refusés ; modules non implémentés : jamais souscrits
   for (const type of ['maison_aines', 'rpa', 'ressource_intermediaire']) {
@@ -251,6 +253,8 @@ test('parcours CHSLD réels : peuplement par le personnel, places, contacts, dem
   const pl = (await api('era', 'GET', `/chsld/places?etablissement_id=${ids.era}`)).find((x) => x.etat === 'libre');
   d = await api('era', 'POST', `/chsld/demandes/${d.id}/action`, { action: 'proposer_place', lit_id: pl.id, version_lit: pl.version, version: d.version });
   d = await api('era', 'POST', `/chsld/demandes/${d.id}/action`, { action: 'accepter', version: d.version });
+  // Chambre prête confirmée par l'entretien avant l'admission (règle du 17 nov. 2026)
+  for (const t of (await api('era_entretien', 'GET', `/chsld/taches?etablissement_id=${ids.era}`)).filter((x) => x.lit_id === pl.id && ['preparation_chambre', 'entretien'].includes(x.type))) await api('era_entretien', 'POST', `/chsld/taches/${t.id}/statut`, { statut: 'faite', version: t.version });
   const res = (await api('era', 'GET', `/chsld/residents/${d.resident_id}`)).resident;
   await api('era', 'POST', `/chsld/residents/${res.id}/arrivee`, { version: res.version });
   assert.strictEqual((await api('era', 'GET', `/chsld/demandes?etablissement_id=${ids.era}&toutes=1`)).find((x) => x.id === d.id).statut, 'admise');
@@ -542,6 +546,9 @@ test('Sortie NSA : Hôpital B → CHSLD des Érables (demande, place, acceptatio
   // 6. Départ confirmé par l'hôpital : le lit part au nettoyage (tableau des lits), le statut NSA prend fin ; second clic sans effet
   s = (await api('b', 'GET', `/nsa/orientations-chsld?etablissement_id=${L.B}`)).find((x) => x.id === dh.id);
   await refuse('era', 'POST', `/nsa/orientations-chsld/${dh.id}/depart`, { version: s.version }, 403);
+  // Place confirmée avec l'usager ou la famille et départ organisé avant le départ (règle du 16 nov. 2026)
+  await api('b', 'POST', `/nsa/orientations-chsld/${dh.id}/confirmer-place`, { depart_prevu_le: new Date(Date.now() + 3600000).toISOString(), transport_mode: 'ambulance', usager_famille_d_accord: true });
+  s = (await api('b', 'GET', `/nsa/orientations-chsld?etablissement_id=${L.B}`)).find((x) => x.id === dh.id);
   await api('b', 'POST', `/nsa/orientations-chsld/${dh.id}/depart`, { version: s.version });
   const apres = (await poolPilote.query('SELECT etat, patient_ref, nsa_depuis FROM lits WHERE id = $1', [lit.id])).rows[0];
   assert.deepStrictEqual([apres.etat, apres.patient_ref, apres.nsa_depuis], ['nettoyage', null, null]);
@@ -549,6 +556,9 @@ test('Sortie NSA : Hôpital B → CHSLD des Érables (demande, place, acceptatio
   assert.ok(!(await api('b', 'GET', `/nsa?etablissement_id=${L.B}`)).lits.some((l) => l.id === lit.id), 'plus dans la liste NSA');
   assert.ok((await notifs('era', ids.era)).some((n) => n.code === 'nsa_depart' && n.vars.numero === dh.numero));
   // 7. Le CHSLD confirme l'arrivée : résident présent, demande admise, l'hôpital le voit
+  res = (await api('era', 'GET', `/chsld/residents/${res.id}`)).resident;
+  // Chambre prête confirmée par l'entretien (règle du 17 nov. 2026)
+  for (const t of (await api('era_entretien', 'GET', `/chsld/taches?etablissement_id=${ids.era}`)).filter((y) => y.lit_id === res.lit_id && ['preparation_chambre', 'entretien'].includes(y.type))) await api('era_entretien', 'POST', `/chsld/taches/${t.id}/statut`, { statut: 'faite', version: t.version });
   res = (await api('era', 'GET', `/chsld/residents/${res.id}`)).resident;
   res = await api('era', 'POST', `/chsld/residents/${res.id}/arrivee`, { version: res.version });
   assert.strictEqual(res.statut, 'present');
@@ -1000,7 +1010,9 @@ test('parcours final : CHSLD A → Hôpital B → CHSLD A, formulaire, orientati
   const litResident = (await api('era', 'GET', `/chsld/residents/${x.id}`)).resident.lit_id;
   // D. Entretien : confirme son intervention sans dossier ni tableau de bord ; propre ne libère jamais la place
   for (const chemin of [`/chsld/accueil?etablissement_id=${ids.era}`, `/chsld/residents?etablissement_id=${ids.era}`, `/chsld/residents/${x.id}`, `/coordinations?etablissement_id=${ids.era}`, `/chsld/indicateurs?etablissement_id=${ids.era}`, `/journal?etablissement_id=${ids.era}`]) await refuse('era_entretien', 'GET', chemin, null, 403, 'role_entretien');
-  await refuse('era_entretien', 'POST', '/copilote/question', { etablissement_id: ids.era, question: 'Où est Jean Dupont ?' }, 403, 'role_entretien');
+  // OG limité pour l'entretien (cahier ultime) : chambres, tâches et messages seulement ; aucune information sur un résident
+  { const r = await appel('era_entretien', 'POST', '/copilote/question', { etablissement_id: ids.era, question: 'Où est Jean Dupont ?' });
+    assert.strictEqual(r.statut, 200); assert.ok(!/Dupont|R-\d{5}|chambre \d/.test(r.corps.reponse), r.corps.reponse); assert.match(r.corps.reponse, /pas accessibles à votre rôle/); }
   await refuse('era_entretien', 'POST', `/coordinations/${ret.id}/action`, { etablissement_id: ids.era, action: 'reintegrer', version: ret.version }, 403, 'role_entretien');
   const vuesEnt = await api('era_entretien', 'GET', `/chsld/taches?etablissement_id=${ids.era}`);
   const tacheRetour = vuesEnt.filter((t) => t.lit_id === litResident);
@@ -1233,7 +1245,7 @@ test('phase 2 — portail des proches : activé depuis SH, invitation, accès li
       assert.strictEqual((await sit()).retour_prevu_le, null, 'un retour proposé n’est pas annoncé');
       r = await act('era', ids.era, r.id, { action: 'accepter', version: r.version });
       s = await sit(); assert.ok(s.retour_prevu_le); assert.ok(s.parcours[3].fait);
-      for (const ta of (await api('era', 'GET', `/chsld/taches?etablissement_id=${ids.era}`)).filter((y) => y.lit_id === lit.lit_id)) await api('era', 'POST', `/chsld/taches/${ta.id}/statut`, { statut: 'faite', version: ta.version });
+      for (const ta of (await api('era', 'GET', `/chsld/taches?etablissement_id=${ids.era}`)).filter((y) => y.lit_id === lit.lit_id)) await api('era_entretien', 'POST', `/chsld/taches/${ta.id}/statut`, { statut: 'faite', version: ta.version });
       r = await act('era', ids.era, r.id, { action: 'verifier_chambre', version: r.version });
       r = await act('a', L.A, r.id, { action: 'confirmer_depart', version: r.version });
       s = await sit(); assert.strictEqual(s.statut, 'retour_en_route'); assert.ok(s.depuis);
@@ -1345,7 +1357,8 @@ test('audit de sécurité : attaques automatiques sur toutes les routes, isolati
   assert.deepStrictEqual(ouvertes, [], 'routes ouvertes sans session');
   assert.doesNotMatch((await brut(null, 'GET', '/public')).texte, /KEY|secret|mot_de_passe"|DATABASE|token/i, 'réglages publics sans secret');
   // 2. Rôle entretien : tout est refusé hors de sa liste fermée
-  const ENTRETIEN = /^(GET \/(moi|nettoyage|meteo|og\/configuration|chsld\/taches|chsld\/places)|POST \/(deconnexion|nettoyage\/:|lits\/:|civieres\/:|chsld\/taches\/:)|(PUT|POST|GET|DELETE) \/moi\/)/;
+  // Ajouts voulus : formation (21 nov.), Arrimo Connect interne (21 nov.), Mes tâches (22 nov.)
+  const ENTRETIEN = /^(GET \/(moi|nettoyage|meteo|og\/configuration|chsld\/taches|chsld\/places|formation\/(moi|aide|superutilisateurs)|messagerie\/(fils|annuaire|annonces)|taches\/miennes)|POST \/(deconnexion|nettoyage\/:|lits\/:|civieres\/:|chsld\/taches\/:)|(PUT|POST|GET|DELETE) \/moi\/)/;
   const fuites = [];
   for (const rt of routes.filter((x) => !ENTRETIEN.test(x) && !/ \/(deconnexion|moi\b)/.test(x) && !PUBLIQUES.has(x))) {
     const [m, c] = rt.split(' ');
@@ -1459,7 +1472,9 @@ test('audit de sécurité : attaques automatiques sur toutes les routes, isolati
     assert.ok(routesSh.length > 150, `${routesSh.length} routes SH`);
     const brutSh = async (jeton, m, c) => { const r = await fetch(`${baseSh}/api${c}`, { method: m, headers: { 'Content-Type': 'application/json', ...(jeton ? { Authorization: `Bearer ${jeton}` } : {}) }, body: m === 'GET' ? undefined : '{}' }); return { statut: r.status, texte: await r.text() }; };
     // Appairage d'un serveur : public, protégé par le code à usage unique (empreinte, 15 min) et limité à 10 essais par 15 min et par adresse
-    const SH_PUBLIQUES = new Set(['POST /serveurs/appairage', 'GET /sante', 'POST /connexion', 'POST /connexion/2fa', 'POST /invitations/consommer', 'GET /connexion/configuration', 'POST /mot-de-passe/demander', 'POST /mot-de-passe/reinitialiser']);
+    const SH_PUBLIQUES = new Set(['POST /serveurs/appairage', 'GET /sante', 'POST /connexion', 'POST /connexion/2fa', 'POST /invitations/consommer', 'GET /connexion/configuration', 'POST /mot-de-passe/demander', 'POST /mot-de-passe/reinitialiser',
+      // Réponse à une invitation de formation : lien à jeton à usage unique (comme la réinitialisation du mot de passe)
+      'POST /formation-reponse/lire', 'POST /formation-reponse/repondre']);
     const chemin = (c) => c.replace(/:[a-zA-Z_]+/g, '1');
     const ouvertesSh = [];
     for (const rt of routesSh) { const [m, c] = rt.split(' '); const r = await brutSh(null, m, chemin(c)); assert.ok(r.statut < 500 && r.statut !== 429, `SH ${rt} → ${r.statut} ${r.texte.slice(0, 100)}`); if (r.statut < 400 && !SH_PUBLIQUES.has(rt)) ouvertesSh.push(`${rt} → ${r.statut}`); }
@@ -1537,7 +1552,7 @@ test('transferts multiples : CHSLD → A → B → C → CHSLD, puis 2e et 3e ho
   const retourner = async (qui, h) => {
     let r = await api(qui, 'POST', `/coordinations/${h.id}/retour`, { retour_prevu_le: new Date(Date.now() + 3600000).toISOString() });
     r = await act('era', ids.era, r.id, { action: 'accepter', version: r.version });
-    for (const ta of (await api('era', 'GET', `/chsld/taches?etablissement_id=${ids.era}`)).filter((y) => y.lit_id === litAvant && ['a_faire', 'en_cours'].includes(y.statut))) await api('era', 'POST', `/chsld/taches/${ta.id}/statut`, { statut: 'faite', version: ta.version });
+    for (const ta of (await api('era', 'GET', `/chsld/taches?etablissement_id=${ids.era}`)).filter((y) => y.lit_id === litAvant && ['a_faire', 'en_cours'].includes(y.statut))) await api('era_entretien', 'POST', `/chsld/taches/${ta.id}/statut`, { statut: 'faite', version: ta.version });
     r = await act('era', ids.era, r.id, { action: 'verifier_chambre', version: r.version });
     r = await act(qui, H[qui], r.id, { action: 'confirmer_depart', version: r.version });
     r = await act('era', ids.era, r.id, { action: 'confirmer_arrivee', version: r.version });
@@ -1616,7 +1631,7 @@ async function reintegrerApres(r, x) {
   const act = (qui, etab, id, corps) => api(qui, 'POST', `/coordinations/${id}/action`, { etablissement_id: etab, ...corps });
   r = await act('era', ids.era, r.id, { action: 'accepter', version: r.version });
   const lit = (await api('era', 'GET', `/chsld/residents/${x.id}`)).resident.lit_id;
-  for (const ta of (await api('era', 'GET', `/chsld/taches?etablissement_id=${ids.era}`)).filter((y) => y.lit_id === lit)) await api('era', 'POST', `/chsld/taches/${ta.id}/statut`, { statut: 'faite', version: ta.version });
+  for (const ta of (await api('era', 'GET', `/chsld/taches?etablissement_id=${ids.era}`)).filter((y) => y.lit_id === lit)) await api('era_entretien', 'POST', `/chsld/taches/${ta.id}/statut`, { statut: 'faite', version: ta.version });
   r = await act('era', ids.era, r.id, { action: 'verifier_chambre', version: r.version });
   r = await act('b', L.B, r.id, { action: 'confirmer_depart', version: r.version });
   r = await act('era', ids.era, r.id, { action: 'confirmer_arrivee', version: r.version });
@@ -1832,7 +1847,8 @@ test('écrans : transfert d’hôpital au bouton, nettoyage sous précautions, r
   try {
     for (const [nom, vp] of [['ordinateur', { width: 1366, height: 900 }], ['tablette', { width: 820, height: 1180 }], ['telephone', { width: 390, height: 844 }]]) {
       const era = await ouvrir('era', E, vp); await aller(era, 'c-taches', '#registre'); await era.waitForSelector('#famille'); await era.waitForSelector('#visites'); await era.waitForSelector('#activites'); await sansDebord(era, `${nom} registre`);
-      await aller(era, 'c-accueil', '#ch-accueil-sup'); await era.waitForSelector('#messages-familles'); await sansDebord(era, `${nom} accueil`);
+      // Accueil universel : les communications des proches sont dans un volet compact, ouvert comme le ferait l'utilisateur
+      await aller(era, 'c-accueil', '#v-c-accueil .acc-kpis'); await era.waitForSelector('#ch-comm'); await era.evaluate(() => { document.querySelector('#ch-comm').open = true; }); await era.waitForSelector('#messages-familles'); await sansDebord(era, `${nom} accueil`);
       // Répondre à un message de famille depuis l'accueil, réellement, au clic
       if (nom === 'ordinateur') {
         const k = (await poolPilote.query(`SELECT a.contact_id, a.resident_id FROM proches_acces a WHERE a.revoque_le IS NULL AND a.etablissement_id = $1 LIMIT 1`, [E])).rows[0];
@@ -2085,7 +2101,7 @@ test('chambre prête : l’entretien la déclare ; personne n’est admis avant 
   let r = await api('b', 'POST', `/coordinations/${co.id}/retour`, { retour_prevu_le: new Date(Date.now() + 3600000).toISOString() });
   r = await act('era', E, r.id, { action: 'accepter', version: r.version });
   const lit = (await api('era', 'GET', `/chsld/residents/${x.id}`)).resident.lit_id;
-  for (const t of (await api('era', 'GET', `/chsld/taches?etablissement_id=${E}`)).filter((y) => y.lit_id === lit && y.type !== 'preparation_chambre')) await api('era', 'POST', `/chsld/taches/${t.id}/statut`, { statut: 'faite', version: t.version });
+  for (const t of (await api('era', 'GET', `/chsld/taches?etablissement_id=${E}`)).filter((y) => y.lit_id === lit && y.type !== 'preparation_chambre')) await api('era_entretien', 'POST', `/chsld/taches/${t.id}/statut`, { statut: 'faite', version: t.version });
   const [tp] = await prep(lit); assert.ok(tp, 'préparation de la chambre pour le retour');
   assert.strictEqual((await q('SELECT chambre_verifiee_le FROM coordinations WHERE id = $1', [r.id]))[0].chambre_verifiee_le, null);
   await api('era_entretien', 'POST', `/chsld/taches/${tp.id}/statut`, { statut: 'faite', version: tp.version });
@@ -2294,7 +2310,7 @@ test('écrans Arrimo Famille : créer un compte, demander un rattachement, valid
     await era.addInitScript(({ jeton, id }) => { localStorage.setItem('arrimo-token', jeton); localStorage.setItem('arrimo-ctx', String(id)); localStorage.setItem('arrimo-langue', 'fr'); }, { jeton: sessions.era, id: E });
     await era.goto(basePilote); await era.waitForSelector('body[data-pret="1"]');
     if (await era.locator('#b-premiers-pas-ok').isVisible().catch(() => false)) await era.click('#b-premiers-pas-ok');
-    await era.evaluate(() => document.querySelector('#onglets button[data-v="c-accueil"]').click()); await era.waitForSelector('#rattachements');
+    await era.evaluate(() => document.querySelector('#onglets button[data-v="c-accueil"]').click()); await era.waitForSelector('#ch-comm'); await era.evaluate(() => { document.querySelector('#ch-comm').open = true; }); await era.waitForSelector('#rattachements');
     const id = (await poolPilote.query(`SELECT max(d.id) id FROM proches_demandes_rattachement d JOIN proches_comptes k ON k.id = d.compte_id WHERE k.courriel = 'ecran.proche@exemple.invalid'`)).rows[0].id;
     await era.click(`[data-rat-examiner="${id}"]`); await era.waitForSelector('#rat-res');
     await era.selectOption('#rat-res', String(p.dupont)); await era.fill('#rat-cpar', 'Jean Dupont (fictif)'); await era.click('#modale button.pri');
@@ -2439,7 +2455,7 @@ test('captures : formulaire SH (type puis modules), liste SH, écrans CHSLD rée
       await pg.addInitScript(({ jeton, id }) => { localStorage.setItem('arrimo-token', jeton); localStorage.setItem('arrimo-ctx', String(id)); localStorage.setItem('arrimo-langue', 'fr'); }, { jeton: sessions.era, id: ids.era });
       await pg.goto(basePilote); await pg.waitForSelector('body[data-pret="1"]');
       if (await pg.locator('#b-premiers-pas-ok').isVisible().catch(() => false)) await pg.click('#b-premiers-pas-ok');
-      await pg.waitForSelector('#v-c-accueil .ch-kpis');
+      await pg.waitForSelector('#v-c-accueil .acc-kpis');
       assert.strictEqual(await pg.locator('#onglets button[data-v="urgence"]').isHidden(), true, 'aucun onglet d’urgence en CHSLD');
       await pg.screenshot({ path: `${dossier}/chsld-accueil-${nom}.png`, fullPage: nom === 'ordinateur' });
       if (nom === 'ordinateur') {
@@ -2782,11 +2798,12 @@ test('démonstration : un seul compte par CHSLD (administrateur), six comptes d�
         await pg.goto(basePilote); await pg.waitForSelector('body[data-pret="1"]');
         if (await pg.locator('#b-premiers-pas-ok').isVisible().catch(() => false)) await pg.click('#b-premiers-pas-ok');
         if (theme === 'sombre') await pg.evaluate(() => { document.documentElement.dataset.theme = 'sombre'; });
-        await pg.waitForSelector('#v-c-accueil .ch-kpis');
+        await pg.waitForSelector('#v-c-accueil .acc-kpis');
         assert.strictEqual(await pg.evaluate(() => document.documentElement.dataset.typeEtab), 'chsld');
         assert.match(await pg.evaluate(() => getComputedStyle(document.querySelector('.entete-app')).backgroundImage), /linear-gradient/, 'barre CHSLD');
         assert.strictEqual(await pg.locator('#v-c-accueil .ch-kpi').count(), 12, '7 capacités et 5 résidents');
-        assert.ok(await pg.locator('#v-c-accueil .ch-situation').isVisible() && await pg.locator('#v-c-accueil .ch-actions').isVisible());
+        // Accueil universel (cahier directeur) : vue d'ensemble compacte et indicateurs à la place de l'ancien bandeau de situation
+        assert.ok(await pg.locator('#v-c-accueil .acc-vue').isVisible() && await pg.locator('#v-c-accueil .acc-kpis').isVisible());
         assert.ok(await pg.locator('#og-open').isVisible(), 'OG visible');
         assert.ok(await pg.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), `${nom} ${theme} : aucun débordement horizontal`);
         await pg.screenshot({ path: `${dossier}/chsld-theme-accueil-${nom}-${theme}.png`, fullPage: true });

@@ -168,6 +168,8 @@ async function expliquer(pool, u, numero, langue = 'fr') {
   let f; try { f = await fil(pool, u, t[1], r.id); } catch (e) { if (e.statut === 404 || e.statut === 403) return null; throw e; }
   const h = (d) => new Date(d).toLocaleString(en ? 'en-CA' : 'fr-CA', { timeZone: 'America/Toronto', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
   const lignes = [en ? `Path ${f.parcours} (${f.objets.map((o) => o.numero).join(' → ')}):` : `Parcours ${f.parcours} (${f.objets.map((o) => o.numero).join(' → ')}) :`];
+  // Coordination CHSLD : référence du résident (jamais son identité), pour relier le parcours à la bonne personne
+  if (t[1] === 'coordination') { const ref = (await pool.query('SELECT resident_ref FROM coordinations WHERE id = $1', [r.id])).rows[0]?.resident_ref; if (ref) lignes[0] += en ? ` Resident ${ref}.` : ` Résident ${ref}.`; }
   for (const o of f.objets) lignes.push(`  ${o.numero} · ${o.statut}${o.lieu ? ` · ${o.lieu}` : ''}`);
   if (!f.evenements.length) lignes.push(en ? 'No time recorded in the Clock for this path yet.' : 'Aucune heure enregistrée dans l’Horloge pour ce parcours.');
   for (const e of f.evenements) lignes.push(`• ${h(e.heure)} · ${e.numero} · ${e.etape}${e.corrigee ? (en ? ' (corrected)' : ' (corrigée)') : ''}${e.lieu ? ` · ${e.lieu}` : ''}`);
