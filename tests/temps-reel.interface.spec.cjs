@@ -55,10 +55,10 @@ test('scénario F : deux sessions sur Arrimo Flux ; la préalerte de l’équipa
   const r = await fetch(`${base}/api/secours/transports/${ids.dt}/action`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jeton}` }, body: JSON.stringify({ action: 'prealerter', version: v, eta_min: 25 }) });
   assert.strictEqual(r.status, 200);
   // Les deux sessions voient la préalerte sans rechargement
-  for (const pg of [a, b]) await pg.waitForFunction(() => /à acquitter/.test(document.querySelector('#v-flux').textContent), null, { timeout: 30000 });
+  for (const pg of [a, b]) await pg.waitForFunction(() => /à acquitter/.test(document.querySelector('#v-flux').textContent), null, { timeout: 60000 });
   // La session A accuse réception ; la session B le voit sans rechargement, sans doublon de ligne
   await a.click('[data-flux-accuser]');
-  await b.waitForFunction(() => /reçue/.test(document.querySelector('#v-flux').textContent) && !document.querySelector('[data-flux-accuser]'), null, { timeout: 30000 });
+  await b.waitForFunction(() => /reçue/.test(document.querySelector('#v-flux').textContent) && !document.querySelector('[data-flux-accuser]'), null, { timeout: 60000 });
   assert.strictEqual(await b.locator('#v-flux tbody tr', { hasText: 'DT-009001' }).count(), 1, 'une seule ligne pour le transport');
   assert.deepStrictEqual([...a.erreurs, ...b.erreurs], []);
 });

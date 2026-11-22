@@ -4,7 +4,7 @@
   const TXT = {
     fr: { titre: 'Arrimo Connect', fermer: 'Fermer', mes: 'Mes communications', contacter: 'Contacter l’administration', nouveau: 'Nouveau message', annonces: 'Annonces',
       aucun: 'Aucune communication pour le moment.', sujet: 'Sujet', categorie: 'Catégorie', priorite: 'Priorité', message: 'Message', envoyer: 'Envoyer', destinataire: 'Destinataire',
-      normale: 'Normale', haute: 'Haute', envoye: 'Message envoyé.', repondre: 'Répondre', retour: '← Retour', administration: 'Administration', non_lus: '{n} non lu(s)',
+      normale: 'Normale', haute: 'Haute', envoye: 'Message envoyé.', repondre: 'Répondre', retour: '← Retour', administration: 'Administration', non_lus: 'non lus : {n}',
       st: { ouverte: 'Ouverte', en_cours: 'En cours', resolue: 'Résolue' }, marquer: 'Marquer', publier: 'Publier une annonce', titre_a: 'Titre', publie: 'Annonce publiée.', aucune_a: 'Aucune annonce.',
       urgence: 'Pour une urgence médicale, utilisez les canaux d’urgence officiels : Arrimo Connect ne les remplace pas.',
       cat: { message: 'Message', materiel: 'Demande de matériel', technique: 'Problème technique', administratif: 'Question administrative', planning: 'Problème de planning', soutien: 'Demande de soutien', signalement: 'Signalement opérationnel', autre: 'Autre demande' } },
