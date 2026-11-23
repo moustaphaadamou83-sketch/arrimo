@@ -1,6 +1,13 @@
 'use strict';
 /** Ouvre un écran par la navigation principale comme un utilisateur : sur téléphone, le menu tiroir est d'abord ouvert. */
 async function allerOnglet(page, vue) {
+  // Journal et support sont volontairement accessibles depuis le centre de paramètres.
+  if (await page.locator(`#onglets button[data-v="${vue}"].hors-menu`).count()) {
+    await allerOnglet(page, 'params');
+    await page.locator(`.params-nav [data-param-nav="${vue}"]:visible`).last().click();
+    await page.waitForFunction((v) => document.querySelector(`#onglets button[data-v="${v}"]`)?.getAttribute('aria-selected') === 'true', vue);
+    return;
+  }
   // Navigation par espaces (22 nov. 2026) : l'espace du module est ouvert d'abord, comme le ferait un utilisateur
   await page.evaluate((v) => window.ArrimoEspaces?.reveler(v), vue).catch(() => {});
   const menu = page.locator('#b-nav');

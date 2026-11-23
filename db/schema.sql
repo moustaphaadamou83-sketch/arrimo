@@ -950,7 +950,7 @@ DO $$ BEGIN
 END $$;
 ALTER TABLE coordinations DROP CONSTRAINT IF EXISTS coordinations_incident_check;
 ALTER TABLE coordinations ADD CONSTRAINT coordinations_incident_check
-  CHECK (incident IN ('retour_retarde', 'chambre_indisponible', 'informations_manquantes', 'changement_hopital', 'hospitalisation_prolongee', 'arrivee_retardee'));
+  CHECK (incident IN ('retour_retarde', 'chambre_indisponible', 'informations_manquantes', 'changement_hopital', 'hospitalisation_prolongee', 'arrivee_retardee', 'arrivee_anticipee'));
 CREATE TABLE IF NOT EXISTS coordination_etapes (
   id                 bigserial PRIMARY KEY,
   coordination_id    int  NOT NULL REFERENCES coordinations(id),
