@@ -5,6 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { allerOnglet } = require('./aide-navigation.cjs');
 const cible = process.env.PRIORITES_UI_DATABASE_URL;
 test('priorités : validation humaine depuis Admissions, ordinateur/tablette/mobile', { skip: !cible && 'PRIORITES_UI_DATABASE_URL absent : navigateur non testé' }, async (t) => {
   const url = new URL(cible);
@@ -48,7 +49,7 @@ test('priorités : validation humaine depuis Admissions, ordinateur/tablette/mob
         const page = await contexte.newPage(); const erreurs = []; page.on('pageerror', (e) => erreurs.push(e.message));
         await page.goto(base); await page.fill('#c-email', 'tremblay@demo.arrimo'); await page.fill('#c-mdp', process.env.DEMO_MOT_DE_PASSE);
         await page.click('#f-connexion button[type=submit]'); await page.waitForSelector('body[data-pret="1"]');
-        await page.click('[data-v="admissions"]');
+        await allerOnglet(page, 'admissions');
         const carte = page.locator('#v-admissions .fiche').filter({ hasText: ref });
         await carte.getByRole('button', { name: 'Valider la priorité' }).click();
         assert.equal((await pool.query('SELECT priorite_validee_par FROM demandes_admission WHERE id=$1', [d.id])).rows[0].priorite_validee_par, null);
