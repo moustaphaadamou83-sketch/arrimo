@@ -60,12 +60,22 @@ async function ressources(pool, hop, regionId) {
   }
 }
 
+/* Véhicules réservés à la simulation (23 nov. 2026) : jamais ceux des équipages de démonstration (DM-101 à DM-103). Sinon une préalerte
+   entretenue en permanence occupait un véhicule utilisé par une personne et faussait ses parcours. */
+const SIMULATION = ['SIM-01', 'SIM-02', 'SIM-03'];
+async function unitesSimulation(c) {
+  const org = (await c.query("SELECT id FROM organisations_secours WHERE 'ambulance' = ANY(profils) AND actif ORDER BY id LIMIT 1")).rows[0];
+  if (!org) return;
+  for (const n of SIMULATION) await c.query("INSERT INTO unites_secours (organisation_id, numero, plaque) VALUES ($1, $2, 'fictive') ON CONFLICT (organisation_id, numero) DO NOTHING", [org.id, n]);
+}
 async function unitesLibres(c) {
   return (await c.query(`SELECT u.id, u.organisation_id, u.numero FROM unites_secours u JOIN organisations_secours o ON o.id = u.organisation_id
-    WHERE 'ambulance' = ANY(o.profils) AND u.actif AND NOT EXISTS (SELECT 1 FROM passages_chrono p WHERE p.unite_id = u.id AND p.statut IN ('detecte', 'a_la_porte'))
+    WHERE 'ambulance' = ANY(o.profils) AND u.actif AND u.numero = ANY($1) AND NOT EXISTS (SELECT 1 FROM passages_chrono p WHERE p.unite_id = u.id AND p.statut IN ('detecte', 'a_la_porte'))
       AND NOT EXISTS (SELECT 1 FROM prealertes pa WHERE pa.unite_id = u.id AND pa.statut IN ('envoyee', 'recue', 'consultee', 'prise_en_compte', 'preparation', 'preparation_terminee'))
-    ORDER BY u.id`)).rows;
+    ORDER BY u.id`, [SIMULATION])).rows;
 }
+/** Heures plausibles et variées d'un passage simulé, stables pour un même numéro (aucune série identique). */
+const dureesSimulees = (n) => { const x = (Number(n) * 7919) % 97; const h12 = 2 + (x % 5); const h13 = h12 + 4 + (x % 7); const h14 = h13 + 6 + (x % 13); return [h12, h13, h14, h14 + 7 + (x % 11)]; };
 const minutes = (m) => new Date(Date.now() + m * 60000);
 async function passage(c, hop, u, { h11, etapes, termine }) {
   const numero = `CH-${String((await c.query("SELECT nextval('passage_chrono_seq') AS n")).rows[0].n).padStart(6, '0')}`;
@@ -81,12 +91,19 @@ async function passage(c, hop, u, { h11, etapes, termine }) {
 async function chrono(pool, hop) {
   if ((hop.modules || {}).chrono !== true) return;
   await transaction(pool, async (c) => {
-    // 1. Une ambulance laissée à la porte plus de 50 min est clôturée avec des heures plausibles (la démo ne s'encombre pas)
+    await unitesSimulation(c);
+    // 0. Anciennes préalertes de simulation sur les véhicules des équipages : closes (elles n'ont jamais correspondu à un parcours réel)
+    await c.query(`UPDATE prealertes SET statut = 'cloturee', cloturee_le = now(), version = version + 1, modifie_le = now() WHERE cle_idempotence LIKE $1
+      AND statut NOT IN ('cloturee', 'annulee', 'remplacee') AND unite_id NOT IN (SELECT id FROM unites_secours WHERE numero = ANY($2))`, [`${MARQUE}%`, SIMULATION]);
+    // 1. Une ambulance de simulation (passage sans position ni clic : créé ici) laissée à la porte plus de 50 min est clôturée avec des heures plausibles (la démo ne s'encombre pas)
     const vieux = (await c.query(`SELECT p.id, h.heure AS h11 FROM passages_chrono p JOIN v_horodatages_courants h ON h.objet = 'passage_chrono' AND h.objet_id = p.id AND h.etape = 'H11'
-      WHERE p.etablissement_id = $1 AND p.statut = 'a_la_porte' AND h.heure < now() - interval '50 minutes' FOR UPDATE OF p`, [hop.id])).rows;
+      JOIN unites_secours u ON u.id = p.unite_id
+      WHERE p.etablissement_id = $1 AND p.statut = 'a_la_porte' AND h.heure < now() - interval '50 minutes' AND p.source = 'position' AND p.premiere_position_le IS NULL
+        AND (u.numero = ANY($2) OR p.cree_le < now() - interval '50 minutes') FOR UPDATE OF p`, [hop.id, SIMULATION])).rows;
     for (const v of vieux) {
       const faites = (await c.query("SELECT etape FROM v_horodatages_courants WHERE objet = 'passage_chrono' AND objet_id = $1", [v.id])).rows.map((x) => x.etape);
-      for (const [e, m] of [['H12', 4], ['H13', 11], ['H14', 26], ['H15', 38]]) if (!faites.includes(e)) await horloge.marquer(c, { objet: 'passage_chrono', objetId: v.id, etape: e, heure: new Date(new Date(v.h11).getTime() + m * 60000), source: 'systeme' });
+      const d = dureesSimulees(v.id);
+      for (const [e, m] of [['H12', d[0]], ['H13', d[1]], ['H14', d[2]], ['H15', d[3]]]) if (!faites.includes(e)) await horloge.marquer(c, { objet: 'passage_chrono', objetId: v.id, etape: e, heure: new Date(new Date(v.h11).getTime() + m * 60000), source: 'systeme' });
       await c.query("UPDATE passages_chrono SET statut = 'termine', version = version + 1, modifie_le = now() WHERE id = $1", [v.id]);
     }
     let libres = await unitesLibres(c);

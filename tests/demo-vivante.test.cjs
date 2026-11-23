@@ -41,6 +41,9 @@ test('démonstration : scénarios en place, rejouables, heures recalées ; régi
   assert.deepStrictEqual(r.map((x) => x.type_local_code).sort(), ['hospitalisation_domicile', 'ri', 'rpa', 'sante_mentale', 'soins_palliatifs']);
   assert.ok(r.some((x) => x.capacites.includes('leve_personne')) && r.some((x) => x.capacites.includes('unite_securisee')) && r.some((x) => x.capacites.includes('oxygene')));
   assert.strictEqual((await pool.query("SELECT count(*)::int n FROM etablissements WHERE region_id = (SELECT id FROM regions WHERE code = 'CA-QC-06')")).rows[0].n, 0);
+  // La simulation n'utilise jamais les véhicules des équipages
+  assert.strictEqual(await n("SELECT count(*)::int n FROM passages_chrono p JOIN unites_secours u ON u.id = p.unite_id WHERE p.etablissement_id = $1 AND u.numero NOT LIKE 'SIM-%'"), 0);
+  assert.strictEqual(await n("SELECT count(*)::int n FROM prealertes p JOIN unites_secours u ON u.id = p.unite_id WHERE p.destination_id = $1 AND u.numero NOT LIKE 'SIM-%'"), 0);
   // Une ambulance laissée plus de 50 min à la porte est clôturée et remplacée
   await pool.query("UPDATE horodatages SET heure = heure - interval '40 minutes' WHERE objet = 'passage_chrono' AND objet_id = (SELECT id FROM passages_chrono WHERE statut = 'a_la_porte')").catch(() => {});
 });

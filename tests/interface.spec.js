@@ -447,7 +447,8 @@ for (const L of LARGEURS) {
     await r.click('#b-demo-zero');
     await r.waitForSelector('#modale:not([hidden])');
     await r.click('#modale .btn.pri');
-    await r.waitForSelector('#ecran-connexion:not([hidden])');
+    // La remise à zéro complète prend environ 30 s sur ce serveur (mesuré le 23 nov. 2026) : délai à la mesure de l'opération
+    await r.waitForSelector('#ecran-connexion:not([hidden])', { timeout: 150000 });
     assert.match(await r.textContent('#c-erreur'), /remise à zéro/);
     const recree = (await pool.query(`SELECT count(*)::int AS n FROM utilisateurs WHERE email LIKE 'essai.%'`)).rows[0].n;
     assert.strictEqual(recree, 0, 'le compte créé pendant la démo a disparu');
