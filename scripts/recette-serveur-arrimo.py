@@ -278,7 +278,7 @@ def main():
         for nom, prefixe, variable, fichiers in suites:
             try:
                 base = creer(prefixe)
-                ok, texte = executer(nom, ['node','--test','--test-concurrency=1','--test-reporter=tap', *fichiers],
+                ok, texte = executer(nom, ['node','--test','--test-force-exit','--test-concurrency=1','--test-reporter=tap', *fichiers],
                                      env=dict(environnement_suite(test_env, nom), **{variable: url_base(base)}), cwd=application)
                 # Vérifier les résultats réels, pas seulement le code de sortie.
                 if not ok or not tap_valide(texte):
