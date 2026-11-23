@@ -63,6 +63,13 @@
   .secours .og-phrase { display: flex; gap: 8px; align-items: flex-start; background: rgba(21,152,149,.08); border-left: 4px solid #159895; border-radius: 8px; padding: 8px 10px; margin: 8px 0 10px; }
   .secours details.voir-carte { margin-top: 12px; } .secours details.voir-carte summary { display: inline-flex; align-items: center; min-height: 44px; font-size: 16px; cursor: pointer; list-style: none; }
   .secours details.voir-carte summary::-webkit-details-marker { display: none; }
+  .secours .crise-c { border-left: 6px solid #DC2626; padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; }
+  .secours .crise-c h2 { font-size: 17px; margin: 0; } .secours .crise-c p { margin: 0; font-size: 15px; } .secours .crise-c .btn { min-height: 44px; font-size: 16px; } .secours .crise-c details { flex: 1 1 100%; } .secours .crise-c summary { cursor: pointer; min-height: 24px; font-size: 15px; }
+  .secours .mission-active { border: 2px solid var(--principal); }
+  .secours .ma-dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap: 8px 16px; margin: 0 0 12px; } .secours .ma-dl dt { font-size: 14px; color: var(--texte-2-fond, #5B6B7F); } .secours .ma-dl dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+  .secours .ma-action { width: 100%; min-height: 64px; font-size: 20px; } .secours .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .secours .actions .btn { min-height: 44px; font-size: 15px; } .secours .actions .btn[aria-pressed="true"] { border-color: var(--principal); box-shadow: inset 0 0 0 1px var(--principal); }
+  .secours button.kpi-amb { font: inherit; background: var(--fond); color: var(--texte); cursor: pointer; text-align: left; } .secours .kpi-amb span { font-size: 14px; color: var(--texte-2-fond, #5B6B7F); }
   .secours .tuiles-c { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
   .secours .tuile-c { background: var(--carte); border: 1px solid var(--bordure); border-radius: var(--rayon-carte); padding: 12px 14px; }
   .secours .tuile-c .gros { color: var(--principal); display: block; }
@@ -93,7 +100,7 @@
   .secours .onglets-s button[aria-selected="true"] { color: #fff; font-weight: 700; border-bottom-color: #57C5B6; }
   .secours .onglets-s button:focus-visible { outline: 2px solid #57C5B6; outline-offset: -2px; }
   .secours .onglets-s .pastille-n { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 6px; border-radius: 10px; background: #57C5B6; color: #0B2A33; font-size: 12px; font-weight: 700; line-height: 20px; text-align: center; }
-  .secours main { max-width: 1240px; }
+  .secours main { max-width: 1600px; }
   :root[data-theme="sombre"] .secours .onglets-s { background: #08262E; }
   @media (max-width: 600px) { .secours .gros { font-size: 24px; } .secours .tete .contexte { display: none; }
     .secours .tete { padding: 8px 12px; gap: 6px; } .secours .tete h1 { font-size: 17px; } .secours .tete .sous-titre { font-size: 13px; } .secours .tete .marque img { width: 28px; height: 28px; }
