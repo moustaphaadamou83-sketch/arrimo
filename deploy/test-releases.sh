@@ -9,7 +9,8 @@ ROOT="$TMP/opt/arrimo"
 mkdir -p "$ROOT/releases/release-a" "$ROOT/releases/release-b"
 printf 'a\n' > "$ROOT/releases/release-a/version"
 printf 'b\n' > "$ROOT/releases/release-b/version"
-ln -s releases/release-b "$ROOT/previous"
+ln -s "$ROOT/releases/release-b" "$ROOT/previous"
+ln -s "$ROOT/releases/release-b" "$ROOT/current"
 cat > "$TMP/systemctl" <<'MOCK'
 #!/usr/bin/env bash
 set -e
@@ -30,6 +31,8 @@ exit 0
 MOCK
 chmod +x "$TMP/systemctl" "$TMP/curl"
 export TEST_ROOT="$ROOT" ARRIMO_SYSTEMCTL_BIN="$TMP/systemctl" ARRIMO_CURL_BIN="$TMP/curl"
+
+[[ "$("$DEPLOY_DIR/releases.sh" status "$ROOT")" == $'current=releases/release-b\nprevious=releases/release-b' ]]
 
 "$DEPLOY_DIR/releases.sh" activate "$ROOT" release-a arrimo-recette http://127.0.0.1/health
 [[ "$(readlink "$ROOT/current")" == releases/release-a ]]

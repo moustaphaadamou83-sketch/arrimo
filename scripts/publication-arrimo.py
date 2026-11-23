@@ -79,10 +79,14 @@ def url_copie(url, nom):
 
 
 def cible_lien(root):
-    root = pathlib.Path(root)
+    root = pathlib.Path(root).resolve(strict=True)
     if not (root / 'current').is_symlink(): raise Refus('Installation sans release immuable : arrêt')
     rel = os.readlink(root / 'current')
+    if pathlib.Path(rel).is_absolute():
+        try: rel = pathlib.Path(rel).relative_to(root).as_posix()
+        except ValueError: raise Refus('Pointeur de release hors périmètre') from None
     if not re.fullmatch(r'releases/[A-Za-z0-9._-]+', rel) or (root / rel).is_symlink() or not (root / rel).is_dir(): raise Refus('Pointeur de release invalide')
+    if (root / 'releases').is_symlink(): raise Refus('Répertoire de releases invalide')
     if (root / rel).resolve().parent != (root / 'releases').resolve(): raise Refus('Release hors périmètre')
     return rel
 
@@ -502,10 +506,11 @@ class Publication:
         self.sauver()
 
 
-def audit():
+def audit(selection):
     verifier_preuves()
     sortie={'commit_candidat':CANDIDAT,'mode':'audit_sans_ecriture','versions_locales':[],'aucune_migration':True,'aucun_deploiement':True}
     for t, root, service, hote in CIBLES:
+        if t not in selection: continue
         rel=cible_lien(root); sortie['versions_locales'].append({'environnement':t,'domaine':hote,'release_active':rel,'version_active':Publication.version(None,pathlib.Path(root)/rel),'service':service})
     print(json.dumps(sortie,ensure_ascii=False,indent=2))
 
@@ -516,7 +521,7 @@ def main():
     parser.add_argument('--cibles',default='demo,principal,sh');args=parser.parse_args()
     selection=[t for t, *_ in CIBLES if t in args.cibles.split(',')]
     if not selection or set(args.cibles.split(','))-{t for t, *_ in CIBLES}:raise Refus('Cibles inconnues')
-    if args.audit:audit();return 0
+    if args.audit:audit(selection);return 0
     if os.geteuid()!=0:raise Refus('Session SSH root autorisée requise')
     os.umask(0o077)
     # Verrou commun avec les autres exécutions de ce lanceur, gardé jusqu'au rapport final.

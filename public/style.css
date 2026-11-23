@@ -953,3 +953,10 @@ th.erp-triable[aria-sort="ascending"]::after { content: " \2191"; } th.erp-triab
   .acc-kpi-fiche dt,
   .acc-kpi-fiche dd { min-width: 0; overflow-wrap: anywhere; }
 }
+/* Urgences classées (hébergement) sur téléphone : le tableau devient une suite de cartes à la largeur de l'écran */
+@media (max-width: 700px) {
+  #v-c-urgences table.classe, #v-c-urgences table.classe tbody, #v-c-urgences table.classe tr { display: block; width: 100%; max-width: 100%; min-width: 0; }
+  #v-c-urgences table.classe thead { display: none; }
+  #v-c-urgences table.classe td { display: block; width: auto; min-width: 0; overflow-wrap: anywhere; white-space: normal; padding: 4px 0; text-align: left; }
+  #v-c-urgences table.classe tr { padding: 10px 0; border-bottom: 1px solid var(--bordure); }
+}

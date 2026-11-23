@@ -178,3 +178,20 @@ Aucune publication ou modification de production. Les résultats de recette ne p
 ### Correctif mobile en cours de validation
 
 Le débordement de la vue d’accueil mobile provient de la première colonne `max-content` de `.acc-kpi-fiche`, qui laisse un libellé KPI trop long dépasser du viewport. Une règle mobile borne les deux colonnes et autorise le retour à la ligne. Le rejeu du test téléphone s’est interrompu avec `Promise resolution is still pending`; cette correction reste à confirmer sur une exécution stable avant de fermer le volet interface.
+
+## Reprise immédiate après les corrections de Claude
+
+- Le correctif d’affichage des urgences classées sur téléphone est présent dans `public/style.css`. Le contrôle navigateur minimal de l’Accueil téléphone, sur 390 px et avec les zones défilantes autorisées exclues, donne `scrollWidth=390` et zéro élément visible hors viewport.
+- Les 238 contrôles locaux ont été rejoués et réussissent sans échec, test ignoré ou annulation.
+- Une base API fictive a été sauvegardée puis restaurée dans `arrimo_vnext_restore_final_20261123`. Le validateur a rejoué deux fois les quatre migrations de stabilisation, confirmé la conservation des lignes métier et contrôlé la présence des nouvelles colonnes et tables. Le dump fictif est `/tmp/arrimo-fictif-final.dump`.
+- La suite navigateur SH lancée sur base neuve n’a pas fourni de résultat de scénario. Node a terminé avec `Promise resolution is still pending but the event loop has already resolved` après 145 secondes. L’interface SH n’est donc pas validée.
+- Reste le rejeu de l’interface SH avec un montage de test corrigé et le contrôle final sur les environnements hébergés recette, SH et démo. Aucune publication n’a été faite.
+
+## Préparation de publication — 23 novembre
+
+- Le titulaire a autorisé l'étendue de publication, y compris la production. Aucune bascule n'a encore été exécutée.
+- L'audit en lecture seule a retrouvé trois cibles distinctes (démo, principal, SH), toutes sur `releases/restructuration-20261123`. Leurs empreintes applicatives servies sont identiques entre elles, mais différentes de l'arbre de travail actuel. Cela impose une candidate et une recette finales avant toute bascule.
+- Le lanceur historique est toujours épinglé à `98712dfb9b20c2b5ae21903a3c154da52bff5aa6` et aux preuves d'une ancienne recette ; il ne constitue pas la publication de la candidate actuelle. Son audit a été corrigé pour respecter `--cibles` et n'inspecter que les cibles demandées.
+- Les liens `current` réels sont absolus. Le lanceur de release et la sauvegarde complète les acceptent désormais seulement lorsqu'ils désignent une release directe sous le `releases/` de la même installation ; les chemins hors périmètre, releases symboliques et identifiants contenant des séparateurs restent refusés.
+- Vérifications de ces changements : 23 tests Python de publication réussis ; exercice shell d'activation atomique, panne simulée et retour arrière réussi ; `bash -n` et `git diff --check` réussis.
+- Le contrôle navigateur complet n'est pas encore vert sur cette candidate. Aucun déploiement recette, SH, démo ou production n'est donc attesté par ce point.

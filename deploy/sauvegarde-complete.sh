@@ -6,7 +6,7 @@ umask 077
 ROOT="${1:?Usage: sauvegarde-complete.sh ROOT SERVICE [DESTINATION]}"
 SERVICE="${2:?Service systemd requis}"
 DEST="${3:-/var/backups/$SERVICE/complet}"
-ROOT="$(cd "$ROOT" && pwd)"
+ROOT="$(cd "$ROOT" && pwd -P)"
 ENV_FILE="$ROOT/shared/.env"
 [ -r "$ENV_FILE" ] || ENV_FILE="$ROOT/.env"
 [ -r "$ENV_FILE" ] || { echo "Configuration privée absente sous $ROOT/shared/.env ou $ROOT/.env" >&2; exit 1; }
@@ -16,14 +16,24 @@ command -v pg_dump >/dev/null && command -v pg_restore >/dev/null || { echo "pg_
 
 if [ -L "$ROOT/current" ]; then
   ACTIVE="$(readlink "$ROOT/current")"
-  case "$ACTIVE" in releases/*) ;; *) echo "Pointeur current invalide." >&2; exit 1 ;; esac
-  [ -d "$ROOT/$ACTIVE" ] && [ ! -L "$ROOT/$ACTIVE" ] || { echo "Release active invalide." >&2; exit 1; }
+  case "$ACTIVE" in
+    releases/*) ;;
+    "$ROOT"/releases/*) ACTIVE="${ACTIVE#"$ROOT"/}" ;;
+    *) echo "Pointeur current invalide." >&2; exit 1 ;;
+  esac
+  [[ "$ACTIVE" =~ ^releases/[A-Za-z0-9._-]+$ ]] || { echo "Pointeur current invalide." >&2; exit 1; }
+  [ -d "$ROOT/$ACTIVE" ] && [ ! -L "$ROOT/$ACTIVE" ] && [ "$(cd -P "$ROOT/$ACTIVE" && pwd)" = "$(cd -P "$ROOT/releases" && pwd)/${ACTIVE#releases/}" ] || { echo "Release active invalide." >&2; exit 1; }
   ACTIVE_PATH="$ROOT/$ACTIVE"
   RELEASE_ID="${ACTIVE#releases/}"
   PREVIOUS="$(readlink "$ROOT/previous" 2>/dev/null || true)"
   if [ -n "$PREVIOUS" ]; then
-    case "$PREVIOUS" in releases/*) ;; *) echo "Pointeur previous invalide." >&2; exit 1 ;; esac
-    [ -d "$ROOT/$PREVIOUS" ] && [ ! -L "$ROOT/$PREVIOUS" ] || { echo "Release précédente invalide." >&2; exit 1; }
+    case "$PREVIOUS" in
+      releases/*) ;;
+      "$ROOT"/releases/*) PREVIOUS="${PREVIOUS#"$ROOT"/}" ;;
+      *) echo "Pointeur previous invalide." >&2; exit 1 ;;
+    esac
+    [[ "$PREVIOUS" =~ ^releases/[A-Za-z0-9._-]+$ ]] || { echo "Pointeur previous invalide." >&2; exit 1; }
+    [ -d "$ROOT/$PREVIOUS" ] && [ ! -L "$ROOT/$PREVIOUS" ] && [ "$(cd -P "$ROOT/$PREVIOUS" && pwd)" = "$(cd -P "$ROOT/releases" && pwd)/${PREVIOUS#releases/}" ] || { echo "Release précédente invalide." >&2; exit 1; }
   fi
 else
   # Première mise à jour d'une installation historique : sauvegarder la racine

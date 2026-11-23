@@ -10,7 +10,7 @@ usage() {
 ACTION="${1:-}"; ROOT="${2:-}"; RELEASE_ID="${3:-}"; SERVICE="${4:-}"; HEALTH_URL="${5:-}"
 [ -n "$ACTION" ] && [ -n "$ROOT" ] || usage
 case "$ACTION" in activate|rollback|status) ;; *) usage ;; esac
-ROOT="$(cd "$(dirname "$ROOT")" && pwd)/$(basename "$ROOT")"
+ROOT="$(cd "$ROOT" && pwd -P)"
 RELEASES="$ROOT/releases"; CURRENT="$ROOT/current"; PREVIOUS="$ROOT/previous"
 SYSTEMCTL="${ARRIMO_SYSTEMCTL_BIN:-systemctl}"; CURL="${ARRIMO_CURL_BIN:-curl}"
 
@@ -18,8 +18,18 @@ target_of() {
   [ -L "$1" ] || return 1
   local target
   target="$(readlink "$1")"
-  case "$target" in releases/*) ;; *) return 1 ;; esac
-  [ -d "$ROOT/$target" ] && [ ! -L "$ROOT/$target" ] || return 1
+  case "$target" in
+    releases/*) ;;
+    "$ROOT"/releases/*) target="${target#"$ROOT"/}" ;;
+    *) return 1 ;;
+  esac
+  [[ "$target" =~ ^releases/[A-Za-z0-9._-]+$ ]] || return 1
+  local path releases resolved
+  path="$ROOT/$target"; releases="$ROOT/releases"
+  [ -d "$path" ] && [ ! -L "$path" ] && [ -d "$releases" ] && [ ! -L "$releases" ] || return 1
+  resolved="$(cd -P "$path" && pwd)" || return 1
+  releases="$(cd -P "$releases" && pwd)" || return 1
+  [ "$resolved" = "$releases/${target#releases/}" ] || return 1
   printf '%s\n' "$target"
 }
 

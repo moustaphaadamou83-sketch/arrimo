@@ -81,6 +81,17 @@ class Politiques(unittest.TestCase):
             p=Path(tmp);(p/'releases/r').mkdir(parents=True);(p/'current').symlink_to('releases/r')
             self.assertEqual(m.cible_lien(p),'releases/r')
 
+    def test_current_absolu_dans_installation_valide(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p=Path(tmp);(p/'releases/r').mkdir(parents=True);(p/'current').symlink_to(p/'releases/r')
+            self.assertEqual(m.cible_lien(p),'releases/r')
+
+    def test_current_absolu_hors_installation_refuse(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as ailleurs:
+            p=Path(tmp);(p/'releases').mkdir();(Path(ailleurs)/'r').mkdir()
+            (p/'current').symlink_to(Path(ailleurs)/'r')
+            with self.assertRaises(m.Refus):m.cible_lien(p)
+
 
 class FaussePublication(m.Publication):
     def __init__(self, root, panne=None):
