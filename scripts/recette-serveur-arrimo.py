@@ -23,7 +23,7 @@ SUITES = [
     ('securite-multietablissement', 'arrimo_audit_multi_', 'AUDIT_DATABASE_URL', ['tests/audit-multi-etab.test.cjs']),
     ('scenarios-abc', 'arrimo_demo_trio_scenarios_', 'TRIO_TEST_DATABASE_URL', ['tests/scenarios-abc.test.cjs']),
     ('dashboards-abc-reseau', 'arrimo_demo_trio_ui_', 'TRIO_TEST_DATABASE_URL', ['tests/demo-trio.test.cjs']),
-    ('interface-parcours', 'arrimo_interface_', 'TEST_DATABASE_URL', ['tests/interface.spec.js']),
+    ('interface-parcours', 'arrimo_interface_test_', 'TEST_DATABASE_URL', ['tests/interface.spec.js']),
     ('priorites-navigateur', 'arrimo_vnext_ui_test_', 'PRIORITES_UI_DATABASE_URL', ['tests/priorites.interface.spec.cjs']),
     ('structure-navigateur', 'arrimo_demo_trio_structure_', 'STRUCTURE_DATABASE_URL', ['tests/structure-ui.spec.cjs']),
     ('sh-erp', 'arrimo_sh_test_', 'TEST_DATABASE_URL', ['tests/sh-erp.test.cjs']),
