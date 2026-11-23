@@ -9,6 +9,7 @@
 const { ErreurHttp } = require('./db');
 const { exigerEtablissement } = require('./auth');
 
+const { DEPART_NSA_SQL, BROUILLON_PRIVE_SQL } = require('./transports');
 const ETAPES_TR = { a_valider: 'a_valider', demandee: 'demande', acceptee: 'accepte', en_route: 'en_route_depart', pris_en_charge: 'en_transport', arrivee: 'arrive', refusee: 'refuse', annulee: 'annule' };
 
 async function preparation(db, litId) {
@@ -27,10 +28,13 @@ async function mouvements(pool, u, q = {}) {
   const lignes = [];
   // 1. Transports (source principale : ils portent véhicule, statut et préalerte)
   const tr = (await pool.query(`SELECT d.*, eo.nom AS origine, COALESCE(ed.nom, d.destination_libelle) AS destination, un.numero AS unite, ed.type_etablissement AS destination_type,
-      dh.resident_id, dh.lit_propose_id, r.lit_id AS resident_lit
+      dh.resident_id, dh.lit_propose_id, r.lit_id AS resident_lit,
+      COALESCE(hd.heure, ${DEPART_NSA_SQL},
+        CASE WHEN d.motif_transport IS NULL THEN d.pris_en_charge_le END) AS depart_reel
     FROM demandes_transport d JOIN etablissements eo ON eo.id = d.origine_id LEFT JOIN etablissements ed ON ed.id = d.destination_id LEFT JOIN unites_secours un ON un.id = d.unite_id
       LEFT JOIN demandes_hebergement dh ON dh.id = d.demande_hebergement_id LEFT JOIN residents r ON r.id = dh.resident_id
-    WHERE (d.origine_id = $1 OR d.destination_id = $1) AND d.statut <> 'annulee'
+      LEFT JOIN v_horodatages_courants hd ON hd.objet = 'demande_transport' AND hd.objet_id = d.id AND hd.etape = 'depart'
+    WHERE (d.origine_id = $1 OR (d.destination_id = $1 AND NOT ${BROUILLON_PRIVE_SQL})) AND d.statut <> 'annulee'
       AND (d.statut IN ('a_valider', 'demandee', 'acceptee', 'en_route', 'pris_en_charge') OR d.modifie_le > now() - interval '18 hours')
       AND COALESCE(d.plage_confirmee_debut, d.plage_debut, d.heure_souhaitee, d.cree_le)::date BETWEEN current_date - 1 AND current_date + 1 + $2::int`, [id, jour])).rows;
   const dhAvecTransport = new Set(tr.filter((d) => d.demande_hebergement_id).map((d) => d.demande_hebergement_id));
@@ -39,8 +43,9 @@ async function mouvements(pool, u, q = {}) {
     const eta = arrivee && d.prealerte_eta_min != null && d.prealerte_eta_le ? new Date(new Date(d.prealerte_eta_le).getTime() + d.prealerte_eta_min * 60000) : null;   // ETA = arrivée chez nous seulement
     lignes.push({ cle: `transport:${d.id}`, mouvement: arrivee ? 'arrivee' : 'depart', type: 'transport', reference: d.numero, personne: d.resident_ref, origine: d.origine, destination: d.destination,
       creneau: d.plage_confirmee_debut || d.plage_debut ? { debut: d.plage_confirmee_debut || d.plage_debut, fin: d.plage_confirmee_fin || d.plage_fin, confirme: !!d.plage_confirmee_debut } : null,
-      prevue: d.plage_confirmee_debut || d.plage_debut || d.heure_souhaitee, depart_reel: d.pris_en_charge_le, eta, eta_source: eta ? 'prealerte' : null, arrivee_reelle: d.arrivee_le,
-      vehicule: d.unite, statut: ETAPES_TR[d.statut] || d.statut, statut_brut: d.statut,
+      prevue: d.plage_confirmee_debut || d.plage_debut || d.heure_souhaitee, depart_reel: d.depart_reel, eta, eta_source: eta ? 'prealerte' : null, arrivee_reelle: d.arrivee_le,
+      vehicule: d.unite, statut: d.terminee_le ? 'termine' : ETAPES_TR[d.statut] || d.statut, statut_brut: d.statut,
+      statut_detail: d.remis_le && !d.terminee_le ? 'remis' : null, incident: !!d.incident_le && !d.terminee_le,
       prealerte: d.prealerte_le ? { le: d.prealerte_le, recue_le: d.prealerte_recue_le, eta_min: d.prealerte_eta_min } : null,
       preparation: arrivee && d.destination_type !== 'hopital' ? await preparation(pool, d.resident_lit || d.lit_propose_id) : null,
       ecran: 'transports-planifies', fiche: { type: 'transport', id: d.id }, actions: arrivee && d.prealerte_le && !d.prealerte_recue_le ? ['accuser_prealerte'] : [], transport_id: d.id });
@@ -52,8 +57,11 @@ async function mouvements(pool, u, q = {}) {
     const eta = t.date_depart && t.minutes_route ? new Date(new Date(t.date_depart).getTime() + t.minutes_route * 60000) : null;
     lignes.push({ cle: `transfert:${t.id}`, mouvement: arrivee ? 'arrivee' : 'depart', type: 'transfert', reference: t.numero, personne: t.patient_ref, origine: t.origine, destination: t.destination,
       creneau: null, prevue: t.date_validation || t.date_demande, depart_reel: t.date_depart, eta, eta_source: eta ? 'itineraire' : null, arrivee_reelle: t.date_reception,
-      vehicule: null, statut: { demande: 'demande', validee: 'accepte', transport: 'en_route_depart', en_route: 'en_transport', recu: 'arrive', refuse: 'refuse' }[t.statut] || t.statut, statut_brut: t.statut,
-      preparation: arrivee && t.lit_id ? { etat: t.date_chambre_prete ? 'prete' : 'a_verifier' } : null, ecran: 'transferts', fiche: { type: 'transfert', id: t.id }, actions: [] });
+      vehicule: null, priorite: t.urgent ? 'urgente' : 'non_urgente', statut: { demande: 'demande', validee: 'accepte', transport: 'en_route_depart', en_route: 'en_transport', recu: 'arrive', refuse: 'refuse' }[t.statut] || t.statut, statut_brut: t.statut,
+      preparation: arrivee && t.lit_id ? { etat: t.date_chambre_prete ? 'prete' : 'a_verifier' } : null, ecran: 'transferts',
+      fiche: { type: 'transfert', id: t.id }, actions: [],
+      transfert: u.role === 'entretien' ? null : { id: t.id, numero: t.numero, statut: t.statut,
+        origine_id: t.origine_id, destination_id: t.destination_id, date_chambre_prete: t.date_chambre_prete } });
   }
   // 3. Hébergement : départs/arrivées programmés sans transport lié
   for (const h of (await pool.query(`SELECT dh.*, eo.nom AS origine, ed.nom AS destination, r.lit_id AS resident_lit FROM demandes_hebergement dh JOIN etablissements ed ON ed.id = dh.etablissement_id
@@ -121,7 +129,7 @@ async function historique(pool, u, q = {}) {
       CASE WHEN d.destination_id = $1 THEN 'arrivee' ELSE 'depart' END AS mouvement, CASE WHEN d.statut = 'annulee' THEN 'annule' WHEN d.statut = 'refusee' THEN 'refuse' WHEN d.remis_le IS NOT NULL THEN 'termine' ELSE 'arrive' END AS statut,
       d.cree_le AS debut, COALESCE(d.remis_le, d.arrivee_le, d.modifie_le) AS fin, un.numero AS vehicule
     FROM demandes_transport d JOIN etablissements eo ON eo.id = d.origine_id LEFT JOIN etablissements ed ON ed.id = d.destination_id LEFT JOIN unites_secours un ON un.id = d.unite_id
-    WHERE (d.origine_id = $1 OR d.destination_id = $1) AND d.statut IN ('annulee', 'refusee', 'arrivee') AND d.modifie_le > now() - make_interval(days => $2)`, [id, jours]).catch(() => ({ rows: [] }))).rows;
+    WHERE (d.origine_id = $1 OR d.destination_id = $1) AND NOT ${BROUILLON_PRIVE_SQL} AND d.statut IN ('annulee', 'refusee', 'arrivee') AND d.modifie_le > now() - make_interval(days => $2)`, [id, jours]).catch(() => ({ rows: [] }))).rows;
   const tf = (await pool.query(`SELECT 'transfert' AS type, t.id, t.numero AS reference, t.patient_ref AS personne, eo.nom AS origine, ed.nom AS destination,
       CASE WHEN t.destination_id = $1 THEN 'arrivee' ELSE 'depart' END AS mouvement, CASE t.statut WHEN 'recu' THEN 'arrive' WHEN 'refuse' THEN 'refuse' ELSE 'annule' END AS statut,
       t.date_demande AS debut, COALESCE(t.date_reception, t.date_demande) AS fin, NULL AS vehicule
@@ -145,11 +153,11 @@ async function fiche(pool, u, q = {}) {
     return { type: 'transfert', reference: t.numero, personne: t.patient_ref, origine: t.origine, destination: t.destination, statut: t.statut, lit: t.lit, vehicule: null,
       chronologie: etapes.filter(([, d]) => d).map(([etape, quand]) => ({ etape, quand, acteur: null })).sort((a, b) => new Date(a.quand) - new Date(b.quand)), incident: null };
   }
-  const d = (await pool.query(`SELECT d.*, eo.nom AS origine, COALESCE(ed.nom, d.destination_libelle) AS destination, un.numero AS unite FROM demandes_transport d JOIN etablissements eo ON eo.id = d.origine_id
+  const d = (await pool.query(`SELECT d.*, ${BROUILLON_PRIVE_SQL} AS brouillon_prive, eo.nom AS origine, COALESCE(ed.nom, d.destination_libelle) AS destination, un.numero AS unite FROM demandes_transport d JOIN etablissements eo ON eo.id = d.origine_id
     LEFT JOIN etablissements ed ON ed.id = d.destination_id LEFT JOIN unites_secours un ON un.id = d.unite_id WHERE d.id = $1`, [id])).rows[0];
-  if (!d || !(u.gestionnaire || etabs.includes(d.origine_id) || etabs.includes(d.destination_id))) throw new ErreurHttp(404, 'objet_introuvable');
+  if (!d || !(u.gestionnaire || etabs.includes(d.origine_id) || (!d.brouillon_prive && etabs.includes(d.destination_id)))) throw new ErreurHttp(404, 'objet_introuvable');
   const ev = (await pool.query(`SELECT e.type, e.cree_le, x.nom AS acteur FROM demande_transport_evenements e LEFT JOIN utilisateurs x ON x.id = e.utilisateur_id WHERE e.demande_id = $1 ORDER BY e.cree_le, e.id`, [d.id])).rows;
-  const NOM = { preparee: 'demande', demandee: 'demande', transmettre: 'demande_transmise', accepter: 'acceptation', refuser: 'refus', en_route: 'en_route', sur_place: 'sur_place', pris_en_charge: 'depart', prealerte: 'prealerte',
+  const NOM = { preparee: 'demande', demandee: 'demande', transmettre: 'demande_transmise', accepter: 'acceptation', refuser: 'refus', en_route: 'en_route', sur_place: 'sur_place', pris_en_charge: 'depart', partir_destination: 'depart_confirme', prealerte: 'prealerte',
     prealerte_maj: 'prealerte', prealerte_recue: 'prealerte_recue', arrivee: 'arrivee', remis: 'reception', terminer: 'cloture', incident: 'incident', annuler: 'annulation' };
   return { type: 'transport', reference: d.numero, personne: d.resident_ref, origine: d.origine, destination: d.destination, statut: d.statut, vehicule: d.unite,
     creneau: d.plage_debut ? { debut: d.plage_confirmee_debut || d.plage_debut, fin: d.plage_confirmee_fin || d.plage_fin, confirme: !!d.plage_confirmee_debut } : null,

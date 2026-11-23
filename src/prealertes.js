@@ -16,6 +16,7 @@ const { journaliser } = require('./regles');
 const TE = require('./types-etablissement');
 const vehicules = require('./vehicules');
 
+const accesVehicules = require('./acces-vehicules-secours');
 const PRIORITES = ['immediate', 'urgente', 'non_urgente'];
 const CATEGORIES = ['medicale', 'traumatologie', 'cardiaque', 'neurologique', 'respiratoire', 'pediatrique', 'obstetrique', 'sante_mentale', 'autre'];
 const OUVERTES = ['envoyee', 'recue', 'consultee', 'prise_en_compte', 'preparation', 'preparation_terminee', 'arrivee'];
@@ -111,6 +112,7 @@ async function creer(pool, u, b) {
   const heure = lireHeure(b);
   return transaction(pool, async (c) => {
     const unite = (await c.query('SELECT * FROM unites_secours WHERE id = $1 AND actif FOR UPDATE', [entier(b.unite_id)])).rows[0];
+    if (unite && !(await accesVehicules.autorise(c, u, unite.organisation_id, unite.id))) throw new ErreurHttp(404, 'unite_introuvable');
     if (!unite || !orgs.some((o) => o.id === unite.organisation_id)) throw new ErreurHttp(404, 'unite_introuvable');
     if (cle) {
       const deja = (await c.query('SELECT * FROM prealertes WHERE organisation_id = $1 AND cle_idempotence = $2', [unite.organisation_id, cle])).rows[0];
@@ -123,7 +125,7 @@ async function creer(pool, u, b) {
       transport = (await c.query('SELECT * FROM demandes_transport WHERE id = $1', [entier(b.demande_transport_id)])).rows[0];
       // La destination reste décidée par l'équipage et les protocoles (13 nov. 2026) : un autre hôpital que celui de la coordination
       // est accepté et inscrit à l'historique du transport ; l'établissement d'origine le voit dans son suivi.
-      if (!transport || transport.organisation_id !== unite.organisation_id || transport.statut !== 'pris_en_charge') throw new ErreurHttp(409, 'transport_statut_incompatible');
+      if (!transport || transport.organisation_id !== unite.organisation_id || transport.unite_id !== unite.id || transport.statut !== 'pris_en_charge') throw new ErreurHttp(409, 'transport_statut_incompatible');
     }
     const ouverte = (await c.query(`SELECT numero FROM prealertes WHERE unite_id = $1 AND statut = ANY($2)`, [unite.id, OUVERTES])).rows[0];
     if (ouverte) throw new ErreurHttp(409, 'prealerte_deja_ouverte', { numero: ouverte.numero });
@@ -188,9 +190,11 @@ async function liste(pool, u, q = {}) {
     if (!orgs.length) throw new ErreurHttp(403, 'organisation_interdite');
     filtre = 'o.config_id = ANY($1)'; args = [orgs.map((o) => o.config_id)];
   } else throw new ErreurHttp(403, 'role_insuffisant');
-  const rows = (await pool.query(`SELECT ${CHAMPS(2)} ${FROM} WHERE ${filtre} AND (p.statut = ANY($2) OR p.modifie_le > now() - interval '24 hours')
+  const params = [...args, OUVERTES];
+  const droits = accesVehicules.concerne(u) ? ` AND ${accesVehicules.condition('o', 'p.unite_id', params.push(u.id))}` : '';
+  const rows = (await pool.query(`SELECT ${CHAMPS(2)} ${FROM} WHERE ${filtre}${droits} AND (p.statut = ANY($2) OR p.modifie_le > now() - interval '24 hours')
     ORDER BY (p.statut = ANY($2)) DESC, CASE p.priorite WHEN 'immediate' THEN 0 WHEN 'urgente' THEN 1 ELSE 2 END, p.heure_prevue NULLS LAST, p.id`,
-  [...args, OUVERTES])).rows;
+  params)).rows;
   const urg = ROLES_HOPITAL.includes(u.role) ? await urgenceAvecDeclaration(pool, args[0]) : null;
   const cs = require('./correspondance-simulee');
   const out = [];
@@ -229,7 +233,8 @@ async function exigerVisibilite(db, u, pa, etabId) {
     return 'hopital';
   }
   if (ROLES_AMBULANCE.includes(u.role)) {
-    if ((await exigerAmbulance(db, u)).some((o) => o.id === pa.organisation_id)) return 'ambulance';
+    if ((await exigerAmbulance(db, u)).some((o) => o.id === pa.organisation_id)
+      && await accesVehicules.autorise(db, u, pa.organisation_id, pa.unite_id)) return 'ambulance';
     if (!u.connecteur?.profils.includes('ccs')) throw new ErreurHttp(404, 'prealerte_introuvable');
   }
   if (ROLES_CCS.includes(u.role) || u.connecteur?.profils.includes('ccs')) {
@@ -503,17 +508,19 @@ async function statutUrgence(pool, u, etabId) {
 /** Unités de l'organisation de l'ambulancier, avec leur dernière position. */
 async function unites(pool, u) {
   const orgs = await exigerAmbulance(pool, u);
-  return (await pool.query(`SELECT un.id, un.numero, un.plaque, o.nom AS organisation,
+  const params = [orgs.map((o) => o.id)];
+  const droits = accesVehicules.concerne(u) ? ` AND ${accesVehicules.condition('o', 'un.id', params.push(u.id))}` : '';
+  return (await pool.query(`SELECT un.id, un.numero, un.plaque, un.organisation_id, un.type_vehicule, o.nom AS organisation,
       (SELECT json_build_object('latitude', pu.latitude, 'longitude', pu.longitude, 'le', pu.enregistree_le) FROM positions_unites pu
         WHERE pu.unite_id = un.id ORDER BY pu.enregistree_le DESC LIMIT 1) AS position
-    FROM unites_secours un JOIN organisations_secours o ON o.id = un.organisation_id WHERE un.organisation_id = ANY($1) AND un.actif ORDER BY un.numero`,
-  [orgs.map((o) => o.id)])).rows;
+    FROM unites_secours un JOIN organisations_secours o ON o.id = un.organisation_id WHERE un.organisation_id = ANY($1) AND un.actif${droits} ORDER BY un.numero`, params)).rows;
 }
 /** Position transmise par l'équipe (facultative : la préalerte fonctionne sans). */
 async function position(pool, u, uniteId, b) {
   const orgs = await exigerAmbulance(pool, u);
   const un = (await pool.query('SELECT id, organisation_id FROM unites_secours WHERE id = $1 AND actif', [entier(uniteId)])).rows[0];
-  if (!un || !orgs.some((o) => o.id === un.organisation_id)) throw new ErreurHttp(404, 'unite_introuvable');
+  if (!un || !orgs.some((o) => o.id === un.organisation_id)
+    || !(await accesVehicules.autorise(pool, u, un.organisation_id, un.id))) throw new ErreurHttp(404, 'unite_introuvable');
   const lat = Number(b.latitude); const lon = Number(b.longitude);
   if (!(lat >= -90 && lat <= 90) || !(lon >= -180 && lon <= 180) || b.latitude == null || b.longitude == null) throw new ErreurHttp(400, 'position_invalide');
   const precision = b.precision_m == null ? null : Math.max(0, Math.round(Number(b.precision_m)) || 0);

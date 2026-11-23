@@ -1,17 +1,19 @@
-/* Navigation par espaces (cahier directeur, 22 nov. 2026) : 8 espaces métier au lieu de 20 onglets. Les boutons de module existants
+/* Navigation par espaces (cahier directeur, 22 nov. 2026) : des espaces métier au lieu de 20 onglets. Les boutons de module existants
    restent en place (mêmes data-v, mêmes routes, mêmes favoris) : un espace montre seulement ses modules, sur une seconde ligne.
    Un espace n'apparaît que s'il contient au moins un module visible pour ce rôle, cet établissement et ses modules activés. */
 (() => {
   const nav = document.getElementById('onglets'); if (!nav) return;
   const ESPACES = [
-    ['accueil', '🏠', 'Accueil', 'Home', ['copilote', 'c-accueil']],
-    ['patients', '🩺', 'Patients & DSN', 'Patients & EHR', ['patients', 'dsn', 'admissions', 'c-residents', 'c-admissions', 'nsa']],
-    ['transferts', '⇄', 'Transferts', 'Transfers', ['flux', 'transferts', 'liaison', 'c-demandes', 'c-mouvements', 'transports-planifies']],
-    ['capacites', '🛏', 'Capacités', 'Capacity', ['lits', 'c-chambres', 'bourse', 'c-urgences']],
-    ['urgences', '🚨', 'Urgences', 'Emergency', ['urgence', 'secours', 'chrono', 'eviter', 'crise']],
-    ['operations', '🧽', 'Opérations', 'Operations', ['mes-taches', 'nettoyage', 'c-taches', 'visites']],
-    ['pilotage', '📊', 'Pilotage', 'Steering', ['continuite', 'vigilance', 'indicateurs', 'c-indicateurs', 'donnees']],
-    ['administration', '⚙', 'Administration', 'Administration', ['reseau', 'c-reseau', 'national', 'params', 'admin', 'journal', 'support']],
+    ['accueil', 'house', 'Accueil', 'Home', ['copilote', 'c-accueil']],
+    ['patients', 'stethoscope', 'Patients & DSN', 'Patients & EHR', ['patients', 'dsn', 'admissions', 'c-residents', 'c-admissions', 'nsa']],
+    ['transferts', 'arrow-right-left', 'Transferts', 'Transfers', ['flux', 'transferts', 'liaison', 'c-demandes', 'c-mouvements', 'transports-planifies']],
+    ['capacites', 'bed-double', 'Capacités', 'Capacity', ['lits', 'c-chambres', 'bourse', 'c-urgences']],
+    ['urgences', 'siren', 'Urgences', 'Emergency', ['urgence', 'secours', 'chrono', 'eviter', 'crise']],
+    ['operations', 'spray-can', 'Opérations', 'Operations', ['mes-taches', 'nettoyage', 'c-taches', 'visites']],
+    ['pilotage', 'chart-column', 'Pilotage', 'Steering', ['continuite', 'vigilance', 'indicateurs', 'c-indicateurs', 'donnees']],
+    ['reseau', 'network', 'Réseau', 'Network', ['reseau', 'c-reseau']],
+    ['national', 'map-pin', 'National', 'National', ['national']],
+    ['administration', 'settings', 'Administration', 'Administration', ['params', 'admin', 'journal', 'support']],
   ];
   const en = () => (document.documentElement.lang || '').startsWith('en');
   const espaceDe = (v) => ESPACES.find((x) => x[4].includes(v))?.[0] || null;
@@ -25,7 +27,7 @@
     if (sig !== construit) {
       nav.querySelectorAll('.espace-btn, .espace-saut').forEach((x) => x.remove());
       const frag = document.createDocumentFragment();
-      for (const [cle, ic, fr, an] of presents) { const b = document.createElement('button'); b.type = 'button'; b.className = 'espace-btn'; b.dataset.espace = cle; b.innerHTML = `<span aria-hidden="true">${ic}</span> ${en() ? an : fr}`; frag.appendChild(b); }
+      for (const [cle, ic, fr, an] of presents) { const b = document.createElement('button'); b.type = 'button'; b.className = 'espace-btn'; b.dataset.espace = cle; b.innerHTML = `<svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-${ic}"/></svg> ${en() ? an : fr}`; frag.appendChild(b); }
       const saut = document.createElement('span'); saut.className = 'espace-saut'; saut.setAttribute('aria-hidden', 'true'); frag.appendChild(saut);
       nav.prepend(frag); construit = sig;
     }
@@ -43,7 +45,7 @@
     const cible = { transferts: 'params:etablissement', capacites: 'params:etablissement', urgences: 'params:etablissement', pilotage: 'params:etablissement', patients: 'params:etablissement', operations: 'mes-taches' }[actif];
     if (cible && ['admin_etab', 'coordonnateur', 'gestionnaire'].includes(role)) {
       const pb = document.createElement('button'); pb.type = 'button'; pb.className = 'espace-params'; pb.dataset.cible = cible;
-      pb.innerHTML = `<span aria-hidden="true">⚙</span> ${en() ? 'Module settings' : 'Paramètres du module'}`;
+      pb.innerHTML = `<svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-settings"/></svg> ${en() ? 'Module settings' : 'Paramètres du module'}`;
       nav.appendChild(pb);
     }
     // Un espace d'un seul module n'a pas besoin de seconde ligne

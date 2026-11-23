@@ -3,24 +3,24 @@
    l'environnement). Modules « Bientôt » : carte grisée, interrupteur désactivé, refus aussi côté serveur. FR/EN, clavier, téléphone. */
 (function (racine) {
   const CARTES = [
-    { id: 'hopital', emoji: '🏥', codes: ['lits', 'admissions_hopital', 'transferts', 'urgence', 'nsa', 'nettoyage', 'national', 'liaison_chsld'], fr: ['Hôpital', 'Lits, admissions, urgence, NSA, nettoyage'], en: ['Hospital', 'Beds, admissions, emergency, ALC, cleaning'] },
-    { id: 'hebergement', emoji: '🏡', codes: ['residents', 'chambres', 'demandes_hebergement', 'entretien_chsld', 'taches', 'hospitalisations', 'reseau_chsld'], fr: ['Hébergement', 'Résidents, chambres, demandes, entretien'], en: ['Residential care', 'Residents, rooms, requests, housekeeping'] },
-    { id: 'secours', emoji: '🚑', codes: ['liaison_secours', 'transport_ambulancier', 'profil_ccs', 'profil_ambulance', 'profil_visites'], fr: ['Secours', 'Préalertes, transports ambulanciers, CCS'], en: ['Emergency services', 'Pre-alerts, ambulance transport, CCS'] },
-    { id: 'famille', emoji: '👨‍👩‍👧', codes: ['proches', 'portail_proches', 'messagerie_securisee', 'appels_video'], fr: ['Famille', 'Proches, portail, messagerie sécurisée'], en: ['Family', 'Relatives, portal, secure messaging'] },
-    { id: 'og', emoji: '✨', codes: ['og'], fr: ['OG', 'Assistant : propose, un humain décide'], en: ['OG', 'Assistant: suggests, a person decides'] },
-    { id: 'sillage', emoji: '🧭', codes: [], inclus: true, fr: ['Sillage', 'Fil du patient ou du résident entre établissements'], en: ['Trail', 'Patient or resident thread across facilities'] },
-    { id: 'connect', emoji: '🔌', codes: [], inclus: true, fr: ['Arrimo Connect', 'Branchement HL7, FHIR et API signée'], en: ['Arrimo Connect', 'HL7, FHIR and signed API connection'] },
-    { id: 'dsn', emoji: '🩺', codes: ['dsn'], fr: ['Dossier santé numérique', 'Dossier clinique et paquets de transition (démonstration)'], en: ['Health record', 'Clinical record and transition packages (demo)'] },
-    { id: 'formation', emoji: '🎓', codes: ['formation'], fr: ['Formation', 'Parcours de formation des équipes'], en: ['Training', 'Team training path'] },
-    { id: 'chrono', emoji: '⏱️', codes: ['chrono'], fr: ['Chrono', 'Temps à la porte de l’urgence, H11 à H15'], en: ['Chrono', 'Emergency door times, H11 to H15'] },
-    { id: 'urgences_direct', emoji: '🚨', codes: ['urgences_direct'], fr: ['Urgences en direct', 'État des urgences et fermetures planifiées'], en: ['Live emergency status', 'Emergency status and planned closures'] },
-    { id: 'transferts_suivi', emoji: '🔁', codes: ['transferts_suivi'], fr: ['Transferts', 'Centrale régionale et rapatriements'], en: ['Transfers', 'Regional hub and repatriation'] },
-    { id: 'transport_planifie', emoji: '🚐', codes: ['transport_planifie'], fr: ['Transport', 'Transport non urgent réservé'], en: ['Transport', 'Booked non-urgent transport'] },
-    { id: 'bourse_places', emoji: '🛏️', codes: ['bourse_places'], fr: ['Bourse des places', 'Places libres et à venir, classement expliqué'], en: ['Placement exchange', 'Free and upcoming places, explained ranking'] },
-    { id: 'donnees_regionales', emoji: '📊', codes: ['donnees_regionales'], fr: ['Données', 'Tableaux régionaux et listes d’attente'], en: ['Data', 'Regional dashboards and waiting lists'] },
-    { id: 'mode_crise', emoji: '🆘', codes: ['mode_crise'], fr: ['Mode crise', 'Évacuation et places de la région'], en: ['Crisis mode', 'Evacuation and regional places'] },
-    { id: 'visites_confirmees', emoji: '✅', codes: ['visites_confirmees'], fr: ['Visites confirmées', 'Visites du CLSC ou du prestataire'], en: ['Confirmed visits', 'CLSC or provider visits'] },
-    { id: 'eviter_transferts', emoji: '🛡️', codes: ['eviter_transferts'], fr: ['Éviter les transferts inutiles', 'Alternatives avant l’appel'], en: ['Avoid unnecessary transfers', 'Alternatives before the call'] },
+    { id: 'hopital', emoji: 'hospital', codes: ['lits', 'admissions_hopital', 'transferts', 'urgence', 'nsa', 'nettoyage', 'national', 'liaison_chsld'], fr: ['Hôpital', 'Lits, admissions, urgence, NSA, nettoyage'], en: ['Hospital', 'Beds, admissions, emergency, ALC, cleaning'] },
+    { id: 'hebergement', emoji: 'house', codes: ['residents', 'chambres', 'demandes_hebergement', 'entretien_chsld', 'taches', 'hospitalisations', 'reseau_chsld'], fr: ['Hébergement', 'Résidents, chambres, demandes, entretien'], en: ['Residential care', 'Residents, rooms, requests, housekeeping'] },
+    { id: 'secours', emoji: 'ambulance', codes: ['liaison_secours', 'transport_ambulancier', 'profil_ccs', 'profil_ambulance', 'profil_visites'], fr: ['Secours', 'Préalertes, transports ambulanciers, CCS'], en: ['Emergency services', 'Pre-alerts, ambulance transport, CCS'] },
+    { id: 'famille', emoji: 'users', codes: ['proches', 'portail_proches', 'messagerie_securisee', 'appels_video'], fr: ['Famille', 'Proches, portail, messagerie sécurisée'], en: ['Family', 'Relatives, portal, secure messaging'] },
+    { id: 'og', emoji: 'sparkles', codes: ['og'], fr: ['OG', 'Assistant : propose, un humain décide'], en: ['OG', 'Assistant: suggests, a person decides'] },
+    { id: 'sillage', emoji: 'compass', codes: [], inclus: true, fr: ['Sillage', 'Fil du patient ou du résident entre établissements'], en: ['Trail', 'Patient or resident thread across facilities'] },
+    { id: 'connect', emoji: 'plug', codes: [], inclus: true, fr: ['Arrimo Connect', 'Branchement HL7, FHIR et API signée'], en: ['Arrimo Connect', 'HL7, FHIR and signed API connection'] },
+    { id: 'dsn', emoji: 'stethoscope', codes: ['dsn'], fr: ['Dossier santé numérique', 'Dossier clinique et paquets de transition (démonstration)'], en: ['Health record', 'Clinical record and transition packages (demo)'] },
+    { id: 'formation', emoji: 'graduation-cap', codes: ['formation'], fr: ['Formation', 'Parcours de formation des équipes'], en: ['Training', 'Team training path'] },
+    { id: 'chrono', emoji: 'timer', codes: ['chrono'], fr: ['Chrono', 'Temps à la porte de l’urgence, H11 à H15'], en: ['Chrono', 'Emergency door times, H11 to H15'] },
+    { id: 'urgences_direct', emoji: 'siren', codes: ['urgences_direct'], fr: ['Urgences en direct', 'État des urgences et fermetures planifiées'], en: ['Live emergency status', 'Emergency status and planned closures'] },
+    { id: 'transferts_suivi', emoji: 'repeat', codes: ['transferts_suivi'], fr: ['Transferts', 'Centrale régionale et rapatriements'], en: ['Transfers', 'Regional hub and repatriation'] },
+    { id: 'transport_planifie', emoji: 'truck', codes: ['transport_planifie'], fr: ['Transport', 'Transport non urgent réservé'], en: ['Transport', 'Booked non-urgent transport'] },
+    { id: 'bourse_places', emoji: 'bed-double', codes: ['bourse_places'], fr: ['Bourse des places', 'Places libres et à venir, classement expliqué'], en: ['Placement exchange', 'Free and upcoming places, explained ranking'] },
+    { id: 'donnees_regionales', emoji: 'chart-column', codes: ['donnees_regionales'], fr: ['Données', 'Tableaux régionaux et listes d’attente'], en: ['Data', 'Regional dashboards and waiting lists'] },
+    { id: 'mode_crise', emoji: '<svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-life-buoy"/></svg>', codes: ['mode_crise'], fr: ['Mode crise', 'Évacuation et places de la région'], en: ['Crisis mode', 'Evacuation and regional places'] },
+    { id: 'visites_confirmees', emoji: 'circle-check', codes: ['visites_confirmees'], fr: ['Visites confirmées', 'Visites du CLSC ou du prestataire'], en: ['Confirmed visits', 'CLSC or provider visits'] },
+    { id: 'eviter_transferts', emoji: 'shield-check', codes: ['eviter_transferts'], fr: ['Éviter les transferts inutiles', 'Alternatives avant l’appel'], en: ['Avoid unnecessary transfers', 'Alternatives before the call'] },
   ];
   const T = {
     fr: { tous: 'Tous', actives: 'Activés', bientot: 'Bientôt', active: 'Activé', desactive: 'Désactivé', inclus: 'Inclus', filtre: 'Filtrer les modules',
@@ -66,7 +66,7 @@
     return cartes.map((c) => {
       const [nom, desc] = c[langue()]; const etat = etatCarte(c);
       return `<article class="carte-module etat-${etat}" data-carte="${c.id}">
-        <div class="carte-tete"><span class="carte-emoji" aria-hidden="true">${c.emoji}</span><div><h4>${e(nom)}</h4><p class="note">${e(desc)}</p></div>
+        <div class="carte-tete"><span class="carte-emoji" aria-hidden="true"><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-${c.emoji}"/></svg></span><div><h4>${e(nom)}</h4><p class="note">${e(desc)}</p></div>
         ${etat === 'bientot' ? `<span class="etiquette-bientot">${e(t('bientot'))}</span>` : etat === 'inclus' ? `<span class="etiquette-inclus">${e(t('inclus'))}</span>` : ''}</div>
         ${c.modules.map(interrupteur).join('')}
         ${c.lien ? `<a class="btn lien-carte" href="${c.lien}">${e(t('voir'))}</a>` : ''}

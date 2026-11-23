@@ -28,6 +28,10 @@ SUITES = [
     ('structure-navigateur', 'arrimo_demo_trio_structure_', 'STRUCTURE_DATABASE_URL', ['tests/structure-ui.spec.cjs']),
     ('sh-erp', 'arrimo_sh_test_', 'TEST_DATABASE_URL', ['tests/sh-erp.test.cjs']),
     ('sh-navigateur', 'arrimo_sh_ui_test_', 'TEST_DATABASE_URL', ['tests/sh-erp.interface.spec.cjs']),
+    ('chrono-et-sillage', 'arrimo_chrono_test_', 'TEST_DATABASE_URL', ['tests/chrono.test.cjs', 'tests/sillage.test.cjs']),
+    ('secours-et-transport', 'arrimo_secours_test_', 'TEST_DATABASE_URL', ['tests/prealertes.test.cjs', 'tests/transport-planifie.test.cjs']),
+    ('chsld-et-dsn', 'arrimo_sh_lot1_test_', 'TEST_DATABASE_URL', ['tests/chsld.test.cjs', 'tests/dsn-clinique.test.cjs', 'tests/dsn-sync.test.cjs']),
+    ('inter-acteurs-temps-reel', 'arrimo_temps_reel_test_', 'TEST_DATABASE_URL', ['tests/temps-reel.interface.spec.cjs', 'tests/cahier-ultime.test.cjs']),
     ('securite-xss', 'arrimo_audit_xss_', 'AUDIT_DATABASE_URL', ['tests/audit-xss.spec.cjs']),
 ]
 PREUVES_REQUISES = ['runtime-node', 'runtime-ipc', 'runtime-chromium', 'postgres-maintenance',
@@ -126,7 +130,11 @@ def main():
     parser.add_argument('--sortie', required=True, type=pathlib.Path)
     parser.add_argument('--reference', default='2ed912745f6338e185c8c31bd0cb97385a9fce1d')
     parser.add_argument('--reprendre-echecs', type=pathlib.Path)
+    parser.add_argument('--stabilisation', action='store_true',
+                        help='Vérifier les migrations de stabilisation sur une référence contenant Chrono et les missions CCS')
     args = parser.parse_args()
+    if args.stabilisation and args.reprendre_echecs:
+        parser.error('La stabilisation exige une nouvelle restauration fictive.')
     # Authentification locale existante par défaut ; aucun compte ni droit créé.
     # Une URL protégée explicite permet de sélectionner un rôle déjà autorisé.
     valeur = os.environ.get('ARRIMO_RECETTE_ADMIN_URL') or 'postgresql:///postgres?host=/var/run/postgresql'
@@ -217,9 +225,15 @@ def main():
             ok, _ = executer(nom, argv, env=test_env, cwd=application)
             if not ok:
                 raise RuntimeError('Runtime non autorisé ou incomplet : aucune base créée')
-        ok, _ = executer('postgres-maintenance', ['psql', '-X', '-w', '-v', 'ON_ERROR_STOP=1', '-Atc', 'SELECT current_database(),current_user,version()'], env=pg_env)
+        ok, sortie_pg = executer('postgres-maintenance', ['psql', '-X', '-w', '-v', 'ON_ERROR_STOP=1', '-Atc', 'SELECT current_user'], env=pg_env)
         if not ok:
             raise RuntimeError('Connexion PostgreSQL refusée ; configuration serveur préservée')
+        if not u.username:
+            utilisateur_pg = sortie_pg.decode().strip()
+            if not re.fullmatch(r'[a-z][a-z0-9_]{0,40}', utilisateur_pg):
+                raise ValueError('Rôle de recette incompatible avec le périmètre SH')
+            u = u._replace(netloc=utilisateur_pg + '@' + (u.netloc or 'localhost'))
+            pg_env['PGUSER'] = utilisateur_pg
         if not reprise:
             source = creer('arrimo_recette_source_')
             ancien = subprocess.run(['git', 'show', args.reference + ':db/schema.sql'], cwd=RACINE, capture_output=True, check=True).stdout
@@ -252,7 +266,10 @@ def main():
             if traces[0] != traces[1]:
                 raise RuntimeError('Le contenu restauré ne correspond pas à la source fictive')
             rapport['sauvegarde_fictive_restauree'] = True; sauver()
-            ok, _ = executer('migrations-copie-restauree', ['node', 'scripts/verifier-migration-priorites.cjs'],
+            commande_migrations = ['node', 'scripts/verifier-migration-priorites.cjs']
+            if args.stabilisation:
+                commande_migrations.append('--stabilisation')
+            ok, _ = executer('migrations-copie-restauree', commande_migrations,
                              env=dict(test_env, ARRIMO_RESTORE_DATABASE_URL=url_base(restauree)), cwd=application)
             if not ok:
                 raise RuntimeError('Migration refusée : aucune publication admissible')

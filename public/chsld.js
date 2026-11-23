@@ -136,15 +136,15 @@
       const fx = await api('GET', `/arrimo-flux?etablissement_id=${ctx()}`).catch(() => null);
       const A = (k) => t(`accueil.${k}`);
       const prep = fx ? fx.resume.preparations : null;
-      await window.ArrimoAccueil.construire(v, { ...window.optsFlux(), bandeau: window.bandeauAccueil(), taches: true,
-        kpis: [{ lib: A('k_places'), val: p.libres, aller: 'c-chambres', ton: p.libres ? '' : 'alerte' },
-          fx ? { lib: A('k_arrivees'), val: fx.resume.arrivees, aller: 'flux' } : null, fx ? { lib: A('k_departs'), val: fx.resume.departs, aller: 'flux' } : null,
-          { lib: A('k_preparer'), val: prep ?? a.entretien.a_nettoyer, aller: 'c-taches' },
-          fx ? { lib: A('k_prealertes'), val: fx.resume.prealertes_a_acquitter, aller: 'flux', ton: fx.resume.prealertes_a_acquitter ? 'alerte' : '' } : null,
-          { lib: A('k_taches'), val: a.taches.en_retard, aller: 'c-taches', ton: a.taches.en_retard ? 'alerte' : '' }],
+      await window.ArrimoAccueil.construire(v, { ...window.optsFlux(), bandeau: window.bandeauAccueil(), taches: true, flux: fx,
+        kpis: [{ code: 'k_places', lib: A('k_places'), val: p.libres, aller: 'c-chambres', ton: p.libres ? '' : 'alerte' },
+          fx ? { code: 'k_arrivees', lib: A('k_arrivees'), val: fx.resume.arrivees, aller: 'flux' } : null, fx ? { code: 'k_departs', lib: A('k_departs'), val: fx.resume.departs, aller: 'flux' } : null,
+          { code: 'k_preparer', lib: A('k_preparer'), val: prep ?? a.entretien.a_nettoyer, aller: 'c-taches' },
+          fx ? { code: 'k_prealertes', lib: A('k_prealertes'), val: fx.resume.prealertes_a_acquitter, aller: 'flux', ton: fx.resume.prealertes_a_acquitter ? 'alerte' : '' } : null,
+          { code: 'k_taches', lib: A('k_taches'), val: a.taches.en_retard, aller: 'c-taches', ton: a.taches.en_retard ? 'alerte' : '' }],
         priorites: actions.slice(0, 3).map((x) => ({ texte: String(x).replace(/<[^>]+>/g, '') })), details: ancien });
     }
-    v.insertAdjacentHTML('beforeend', `<details class="panneau-c ch-communications" id="ch-comm"><summary><b>✉ ${esc(t('chsld.accueil.communications'))}</b></summary><div id="ch-comm-zone"></div></details>`);
+    v.insertAdjacentHTML('beforeend', `<details class="panneau-c ch-communications" id="ch-comm"><summary><b><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-mail"/></svg> ${esc(t('chsld.accueil.communications'))}</b></summary><div id="ch-comm-zone"></div></details>`);
     const comm = v.querySelector('#ch-comm'); comm.open = window.__chCommOuvert === true; comm.addEventListener('toggle', () => { window.__chCommOuvert = comm.open; });
     const zc = v.querySelector('#ch-comm-zone');
     panneauMessagesFamilles(zc);
@@ -688,7 +688,7 @@
       <p class="note">${L('regle')}</p>
       <div class="li-onglets" role="tablist" aria-label="${L('titre_court')}">${ONGLETS_LIAISON.map((o) => `<button type="button" role="tab" class="li-onglet" data-li-onglet="${o}" aria-selected="${o === onglet}">${L(`onglet_${o}`)} <span class="n num">${n[o]}</span></button>`).join('')}</div>
       <div class="panneau-c"><p class="note">${L(`aide_${onglet}`)}</p><div class="liste">${liste.map(carteLiaison).join('') || `<p class="note">${L(`aucun_${onglet}`)}</p>`}</div></div>`;
-    v.querySelectorAll('[data-li-onglet]').forEach((b) => { b.onclick = () => { etat.liaisonOnglet = b.dataset.liOnglet; vueLiaison(); }; });
+    v.querySelectorAll('[data-li-onglet]').forEach((b) => { b.onclick = () => { etat.liaisonSuivre = null; etat.liaisonOnglet = b.dataset.liOnglet; vueLiaison(); }; });
     brancherLiaison(v);
     if (ongletSuivi) {
       const carte = v.querySelector(`[data-coordination="${suivie}"]`) || v.querySelector(`.li-carte [data-id="${suivie}"]`)?.closest('.li-carte');
@@ -708,7 +708,11 @@
       if (a === 'transferer') {
         const hopitaux = (await api('GET', `/liaison-chsld/hopitaux?etablissement_id=${ctx()}`)).filter((h) => h.id !== ctx());
         return modale(L('action_transferer'), `<p class="note">${L('transferer_aide')}</p>${sel('li-hopital', L('transferer_vers'), hopitaux.map((h) => [h.id, h.nom]))}${champ('li-motif', C('actions.motif'), '', 'maxlength="200"')}`,
-          [{ label: t('general.annuler') }, { label: t('general.confirmer'), pri: true, run: async () => (await agir(null, () => api('POST', `/coordinations/${id}/transfert-hopital`, { hopital_id: Number($('#li-hopital').value), motif_admin: $('#li-motif').value }), ok)) !== null || false }]);
+          [{ label: t('general.annuler') }, { label: t('general.confirmer'), pri: true, run: async () => (await agir(null, async () => {
+            const transfert = await api('POST', `/coordinations/${id}/transfert-hopital`, { hopital_id: Number($('#li-hopital').value), motif_admin: $('#li-motif').value });
+            etat.liaisonSuivre = transfert.id; etat.liaisonSuivreLe = Date.now();
+            return transfert;
+          }, ok)) !== null || false }]);
       }
       if (a === 'refuser') return modale(L('action_refuser'), `<p>${esc(numero)}</p>${champ('li-motif', L('motif_refus'), '', 'maxlength="200"')}`,
         [{ label: t('general.annuler') }, { label: L('action_refuser'), pri: true, run: async () => (await agir(null, () => action({ motif: $('#li-motif').value }), ok)) !== null || false }]);

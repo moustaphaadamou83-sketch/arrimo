@@ -28,10 +28,11 @@
     if (!ctx()) return;
     const d = await appel('GET', `/messagerie/fils?etablissement_id=${ctx()}`).catch(() => null); if (!d) return;
     const n = document.getElementById('n-messagerie'); if (n) { n.hidden = !d.non_lus; n.textContent = String(d.non_lus); }
+    window.ArrimoSon?.compter(`msg:${ctx()}`, d.non_lus, 'message');   // son : chaque nouveau message
     return d;
   }
   function entete() {
-    return `<div class="msg-tete"><h2 id="msg-titre">✉ ${T('titre')}</h2><button class="btn" type="button" data-msg-fermer>${T('fermer')}</button></div>
+    return `<div class="msg-tete"><h2 id="msg-titre"><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-mail"/></svg> ${T('titre')}</h2><button class="btn" type="button" data-msg-fermer>${T('fermer')}</button></div>
       <div class="msg-onglets" role="tablist">${['mes', 'contacter', 'nouveau', 'annonces'].map((k) => `<button type="button" role="tab" aria-selected="${onglet === k}" data-msg-onglet="${k}">${T(k)}</button>`).join('')}</div>`;
   }
   async function rendre() {

@@ -50,7 +50,7 @@
     let pt, pn; try { [pt, pn] = await Promise.all([o.api('GET', `/parametres-modules/taches?etablissement_id=${o.etablissement_id}`), o.api('GET', `/parametres-modules/nettoyage?etablissement_id=${o.etablissement_id}`)]); } catch { zone.remove(); return; }
     const dis = admin ? '' : ' disabled';
     const num = (id, v, min, max) => `<div class="champ"><label class="lbl" for="mp-${id}">${T(id)}</label><input id="mp-${id}" type="number" inputmode="numeric" min="${min}" max="${max}" step="1" value="${v}"${dis}></div>`;
-    zone.innerHTML = `<details class="panneau-c mt-params"><summary><b>⚙ ${T('params')}</b></summary><p class="note">${T('params_intro')}${admin ? '' : ` ${T('lecture')}`}</p>
+    zone.innerHTML = `<details class="panneau-c mt-params"><summary><b><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-settings"/></svg> ${T('params')}</b></summary><p class="note">${T('params_intro')}${admin ? '' : ` ${T('lecture')}`}</p>
       <form data-mp="taches"><h3>${T('p_taches')}</h3>${num('echeance_defaut_min', pt.valeurs.echeance_defaut_min, 0, 2880)}${num('prioritaire_avant_min', pt.valeurs.prioritaire_avant_min, 0, 1440)}
         <label class="case"><input type="checkbox" id="mp-notifier_attribution"${pt.valeurs.notifier_attribution ? ' checked' : ''}${dis}> ${T('notifier_attribution')}</label>
         <div class="champ"><label class="lbl" for="mp-attribution_auto">${T('attribution_auto')}</label><select id="mp-attribution_auto"${dis}><option value="aucune">${T('auto_aucune')}</option><option value="seul_agent"${pt.valeurs.attribution_auto === 'seul_agent' ? ' selected' : ''}>${T('auto_seul')}</option></select></div>${admin ? `<p><button class="btn pri" type="submit">${T('enregistrer')}</button></p>` : ''}</form>
@@ -74,7 +74,7 @@
     const lib = (k) => (k === 'ouvertes' ? T('toutes') : T(k));
     const types = [...new Set([...d.taches, ...(d.terminees || [])].map((x) => x.type))];
     const liste = groupes[etat.vue] || ouvertes;
-    v.innerHTML = `<div class="entete"><div><h2>✔ ${T('titre')}</h2><p class="note">${T('intro')}</p></div></div>
+    v.innerHTML = `<div class="entete"><div><h2><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-check"/></svg> ${T('titre')}</h2><p class="note">${T('intro')}</p></div></div>
       <div class="flux-groupes" role="group" aria-label="${T('filtre_vue')}">${Object.keys(groupes).map((k) => `<button type="button" class="acc-mini-k flux-groupe${etat.vue === k ? ' actif' : ''}${k === 'retard' && groupes[k].length ? ' alerte' : ''}" data-mt-vue="${k}" aria-pressed="${etat.vue === k}"><b>${groupes[k].length}</b><span>${lib(k)}</span></button>`).join('')}</div>
       ${types.length > 1 ? `<div class="ligne"><label class="lbl" for="mt-type">${T('filtre_type')}</label><select id="mt-type"><option value="">${T('tous_types')}</option>${types.map((k) => `<option value="${k}"${etat.type === k ? ' selected' : ''}>${e(X().ty[k] || k)}</option>`).join('')}</select></div>` : ''}
       ${liste.length ? `<ul class="mt-liste">${liste.map((x) => carte(x, d, o)).join('')}</ul>` : `<p class="note">${T('aucune')}</p>`}

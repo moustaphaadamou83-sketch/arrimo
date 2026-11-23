@@ -124,6 +124,9 @@ window.ARRIMO_I18N.fr = {
     activer: 'Activer l’organisation', desactiver: 'Désactiver l’organisation',
   },
   chrono: {
+    pilote_observe: '{n} passages terminés mesurés · {minutes} min d’immobilisation observées · {depasses} attentes hors cible',
+    filtre_vehicule: 'Véhicule', filtre_organisation: 'Entreprise', filtre_periode: 'Passages terminés depuis', periode_heures: '{n} heures', filtrer: 'Filtrer',
+    attente_seuil: 'Au seuil ou au-delà', attente_moyenne: 'Attente en cours moyenne', attente_mediane: 'Attente en cours médiane', attente_cumulee: 'Attente en cours cumulée', actualise: 'Actualisé à {h}',
     titre: 'Chrono · ambulances à l’urgence', intro: 'Cibles : civière libérée en {porte} min après l’arrivée, départ {sortie} min après, {total} min au total. Mêmes heures pour l’urgence, l’ambulance et le CCS.',
     indicatif: 'Définitions du guide du MSSS ; chiffres indicatifs avant validation avec la première entreprise ambulancière. Arrimo mesure, ne calcule aucune prime ni pénalité.',
     en_route: 'En route', a_la_porte: 'À la porte', termines: 'Passages terminés (12 dernières heures)', aucune_porte: 'Aucune ambulance à la porte.', aucune_route: 'Aucune ambulance annoncée.', aucun_termine: 'Aucun passage terminé.',
@@ -141,6 +144,7 @@ window.ARRIMO_I18N.fr = {
     manquantes: 'Étapes manquantes (jamais estimées) :', ecarts: 'Contrôle des écarts (heure saisie ou corrigée / heure détectée)', aucun_ecart: 'Aucun écart de 5 min ou plus.', detectee: 'détectée', ecart: 'écart {n} min',
   },
   transport_planifie: {
+    historique: 'Historique des transports', activite: 'Transports actifs et récents', brouillon: 'Enregistrer en brouillon', brouillon_ok: 'Brouillon enregistré.', retirer_brouillon: 'Retirer le brouillon', retirer_brouillon_ok: 'Brouillon retiré.', archiver: 'Archiver', archiver_ok: 'Transport archivé.', archive: 'Archivé',
     titre: 'Transports non urgents', intro: 'Réservez un transport (retour à domicile, transfert stable, départ NSA, retour en résidence) : le transporteur confirme une plage ou refuse avec un motif. Il ne voit que la référence et les lieux.',
     reserver: 'Réserver un transport', aucun: 'Aucun transport réservé.', numero: 'Numéro', motif: 'Motif', patient: 'Référence', destination: 'Destination', plage: 'Plage', statut: 'Statut', annuler: 'Annuler', annule: 'Transport annulé.',
     lit: 'lit {lit}', confirmee: 'Confirmé {debut}-{fin}', demandee: 'Demandé : {jour}-{fin}', veille: 'Réservation la veille recommandée.',
@@ -714,7 +718,7 @@ window.ARRIMO_I18N.fr = {
     nouveau_compte: 'Nouveau compte', nom: 'Nom', courriel: 'Adresse courriel', role: 'Rôle', etablissements: 'Établissements', creer: 'Créer le compte',
     creer_aide: 'Un mot de passe temporaire est généré ; la personne le change à sa première connexion.',
     th_nom: 'Nom', th_role: 'Rôle', th_etabs: 'Établissements', th_securite: 'Sécurité', th_connexion: 'Dernière connexion',
-    desactive: 'désactivé', tout_le_reseau: 'Tout le réseau', double_ok: 'Double auth. ✓', mdp_seul: 'Mot de passe seul', mdp_temp: 'Mot de passe temporaire',
+    desactive: 'désactivé', tout_le_reseau: 'Tout le réseau', double_ok: 'Double auth. active', mdp_seul: 'Mot de passe seul', mdp_temp: 'Mot de passe temporaire',
     reinitialiser: 'Réinitialiser', desactiver: 'Désactiver', reactiver: 'Réactiver', compte_cree: 'Compte créé : {email}',
     temp_a_transmettre: 'Mot de passe temporaire à transmettre à la personne :', reinit_titre: 'Réinitialiser · {nom}',
     reinit_aide: 'Un nouveau mot de passe temporaire sera créé et toutes ses sessions seront fermées.',

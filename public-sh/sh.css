@@ -178,3 +178,10 @@ table.compact { min-width: 0; }
 .avance-modules { margin-top: var(--e4); }
 .avance-modules summary { cursor: pointer; font-weight: 600; }
 @media (max-width: 700px) { .grille-modules { grid-template-columns: 1fr; } }
+.ic { width: 18px; height: 18px; flex: none; vertical-align: -4px; display: inline-block; }
+.carte-emoji .ic { width: 22px; height: 22px; color: var(--principal, #0E5E6F); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.erp-barre { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 8px 0; }
+.erp-recherche { min-height: 40px; min-width: min(100%, 260px); padding: 6px 10px; border: 1px solid var(--bordure, #E2E8F0); border-radius: 10px; font: inherit; }
+.erp-pages { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
+th.erp-triable { cursor: pointer; } th.erp-triable[aria-sort="ascending"]::after { content: " \2191"; } th.erp-triable[aria-sort="descending"]::after { content: " \2193"; }

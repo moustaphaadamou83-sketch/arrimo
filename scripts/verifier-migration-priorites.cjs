@@ -19,6 +19,8 @@ async function verifier() {
   const pool = creerPool(cible);
   try {
     if ((await pool.query('SELECT current_database() AS nom')).rows[0].nom !== url.pathname.slice(1)) refuser('BASE_INATTENDUE');
+    const stabilisation = process.argv.includes('--stabilisation');
+    if (stabilisation) tables.push('missions_ccs', 'passages_chrono', 'organisations_secours');
     const colonnes = {};
     for (const table of tables) {
       colonnes[table] = (await pool.query('SELECT column_name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name=$1 ORDER BY ordinal_position', [table])).rows.map((r) => r.column_name);
@@ -40,7 +42,15 @@ async function verifier() {
       }
       return resultat;
     };
-    const sql = ['20261025-priorites.sql','20261025-simulation.sql'].map((f) => fs.readFileSync(require.resolve(`../db/migrations/${f}`), 'utf8')).join('\n');
+    const migrations = stabilisation ? [
+      '20261123-interventions-ccs-demo.sql',
+      '20261123-chrono-motifs-retard.sql',
+      '20261123-chrono-alertes.sql',
+      '20261123-secours-perimetres-vehicules.sql',
+    ] : ['20261025-priorites.sql', '20261025-simulation.sql'];
+    // La vérification porte déjà une transaction.
+    const sql = migrations.map((f) => fs.readFileSync(require.resolve(`../db/migrations/${f}`), 'utf8')
+      .replace(/^\s*BEGIN;\s*/i, '').replace(/\s*COMMIT;\s*$/i, '')).join('\n');
     const repetitions = [];
     for (let numero = 1; numero <= 2; numero += 1) {
       repetitions.push(await transaction(pool, async (c) => {
@@ -53,6 +63,20 @@ async function verifier() {
         if (JSON.stringify(avant) !== JSON.stringify(apres)) refuser('CONTENU_EXISTANT_MODIFIE');
         return { repetition: numero, donnees_preservees: true, lignes: Object.fromEntries(tables.map((t) => [t, apres[t].total])) };
       }));
+    }
+    if (stabilisation) {
+      const { rows: [schema] } = await pool.query(`SELECT
+        to_regclass('interventions_ccs_demo') IS NOT NULL AS interventions,
+        to_regclass('passages_chrono_motifs') IS NOT NULL AS motifs,
+        EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema()
+          AND table_name = 'missions_ccs' AND column_name = 'intervention_demo_id') AS lien,
+        EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema()
+          AND table_name = 'passages_chrono' AND column_name = 'alerte_notifiee_le') AS alerte,
+        to_regclass('utilisateur_unites_secours') IS NOT NULL AS vehicules`);
+      if (Object.values(schema).some((presente) => !presente)) refuser('SCHEMA_STABILISATION_INCOMPLET');
+      console.log(JSON.stringify({ statut: 'migration_verifiee_sur_copie', migrations, migration_sha256: crypto.createHash('sha256').update(sql).digest('hex'),
+        repetitions, schema, restauration_effectuee_par_ce_script: false, publication_effectuee: false }, null, 2));
+      return;
     }
     const proprietaires = (await pool.query("SELECT relname,pg_get_userbyid(relowner) AS proprietaire FROM pg_class WHERE oid IN ('admission_referentiels'::regclass,'admission_habilitations'::regclass,'connecteurs_simulation_config'::regclass,'connecteurs_correspondances'::regclass,'connecteurs_simulation_flux'::regclass,'connecteurs_simulation_evenements'::regclass)")).rows;
     console.log(JSON.stringify({ statut: 'migration_verifiee_sur_copie', migration_sha256: crypto.createHash('sha256').update(sql).digest('hex'), repetitions, proprietaires,

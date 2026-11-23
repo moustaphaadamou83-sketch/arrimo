@@ -73,12 +73,80 @@ test('départ (unité exigée), prise en charge → lit au nettoyage, arrivée ;
   assert.strictEqual((await appel('ta', 'POST', `/secours/transports/${ids.d1}/action`, { action: 'en_route', unite_id: ids.u1 })).statut, 200);
   assert.strictEqual((await appel('ta', 'POST', `/secours/transports/${ids.d1}/action`, { action: 'pris_en_charge' })).statut, 200);
   assert.strictEqual((await pool.query('SELECT etat FROM lits WHERE id = $1', [ids.lit.id])).rows[0].etat, 'nettoyage', 'lit libéré à la prise en charge');
+  const d = await appel('ta', 'POST', `/secours/transports/${ids.d1}/action`, { action: 'partir_destination' });
+  assert.strictEqual(d.statut, 200);
+  assert.ok(d.corps.depart_reel);
+  assert.strictEqual((await appel('ta', 'POST', `/secours/transports/${ids.d1}/action`, { action: 'partir_destination' })).corps.deja, true);
   assert.strictEqual((await appel('ta', 'POST', `/secours/transports/${ids.d1}/action`, { action: 'arrivee' })).statut, 200);
   const h = (await pool.query("SELECT etape FROM horodatages WHERE objet = 'demande_transport' AND objet_id = $1 ORDER BY id", [ids.d1])).rows.map((r) => r.etape);
-  assert.deepStrictEqual(h, ['demande', 'decision', 'prise_en_charge', 'arrivee']);
+  assert.deepStrictEqual(h, ['demande', 'decision', 'prise_en_charge', 'depart', 'arrivee']);
   const vue = (await appel('tremblay', 'GET', `/transports?etablissement_id=${ids.mb}`)).corps.find((x) => x.id === ids.d1);
   assert.ok(vue.plage_confirmee_debut); assert.strictEqual(vue.statut, 'arrivee');
+  assert.ok(vue.durees_planifiees.trajet_patient >= 0);
   assert.ok((await pool.query("SELECT 1 FROM v_demandes WHERE circuit = 'transport' AND id = $1 AND statut = 'terminee'", [ids.d1])).rowCount, 'lecture commune des demandes');
+  const etat = async () => (await pool.query('SELECT etat FROM etats_vehicules WHERE unite_id = $1', [ids.u1])).rows[0].etat;
+  const action = (nom) => appel('ta', 'POST', `/secours/transports/${ids.d1}/action`, { action: nom });
+  assert.strictEqual(await etat(), 'a_l_hopital');
+  assert.strictEqual((await appel('ta', 'POST', `/secours/unites/${ids.u1}/etat`, { etat: 'disponible' })).corps.code, 'vehicule_mission_active');
+  assert.strictEqual((await action('terminer')).statut, 409);
+  assert.strictEqual((await action('remis')).statut, 200);
+  assert.strictEqual(await etat(), 'a_l_hopital');
+  assert.strictEqual((await action('terminer')).statut, 200);
+  assert.strictEqual(await etat(), 'disponible');
+});
+
+test('véhicule planifié : deux acceptations concurrentes ne réservent pas la même plage', async () => {
+  const premier = await demande({ reference: 'P-88021', plage_debut: dans(48), plage_fin: dans(50) });
+  const second = await demande({ reference: 'P-88022', plage_debut: dans(49), plage_fin: dans(51) });
+  assert.strictEqual(premier.statut, 200);
+  assert.strictEqual(second.statut, 200);
+  const accepter = (id) => appel('ta', 'POST', `/secours/transports/${id}/action`,
+    { action: 'accepter', unite_id: ids.u1 });
+  const reponses = await Promise.all([accepter(premier.corps.id), accepter(second.corps.id)]);
+  assert.deepStrictEqual(reponses.map((r) => r.statut).sort(), [200, 409]);
+  assert.strictEqual(reponses.find((r) => r.statut === 409).corps.code, 'transport_vehicule_reserve');
+  const affectee = reponses.find((r) => r.statut === 200).corps;
+  const unit = (await pool.query(`INSERT INTO unites_secours (organisation_id, numero, type_vehicule)
+    VALUES ($1, 'TA-02', 'transport_adapte') RETURNING id`, [ids.amb])).rows[0];
+  const changement = await appel('ta', 'POST', `/secours/transports/${affectee.id}/action`,
+    { action: 'affecter', unite_id: unit.id, version: affectee.version });
+  assert.strictEqual(changement.statut, 200);
+  assert.strictEqual(changement.corps.unite_id, unit.id);
+  const historique = (await pool.query("SELECT detail FROM demande_transport_evenements WHERE demande_id = $1 AND type = 'affecter'", [affectee.id])).rows;
+  assert.strictEqual(historique[0].detail.unite_id_avant, ids.u1);
+  const horaire = { action: 'replanifier', version: changement.corps.version, plage_confirmee_debut: dans(60), plage_confirmee_fin: dans(61) };
+  const url = `/secours/transports/${affectee.id}/action`;
+  assert.strictEqual((await appel('ta', 'POST', url, { ...horaire, plage_confirmee_fin: dans(59) })).corps.code, 'plage_invalide');
+  const replanifie = await appel('ta', 'POST', url, horaire);
+  assert.strictEqual(replanifie.statut, 200);
+  assert.strictEqual(new Date(replanifie.corps.plage_confirmee_debut).toISOString(), horaire.plage_confirmee_debut);
+  assert.strictEqual(new Date(replanifie.corps.plage_debut).toISOString(), new Date(affectee.plage_debut).toISOString());
+  assert.strictEqual((await appel('ta', 'POST', url, horaire)).corps.code, 'version_perimee');
+});
+
+test('brouillon privé, retrait sans transmission et archive consultable', async () => {
+  const draft = await demande({ reference: 'P-88026', destination_id: ids.sl, brouillon: true });
+  assert.strictEqual(draft.statut, 200);
+  assert.strictEqual(draft.corps.statut, 'a_valider');
+  const id = draft.corps.id;
+  for (const [role, route] of [
+    ['ta', `/secours/transports/${id}`], ['bouchard', `/transports/${id}?etablissement_id=${ids.sl}`],
+    ['bouchard', `/arrimo-flux/fiche?type=transport&id=${id}`], ['bouchard', `/sillage?objet=demande_transport&id=${id}`],
+  ]) assert.strictEqual((await appel(role, 'GET', route)).statut, 404, route);
+  const chemin = `/transports/${id}/action`;
+  const retire = await appel('tremblay', 'POST', chemin, { etablissement_id: ids.mb, action: 'retirer_brouillon', version: draft.corps.version });
+  assert.strictEqual(retire.statut, 200);
+  assert.ok(!(await appel('tremblay', 'GET', `/transports?etablissement_id=${ids.mb}`)).corps.some((d) => d.id === id));
+  const evenements = await pool.query('SELECT type FROM demande_transport_evenements WHERE demande_id = $1 ORDER BY id', [id]);
+  assert.deepStrictEqual(evenements.rows.map((e) => e.type), ['preparee', 'retirer_brouillon']);
+  const archive = await appel('tremblay', 'POST', `/transports/${ids.d2}/action`, { etablissement_id: ids.mb, action: 'archiver' });
+  assert.strictEqual(archive.statut, 200);
+  const lire = (suffixe = '') => appel('tremblay', 'GET', `/transports?etablissement_id=${ids.mb}${suffixe}`);
+  assert.ok(!(await lire()).corps.some((d) => d.id === ids.d2));
+  assert.ok((await lire('&historique=1')).corps.some((d) => d.id === ids.d2 && d.archivee));
+  const fiche = await appel('ta', 'GET', `/secours/transports/${ids.d2}`);
+  assert.strictEqual(fiche.statut, 200);
+  assert.ok(fiche.corps.evenements.some((e) => e.type === 'archiver'));
 });
 
 test('anglais : chaque texte de l’écran et de l’ambulance existe en FR et en EN', () => {

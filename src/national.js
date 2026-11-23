@@ -85,21 +85,34 @@ async function national(pool, utilisateur, depuisId, f = {}) {
 }
 
 /** Points de la carte : tous les établissements filtrés, position et niveau d'alerte (calculé en quelques requêtes groupées). */
-async function carte(pool, utilisateur, depuisId) {
+async function carte(pool, utilisateur, depuisId, { synthese = false } = {}) {
   exigerEtablissement(utilisateur, depuisId);
   const ici = await s.etablissement(pool, depuisId);
   s.exigerActif(ici);
+  if (synthese && (!require('./types-etablissement').moduleActif(ici, 'national') || utilisateur.role === 'entretien')) {
+    throw new ErreurHttp(403, 'module_desactive', { module: 'national' });
+  }
   const cfg = ici.config;
   const { rows } = await pool.query(
-    `SELECT e.id, e.nom, e.ville, e.latitude, e.longitude, (e.id = $1) AS moi,
+    `SELECT e.id, e.nom, e.ville, e.latitude, e.longitude, e.region_id, (e.id = $1) AS moi,
             count(l.*) FILTER (WHERE l.etat <> 'indispo')::int AS dotes, count(l.*) FILTER (WHERE l.etat = 'libre')::int AS libres,
+            count(l.*) FILTER (WHERE l.etat = 'occupe')::int AS occupes,
             (SELECT count(*)::int FROM demandes_admission d WHERE d.etablissement_id = e.id AND d.statut = 'attente') AS attente
        FROM etablissements e LEFT JOIN lits l ON l.etablissement_id = e.id
       WHERE e.actif AND e.module_actif AND e.config_id = $2 AND (e.partage <> 'aucun' OR e.id = $1)
       GROUP BY e.id`, [ici.id, ici.config_id]);
   const urgences = await cv.statsUrgence(pool, rows.map((r) => r.id));
+  const niveau = (r) => s.niveauDepuis(r.dotes, r.libres, r.attente, cfg, urgences.get(r.id)).niveau;
+  if (synthese) {
+    const regions = new Set(rows.map((r) => r.region_id).filter((id) => id != null));
+    const dotes = rows.reduce((total, r) => total + r.dotes, 0);
+    const occupes = rows.reduce((total, r) => total + r.occupes, 0);
+    return { etablissements: rows.length, regions: regions.size,
+      occupation: dotes ? Math.round(100 * occupes / dotes) : null,
+      alertes: rows.filter((r) => niveau(r) === 'rouge').length };
+  }
   return rows.map((r) => ({ id: r.id, nom: r.nom, ville: r.ville, latitude: r.latitude, longitude: r.longitude, moi: r.moi, libres: r.libres,
-    niveau: s.niveauDepuis(r.dotes, r.libres, r.attente, cfg, urgences.get(r.id)).niveau }));
+    niveau: niveau(r) }));
 }
 
 module.exports = { national, carte };

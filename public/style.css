@@ -929,3 +929,27 @@ button.flux-groupe:focus-visible { outline: 3px solid var(--principal); outline-
 .espace-params { margin-left: auto; font: inherit; font-size: .9rem; font-weight: 600; color: inherit; background: none; border: 1px solid rgba(255,255,255,.35); border-radius: 999px; padding: 4px 12px; min-height: 36px; cursor: pointer; }
 .espace-params:hover { background: rgba(255,255,255,.12); } .espace-params:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
 #onglets:not(.avec-espaces) .espace-params { display: none; }
+/* KPI expliqués (catalogue central) : bouton d'information dans le coin de la carte */
+.acc-kpi-c { position: relative; display: grid; }
+.acc-kpi-c .acc-kpi { padding-right: 44px; }
+.acc-kpi-i { position: absolute; top: 2px; right: 2px; width: 40px; height: 40px; display: grid; place-items: center; background: none; border: 0; border-radius: 10px; color: var(--texte-2-fond); cursor: pointer; z-index: 1; }
+.acc-kpi-i:hover { color: var(--principal); background: rgba(14,94,111,.08); } .acc-kpi-i:focus-visible { outline: 3px solid var(--principal); outline-offset: 0; }
+.acc-kpi-fiche { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; } .acc-kpi-fiche dt { font-weight: 700; color: var(--texte-2-fond); } .acc-kpi-fiche dd { margin: 0; }
+/* Grille sans espaces vides : les cartes gardent la hauteur de leur contenu (aucun étirement artificiel) */
+.acc-grille { align-items: start; }
+.acc-grille > * > .panneau-c, .acc-grille > .panneau-c { height: auto; }
+/* Tableaux ERP : recherche, tri, pagination */
+.erp-barre { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 8px 0; }
+.erp-recherche { min-height: 40px; min-width: min(100%, 260px); padding: 6px 10px; border: 1px solid var(--bordure); border-radius: 10px; background: var(--carte); color: var(--texte); font: inherit; }
+.erp-pages { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
+th.erp-triable { cursor: pointer; user-select: none; }
+th.erp-triable:focus-visible { outline: 3px solid var(--principal); outline-offset: -3px; }
+th.erp-triable[aria-sort="ascending"]::after { content: " \2191"; } th.erp-triable[aria-sort="descending"]::after { content: " \2193"; }
+.acc-prio { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--bordure); list-style: none; }
+.acc-prio:last-child { border-bottom: 0; } .acc-priorites ul.liste-simple { padding-left: 0; }
+
+@media (max-width: 560px) {
+  .acc-kpi-fiche { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .acc-kpi-fiche dt,
+  .acc-kpi-fiche dd { min-width: 0; overflow-wrap: anywhere; }
+}

@@ -53,6 +53,14 @@ test('DSN : parcours clinique complet, habilitations, prescription simulée, auc
   // Admission : patient synthétique
   const p = await appel('admission', 'POST', '/dsn/patients', { etablissement_id: ids.h, prenom: 'Alice', nom: 'Démo-Synthèse', date_naissance: '1944-03-02' });
   assert.strictEqual(p.s, 200, JSON.stringify(p.d)); ids.p = p.d.id;
+  for (const q of ['alice', 'démo', 'Démo-Synthèse   Alice', p.d.reference.toLowerCase()]) {
+    const liste = await appel('admission', 'GET', `/dsn/patients?etablissement_id=${ids.h}&q=${encodeURIComponent(q)}`);
+    assert.strictEqual(liste.s, 200);
+    assert.ok(liste.d.patients.some((patient) => patient.id === ids.p), q);
+  }
+  const litteral = await appel('admission', 'GET', `/dsn/patients?etablissement_id=${ids.h}&q=%25`);
+  assert.deepStrictEqual(litteral.d.patients, []);
+  assert.strictEqual((await appel('admission', 'GET', `/dsn/patients?etablissement_id=${ids.m}&q=${p.d.reference}`)).s, 403);
   assert.strictEqual((await appel('admission', 'POST', `/dsn/patients/${ids.p}/elements`, { genre: 'diagnostic', donnees: { libelle: 'Fictif' } })).s, 403, 'l’admission ne pose pas de diagnostic');
   // Infirmière : allergie ; médecin : diagnostic, prescription simulée validée
   const al = await appel('infirmiere', 'POST', `/dsn/patients/${ids.p}/elements`, { genre: 'allergie', donnees: { substance: 'Pénicilline (fictif)', gravite: 'severe' } });
@@ -81,10 +89,15 @@ test('DSN : transition Hôpital → Maison de retraite ; la destination ne voit 
   const el = (await pool.query("SELECT id FROM dsn_elements WHERE patient_id = $1 AND remplace_par IS NULL AND genre IN ('allergie', 'prescription')", [ids.p])).rows.map((r) => r.id);
   const t = await appel('medecin', 'POST', `/dsn/patients/${ids.p}/transitions`, { destination_id: ids.m, elements: el, note_transition: 'Consignes fictives' });
   assert.strictEqual(t.s, 200, JSON.stringify(t.d));
+  const sillage = `/sillage?objet=dsn_transition&id=${t.d.id}`;
+  assert.strictEqual((await appel('sans', 'GET', sillage)).s, 404, 'origine sans habilitation DSN');
+  assert.strictEqual((await appel('mr', 'GET', sillage)).s, 404, 'destination avant transmission');
+  assert.strictEqual((await appel('medecin', 'GET', sillage)).s, 200);
   assert.strictEqual((await appel('medecin', 'POST', `/dsn/transitions/${t.d.id}/envoyer`, {})).s, 409, 'non validée : pas d’envoi');
   assert.strictEqual((await appel('medecin', 'POST', `/dsn/transitions/${t.d.id}/valider`)).d.statut, 'valide');
   assert.strictEqual((await appel('mr', 'GET', `/dsn/transitions/recues?etablissement_id=${ids.m}`)).d.length, 0, 'invisible avant l’envoi');
   const e = await appel('medecin', 'POST', `/dsn/transitions/${t.d.id}/envoyer`, {}); assert.strictEqual(e.d.statut, 'envoye');
+  assert.strictEqual((await appel('mr', 'GET', sillage)).s, 200, 'destination après transmission');
   const n = (await pool.query("SELECT message FROM notifications WHERE etablissement_id = $1 AND code = 'dsn_transition'", [ids.m])).rows;
   assert.strictEqual(n.length, 1); assert.ok(!n[0].message.includes('Pénicilline'), 'avis sans contenu clinique');
   const r = (await appel('mr', 'GET', `/dsn/transitions/recues?etablissement_id=${ids.m}`)).d;

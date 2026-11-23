@@ -14,8 +14,21 @@ const { transaction, ErreurHttp } = require('./db');
 const { exigerEtablissement } = require('./auth');
 const { journaliser } = require('./regles');
 const pa = require('./prealertes');
+const accesVehicules = require('./acces-vehicules-secours');
+
+// Un départ NSA confirmé peut appartenir au transport lié seulement si les lieux
+// concordent et si son heure est compatible avec cette mission.
+const DEPART_NSA_SQL = `CASE WHEN d.origine_id = dh.hopital_id AND d.destination_id = dh.etablissement_id
+  AND d.resident_ref = COALESCE(NULLIF(dh.reference_externe, ''), dh.numero)
+  AND d.statut IN ('acceptee', 'en_route', 'pris_en_charge', 'arrivee')
+  AND dh.depart_hopital_le >= d.cree_le
+  AND (d.arrivee_le IS NULL OR dh.depart_hopital_le <= d.arrivee_le)
+  THEN dh.depart_hopital_le END`;
 
 const OUVERTES = ['demandee', 'acceptee', 'en_route', 'pris_en_charge'];
+const BROUILLON_PRIVE_SQL = `(d.statut = 'a_valider' OR EXISTS (
+  SELECT 1 FROM demande_transport_evenements ev_brouillon WHERE ev_brouillon.demande_id = d.id AND ev_brouillon.type = 'retirer_brouillon'))`;
+const ARCHIVE_SQL = `EXISTS (SELECT 1 FROM demande_transport_evenements ev_archive WHERE ev_archive.demande_id = d.id AND ev_archive.type = 'archiver')`;
 const ROLES_ETAB = ['coordonnateur', 'admin_etab', 'gestionnaire', 'equipe_soins'];
 const entier = (v) => { const n = Number(v); return Number.isSafeInteger(n) && n > 0 ? n : null; };
 const evenement = (c, d, type, u, detail = {}) => c.query('INSERT INTO demande_transport_evenements (demande_id, type, detail, utilisateur_id) VALUES ($1, $2, $3, $4)',
@@ -68,8 +81,8 @@ async function organisations(pool, u, etabId) {
   return organisationsRegion(pool, id);
 }
 /** Webhooks des clients concernés (établissements d'origine et de destination, entreprise) : référence du résident seulement. */
-const emettre = (c, d, evenement) => require('./webhooks').emettre(c, { etablissements: [d.origine_id, d.destination_id], organisations: [d.organisation_id], evenement,
-  charge: { numero: d.numero, statut: d.statut, resident_ref: d.resident_ref, heure_souhaitee: d.heure_souhaitee } });
+const emettre = (c, d, evenement, detail = {}) => require('./webhooks').emettre(c, { etablissements: [d.origine_id, d.destination_id], organisations: [d.organisation_id], evenement,
+  charge: { numero: d.numero, statut: d.statut, resident_ref: d.resident_ref, heure_souhaitee: d.heure_souhaitee, ...detail } });
 const numero = async (c) => `DT-${String((await c.query("SELECT nextval('transport_demande_seq') AS n")).rows[0].n).padStart(6, '0')}`;
 
 /** L'établissement d'origine de la coordination demande le transport (avant le départ confirmé). */
@@ -120,7 +133,26 @@ async function demander(pool, u, coordinationId, b) {
   });
 }
 
-const CHAMPS = `d.*, o.nom AS organisation, un.numero AS unite, un.plaque, eo.nom AS origine, eo.adresse AS origine_adresse, eo.ville AS origine_ville,
+/** Durées entre faits constatés. Un intervalle incomplet ou inversé reste inconnu. */
+function dureesPlanifiees(d) {
+  const minutes = (debut, fin) => {
+    if (!debut || !fin) return null;
+    const delai = new Date(fin).getTime() - new Date(debut).getTime();
+    return Number.isFinite(delai) && delai >= 0 ? Math.round(delai / 6000) / 10 : null;
+  };
+  return {
+    reponse: minutes(d.demande_transmise_le, d.acceptee_le),
+    mobilisation: minutes(d.acceptee_le, d.en_route_le),
+    vers_prise_en_charge: minutes(d.en_route_le, d.sur_place_le),
+    attente_prise_en_charge: minutes(d.sur_place_le, d.pris_en_charge_le),
+    trajet_patient: minutes(d.depart_reel, d.arrivee_le),
+    attente_remise: minutes(d.arrivee_le, d.remis_le),
+    remise_en_condition: minutes(d.remis_le, d.terminee_le),
+    engagement: minutes(d.en_route_le, d.terminee_le),
+  };
+}
+
+const CHAMPS = `d.*, COALESCE(h_depart.heure, ${DEPART_NSA_SQL}) AS depart_reel, h_demande.heure AS demande_transmise_le, o.nom AS organisation, un.numero AS unite, un.plaque, eo.nom AS origine, eo.adresse AS origine_adresse, eo.ville AS origine_ville,
   COALESCE(ed.nom, d.destination_libelle) AS destination, ed.ville AS destination_ville, ed.type_etablissement AS destination_type, l.code AS lit_code, co.numero AS coordination, co.type AS coordination_type, co.statut AS coordination_statut,
   pref.categorie AS categorie_urgence, pref.hopital_prefere_id, hp.nom AS hopital_prefere, ev.etat AS etat_vehicule, ev.modifie_le AS etat_vehicule_le,
   (SELECT json_build_object('numero', p.numero, 'statut', p.statut, 'destination_id', p.destination_id, 'destination', e2.nom, 'heure_prevue', p.heure_prevue,
@@ -131,7 +163,10 @@ const FROM = `FROM demandes_transport d JOIN organisations_secours o ON o.id = d
   JOIN etablissements eo ON eo.id = d.origine_id LEFT JOIN etablissements ed ON ed.id = d.destination_id LEFT JOIN coordinations co ON co.id = d.coordination_id
   LEFT JOIN lits l ON l.id = d.lit_id
   LEFT JOIN demande_transport_preferences pref ON pref.demande_id = d.id LEFT JOIN etablissements hp ON hp.id = pref.hopital_prefere_id
-  LEFT JOIN etats_vehicules ev ON ev.unite_id = d.unite_id`;
+  LEFT JOIN etats_vehicules ev ON ev.unite_id = d.unite_id
+  LEFT JOIN demandes_hebergement dh ON dh.id = d.demande_hebergement_id
+  LEFT JOIN v_horodatages_courants h_depart ON h_depart.objet = 'demande_transport' AND h_depart.objet_id = d.id AND h_depart.etape = 'depart'
+  LEFT JOIN v_horodatages_courants h_demande ON h_demande.objet = 'demande_transport' AND h_demande.objet_id = d.id AND h_demande.etape = 'demande'`;
 
 /**
  * Transport non urgent (cahier v2, C.4 ; 20 nov. 2026) : un hôpital ou une résidence réserve un transport SANS coordination CHSLD
@@ -166,7 +201,7 @@ async function planifier(pool, u, b) {
     const l = (await pool.query("SELECT id, patient_ref, etat FROM lits WHERE id = $1 AND etablissement_id = $2", [entier(b.lit_id), origine])).rows[0];
     if (!l || l.etat !== 'occupe') throw new ErreurHttp(409, 'lit_non_occupe', { code: '' });
     litId = l.id; ref = l.patient_ref;
-    const ouvert = (await pool.query(`SELECT numero FROM demandes_transport WHERE lit_id = $1 AND statut = ANY($2)`, [litId, OUVERTES])).rows[0];
+    const ouvert = (await pool.query(`SELECT numero FROM demandes_transport WHERE lit_id = $1 AND statut = ANY($2)`, [litId, ['a_valider', ...OUVERTES]])).rows[0];
     if (ouvert) throw new ErreurHttp(409, 'transport_deja_demande', { numero: ouvert.numero });
   } else {
     ref = String(b.reference || '').trim();
@@ -174,13 +209,18 @@ async function planifier(pool, u, b) {
   }
   const d = await transaction(pool, async (c) => {
     const r = (await c.query(`INSERT INTO demandes_transport (numero, organisation_id, origine_id, destination_id, destination_libelle, resident_ref, heure_souhaitee, infos,
-        motif_transport, type_vehicule, plage_debut, plage_fin, lit_id, cree_par) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $7, $11, $12, $13) RETURNING *`,
-    [await numero(c), entier(b.organisation_id), origine, destId, libelle, ref, debut, JSON.stringify(infos), b.motif_transport, b.type_vehicule, fin, litId, u.id])).rows[0];
-    await evenement(c, r, 'demandee', u, { motif_transport: r.motif_transport, type_vehicule: r.type_vehicule });
+        motif_transport, type_vehicule, plage_debut, plage_fin, lit_id, cree_par, statut) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $7, $11, $12, $13, $14) RETURNING *`,
+    [await numero(c), entier(b.organisation_id), origine, destId, libelle, ref, debut, JSON.stringify(infos), b.motif_transport, b.type_vehicule, fin, litId, u.id,
+      b.brouillon === true ? 'a_valider' : 'demandee'])).rows[0];
+    await evenement(c, r, r.statut === 'a_valider' ? 'preparee' : 'demandee', u, { motif_transport: r.motif_transport, type_vehicule: r.type_vehicule });
+    if (r.statut === 'a_valider') return r;
     await require('./horloge').marquer(c, { objet: 'demande_transport', objetId: r.id, etape: 'demande', source: 'clic', auteurId: u.id });
     await emettre(c, r, 'transport.demandee');
     await journaliser(c, { etablissementId: origine, utilisateurId: u.id, action: 'Transport réservé', detail: `${r.numero} · ${r.motif_transport}` });
     return r;
+  }).catch((e) => {
+    if (e.code === '23505' && e.constraint === 'demandes_transport_lit_ouvert') throw new ErreurHttp(409, 'transport_deja_demande', { numero: '' });
+    throw e;
   });
   require('./flux').signaler();
   // Réservation la veille recommandée : simple avertissement, jamais un refus
@@ -188,7 +228,7 @@ async function planifier(pool, u, b) {
 }
 
 /** Demandes de transport visibles : ambulance (son organisation), établissement (origine ou destination), CCS (sa région, lecture). */
-async function liste(pool, u, q = {}) {
+async function liste(pool, u, q = {}, ficheId = null) {
   let filtre; let args;
   if (pa.ROLES_AMBULANCE.includes(u.role) || pa.ROLES_CCS.includes(u.role)) {
     const orgs = (await pool.query(`SELECT o.id, o.profils, o.config_id FROM utilisateur_organisations uo JOIN organisations_secours o ON o.id = uo.organisation_id
@@ -201,14 +241,27 @@ async function liste(pool, u, q = {}) {
     if (!ROLES_ETAB.includes(u.role)) throw new ErreurHttp(403, 'role_insuffisant');
     filtre = '(d.origine_id = $1 OR d.destination_id = $1)'; args = [id];
   }
-  const rows = (await pool.query(`SELECT ${CHAMPS} ${FROM} WHERE ${filtre} AND (d.statut = ANY($2) OR d.modifie_le > now() - interval '24 hours')
-    ORDER BY (d.statut = ANY($2)) DESC, d.heure_souhaitee NULLS LAST, d.id`, [...args, ['a_valider', ...OUVERTES]])).rows
-    // COR-001 : une demande « à valider » n'est visible que des établissements, jamais du transporteur ni du CCS avant sa transmission
-    .filter((d) => d.statut !== 'a_valider' || !(pa.ROLES_AMBULANCE.includes(u.role) || pa.ROLES_CCS.includes(u.role)));
+  const attendCloture = `(d.statut = 'arrivee' AND d.motif_transport IS NOT NULL AND d.terminee_le IS NULL
+    AND ev.etat = 'a_l_hopital' AND ev.source = 'transport' AND ev.modifie_le = d.arrivee_le)`;
   const cote = pa.ROLES_AMBULANCE.includes(u.role) ? 'ambulance' : pa.ROLES_CCS.includes(u.role) ? 'ccs' : 'etablissement';
+  const droitsBrouillon = cote === 'etablissement' ? `(NOT ${BROUILLON_PRIVE_SQL} OR d.origine_id = $1)` : `NOT ${BROUILLON_PRIVE_SQL}`;
+  const historique = q.historique === '1';
+  const parametres = [...args, ['a_valider', ...OUVERTES], ficheId, historique];
+  const droitsVehicule = accesVehicules.concerne(u)
+    ? ` AND ${accesVehicules.condition('o', 'd.unite_id', parametres.push(u.id))}` : '';
+  const rows = (await pool.query(`SELECT ${CHAMPS}, COALESCE(${attendCloture}, false) AS attend_cloture, ${ARCHIVE_SQL} AS archivee,
+      EXISTS (SELECT 1 FROM demande_transport_evenements ev WHERE ev.demande_id = d.id AND ev.type = 'retirer_brouillon') AS brouillon_retire
+    ${FROM} WHERE ${filtre} AND ${droitsBrouillon}${droitsVehicule}
+      AND ($3::int IS NULL OR d.id = $3)
+      AND ($3::int IS NOT NULL OR ($4 AND d.statut IN ('arrivee', 'refusee', 'annulee'))
+        OR (NOT $4 AND NOT ${ARCHIVE_SQL} AND (d.statut = ANY($2) OR d.modifie_le > now() - interval '24 hours' OR ${attendCloture})))
+    ORDER BY (d.statut = ANY($2)) DESC, CASE WHEN $4 THEN d.modifie_le END DESC, d.heure_souhaitee NULLS LAST, d.id
+    LIMIT CASE WHEN $4 AND $3 IS NULL THEN 100 END`, parametres)).rows
+    .filter((d) => !d.brouillon_retire || ficheId != null);
   // L'état du véhicule n'est montré que pendant ce transport (ou la préalerte qui le prolonge) : jamais une autre mission
-  const enCours = (d) => OUVERTES.includes(d.statut) || (d.prealerte && pa.OUVERTES.includes(d.prealerte.statut));
-  return rows.map((d) => ({ ...d, ...(enCours(d) ? {} : { etat_vehicule: null, etat_vehicule_le: null }), actions: actions(d, u, cote, q.etablissement_id) }));
+  const enCours = (d) => OUVERTES.includes(d.statut) || d.attend_cloture || (d.prealerte && pa.OUVERTES.includes(d.prealerte.statut));
+  return rows.map((d) => ({ ...d, ...(enCours(d) ? {} : { etat_vehicule: null, etat_vehicule_le: null }),
+    ...(d.motif_transport ? { durees_planifiees: dureesPlanifiees(d) } : {}), actions: actions(d, u, cote, q.etablissement_id) }));
 }
 /**
  * Préalerte d'arrivée → préparation de la chambre attribuée (si une place est réservée pour ce résident à la destination) :
@@ -226,12 +279,20 @@ async function preparerChambre(c, d, u, eta) {
   const echeance = new Date(Date.now() + (eta == null ? 60 : eta) * 60000);
   return require('./chsld').tache(c, d.destination_id, u, { type: 'preparation_chambre', titre: `Préparer ${l.code} pour l’arrivée de ${r?.reference || d.resident_ref} (préalerte ${d.numero})`, lit_id: litId, resident_id: r?.id || null, assigne_role: 'entretien', echeance });
 }
+function transportClos(d) {
+  return ['refusee', 'annulee'].includes(d.statut) || (d.statut === 'arrivee' && (!d.motif_transport || !!d.terminee_le));
+}
+
 function actions(d, u, cote, etabId) {
   if (d.statut === 'a_valider') return cote === 'etablissement' && Number(etabId) === d.origine_id ? ['transmettre', 'annuler'] : [];
+  if (d.archivee || d.brouillon_retire) return [];
+  if (cote === 'etablissement' && Number(etabId) === d.origine_id && transportClos(d)) return ['archiver'];
   if (!OUVERTES.includes(d.statut) && !(cote === 'ambulance' && d.statut === 'arrivee')) return [];
   if (cote === 'ambulance') {
     if (d.statut === 'arrivee') return [...(!d.remis_le ? ['remis'] : []), ...(d.remis_le && !d.terminee_le ? ['terminer'] : []), ...(!d.terminee_le ? ['incident'] : [])];
     const base = d.statut === 'demandee' ? ['accepter', 'refuser'] : d.statut === 'acceptee' ? ['en_route', 'incident'] : d.statut === 'en_route' ? [...(!d.sur_place_le ? ['sur_place'] : []), 'pris_en_charge', 'incident'] : ['arrivee', 'incident'];
+    if (d.statut === 'acceptee' && d.motif_transport && u.role === 'superviseur_secours') base.push('affecter', 'replanifier');
+    if (d.statut === 'pris_en_charge' && d.motif_transport && !d.depart_reel) base.unshift('partir_destination');
     return ['en_route', 'pris_en_charge'].includes(d.statut) && d.destination_id && d.destination_type && d.destination_type !== 'hopital' ? [...base, 'prealerter'] : base;
   }
   if (cote === 'etablissement' && Number(etabId) === d.destination_id && d.prealerte_le && !d.prealerte_recue_le) return ['accuser_prealerte'];
@@ -241,21 +302,66 @@ function actions(d, u, cote, etabId) {
 const MOTIFS = ['aucune_unite', 'hors_territoire', 'autre'];
 // Libellés du journal (traduits par l'interface : journal_actions)
 const ACTIONS_JOURNAL = { transmettre: 'Transport transmis au transporteur', accepter: 'Transport accepté', refuser: 'Transport refusé', en_route: 'Ambulance en route', pris_en_charge: 'Résident pris en charge', arrivee: 'Transport arrivé', annuler: 'Transport annulé' };
+/** Sérialise les affectations d'un même véhicule et vérifie la plage avant de l'enregistrer. */
+async function verifierAffectation(c, d, uniteId, debut, fin, { depart = false } = {}) {
+  const unite = (await c.query(`SELECT id, numero, type_vehicule FROM unites_secours
+    WHERE id = $1 AND organisation_id = $2 AND actif FOR NO KEY UPDATE`, [entier(uniteId), d.organisation_id])).rows[0];
+  if (!unite) throw new ErreurHttp(404, 'unite_introuvable');
+  if (!d.motif_transport) return unite;
+  if (d.type_vehicule && d.type_vehicule !== unite.type_vehicule) throw new ErreurHttp(409, 'transport_vehicule_incompatible');
+  if ((await c.query("SELECT 1 FROM etats_vehicules WHERE unite_id = $1 AND etat = 'hors_service'", [unite.id])).rowCount) {
+    throw new ErreurHttp(409, 'transport_vehicule_incompatible');
+  }
+  if (depart && await require('./vehicules').missionActive(c, unite.id)) throw new ErreurHttp(409, 'transport_vehicule_reserve');
+  const conflit = await c.query(`SELECT 1 FROM demandes_transport t
+    WHERE t.unite_id = $1 AND t.id <> $2 AND t.statut IN ('acceptee', 'en_route', 'pris_en_charge')
+      AND COALESCE(t.plage_confirmee_debut, t.plage_debut) < $4::timestamptz
+      AND COALESCE(t.plage_confirmee_fin, t.plage_fin) > $3::timestamptz
+    LIMIT 1`, [unite.id, d.id, debut || null, fin || null]);
+  if (conflit.rowCount) throw new ErreurHttp(409, 'transport_vehicule_reserve');
+  return unite;
+}
+
 /** Étapes du transport : l'ambulance accepte (unité), part, prend en charge, arrive ; l'établissement d'origine peut annuler avant la prise en charge. */
 async function agir(pool, u, id, b) {
-  const d0 = (await pool.query('SELECT * FROM demandes_transport WHERE id = $1', [entier(id)])).rows[0];
+  const d0 = (await pool.query(`SELECT d.*, ${BROUILLON_PRIVE_SQL} AS brouillon_prive FROM demandes_transport d WHERE d.id = $1`, [entier(id)])).rows[0];
   if (!d0) throw new ErreurHttp(404, 'transport_introuvable');
   let cote;
   if (pa.ROLES_AMBULANCE.includes(u.role)) {
+    if (d0.brouillon_prive) throw new ErreurHttp(404, 'transport_introuvable');
     const ok = (await pool.query(`SELECT 1 FROM utilisateur_organisations uo JOIN organisations_secours o ON o.id = uo.organisation_id WHERE uo.utilisateur_id = $1 AND o.id = $2 AND o.actif AND 'ambulance' = ANY(o.profils)`, [u.id, d0.organisation_id])).rowCount;
     if (!ok) throw new ErreurHttp(404, 'transport_introuvable');
     cote = 'ambulance';
   } else if (ROLES_ETAB.includes(u.role) && Number(b.etablissement_id) === d0.origine_id) { exigerEtablissement(u, d0.origine_id); cote = 'etablissement'; }
-  else if (ROLES_ETAB.includes(u.role) && b.action === 'accuser_prealerte' && Number(b.etablissement_id) === d0.destination_id) { exigerEtablissement(u, d0.destination_id); cote = 'destination'; }
+  else if (ROLES_ETAB.includes(u.role) && b.action === 'accuser_prealerte' && !d0.brouillon_prive && Number(b.etablissement_id) === d0.destination_id) { exigerEtablissement(u, d0.destination_id); cote = 'destination'; }
   else throw new ErreurHttp(403, 'role_insuffisant');
   const a = String(b.action || '');
   return transaction(pool, async (c) => {
     const d = (await c.query('SELECT * FROM demandes_transport WHERE id = $1 FOR UPDATE', [d0.id])).rows[0];
+    if (cote === 'ambulance') {
+      if (!d || d.organisation_id !== d0.organisation_id || !(await accesVehicules.autorise(c, u, d.organisation_id, d.unite_id))) {
+        throw new ErreurHttp(404, 'transport_introuvable');
+      }
+      if (d.unite_id == null && ['accepter', 'en_route'].includes(a) && b.unite_id != null
+        && !(await accesVehicules.autorise(c, u, d.organisation_id, entier(b.unite_id)))) throw new ErreurHttp(404, 'unite_introuvable');
+    }
+    if (cote === 'etablissement' && ['archiver', 'retirer_brouillon', 'annuler'].includes(a)) {
+      const retirer = d.statut === 'a_valider' && ['retirer_brouillon', 'annuler'].includes(a);
+      if (retirer || a === 'archiver') {
+        if (b.version != null && Number(b.version) !== d.version) throw new ErreurHttp(409, 'version_perimee');
+        if (!retirer && !transportClos(d)) throw new ErreurHttp(409, 'transport_statut_incompatible');
+        const precedent = (await c.query(`SELECT type FROM demande_transport_evenements
+          WHERE demande_id = $1 AND type IN ('archiver', 'retirer_brouillon') LIMIT 1`, [d.id])).rows[0];
+        if (precedent) return { ...d, deja: true };
+        const n = (await c.query(`UPDATE demandes_transport SET statut = $2, version = version + 1, modifie_le = now() WHERE id = $1 RETURNING *`,
+          [d.id, retirer ? 'annulee' : d.statut])).rows[0];
+        await evenement(c, n, retirer ? 'retirer_brouillon' : 'archiver', u);
+        require('./flux').signaler();
+        return n;
+      }
+    }
+    if (transportClos(d) && (await c.query(`SELECT 1 FROM demande_transport_evenements
+      WHERE demande_id = $1 AND type = 'archiver'`, [d.id])).rowCount) throw new ErreurHttp(409, 'transport_clos');
     const apresArrivee = cote === 'ambulance' && d.statut === 'arrivee' && ['remis', 'terminer', 'incident'].includes(a);
     if (!OUVERTES.includes(d.statut) && !(d.statut === 'a_valider' && cote === 'etablissement') && !apresArrivee) throw new ErreurHttp(409, 'transport_clos');
     if (b.version != null && Number(b.version) !== d.version) throw new ErreurHttp(409, 'version_perimee');
@@ -286,6 +392,47 @@ async function agir(pool, u, id, b) {
       }
       return n;
     }
+    if (cote === 'ambulance' && a === 'partir_destination') {
+      if (d.statut !== 'pris_en_charge' || !d.motif_transport) throw new ErreurHttp(409, 'transport_statut_incompatible');
+      const deja = (await c.query(`SELECT ${DEPART_NSA_SQL} AS depart FROM demandes_transport d
+        LEFT JOIN demandes_hebergement dh ON dh.id = d.demande_hebergement_id WHERE d.id = $1`, [d.id])).rows[0]?.depart;
+      if (deja) return { ...d, depart_reel: deja, deja: true };
+      const h = await require('./horloge').marquer(c, { objet: 'demande_transport', objetId: d.id, etape: 'depart', auteurId: u.id || null });
+      if (h.deja) return { ...d, depart_reel: h.heure, deja: true };
+      n = await maj('statut = statut');
+      await evenement(c, n, a, u);
+      await emettre(c, n, 'transport.depart', { depart_reel: h.heure });
+      require('./flux').signaler();
+      return { ...n, depart_reel: h.heure };
+    }
+    if (cote === 'ambulance' && a === 'replanifier') {
+      if (u.role !== 'superviseur_secours') throw new ErreurHttp(403, 'role_insuffisant');
+      if (d.statut !== 'acceptee' || !d.motif_transport) throw new ErreurHttp(409, 'transport_statut_incompatible');
+      const debut = new Date(String(b.plage_confirmee_debut || ''));
+      const fin = new Date(String(b.plage_confirmee_fin || ''));
+      if (!Number.isFinite(debut.getTime()) || !Number.isFinite(fin.getTime()) || fin <= debut) {
+        throw new ErreurHttp(400, 'plage_invalide');
+      }
+      if (debut.getTime() === d.plage_confirmee_debut?.getTime() && fin.getTime() === d.plage_confirmee_fin?.getTime()) return d;
+      if (d.unite_id) await verifierAffectation(c, d, d.unite_id, debut, fin);
+      n = await maj('plage_confirmee_debut = $2, plage_confirmee_fin = $3', [debut, fin]);
+      if (n.lit_id) await require('./terrain').majConge(pool, u, n.lit_id, 'attente_transport', debut, c);
+      await evenement(c, n, a, u, { debut, fin, debut_avant: d.plage_confirmee_debut, fin_avant: d.plage_confirmee_fin });
+      await emettre(c, n, 'transport.replanifier', { plage_confirmee_debut: debut, plage_confirmee_fin: fin });
+      require('./flux').signaler();
+      return n;
+    }
+    if (cote === 'ambulance' && a === 'affecter') {
+      if (u.role !== 'superviseur_secours') throw new ErreurHttp(403, 'role_insuffisant');
+      if (d.statut !== 'acceptee' || !d.motif_transport) throw new ErreurHttp(409, 'transport_statut_incompatible');
+      const unite = await verifierAffectation(c, d, b.unite_id, d.plage_confirmee_debut || d.plage_debut, d.plage_confirmee_fin || d.plage_fin);
+      if (unite.id === d.unite_id) return d;
+      n = await maj('unite_id = $2', [unite.id]);
+      await evenement(c, n, 'affecter', u, { unite: unite.numero, unite_id_avant: d.unite_id });
+      await emettre(c, n, 'transport.affecter');
+      require('./flux').signaler();
+      return n;
+    }
     if (cote === 'ambulance' && ['sur_place', 'remis', 'terminer', 'incident'].includes(a)) {
       // Étapes physiques déclarées par l'équipage (cahier ultime, 11.3 et 11.5) : chacune horodatée, sans changer le statut principal
       if (a === 'sur_place') {
@@ -298,6 +445,16 @@ async function agir(pool, u, id, b) {
       } else if (a === 'terminer') {
         if (d.statut !== 'arrivee' || !d.remis_le || d.terminee_le) throw new ErreurHttp(409, 'transport_statut_incompatible');
         n = await maj('terminee_le = now()');
+        if (n.motif_transport && n.unite_id) {
+          const courant = (await c.query('SELECT etat, source, modifie_le FROM etats_vehicules WHERE unite_id = $1 FOR UPDATE', [n.unite_id])).rows[0];
+          const autreMission = await c.query(`SELECT 1 FROM prealertes WHERE unite_id = $1 AND statut NOT IN ('cloturee', 'annulee', 'remplacee')
+            UNION ALL SELECT 1 FROM demandes_transport WHERE unite_id = $1 AND id <> $2 AND statut IN ('en_route', 'pris_en_charge')
+            UNION ALL SELECT 1 FROM missions_ccs WHERE unite_id = $1 AND statut IN ('acceptee', 'sur_place')`, [n.unite_id, n.id]);
+          if (courant?.etat === 'a_l_hopital' && courant.source === 'transport'
+            && new Date(courant.modifie_le).getTime() === new Date(n.arrivee_le).getTime() && !autreMission.rowCount) {
+            await require('./vehicules').fixer(c, n.unite_id, 'disponible', { source: 'transport_termine', utilisateurId: u.id || null });
+          }
+        }
       } else {
         const motif = String(b.motif || '').trim(); if (motif.length < 3 || motif.length > 300) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'motif' });
         n = await maj('incident_le = now(), incident_motif = $2', [motif]);
@@ -311,12 +468,10 @@ async function agir(pool, u, id, b) {
       if (!attendu[a]) throw new ErreurHttp(400, 'action_inconnue');
       if (d.statut !== attendu[a]) throw new ErreurHttp(409, 'transport_statut_incompatible');
       if (a === 'accepter') {
-        const un = b.unite_id == null && !d.coordination_id ? null
-          : (await c.query('SELECT id, numero FROM unites_secours WHERE id = $1 AND organisation_id = $2 AND actif', [entier(b.unite_id), d.organisation_id])).rows[0];
-        if (!un && d.coordination_id) throw new ErreurHttp(404, 'unite_introuvable');
         // Transport planifié (20 nov. 2026) : plage confirmée par le transporteur (la plage demandée par défaut)
         const pd = b.plage_confirmee_debut ? new Date(b.plage_confirmee_debut) : d.plage_debut; const pf = b.plage_confirmee_fin ? new Date(b.plage_confirmee_fin) : d.plage_fin;
         if ((pd && Number.isNaN(new Date(pd).getTime())) || (pf && Number.isNaN(new Date(pf).getTime())) || (pd && pf && new Date(pf) <= new Date(pd))) throw new ErreurHttp(400, 'plage_invalide');
+        const un = b.unite_id == null && !d.coordination_id ? null : await verifierAffectation(c, d, b.unite_id, pd, pf);
         n = await maj("statut = 'acceptee', unite_id = COALESCE($2, unite_id), acceptee_le = now(), plage_confirmee_debut = $3, plage_confirmee_fin = $4", [un?.id || null, pd || null, pf || null]);
         detail = { unite: un?.numero || null, plage_debut: pd, plage_fin: pf };
         // Lit « à libérer » : congé en attente de transport, à l'heure confirmée (mêmes règles que l'écran Lits)
@@ -325,10 +480,10 @@ async function agir(pool, u, id, b) {
         const motif = MOTIFS.includes(b.motif) ? b.motif : 'autre';
         n = await maj("statut = 'refusee', motif_refus = $2", [motif]); detail = { motif };
       } else {
-        if (a === 'en_route' && !d.unite_id) {   // transport planifié accepté sans unité : l'unité est donnée au départ
-          const un = (await c.query('SELECT id FROM unites_secours WHERE id = $1 AND organisation_id = $2 AND actif', [entier(b.unite_id), d.organisation_id])).rows[0];
-          if (!un) throw new ErreurHttp(404, 'unite_introuvable');
-          await c.query('UPDATE demandes_transport SET unite_id = $2 WHERE id = $1', [d.id, un.id]);
+        if (a === 'en_route' && (d.motif_transport || !d.unite_id)) {
+          const un = await verifierAffectation(c, d, d.unite_id || b.unite_id,
+            d.plage_confirmee_debut || d.plage_debut, d.plage_confirmee_fin || d.plage_fin, { depart: true });
+          if (!d.unite_id) await c.query('UPDATE demandes_transport SET unite_id = $2 WHERE id = $1', [d.id, un.id]);
         }
         n = await maj(`statut = '${a}', ${a}_le = now()`);
         // Prise en charge d'un patient hospitalisé : le patient quitte son lit, qui part au nettoyage (règles des lits)
@@ -343,9 +498,12 @@ async function agir(pool, u, id, b) {
       const fixer = require('./vehicules').fixer;
       if (a === 'en_route' && n.unite_id) await fixer(c, n.unite_id, 'en_route', { source: 'transport', utilisateurId: u.id || null });
       if (a === 'pris_en_charge' && n.unite_id) await fixer(c, n.unite_id, 'transport_hopital', { destinationId: n.destination_id, source: 'transport', utilisateurId: u.id || null });
-      // Patient remis à destination : l'ambulance redevient disponible, sauf si une préalerte est encore ouverte (l'hôpital la clôt à la remise)
       if (a === 'arrivee' && n.unite_id && !(await c.query(`SELECT 1 FROM prealertes WHERE unite_id = $1 AND statut NOT IN ('cloturee', 'annulee', 'remplacee')`, [n.unite_id])).rowCount) {
-        await fixer(c, n.unite_id, 'disponible', { source: 'transport_termine', utilisateurId: u.id || null });
+        if (n.motif_transport) {
+          await fixer(c, n.unite_id, 'a_l_hopital', { destinationId: n.destination_id, source: 'transport', utilisateurId: u.id || null });
+        } else {
+          await fixer(c, n.unite_id, 'disponible', { source: 'transport_termine', utilisateurId: u.id || null });
+        }
       }
     } else {
       if (a === 'transmettre') {
@@ -354,6 +512,12 @@ async function agir(pool, u, id, b) {
         const pd = b.plage_debut ? new Date(b.plage_debut) : d.plage_debut; const pf = b.plage_fin ? new Date(b.plage_fin) : d.plage_fin;
         if (Number.isNaN(new Date(pd).getTime()) || Number.isNaN(new Date(pf).getTime()) || new Date(pf) <= new Date(pd)) throw new ErreurHttp(400, 'plage_invalide');
         const veh = b.type_vehicule ? String(b.type_vehicule) : d.type_vehicule; if (!TYPES_VEHICULE.includes(veh)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'type_vehicule' });
+        if (d.lit_id) {
+          const lit = (await c.query('SELECT etat, patient_ref FROM lits WHERE id = $1 FOR NO KEY UPDATE', [d.lit_id])).rows[0];
+          if (lit?.etat !== 'occupe' || lit.patient_ref !== d.resident_ref) throw new ErreurHttp(409, 'lit_non_occupe', { code: '' });
+          const ouvert = (await c.query('SELECT numero FROM demandes_transport WHERE lit_id = $1 AND id <> $2 AND statut = ANY($3)', [d.lit_id, d.id, OUVERTES])).rows[0];
+          if (ouvert) throw new ErreurHttp(409, 'transport_deja_demande', { numero: ouvert.numero });
+        }
         const orgId = b.organisation_id ? entier(b.organisation_id) : d.organisation_id;
         if (!(await organisationsRegion(c, d.origine_id)).some((o) => o.id === orgId)) throw new ErreurHttp(404, 'organisation_introuvable');
         n = await maj("statut = 'demandee', plage_debut = $2, plage_fin = $3, heure_souhaitee = $2, type_vehicule = $4, organisation_id = $5", [pd, pf, veh, orgId]);
@@ -394,13 +558,13 @@ async function agir(pool, u, id, b) {
     return n;
   });
 }
-/** Historique d'une demande : mêmes droits et même période que la liste (ouvertes et dernières 24 h). */
+/** Historique d'une demande autorisée, y compris après archivage. */
 async function fiche(pool, u, id, q = {}) {
-  const visibles = await liste(pool, u, q);
+  const visibles = await liste(pool, u, q, entier(id));
   const d = visibles.find((x) => x.id === entier(id));
   if (!d) throw new ErreurHttp(404, 'transport_introuvable');
   const evenements = (await pool.query(`SELECT ev.type, ev.detail, ev.cree_le, us.nom AS par FROM demande_transport_evenements ev LEFT JOIN utilisateurs us ON us.id = ev.utilisateur_id
     WHERE ev.demande_id = $1 ORDER BY ev.id`, [d.id])).rows;
   return { ...d, evenements };
 }
-module.exports = { destinations, preparerDepuisHebergement, organisations, demander, planifier, liste, agir, fiche, OUVERTES, MOTIFS_TRANSPORT, TYPES_VEHICULE };
+module.exports = { DEPART_NSA_SQL, dureesPlanifiees, BROUILLON_PRIVE_SQL, destinations, preparerDepuisHebergement, organisations, demander, planifier, liste, agir, fiche, OUVERTES, MOTIFS_TRANSPORT, TYPES_VEHICULE };

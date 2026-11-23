@@ -1697,6 +1697,12 @@ test('tableau national : 200 établissements, tri par distance, filtres, partage
     const carte = (await appel('x', 'GET', `/national/carte?depuis=${hx}`)).corps;
     assert.strictEqual(carte.length, visibles);
     assert.ok(carte.every((p) => ['vert', 'jaune', 'orange', 'rouge'].includes(p.niveau)));
+    const synthese = await appel('x', 'GET', `/national/synthese?depuis=${hx}`);
+    assert.strictEqual(synthese.statut, 200);
+    assert.deepStrictEqual(Object.keys(synthese.corps).sort(), ['alertes', 'etablissements', 'occupation', 'regions']);
+    assert.strictEqual(synthese.corps.etablissements, visibles);
+    assert.strictEqual(synthese.corps.alertes, carte.filter((p) => p.niveau === 'rouge').length);
+    assert.ok(synthese.corps.occupation >= 0 && synthese.corps.occupation <= 100);
     // Temps de réponse : moins de 300 ms, avec et sans filtres
     for (const q of ['', `&type_id=${med}&isolement=1&avec_lit=1`, '&max_minutes=120&page=2']) {
       const t0 = Date.now();
@@ -2779,6 +2785,7 @@ test('C4 : patients fictifs en recette seulement, formation par rôle, go-live s
   const cle = process.env.SH_API_KEY;
   let motDePasseSh;
   try {
+    const { viderBaseSh } = require('../db/sh-vider');
     await viderBaseSh(pool);
     motDePasseSh = await creerPremierCompteShTest('sh@exemple.ca', 'Équipe SH');
   } catch (e) {

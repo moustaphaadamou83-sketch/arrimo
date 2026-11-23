@@ -3,7 +3,7 @@
    pose la question à OG. Vigilance affiche la liste « Parcours à surveiller » (mêmes faits). FR/EN ; aucun texte en dur dans les modules. */
 (() => {
   const TXT = {
-    fr: { bouton: 'Sillage', titre: 'Sillage · parcours {p}', fermer: 'Fermer', objets: 'Étapes du parcours', chrono: 'Chronologie (Horloge)', aucun: 'Aucune heure enregistrée pour ce parcours.',
+    fr: { bouton: 'Sillage', titre: 'Sillage · parcours {p}', fermer: 'Fermer', objets: 'Étapes du parcours', chrono: 'Chronologie', aucun: 'Aucune heure enregistrée pour ce parcours.',
       incompletes: 'Étapes non confirmées', autres: '{n} étape(s) liée(s) chez un autre organisme : non montrées.', og: 'Demander à OG d’expliquer', ouvrir: 'Ouvrir dans le module',
       corrigee: 'corrigée', source: { position: 'position', clic: 'clic', connecteur: 'connecteur', systeme: 'système' }, erreur: 'Parcours indisponible.',
       vig_titre: 'Parcours à surveiller', vig_intro: 'Confirmations manquantes, délais dépassés et étapes non confirmées, tous modules confondus. Une ligne par fait ; elle disparaît quand l’étape est faite.',
@@ -11,9 +11,9 @@
       codes: { confirmation_manquante: 'Confirmation manquante (délai dépassé)', civiere_au_dela_cible: 'Ambulance à la porte au-delà de la cible', visite_manquee: 'Visite manquée sans suite', transition_incomplete: 'Étape non confirmée', reception_manquante: 'Arrivée non confirmée' },
       o: { prealerte: 'Préalerte', passage_chrono: 'Passage Chrono', transfert: 'Transfert', demande_transport: 'Transport', demande_hebergement: 'Demande d’hébergement', mission_ccs: 'Mission CCS', coordination: 'Coordination', visite: 'Visite', dsn_transition: 'Transition (DSN)' },
       e: { H11: 'Arrivée à l’urgence (H11)', H12: 'Début du triage (H12)', H13: 'Fin du triage (H13)', H14: 'Civière libérée (H14)', H15: 'Départ (H15)', demande: 'Demande', decision: 'Décision',
-        depart: 'Départ', arrivee: 'Arrivée', prise_en_charge: 'Prise en charge', remise: 'Remise', reception: 'Réception' },
+        depart: 'Départ', arrivee: 'Arrivée', prise_en_charge: 'Prise en charge', remise: 'Remise', reception: 'Réception', affecter: 'Affectation du véhicule', replanifier: 'Horaire modifié', sur_place: 'Sur place', cloture: 'Clôture', incident: 'Incident', annuler: 'Annulation', archiver: 'Archivage' },
       q: 'Explique le parcours {n}' },
-    en: { bouton: 'Trail', titre: 'Trail · path {p}', fermer: 'Close', objets: 'Path steps', chrono: 'Timeline (Clock)', aucun: 'No time recorded for this path.',
+    en: { bouton: 'Trail', titre: 'Trail · path {p}', fermer: 'Close', objets: 'Path steps', chrono: 'Timeline', aucun: 'No time recorded for this path.',
       incompletes: 'Steps not confirmed', autres: '{n} linked step(s) at another organisation: not shown.', og: 'Ask OG to explain', ouvrir: 'Open in the module',
       corrigee: 'corrected', source: { position: 'position', clic: 'click', connecteur: 'connector', systeme: 'system' }, erreur: 'Path unavailable.',
       vig_titre: 'Paths to watch', vig_intro: 'Missing confirmations, passed deadlines and unconfirmed steps, across all modules. One line per fact; it disappears once the step is done.',
@@ -21,7 +21,7 @@
       codes: { confirmation_manquante: 'Missing confirmation (deadline passed)', civiere_au_dela_cible: 'Ambulance at the door beyond target', visite_manquee: 'Missed visit with no follow-up', transition_incomplete: 'Step not confirmed', reception_manquante: 'Arrival not confirmed' },
       o: { prealerte: 'Pre-alert', passage_chrono: 'Chrono visit', transfert: 'Transfer', demande_transport: 'Transport', demande_hebergement: 'Placement request', mission_ccs: 'CCS mission', coordination: 'Coordination', visite: 'Visit', dsn_transition: 'Transition (EHR)' },
       e: { H11: 'Arrival at the ED (H11)', H12: 'Triage start (H12)', H13: 'Triage end (H13)', H14: 'Stretcher released (H14)', H15: 'Departure (H15)', demande: 'Request', decision: 'Decision',
-        depart: 'Departure', arrivee: 'Arrival', prise_en_charge: 'Pick-up', remise: 'Handover', reception: 'Reception' },
+        depart: 'Departure', arrivee: 'Arrival', prise_en_charge: 'Pick-up', remise: 'Handover', reception: 'Reception', affecter: 'Vehicle assigned', replanifier: 'Schedule changed', sur_place: 'On scene', cloture: 'Closeout', incident: 'Incident', annuler: 'Cancellation', archiver: 'Archived' },
       q: 'Explain path {n}' },
   };
   const lire = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -65,7 +65,7 @@
       d.innerHTML = `<div class="sillage-corps"><header class="sillage-tete"><h2 id="sillage-titre">${esc(f(x.titre, { p: s.parcours }))}</h2><button type="button" class="btn" data-sillage-fermer>${esc(x.fermer)}</button></header>
         <h3>${esc(x.objets)}</h3><ol class="sillage-objets">${s.objets.map((o) => `<li><span class="badge">${esc(x.o[o.objet] || o.objet)}</span> <b>${esc(o.numero)}</b> · ${esc(String(o.statut).replaceAll('_', ' '))}${o.lieu ? ` · <span class="note">${esc(o.lieu)}</span>` : ''}
           ${aOnglet(o.ecran) && !(o.objet === objet && o.id === Number(id)) ? ` <button type="button" class="btn lien" data-sillage-ecran="${esc(o.ecran)}">${esc(x.ouvrir)}</button>` : ''}</li>`).join('')}</ol>
-        <h3>${esc(x.chrono)}</h3>${s.evenements.length ? `<ol class="sillage-fil">${s.evenements.map((e) => `<li><time>${esc(h(e.heure))}</time><div><b>${esc(x.e[e.etape] || e.etape)}</b> · ${esc(e.numero)}
+        <h3>${esc(x.chrono)}</h3>${s.evenements.length ? `<ol class="sillage-fil">${s.evenements.map((e) => `<li><time>${esc(h(e.heure))}</time><div><b>${esc(x.e[e.etape] || (e.etape.startsWith('retard_') && window.ArrimoChronoRetards?.libelle(e.etape.slice(7))) || e.etape)}</b> · ${esc(e.numero)}
           <div class="note">${esc(x.source[e.source] || e.source)}${e.auteur ? ` · ${esc(e.auteur)}` : ''}${e.lieu ? ` · ${esc(e.lieu)}` : ''}${e.corrigee ? ` · <span class="badge">${esc(x.corrigee)}</span>` : ''}</div></div></li>`).join('')}</ol>` : `<p class="note">${esc(x.aucun)}</p>`}
         ${s.incompletes.length ? `<div class="sillage-manques" role="status"><b>${esc(x.incompletes)}</b> : ${s.incompletes.map((m) => `${esc(m.numero)} · ${esc(x.e[m.etape] || m.etape)}`).join(' ; ')}</div>` : ''}
         ${s.autres_organismes ? `<p class="note">${esc(f(x.autres, { n: s.autres_organismes }))}</p>` : ''}

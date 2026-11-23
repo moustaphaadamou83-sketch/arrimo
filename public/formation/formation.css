@@ -133,3 +133,5 @@ a { color: var(--sarcelle); }
 .fo-tableau th, .fo-tableau td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--bordure); vertical-align: top; }
 .fo-tableau th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--encre-2); }
 .fo-tableau input[type="checkbox"] { width: 20px; height: 20px; }
+.ic { width: 18px; height: 18px; flex: none; vertical-align: -4px; display: inline-block; }
+.em .ic, .fo-confettis .ic { width: 28px; height: 28px; color: #0E5E6F; vertical-align: middle; }

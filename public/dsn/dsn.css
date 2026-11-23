@@ -52,3 +52,4 @@ th { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: v
 .chrono li { margin-bottom: 6px; }
 .cases label { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; }
 @media (max-width: 700px) { .ds-barre select { margin-left: 0; max-width: 100%; flex: 1 1 100%; } }
+.ic { width: 18px; height: 18px; flex: none; vertical-align: -4px; display: inline-block; }

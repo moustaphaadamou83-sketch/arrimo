@@ -1,0 +1,75 @@
+'use strict';
+/**
+ * Catalogue central des KPI (cahier « Professionnalisation ERP », section 3). Chaque indicateur affiché sur un Accueil est défini ici :
+ * nom, description, formule, source (service métier existant), périmètre, période, actualisation, responsable métier, permissions,
+ * exclusions et traitement des données manquantes. Aucune valeur n'est calculée ici : les écrans lisent les services cités.
+ */
+const K = (code, o) => ({ code, ...o });
+const T = (fr, en) => ({ fr, en });
+const CATALOGUE = [
+  K('k_lits', { nom: T('Lits libres', 'Free beds'), unite: T('lits', 'beds'),
+    description: T('Lits en service à l’état « libre » : prêts à recevoir un patient.', 'In-service beds in the “free” state: ready for a patient.'),
+    formule: T('Nombre de lits actifs de l’établissement dont l’état est « libre » (un lit en nettoyage, réservé ou bloqué n’est pas compté).', 'Count of active beds whose state is “free” (beds being cleaned, reserved or blocked are excluded).'),
+    source: T('Lits (src/regles.js, seul service qui change l’état d’un lit)', 'Beds (src/regles.js, the only service that changes a bed state)'),
+    perimetre: T('Établissement courant', 'Current facility'), periode: T('Instantané', 'Snapshot'), actualisation: T('À chaque ouverture et toutes les 15 s', 'On every open and every 15 s'),
+    responsable: T('Coordination des lits', 'Bed coordination'), permissions: T('Personnel de l’établissement', 'Facility staff'),
+    exclusions: T('Lits inactifs ou fermés', 'Inactive or closed beds'), manquantes: T('Aucun lit déclaré : « — »', 'No bed declared: “—”') }),
+  K('k_urgence', { nom: T('Urgence (civières occupées)', 'ER (stretchers occupied)'), unite: T('%', '%'),
+    description: T('Taux d’occupation des civières fonctionnelles de l’urgence.', 'Occupancy rate of functional ER stretchers.'),
+    formule: T('Civières occupées ÷ civières fonctionnelles × 100 (civières de débordement exclues du dénominateur).', 'Occupied stretchers ÷ functional stretchers × 100 (overflow stretchers excluded from the denominator).'),
+    source: T('Civières (src/civieres.js, statsUrgence)', 'Stretchers (src/civieres.js, statsUrgence)'), perimetre: T('Urgence de l’établissement', 'Facility ER'),
+    periode: T('Instantané', 'Snapshot'), actualisation: T('À chaque ouverture et toutes les 15 s', 'On every open and every 15 s'), responsable: T('Chef de l’urgence', 'ER lead'),
+    permissions: T('Personnel hospitalier', 'Hospital staff'), exclusions: T('Civières hors service', 'Out-of-service stretchers'), manquantes: T('Pas d’urgence : indicateur masqué', 'No ER: indicator hidden') }),
+  K('k_arrivees', { nom: T('Arrivées prévues', 'Expected arrivals'), unite: T('mouvements', 'movements'),
+    description: T('Arrivées attendues aujourd’hui : transports, transferts, hébergement, ambulances.', 'Arrivals expected today: transports, transfers, housing, ambulances.'),
+    formule: T('Mouvements d’Arrimo Flux dont la destination est l’établissement, d’hier à aujourd’hui, hors annulés.', 'Arrimo Flow movements whose destination is the facility, yesterday to today, cancelled excluded.'),
+    source: T('Arrimo Flux (src/arrimo-flux.js, lit les transports, transferts, hébergement et préalertes)', 'Arrimo Flow (src/arrimo-flux.js, reads transports, transfers, housing and pre-alerts)'),
+    perimetre: T('Établissement courant', 'Current facility'), periode: T('Aujourd’hui (et la veille non close)', 'Today (and unclosed yesterday)'), actualisation: T('En direct', 'Live'),
+    responsable: T('Coordination', 'Coordination'), permissions: T('Personnel de l’établissement', 'Facility staff'), exclusions: T('Mouvements annulés', 'Cancelled movements'), manquantes: T('0 si aucun mouvement', '0 if no movement') }),
+  K('k_prealertes', { nom: T('Préalertes actives', 'Active pre-alerts'), unite: T('préalertes', 'pre-alerts'),
+    description: T('Préalertes d’arrivée en cours (ambulance en route vers l’établissement).', 'Ongoing arrival pre-alerts (ambulance on the way).'),
+    formule: T('Mouvements avec préalerte, non arrivés, non terminés, non annulés.', 'Movements with a pre-alert, not arrived, not completed, not cancelled.'),
+    source: T('Arrimo Flux et Liaison Secours (src/prealertes.js, src/transports.js)', 'Arrimo Flow and Emergency liaison (src/prealertes.js, src/transports.js)'),
+    perimetre: T('Établissement destinataire', 'Receiving facility'), periode: T('En cours', 'Ongoing'), actualisation: T('En direct', 'Live'), responsable: T('Urgence et coordination', 'ER and coordination'),
+    permissions: T('Personnel de l’établissement destinataire', 'Receiving facility staff'), exclusions: T('Préalertes closes', 'Closed pre-alerts'), manquantes: T('0', '0') }),
+  K('k_porte', { nom: T('Ambulances à la porte', 'Ambulances at the door'), unite: T('ambulances', 'ambulances'),
+    description: T('Ambulances arrivées (H11) dont le patient n’est pas encore pris en charge (H14).', 'Ambulances arrived (H11) whose patient is not yet handed over (H14).'),
+    formule: T('Passages Chrono avec H11 enregistrée et sans H14 ; en rouge si l’attente dépasse le seuil configuré.', 'Chrono passages with H11 recorded and no H14; red if the wait exceeds the configured threshold.'),
+    source: T('Chrono (src/chrono.js, seul moteur de délais)', 'Chrono (src/chrono.js, the only delay engine)'), perimetre: T('Urgence de l’établissement', 'Facility ER'),
+    periode: T('En cours', 'Ongoing'), actualisation: T('En direct', 'Live'), responsable: T('Chef de l’urgence', 'ER lead'), permissions: T('Personnel hospitalier, module Chrono activé', 'Hospital staff, Chrono enabled'),
+    exclusions: T('Passages clos ou annulés', 'Closed or cancelled passages'), manquantes: T('Chrono non activé : indicateur masqué', 'Chrono disabled: indicator hidden') }),
+  K('k_transferts', { nom: T('Transferts actifs', 'Active transfers'), unite: T('transferts', 'transfers'),
+    description: T('Transferts interhospitaliers entrants et sortants en cours.', 'Inbound and outbound inter-hospital transfers in progress.'),
+    formule: T('Transferts entrants + sortants au statut demandé, validé, transport ou en route.', 'Inbound + outbound transfers with status requested, validated, transport or en route.'),
+    source: T('Transferts (src/services.js)', 'Transfers (src/services.js)'), perimetre: T('Établissement courant', 'Current facility'), periode: T('En cours', 'Ongoing'),
+    actualisation: T('À chaque ouverture et toutes les 15 s', 'On every open and every 15 s'), responsable: T('Coordination des transferts', 'Transfer coordination'),
+    permissions: T('Personnel de l’établissement', 'Facility staff'), exclusions: T('Transferts reçus, refusés ou annulés', 'Received, declined or cancelled transfers'), manquantes: T('0', '0') }),
+  K('k_places', { nom: T('Places libres', 'Free places'), unite: T('places', 'places'),
+    description: T('Places d’hébergement libres et prêtes (jamais une place conservée, réservée ou bloquée).', 'Free and ready housing places (never a held, reserved or blocked place).'),
+    formule: T('Places de l’établissement à l’état « libre », sans résident rattaché.', 'Facility places in the “free” state, with no resident attached.'),
+    source: T('Chambres et places (src/chsld.js)', 'Rooms and places (src/chsld.js)'), perimetre: T('Établissement d’hébergement', 'Housing facility'), periode: T('Instantané', 'Snapshot'),
+    actualisation: T('À chaque ouverture et en direct', 'On every open and live'), responsable: T('Coordination de l’hébergement', 'Housing coordination'), permissions: T('Personnel de l’établissement', 'Facility staff'),
+    exclusions: T('Places conservées, réservées, bloquées ou en préparation', 'Held, reserved, blocked or being prepared'), manquantes: T('0', '0') }),
+  K('k_departs', { nom: T('Départs prévus', 'Expected departures'), unite: T('mouvements', 'movements'),
+    description: T('Départs attendus aujourd’hui depuis l’établissement.', 'Departures expected today from the facility.'),
+    formule: T('Mouvements d’Arrimo Flux dont l’origine est l’établissement, hors annulés.', 'Arrimo Flow movements whose origin is the facility, cancelled excluded.'),
+    source: T('Arrimo Flux (src/arrimo-flux.js)', 'Arrimo Flow (src/arrimo-flux.js)'), perimetre: T('Établissement courant', 'Current facility'), periode: T('Aujourd’hui', 'Today'), actualisation: T('En direct', 'Live'),
+    responsable: T('Coordination', 'Coordination'), permissions: T('Personnel de l’établissement', 'Facility staff'), exclusions: T('Mouvements annulés', 'Cancelled movements'), manquantes: T('0', '0') }),
+  K('k_preparer', { nom: T('Chambres à préparer', 'Rooms to prepare'), unite: T('chambres', 'rooms'),
+    description: T('Chambres à préparer pour une arrivée, pas encore déclarées prêtes par l’entretien.', 'Rooms to prepare for an arrival, not yet declared ready by housekeeping.'),
+    formule: T('Arrivées d’Arrimo Flux dont la préparation est « à faire » ou « en cours » ; à défaut, places à nettoyer.', 'Arrimo Flow arrivals whose preparation is “to do” or “in progress”; otherwise places to clean.'),
+    source: T('Arrimo Flux et Personnel & Tâches (taches_etab)', 'Arrimo Flow and Staff & Tasks (taches_etab)'), perimetre: T('Établissement courant', 'Current facility'), periode: T('Aujourd’hui', 'Today'),
+    actualisation: T('En direct', 'Live'), responsable: T('Responsable de l’entretien', 'Housekeeping lead'), permissions: T('Personnel de l’établissement', 'Facility staff'),
+    exclusions: T('Chambres déjà prêtes', 'Rooms already ready'), manquantes: T('0', '0') }),
+  K('k_taches', { nom: T('Tâches prioritaires', 'Priority tasks'), unite: T('tâches', 'tasks'),
+    description: T('Tâches ouvertes dont l’échéance est dépassée.', 'Open tasks past their due time.'),
+    formule: T('Tâches à faire ou en cours avec une échéance antérieure à maintenant.', 'To-do or in-progress tasks with a due time before now.'),
+    source: T('Personnel & Tâches (taches_etab, moteur unique)', 'Staff & Tasks (taches_etab, single engine)'), perimetre: T('Établissement courant', 'Current facility'), periode: T('En cours', 'Ongoing'),
+    actualisation: T('À chaque ouverture', 'On every open'), responsable: T('Coordination', 'Coordination'), permissions: T('Personnel de l’établissement', 'Facility staff'),
+    exclusions: T('Tâches faites ou annulées', 'Done or cancelled tasks'), manquantes: T('Sans échéance : jamais en retard', 'No due time: never overdue') }),
+];
+function catalogue(langue = 'fr') {
+  const L = langue === 'en' ? 'en' : 'fr';
+  return CATALOGUE.map((k) => Object.fromEntries(Object.entries(k).map(([c, v]) => [c, v && typeof v === 'object' ? v[L] : v])));
+}
+module.exports = { CATALOGUE, catalogue };

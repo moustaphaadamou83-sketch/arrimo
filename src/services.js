@@ -678,7 +678,8 @@ async function lireNotifications(pool, utilisateur, etabId) {
   exigerEtablissement(utilisateur, etabId);
   const { rows } = await pool.query(
     `SELECT n.*, t.numero FROM notifications n LEFT JOIN transferts t ON t.id = n.transfert_id
-      WHERE n.etablissement_id = $1 ORDER BY n.date DESC LIMIT 50`, [etabId]);
+      WHERE n.etablissement_id = $1 AND ($2 OR n.code IS DISTINCT FROM 'chrono_seuil_atteint')
+      ORDER BY n.date DESC LIMIT 50`, [etabId, require('./chrono').peutLireAlerte(utilisateur)]);
   const nomType = await traducteurTypes(pool, utilisateur.langue);
   const fuseau = rows.some((n) => n.vars?.arrivee || n.vars?.debut) ? (await etablissement(pool, etabId)).config.fuseau : null;
   for (const n of rows) {

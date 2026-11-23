@@ -727,7 +727,7 @@ async function completerEquipe(v) {
   const zone = document.createElement('div');
   zone.innerHTML = `<h3>Équipes</h3>${tableSH(['Équipe', 'Membres', ''], equipes.map((e) => `<tr><td><b>${esc(e.nom)}</b><div class="note">${esc(e.description || '')}</div></td><td>${e.membres.map((m) => `${esc(m.nom)}${m.chef ? ' <span class="badge">chef</span>' : ''}`).join(', ') || '—'}</td><td>${bouton('Modifier', 'eq-modifier', 'btn', e.id)}</td></tr>`).join(''), 'Aucune équipe.')}
     <div class="ligne">${bouton('Nouvelle équipe', 'eq-nouvelle')}</div>
-    <details class="matrice"><summary>Matrice des permissions par rôle (${matrice.routes.length} actions)</summary>${tableSH(['Action', ...matrice.roles.map((r) => LIB.role[r] || r)], matrice.routes.map((x) => `<tr><td class="num">${esc(x.route)}</td>${matrice.roles.map((r) => `<td>${x.roles.includes(r) ? '✓' : ''}</td>`).join('')}</tr>`).join(''))}</details>`;
+    <details class="matrice"><summary>Matrice des permissions par rôle (${matrice.routes.length} actions)</summary>${tableSH(['Action', ...matrice.roles.map((r) => LIB.role[r] || r)], matrice.routes.map((x) => `<tr><td class="num">${esc(x.route)}</td>${matrice.roles.map((r) => `<td>${x.roles.includes(r) ? '<svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-check"/></svg>' : ''}</td>`).join('')}</tr>`).join(''))}</details>`;
   v.appendChild(zone);
   if (peut('implantation')) await afficherCompetences(v);
   const formulaire = (e) => modale(e ? `Équipe · ${e.nom}` : 'Nouvelle équipe', `<div class="form-modale">${champ('eq-nom', 'Nom', e?.nom || '')}${champ('eq-desc', 'Description', e?.description || '')}

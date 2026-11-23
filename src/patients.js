@@ -73,16 +73,28 @@ function presenter(p) {
   return { ...p, groupe_age: groupeAgeDepuisNaissance(p.date_naissance), nom_court: `${p.prenom} ${p.nom.slice(0, 1)}.` };
 }
 
+// Les termes sont littéraux et peuvent être saisis dans l'ordre prénom–nom ou nom–prénom.
+const FILTRE_IDENTITE_SQL = `(
+  lower(p.reference) = $2 OR NOT EXISTS (
+    SELECT 1 FROM unnest(string_to_array($2, ' ')) AS recherche(terme)
+    WHERE NOT EXISTS (
+      SELECT 1 FROM unnest(string_to_array(lower(p.prenom || ' ' || p.nom), ' ')) AS identite(mot)
+      WHERE starts_with(identite.mot, recherche.terme)
+    )
+  )
+)`;
+const normaliserRecherche = (q) => texte(q, 161).toLowerCase();
+
 async function listePatients(pool, utilisateur, etabId, q) {
   exigerFictifs();
   exigerEtablissement(utilisateur, etabId);
-  const filtre = texte(q, 40).toLowerCase();
+  const filtre = normaliserRecherche(q);
   const { rows } = await pool.query(
     `SELECT p.*, cv.code AS civiere_code, l.code AS lit_code
        FROM patients p
        LEFT JOIN civieres cv ON cv.etablissement_id = p.etablissement_id AND cv.patient_ref = p.reference AND cv.etat = 'occupee'
        LEFT JOIN lits l ON l.etablissement_id = p.etablissement_id AND l.patient_ref = p.reference AND l.etat IN ('reserve', 'occupe')
-      WHERE p.etablissement_id = $1 AND ($2 = '' OR lower(p.nom) LIKE $2 || '%' OR lower(p.prenom) LIKE $2 || '%' OR lower(p.reference) = $2)
+      WHERE p.etablissement_id = $1 AND ($2 = '' OR ${FILTRE_IDENTITE_SQL})
       ORDER BY p.modifie_le DESC LIMIT 100`, [etabId, filtre]);
   return rows.map(presenter);
 }
@@ -143,4 +155,4 @@ async function modifierPatient(pool, utilisateur, patientId, b) {
   });
 }
 
-module.exports = { creerPatient, listePatients, enregistrerArrivee, modifierPatient, semblables, lireIdentite, exigerFictifs };
+module.exports = { FILTRE_IDENTITE_SQL, normaliserRecherche, creerPatient, listePatients, enregistrerArrivee, modifierPatient, semblables, lireIdentite, exigerFictifs };

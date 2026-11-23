@@ -48,9 +48,9 @@
         <p class="note">${A('jamais_bloquant')}</p><div class="ligne"><label class="lbl" for="ev-ref">${A('ref_resident')}</label><input id="ev-ref" maxlength="12" autocomplete="off" style="max-width:140px"><button class="btn" id="ev-fait">${A('transfert_fait')}</button></div>
         <div id="ev-suite"></div></section>
       <section class="panneau-c"><h3>${A('decisions_titre')}</h3>${(d.decisions || []).length ? `<div class="tableau"><table><thead><tr><th>${A('d_quand')}</th><th>${A('d_decision')}</th><th>${A('d_demande')}</th><th>${A('d_accuse')}</th><th>${A('d_vehicule')}</th></tr></thead><tbody>
-        ${d.decisions.map((x) => { const f = x.decision === 'transfert_fait'; const oui = (b) => (b ? '✓' : '—');
+        ${d.decisions.map((x) => { const f = x.decision === 'transfert_fait'; const oui = (b) => (b ? '<svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-check"/></svg>' : '—');
           return `<tr><td class="note">${esc(heure(x.cree_le))}</td><td>${f ? A('dec_transfert') : `${A('dec_evite')} · ${A(`a_${x.alternative}`)}`}${x.resident_ref ? ` · <span class="donnee">${esc(x.resident_ref)}</span>` : ''}</td>
-            <td>${f ? (x.transport ? `✓ ${esc(x.transport)}` : `<b>${A('pas_de_demande')}</b>`) : ''}</td><td>${f ? oui(x.accuse) : ''}</td><td>${f ? oui(x.vehicule_affecte) : ''}</td></tr>`; }).join('')}</tbody></table></div>` : `<p class="note">${A('aucune_decision')}</p>`}</section>
+            <td>${f ? (x.transport ? `<svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-check"/></svg> ${esc(x.transport)}` : `<b>${A('pas_de_demande')}</b>`) : ''}</td><td>${f ? oui(x.accuse) : ''}</td><td>${f ? oui(x.vehicule_affecte) : ''}</td></tr>`; }).join('')}</tbody></table></div>` : `<p class="note">${A('aucune_decision')}</p>`}</section>
       <section class="panneau-c"><h3>${A('mois_titre')}</h3><p>${A('mois', { e: d.mois.evites, f: d.mois.faits })}</p></section>
       ${d.peut_regler ? `<section class="panneau-c"><h3>${A('regler')}</h3><p class="note">${A('regler_aide')}</p>
         <div class="champ"><label class="lbl" for="ev-verifs">${A('verifications')}</label><textarea id="ev-verifs" rows="5">${esc(d.verifications.join('\n'))}</textarea></div>

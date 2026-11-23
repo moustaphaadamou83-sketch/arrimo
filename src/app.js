@@ -306,6 +306,7 @@ function creerApp(pool, options = {}) {
   api.get('/messagerie/annonces', route((req) => msg.annonces(pool, req.utilisateur, req.query)));
   api.post('/messagerie/annonces', route((req) => msg.publier(pool, req.utilisateur, req.body)));
   // Personnel & Tâches : « Mes tâches » (moteur unique) et attribution
+  api.get('/kpi/catalogue', route((req) => require('./kpi-catalogue').catalogue(req.query.langue || req.utilisateur.langue)));
   api.get('/taches/miennes', route((req) => require('./taches').miennes(pool, req.utilisateur, req.query)));
   api.get('/parametres-modules/:module', route((req) => require('./taches').parametres(pool, req.utilisateur, req.params.module, req.query)));
   api.put('/parametres-modules/:module', route((req) => require('./taches').enregistrerParametres(pool, req.utilisateur, req.params.module, req.body)));
@@ -347,6 +348,7 @@ function creerApp(pool, options = {}) {
     api.post(`${pre}/passages/:id/etape`, route((req) => chrono.marquerEtape(pool, req.utilisateur, req.params.id, req.body)));
     api.post(`${pre}/passages/:id/depart`, route((req) => chrono.depart(pool, req.utilisateur, req.params.id, req.body)));
     api.post(`${pre}/passages/:id/corriger`, route((req) => chrono.corriger(pool, req.utilisateur, req.params.id, req.body)));
+    api.post(`${pre}/passages/:id/retard`, route((req) => chrono.signalerRetard(pool, req.utilisateur, req.params.id, req.body)));
   }
   // Urgences en direct (20 nov. 2026) : fermetures planifiées de l'urgence (hôpital) ; lecture des fermetures de la région (secours)
   const ud = require('./urgences-direct');
@@ -602,6 +604,7 @@ function creerApp(pool, options = {}) {
       ventilation: req.query.ventilation === '1', telemetrie: req.query.telemetrie === '1' },
   })));
   api.get('/national/carte', route((req) => nat.carte(pool, req.utilisateur, entier(req.query.depuis, 'depuis'))));
+  api.get('/national/synthese', route((req) => nat.carte(pool, req.utilisateur, entier(req.query.depuis, 'depuis'), { synthese: true })));
 
   /* ---------- civières de l'urgence ---------- */
   api.get('/civieres', route(async (req) => {
@@ -704,6 +707,7 @@ function creerApp(pool, options = {}) {
   // État des véhicules (13 nov. 2026) : l'équipage le change, le CCS le consulte ; aucune attribution dans Arrimo
   const vh = require('./vehicules');
   api.get('/secours/vehicules', route((req) => vh.liste(pool, req.utilisateur)));
+  api.get('/secours/vehicules/:id', route((req) => vh.fiche(pool, req.utilisateur, entier(req.params.id, 'id'))));
   api.get('/secours/hebergements', route((req) => vh.hebergements(pool, req.utilisateur)));
   const rs = require('./reservations');
   api.post('/secours/prealertes/:id/reponse', route((req) => rs.repondre(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
@@ -715,6 +719,10 @@ function creerApp(pool, options = {}) {
   // Missions proposées par le CCS, acceptées ou refusées par l'équipage (16 nov. 2026)
   const mc = require('./missions-ccs');
   api.get('/secours/missions', route((req) => mc.liste(pool, req.utilisateur)));
+  api.get('/secours/interventions-demo', route((req) => mc.interventionsDemo(pool, req.utilisateur)));
+  api.post('/secours/interventions-demo', route((req) => mc.recevoirDemo(pool, req.utilisateur, req.body)));
+  api.post('/secours/interventions-demo/:id/affecter', route((req) => mc.affecterDemo(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
+
   api.post('/secours/missions', route((req) => mc.proposer(pool, req.utilisateur, req.body)));
   api.post('/secours/missions/:id/action', route((req) => mc.agir(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   // Établissements d'hébergement : urgences proches (capacités globales seulement)
@@ -834,7 +842,8 @@ function creerApp(pool, options = {}) {
   api.post('/notifications/lues', route(async (req) => {
     const etab = entier(req.body.etablissement_id, 'etablissement_id');
     exigerEtablissement(req.utilisateur, etab);
-    await pool.query('UPDATE notifications SET lu = true WHERE etablissement_id = $1 AND NOT lu', [etab]);
+    await pool.query(`UPDATE notifications SET lu = true WHERE etablissement_id = $1 AND NOT lu
+      AND ($2 OR code IS DISTINCT FROM 'chrono_seuil_atteint')`, [etab, chrono.peutLireAlerte(req.utilisateur)]);
   }));
 
   /* ---------- mon compte et administration ---------- */

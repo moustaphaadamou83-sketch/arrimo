@@ -2,7 +2,7 @@
    « À vous de jouer » (bac à sable, lot 2), mini-test noté et chronométré par le serveur. FR/EN, clavier, mode sombre, téléphone. */
 (() => {
   const TXT = {
-    fr: { titre_barre: '🎓 Ma formation', evitement: 'Aller au contenu', bonjour: 'Ma formation', reussies: 'Capsules réussies : {r} sur {t}', aucune: 'Bravo : toutes vos capsules sont réussies.',
+    fr: { titre_barre: 'Ma formation', evitement: 'Aller au contenu', bonjour: 'Ma formation', reussies: 'Capsules réussies : {r} sur {t}', aucune: 'Bravo : toutes vos capsules sont réussies.',
       continuer: 'Continuer : {t} · {d} min', commencer: 'Commencer : {t} · {d} min', mes_parcours: 'Mes parcours', ajouter: 'Choisissez vos parcours (selon votre rôle) :',
       etat: { a_faire: 'À faire', en_cours: 'En cours', reussi: 'Réussi', preparation: 'En préparation' }, min: '{d} min', score: '{s} %',
       inactif: 'La formation n’est pas encore activée pour votre établissement. Votre administrateur peut l’activer depuis Arrimo SH.', retour: '← Ma formation',
@@ -11,7 +11,7 @@
       test_titre: 'Mini-test', test_intro: '3 questions. Il faut 2 bonnes réponses sur 3.', test_chrono: 'Test chronométré : {s} secondes.', demarrer: 'Commencer le test', valider: 'Valider mes réponses',
       reussi: 'Capsule réussie !', rate: 'Pas encore : {s} %. Revoyez la capsule et recommencez.', hors_temps: 'Temps dépassé : recommencez quand vous êtes prêt.', recommencer: 'Recommencer', suivante: 'Capsule suivante', capsule_vue: 'Revoir la capsule',
       reponse_manquante: 'Répondez aux trois questions.', attestation: 'Télécharger mon attestation', parcours_fini: 'Parcours réussi !', avis: 'Votre avis sur ce parcours', avis_envoyer: 'Envoyer', avis_merci: 'Merci pour votre avis.', commentaire: 'Un commentaire ? (facultatif)', etoiles: '{n} sur 5', aide_su: 'Une question ? Demandez d’abord à : {noms}', suivi: 'Suivi de l’équipe', suivi_intro: 'Qui a vu, pratiqué et réussi ; qui a besoin d’aide.', csv: 'Exporter en CSV', col_nom: 'Nom', col_role: 'Rôle', col_vues: 'Vues', col_prat: 'Pratiquées', col_reussies: 'Réussies', col_aide: 'Besoin d’aide', col_su: 'Superutilisateur', oui: 'Oui', satisfaction_moy: 'Satisfaction moyenne : {m} sur 5 ({n} avis)', erreur: 'Une erreur est survenue. Réessayez.', voix: 'Voix' },
-    en: { titre_barre: '🎓 My training', evitement: 'Skip to content', bonjour: 'My training', reussies: 'Lessons passed: {r} of {t}', aucune: 'Well done: all your lessons are passed.',
+    en: { titre_barre: 'My training', evitement: 'Skip to content', bonjour: 'My training', reussies: 'Lessons passed: {r} of {t}', aucune: 'Well done: all your lessons are passed.',
       continuer: 'Continue: {t} · {d} min', commencer: 'Start: {t} · {d} min', mes_parcours: 'My paths', ajouter: 'Choose your paths (based on your role):',
       etat: { a_faire: 'To do', en_cours: 'In progress', reussi: 'Passed', preparation: 'Coming soon' }, min: '{d} min', score: '{s}%',
       inactif: 'Training is not turned on for your facility yet. Your administrator can turn it on from Arrimo SH.', retour: '← My training',
@@ -43,7 +43,7 @@
     document.documentElement.lang = L === 'en' ? 'en-CA' : 'fr-CA';
     document.getElementById('fo-titre-barre').textContent = X().titre_barre;
     document.getElementById('lien-evitement').textContent = X().evitement;
-    document.title = `Arrimo · ${X().titre_barre.replace('🎓 ', '')}`;
+    document.title = `Arrimo · ${X().titre_barre}`;
     document.querySelectorAll('[data-fo-langue]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.foLangue === L)));
   }
   const anneau = (pct) => {
@@ -52,8 +52,8 @@
       <circle class="fond" cx="66" cy="66" r="${r}"/><circle class="barre" cx="66" cy="66" r="${r}" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - pct / 100)}"/></svg><span class="pct">${pct} %</span></div>`;
   };
   const carte = (c) => `<button type="button" class="fo-carte" data-capsule="${esc(c.code)}"${c.etat === 'preparation' ? ' disabled' : ''}>
-      ${c.etat === 'reussi' ? '<span class="fo-badge" aria-hidden="true">✓</span>' : ''}<span class="em" aria-hidden="true">${c.emoji}</span><h3>${esc(c.titre)}</h3>
-      <span class="meta"><span class="fo-etat ${c.etat}">${esc(X().etat[c.etat])}</span><span>⏱ ${esc(f(X().min, { d: Math.max(1, Math.round(c.duree / 60)) }))}</span>${c.score != null && c.etat !== 'reussi' ? `<span>${esc(f(X().score, { s: c.score }))}</span>` : ''}</span></button>`;
+      ${c.etat === 'reussi' ? '<span class="fo-badge" aria-hidden="true"><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-check"/></svg></span>' : ''}<span class="em" aria-hidden="true">${icoEmoji(c.emoji)}</span><h3>${esc(c.titre)}</h3>
+      <span class="meta"><span class="fo-etat ${c.etat}">${esc(X().etat[c.etat])}</span><span><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-timer"/></svg> ${esc(f(X().min, { d: Math.max(1, Math.round(c.duree / 60)) }))}</span>${c.score != null && c.etat !== 'reussi' ? `<span>${esc(f(X().score, { s: c.score }))}</span>` : ''}</span></button>`;
 
   async function accueil() {
     arreter();
@@ -61,17 +61,17 @@
     if (!donnees.actif) { main.innerHTML = `<div class="fo-heros" style="grid-template-columns:1fr"><div><h1>${esc(X().bonjour)}</h1><p>${esc(X().inactif)}</p></div></div>`; return; }
     const p = donnees.prochaine;
     main.innerHTML = `<section class="fo-heros">${anneau(donnees.progression)}<div><h1>${esc(X().bonjour)}</h1><p>${esc(donnees.total ? f(X().reussies, { r: donnees.reussies, t: donnees.total }) : '')}</p>
-        ${p ? `<button class="fo-bouton" data-capsule="${esc(p.code)}">${p.emoji} ${esc(f(donnees.reussies ? X().continuer : X().commencer, { t: p.titre, d: Math.max(1, Math.round(p.duree / 60)) }))}</button>` : `<p>${esc(X().aucune)}</p>`}</div></section>
-      <div class="fo-puces" role="group" aria-label="${esc(X().mes_parcours)}"><span class="fo-note">${esc(X().ajouter)}</span>${donnees.eligibles.map((e) => `<button type="button" class="fo-puce" data-parcours="${esc(e.code)}" aria-pressed="${e.choisi}">${e.emoji} ${esc(e.nom)}</button>`).join('')}</div>
-      ${donnees.parcours.map((pc) => `<section class="fo-section"><div class="fo-section-tete"><h2>${pc.emoji} ${esc(pc.nom)}</h2><span>${pc.reussies}/${pc.total}</span></div>
-        ${pc.total && pc.reussies === pc.total ? `<div class="fo-panneau fo-fini"><p><span class="fo-confettis" aria-hidden="true">🏅</span><b>${esc(X().parcours_fini)}</b></p>
-          <p><button class="fo-bouton" data-attestation="${esc(pc.code)}">📄 ${esc(X().attestation)}</button></p>
-          <form class="fo-avis" data-avis="${esc(pc.code)}"><fieldset><legend>${esc(X().avis)}</legend><div class="fo-etoiles">${[1, 2, 3, 4, 5].map((n) => `<label><input type="radio" name="note" value="${n}" required><span aria-hidden="true">★</span><span class="lecteur">${esc(f(X().etoiles, { n }))}</span></label>`).join('')}</div>
+        ${p ? `<button class="fo-bouton" data-capsule="${esc(p.code)}">${icoEmoji(p.emoji)} ${esc(f(donnees.reussies ? X().continuer : X().commencer, { t: p.titre, d: Math.max(1, Math.round(p.duree / 60)) }))}</button>` : `<p>${esc(X().aucune)}</p>`}</div></section>
+      <div class="fo-puces" role="group" aria-label="${esc(X().mes_parcours)}"><span class="fo-note">${esc(X().ajouter)}</span>${donnees.eligibles.map((e) => `<button type="button" class="fo-puce" data-parcours="${esc(e.code)}" aria-pressed="${e.choisi}">${icoEmoji(e.emoji)} ${esc(e.nom)}</button>`).join('')}</div>
+      ${donnees.parcours.map((pc) => `<section class="fo-section"><div class="fo-section-tete"><h2>${icoEmoji(pc.emoji)} ${esc(pc.nom)}</h2><span>${pc.reussies}/${pc.total}</span></div>
+        ${pc.total && pc.reussies === pc.total ? `<div class="fo-panneau fo-fini"><p><span class="fo-confettis" aria-hidden="true"><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-award"/></svg></span><b>${esc(X().parcours_fini)}</b></p>
+          <p><button class="fo-bouton" data-attestation="${esc(pc.code)}"><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-file-text"/></svg> ${esc(X().attestation)}</button></p>
+          <form class="fo-avis" data-avis="${esc(pc.code)}"><fieldset><legend>${esc(X().avis)}</legend><div class="fo-etoiles">${[1, 2, 3, 4, 5].map((n) => `<label><input type="radio" name="note" value="${n}" required><span aria-hidden="true"><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-star"/></svg></span><span class="lecteur">${esc(f(X().etoiles, { n }))}</span></label>`).join('')}</div>
             <label class="fo-com">${esc(X().commentaire)}<textarea name="commentaire" maxlength="500" rows="2"></textarea></label><button class="fo-bouton ligne" type="submit">${esc(X().avis_envoyer)}</button></fieldset></form></div>` : ''}
         <div class="fo-grille">${pc.capsules.map(carte).join('')}</div></section>`).join('')}
       <div id="fo-suivi-lien"></div>`;
-    api('GET', '/formation/superutilisateurs').then((su) => { if (su.length) document.querySelector('.fo-heros > div')?.insertAdjacentHTML('beforeend', `<p class="fo-note">💬 ${esc(f(X().aide_su, { noms: su.map((x) => x.nom).join(', ') }))}</p>`); }).catch(() => {});
-    if (etabSuivi) api('GET', `/formation/suivi?etablissement_id=${etabSuivi}`).then(() => { const z = document.getElementById('fo-suivi-lien'); if (z) z.innerHTML = `<p style="margin-top:28px"><a class="fo-bouton ligne" href="#suivi">📋 ${esc(X().suivi)}</a></p>`; }).catch(() => {});
+    api('GET', '/formation/superutilisateurs').then((su) => { if (su.length) document.querySelector('.fo-heros > div')?.insertAdjacentHTML('beforeend', `<p class="fo-note"><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-message-square"/></svg> ${esc(f(X().aide_su, { noms: su.map((x) => x.nom).join(', ') }))}</p>`); }).catch(() => {});
+    if (etabSuivi) api('GET', `/formation/suivi?etablissement_id=${etabSuivi}`).then(() => { const z = document.getElementById('fo-suivi-lien'); if (z) z.innerHTML = `<p style="margin-top:28px"><a class="fo-bouton ligne" href="#suivi"><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-clipboard-list"/></svg> ${esc(X().suivi)}</a></p>`; }).catch(() => {});
   }
 
   // ---------------------------------------------------------------- capsule
@@ -82,7 +82,7 @@
     api('POST', `/formation/capsules/${c.code}/vue`).catch(() => {});
     lecture = { c, i: 0, joue: true, t: null, audio: null, etape: 0 };
     main.innerHTML = `<button class="fo-retour" data-accueil>${esc(X().retour)}</button>
-      <div class="fo-capsule-tete"><span class="em" aria-hidden="true">${c.emoji}</span><div><h1>${esc(c.titre)}</h1></div></div><p class="fo-objectif">${esc(c.objectif)}</p>
+      <div class="fo-capsule-tete"><span class="em" aria-hidden="true">${icoEmoji(c.emoji)}</span><div><h1>${esc(c.titre)}</h1></div></div><p class="fo-objectif">${esc(c.objectif)}</p>
       <ol class="fo-etapes" aria-label="Étapes">${X().etapes.map((e, i) => `<li class="fo-etape" data-etape="${i}"${i === 0 ? ' aria-current="step"' : ''}>${esc(e)}</li>`).join('')}</ol>
       <div class="fo-scene" id="fo-scene"></div><p class="fo-sous-titre" id="fo-st" aria-live="polite"></p>
       <div class="fo-commandes"><button class="fo-bouton ligne" data-scene="-1">← ${esc(X().precedent)}</button><button class="fo-bouton" id="fo-joue" data-joue>${esc(X().pause)}</button><button class="fo-bouton ligne" data-scene="1">${esc(X().suivant)} →</button>
@@ -94,7 +94,7 @@
   function afficherScene() {
     const { c, i } = lecture; const s = c.scenes[i];
     const z = s.zone ? `<span class="zone" style="left:${s.zone.x}%;top:${s.zone.y}%;width:${s.zone.w}%;height:${s.zone.h}%"></span>` : '';
-    document.getElementById('fo-scene').innerHTML = s.image ? `<img src="${esc(s.image)}" alt="${esc(s.sous_titre)}">${z}<span class="fo-etiquette">${esc(X().fictif)}</span>` : `<div class="vide" aria-hidden="true">${c.emoji}</div>`;
+    document.getElementById('fo-scene').innerHTML = s.image ? `<img src="${esc(s.image)}" alt="${esc(s.sous_titre)}">${z}<span class="fo-etiquette">${esc(X().fictif)}</span>` : `<div class="vide" aria-hidden="true">${icoEmoji(c.emoji)}</div>`;
     document.getElementById('fo-st').textContent = s.sous_titre;
     document.querySelectorAll('.fo-points span').forEach((p, k) => p.classList.toggle('actif', k === i));
     clearTimeout(lecture.t); lecture.audio?.pause(); lecture.audio = null;
@@ -110,7 +110,7 @@
     if (document.getElementById('fo-test')) return;
     etape(1);
     document.getElementById('fo-suite').innerHTML = `<section class="fo-panneau"><p>${esc(X().fin_scenes)}</p></section>
-      ${lecture.c.exercice.length ? `<section class="fo-panneau" id="fo-ex"><h2>${esc(X().exercice_titre)}</h2>${lecture.c.pratique ? `<p class="fo-resultat ok">✓ ${esc(X().exercice_fait)}</p>` : ''}<div class="fo-exercice"><span class="em" aria-hidden="true">🧪</span><p class="fo-note">${esc(X().exercice_intro)}</p></div>
+      ${lecture.c.exercice.length ? `<section class="fo-panneau" id="fo-ex"><h2>${esc(X().exercice_titre)}</h2>${lecture.c.pratique ? `<p class="fo-resultat ok"><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-check"/></svg> ${esc(X().exercice_fait)}</p>` : ''}<div class="fo-exercice"><span class="em" aria-hidden="true"><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-flask-conical"/></svg></span><p class="fo-note">${esc(X().exercice_intro)}</p></div>
         <p style="margin-top:12px"><button class="fo-bouton" data-ex-debut>${esc(X().exercice_debut)}</button></p></section>` : ''}
       <section class="fo-panneau" id="fo-test"><h2>${esc(X().test_titre)}</h2><p class="fo-note">${esc(X().test_intro)} ${lecture.c.chrono_test_s ? esc(f(X().test_chrono, { s: lecture.c.chrono_test_s })) : ''}</p>
         <button class="fo-bouton" data-test-debut>${esc(X().demarrer)}</button></section>`;
@@ -122,7 +122,7 @@
   }
   function afficherEtapeEx(message, indice) {
     const c = lecture.c; const e = c.exercice[lecture.ex]; const z = document.getElementById('fo-ex');
-    const bulle = indice ? `<button type="button" class="zone indice" data-ex-zone style="left:${indice.x}%;top:${indice.y}%;width:${indice.w}%;height:${indice.h}%" aria-label="${esc(X().cliquez_ici)}"><span class="bulle">👆 ${esc(X().cliquez_ici)}</span></button>` : '';
+    const bulle = indice ? `<button type="button" class="zone indice" data-ex-zone style="left:${indice.x}%;top:${indice.y}%;width:${indice.w}%;height:${indice.h}%" aria-label="${esc(X().cliquez_ici)}"><span class="bulle"><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-pointer"/></svg> ${esc(X().cliquez_ici)}</span></button>` : '';
     z.innerHTML = `<h2>${esc(X().exercice_titre)} <span class="fo-note" style="font-size:14px">${esc(f(X().exercice_etape, { n: lecture.ex + 1, t: c.exercice.length }))}</span></h2>
       <p class="fo-consigne"><b>${esc(e.consigne)}</b></p>
       <div class="fo-scene fo-cible" id="fo-cible" role="application" aria-label="${esc(e.consigne)}">${e.image ? `<img src="${esc(e.image)}" alt="" draggable="false">` : ''}${bulle}<span class="fo-etiquette">${esc(X().fictif)}</span></div>
@@ -135,21 +135,21 @@
     if (!r.juste) { afficherEtapeEx(X().rate_clic, r.indice || { x: 0, y: 0, w: 0, h: 0 }); document.querySelector('[data-ex-zone]')?.focus(); return; }
     if (!r.termine) { lecture.ex = r.etape; afficherEtapeEx(X().bravo_etape); return; }
     lecture.c.pratique = r.reussi;
-    document.getElementById('fo-ex').innerHTML = `<h2>${esc(X().exercice_titre)}</h2><div class="fo-resultat ${r.reussi ? 'ok' : 'ko'}" role="status">${r.reussi ? `<span class="fo-confettis" aria-hidden="true">🎯</span>${esc(f(X().exercice_fini, { s: r.score }))}` : esc(f(X().exercice_rate, { s: r.score }))}
+    document.getElementById('fo-ex').innerHTML = `<h2>${esc(X().exercice_titre)}</h2><div class="fo-resultat ${r.reussi ? 'ok' : 'ko'}" role="status">${r.reussi ? `<span class="fo-confettis" aria-hidden="true"><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-target"/></svg></span>${esc(f(X().exercice_fini, { s: r.score }))}` : esc(f(X().exercice_rate, { s: r.score }))}
       ${r.reussi ? '' : `<div class="fo-commandes"><button type="button" class="fo-bouton" data-ex-debut>${esc(X().recommencer)}</button></div>`}</div>`;
-    if (r.capsule_reussie) document.getElementById('fo-ex').insertAdjacentHTML('beforeend', `<p class="fo-resultat ok"><span class="fo-confettis" aria-hidden="true">🎉</span>${esc(X().reussi)}</p>`);
+    if (r.capsule_reussie) document.getElementById('fo-ex').insertAdjacentHTML('beforeend', `<p class="fo-resultat ok"><span class="fo-confettis" aria-hidden="true"><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-party-popper"/></svg></span>${esc(X().reussi)}</p>`);
     etape(r.reussi ? 2 : 1);
   }
   async function debutTest() {
     const c = lecture.c; etape(2);
     try { await api('POST', `/formation/capsules/${c.code}/quiz/debut`); } catch (e) { return alerte(e.message); }
     const zone = document.getElementById('fo-test');
-    zone.innerHTML = `<h2>${esc(X().test_titre)} ${c.chrono_test_s ? `<span class="fo-minuteur" id="fo-minuteur" aria-live="off">⏱ ${c.chrono_test_s} s</span>` : ''}</h2>
+    zone.innerHTML = `<h2>${esc(X().test_titre)} ${c.chrono_test_s ? `<span class="fo-minuteur" id="fo-minuteur" aria-live="off"><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-timer"/></svg> ${c.chrono_test_s} s</span>` : ''}</h2>
       <form id="fo-quiz">${c.quiz.map((q, i) => `<div class="fo-question"><fieldset><legend>${i + 1}. ${esc(q.question)}</legend>${q.choix.map((x, k) => `<label class="fo-choix" data-q="${i}" data-k="${k}"><input type="radio" name="q${i}" value="${k}"><span>${esc(x)}</span></label>`).join('')}</fieldset></div>`).join('')}
         <button class="fo-bouton" type="submit">${esc(X().valider)}</button><p id="fo-retour-test" class="fo-note" aria-live="polite"></p></form>`;
     if (c.chrono_test_s) {
       const fin = Date.now() + c.chrono_test_s * 1000;
-      minuterie = setInterval(() => { const r = Math.max(0, Math.ceil((fin - Date.now()) / 1000)); const m = document.getElementById('fo-minuteur'); if (m) m.textContent = `⏱ ${r} s`; if (!r) clearInterval(minuterie); }, 250);
+      minuterie = setInterval(() => { const r = Math.max(0, Math.ceil((fin - Date.now()) / 1000)); const m = document.getElementById('fo-minuteur'); if (m) m.textContent = `${r} s`; if (!r) clearInterval(minuterie); }, 250);
     }
     zone.querySelector('input')?.focus();
   }
@@ -162,7 +162,7 @@
     r.corrections.forEach((x, i) => { form.querySelectorAll(`.fo-choix[data-q="${i}"]`).forEach((l) => { const k = Number(l.dataset.k); if (k === x.bonne) l.classList.add('juste'); else if (l.querySelector('input').checked) l.classList.add('faux'); }); });
     form.querySelectorAll('input, button[type="submit"]').forEach((x) => { x.disabled = true; });
     const suivante = r.reussi ? prochaineApres(c.code) : null;
-    form.insertAdjacentHTML('beforeend', `<div class="fo-resultat ${r.reussi ? 'ok' : 'ko'}" role="status">${r.reussi ? (r.exercice_a_faire ? `${esc(X().il_reste_exercice)} (${r.score} %)` : `<span class="fo-confettis" aria-hidden="true">🎉</span>${esc(X().reussi)} (${r.score} %)`) : esc(r.hors_temps ? X().hors_temps : f(X().rate, { s: r.score }))}
+    form.insertAdjacentHTML('beforeend', `<div class="fo-resultat ${r.reussi ? 'ok' : 'ko'}" role="status">${r.reussi ? (r.exercice_a_faire ? `${esc(X().il_reste_exercice)} (${r.score} %)` : `<span class="fo-confettis" aria-hidden="true"><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-party-popper"/></svg></span>${esc(X().reussi)} (${r.score} %)`) : esc(r.hors_temps ? X().hors_temps : f(X().rate, { s: r.score }))}
       <div class="fo-commandes">${r.reussi ? '' : `<button type="button" class="fo-bouton" data-test-debut>${esc(X().recommencer)}</button><button type="button" class="fo-bouton ligne" data-revoir>${esc(X().capsule_vue)}</button>`}
         ${suivante ? `<button type="button" class="fo-bouton" data-capsule="${esc(suivante)}">${esc(X().suivante)} →</button>` : ''}<button type="button" class="fo-bouton ligne" data-accueil>${esc(X().retour)}</button></div></div>`);
     etape(r.reussi ? 3 : 2);
@@ -179,11 +179,11 @@
     arreter();
     let d; try { d = await api('GET', `/formation/suivi?etablissement_id=${etabSuivi}`); } catch (e) { main.innerHTML = `<button class="fo-retour" data-accueil>${esc(X().retour)}</button><p role="alert">${esc(e.message)}</p>`; return; }
     const peutDesigner = moiCompte && (moiCompte.gestionnaire || moiCompte.role === 'admin_etab');
-    main.innerHTML = `<button class="fo-retour" data-accueil>${esc(X().retour)}</button><h1 style="margin:8px 0 6px">📋 ${esc(X().suivi)}</h1><p class="fo-note">${esc(X().suivi_intro)}${d.satisfaction.n ? ` · ${esc(f(X().satisfaction_moy, { m: d.satisfaction.moyenne, n: d.satisfaction.n }))}` : ''}</p>
+    main.innerHTML = `<button class="fo-retour" data-accueil>${esc(X().retour)}</button><h1 style="margin:8px 0 6px"><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-clipboard-list"/></svg> ${esc(X().suivi)}</h1><p class="fo-note">${esc(X().suivi_intro)}${d.satisfaction.n ? ` · ${esc(f(X().satisfaction_moy, { m: d.satisfaction.moyenne, n: d.satisfaction.n }))}` : ''}</p>
       <p style="margin:12px 0"><button class="fo-bouton ligne" data-suivi-csv>⬇ ${esc(X().csv)}</button></p>
       <div class="fo-tableau"><table><thead><tr><th>${esc(X().col_nom)}</th><th>${esc(X().col_role)}</th><th>${esc(X().col_vues)}</th><th>${esc(X().col_prat)}</th><th>${esc(X().col_reussies)}</th><th>${esc(X().col_aide)}</th><th>${esc(X().col_su)}</th></tr></thead><tbody>
       ${d.personnes.map((x) => `<tr><td>${esc(x.nom)}<div class="fo-note">${esc(x.parcours.join(' · '))}</div></td><td>${esc(x.role)}</td><td>${x.vues}/${x.total}</td><td>${x.pratiquees}/${x.total}</td><td><b>${x.reussies}/${x.total}</b></td>
-        <td>${x.besoin_aide ? `<span class="fo-etat en_cours">⚠ ${esc(x.capsules_bloquees.join(', '))}</span>` : ''}</td>
+        <td>${x.besoin_aide ? `<span class="fo-etat en_cours"><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-triangle-alert"/></svg> ${esc(x.capsules_bloquees.join(', '))}</span>` : ''}</td>
         <td>${peutDesigner ? `<input type="checkbox" data-su="${x.id}"${x.superutilisateur ? ' checked' : ''} aria-label="${esc(X().col_su)} · ${esc(x.nom)}">` : x.superutilisateur ? esc(X().oui) : ''}</td></tr>`).join('')}</tbody></table></div>`;
   }
   async function telecharger(chemin, nom) {

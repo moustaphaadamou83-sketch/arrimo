@@ -73,6 +73,23 @@ test('zone : une position isolée n’ouvre rien (bruit GPS) ; deux positions de
   ids.p2 = p.id;
 });
 
+test('alerte Chrono persistante : un seul envoi lors de deux balayages concurrents', async () => {
+  const c = (await pool.query(`SELECT cfg.id, cfg.chrono_cible_porte_min, cfg.chrono_orange_min FROM etablissements e
+    JOIN config_pays cfg ON cfg.id = e.config_id WHERE e.id = $1`, [ids.mb])).rows[0];
+  await pool.query('UPDATE config_pays SET chrono_cible_porte_min = 6, chrono_orange_min = 5 WHERE id = $1', [c.id]);
+  try {
+    const chrono = require('../src/chrono');
+    await Promise.all([chrono.notifierAttentes(pool), chrono.notifierAttentes(pool)]);
+    const p = (await passageDe(ids.u2)).numero;
+    const n = await pool.query("SELECT id FROM notifications WHERE code = 'chrono_seuil_atteint' AND vars->>'passage' = $1", [p]);
+    assert.strictEqual(n.rowCount, 1);
+    const notifs = await appel('tremblay', 'GET', `/notifications?etablissement_id=${ids.mb}`);
+    assert.ok(notifs.corps.some((x) => x.code === 'chrono_seuil_atteint' && x.vars.passage === p));
+  } finally {
+    await pool.query('UPDATE config_pays SET chrono_cible_porte_min = $2, chrono_orange_min = $3 WHERE id = $1', [c.id, c.chrono_cible_porte_min, c.chrono_orange_min]);
+  }
+});
+
 test('ordre des étapes : H12 < H13 < H14 imposé ; rien n’est inventé', async () => {
   const etape = (e) => appel('tremblay', 'POST', `/chrono/passages/${ids.p2}/etape`, { etablissement_id: ids.mb, etape: e });
   assert.strictEqual((await etape('H13')).corps.code, 'etape_precedente_manquante');
@@ -88,14 +105,46 @@ test('démarquage : la même fiche, les mêmes heures pour l’urgence, l’ambu
   const amb = (await appel('para', 'GET', '/secours/chrono')).corps;
   const ccs = (await appel('ccs', 'GET', '/secours/chrono')).corps;
   const fiche = (d) => d.a_la_porte.find((x) => x.id === ids.p2);
-  for (const [nom, d] of [['ambulance', amb], ['ccs', ccs]]) assert.deepStrictEqual(fiche(d).heures, fiche(hop).heures, nom);
+  for (const [nom, d] of [['ambulance', amb], ['ccs', ccs]]) {
+    assert.deepStrictEqual(fiche(d).heures, fiche(hop).heures, nom);
+    assert.deepStrictEqual(fiche(d).cibles, fiche(hop).cibles, nom);
+    assert.strictEqual(fiche(d).niveau, fiche(hop).niveau, nom);
+  }
   assert.strictEqual(hop.cibles.porte, 20); assert.strictEqual(hop.indicatif, true);
+  const choisi = await appel('ccs', 'GET', `/secours/chrono?vehicule=${encodeURIComponent(fiche(hop).unite)}&heures_historique=48`);
+  assert.strictEqual(choisi.statut, 200);
+  assert.strictEqual(choisi.corps.heures_historique, 48);
+  assert.ok(choisi.corps.a_la_porte.some((p) => p.id === ids.p2));
+  const inconnu = await appel('ccs', 'GET', '/secours/chrono?vehicule=%25');
+  assert.strictEqual(inconnu.corps.a_la_porte.length, 0, 'les caractères de recherche sont littéraux');
+  assert.strictEqual((await appel('ccs', 'GET', '/secours/chrono?heures_historique=3000')).statut, 400);
+  assert.ok(Number.isFinite(Date.parse(hop.actualise_le)));
+  const attentes = hop.a_la_porte.map((p) => p.a_la_porte_min).filter((min) => min != null && min >= 0);
+  assert.strictEqual(hop.attente.en_cours, attentes.length);
+  assert.strictEqual(hop.attente.seuil_atteint, attentes.filter((min) => min >= hop.cibles.porte).length);
+  assert.strictEqual(hop.attente.minutes_cumulees, attentes.reduce((total, min) => total + min, 0));
   // Autre entreprise, autre hôpital, hôpital sans le module : rien
   assert.ok(!(await appel('paraB', 'GET', '/secours/chrono')).corps.a_la_porte.some((x) => x.id === ids.p2));
   assert.strictEqual((await appel('paraB', 'GET', `/secours/chrono/passages/${ids.p2}`)).statut, 404);
   const sl = await appel('bouchard', 'GET', `/chrono?etablissement_id=${ids.sl}`);
   assert.strictEqual(sl.statut, 403); assert.strictEqual(sl.corps.code, 'module_desactive');
   assert.strictEqual((await appel('bouchard', 'GET', `/chrono?etablissement_id=${ids.mb}`)).statut, 403);
+});
+
+test('Chrono : les motifs observés sont historisés et le CCS reste en lecture', async () => {
+  const url = `/secours/chrono/passages/${ids.p2}/retard`;
+  assert.strictEqual((await appel('ccs', 'POST', url, { motif: 'civiere' })).statut, 403);
+  assert.strictEqual((await appel('paraB', 'POST', url, { motif: 'civiere' })).statut, 404);
+  assert.strictEqual((await appel('para', 'POST', url, { motif: 'invalide' })).statut, 400);
+  const premier = await appel('para', 'POST', url, { motif: 'civiere' });
+  assert.strictEqual(premier.statut, 200);
+  assert.strictEqual((await appel('para', 'POST', url, { motif: 'civiere' })).corps.deja, true);
+  const second = await appel('tremblay', 'POST', `/chrono/passages/${ids.p2}/retard`,
+    { etablissement_id: ids.mb, motif: 'nettoyage', version: premier.corps.version });
+  assert.strictEqual(second.statut, 200);
+  const fiche = await appel('ccs', 'GET', `/secours/chrono/passages/${ids.p2}`);
+  assert.strictEqual(fiche.corps.motif_retard, 'nettoyage');
+  assert.deepStrictEqual(fiche.corps.historique_retards.map((r) => r.motif), ['civiere', 'nettoyage']);
 });
 
 test('sortie : première position hors zone après H14 → H15 et passage terminé', async () => {

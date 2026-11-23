@@ -1848,7 +1848,7 @@ test('écrans : transfert d’hôpital au bouton, nettoyage sous précautions, r
     for (const [nom, vp] of [['ordinateur', { width: 1366, height: 900 }], ['tablette', { width: 820, height: 1180 }], ['telephone', { width: 390, height: 844 }]]) {
       const era = await ouvrir('era', E, vp); await aller(era, 'c-taches', '#registre'); await era.waitForSelector('#famille'); await era.waitForSelector('#visites'); await era.waitForSelector('#activites'); await sansDebord(era, `${nom} registre`);
       // Accueil universel : les communications des proches sont dans un volet compact, ouvert comme le ferait l'utilisateur
-      await aller(era, 'c-accueil', '#v-c-accueil .acc-kpis'); await era.waitForSelector('#ch-comm'); await era.evaluate(() => { document.querySelector('#ch-comm').open = true; }); await era.waitForSelector('#messages-familles'); await sansDebord(era, `${nom} accueil`);
+      await aller(era, 'c-accueil', '#v-c-accueil .acc-kpis'); await era.waitForFunction(() => { window.__chCommOuvert = true; const d = document.querySelector('#ch-comm'); if (d) d.open = true; return !!d; }); await era.waitForSelector('#messages-familles'); await sansDebord(era, `${nom} accueil`);
       // Répondre à un message de famille depuis l'accueil, réellement, au clic
       if (nom === 'ordinateur') {
         const k = (await poolPilote.query(`SELECT a.contact_id, a.resident_id FROM proches_acces a WHERE a.revoque_le IS NULL AND a.etablissement_id = $1 LIMIT 1`, [E])).rows[0];
@@ -1884,7 +1884,8 @@ test('écrans : transfert d’hôpital au bouton, nettoyage sous précautions, r
     const hb = await ouvrir('b', L.B, { width: 1366, height: 900 }); await aller(hb, 'liaison', '.li-onglets'); await hb.click('[data-li-onglet="a_accueillir"]');
     await hb.click(`[data-coordination="${co.id}"] [data-li="transferer"]`); await hb.waitForSelector('#li-hopital');
     await hb.selectOption('#li-hopital', String(L.A)); await hb.fill('#li-motif', 'Service non offert (fictif)'); await hb.click('#modale button.pri');
-    await hb.click('[data-li-onglet="transferts"]'); await hb.waitForSelector('[data-li="annuler"]');
+    await hb.waitForSelector('[data-li-onglet="transferts"][aria-selected="true"]');
+    await hb.waitForSelector('[data-li="annuler"]');
     const t = (await poolPilote.query(`SELECT id, version, destination_id FROM coordinations WHERE liee_id = $1 AND type = 'transfert_hopital'`, [co.id])).rows[0];
     assert.strictEqual(t.destination_id, L.A);
     await hb.click(`[data-coordination="${t.id}"] [data-li="annuler"]`); await hb.waitForFunction((id) => !document.querySelector(`[data-coordination="${id}"]`), t.id);
@@ -2310,7 +2311,7 @@ test('écrans Arrimo Famille : créer un compte, demander un rattachement, valid
     await era.addInitScript(({ jeton, id }) => { localStorage.setItem('arrimo-token', jeton); localStorage.setItem('arrimo-ctx', String(id)); localStorage.setItem('arrimo-langue', 'fr'); }, { jeton: sessions.era, id: E });
     await era.goto(basePilote); await era.waitForSelector('body[data-pret="1"]');
     if (await era.locator('#b-premiers-pas-ok').isVisible().catch(() => false)) await era.click('#b-premiers-pas-ok');
-    await era.evaluate(() => document.querySelector('#onglets button[data-v="c-accueil"]').click()); await era.waitForSelector('#ch-comm'); await era.evaluate(() => { document.querySelector('#ch-comm').open = true; }); await era.waitForSelector('#rattachements');
+    await era.evaluate(() => document.querySelector('#onglets button[data-v="c-accueil"]').click()); await era.waitForFunction(() => { window.__chCommOuvert = true; const d = document.querySelector('#ch-comm'); if (d) d.open = true; return !!d; }); await era.waitForSelector('#rattachements');
     const id = (await poolPilote.query(`SELECT max(d.id) id FROM proches_demandes_rattachement d JOIN proches_comptes k ON k.id = d.compte_id WHERE k.courriel = 'ecran.proche@exemple.invalid'`)).rows[0].id;
     await era.click(`[data-rat-examiner="${id}"]`); await era.waitForSelector('#rat-res');
     await era.selectOption('#rat-res', String(p.dupont)); await era.fill('#rat-cpar', 'Jean Dupont (fictif)'); await era.click('#modale button.pri');
@@ -2808,7 +2809,7 @@ test('démonstration : un seul compte par CHSLD (administrateur), six comptes d�
         assert.ok(await pg.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), `${nom} ${theme} : aucun débordement horizontal`);
         await pg.screenshot({ path: `${dossier}/chsld-theme-accueil-${nom}-${theme}.png`, fullPage: true });
         if (nom === 'ordinateur' && theme === 'clair') {
-          await pg.click('#v-c-accueil [data-ch-aller="c-chambres"]'); await pg.waitForSelector('#v-c-chambres .ch-place');
+          await pg.click('#v-c-accueil .acc-kpis [data-acc-aller="c-chambres"]'); await pg.waitForSelector('#v-c-chambres .ch-place');
           await pg.click('#og-open'); await pg.waitForSelector('#og-panel[open]'); assert.ok(await pg.locator('#og-panel .og-actions button, #og-actions button').count() > 0, 'OG : raccourcis CHSLD');
           await pg.screenshot({ path: `${dossier}/chsld-theme-og.png` });
         }

@@ -5,6 +5,7 @@
  * Chaque réponse : état actuel, source, heure d'actualisation, données manquantes signalées, action suivante. OG n'agit jamais,
  * n'invente aucune disponibilité, heure d'arrivée ni confirmation ; aucune donnée clinique.
  */
+const { BROUILLON_PRIVE_SQL } = require('./transports');
 const norm = (q) => String(q || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const T = (L, fr, en) => (L === 'en' ? en : fr);
 const h = (L, d) => new Date(d).toLocaleTimeString(L === 'en' ? 'en-CA' : 'fr-CA', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Toronto' });
@@ -16,7 +17,7 @@ const ST_TR = { fr: { a_valider: 'à valider (pas encore transmis)', demandee: '
 
 async function transport(pool, u, etabs, numero, L) {
   const d = (await pool.query(`SELECT d.*, eo.nom AS origine, COALESCE(ed.nom, d.destination_libelle) AS destination, un.numero AS unite FROM demandes_transport d JOIN etablissements eo ON eo.id = d.origine_id
-    LEFT JOIN etablissements ed ON ed.id = d.destination_id LEFT JOIN unites_secours un ON un.id = d.unite_id WHERE upper(d.numero) = $1`, [numero])).rows[0];
+    LEFT JOIN etablissements ed ON ed.id = d.destination_id LEFT JOIN unites_secours un ON un.id = d.unite_id WHERE upper(d.numero) = $1 AND (d.origine_id = ANY($2) OR (d.destination_id = ANY($2) AND NOT ${BROUILLON_PRIVE_SQL}))`, [numero, etabs])).rows[0];
   if (!d || !(etabs.includes(d.origine_id) || etabs.includes(d.destination_id))) return T(L, `Je ne trouve pas le transport ${numero} parmi ceux de votre établissement.`, `I cannot find transport ${numero} among your facility’s transports.`);
   const lignes = [`${d.numero} · ${d.origine} → ${d.destination} · ${ST_TR[L][d.statut] || d.statut}.`];
   lignes.push(d.unite ? T(L, `Véhicule : ${d.unite}.`, `Vehicle: ${d.unite}.`) : T(L, 'Aucun véhicule affecté pour l’instant (la demande n’est pas une affectation).', 'No vehicle assigned yet (the request is not an assignment).'));
@@ -55,6 +56,12 @@ async function repondre(pool, u, etabId, question, langue) {
     const r = await chambre(pool, etabs, code[0].toUpperCase(), L); if (r) return rep(r, 'chambre', 'c-chambres');
   }
   if (!etabId || !etabs.includes(Number(etabId))) return null;
+  // K. Explication d'un indicateur (catalogue central des KPI) : formule, source, période ; jamais une valeur inventée
+  if (/\b(comment (est|sont) calcule\w*|que (signifie|veut dire)|explique\w* (l.?indicateur|le kpi|le chiffre)|how is .* calculated|what does .* mean|explain (the )?(kpi|indicator))\b/.test(qn)) {
+    const cat = require('./kpi-catalogue').catalogue(L);
+    const k = cat.find((x) => qn.includes(norm(x.nom))) || cat.find((x) => norm(x.nom).split(' ').filter((m) => m.length > 4).some((m) => qn.includes(m)));
+    if (k) return rep(`${k.nom} : ${k.description}\n${T(L, 'Formule', 'Formula')} : ${k.formule}\n${T(L, 'Source', 'Source')} : ${k.source}\n${T(L, 'Période', 'Period')} : ${k.periode} · ${T(L, 'Actualisation', 'Refresh')} : ${k.actualisation}\n${T(L, 'Exclusions', 'Exclusions')} : ${k.exclusions}`, 'kpi');
+  }
   // N. Niveau opérationnel : expliqué d'après le moteur existant (terrain.niveauAlerte) et les seuils configurés ; rien d'inventé
   if (/\b(niveau|level)\b/.test(qn) && /\b(pourquoi|why|explique\w*|explain|passer|faire passer|pourrai\w*|could)\b/.test(qn) && u.role !== 'entretien') {
     const n = await require('./terrain').niveauAlerte(pool, etabId, L); if (!n) return null;
@@ -99,7 +106,7 @@ async function repondre(pool, u, etabId, question, langue) {
     const ref = refP[0].toUpperCase(); const lignes = [];
     const dhs = (await pool.query(`SELECT d.*, ed.nom AS destination, eo.nom AS origine FROM demandes_hebergement d JOIN etablissements ed ON ed.id = d.etablissement_id LEFT JOIN etablissements eo ON eo.id = d.hopital_id
       WHERE upper(d.reference_externe) = $1 AND (d.etablissement_id = ANY($2) OR d.hopital_id = ANY($2)) ORDER BY d.id DESC LIMIT 1`, [ref, etabs])).rows[0];
-    const tr = (await pool.query(`SELECT d.*, un.numero AS unite FROM demandes_transport d LEFT JOIN unites_secours un ON un.id = d.unite_id WHERE upper(d.resident_ref) = $1 AND (d.origine_id = ANY($2) OR d.destination_id = ANY($2)) AND d.statut <> 'annulee' ORDER BY d.id DESC LIMIT 1`, [ref, etabs])).rows[0];
+    const tr = (await pool.query(`SELECT d.*, un.numero AS unite FROM demandes_transport d LEFT JOIN unites_secours un ON un.id = d.unite_id WHERE upper(d.resident_ref) = $1 AND (d.origine_id = ANY($2) OR (d.destination_id = ANY($2) AND NOT ${BROUILLON_PRIVE_SQL})) AND d.statut <> 'annulee' ORDER BY d.id DESC LIMIT 1`, [ref, etabs])).rows[0];
     if (!dhs && !tr) return rep(T(L, `Aucun parcours enregistré pour ${ref} dans vos établissements.`, `No recorded path for ${ref} in your facilities.`), 'parcours');
     if (dhs) lignes.push(T(L, `Demande d’hébergement ${dhs.numero} : ${dhs.origine || '—'} → ${dhs.destination} (statut ${dhs.statut}).`, `Housing request ${dhs.numero}: ${dhs.origine || '—'} → ${dhs.destination} (status ${dhs.statut}).`));
     if (dhs?.depart_prevu_le) lignes.push(T(L, `Départ prévu : ${dh(L, dhs.depart_prevu_le)} ; départ réel : ${dhs.depart_hopital_le ? dh(L, dhs.depart_hopital_le) : 'non enregistré'}.`, `Planned departure: ${dh(L, dhs.depart_prevu_le)}; actual departure: ${dhs.depart_hopital_le ? dh(L, dhs.depart_hopital_le) : 'not recorded'}.`));
@@ -120,7 +127,7 @@ async function repondre(pool, u, etabId, question, langue) {
     const lignes = [T(L, `Messages non lus : ${f.non_lus}.`, `Unread messages: ${f.non_lus}.`)];
     if (f.fils[0]) lignes.push(T(L, `Dernier fil : « ${f.fils[0].sujet || '—'} » (${f.fils[0].expediteur}).`, `Latest thread: “${f.fils[0].sujet || '—'}” (${f.fils[0].expediteur}).`));
     lignes.push(T(L, `Demandes à l’administration encore ouvertes : ${ouvertes.length}${ouvertes.length ? ` (${ouvertes.slice(0, 5).map((x) => x.sujet).join(', ')})` : ''}.`, `Requests to the administration still open: ${ouvertes.length}${ouvertes.length ? ` (${ouvertes.slice(0, 5).map((x) => x.sujet).join(', ')})` : ''}.`));
-    lignes.push(T(L, 'Pour contacter l’administration ou un responsable : icône ✉ en haut de l’écran, puis « Contacter l’administration ». Arrimo Connect ne remplace pas les appels d’urgence.', 'To contact the administration or a manager: ✉ icon at the top of the screen, then “Contact the administration”. Arrimo Connect does not replace emergency calls.'));
+    lignes.push(T(L, 'Pour contacter l’administration ou un responsable : icône enveloppe (Arrimo Connect) en haut de l’écran, puis « Contacter l’administration ». Arrimo Connect ne remplace pas les appels d’urgence.', 'To contact the administration or a manager: envelope icon (Arrimo Connect) at the top of the screen, then “Contact the administration”. Arrimo Connect does not replace emergency calls.'));
     return rep(lignes.join('\n') + pied(L, 'Arrimo Connect'), 'connect', 'messagerie');
   }
   // 3. Préalertes (à acquitter) et 4. arrivées / départs : Arrimo Flux, mêmes droits
@@ -148,7 +155,7 @@ async function repondre(pool, u, etabId, question, langue) {
     else if (retard) l = l.filter((x) => x.retard);
     else l = l.filter((x) => (arrivees && x.mouvement === 'arrivee') || (departs && x.mouvement === 'depart'));
     l = l.filter((x) => !['annule', 'refuse'].includes(x.statut));
-    const lib = (x) => `• ${x.mouvement === 'arrivee' ? '↘' : '↗'} ${x.reference} · ${x.origine} → ${x.destination || '—'} · ${x.prevue ? dh(L, x.prevue) : '—'}${x.vehicule ? ` · ${x.vehicule}` : ''}`
+    const lib = (x) => `• ${x.mouvement === 'arrivee' ? T(L, 'Arrivée', 'Arrival') : T(L, 'Départ', 'Departure')} ${x.reference} · ${x.origine} → ${x.destination || '—'} · ${x.prevue ? dh(L, x.prevue) : '—'}${x.vehicule ? ` · ${x.vehicule}` : ''}`
       + `${x.mouvement === 'arrivee' ? ` · ${x.arrivee_reelle ? T(L, `arrivé ${h(L, x.arrivee_reelle)}`, `arrived ${h(L, x.arrivee_reelle)}`) : x.eta ? T(L, `estimée ${h(L, x.eta)}`, `estimated ${h(L, x.eta)}`) : T(L, 'ETA indisponible', 'ETA unavailable')}` : ''}`
       + `${x.prealerte ? ` · ${x.prealerte.recue_le ? T(L, 'préalerte reçue', 'pre-alert received') : T(L, 'préalerte À ACQUITTER', 'pre-alert TO ACKNOWLEDGE')}` : ''}${x.retard ? ` · ${T(L, 'EN RETARD', 'DELAYED')}` : ''}`
       + `${x.preparation ? ` · ${T(L, 'chambre', 'room')} ${x.preparation.chambre || ''} ${({ prete: T(L, 'prête', 'ready'), a_faire: T(L, 'à préparer', 'to prepare'), en_cours: T(L, 'en préparation', 'being prepared'), a_verifier: T(L, 'à vérifier', 'to check') })[x.preparation.etat] || ''}` : ''}`;

@@ -83,10 +83,11 @@ async function creerPatient(pool, u, b = {}) {
 async function rechercher(pool, u, q = {}) {
   const ctx = await contexte(pool, u, q.etablissement_id);
   if (!ctx.fonctions.length) throw new ErreurHttp(403, 'dsn_habilitation_requise', { fonctions: FONCTIONS.join(', ') });
-  const t = String(q.q || '').trim().toLowerCase();
+  const { FILTRE_IDENTITE_SQL, normaliserRecherche } = require('./patients');
+  const t = normaliserRecherche(q.q);
   const rows = (await pool.query(`SELECT p.id, p.reference, p.prenom, p.nom, p.date_naissance::text AS date_naissance, p.parcours,
       (SELECT count(*)::int FROM dsn_elements x WHERE x.patient_id = p.id AND x.genre = 'allergie' AND x.statut = 'actif' AND x.remplace_par IS NULL) AS allergies
-    FROM patients p WHERE p.etablissement_id = $1 AND ($2 = '' OR lower(p.nom) LIKE $2 || '%' OR lower(p.prenom) LIKE $2 || '%' OR lower(p.reference) = $2 OR p.date_naissance::text = $2)
+    FROM patients p WHERE p.etablissement_id = $1 AND ($2 = '' OR ${FILTRE_IDENTITE_SQL} OR p.date_naissance::text = $2)
     ORDER BY p.nom, p.prenom LIMIT 50`, [ctx.e.id, t])).rows;
   return { patients: rows, fonctions: ctx.fonctions };
 }

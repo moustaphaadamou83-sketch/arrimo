@@ -439,8 +439,8 @@ $('#b-disposition')?.addEventListener('click', () => choisirDisposition(disposit
 
 /* ---------------- Météo, heure et date de l'établissement (fuseau de sa configuration) ---------------- */
 // Codes météo de l'OMM regroupés en familles lisibles ; l'icône accompagne toujours un libellé (jamais l'icône seule).
-const METEO = [[[0], 'degage', '☀️', '🌙'], [[1, 2], 'nuageux', '🌤️', '☁️'], [[3], 'couvert', '☁️', '☁️'], [[45, 48], 'brouillard', '🌫️', '🌫️'],
-  [[51, 53, 55, 56, 57], 'bruine', '🌦️', '🌧️'], [[61, 63, 65, 66, 67, 80, 81, 82], 'pluie', '🌧️', '🌧️'], [[71, 73, 75, 77, 85, 86], 'neige', '❄️', '❄️'], [[95, 96, 99], 'orage', '⛈️', '⛈️']];
+const METEO = [[[0], 'degage', 'sun', 'moon'], [[1, 2], 'nuageux', 'cloud-sun', 'cloud'], [[3], 'couvert', 'cloud', 'cloud'], [[45, 48], 'brouillard', 'cloud-fog', 'cloud-fog'],
+  [[51, 53, 55, 56, 57], 'bruine', 'cloud-sun-rain', 'cloud-rain'], [[61, 63, 65, 66, 67, 80, 81, 82], 'pluie', 'cloud-rain', 'cloud-rain'], [[71, 73, 75, 77, 85, 86], 'neige', 'snowflake', 'snowflake'], [[95, 96, 99], 'orage', 'cloud-lightning', 'cloud-lightning']];
 let meteoCtx = { ctx: null, donnees: null, lu: 0 };
 function majInfosLieu() {
   const z = $('#infos-lieu'); const e = etabCtx(); if (!z) return;
@@ -450,7 +450,7 @@ function majInfosLieu() {
   const h = maintenant.toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit', timeZone: tz });
   const m = meteoCtx.ctx === etat.ctx && meteoCtx.donnees?.disponible ? meteoCtx.donnees : null;
   const famille = m ? METEO.find(([codes]) => codes.includes(m.code)) : null;
-  const meteoHtml = m ? `<span class="il-meteo" title="${esc(t('infos.source', { source: m.source }))}"><span aria-hidden="true">${famille ? (m.jour ? famille[2] : famille[3]) : '🌡️'}</span>
+  const meteoHtml = m ? `<span class="il-meteo" title="${esc(t('infos.source', { source: m.source }))}"><span aria-hidden="true">${icone(famille ? (m.jour ? famille[2] : famille[3]) : 'thermometer')}</span>
       <span class="num">${esc(nb((Math.round(m.temperature) || 0)))} °C</span><span class="il-ciel">${famille ? esc(t(`infos.ciel_${famille[1]}`)) : ''}</span></span>` : '';
   z.innerHTML = `${meteoHtml}<span class="il-lieu">${esc(m?.ville || e.ville || '')}</span><span class="il-date">${esc(date)}</span><span class="il-heure num">${esc(h)}</span>`;
   z.setAttribute('aria-label', t('infos.resume', { ville: m?.ville || e.ville || '', date, heure: h, meteo: m ? `${(Math.round(m.temperature) || 0)} °C${famille ? `, ${t(`infos.ciel_${famille[1]}`)}` : ''}` : t('infos.meteo_indisponible') }));
@@ -663,7 +663,7 @@ async function rafraichir() {
 const VUES_FORMULAIRES = ['params', 'compte', 'admin', 'patients', 'c-residents', 'c-demandes', 'c-taches'];
 setInterval(() => {
   if ($('#modale').hidden && document.visibilityState === 'visible' && !VUES_FORMULAIRES.includes(etat.vue) && !etat.ogModifie
-    && !$('#v-support').contains(document.activeElement)) rafraichir();
+    && !$('#v-support').contains(document.activeElement) && !document.activeElement?.closest('#ch-filtres, [data-chrono-retard]')) rafraichir();
 }, 30000);
 
 // Alerte Liaison Secours sur tous les onglets : relecture lente en secours du direct
@@ -676,7 +676,7 @@ setInterval(() => {
   if (etat.token && etat.moi && !fluxApp && window.ArrimoFlux) {
     fluxApp = window.ArrimoFlux.ecouter(() => etat.token, () => {
       window.ArrimoSecours?.veille?.();
-      if ($('#modale').hidden && document.visibilityState === 'visible' && ['secours', 'chrono', 'transports-planifies', 'c-urgences', 'c-mouvements', 'liaison', 'urgence', 'flux', 'mes-taches'].includes(etat.vue)) rafraichir();
+      if ($('#modale').hidden && document.visibilityState === 'visible' && !document.activeElement?.closest('#ch-filtres, [data-chrono-retard]') && ['secours', 'chrono', 'transports-planifies', 'c-urgences', 'c-mouvements', 'liaison', 'urgence', 'flux', 'mes-taches'].includes(etat.vue)) rafraichir();
     });
     fluxApp.jeton = etat.token;
   }
@@ -692,6 +692,7 @@ async function veilleNotifs() {
   const nonLues = notifs.filter((n) => !n.lu).length;
   $('#n-notif').hidden = !nonLues; $('#n-notif').textContent = nonLues;
   etat.notifs = notifs;
+  window.ArrimoSon?.notifications(notifs);   // son : chaque nouvelle alerte ou notification
   const max = notifs.reduce((m, n) => Math.max(m, Number(n.id)), 0);
   const dernier = etat.derniereNotif?.[ctx];
   etat.derniereNotif = { ...(etat.derniereNotif || {}), [ctx]: max };
@@ -1185,6 +1186,29 @@ function actionsTransfert(x) {
   if (['validee', 'transport', 'en_route'].includes(x.statut) && dest && !x.date_chambre_prete) a.push(['chambre_prete', x.statut !== 'en_route']);
   return a;
 }
+function boutonsTransfert(x) {
+  if (!x) return '';
+  return actionsTransfert(x).map(([action, prioritaire]) => `<button type="button" class="btn${prioritaire ? ' pri' : ''}${action === 'refuser' ? ' dan' : ''}"
+    data-tr="${x.id}" data-etape="${action}" data-num="${esc(x.numero)}">${esc(t(`transferts.${action}`))}</button>`).join('');
+}
+function lierActionsTransfert(zone) {
+  zone.querySelectorAll('[data-tr][data-etape]').forEach((b) => { b.onclick = () => executerActionTransfert(b); });
+}
+function executerActionTransfert(b) {
+  const id = b.dataset.tr; const etape = b.dataset.etape; const numero = b.dataset.num;
+  if (etape === 'relancer') {
+    agir(b, () => api('POST', `/transferts/${id}/relancer`), t('transferts.relance_ok', { numero }));
+    return;
+  }
+  if (etape === 'refuser') {
+    modale(t('transferts.refuser_titre', { numero }), `<div class="champ"><label class="lbl" for="m-motif-code">${esc(t('transferts.motif_code'))}</label><select id="m-motif-code">${['pas_de_lit', 'pas_de_personnel', 'plateau_technique', 'autre'].map((m) => `<option value="${m}">${esc(t(`transferts.motif_${m}`))}</option>`).join('')}</select></div>
+      <div class="champ"><label class="lbl" for="m-motif">${esc(t('transferts.motif_facultatif'))}</label><input id="m-motif" maxlength="300" autocomplete="off"></div>
+      <p class="note">${esc(t('transferts.refuser_aide'))}</p>`,
+    [{ label: t('general.retour') }, { label: t('transferts.refuser_bouton'), pri: true, run: async () => (await agir(null, () => api('POST', `/transferts/${id}/refuser`, { motif_code: $('#m-motif-code').value, motif: $('#m-motif').value }), t('transferts.refuse_ok', { numero }))) !== null || false }]);
+    return;
+  }
+  agir(b, () => api('POST', `/transferts/${id}/${etape}`), t({ accepter: 'transferts.accepte_ok', chambre_prete: 'transferts.chambre_prete_ok', transport: 'transferts.transport_ok', depart: 'transferts.depart_ok', reception: 'transferts.reception_ok' }[etape], { numero }));
+}
 const jourHeure = (iso) => heure(iso);
 const heureCourte = (iso) => new Date(iso).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit', timeZone: fuseau() });
 /** Compte à rebours jusqu'à l'heure d'arrivée prévue, mis à jour sans recharger la page. */
@@ -1251,7 +1275,7 @@ async function vueTransferts() {
       ${attente(x) ? `<div class="note">${esc(attente(x))}</div>` : ''}
       ${x.statut === 'demande' ? `<div class="note">${esc(t('transferts.relances', { n: x.nombre_relances || 0 }))}${x.service_responsable ? ` · ${esc(t('transferts.service_responsable_valeur', { service: x.service_responsable }))}` : ''}</div>
         ${x.destination_id === etat.ctx ? `<div class="ligne"><input class="champ" maxlength="100" data-service-responsable="${x.id}" value="${esc(x.service_responsable || '')}" placeholder="${esc(t('transferts.service_responsable'))}"><button class="btn" data-enregistrer-responsable="${x.id}" data-num="${esc(x.numero)}">${esc(t('transferts.enregistrer_responsable'))}</button></div>` : ''}` : ''}
-      ${actif ? `<div class="actions">${actionsTransfert(x).map(([a, p]) => `<button class="btn${p ? ' pri' : ''}${a === 'refuser' ? ' dan' : ''}" data-tr="${x.id}" data-etape="${a}" data-num="${esc(x.numero)}">${esc(t(`transferts.${a}`))}</button>`).join('')}<button class="btn discret" data-tr-fiche="${x.id}">${esc(t('transferts.fiche'))}</button></div>` : ''}
+      ${actif ? `<div class="actions">${boutonsTransfert(x)}<button class="btn discret" data-tr-fiche="${x.id}">${esc(t('transferts.fiche'))}</button></div>` : ''}
     </div>`).join('') || `<div class="vide">${esc(t('transferts.aucun'))}</div>`}</div>`;
   }).join('');
   // Centrale des transferts urgents de la région (coordination réseau, 20 nov. 2026)
@@ -1260,23 +1284,7 @@ async function vueTransferts() {
   v.innerHTML = `<div class="entete"><div><h2>${esc(t('transferts.titre', { etab: etabCtx().nom }))}</h2><p>${esc(t('transferts.intro'))}</p></div></div>${blocCentrale}<div class="kanban">${cols}</div>${plus ? boutonPlus('transferts') : ''}`;
   v.querySelectorAll('[data-tr-fiche]').forEach((b) => { b.onclick = () => ficheTransfert(Number(b.dataset.trFiche)); });
   brancherPlus(v, 'transferts', `/transferts?etablissement_id=${etat.ctx}`, trs.filter(termine));
-  v.querySelectorAll('[data-tr]').forEach((b) => {
-    b.onclick = () => {
-      const id = b.dataset.tr; const etape = b.dataset.etape; const numero = b.dataset.num;
-      if (etape === 'relancer') {
-        agir(b, () => api('POST', `/transferts/${id}/relancer`), t('transferts.relance_ok', { numero }));
-        return;
-      }
-      if (etape === 'refuser') {
-        modale(t('transferts.refuser_titre', { numero }), `<div class="champ"><label class="lbl" for="m-motif-code">${esc(t('transferts.motif_code'))}</label><select id="m-motif-code">${['pas_de_lit', 'pas_de_personnel', 'plateau_technique', 'autre'].map((m) => `<option value="${m}">${esc(t(`transferts.motif_${m}`))}</option>`).join('')}</select></div>
-          <div class="champ"><label class="lbl" for="m-motif">${esc(t('transferts.motif_facultatif'))}</label><input id="m-motif" maxlength="300" autocomplete="off"></div>
-          <p class="note">${esc(t('transferts.refuser_aide'))}</p>`,
-        [{ label: t('general.retour') }, { label: t('transferts.refuser_bouton'), pri: true, run: async () => (await agir(null, () => api('POST', `/transferts/${id}/refuser`, { motif_code: $('#m-motif-code').value, motif: $('#m-motif').value }), t('transferts.refuse_ok', { numero }))) !== null || false }]);
-        return;
-      }
-      agir(b, () => api('POST', `/transferts/${id}/${etape}`), t({ accepter: 'transferts.accepte_ok', chambre_prete: 'transferts.chambre_prete_ok', transport: 'transferts.transport_ok', depart: 'transferts.depart_ok', reception: 'transferts.reception_ok' }[etape], { numero }));
-    };
-  });
+  lierActionsTransfert(v);
   v.querySelectorAll('[data-enregistrer-responsable]').forEach((b) => { b.onclick = () => {
     const id = b.dataset.enregistrerResponsable; const champ = v.querySelector(`[data-service-responsable="${id}"]`);
     agir(b, () => api('PUT', `/transferts/${id}/responsable`, { service_responsable: champ.value }), t('transferts.responsable_ok', { numero: b.dataset.num }));
@@ -1662,17 +1670,18 @@ async function vueCopilote() {
   const [fx, ch] = await Promise.all([api('GET', `/arrimo-flux?etablissement_id=${etat.ctx}`).catch(() => null), mods.chrono === true ? api('GET', `/chrono?etablissement_id=${etat.ctx}`).catch(() => null) : null]);
   const A = (k, vars) => t(`accueil.${k}`, vars);
   const kpis = [
-    { lib: A('k_lits'), val: b.vue?.lits?.libres, aller: 'lits', ton: b.vue?.lits?.libres === 0 ? 'alerte' : '' },
-    b.vue?.civieres ? { lib: A('k_urgence'), val: pct(b.vue.civieres.taux), aller: 'urgence', ton: ['orange', 'rouge'].includes(b.alerte?.urgence?.niveau) ? 'alerte' : '' } : null,
-    fx ? { lib: A('k_arrivees'), val: fx.resume.arrivees, aller: 'flux' } : null,
-    fx ? { lib: A('k_prealertes'), val: fx.mouvements.filter((l) => (l.prealerte || l.type === 'prealerte') && !['arrive', 'termine', 'annule'].includes(l.statut)).length, aller: 'secours' } : null,
-    ch ? { lib: A('k_porte'), val: (ch.a_la_porte || []).length, aller: 'chrono', ton: (ch.a_la_porte || []).some((p) => p.a_la_porte_min > (ch.cibles?.porte || 20)) ? 'alerte' : '' } : null,
-    { lib: A('k_transferts'), val: (b.vue?.transferts?.entrants || 0) + (b.vue?.transferts?.sortants || 0), aller: 'transferts' },
+    { code: 'k_lits', lib: A('k_lits'), val: b.vue?.lits?.libres, aller: 'lits', ton: b.vue?.lits?.libres === 0 ? 'alerte' : '' },
+    b.vue?.civieres ? { code: 'k_urgence', lib: A('k_urgence'), val: pct(b.vue.civieres.taux), aller: 'urgence', ton: ['orange', 'rouge'].includes(b.alerte?.urgence?.niveau) ? 'alerte' : '' } : null,
+    fx ? { code: 'k_arrivees', lib: A('k_arrivees'), val: fx.resume.arrivees, aller: 'flux' } : null,
+    fx ? { code: 'k_prealertes', lib: A('k_prealertes'), val: fx.mouvements.filter((l) => (l.prealerte || l.type === 'prealerte') && !['arrive', 'termine', 'annule'].includes(l.statut)).length, aller: 'secours' } : null,
+    ch ? { code: 'k_porte', lib: A('k_porte'), val: (ch.a_la_porte || []).length, aller: 'chrono', ton: (ch.a_la_porte || []).some((p) => p.niveau === 'rouge') ? 'alerte' : '' } : null,
+    { code: 'k_transferts', lib: A('k_transferts'), val: (b.vue?.transferts?.entrants || 0) + (b.vue?.transferts?.sortants || 0), aller: 'transferts' },
   ];
   await window.ArrimoAccueil.construire(v, { ...optsFlux(), bandeau: bandeauAccueil(), kpis,
     niveau: b.alerte?.niveau ? { code: b.alerte.niveau, details: detailsNiveau, le: b.genere_le, question: A('q_niveau', { niveau: t(`niveaux.${b.alerte.niveau}`) }) } : null,
-    chrono: mods.chrono === true, taches: true, previsions: b.previsions,
-    priorites: (b.recommandations || []).slice(0, 3).map((x) => ({ texte: x.titre })), details: ancien });
+    chrono: mods.chrono === true, taches: true, previsions: b.previsions, reseau: r, flux: fx,
+    priorites: (b.recommandations || []).slice(0, 4).map((x) => ({ texte: x.titre, raison: x.raison,
+      aller: { assigner: 'admissions', debut_nettoyage: 'nettoyage', lit: 'lits', plan_b: 'transferts', transfert: 'transferts', transferer: 'transferts', recherche_reseau: 'reseau' }[x.action?.type] || x.action?.vue || null })), details: ancien });
 }
 /** Bandeau d'accueil : nom réel, rôle, établissement, date et heure locales de l'établissement (jamais d'horaire inventé). */
 function bandeauAccueil() {
@@ -1810,7 +1819,7 @@ function modaleArrivee(libres, cfg) {
 /* ---------------- Patients fictifs : recherche, vérification d'identité, historique des passages ---------------- */
 // Démonstration et recette seulement (fiches fictives) ; historique administratif, aucune donnée clinique.
 /** Arrimo Flux : dépendances de l'application (même session, établissement courant, ouverture d'un onglet). */
-function optsFlux() { return { api, etablissement_id: etat.ctx, toast, modale, rafraichir: () => (typeof rafraichir === 'function' ? rafraichir() : null), bourse: ((etabCtx() && etabCtx().modules) || {}).bourse_places === true, ouvrir: (v) => { const b = document.querySelector(`#onglets button[data-v="${v}"]`); if (b) b.click(); } }; }
+function optsFlux() { return { api, etablissement_id: etat.ctx, toast, modale, boutonsTransfert, lierActionsTransfert, rafraichir: () => (typeof rafraichir === 'function' ? rafraichir() : null), bourse: ((etabCtx() && etabCtx().modules) || {}).bourse_places === true, ouvrir: (v) => { const b = document.querySelector(`#onglets button[data-v="${v}"]`); if (b) b.click(); } }; }
 /** DSN (22 nov. 2026) : le module s'ouvre dans l'onglet, pour l'établissement courant ; démo et recette seulement (refus côté serveur ailleurs). */
 function vueDsn() {
   const v = $('#v-dsn');
@@ -2295,7 +2304,7 @@ async function vueNsa() {
     if (o.depart_hopital_le) {
       // Cahier ultime (11.2) : départ prévu et départ réel affichés séparément ; un écart notable est signalé, jamais masqué
       const ecart = o.depart_prevu_le ? Math.round((new Date(o.depart_hopital_le) - new Date(o.depart_prevu_le)) / 60000) : null;
-      return `${S('sortie_partie', { quand: heure(o.depart_hopital_le) })}${o.depart_prevu_le ? ` · ${S('depart_prevu_a', { quand: heure(o.depart_prevu_le) })}` : ''}${ecart != null && Math.abs(ecart) > 30 ? ` · ⚠ ${S(ecart < 0 ? 'depart_avance' : 'depart_retard', { min: Math.abs(ecart) })}` : ''}`;
+      return `${S('sortie_partie', { quand: heure(o.depart_hopital_le) })}${o.depart_prevu_le ? ` · ${S('depart_prevu_a', { quand: heure(o.depart_prevu_le) })}` : ''}${ecart != null && Math.abs(ecart) > 30 ? ` · <svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-triangle-alert"/></svg> ${S(ecart < 0 ? 'depart_avance' : 'depart_retard', { min: Math.abs(ecart) })}` : ''}`;
     }
     if (o.statut === 'acceptee' && o.acceptation_equipe_le) return S('sortie_organisee', { quand: heure(o.depart_prevu_le), transport: t(`nsa.transport_${o.transport_mode}`) })
       + (o.famille_avisee_le ? ` · ${S('famille_avisee')}` : '')

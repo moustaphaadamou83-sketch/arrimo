@@ -88,7 +88,7 @@ test('isolation : aucun accès aux ressources d’un autre établissement en cha
     const lectures = ['/lits', '/structure', '/nettoyage', '/nsa', '/admissions', '/indicateurs', '/indicateurs.csv', '/civieres', '/journal', '/notifications', '/blocages',
       '/copilote/briefing', '/copilote/previsions', '/copilote/reseau', '/transferts'].map((p) => ['GET', `${p}?etablissement_id=${B.id}`]);
     const autres = [
-      ['GET', `/reseau?depuis=${B.id}`], ['GET', `/recherche?depuis=${B.id}&type_id=${type}`], ['GET', `/national?depuis=${B.id}`], ['GET', `/national/carte?depuis=${B.id}`],
+      ['GET', `/reseau?depuis=${B.id}`], ['GET', `/recherche?depuis=${B.id}&type_id=${type}`], ['GET', `/national?depuis=${B.id}`], ['GET', `/national/carte?depuis=${B.id}`], ['GET', `/national/synthese?depuis=${B.id}`],
       ['GET', `/itineraire?depuis=${B.id}&vers=${A.id}`],
       ['POST', '/assistant', { etablissement_id: B.id, question: 'Combien de lits libres ?' }], ['POST', '/copilote/question', { etablissement_id: B.id, question: 'Lits libres ?' }],
       ['POST', `/lits/${lit.id}/action`, { action: 'reserver', version: lit.version, patient_ref: 'P-00001' }], ['POST', `/lits/${lit.id}/confirmer-disponibilite`],

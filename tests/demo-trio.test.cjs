@@ -194,6 +194,9 @@ test('sessions navigateur séparées : tableaux A, B, C et réseau', async () =>
     } else {
       assert.ok(await page.locator('#v-copilote').isVisible());
       if (key === 'a') {
+        const details = page.locator('#v-copilote details').filter({ has: page.locator('.panneau-plan') }).first();
+        await details.waitFor({ state: 'attached' });
+        if (!await details.evaluate((d) => d.open)) await details.locator('summary').first().click();
         await page.waitForSelector('#v-copilote .panneau-plan');
         assert.match(await page.locator('#v-copilote .panneau-plan').innerText(), /Escalade proposée/);
       }

@@ -4,17 +4,24 @@
 (() => {
   const P = (k, v) => esc(t(`transport_planifie.${k}`, v));
   const local = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  let historique = false;
   async function vue() {
     const v = $('#v-transports-planifies');
-    const [liste, orgs] = await Promise.all([api('GET', `/transports?etablissement_id=${etat.ctx}`), api('GET', `/transports/organisations?etablissement_id=${etat.ctx}`).catch(() => [])]);
+    const [liste, orgs] = await Promise.all([api('GET', `/transports?etablissement_id=${etat.ctx}${historique ? '&historique=1' : ''}`), api('GET', `/transports/organisations?etablissement_id=${etat.ctx}`).catch(() => [])]);
     if (!liste) return;
     const planifies = liste.filter((d) => d.motif_transport);
-    v.innerHTML = `<div class="entete"><div><h2>${P('titre')}</h2><p class="note">${P('intro')}</p></div><button class="btn pri" id="tp-reserver">${P('reserver')}</button></div>
+    v.innerHTML = `<div class="entete"><div><h2>${P('titre')}</h2><p class="note">${P('intro')}</p></div><div class="actions"><button type="button" class="btn" id="tp-historique" aria-pressed="${historique}">${P(historique ? 'activite' : 'historique')}</button>
+      <button class="btn pri" id="tp-reserver">${P('reserver')}</button></div></div>
       <section class="panneau-c">${planifies.length ? `<div class="tableau"><table><thead><tr><th>${P('numero')}</th><th>${P('motif')}</th><th>${P('patient')}</th><th>${P('destination')}</th><th>${P('plage')}</th><th>${P('statut')}</th><th></th></tr></thead><tbody>
         ${planifies.map((d) => `<tr><td>${esc(d.numero)}</td><td>${P(`m_${d.motif_transport}`)}</td><td><span class="donnee">${esc(d.resident_ref)}</span>${d.lit_code ? ` · ${P('lit', { lit: d.lit_code })}` : ''}</td>
           <td>${esc(d.destination || '')}</td><td>${d.plage_confirmee_debut ? `<strong>${P('confirmee', { debut: heureCourte(d.plage_confirmee_debut), fin: heureCourte(d.plage_confirmee_fin) })}</strong>` : P('demandee', { jour: heure(d.plage_debut), fin: heureCourte(d.plage_fin) })}</td>
-          <td>${P(`s_${d.statut}`)}${d.unite ? ` · ${esc(d.unite)}` : ''}</td><td>${d.statut === 'a_valider' && d.origine_id === etat.ctx ? `<button class="btn pri" data-tp-transmettre="${d.id}">${P('transmettre')}</button>` : ''}${['a_valider', 'demandee', 'acceptee', 'en_route'].includes(d.statut) && d.origine_id === etat.ctx ? `<button class="btn discret" data-tp-annuler="${d.id}" data-v="${d.version}">${P('annuler')}</button>` : ''}${(window.ArrimoSillage?.bouton('demande_transport', d.id) || '')}</td></tr>`).join('')}</tbody></table></div>` : `<p class="note">${P('aucun')}</p>`}</section>`;
+          <td>${P(`s_${d.statut}`)}${d.unite ? ` · ${esc(d.unite)}` : ''}</td><td>${d.statut === 'a_valider' && d.origine_id === etat.ctx ? `<button class="btn pri" data-tp-transmettre="${d.id}">${P('transmettre')}</button>` : ''}${d.statut !== 'a_valider' && d.actions.includes('annuler') ? `<button class="btn discret" data-tp-annuler="${d.id}" data-v="${d.version}">${P('annuler')}</button>` : ''}${d.actions.map((action) => action === 'annuler' && d.statut === 'a_valider' ? 'retirer_brouillon' : action).filter((action) => ['retirer_brouillon', 'archiver'].includes(action)).map((action) =>
+            `<button type="button" class="btn discret" data-tp-action="${action}" data-id="${d.id}" data-v="${d.version}">${P(action)}</button>`).join('')}${d.archivee ? `<span class="note">${P('archive')}</span>` : ''}${(window.ArrimoSillage?.bouton('demande_transport', d.id) || '')}</td></tr>`).join('')}</tbody></table></div>` : `<p class="note">${P('aucun')}</p>`}</section>`;
     $('#tp-reserver').onclick = () => reserver(orgs);
+    $('#tp-historique').onclick = () => { historique = !historique; rafraichir(); };
+    v.querySelectorAll('[data-tp-action]').forEach((b) => { b.onclick = () => agir(b,
+      () => api('POST', `/transports/${b.dataset.id}/action`, { etablissement_id: etat.ctx, action: b.dataset.tpAction, version: Number(b.dataset.v) }),
+      t(`transport_planifie.${b.dataset.tpAction}_ok`)); });
     // COR-001 : vérification humaine avant transmission (plage, véhicule, transporteur autorisé) ; aucune ambulance affectée ici
     v.querySelectorAll('[data-tp-transmettre]').forEach((b) => { b.onclick = () => {
       const d = planifies.find((x) => x.id === Number(b.dataset.tpTransmettre)); if (!d) return;
@@ -48,15 +55,16 @@
       <div class="champ"><label class="lbl" for="tp-access">${P('accessibilite')}</label><select id="tp-access"><option value="">${P('a_aucune')}</option>${opt(['fauteuil', 'deambulateur', 'leve_personne', 'lit_electrique', 'malentendant', 'malvoyant'].map((m) => [m, t(`transport_planifie.a_${m}`)]))}</select></div>
       <div class="champ"><label class="lbl" for="tp-accomp">${P('accompagnateur')}</label><select id="tp-accomp">${opt([['non', t('transport_planifie.c_non')], ['oui', t('transport_planifie.c_oui')]])}</select></div>
       <div class="champ"><label class="lbl" for="tp-org">${P('transporteur')}</label><select id="tp-org">${opt(orgs.map((o) => [o.id, o.nom]))}</select></div>`,
-    [{ label: t('general.annuler') }, { label: t('transport_planifie.reserver'), pri: true, run: async () => {
+    [{ label: t('general.annuler') }, ...[true, false].map((brouillon) => ({
+      label: t(brouillon ? 'transport_planifie.brouillon' : 'transport_planifie.reserver'), pri: !brouillon, run: async () => {
       const lit = $('#tp-lit').value; const saisie = $('#tp-dest-recherche').value.trim(); const dest = etabs.find((e) => e.nom === saisie)?.id || '';
       const r = await agir(null, () => api('POST', '/transports-planifies', { etablissement_id: etat.ctx, ...(lit ? { lit_id: Number(lit) } : { reference: $('#tp-ref').value.trim() }),
-        motif_transport: $('#tp-motif').value, ...(dest ? { destination_id: Number(dest) } : { destination_libelle: saisie }),
+        brouillon, motif_transport: $('#tp-motif').value, ...(dest ? { destination_id: Number(dest) } : { destination_libelle: saisie }),
         plage_debut: new Date($('#tp-debut').value).toISOString(), plage_fin: new Date($('#tp-fin').value).toISOString(), type_vehicule: $('#tp-vehicule').value,
         infos: { accessibilite: $('#tp-access').value ? [$('#tp-access').value] : [], accompagnateur: $('#tp-accomp').value === 'oui' }, organisation_id: Number($('#tp-org').value) }),
-      (x) => (x.avertissement ? t('transport_planifie.tardive') : t('transport_planifie.reserve_ok', { numero: x.numero })));
+      (x) => (brouillon ? t('transport_planifie.brouillon_ok') : x.avertissement ? t('transport_planifie.tardive') : t('transport_planifie.reserve_ok', { numero: x.numero })));
       return r !== null || false;
-    } }]);
+    } }))]);
   }
   window.ArrimoTransportPlanifie = { vues: { 'transports-planifies': vue } };
 })();

@@ -100,7 +100,8 @@
       }
       const html = `<div class="ca-amb" style="background:${a.mission ? AMB.mission : AMB.libre}">${esc(String(a.numero).replace(/^[A-Z]+-/, ''))}</div>`;
       const m = L.marker(p, { icon: L.divIcon({ className: '', html, iconSize: [34, 22], iconAnchor: [17, 11] }), keyboard: true, title: a.numero, zIndexOffset: 1000 }).addTo(carte);
-      etiquette(m, a.etiquette || a.numero, `amb ${a.mission ? 'prio-2' : 'prio-3'}`, 'top'); m.bindPopup(fiche(a.numero, a.details || []));
+      etiquette(m, a.etiquette || a.numero, `amb ${a.mission ? 'prio-2' : 'prio-3'}`, 'top'); m.bindPopup(fiche(a.numero, a.details || []) + (Number.isSafeInteger(a.idVehicule)
+        ? `<button type="button" class="btn" data-fiche-vehicule="${a.idVehicule}">${esc(a.libFiche)}</button>` : ''));
     }
     // Étiquettes lisibles : une étiquette moins importante qui en chevauche une autre (ou un symbole) est masquée ; le détail reste au clic
     const desencombrer = () => {

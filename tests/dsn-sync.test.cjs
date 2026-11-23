@@ -104,6 +104,9 @@ test('Transition vers un CHSLD : demande d’hébergement liée (une seule), env
   assert.strictEqual(r.filter((x) => x.s === 200).length, 1, JSON.stringify(r.map((x) => [x.s, x.d.code])));
   const tr = (await pool.query('SELECT * FROM dsn_transitions WHERE id = $1', [t.id])).rows[0];
   assert.ok(tr.demande_hebergement_id && tr.demande_transport_id);
+  const trajetAmb = await appel('para', 'GET', `/secours/sillage?objet=demande_transport&id=${tr.demande_transport_id}`);
+  assert.strictEqual(trajetAmb.s, 200);
+  assert.ok(trajetAmb.d.objets.every((o) => o.objet !== 'dsn_transition'), 'le transporteur ne voit pas le dossier DSN lié');
   assert.strictEqual((await pool.query("SELECT count(*)::int n FROM demandes_transport WHERE resident_ref = $1", [p.reference])).rows[0].n, 1, 'une seule demande de transport');
   assert.strictEqual((await pool.query("SELECT count(*)::int n FROM demandes_hebergement WHERE reference_externe = $1", [p.reference])).rows[0].n, 1, 'une seule demande d’hébergement');
   const dt = (await pool.query('SELECT statut, unite_id FROM demandes_transport WHERE id = $1', [tr.demande_transport_id])).rows[0];

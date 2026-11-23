@@ -12,8 +12,10 @@
 const { ErreurHttp, transaction } = require('./db');
 const TE = require('./types-etablissement');
 const horloge = require('./horloge');
+const accesVehicules = require('./acces-vehicules-secours');
 
 const ETAPES = ['H11', 'H12', 'H13', 'H14', 'H15'];
+const MOTIFS_RETARD = ['civiere', 'personnel', 'chambre', 'dossier', 'saturation', 'nettoyage', 'technique', 'autre'];
 const BOUTONS = ['H12', 'H13', 'H14'];               // un clic chacun, côté urgence
 const ROLES_HOPITAL = ['coordonnateur', 'gestionnaire', 'admin_etab', 'equipe_soins'];
 const ROLES_AMBULANCE = ['paramedic', 'superviseur_secours'];
@@ -150,7 +152,9 @@ async function perimetre(db, u, etabId) {
   if (ROLES_AMBULANCE.includes(u.role)) {
     const ids = orgs.filter((o) => (o.profils || []).includes('ambulance')).map((o) => o.id);
     if (!ids.length) throw new ErreurHttp(403, 'organisation_interdite');
-    return { cote: 'ambulance', sql: 'p.organisation_id = ANY($1)', vals: [ids] };
+    const droit = (alias) => accesVehicules.concerne(u) ? ` AND ${accesVehicules.condition('o', `${alias}.unite_id`, 2)}` : '';
+    return { cote: 'ambulance', sql: `p.organisation_id = ANY($1)${droit('p')}`,
+      sqlEnRoute: `pa.organisation_id = ANY($1)${droit('pa')}`, vals: accesVehicules.concerne(u) ? [ids, u.id] : [ids] };
   }
   if (ROLES_CCS.includes(u.role)) {
     const ccs = orgs.filter((o) => (o.profils || []).includes('ccs'));
@@ -161,13 +165,17 @@ async function perimetre(db, u, etabId) {
   throw new ErreurHttp(403, 'role_insuffisant');
 }
 const SELECT_PASSAGES = `SELECT p.id, p.numero, p.statut, p.source, p.etablissement_id, e.nom AS hopital, p.unite_id, un.numero AS unite, un.type_vehicule,
-    p.organisation_id, o.nom AS organisation, p.prealerte_id, pa.numero AS prealerte, pa.priorite, p.cree_le, p.version
+    p.organisation_id, o.nom AS organisation, p.prealerte_id, pa.numero AS prealerte, pa.priorite, p.cree_le, p.version,
+    COALESCE(cfg.chrono_cible_porte_min, 20) AS cible_porte, COALESCE(cfg.chrono_orange_min, 15) AS cible_orange,
+    COALESCE(cfg.chrono_cible_sortie_min, 25) AS cible_sortie, COALESCE(cfg.chrono_cible_total_min, 45) AS cible_total, retard.motif AS motif_retard
   FROM passages_chrono p JOIN etablissements e ON e.id = p.etablissement_id JOIN unites_secours un ON un.id = p.unite_id
-  JOIN organisations_secours o ON o.id = p.organisation_id LEFT JOIN prealertes pa ON pa.id = p.prealerte_id`;
+  JOIN organisations_secours o ON o.id = p.organisation_id LEFT JOIN prealertes pa ON pa.id = p.prealerte_id
+  LEFT JOIN config_pays cfg ON cfg.id = e.config_id
+  LEFT JOIN LATERAL (SELECT motif FROM passages_chrono_motifs m WHERE m.passage_id = p.id ORDER BY m.id DESC LIMIT 1) retard ON true`;
 
 function durees(h) {
   const t = (e) => (h[e] ? new Date(h[e].heure).getTime() : null);
-  const min = (a, b) => (t(a) != null && t(b) != null ? Math.round((t(b) - t(a)) / 6000) / 10 : null);
+  const min = (a, b) => (t(a) != null && t(b) != null && t(b) >= t(a) ? Math.round((t(b) - t(a)) / 6000) / 10 : null);
   return { porte: min('H11', 'H14'), sortie: min('H14', 'H15'), total: min('H11', 'H15'), triage: min('H12', 'H13') };
 }
 function vueHeures(h) {
@@ -177,30 +185,70 @@ function vueHeures(h) {
 async function enrichir(db, rows) {
   if (!rows.length) return [];
   const toutes = (await db.query("SELECT * FROM v_horodatages_courants WHERE objet = 'passage_chrono' AND objet_id = ANY($1)", [rows.map((r) => r.id)])).rows;
-  return rows.map((r) => {
-    const h = Object.fromEntries(toutes.filter((x) => x.objet_id === r.id).map((x) => [x.etape, x]));
-    const depuis = h.H11 ? Math.round((Date.now() - new Date(h.H11.heure).getTime()) / 60000) : null;
-    return { ...r, heures: vueHeures(h), durees: durees(h), a_la_porte_min: r.statut === 'a_la_porte' && !h.H14 ? depuis : null,
+  const parPassage = new Map();
+  for (const heure of toutes) {
+    if (!parPassage.has(heure.objet_id)) parPassage.set(heure.objet_id, {});
+    parPassage.get(heure.objet_id)[heure.etape] = heure;
+  }
+  const maintenant = Date.now();
+  return rows.map(({ cible_porte, cible_orange, cible_sortie, cible_total, ...r }) => {
+    const h = parPassage.get(r.id) || {};
+    const cibles = { porte: cible_porte, orange: cible_orange, sortie: cible_sortie, total: cible_total };
+    const ms = h.H11 ? maintenant - new Date(h.H11.heure).getTime() : null;
+    const attente = r.statut === 'a_la_porte' && !h.H14 && ms != null && ms >= 0 ? Math.floor(ms / 60000) : null;
+    const niveau = attente == null ? null : attente >= cibles.porte ? 'rouge' : attente >= cibles.orange ? 'orange' : 'vert';
+    return { ...r, cibles, heures: vueHeures(h), durees: durees(h), a_la_porte_min: attente, niveau,
       prochaine: BOUTONS.find((e) => !h[e] && h.H11 && !(e !== 'H14' && h.H14)) || null };
   });
+}
+
+function filtresTableau(q, vals) {
+  const parametres = [...vals];
+  const clauses = [];
+  for (const [nom, champ] of [['vehicule', 'un.numero'], ['organisation', 'o.nom'], ['etablissement', 'e.nom']]) {
+    const valeur = String(q[nom] ?? '').trim().slice(0, 100);
+    if (!valeur) continue;
+    parametres.push(valeur);
+    clauses.push(`strpos(lower(${champ}), lower($${parametres.length}::text)) > 0`);
+  }
+  if (q.region_id != null && q.region_id !== '') {
+    const id = entier(q.region_id);
+    if (!id) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'region_id' });
+    parametres.push(id);
+    clauses.push(`e.region_id = $${parametres.length}`);
+  }
+  return { sql: clauses.length ? ` AND ${clauses.join(' AND ')}` : '', parametres };
 }
 
 /** Écran Chrono : « En route » (préalertes ouvertes, heure prévue) et « À la porte » (passages ouverts, chrono). Mêmes données des deux côtés. */
 async function tableau(pool, u, q = {}) {
   const per = await perimetre(pool, u, q.etablissement_id);
-  const ouverts = (await pool.query(`${SELECT_PASSAGES} WHERE ${per.sql} AND p.statut = 'a_la_porte' ORDER BY p.id`, per.vals)).rows;
-  const termines = (await pool.query(`${SELECT_PASSAGES} WHERE ${per.sql} AND p.statut = 'termine' AND p.modifie_le > now() - interval '12 hours' ORDER BY p.modifie_le DESC LIMIT 20`, per.vals)).rows;
-  const enRouteSql = per.cote === 'urgence' ? 'pa.destination_id = $1' : per.cote === 'ambulance' ? 'pa.organisation_id = ANY($1)'
+  const h = Number(q.heures_historique ?? 12);
+  if (![12, 24, 48, 168].includes(h)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'heures_historique' });
+  const filtre = filtresTableau(q, per.vals);
+  const ouverts = (await pool.query(`${SELECT_PASSAGES} WHERE ${per.sql}${filtre.sql} AND p.statut = 'a_la_porte' ORDER BY p.id`, filtre.parametres)).rows;
+  const termines = (await pool.query(`${SELECT_PASSAGES} WHERE ${per.sql}${filtre.sql} AND p.statut = 'termine'
+    AND p.modifie_le > now() - make_interval(hours => $${filtre.parametres.length + 1}) ORDER BY p.modifie_le DESC, p.id DESC
+    LIMIT $${filtre.parametres.length + 2}`, [...filtre.parametres, h, h === 12 ? 20 : 100])).rows;
+  const enRouteSql = per.cote === 'urgence' ? 'pa.destination_id = $1' : per.cote === 'ambulance' ? per.sqlEnRoute
     : '(o.config_id = ANY($1) OR (o.region_id IS NOT NULL AND o.region_id = ANY($2)))';
   const enRoute = (await pool.query(`SELECT pa.id, pa.numero, pa.priorite, pa.heure_prevue, un.numero AS unite, e.nom AS hopital, pa.destination_id AS etablissement_id,
       o.nom AS organisation, eta.minutes AS eta_min, eta.distance_km::float AS eta_km
     FROM prealertes pa JOIN unites_secours un ON un.id = pa.unite_id JOIN etablissements e ON e.id = pa.destination_id JOIN organisations_secours o ON o.id = pa.organisation_id
     LEFT JOIN eta_prealertes eta ON eta.prealerte_id = pa.id
-    WHERE ${enRouteSql} AND pa.statut IN ('envoyee', 'recue', 'consultee', 'prise_en_compte', 'preparation', 'preparation_terminee') AND (e.modules->>'chrono') = 'true'
+    WHERE ${enRouteSql}${filtre.sql} AND pa.statut IN ('envoyee', 'recue', 'consultee', 'prise_en_compte', 'preparation', 'preparation_terminee') AND (e.modules->>'chrono') = 'true'
       AND NOT EXISTS (SELECT 1 FROM passages_chrono p WHERE p.prealerte_id = pa.id AND p.statut IN ('a_la_porte', 'termine'))
-    ORDER BY pa.heure_prevue NULLS LAST`, per.vals)).rows;
+      AND NOT EXISTS (SELECT 1 FROM demandes_transport d WHERE d.id = pa.demande_transport_id
+        AND d.unite_id = pa.unite_id AND d.destination_id = pa.destination_id AND d.arrivee_le IS NOT NULL)
+    ORDER BY pa.heure_prevue NULLS LAST`, filtre.parametres)).rows;
   const c = per.etabId ? await cibles(pool, per.etabId) : { porte: 20, sortie: 25, total: 45, orange: 15 };
-  return { cote: per.cote, cibles: c, indicatif: true, en_route: enRoute, a_la_porte: await enrichir(pool, ouverts), termines: await enrichir(pool, termines) };
+  const [aLaPorte, derniersTermines] = await Promise.all([enrichir(pool, ouverts), enrichir(pool, termines)]);
+  const attentes = aLaPorte.map((p) => p.a_la_porte_min).filter((min) => min != null && min >= 0);
+  return { cote: per.cote, cibles: c, indicatif: true, en_route: enRoute, a_la_porte: aLaPorte, termines: derniersTermines,
+    actualise_le: new Date().toISOString(), heures_historique: h,
+    attente: { en_cours: attentes.length, seuil_atteint: aLaPorte.filter((p) => p.niveau === 'rouge').length, surveillance: aLaPorte.filter((p) => p.niveau === 'orange').length,
+      moyenne_min: moyenne(attentes), mediane_min: mediane(attentes),
+      minutes_cumulees: attentes.reduce((total, min) => total + min, 0) } };
 }
 
 async function passageVisible(c, u, id, etabId, verrou = false) {
@@ -262,8 +310,51 @@ async function corriger(pool, u, id, b = {}) {
   }).finally(() => require('./flux').signaler());
 }
 
+async function signalerRetard(pool, u, id, b = {}) {
+  if (!MOTIFS_RETARD.includes(b.motif)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'motif' });
+  const r = await transaction(pool, async (c) => {
+    const { p, per } = await passageVisible(c, u, id, b.etablissement_id, true);
+    if (per.cote === 'ccs') throw new ErreurHttp(403, 'role_insuffisant');
+    if (b.version != null && Number(b.version) !== p.version) throw new ErreurHttp(409, 'version_perimee');
+    if (p.statut !== 'a_la_porte') throw new ErreurHttp(409, 'mission_statut_incompatible');
+    if (p.motif_retard === b.motif) return { motif: p.motif_retard, version: p.version, deja: true };
+    const { rows: [motif] } = await c.query(`INSERT INTO passages_chrono_motifs (passage_id, auteur_id, motif)
+      VALUES ($1, $2, $3) RETURNING motif, cree_le`, [p.id, u.id, b.motif]);
+    const { rows: [passage] } = await c.query('UPDATE passages_chrono SET version = version + 1 WHERE id = $1 RETURNING version', [p.id]);
+    return { ...motif, version: passage.version };
+  });
+  if (!r.deja) require('./flux').signaler();
+  return r;
+}
+
 async function journaliser(c, p, u, detail) {
   await c.query(`INSERT INTO journal (etablissement_id, utilisateur_id, action, detail) VALUES ($1, $2, 'Chrono', $3)`, [p.etablissement_id, u?.id || null, detail]);
+}
+
+/** Alerte persistante, atomique et unique par passage ouvert. */
+async function notifierAttentes(pool) {
+  const n = await transaction(pool, async (c) => {
+    const { rows } = await c.query(`WITH candidats AS (
+      SELECT p.id, COALESCE(cfg.chrono_cible_porte_min, 20) AS seuil
+      FROM passages_chrono p JOIN etablissements e ON e.id = p.etablissement_id
+      JOIN v_horodatages_courants h ON h.objet = 'passage_chrono' AND h.objet_id = p.id AND h.etape = 'H11'
+      LEFT JOIN config_pays cfg ON cfg.id = e.config_id
+      WHERE p.statut = 'a_la_porte' AND p.alerte_notifiee_le IS NULL AND e.actif AND e.module_actif
+        AND e.modules->>'chrono' = 'true'
+        AND h.heure <= now() - make_interval(mins => COALESCE(cfg.chrono_cible_porte_min, 20))
+        AND NOT EXISTS (SELECT 1 FROM v_horodatages_courants hr
+          WHERE hr.objet = 'passage_chrono' AND hr.objet_id = p.id AND hr.etape = 'H14')
+      ORDER BY h.heure, p.id LIMIT 100 FOR UPDATE OF p SKIP LOCKED
+    )
+    UPDATE passages_chrono p SET alerte_notifiee_le = now() FROM candidats ca WHERE p.id = ca.id
+    RETURNING p.numero, p.etablissement_id, ca.seuil`);
+    for (const p of rows) {
+      await require('./services').notifier(c, p.etablissement_id, null, 'chrono_seuil_atteint', { passage: p.numero, seuil: p.seuil });
+    }
+    return rows.length;
+  });
+  if (n) require('./flux').signaler();
+  return n;
 }
 
 /* ------------------------------------------------------------------ rapport mensuel, écarts */
@@ -277,18 +368,30 @@ function mois(q) {
 /** Rapport mensuel : par hôpital (urgence), par entreprise (ambulance), par région (CCS). Étapes manquantes comptées, jamais estimées. */
 async function rapport(pool, u, q = {}) {
   const per = await perimetre(pool, u, q.etablissement_id); const m = mois(q);
-  const rows = await enrichir(pool, (await pool.query(`${SELECT_PASSAGES} WHERE ${per.sql} AND p.statut IN ('a_la_porte', 'termine')
-    AND to_char(p.cree_le AT TIME ZONE 'America/Toronto', 'YYYY-MM') = $${per.vals.length + 1} ORDER BY p.id`, [...per.vals, m])).rows);
+  const filtre = filtresTableau(q, per.vals);
+  const rows = await enrichir(pool, (await pool.query(`${SELECT_PASSAGES} WHERE ${per.sql}${filtre.sql} AND p.statut IN ('a_la_porte', 'termine')
+    AND to_char(p.cree_le AT TIME ZONE 'America/Toronto', 'YYYY-MM') = $${filtre.parametres.length + 1} ORDER BY p.id`, [...filtre.parametres, m])).rows);
   const c = per.etabId ? await cibles(pool, per.etabId) : { porte: 20, sortie: 25, total: 45, orange: 15 };
   const stat = (k, cible) => {
-    const xs = rows.map((r) => r.durees[k]).filter((x) => x != null);
-    return { n: xs.length, moyenne_min: moyenne(xs), mediane_min: mediane(xs), cible_min: cible, hors_cible_pct: xs.length ? Math.round((xs.filter((x) => x > cible).length / xs.length) * 1000) / 10 : null };
+    const mesures = rows.filter((r) => r.durees[k] != null);
+    const xs = mesures.map((r) => r.durees[k]);
+    const seuils = new Set(mesures.map((r) => r.cibles[k]));
+    return { n: xs.length, moyenne_min: moyenne(xs), mediane_min: mediane(xs),
+      cible_min: seuils.size > 1 ? null : [...seuils][0] ?? cible,
+      hors_cible_pct: xs.length ? Math.round((mesures.filter((r) => r.durees[k] > r.cibles[k]).length / xs.length) * 1000) / 10 : null };
   };
   const complets = rows.filter((r) => ETAPES.every((e) => r.heures[e])).length;
-  return { mois: m, cote: per.cote, cibles: c, indicatif: true, passages: rows.length,
+  const visitesMesurees = rows.filter((r) => r.statut === 'termine' && r.durees.total != null);
+  const pilotes = {
+    passages_mesures: visitesMesurees.length,
+    immobilisation_min: visitesMesurees.length ? Math.round(visitesMesurees.reduce((total, r) => total + r.durees.total, 0) * 10) / 10 : null,
+    porte_hors_cible: rows.filter((r) => r.durees.porte != null && r.durees.porte > r.cibles.porte).length,
+  };
+  return { mois: m, cote: per.cote, cibles: c, indicatif: true, passages: rows.length, pilote: pilotes,
     completude_pct: rows.length ? Math.round((complets / rows.length) * 1000) / 10 : null,
     etapes_manquantes: Object.fromEntries(ETAPES.map((e) => [e, rows.filter((r) => !r.heures[e]).length])),
     porte: stat('porte', c.porte), sortie: stat('sortie', c.sortie), total: stat('total', c.total),
+    motifs_retard: Object.fromEntries(MOTIFS_RETARD.map((motif) => [motif, rows.filter((r) => r.motif_retard === motif).length])),
     corrections: rows.reduce((n, r) => n + ETAPES.filter((e) => r.heures[e]?.corrigee).length, 0), lignes: rows };
 }
 function csv(r, langue = 'fr') {
@@ -313,7 +416,12 @@ async function ecarts(pool, u, q = {}) {
 async function fiche(pool, u, id, q = {}) {
   const { p } = await passageVisible(pool, u, id, q.etablissement_id);
   const [e] = await enrichir(pool, [p]);
-  return { ...e, historique: await horloge.lire(pool, 'passage_chrono', p.id, { historique: true }) };
+  const [historique, motifs] = await Promise.all([
+    horloge.lire(pool, 'passage_chrono', p.id, { historique: true }),
+    pool.query(`SELECT m.motif, m.cree_le, u.nom AS auteur FROM passages_chrono_motifs m
+      JOIN utilisateurs u ON u.id = m.auteur_id WHERE m.passage_id = $1 ORDER BY m.id`, [p.id]),
+  ]);
+  return { ...e, historique, historique_retards: motifs.rows };
 }
 
-module.exports = { traiterPosition, arriveeSignalee, remise, tableau, marquerEtape, depart, corriger, rapport, csv, ecarts, fiche, metres, ETAPES, ZONE_DEFAUT_M };
+module.exports = { traiterPosition, arriveeSignalee, remise, tableau, marquerEtape, depart, corriger, signalerRetard, notifierAttentes, rapport, csv, ecarts, fiche, metres, ETAPES, MOTIFS_RETARD, peutLireAlerte: (u) => ROLES_HOPITAL.includes(u.role), ZONE_DEFAUT_M };

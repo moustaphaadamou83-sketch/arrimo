@@ -164,8 +164,9 @@ function construire(d) {
     PE(q, { proposition: 'tache' });
   for (const q of ['Sa chambre a-t-elle été nettoyée ?', 'Qui a terminé le nettoyage ?', 'Has his room been cleaned?', 'Who finished the cleaning?', `La chambre de ${dup.ref} a-t-elle été nettoyée ?`, 'Est-ce que sa chambre est propre ?'])
     PE(q, { contient: [['propre', 'clean'], d.nettoyeur.toLowerCase()] }, ['Recherche Jean Dupont']);
-  // Rôle entretien : OG n'est pas ouvert à ce rôle (écran Nettoyage seulement) ; refus serveur vérifié
-  for (const q of ['Quelles chambres sont à nettoyer ?', 'rooms to clean', 'chambres en nettoyage', 'Où est Jean Dupont ?', 'Where is Jean Dupont?', `Où est ${dup.ref} ?`]) PE(q, { statut: 403 }, [], 'era_entretien');
+  // Rôle entretien : OG limité (cahier ultime, 21 nov. 2026) — chambres à préparer, état d'une chambre, ses messages ; rien sur les résidents
+  for (const q of ['Quelles chambres sont à nettoyer ?', 'rooms to clean', 'chambres en nettoyage']) PE(q, { contient: [['chambres a preparer', 'rooms to prepare']], pas: ['dupont', 'r-0'] }, [], 'era_entretien');
+  for (const q of ['Où est Jean Dupont ?', 'Where is Jean Dupont?', `Où est ${dup.ref} ?`]) PE(q, { contient: [['pas accessibles a votre role', 'not available to your role']], pas: ['dupont', dup.ref] }, [], 'era_entretien');
   for (const q of ['Combien de notifications non lues ?', 'notifications', 'Any unread notification?', 'alertes non lues notifications']) PE(q, { contient: [['notification', 'notification(s)']] });
 
   /* ---------------- 9. Permissions, ambiguïtés et sécurité (50) */

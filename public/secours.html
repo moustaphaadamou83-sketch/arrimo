@@ -65,7 +65,10 @@
   .secours details.voir-carte summary::-webkit-details-marker { display: none; }
   .secours .tuiles-c { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
   .secours .tuile-c { background: var(--carte); border: 1px solid var(--bordure); border-radius: var(--rayon-carte); padding: 12px 14px; }
-  .secours .tuile-c .gros { color: var(--principal); }
+  .secours .tuile-c .gros { color: var(--principal); display: block; }
+  .secours button.tuile-c { cursor: pointer; text-align: left; }
+  #fiche-vehicule { width: min(92vw, 44rem); max-height: 88vh; overflow: auto; background: var(--carte); color: var(--texte); border: 1px solid var(--bordure); border-radius: var(--rayon-carte); padding: 1rem; }
+  #fiche-vehicule::backdrop { background: rgb(0 0 0 / 55%); }
   /* Jamais de défilement horizontal : la page reste à la largeur de l'écran (sinon le téléphone dézoome et les appuis tombent à côté) */
   html, body.secours { max-width: 100%; overflow-x: hidden; }
   .secours main, .secours .carte-s { min-width: 0; max-width: 100%; }
@@ -111,8 +114,13 @@
 </header>
 <nav class="onglets-s" id="onglets-s" role="tablist"></nav>
 <main id="contenu" aria-live="polite"></main>
+<dialog id="fiche-vehicule" aria-labelledby="titre-fiche-vehicule"></dialog>
 <script src="carte-arrimo.js"></script>
 <script src="flux.js"></script>
+<script src="son-notif.js"></script>
+<script src="tableaux.js"></script>
+<script src="vue-transferts.js"></script>
+<script src="chrono-retards.js"></script>
 <script src="secours.js"></script>
 <script src="sillage.js"></script>
 </body>

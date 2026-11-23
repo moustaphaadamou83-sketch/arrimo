@@ -39,7 +39,7 @@
     const choixEtab = o.etablissements?.length ? `<select id="cr-etab" aria-label="${T('etablissement')}">${o.etablissements.map((x) => `<option value="${x.id}">${e(x.nom)}</option>`).join('')}</select>` : '';
     if (!active) {
       const formulaire = (prec = {}) => {
-        v.innerHTML = `<h2>${T('titre')}</h2><p class="note">${T('intro')}</p><p class="bandeau" role="note">⚠ ${T('urgence_911')}</p><p>${T('aucune')}</p>
+        v.innerHTML = `<h2>${T('titre')}</h2><p class="note">${T('intro')}</p><p class="bandeau" role="note"><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-triangle-alert"/></svg> ${T('urgence_911')}</p><p>${T('aucune')}</p>
           <form id="cr-form" class="panneau-c"><div class="ligne">${choixEtab}</div>
             <div class="champ"><label class="lbl" for="cr-motif">${T('motif')}</label><select id="cr-motif">${Object.entries(X.m).map(([k, l]) => `<option value="${k}"${prec.motif === k ? ' selected' : ''}>${e(l)}</option>`).join('')}</select></div>
             <div class="champ"><label class="lbl" for="cr-gravite">${T('gravite')}</label><select id="cr-gravite">${Object.entries(X.g).map(([k, l]) => `<option value="${k}"${(prec.gravite || 'elevee') === k ? ' selected' : ''}>${e(l)}</option>`).join('')}</select></div>
@@ -71,7 +71,7 @@
       : r.statut === 'confirme' ? `<select data-mode="${r.id}" aria-label="${T('mode')}">${Object.entries(X.t).map(([k, l]) => `<option value="${k}">${e(l)}</option>`).join('')}</select>${btn(r, 'depart', 'depart')}`
         : r.statut === 'parti' ? btn(r, 'arrivee', 'arrivee') : r.statut === 'arrive' ? `${btn(r, 'accueilli', 'accueilli')}${btn(r, 'planifier_retour', 'retour')}` : r.statut === 'accueilli' ? btn(r, 'planifier_retour', 'retour') : r.statut === 'retour_planifie' ? btn(r, 'revenu', 'revenu') : '');
     const alertes = (d.alertes || []).map((x) => `<li>${e(x.organisation)} · ${T(x.role)} · <b>${e(X.a_st[x.statut])}</b>${x.unite ? ` · ${T('unite', { u: x.unite })}` : ''}${x.eta_min != null ? ` · ${T('eta', { n: x.eta_min })}` : ''}</li>`).join('');
-    v.innerHTML = `<h2>${T('titre')}</h2>${d.evacuation.simulation ? `<p class="bandeau" role="note">🧪 ${T('bandeau_sim')}</p>` : ''}<p class="bandeau" role="status">${T('en_cours', { numero: d.evacuation.numero, motif: X.m[d.evacuation.motif] })} · ${e(d.evacuation.etablissement)}${d.evacuation.gravite ? ` · ${e(X.g[d.evacuation.gravite])}` : ''}</p>
+    v.innerHTML = `<h2>${T('titre')}</h2>${d.evacuation.simulation ? `<p class="bandeau" role="note"><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-flask-conical"/></svg> ${T('bandeau_sim')}</p>` : ''}<p class="bandeau" role="status">${T('en_cours', { numero: d.evacuation.numero, motif: X.m[d.evacuation.motif] })} · ${e(d.evacuation.etablissement)}${d.evacuation.gravite ? ` · ${e(X.g[d.evacuation.gravite])}` : ''}</p>
       <section class="panneau-c"><h3>${T('alertes')}</h3>${alertes ? `<ul class="liste-simple">${alertes}</ul>` : `<p class="alerte">${T('aucune_alerte')}</p>`}</section>
       <p>${T('resume', { ...d.resume, familles: d.resume.familles_avisees })}</p>
       <div class="tableau"><table><thead><tr><th>${T('resident')}</th><th>${T('statut')}</th><th>${T('propose')}</th><th></th></tr></thead><tbody>

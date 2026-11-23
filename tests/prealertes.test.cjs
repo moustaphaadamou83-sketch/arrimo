@@ -611,6 +611,8 @@ test('parcours démo : malaise au CHSLD → transport → préalerte qui le prol
   // Avant la prise en charge : refusé (le transport n'a pas encore le résident)
   assert.strictEqual((await appel('para', 'POST', '/secours/prealertes', corps)).corps.code, 'transport_statut_incompatible');
   for (const a of [{ action: 'accepter', unite_id: ids.u1 }, { action: 'en_route' }, { action: 'pris_en_charge' }]) assert.strictEqual((await appel('para', 'POST', `/secours/transports/${dt.id}/action`, a)).statut, 200);
+  assert.strictEqual((await appel('para', 'POST', '/secours/prealertes', { ...corps, unite_id: ids.u2 })).corps.code,
+    'transport_statut_incompatible', 'un autre véhicule de la même entreprise ne peut pas prolonger cette mission');
   const pa = await appel('para', 'POST', '/secours/prealertes', corps);
   assert.strictEqual(pa.statut, 200, JSON.stringify(pa.corps)); assert.strictEqual(pa.corps.demande_transport_id, dt.id);
   const vue = (await appel('tremblay', 'GET', `/secours/prealertes/${pa.corps.id}?etablissement_id=${ids.mb}`)).corps;
@@ -624,6 +626,11 @@ test('état des véhicules : un geste de l’équipage, automatique à la préal
   // L'équipage change l'état en un geste ; valeurs fermées ; seulement pour une unité de son organisation
   let r = await appel('para', 'POST', `/secours/unites/${ids.u4}/etat`, { etat: 'en_route' });
   assert.strictEqual(r.statut, 200, JSON.stringify(r.corps)); assert.deepStrictEqual([r.corps.etat, r.corps.destination_id, r.corps.source], ['en_route', null, 'equipage']);
+  const fiche = await appel('ccs', 'GET', `/secours/vehicules/${ids.u4}`);
+  assert.strictEqual(fiche.statut, 200);
+  assert.strictEqual(fiche.corps.vehicule.id, ids.u4);
+  assert.strictEqual(fiche.corps.etats[0].etat, 'en_route');
+  assert.strictEqual((await appel('paraB', 'GET', `/secours/vehicules/${ids.u4}`)).statut, 404);
   assert.strictEqual((await appel('para', 'POST', `/secours/unites/${ids.u4}/etat`, { etat: 'perdu' })).corps.code, 'etat_vehicule_invalide');
   assert.strictEqual((await appel('paraB', 'POST', `/secours/unites/${ids.u4}/etat`, { etat: 'hors_service' })).statut, 404);
   assert.strictEqual((await appel('ccs', 'POST', `/secours/unites/${ids.u4}/etat`, { etat: 'disponible' })).statut, 403, 'le CCS n’agit pas');
@@ -634,7 +641,7 @@ test('état des véhicules : un geste de l’équipage, automatique à la préal
   const v4 = ccs.find((v) => v.id === ids.u4);
   assert.deepStrictEqual([v4.numero, v4.plaque, v4.organisation, v4.etat], ['12-40', 'FICT 040', 'Ambulances fictives A', 'sur_place']); assert.ok(v4.modifie_le);
   assert.ok(ccs.some((v) => v.numero === '20-01'), 'autre entreprise de la région');
-  assert.deepStrictEqual(Object.keys(v4).sort(), ['destination', 'destination_id', 'etat', 'id', 'mission', 'modifie_le', 'numero', 'organisation', 'plaque', 'position', 'source', 'version']);
+  assert.deepStrictEqual(Object.keys(v4).sort(), ['destination', 'destination_id', 'etat', 'id', 'mission', 'modifie_le', 'numero', 'organisation', 'plaque', 'position', 'source', 'type_vehicule', 'version']);
   // Une entreprise ne voit que ses véhicules
   assert.ok(!(await appel('paraB', 'GET', '/secours/vehicules')).corps.some((v) => v.id === ids.u4));
   // Préalerte envoyée : « Transport vers l'hôpital » ; arrivée confirmée par l'hôpital : « À l'hôpital »
@@ -664,7 +671,7 @@ test('hébergement : urgences proches (capacités globales), type d’urgence et
   assert.strictEqual(up.statut, 200, JSON.stringify(up.corps));
   const mb = up.corps.find((x) => x.id === ids.mb);
   assert.ok(mb && typeof mb.urgence.civieres_libres === 'number' && mb.distance_km != null);
-  assert.deepStrictEqual(Object.keys(mb).sort(), ['distance_km', 'id', 'latitude', 'liaison_secours', 'longitude', 'nom', 'rang', 'services_ouverts', 'soins_intensifs', 'source_distance', 'statut_declare', 'temps_min', 'urgence', 'ville']);
+  assert.deepStrictEqual(Object.keys(mb).sort(), ['chrono', 'distance_km', 'id', 'latitude', 'liaison_secours', 'longitude', 'nom', 'rang', 'services_ouverts', 'soins_intensifs', 'source_distance', 'statut_declare', 'temps_min', 'urgence', 'ville']);
   assert.ok(!/patient_ref|P-\d{5}|R-\d{5}/.test(JSON.stringify(up.corps)), 'aucune référence de patient');
   assert.strictEqual((await appel('tremblay', 'GET', `/urgences-proches?etablissement_id=${ids.mb}`)).statut, 403, 'réservé à l’hébergement');
   assert.strictEqual((await appel('ch', 'GET', `/urgences-proches?etablissement_id=${ids.mb}`)).statut, 403, 'pas pour un autre établissement');
@@ -965,4 +972,76 @@ test('mission proposée par le CCS : Arrimo transmet, le CCS décide, l’équip
   v = await vu(u7); assert.deepStrictEqual([v.etat, v.mission], ['disponible', null]);
   // Historique immuable
   await assert.rejects(pool.query('DELETE FROM mission_ccs_evenements'));
+});
+
+test('CCS : simulation isolée, affectation atomique, refus et réaffectation', async () => {
+  const envAvant = process.env.ARRIMO_ENV;
+  try {
+    process.env.ARRIMO_ENV = 'production';
+    assert.strictEqual((await appel('ccs', 'GET', '/secours/interventions-demo')).statut, 404);
+    process.env.ARRIMO_ENV = 'demo';
+    assert.strictEqual((await appel('para', 'POST', '/secours/interventions-demo', { scenario: 'chute' })).statut, 403);
+    const appelDemo = await appel('ccs', 'POST', '/secours/interventions-demo', { scenario: 'chute' });
+    assert.strictEqual(appelDemo.statut, 200);
+    const id = appelDemo.corps.id;
+    const unite = (await pool.query("INSERT INTO unites_secours (organisation_id, numero) VALUES ($1, 'SIM-CCS') RETURNING id", [ids.ambA])).rows[0];
+    const affecter = () => appel('ccs', 'POST', `/secours/interventions-demo/${id}/affecter`, { unite_id: unite.id });
+    const essais = await Promise.all([affecter(), affecter()]);
+    assert.deepStrictEqual(essais.map((r) => r.statut).sort(), [200, 409]);
+    const mission = essais.find((r) => r.statut === 200).corps;
+    assert.strictEqual((await appel('para', 'POST', `/secours/missions/${mission.id}/action`, { action: 'refuser', motif: 'hors_secteur' })).statut, 200);
+    const nouvelle = await affecter();
+    assert.strictEqual(nouvelle.statut, 200);
+    assert.notStrictEqual(nouvelle.corps.id, mission.id);
+    const visibles = await appel('ccs', 'GET', '/secours/interventions-demo');
+    assert.ok(visibles.corps.some((i) => i.id === id && i.mission === nouvelle.corps.numero));
+  } finally {
+    if (envAvant === undefined) delete process.env.ARRIMO_ENV;
+    else process.env.ARRIMO_ENV = envAvant;
+  }
+});
+
+
+test('capacités Secours sans origine connue : urgences visibles, distance et ETA indisponibles', async () => {
+  const r = await appel('ccs', 'GET', '/secours/urgences-classees?capacites_seules=1');
+  assert.strictEqual(r.statut, 200);
+  assert.strictEqual(r.corps.depart, null);
+  assert.strictEqual(r.corps.og, null);
+  assert.ok(r.corps.urgences.length > 0);
+  assert.ok(r.corps.urgences.every((h) => h.distance_km === null && h.temps_min === null));
+});
+
+test('un CCS peut consulter une mission d’un autre CCS de la région mais ne peut pas l’annuler', async () => {
+  const c = (await pool.query(`INSERT INTO organisations_secours (code, nom, type, profils, config_id)
+    VALUES ('CCS-SEC', 'CCS fictif secondaire', 'ccs', '{ccs}', $1) RETURNING id`, [ids.cfg])).rows[0];
+  await compte('ccs.sec@demo.arrimo', 'Répartition secondaire', 'repartiteur', c.id);
+  await connecter('ccsSec', 'ccs.sec@demo.arrimo');
+  const un = (await pool.query("INSERT INTO unites_secours (organisation_id, numero) VALUES ($1, 'CCS-SCOP') RETURNING id", [ids.ambA])).rows[0];
+  const m = await appel('ccs', 'POST', '/secours/missions',
+    { unite_id: un.id, lieu: 'Point fictif', priorite: 'urgente', categorie: 'medicale' });
+  assert.strictEqual(m.statut, 200);
+  const l = await appel('ccsSec', 'GET', '/secours/missions');
+  assert.strictEqual(l.statut, 200);
+  assert.strictEqual(l.corps.find((x) => x.id === m.corps.id).peut_annuler, false);
+  const url = `/secours/missions/${m.corps.id}/action`;
+  const action = { action: 'annuler', version: m.corps.version };
+  assert.strictEqual((await appel('ccsSec', 'POST', url, action)).statut, 404);
+  assert.strictEqual((await appel('ccs', 'POST', url, action)).statut, 200);
+});
+
+test('équipage restreint : un véhicule attribué, sans accès au second véhicule de la même organisation', async () => {
+  await pool.query('INSERT INTO utilisateur_unites_secours (utilisateur_id, unite_id) VALUES ($1, $2)', [ids.para, ids.u1]);
+  await pool.query('UPDATE organisations_secours SET restreindre_equipages_aux_unites = true WHERE id = $1', [ids.ambA]);
+  try {
+    const unites = await appel('para', 'GET', '/secours/unites');
+    assert.strictEqual(unites.statut, 200);
+    assert.deepStrictEqual(unites.corps.map((u) => u.id), [ids.u1]);
+    assert.strictEqual((await appel('para', 'GET', `/secours/vehicules/${ids.u2}`)).statut, 404);
+    assert.strictEqual((await appel('para', 'POST', `/secours/unites/${ids.u2}/etat`, { etat: 'hors_service' })).statut, 404);
+    assert.strictEqual((await appel('para', 'POST', '/secours/prealertes',
+      { unite_id: ids.u2, destination_id: ids.mb, priorite: 'urgente', categorie: 'medicale' })).statut, 404);
+    assert.strictEqual((await appel('ccs', 'GET', `/secours/vehicules/${ids.u2}`)).statut, 200);
+  } finally {
+    await pool.query('UPDATE organisations_secours SET restreindre_equipages_aux_unites = false WHERE id = $1', [ids.ambA]);
+  }
 });

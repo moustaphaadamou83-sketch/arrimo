@@ -42,7 +42,7 @@ async function chargerParcours(db, filtreSql, args) {
     JOIN evacuations ev ON ev.id = er.evacuation_id WHERE er.resident_id = ANY($1)`, [residents])).rows;
   const refs = [...new Set(cos.map((c) => c.resident_ref))];
   const evTp = (await db.query(`SELECT d.resident_ref, d.origine_id, e.type, e.cree_le FROM demandes_transport d JOIN demande_transport_evenements e ON e.demande_id = d.id
-    WHERE d.coordination_id IS NULL AND d.resident_ref = ANY($1)`, [refs])).rows;
+    WHERE d.coordination_id IS NULL AND d.resident_ref = ANY($1) AND NOT ${require('./transports').BROUILLON_PRIVE_SQL}`, [refs])).rows;
   return cos.map((co) => construire(co, {
     retour: retours.filter((r) => r.liee_id === co.id).at(-1) || null,
     transports, prealertes, etapesCo, evTr, evPa, evCh, evEv, evTp,

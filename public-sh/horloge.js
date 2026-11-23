@@ -1,8 +1,8 @@
 /* Console SH : heure à jour (fuseau de l'utilisateur, Montréal par défaut) et météo réelle de la ville de référence. */
 (function () {
-  const CIEL = [[[0], '☀️', '🌙', 'Dégagé', 'Clear'], [[1, 2], '🌤️', '☁️', 'Peu nuageux', 'Partly cloudy'], [[3], '☁️', '☁️', 'Couvert', 'Overcast'],
-    [[45, 48], '🌫️', '🌫️', 'Brouillard', 'Fog'], [[51, 53, 55, 56, 57], '🌦️', '🌧️', 'Bruine', 'Drizzle'], [[61, 63, 65, 66, 67, 80, 81, 82], '🌧️', '🌧️', 'Pluie', 'Rain'],
-    [[71, 73, 75, 77, 85, 86], '❄️', '❄️', 'Neige', 'Snow'], [[95, 96, 99], '⛈️', '⛈️', 'Orage', 'Thunderstorm']];
+  const CIEL = [[[0], 'sun', 'moon', 'Dégagé', 'Clear'], [[1, 2], 'cloud-sun', 'cloud', 'Peu nuageux', 'Partly cloudy'], [[3], 'cloud', 'cloud', 'Couvert', 'Overcast'],
+    [[45, 48], 'cloud-fog', 'cloud-fog', 'Brouillard', 'Fog'], [[51, 53, 55, 56, 57], 'cloud-sun-rain', 'cloud-rain', 'Bruine', 'Drizzle'], [[61, 63, 65, 66, 67, 80, 81, 82], 'cloud-rain', 'cloud-rain', 'Pluie', 'Rain'],
+    [[71, 73, 75, 77, 85, 86], 'snowflake', 'snowflake', 'Neige', 'Snow'], [[95, 96, 99], 'cloud-lightning', 'cloud-lightning', 'Orage', 'Thunderstorm']];
   let meteo = null; let lue = 0; let minute = '';
   const en = () => (typeof langueUI !== 'undefined' && langueUI === 'en');
   const fuseau = () => { try { return (etat.moi && etat.moi.utilisateur && etat.moi.utilisateur.fuseau_horaire) || 'America/Toronto'; } catch { return 'America/Toronto'; } };
@@ -19,7 +19,7 @@
     z.textContent = '';
     if (meteo && meteo.disponible) {
       const m = document.createElement('span'); m.className = 'is-meteo'; m.title = `Source : ${meteo.source}`;
-      m.textContent = `${c ? (meteo.jour ? c[1] : c[2]) : '🌡️'} ${(Math.round(meteo.temperature) || 0)} °C${c ? ` ${en() ? c[4] : c[3]}` : ''}`;
+      m.innerHTML = `<svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-${c ? (meteo.jour ? c[1] : c[2]) : 'thermometer'}"/></svg> ${(Math.round(meteo.temperature) || 0)} °C${c ? ` ${en() ? c[4] : c[3]}` : ''}`;
       z.appendChild(m);
     }
     for (const [cls, txt] of [['is-lieu', (meteo && meteo.ville) || 'Montréal'], ['is-date', date], ['is-heure num', heure]]) {

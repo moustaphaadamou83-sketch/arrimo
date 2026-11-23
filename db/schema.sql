@@ -2494,3 +2494,31 @@ CREATE TABLE IF NOT EXISTS connect_participants (
 );
 -- Personnel & Tâches : notification de retard envoyée une seule fois par tâche (pas de répétition)
 ALTER TABLE taches_etab ADD COLUMN IF NOT EXISTS retard_notifie_le timestamptz;
+CREATE TABLE IF NOT EXISTS interventions_ccs_demo (
+  id serial PRIMARY KEY,
+  organisation_ccs_id int NOT NULL REFERENCES organisations_secours(id),
+  scenario text NOT NULL CHECK (scenario IN ('malaise', 'chute')),
+  recue_par int NOT NULL REFERENCES utilisateurs(id),
+  recue_le timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE missions_ccs ADD COLUMN IF NOT EXISTS intervention_demo_id int REFERENCES interventions_ccs_demo(id);
+CREATE INDEX IF NOT EXISTS interventions_ccs_demo_organisation ON interventions_ccs_demo (organisation_ccs_id, id);
+CREATE INDEX IF NOT EXISTS missions_ccs_intervention_demo ON missions_ccs (intervention_demo_id, id) WHERE intervention_demo_id IS NOT NULL;
+CREATE TABLE IF NOT EXISTS passages_chrono_motifs (
+  id bigserial PRIMARY KEY,
+  passage_id int NOT NULL REFERENCES passages_chrono(id),
+  auteur_id int NOT NULL REFERENCES utilisateurs(id),
+  motif text NOT NULL CHECK (motif IN ('civiere', 'personnel', 'chambre', 'dossier', 'saturation', 'nettoyage', 'technique', 'autre')),
+  cree_le timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS passages_chrono_motifs_passage ON passages_chrono_motifs (passage_id, id);
+DROP TRIGGER IF EXISTS passages_chrono_motifs_immuables ON passages_chrono_motifs;
+CREATE TRIGGER passages_chrono_motifs_immuables BEFORE UPDATE OR DELETE ON passages_chrono_motifs
+  FOR EACH ROW EXECUTE FUNCTION journal_immuable();
+ALTER TABLE passages_chrono ADD COLUMN IF NOT EXISTS alerte_notifiee_le timestamptz;
+ALTER TABLE organisations_secours ADD COLUMN IF NOT EXISTS restreindre_equipages_aux_unites boolean NOT NULL DEFAULT false;
+CREATE TABLE IF NOT EXISTS utilisateur_unites_secours (
+  utilisateur_id int NOT NULL REFERENCES utilisateurs(id),
+  unite_id int NOT NULL REFERENCES unites_secours(id),
+  PRIMARY KEY (utilisateur_id, unite_id)
+);

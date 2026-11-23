@@ -144,6 +144,33 @@ test('Transport : étapes horodatées (sur place, pris en charge, arrivée, remi
   assert.strictEqual((await appel('autre', 'GET', `/arrimo-flux/fiche?type=transport&id=${dt}`)).s, 404, 'fiche réservée à l’origine et à la destination');
 });
 
+test('Sillage et Flux utilisent le départ NSA confirmé du transport lié', async () => {
+  const dh = (await pool.query(`INSERT INTO demandes_hebergement
+      (etablissement_id, numero, provenance, reference_externe, statut, hopital_id, depart_hopital_le)
+    VALUES ($1, 'DH-ULT-HEURE', 'hopital', 'P-90802', 'acceptee', $2, now() - interval '10 minutes')
+    RETURNING id, depart_hopital_le`, [ids.c, ids.h])).rows[0];
+  const dt = (await pool.query(`INSERT INTO demandes_transport
+      (numero, organisation_id, origine_id, destination_id, resident_ref, statut, demande_hebergement_id,
+       motif_transport, type_vehicule, cree_le, heure_souhaitee, pris_en_charge_le, arrivee_le)
+    VALUES ('DT-090802', $1, $2, $3, 'P-90802', 'arrivee', $4, 'depart_nsa', 'ambulance',
+      now() - interval '40 minutes', now() + interval '30 minutes', now() - interval '12 minutes', now() - interval '5 minutes')
+    RETURNING id`, [ids.org, ids.h, ids.c, dh.id])).rows[0];
+  await require('../src/horloge').marquer(pool, { objet: 'demande_transport', objetId: dt.id, etape: 'arrivee', source: 'systeme' });
+  const attendu = dh.depart_hopital_le.toISOString();
+  const sillage = await appel('hop', 'GET', `/sillage?objet=demande_transport&id=${dt.id}`);
+  assert.strictEqual(sillage.s, 200, JSON.stringify(sillage.d));
+  assert.ok(sillage.d.objets.some((o) => o.objet === 'demande_hebergement' && o.id === dh.id));
+  assert.strictEqual(sillage.d.evenements.find((e) => e.etape === 'depart').heure, attendu);
+  const flux = await appel('hop', 'GET', `/arrimo-flux?etablissement_id=${ids.h}`);
+  const mouvement = flux.d.mouvements.find((m) => m.reference === 'DT-090802');
+  assert.strictEqual(mouvement.depart_reel, attendu);
+  assert.ok(new Date(mouvement.prevue) > new Date(mouvement.depart_reel));
+  await pool.query('UPDATE demandes_hebergement SET depart_hopital_le = NULL WHERE id = $1', [dh.id]);
+  const sansDepart = await appel('hop', 'GET', `/sillage?objet=demande_transport&id=${dt.id}`);
+  assert.ok(!sansDepart.d.evenements.some((e) => e.etape === 'depart'));
+  assert.ok(sansDepart.d.incompletes.some((e) => e.numero === 'DT-090802' && e.etape === 'depart'));
+});
+
 test('Cahier directeur : OG explique le niveau (règles réelles), Chrono, « Mes tâches », parcours d’un patient ; attribution des tâches par un responsable', async () => {
   let r = await og('hop', ids.h, 'Pourquoi sommes-nous en niveau vert ?'); assert.strictEqual(r.s, 200, JSON.stringify(r.d)); assert.match(r.d.reponse, /pression/); assert.match(r.d.reponse, /seuils/);
   r = await og('coord', ids.c, 'Quelles sont mes tâches ?'); assert.match(r.d.reponse, /Vos tâches ouvertes/);
@@ -199,4 +226,20 @@ test('Attribution automatique (règle activée) : à la seule personne active du
   const t2 = await appel('coord', 'POST', '/chsld/taches', { etablissement_id: ids.c, type: 'administratif', titre: 'Mettre à jour le registre', assigne_role: 'coordonnateur' });
   assert.strictEqual((await pool.query('SELECT assigne_a FROM taches_etab WHERE id = $1', [t2.d.id])).rows[0].assigne_a, null, 'deux coordonnateurs : reste dans la file');
   await appel('coord', 'PUT', '/parametres-modules/taches', { etablissement_id: ids.c, valeurs: { echeance_defaut_min: 0, prioritaire_avant_min: 60, attribution_auto: 'aucune' } });
+});
+
+test('Professionnalisation : catalogue des KPI complet (formule, source, période…), OG explique un indicateur, aucun emoji dans l’interface', async () => {
+  const c = await appel('coord', 'GET', '/kpi/catalogue?langue=fr'); assert.strictEqual(c.s, 200);
+  for (const k of c.d) for (const champ of ['nom', 'description', 'formule', 'source', 'perimetre', 'periode', 'actualisation', 'responsable', 'permissions', 'exclusions', 'manquantes']) assert.ok(k[champ], `${k.code}.${champ}`);
+  assert.ok(['k_lits', 'k_urgence', 'k_porte', 'k_places', 'k_preparer', 'k_taches'].every((x) => c.d.some((k) => k.code === x)));
+  const r = await og('hop', ids.h, 'Comment est calculé l’indicateur Lits libres ?'); assert.match(r.d.reponse, /Formule/); assert.match(r.d.reponse, /regles\.js/);
+  // Aucun emoji décoratif (hors commentaires et table de correspondance des données historiques)
+  const fs = require('fs'); const path = require('path');
+  const emo = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B50}\u{23F0}-\u{23FF}]/u; const fautes = [];
+  const fichiers = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((x) => (x.isDirectory() ? (x.name === 'vendor' ? [] : fichiers(path.join(d, x.name))) : /\.(js|html)$/.test(x.name) ? [path.join(d, x.name)] : []));
+  for (const f of [...fichiers(path.join(__dirname, '..', 'public')), ...fichiers(path.join(__dirname, '..', 'public-sh'))]) {
+    if (/icone-emoji\.js|legal/.test(f)) continue;
+    fs.readFileSync(f, 'utf8').split('\n').forEach((l, i) => { const t = l.trim(); if (!/^(\/\/|\/\*|\*)/.test(t) && emo.test(l)) fautes.push(`${path.basename(f)}:${i + 1}`); });
+  }
+  assert.deepStrictEqual(fautes, [], 'emojis dans l’interface');
 });
