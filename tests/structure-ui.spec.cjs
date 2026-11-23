@@ -79,7 +79,7 @@ test('formulaires de structure et dashboards A/B/C isolés', {timeout:180000}, a
   for(const [letter,email,code] of [['A','hopital.a@demo.arrimo','HX'],['B','hopital.b@demo.arrimo','HY'],['C','hopital.c@demo.arrimo','HC']]){
     const c=await browser.newContext({viewport:{width:1365,height:900}});const p=await c.newPage();await p.goto(base);await p.fill('#c-email',email);await p.fill('#c-mdp',MDP);await p.click('#f-connexion button[type=submit]');await p.waitForSelector('body[data-pret="1"]');const premier=p.locator('#b-premiers-pas-ok');if(await premier.isVisible().catch(()=>false))await premier.click();
     await p.evaluate((v) => window.ArrimoEspaces?.reveler(v), 'lits').then(() => p.click('#onglets button[data-v="lits"]'));await p.waitForFunction(()=>document.querySelector('#v-lits').hidden===false);await p.waitForSelector('#v-lits .structure-resume',{state:'attached'});
-    await p.locator('#v-lits > details.panneau-c').evaluate(x=>{x.open=true});
+    await p.locator('#v-lits > details.panneau-c:not(#hist-dispo)').evaluate(x=>{x.open=true});
     const cible=code==='HX'?p.locator('#v-lits .structure-resume').filter({hasText:'Unité Démonstration'}):p.locator('#v-lits .structure-resume').first();
     await cible.evaluate(x=>{x.open=true;x.scrollIntoView()});
     const structure=await p.locator('#v-lits').innerText();
