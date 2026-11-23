@@ -24,7 +24,7 @@ import urllib.request
 import urllib.error
 
 RACINE = pathlib.Path(__file__).resolve().parent.parent
-CANDIDAT = '98712dfb9b20c2b5ae21903a3c154da52bff5aa6'
+CANDIDAT = os.environ.get('ARRIMO_PUBLICATION_CANDIDAT', '98712dfb9b20c2b5ae21903a3c154da52bff5aa6')
 CIBLES = [('demo', '/opt/arrimo-demo', 'arrimo-public-demo', 'demo.arrimo.senseafri.com'),
           ('principal', '/opt/arrimo', 'arrimo', 'arrimo.senseafri.com'),
           ('sh', '/opt/arrimo-sh', 'arrimo-sh', 'sh.arrimo.senseafri.com')]
@@ -91,7 +91,53 @@ def cible_lien(root):
     return rel
 
 
+def verifier_preuves_recette_courante(chemin):
+    chemin = pathlib.Path(chemin).resolve(strict=True)
+    st = chemin.stat(); sd = chemin.parent.stat()
+    if not chemin.is_file() or sd.st_mode & 0o077 or st.st_uid != os.geteuid() or sd.st_uid != os.geteuid():
+        raise Refus('Rapport de recette courant absent ou non privé')
+    r = json.loads(chemin.read_text())
+    if (r.get('commit') != CANDIDAT or r.get('statut') != 'copie_validee'
+            or r.get('copie_isolee_validee') is not True or r.get('sauvegarde_fictive_restauree') is not True):
+        raise Refus('Recette complète non validée pour le SHA candidat')
+    suites = {'api','priorites-sql','interop-sql','securite-multietablissement','scenarios-abc','dashboards-abc-reseau',
+              'interface-parcours','priorites-navigateur','structure-navigateur','sh-erp','sh-navigateur','chrono-et-sillage',
+              'secours-et-transport','chsld-et-dsn','inter-acteurs-temps-reel','securite-xss'}
+    preflight = {'runtime-node','runtime-ipc','runtime-chromium','postgres-maintenance','preparer-fictif-ancien-schema',
+                 'sauvegarde-fictive','lecture-sauvegarde','restauration-fictive','empreintes-source','empreintes-restauree',
+                 'migrations-copie-restauree'}
+    etapes = {}
+    for groupe in (r.get('preuves_heritees', []), r.get('etapes', [])):
+        for e in groupe:
+            if e.get('nom'):
+                etapes[e['nom']] = e
+    if not preflight <= set(etapes) or any(etapes[n].get('reussi') is not True for n in preflight):
+        raise Refus('Préflight runtime, sauvegarde ou migrations incomplet')
+    if not suites <= set(etapes) or any(etapes[n].get('reussi') is not True for n in suites):
+        raise Refus('Une suite de recette est absente ou en échec')
+    def valider_tap(log):
+        b = pathlib.Path(log).read_bytes()
+        def compte(k): return re.search(rb'^# ' + k.encode() + rb' (\d+)\s*$', b, re.M)
+        if not all(compte(k) for k in ['tests','pass','fail','skipped','cancelled']): return False
+        return (int(compte('tests')[1]) > 0 and int(compte('pass')[1]) == int(compte('tests')[1])
+                and all(int(compte(k)[1]) == 0 for k in ['fail','skipped','cancelled']))
+    for nom in suites:
+        e = etapes[nom]
+        origine = pathlib.Path(e['origine']) if e.get('origine') else chemin
+        if not valider_tap(origine.parent / (nom + '.log')):
+            raise Refus('Journal TAP non vert ou absent : ' + nom)
+    sauvegarde = r.get('sauvegarde_origine') or str(chemin.parent / 'copie-fictive.dump')
+    empreinte = r.get('sauvegarde_sha256')
+    if not empreinte:
+        raise Refus('Empreinte de sauvegarde fictive absente')
+    if sha(sauvegarde) != empreinte: raise Refus('Sauvegarde fictive restaurée altérée')
+    return r
+
+
 def verifier_preuves(root=RACINE):
+    courantes = os.environ.get('ARRIMO_PUBLICATION_PREUVE')
+    if courantes:
+        return verifier_preuves_recette_courante(courantes)
     p = root / 'docs/preuves-recette-validee-20261025'
     r = json.loads((p / 'rapport-ssh.json').read_text())
     if r.get('commit') != CANDIDAT or r.get('statut') != 'copie_validee' or not r.get('copie_isolee_validee') or not r.get('sauvegarde_fictive_restauree'):
@@ -521,6 +567,8 @@ def main():
     parser.add_argument('--cibles',default='demo,principal,sh');args=parser.parse_args()
     selection=[t for t, *_ in CIBLES if t in args.cibles.split(',')]
     if not selection or set(args.cibles.split(','))-{t for t, *_ in CIBLES}:raise Refus('Cibles inconnues')
+    if not args.audit and 'ARRIMO_PUBLICATION_CANDIDAT' not in os.environ:
+        raise Refus('Publication refusée : SHA candidat récent explicitement requis')
     if args.audit:audit(selection);return 0
     if os.geteuid()!=0:raise Refus('Session SSH root autorisée requise')
     os.umask(0o077)

@@ -19,6 +19,26 @@ class Politiques(unittest.TestCase):
     def test_preuves_reelles_archivees_valides(self):
         self.assertEqual(m.verifier_preuves()['commit'],m.CANDIDAT)
 
+    def test_recette_courante_exige_toutes_les_suites_et_rapports_tap_verts(self):
+        suites={'api','priorites-sql','interop-sql','securite-multietablissement','scenarios-abc','dashboards-abc-reseau',
+                'interface-parcours','priorites-navigateur','structure-navigateur','sh-erp','sh-navigateur','chrono-et-sillage',
+                'secours-et-transport','chsld-et-dsn','inter-acteurs-temps-reel','securite-xss'}
+        preflight={'runtime-node','runtime-ipc','runtime-chromium','postgres-maintenance','preparer-fictif-ancien-schema',
+                   'sauvegarde-fictive','lecture-sauvegarde','restauration-fictive','empreintes-source','empreintes-restauree',
+                   'migrations-copie-restauree'}
+        with tempfile.TemporaryDirectory() as tmp:
+            d=Path(tmp);journal=b'TAP version 13\n1..1\n# tests 1\n# pass 1\n# fail 0\n# cancelled 0\n# skipped 0\n'
+            etapes=[{'nom':n,'reussi':True} for n in preflight|suites]
+            for n in suites:(d/(n+'.log')).write_bytes(journal)
+            sauvegarde=d/'fictive.dump';sauvegarde.write_bytes(b'fictive')
+            r={'commit':'a'*40,'statut':'copie_validee','copie_isolee_validee':True,'sauvegarde_fictive_restauree':True,
+               'sauvegarde_origine':str(sauvegarde),'sauvegarde_sha256':m.sha(sauvegarde),'etapes':etapes,'preuves_heritees':[]}
+            preuve=d/'rapport.json';preuve.write_text(json.dumps(r));preuve.chmod(0o600)
+            with patch.object(m,'CANDIDAT','a'*40):
+                self.assertEqual(m.verifier_preuves_recette_courante(preuve)['commit'],'a'*40)
+                (d/'chsld-et-dsn.log').write_bytes(journal.replace(b'# fail 0',b'# fail 1'))
+                with self.assertRaises(m.Refus):m.verifier_preuves_recette_courante(preuve)
+
     def test_journal_altere_refuse(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);p=root/'docs/preuves-recette-validee-20261025'
