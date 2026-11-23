@@ -96,7 +96,7 @@ def environnement_suite(environnement, nom):
     e = dict(environnement)
     # API teste explicitement les deux modes avec ARRIMO_DEMO ; ne pas forcer
     # ARRIMO_ENV=demo qui a priorité et rendrait ses tests de refus inopérants.
-    if nom in ('api', 'secours-et-transport'):
+    if nom in ('api', 'secours-et-transport', 'chsld-et-dsn'):
         e.pop('ARRIMO_ENV', None)
         e.pop('ARRIMO_DEMO', None)
     return e

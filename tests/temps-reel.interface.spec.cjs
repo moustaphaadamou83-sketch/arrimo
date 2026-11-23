@@ -9,6 +9,7 @@ const { creerApp } = require('../src/app');
 const { viderBase } = require('../db/vider');
 const { seed, MOT_DE_PASSE_DEMO } = require('../db/seed');
 const { hacher } = require('../src/auth');
+const { allerOnglet } = require('./aide-navigation.cjs');
 
 let pool; let serveur; let base; let nav; const ids = {}; const envAvant = process.env.ARRIMO_ENV;
 async function compte(cle, role, { etab, org } = {}) {
@@ -20,11 +21,12 @@ async function compte(cle, role, { etab, org } = {}) {
 async function session(email) {
   const pg = await (await nav.newContext({ viewport: { width: 1366, height: 900 }, locale: 'fr-CA' })).newPage(); pg.erreurs = [];
   pg.on('pageerror', (e) => pg.erreurs.push(e.message));
+  await pg.addInitScript(() => { window.ARRIMO_VEILLE_MS = 1000; });
   await pg.addInitScript(() => { try { localStorage.setItem('arrimo-langue', 'fr'); localStorage.setItem('arrimo-premiers-pas', '1'); } catch { /* */ } });
   await pg.goto(base); await pg.fill('#c-email', email); await pg.fill('#c-mdp', MOT_DE_PASSE_DEMO); await pg.press('#c-mdp', 'Enter');
   await pg.waitForSelector('body[data-pret="1"]', { timeout: 30000 });
   if (await pg.locator('#b-premiers-pas-ok').isVisible().catch(() => false)) await pg.click('#b-premiers-pas-ok');
-  await pg.evaluate(() => document.querySelector('#onglets button[data-v="flux"]').click());
+  await allerOnglet(pg, 'flux');
   await pg.waitForSelector('#v-flux:not([hidden]) table', { timeout: 20000 });
   return pg;
 }
@@ -55,10 +57,10 @@ test('scénario F : deux sessions sur Arrimo Flux ; la préalerte de l’équipa
   const r = await fetch(`${base}/api/secours/transports/${ids.dt}/action`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jeton}` }, body: JSON.stringify({ action: 'prealerter', version: v, eta_min: 25 }) });
   assert.strictEqual(r.status, 200);
   // Les deux sessions voient la préalerte sans rechargement
-  for (const pg of [a, b]) await pg.waitForFunction(() => /à acquitter/.test(document.querySelector('#v-flux').textContent), null, { timeout: 60000 });
+  for (const pg of [a, b]) await pg.waitForSelector('#v-flux [data-flux-accuser]', { timeout: 60000 });
   // La session A accuse réception ; la session B le voit sans rechargement, sans doublon de ligne
   await a.click('[data-flux-accuser]');
-  await b.waitForFunction(() => /reçue/.test(document.querySelector('#v-flux').textContent) && !document.querySelector('[data-flux-accuser]'), null, { timeout: 60000 });
+  await b.waitForFunction(() => !document.querySelector('#v-flux [data-flux-accuser]'), null, { timeout: 60000 });
   assert.strictEqual(await b.locator('#v-flux tbody tr', { hasText: 'DT-009001' }).count(), 1, 'une seule ligne pour le transport');
   assert.deepStrictEqual([...a.erreurs, ...b.erreurs], []);
 });

@@ -15,6 +15,7 @@ const { creerApp } = require('../src/app');
 const { viderBase } = require('../db/vider');
 const { demoReseau } = require('../db/demo-reseau');
 const routeurTest = require('./routeur-fictif.cjs');
+const { allerOnglet } = require('./aide-navigation.cjs');
 
 const URL_AUDIT = process.env.AUDIT_DATABASE_URL;
 const MDP = process.env.DEMO_MOT_DE_PASSE || 'Demo-Arrimo-2026';
@@ -61,7 +62,7 @@ async function parcourir(email) {
   const b = page.locator('#b-premiers-pas-ok'); if (await b.isVisible().catch(() => false)) await b.click();
   const vues = await page.$$eval('#onglets button[data-v]', (bs) => bs.filter((x) => !x.hidden).map((x) => x.dataset.v));
   for (const v of vues) {
-    await page.evaluate((v) => window.ArrimoEspaces?.reveler(v), v).then(() => page.click(`#onglets button[data-v="${v}"]`));
+    await allerOnglet(page, v);
     await page.waitForTimeout(700);
     // Ouvre tout ce qui se déplie (détails, sections repliées) pour rendre un maximum de contenu
     await page.evaluate(() => document.querySelectorAll('details').forEach((d) => { d.open = true; }));

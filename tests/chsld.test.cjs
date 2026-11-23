@@ -1888,7 +1888,10 @@ test('écrans : transfert d’hôpital au bouton, nettoyage sous précautions, r
     await hb.waitForSelector('[data-li="annuler"]');
     const t = (await poolPilote.query(`SELECT id, version, destination_id FROM coordinations WHERE liee_id = $1 AND type = 'transfert_hopital'`, [co.id])).rows[0];
     assert.strictEqual(t.destination_id, L.A);
-    await hb.click(`[data-coordination="${t.id}"] [data-li="annuler"]`); await hb.waitForFunction((id) => !document.querySelector(`[data-coordination="${id}"]`), t.id);
+    await hb.click(`[data-coordination="${t.id}"] [data-li="annuler"]`);
+    await hb.waitForSelector('[data-li-onglet="historique"][aria-selected="true"]');
+    await hb.waitForSelector(`[data-coordination="${t.id}"]`);
+    assert.ok((await poolPilote.query('SELECT statut FROM coordinations WHERE id = $1', [t.id])).rows[0].statut.includes('annul'), 'transfert annulé conservé dans l’historique');
     const r = await api('b', 'POST', `/coordinations/${co.id}/retour`, { retour_prevu_le: new Date(Date.now() + 3600000).toISOString() }); await reintegrerApres(r, x);
     assert.deepStrictEqual(err, []);
   } finally { process.env.ARRIMO_ENV = avant; await nav.close(); }
@@ -2418,7 +2421,7 @@ test('RPA, RI, RTF, maison des aînés : type choisi dans SH, écrans CHSLD sous
       const pg = await ouvrir(sessions.era, E, langue);
       const onglets = await pg.evaluate(() => [...document.querySelectorAll('#onglets button')].filter((b) => b.offsetParent).map((b) => b.textContent).join(' | '));
       assert.ok(!/CHSLD/.test(onglets), `navigation (${langue}) : ${onglets}`);
-      if (/R[ée]seau|network/i.test(onglets)) assert.match(onglets, /RPA/, `le réseau porte le nom RPA (${langue})`);
+      assert.match(onglets, /R[ée]seau|network/i, `accès au Réseau pour l’établissement RPA (${langue})`);
       await pg.close();
     }
     const hop = await ouvrir(sessions.b, L.B);
