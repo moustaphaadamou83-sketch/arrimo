@@ -173,10 +173,12 @@ async function navigateur(p) {
   const ATTENTE_VUE = 60000;
   const { chromium } = require('playwright');
   const { allerOnglet } = require('../../tests/aide-navigation.cjs');
+  const etape = (x) => { global.__arrimoControleEtape = x; };
   const browser = await chromium.launch({ headless:true });
   const compteRendus = [];
   try {
     for (const compte of p.comptes) {
+      etape(`contexte:${compte.nom}`);
       const ctx = await browser.newContext({ viewport:{width:1366,height:900}, ignoreHTTPSErrors:false });
       const page = await ctx.newPage();
       const erreurs = [];
@@ -185,32 +187,35 @@ async function navigateur(p) {
       await page.addInitScript(({token,sh}) => {
         (sh ? sessionStorage : localStorage).setItem(sh ? 'sh-token' : 'arrimo-token', token);
       }, { token:compte.token, sh:p.type==='sh' });
-      await page.goto(p.base,{ waitUntil:'networkidle',timeout:45000 });
+      etape(`chargement:${compte.nom}`); await page.goto(p.base,{ waitUntil:'networkidle',timeout:45000 });
       const headers = {Authorization:'Bearer '+compte.token};
       const appel = async (chemin, options={}) => {
         const r = await ctx.request.get(p.base+'/api'+chemin,{headers,timeout:20000,...options});
         assert.equal(r.status(),200, 'API autorisée indisponible : '+chemin.split('?')[0]); return r.json();
       };
-      const moi = await appel('/moi');
+      etape(`identite:${compte.nom}`); const moi = await appel('/moi');
       if (p.type==='sh') {
         assert.equal(moi.utilisateur?.role || moi.role || moi.u?.role, 'administration', 'Compte SH administration requis');
         await page.locator('#ecran-app:not([hidden])').waitFor({timeout:30000});
         for (const vue of ['accueil','hopitaux','crm','contrats','projets','taches','support']) {
+          etape(`vue:${compte.nom}:${vue}`);
           const tab = page.locator(`#onglets [data-v="${vue}"]`);
           await tab.click(); await page.locator('#contenu h2').waitFor({timeout:ATTENTE_VUE});
         }
-        for (const chemin of ['/hopitaux','/environnements','/journal']) await appel(chemin);
+        for (const chemin of ['/hopitaux','/environnements','/journal']) { etape(`api:${compte.nom}:${chemin}`); await appel(chemin); }
       } else {
+        etape(`dashboard:${compte.nom}`);
         await page.locator('body[data-pret="1"]').waitFor({timeout:30000});
         if (p.type==='demo' && compte.nom !== 'reseau') assert.equal(moi.etablissements.length,1,'Isolation du dashboard');
         if (compte.nom==='reseau') assert.equal(moi.utilisateur.gestionnaire,true);
         const etab = moi.etablissements[0]?.id; assert.ok(etab,'Aucun établissement autorisé');
-        for (const chemin of ['/admissions','/lits','/civieres','/conges','/nsa','/transferts','/copilote/briefing']) await appel(chemin+'?etablissement_id='+etab);
+        for (const chemin of ['/admissions','/lits','/civieres','/conges','/nsa','/transferts','/copilote/briefing']) { etape(`api:${compte.nom}:${chemin}`); await appel(chemin+'?etablissement_id='+etab); }
         if (p.type==='demo' && compte.interdit) {
           const interdit = await ctx.request.get(p.base+'/api/lits?etablissement_id='+compte.interdit,{headers});
           assert.equal(interdit.status(),403,'Accès interétablissement non autorisé');
         }
         for (const vue of compte.nom==='reseau' ? ['reseau','national'] : ['copilote','admissions','lits','urgence','vigilance','nettoyage','nsa','transferts']) {
+          etape(`vue:${compte.nom}:${vue}`);
           await allerOnglet(page, vue);
           await page.locator(`#v-${vue}:not([hidden])`).waitFor({timeout:ATTENTE_VUE});
         }
@@ -222,7 +227,7 @@ async function navigateur(p) {
       assert.deepEqual(erreurs,[], 'Erreurs JavaScript après publication');
       // Captures publiques uniquement sur le jeu explicitement fictif de la démo.
       if (p.type==='demo') {
-        const vue=compte.nom==='reseau'?'reseau':'copilote';
+        const vue=compte.nom==='reseau'?'reseau':'copilote'; etape(`capture:${compte.nom}:${vue}`);
         await allerOnglet(page, vue);
         await page.locator(`#v-${vue}:not([hidden])`).waitFor({timeout:ATTENTE_VUE});
         await page.screenshot({ path:path.join(p.captures,'dashboard-'+compte.nom+'.png'),fullPage:true });
@@ -269,7 +274,7 @@ async function main(p) {
 }
 if(require.main===module){
  let input='';process.stdin.on('data',b=>input+=b);process.stdin.on('end',()=>{
-  Promise.resolve().then(()=>main(JSON.parse(input))).then(r=>process.stdout.write(JSON.stringify(r))).catch(e=>{console.error('CONTROLE_ECHOUE '+(e.code||e.name||'erreur'));process.exitCode=1;});
+  Promise.resolve().then(()=>main(JSON.parse(input))).then(r=>process.stdout.write(JSON.stringify(r))).catch(e=>{console.error('CONTROLE_ECHOUE '+(e.code||e.name||'erreur')+' ETAPE '+(global.__arrimoControleEtape||'inconnue'));process.exitCode=1;});
  });
 }
 module.exports={verifierCible,copie,AJOUTS_CATALOGUE_SH,RENOMMAGES_SH,expression};
