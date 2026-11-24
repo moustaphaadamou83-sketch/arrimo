@@ -23,6 +23,10 @@ def main():
     shutil.copy2(source/'src/courriel.js',release/'src/courriel.js')
     for f in release.rglob('*'):
         if not f.is_symlink():f.chmod(0o755 if f.is_dir() else 0o644)
+    # copytree crée la racine sous root:root avec les modes copiés; le service
+    # ne peut alors pas traverser la nouvelle release si sa racine reste 0750.
+    os.chown(release,0,avant.stat().st_gid)
+    release.chmod(0o750)
     def pointer(p):
         temp=root/('.current-'+stamp);os.symlink(str(p.relative_to(root)),temp);os.replace(temp,root/'current')
     def redemarrer():subprocess.run(['systemctl','restart','arrimo-sh-validation'],check=True)
