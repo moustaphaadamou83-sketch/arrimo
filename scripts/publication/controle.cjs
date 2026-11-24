@@ -192,7 +192,10 @@ async function navigateur(p) {
               ongletDisplay: b ? getComputedStyle(b).display : null, ongletClasse: b?.className || null,
               ongletSelectionne: b?.getAttribute('aria-selected') || null, espace: e || null,
               espacePresent: !!eb, espaceSelectionne: eb?.getAttribute('aria-pressed') || null,
-              panneauPresent: !!panel, panneauCache: !!panel?.hidden };
+              panneauPresent: !!panel, panneauCache: !!panel?.hidden,
+              typeContexte: document.body.dataset.typeEtab || null,
+              contexteSelectPresent: !!document.querySelector('#ctx'),
+              nombreContextes: document.querySelector('#ctx')?.options?.length ?? null };
           }, { v: vue, ph: phase });
         } catch { global.__arrimoControleNavigation = { phase, lecture: 'indisponible' }; }
       };
