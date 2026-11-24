@@ -187,7 +187,8 @@ async function navigateur(p) {
       await page.addInitScript(({token,sh}) => {
         (sh ? sessionStorage : localStorage).setItem(sh ? 'sh-token' : 'arrimo-token', token);
       }, { token:compte.token, sh:p.type==='sh' });
-      etape(`chargement:${compte.nom}`); await page.goto(p.base,{ waitUntil:'networkidle',timeout:45000 });
+      // Arrimo a des actualisations périodiques : networkidle peut ne jamais survenir même si l’écran est prêt.
+      etape(`chargement:${compte.nom}`); await page.goto(p.base,{ waitUntil:'domcontentloaded',timeout:45000 });
       const headers = {Authorization:'Bearer '+compte.token};
       const appel = async (chemin, options={}) => {
         const r = await ctx.request.get(p.base+'/api'+chemin,{headers,timeout:20000,...options});
