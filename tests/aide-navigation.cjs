@@ -2,11 +2,18 @@
 /** Ouvre un écran par la navigation principale comme un utilisateur : sur téléphone, le menu tiroir est d'abord ouvert. */
 async function allerOnglet(page, vue) {
   // La mise à jour des espaces et du menu Plus passe par MutationObserver/rAF ; attendre son état stable avant de choisir le chemin.
-  await page.evaluate(async (v) => {
-    window.ArrimoEspaces?.reveler(v);
+  const espace = await page.evaluate((v) => window.ArrimoEspaces?.espaceDe(v) || null, vue).catch(() => null);
+  const boutonEspace = espace && page.locator(`#onglets .espace-btn[data-espace="${espace}"]`);
+  if (boutonEspace && await boutonEspace.isVisible().catch(() => false)) {
+    await boutonEspace.click();
+    await page.waitForFunction((x) => document.querySelector(`#onglets .espace-btn[data-espace="${x}"]`)?.getAttribute('aria-pressed') === 'true', espace);
+  } else {
+    await page.evaluate((v) => window.ArrimoEspaces?.reveler(v), vue).catch(() => {});
+  }
+  await page.evaluate(async () => {
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     window.ArrimoNavPlus?.ajuster();
-  }, vue).catch(() => {});
+  }).catch(() => {});
   // Journal et support sont volontairement accessibles depuis le centre de paramètres.
   if (await page.locator(`#onglets button[data-v="${vue}"].hors-menu`).count()) {
     await allerOnglet(page, 'params');
