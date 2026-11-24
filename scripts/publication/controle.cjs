@@ -202,6 +202,16 @@ async function navigateur(p) {
       const erreurs = [];
       page.on('pageerror', () => erreurs.push('erreur JavaScript'));
       page.on('console', (m) => { if (m.type()==='error') erreurs.push('console.error'); });
+      page.on('response', (r) => {
+        if (r.status() < 400) return;
+        try {
+          const u = new URL(r.url());
+          if (u.pathname.startsWith('/api/')) {
+            const chemin = u.pathname.replace(/\/[A-Z]{1,3}-\d{4,}(?=\/|$)/g, '/:ref').replace(/\/\d+(?=\/|$)/g, '/:id');
+            erreurs.push(`api:${r.status()}:${chemin}`);
+          }
+        } catch { erreurs.push('api:erreur-reponse'); }
+      });
       await page.addInitScript(({token,sh}) => {
         (sh ? sessionStorage : localStorage).setItem(sh ? 'sh-token' : 'arrimo-token', token);
       }, { token:compte.token, sh:p.type==='sh' });
@@ -256,7 +266,8 @@ async function navigateur(p) {
           assert.equal(q.status(),200); assert.ok((await q.json()).reponse);
         }
       }
-      assert.deepEqual(erreurs,[], 'Erreurs JavaScript après publication');
+      if (erreurs.length) global.__arrimoControleNavigation = { phase:'erreurs', erreurs:[...new Set(erreurs)] };
+      assert.deepEqual(erreurs,[], 'Erreurs JavaScript ou API après publication');
       // Captures publiques uniquement sur le jeu explicitement fictif de la démo.
       if (p.type==='demo') {
         const vue=compte.nom==='reseau'?'reseau':'copilote'; etape(`capture:${compte.nom}:${vue}`);
