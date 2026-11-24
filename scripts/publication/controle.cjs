@@ -216,8 +216,9 @@ async function navigateur(p) {
           assert.equal(interdit.status(),403,'Accès interétablissement non autorisé');
         }
         for (const vue of compte.nom==='reseau' ? ['reseau','national'] : ['copilote','admissions','lits','urgence','vigilance','nettoyage','nsa','transferts']) {
-          etape(`vue:${compte.nom}:${vue}`);
+          etape(`navigation:${compte.nom}:${vue}:ouverture`);
           await allerOnglet(page, vue);
+          etape(`navigation:${compte.nom}:${vue}:attente`);
           await page.locator(`#v-${vue}:not([hidden])`).waitFor({timeout:ATTENTE_VUE});
         }
         if (p.type==='demo') {
