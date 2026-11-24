@@ -200,6 +200,17 @@ async function navigateur(p) {
         } catch { global.__arrimoControleNavigation = { phase, lecture: 'indisponible' }; }
       };
       const erreurs = [];
+      const headers = {Authorization:'Bearer '+compte.token};
+      let moiAvantNavigation = null;
+      let contexteInitial = null;
+      if (p.type==='demo' && compte.nom==='reseau') {
+        const r = await ctx.request.get(p.base+'/api/moi',{headers,timeout:20000});
+        assert.equal(r.status(),200,'API identité Réseau indisponible');
+        moiAvantNavigation = await r.json();
+        assert.equal(moiAvantNavigation.utilisateur?.gestionnaire,true,'Compte Réseau requis');
+        contexteInitial = moiAvantNavigation.etablissements.find(e => e.type_etablissement==='hopital');
+        assert.ok(contexteInitial,'Aucun hôpital dans le périmètre autorisé du compte Réseau');
+      }
       page.on('pageerror', () => erreurs.push('erreur JavaScript'));
       page.on('console', (m) => { if (m.type()==='error') erreurs.push('console.error'); });
       page.on('response', (r) => {
@@ -212,17 +223,17 @@ async function navigateur(p) {
           }
         } catch { erreurs.push('api:erreur-reponse'); }
       });
-      await page.addInitScript(({token,sh}) => {
+      await page.addInitScript(({token,sh,etablissementId}) => {
         (sh ? sessionStorage : localStorage).setItem(sh ? 'sh-token' : 'arrimo-token', token);
-      }, { token:compte.token, sh:p.type==='sh' });
+        if (!sh && etablissementId) localStorage.setItem('arrimo-ctx', String(etablissementId));
+      }, { token:compte.token, sh:p.type==='sh', etablissementId:contexteInitial?.id });
       // Arrimo a des actualisations périodiques : networkidle peut ne jamais survenir même si l’écran est prêt.
       etape(`chargement:${compte.nom}`); await page.goto(p.base,{ waitUntil:'domcontentloaded',timeout:45000 });
-      const headers = {Authorization:'Bearer '+compte.token};
       const appel = async (chemin, options={}) => {
         const r = await ctx.request.get(p.base+'/api'+chemin,{headers,timeout:20000,...options});
         assert.equal(r.status(),200, 'API autorisée indisponible : '+chemin.split('?')[0]); return r.json();
       };
-      etape(`identite:${compte.nom}`); const moi = await appel('/moi');
+      etape(`identite:${compte.nom}`); const moi = moiAvantNavigation || await appel('/moi');
       if (p.type==='sh') {
         assert.equal(moi.utilisateur?.role || moi.role || moi.u?.role, 'administration', 'Compte SH administration requis');
         await page.locator('#ecran-app:not([hidden])').waitFor({timeout:30000});
@@ -237,15 +248,10 @@ async function navigateur(p) {
         await page.locator('body[data-pret="1"]').waitFor({timeout:30000});
         if (p.type==='demo' && compte.nom !== 'reseau') assert.equal(moi.etablissements.length,1,'Isolation du dashboard');
         if (compte.nom==='reseau') assert.equal(moi.utilisateur.gestionnaire,true);
-        // Le compte Réseau peut arriver dans un contexte CHSLD, où les anciennes releases
-        // masquent encore les onglets globaux. Choisir un hôpital explicitement autorisé par
-        // /moi permet de tester ces vues sur le site actif sans contourner son périmètre.
-        const contexteReseau = compte.nom==='reseau'
-          ? moi.etablissements.find(e => e.type_etablissement==='hopital')
-          : moi.etablissements[0];
-        const etab = contexteReseau?.id; assert.ok(etab,'Aucun établissement autorisé');
+        const contexteReseau = compte.nom==='reseau' ? contexteInitial : null;
+        const etablissementCompte = contexteReseau || moi.etablissements[0];
+        const etab = etablissementCompte?.id; assert.ok(etab,'Aucun établissement autorisé');
         if (compte.nom==='reseau') {
-          await page.locator('#ctx').selectOption(String(etab));
           await page.waitForFunction(id => document.body.dataset.typeEtab==='hopital' && document.querySelector('#ctx')?.value===String(id), etab);
         }
         for (const chemin of ['/admissions','/lits','/civieres','/conges','/nsa','/transferts','/copilote/briefing']) { etape(`api:${compte.nom}:${chemin}`); await appel(chemin+'?etablissement_id='+etab); }

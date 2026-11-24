@@ -538,8 +538,12 @@ async function demarrer() {
     return;
   }
   const memo = Number(lire('arrimo-ctx'));
-  const duLien = etat.lien && etabs.some((e) => e.id === etat.lien.id) ? etat.lien.id : null;
-  etat.ctx = duLien || (etabs.some((e) => e.id === memo) ? memo : (etabs.find((e) => e.module_actif) || etabs[0]).id);
+  const chsldAutorise = (e) => !etat.moi.utilisateur.gestionnaire || e.type_etablissement !== 'chsld' || e.acces_direct === true;
+  const duLien = etat.lien && etabs.some((e) => e.id === etat.lien.id && chsldAutorise(e)) ? etat.lien.id : null;
+  const memoEtab = etabs.find((e) => e.id === memo && chsldAutorise(e));
+  const defaut = etabs.find((e) => e.type_etablissement === 'hopital' && e.module_actif)
+    || etabs.find((e) => e.module_actif && chsldAutorise(e)) || etabs.find(chsldAutorise) || etabs[0];
+  etat.ctx = duLien || memoEtab?.id || defaut.id;
   appliquerLangue();   // textes fixes au nom du type de l'établissement courant (RPA, RI, RTF…)
   majSelecteurCtx();
   $('#ecran-connexion').hidden = true;
@@ -562,23 +566,26 @@ const estEntretien = () => etat.moi && etat.moi.utilisateur.role === 'entretien'
 const MODULE_ONGLET = { urgence: 'urgence', nsa: 'nsa', nettoyage: 'nettoyage', national: 'national' };
 /** Type de l'établissement courant (hôpital par défaut) : la navigation et l'écran d'accueil en dépendent. */
 const typeEtab = () => etabCtx()?.type_etablissement || 'hopital';
+const chsldSansAccesDirect = () => typeEtab() === 'chsld' && etat.moi?.utilisateur?.gestionnaire && etabCtx()?.acces_direct !== true;
 function appliquerModules() {
   const entretien = estEntretien();
   const mods = (etabCtx() && etabCtx().modules) || {};
   const type = typeEtab();
+  const chsldInterdit = chsldSansAccesDirect();
   document.body.dataset.typeEtab = type; document.documentElement.dataset.typeEtab = type;
+  $('#b-notif').hidden = entretien || chsldInterdit;
   document.querySelectorAll('#onglets button[data-v]').forEach((b) => {
     const mod = Object.keys(MODULE_ONGLET).find((k) => MODULE_ONGLET[k] === b.dataset.v);
     const autreType = b.dataset.type && b.dataset.type !== type;
     // Entretien : nettoyage (et ses tâches en CHSLD) seulement
     // Entretien : Nettoyage et Mes tâches (vue personnelle unique ; le tableau des tâches de l'établissement reste aux responsables : pas de doublon)
     const entretienInterdit = entretien && !(b.dataset.v === 'nettoyage' || b.dataset.v === 'mes-taches');
-    b.hidden = autreType || entretienInterdit || (b.dataset.v === 'admin' && !etat.moi.utilisateur.admin) || (mod && mods[mod] === false)
+    b.hidden = autreType || (chsldInterdit && b.dataset.type === 'chsld') || entretienInterdit || (b.dataset.v === 'admin' && !etat.moi.utilisateur.admin) || (mod && mods[mod] === false)
       || (b.dataset.module && mods[b.dataset.module] === false) || (b.dataset.v === 'patients' && !etat.moi.patients_fictifs)
       // Module optionnel (Liaison Secours) : visible seulement s'il a été activé pour cet établissement
       || (b.dataset.moduleOptionnel && mods[b.dataset.moduleOptionnel] !== true);
   });
-  document.querySelectorAll('#onglets .onglets-groupe[data-type]').forEach((g) => { g.hidden = g.dataset.type !== type || entretien; });
+  document.querySelectorAll('#onglets .onglets-groupe[data-type]').forEach((g) => { g.hidden = g.dataset.type !== type || (chsldInterdit && g.dataset.type === 'chsld') || entretien; });
   // Formation (22 nov. 2026) : entrée « Ma formation » si le module est activé pour l'établissement courant
   const bf = $('#b-formation'); if (bf) bf.hidden = !(mods.formation === true || etat.moi.utilisateur.gestionnaire);
   // DSN (22 nov. 2026) : entrée « Dossier santé » si le module est activé pour l'établissement courant (démo et recette seulement côté serveur)
@@ -596,8 +603,9 @@ function appliquerModules() {
   // Arrimo Flux : juste après l'Accueil
   placer('flux', type === 'chsld' ? 'c-accueil' : 'copilote');
   const accueil = type === 'chsld' ? 'c-accueil' : 'copilote';
+  const vueSecours = chsldInterdit ? 'copilote' : accueil;
   const cur = document.querySelector(`#onglets button[data-v="${etat.vue}"]`);
-  if (cur && cur.hidden && !entretien) { etat.vue = accueil; document.querySelectorAll('#onglets button[data-v]').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.v === accueil))); document.querySelectorAll('.contenu > section').forEach((sec) => { sec.hidden = sec.id !== `v-${accueil}`; }); }
+  if (cur && cur.hidden && !entretien) { etat.vue = vueSecours; document.querySelectorAll('#onglets button[data-v]').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.v === vueSecours))); document.querySelectorAll('.contenu > section').forEach((sec) => { sec.hidden = sec.id !== `v-${vueSecours}`; }); }
 }
 const libelleAge = (g) => (g && g !== 'adulte' ? `<span class="badge age-${esc(g)}">${esc(t(`fin.age_${g}`))}</span>` : '');
 
@@ -685,7 +693,7 @@ setInterval(() => {
 
 /* ---------------- Notifications en direct : pastille et bandeau « disponibilité à côté », sans recharger la page ---------------- */
 async function veilleNotifs() {
-  if (!etat.token || !etat.moi || etat.pause || estEntretien() || document.visibilityState !== 'visible') return;
+  if (!etat.token || !etat.moi || etat.pause || estEntretien() || chsldSansAccesDirect() || document.visibilityState !== 'visible') return;
   const ctx = etat.ctx;
   const notifs = await api('GET', `/notifications?etablissement_id=${ctx}`).catch(() => null);
   if (!notifs || ctx !== etat.ctx) return;
@@ -730,7 +738,10 @@ async function majCompteurs() {
   const net = await api('GET', `/nettoyage?etablissement_id=${etat.ctx}`);
   $('#n-net').textContent = net.length;
   if (estEntretien()) return;
-  if (typeEtab() === 'chsld') { etat.notifs = await api('GET', `/notifications?etablissement_id=${etat.ctx}`); const nl = etat.notifs.filter((n) => !n.lu).length; $('#n-notif').hidden = !nl; $('#n-notif').textContent = nl; return; }
+  if (typeEtab() === 'chsld') {
+    if (chsldSansAccesDirect()) { etat.notifs = []; $('#n-notif').hidden = true; return; }
+    etat.notifs = await api('GET', `/notifications?etablissement_id=${etat.ctx}`); const nl = etat.notifs.filter((n) => !n.lu).length; $('#n-notif').hidden = !nl; $('#n-notif').textContent = nl; return;
+  }
   const [notifs, trs, adm] = await Promise.all([
     api('GET', `/notifications?etablissement_id=${etat.ctx}`),
     api('GET', `/transferts?etablissement_id=${etat.ctx}`),

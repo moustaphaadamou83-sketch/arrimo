@@ -1401,11 +1401,27 @@ test('audit de sécurité : attaques automatiques sur toutes les routes, isolati
   {
     const jeton = require('node:crypto').randomBytes(32).toString('hex');
     await poolPilote.query(`INSERT INTO sessions (token, utilisateur_id, expire_le) VALUES ($1, $2, now() + interval '1 hour')`, [require('../src/auth').empreinteJeton(jeton), reseau.id]);
+    const moiReseau = await brut(jeton, 'GET', '/moi');
+    assert.strictEqual(moiReseau.statut, 200);
+    assert.strictEqual(JSON.parse(moiReseau.texte).etablissements.find((e) => e.id === ids.era).acces_direct, false, 'le gestionnaire voit le contexte réseau, sans accès direct aux dossiers CHSLD');
+    assert.strictEqual((await api('era', 'GET', '/moi')).etablissements.find((e) => e.id === ids.era).acces_direct, true, 'le membre CHSLD conserve son accès direct');
     for (const c of [`/chsld/residents?etablissement_id=${ids.era}`, `/chsld/residents/${p.dupont}`, `/chsld/places?etablissement_id=${ids.era}`, `/chsld/accueil?etablissement_id=${ids.era}`]) {
       const r = await brut(jeton, 'GET', c);
       assert.strictEqual(r.statut, 403, `gestionnaire ${c} → ${r.statut}`); assert.ok(!r.texte.includes('Dupont'));
     }
     assert.strictEqual((await brut(jeton, 'POST', '/copilote/question', { etablissement_id: ids.era, question: 'Où est Jean Dupont ?' })).texte.includes('R-'), false, 'OG n’ouvre pas les dossiers au gestionnaire');
+    const navigateur = await require('playwright').chromium.launch();
+    try {
+      const page = await navigateur.newPage(); const refusNavigation = [];
+      page.on('response', (r) => { if (r.url().includes('/api/chsld/') && r.status() === 403) refusNavigation.push(r.url().split('?')[0]); });
+      await page.addInitScript((token) => localStorage.setItem('arrimo-token', token), jeton);
+      await page.goto(basePilote); await page.waitForSelector('body[data-pret="1"]');
+      assert.strictEqual(await page.evaluate(() => document.body.dataset.typeEtab), 'hopital', 'le compte réseau commence dans un contexte hospitalier autorisé');
+      await page.locator('#ctx').selectOption(String(ids.era));
+      await page.waitForFunction(() => document.body.dataset.typeEtab === 'chsld' && document.querySelector('#onglets button[data-v="c-accueil"]')?.hidden);
+      await page.waitForTimeout(300);
+      assert.deepStrictEqual(refusNavigation, [], 'aucune vue ni requête CHSLD non autorisée n’est lancée pour le gestionnaire réseau');
+    } finally { await navigateur.close(); }
   }
   // 5. Injections SQL : aucune erreur, aucune ligne de plus, aucune table touchée
   const avant = (await poolPilote.query('SELECT count(*)::int n FROM residents')).rows[0].n;
