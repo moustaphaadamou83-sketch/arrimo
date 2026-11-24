@@ -20,7 +20,8 @@ def main():
         for f in (source/directory).rglob('*'):
             if f.is_file():
                 dest=release/f.relative_to(source);dest.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(f,dest)
-    shutil.copy2(source/'src/courriel.js',release/'src/courriel.js')
+    for rel in ['src/courriel.js','src/types-etablissement.js']:
+        shutil.copy2(source/rel,release/rel)
     for f in release.rglob('*'):
         if not f.is_symlink():f.chmod(0o755 if f.is_dir() else 0o644)
     # copytree crée la racine sous root:root avec les modes copiés; le service
