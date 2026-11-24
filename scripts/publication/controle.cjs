@@ -16,7 +16,9 @@ const AJOUTS_CATALOGUE_SH = new Set(['comptes', 'documents', 'support', 'journal
   // Chantier moteur commun (migration SH 49, 19 nov. 2026) : modules « Bientôt »
   'chrono', 'urgences_direct', 'transferts_suivi', 'transport_planifie', 'bourse_places', 'donnees_regionales', 'mode_crise', 'visites_confirmees', 'eviter_transferts',
   // Migration 38 : module hospitalier Liaison CHSLD (une ligne ajoutée, aucune ligne existante modifiée)
-  'liaison_chsld']);
+  'liaison_chsld',
+  // Migrations 58 (profil Visites), 60 (Formation) et 61 (DSN) ajoutent ces modules au catalogue.
+  'profil_visites', 'formation', 'dsn']);
 // Seconde exception, liste fermée : renommages de valeurs voulus par une migration SH. L'empreinte « avant » est calculée
 // avec la valeur renommée ; toute autre différence (autre colonne, autre valeur, ligne ajoutée ou retirée) reste refusée.
 // Migration 48 (13 nov. 2026, demandes du site reliées au CRM) : statuts « nouvelle » et « en_cours » → « a_traiter ».
@@ -170,6 +172,7 @@ async function navigateur(p) {
   // Le briefing Copilote peut bloquer le basculement de vue sur un grand réseau (~30 s) : marge d'attente.
   const ATTENTE_VUE = 60000;
   const { chromium } = require('playwright');
+  const { allerOnglet } = require('../../tests/aide-navigation.cjs');
   const browser = await chromium.launch({ headless:true });
   const compteRendus = [];
   try {
@@ -208,8 +211,8 @@ async function navigateur(p) {
           assert.equal(interdit.status(),403,'Accès interétablissement non autorisé');
         }
         for (const vue of compte.nom==='reseau' ? ['reseau','national'] : ['copilote','admissions','lits','urgence','vigilance','nettoyage','nsa','transferts']) {
-          const tab = page.locator(`#onglets [data-v="${vue}"]`);
-          await tab.click(); await page.locator(`#v-${vue}:not([hidden])`).waitFor({timeout:ATTENTE_VUE});
+          await allerOnglet(page, vue);
+          await page.locator(`#v-${vue}:not([hidden])`).waitFor({timeout:ATTENTE_VUE});
         }
         if (p.type==='demo') {
           const q = await ctx.request.post(p.base+'/api/copilote/question',{ headers, data:{etablissement_id:etab,question:'Quels lits sont disponibles et quelles demandes attendent un lit ?'} });
@@ -220,7 +223,7 @@ async function navigateur(p) {
       // Captures publiques uniquement sur le jeu explicitement fictif de la démo.
       if (p.type==='demo') {
         const vue=compte.nom==='reseau'?'reseau':'copilote';
-        await page.locator(`#onglets [data-v="${vue}"]`).click();
+        await allerOnglet(page, vue);
         await page.locator(`#v-${vue}:not([hidden])`).waitFor({timeout:ATTENTE_VUE});
         await page.screenshot({ path:path.join(p.captures,'dashboard-'+compte.nom+'.png'),fullPage:true });
       }
