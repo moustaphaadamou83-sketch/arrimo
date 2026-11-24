@@ -314,9 +314,8 @@ class Publication:
                 "      '', '', collist, r.tablename) INTO cnt, hsh;\n"
                 "    INSERT INTO _arrimo_av VALUES (r.tablename, collist, cnt, hsh);\n"
                 "  END LOOP;\nEND $av$;\n"
-                "\\i '" + chemins[0] + "'\n"
-                "\\i '" + chemins[1] + "'\n"
-                "DO $ap$\nDECLARE a record; cnt bigint; hsh text;\nBEGIN\n"
+                + ''.join("\\i '" + chemin + "'\n" for chemin in chemins)
+                + "DO $ap$\nDECLARE a record; cnt bigint; hsh text;\nBEGIN\n"
                 "  FOR a IN SELECT * FROM _arrimo_av LOOP\n"
                 "    EXECUTE format('SELECT count(*), " + empreinte + " FROM (SELECT %s FROM public.%I) x',\n"
                 "      '', '', a.cols, a.t) INTO cnt, hsh;\n"
