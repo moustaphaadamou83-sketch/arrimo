@@ -181,6 +181,21 @@ async function navigateur(p) {
       etape(`contexte:${compte.nom}`);
       const ctx = await browser.newContext({ viewport:{width:1366,height:900}, ignoreHTTPSErrors:false });
       const page = await ctx.newPage();
+      const diagnosticNavigation = async (vue, phase) => {
+        try {
+          global.__arrimoControleNavigation = await page.evaluate(({ v, ph }) => {
+            const b = document.querySelector(`#onglets button[data-v="${v}"]`);
+            const e = window.ArrimoEspaces?.espaceDe(v);
+            const eb = e && document.querySelector(`#onglets .espace-btn[data-espace="${e}"]`);
+            const panel = document.querySelector(`#v-${v}`);
+            return { phase: ph, ongletPresent: !!b, ongletCache: !!b?.hidden,
+              ongletDisplay: b ? getComputedStyle(b).display : null, ongletClasse: b?.className || null,
+              ongletSelectionne: b?.getAttribute('aria-selected') || null, espace: e || null,
+              espacePresent: !!eb, espaceSelectionne: eb?.getAttribute('aria-pressed') || null,
+              panneauPresent: !!panel, panneauCache: !!panel?.hidden };
+          }, { v: vue, ph: phase });
+        } catch { global.__arrimoControleNavigation = { phase, lecture: 'indisponible' }; }
+      };
       const erreurs = [];
       page.on('pageerror', () => erreurs.push('erreur JavaScript'));
       page.on('console', (m) => { if (m.type()==='error') erreurs.push('console.error'); });
@@ -217,9 +232,11 @@ async function navigateur(p) {
         }
         for (const vue of compte.nom==='reseau' ? ['reseau','national'] : ['copilote','admissions','lits','urgence','vigilance','nettoyage','nsa','transferts']) {
           etape(`navigation:${compte.nom}:${vue}:ouverture`);
-          await allerOnglet(page, vue);
+          try { await allerOnglet(page, vue); }
+          catch (e) { await diagnosticNavigation(vue, 'ouverture'); e.code = `NAVIGATION_${vue.toUpperCase()}`; throw e; }
           etape(`navigation:${compte.nom}:${vue}:attente`);
-          await page.locator(`#v-${vue}:not([hidden])`).waitFor({timeout:ATTENTE_VUE});
+          try { await page.locator(`#v-${vue}:not([hidden])`).waitFor({timeout:ATTENTE_VUE}); }
+          catch (e) { await diagnosticNavigation(vue, 'attente'); e.code = `VUE_${vue.toUpperCase()}`; throw e; }
         }
         if (p.type==='demo') {
           const q = await ctx.request.post(p.base+'/api/copilote/question',{ headers, data:{etablissement_id:etab,question:'Quels lits sont disponibles et quelles demandes attendent un lit ?'} });
@@ -276,7 +293,7 @@ async function main(p) {
 }
 if(require.main===module){
  let input='';process.stdin.on('data',b=>input+=b);process.stdin.on('end',()=>{
-  Promise.resolve().then(()=>main(JSON.parse(input))).then(r=>process.stdout.write(JSON.stringify(r))).catch(e=>{console.error('CONTROLE_ECHOUE '+(e.code||e.name||'erreur')+' ETAPE '+(global.__arrimoControleEtape||'inconnue'));process.exitCode=1;});
+  Promise.resolve().then(()=>main(JSON.parse(input))).then(r=>process.stdout.write(JSON.stringify(r))).catch(e=>{console.error('CONTROLE_ECHOUE '+(e.code||e.name||'erreur')+' ETAPE '+(global.__arrimoControleEtape||'inconnue')+' DOM '+JSON.stringify(global.__arrimoControleNavigation||{}));process.exitCode=1;});
  });
 }
 module.exports={verifierCible,copie,AJOUTS_CATALOGUE_SH,RENOMMAGES_SH,expression};
