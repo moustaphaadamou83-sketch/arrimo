@@ -27,6 +27,7 @@ RACINE = pathlib.Path(__file__).resolve().parent.parent
 CANDIDAT = os.environ.get('ARRIMO_PUBLICATION_CANDIDAT', '98712dfb9b20c2b5ae21903a3c154da52bff5aa6')
 CIBLES = [('demo', '/opt/arrimo-demo', 'arrimo-public-demo', 'demo.arrimo.senseafri.com'),
           ('principal', '/opt/arrimo', 'arrimo', 'arrimo.senseafri.com'),
+          ('recette', '/opt/arrimo-recette', 'arrimo-recette', 'recette.arrimo.senseafri.com'),
           ('sh', '/opt/arrimo-sh', 'arrimo-sh', 'sh.arrimo.senseafri.com')]
 MIGRATIONS_APPLICATION = ['20261025-priorites.sql','20261025-simulation.sql',
                           '20261123-chrono-alertes.sql','20261123-chrono-motifs-retard.sql',
@@ -232,7 +233,7 @@ class Publication:
         if subprocess.run(['git','status','--porcelain'],cwd=RACINE,capture_output=True,check=True).stdout.strip(): raise Refus('Dépôt non propre')
         for t, root, service, hote in CIBLES:
             root = pathlib.Path(root); actuel = cible_lien(root)
-            env_file = root / 'shared/.env'
+            env_file = root / '.env' if t == 'recette' else root / 'shared/.env'
             if not env_file.is_file(): raise Refus('Configuration partagée absente')
             env = lire_env(env_file); self.envs[t] = env
             url = (env.get('SH_DATABASE_URL') if t == 'sh' else None) or env.get('DATABASE_URL')
@@ -245,7 +246,7 @@ class Publication:
             v = dict(x.split('=',1) for x in unite.splitlines() if '=' in x)
             # systemctl show répète EnvironmentFiles une fois par fichier (unité puis drop-ins).
             fichiers = [x.split('=',1)[1].split(' (ignore_errors=')[0] for x in unite.splitlines() if x.startswith('EnvironmentFiles=')]
-            if v.get('ActiveState') != 'active' or v.get('WorkingDirectory') != str(root / 'current') or not fichiers or fichiers[0] != str(env_file) or any(pathlib.Path(f).parent != root / 'shared' for f in fichiers) or NODE not in v.get('ExecStart',''):
+            if v.get('ActiveState') != 'active' or v.get('WorkingDirectory') != str(root / 'current') or not fichiers or fichiers[0] != str(env_file) or any(pathlib.Path(f) != env_file for f in fichiers) or NODE not in v.get('ExecStart',''):
                 raise Refus('Unité systemd inattendue : ' + t)
             if v.get('User') in ('', 'root', None): raise Refus('Compte applicatif dédié requis')
             nginx = pathlib.Path('/etc/nginx/sites-available') / service
@@ -260,7 +261,7 @@ class Publication:
             self.etat['environnements'][t] = {'domaine':hote,'release_avant':actuel,'version_avant':self.version(root / actuel), 'base':identite['base'],'role':identite['role'],'sante_avant':self.sante(t),'publie':False}
             self.sauver()
         bases = [self.etat['environnements'][t]['base'] for t, *_ in CIBLES]
-        if len(set(bases)) != 3: raise Refus('Les bases publiques doivent être distinctes')
+        if len(set(bases)) != len(CIBLES): raise Refus('Les bases publiques doivent être distinctes')
         admin = os.environ.get('ARRIMO_PUBLICATION_ADMIN_URL','postgresql:///postgres?host=/var/run/postgresql')
         if cible_pg(admin) not in ['postgres','template1']: raise Refus('Base de maintenance requise')
         self.admin = admin

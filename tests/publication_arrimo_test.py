@@ -16,6 +16,11 @@ m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 
 
 class Politiques(unittest.TestCase):
+    def test_cible_recette_reste_distincte_de_la_production(self):
+        cible = {nom: (root, service, hote) for nom, root, service, hote in m.CIBLES}['recette']
+        self.assertEqual(cible,('/opt/arrimo-recette','arrimo-recette','recette.arrimo.senseafri.com'))
+        self.assertNotEqual(cible[0],'/opt/arrimo')
+
     def test_plan_publication_inclut_toutes_les_migrations_app_requises(self):
         attendues = {'20261123-chrono-alertes.sql','20261123-chrono-motifs-retard.sql',
                      '20261123-dsn-sync.sql','20261123-flux.sql',
@@ -204,7 +209,7 @@ class RetoursArriere(unittest.TestCase):
             def deployer(t):appels.append('deployer-'+t);raise m.Refus('demo refusee')
             p.deployer=deployer
             with self.assertRaises(m.Refus):p.executer()
-            self.assertEqual(appels[-4:],['copie-demo','copie-principal','copie-sh','deployer-demo'])
+            self.assertEqual(appels[-5:],['copie-demo','copie-principal','copie-recette','copie-sh','deployer-demo'])
             self.assertNotIn('deployer-principal',appels)
 
 
