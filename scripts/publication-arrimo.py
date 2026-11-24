@@ -28,6 +28,10 @@ CANDIDAT = os.environ.get('ARRIMO_PUBLICATION_CANDIDAT', '98712dfb9b20c2b5ae2190
 CIBLES = [('demo', '/opt/arrimo-demo', 'arrimo-public-demo', 'demo.arrimo.senseafri.com'),
           ('principal', '/opt/arrimo', 'arrimo', 'arrimo.senseafri.com'),
           ('sh', '/opt/arrimo-sh', 'arrimo-sh', 'sh.arrimo.senseafri.com')]
+MIGRATIONS_APPLICATION = ['20261025-priorites.sql','20261025-simulation.sql',
+                          '20261123-chrono-alertes.sql','20261123-chrono-motifs-retard.sql',
+                          '20261123-dsn-sync.sql','20261123-flux.sql',
+                          '20261123-interventions-ccs-demo.sql','20261123-secours-perimetres-vehicules.sql']
 NODE = '/opt/arrimo-runtime/node-v24.22.1/bin/node'
 
 
@@ -286,8 +290,12 @@ class Publication:
         tmp.mkdir(); tmp.chmod(0o755)
         try:
             chemins = []
-            for f in ['20261025-priorites.sql','20261025-simulation.sql']:
-                dst = tmp / f; shutil.copy2(self.code / 'db/migrations' / f, dst); dst.chmod(0o644)
+            for f in MIGRATIONS_APPLICATION:
+                dst = tmp / f
+                contenu = (self.code / 'db/migrations' / f).read_text()
+                contenu = re.sub(r'^\s*BEGIN;\s*', '', contenu, count=1, flags=re.I)
+                contenu = re.sub(r'\s*COMMIT;\s*$', '', contenu, count=1, flags=re.I)
+                dst.write_text(contenu); dst.chmod(0o644)
                 chemins.append(str(dst).replace("'", "''"))
             empreinte = ("md5(coalesce(string_agg(md5(row_to_json(x)::text), %L ORDER BY "
                          "md5(row_to_json(x)::text)), %L))")

@@ -16,6 +16,15 @@ m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 
 
 class Politiques(unittest.TestCase):
+    def test_plan_publication_inclut_toutes_les_migrations_app_requises(self):
+        attendues = {'20261123-chrono-alertes.sql','20261123-chrono-motifs-retard.sql',
+                     '20261123-dsn-sync.sql','20261123-flux.sql',
+                     '20261123-interventions-ccs-demo.sql','20261123-secours-perimetres-vehicules.sql'}
+        self.assertTrue(attendues <= set(m.MIGRATIONS_APPLICATION))
+        self.assertEqual(len(m.MIGRATIONS_APPLICATION),len(set(m.MIGRATIONS_APPLICATION)))
+        for migration in m.MIGRATIONS_APPLICATION:
+            self.assertTrue((ROOT/'db/migrations'/migration).is_file(),migration)
+
     def test_preuves_reelles_archivees_valides(self):
         self.assertEqual(m.verifier_preuves()['commit'],m.CANDIDAT)
 

@@ -4,6 +4,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const assert = require('node:assert/strict');
+const MIGRATIONS_APP = [
+  '20261025-priorites.sql', '20261025-simulation.sql',
+  '20261123-chrono-alertes.sql', '20261123-chrono-motifs-retard.sql',
+  '20261123-dsn-sync.sql', '20261123-flux.sql',
+  '20261123-interventions-ccs-demo.sql', '20261123-secours-perimetres-vehicules.sql',
+];
 const ident = (x) => `"${String(x).replaceAll('"', '""')}"`;
 const copie = (x) => /^arrimo_publication_restore_[a-z0-9_]+$/.test(x);
 // Seule exception au contrôle « données existantes » : ajouts du catalogue SH par les migrations 37 (types d'établissement) et 38 (Liaison CHSLD).
@@ -77,7 +83,14 @@ async function migration(c, p) {
       return c.query(...a);
     }, release() {} }) }, p.env);
   } else {
-    for (const f of ['20261025-priorites.sql','20261025-simulation.sql']) await c.query(fs.readFileSync(path.join(p.code,'db/migrations',f),'utf8'));
+    // Les déploiements Arrimo de démonstration peuvent précéder les derniers parcours.
+    // Appliquer explicitement les migrations additives validées avec le candidat : les
+    // tests d'interface ont notamment besoin de la table Chrono des motifs de retard.
+    for (const f of MIGRATIONS_APP) {
+      const sql = fs.readFileSync(path.join(p.code,'db/migrations',f),'utf8')
+        .replace(/^\s*BEGIN;\s*/i,'').replace(/\s*COMMIT;\s*$/i,'');
+      await c.query(sql);
+    }
   }
   const identite = renommages && Object.fromEntries(Object.entries(renommages).map(([t, cs]) => [t, Object.fromEntries(Object.keys(cs).map((k) => [k, {}]))]));
   assert.deepEqual(await empreintes(c, metier, identite), avant, 'Données existantes modifiées : publication refusée');
@@ -326,4 +339,4 @@ if(require.main===module){
   Promise.resolve().then(()=>main(JSON.parse(input))).then(r=>process.stdout.write(JSON.stringify(r))).catch(e=>{console.error('CONTROLE_ECHOUE '+(e.code||e.name||'erreur')+' ETAPE '+(global.__arrimoControleEtape||'inconnue')+' DOM '+JSON.stringify(global.__arrimoControleNavigation||{}));process.exitCode=1;});
  });
 }
-module.exports={verifierCible,copie,AJOUTS_CATALOGUE_SH,RENOMMAGES_SH,expression};
+module.exports={verifierCible,copie,AJOUTS_CATALOGUE_SH,RENOMMAGES_SH,MIGRATIONS_APP,expression};

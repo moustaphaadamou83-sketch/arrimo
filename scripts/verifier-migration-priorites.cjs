@@ -46,6 +46,8 @@ async function verifier() {
       '20261123-interventions-ccs-demo.sql',
       '20261123-chrono-motifs-retard.sql',
       '20261123-chrono-alertes.sql',
+      '20261123-dsn-sync.sql',
+      '20261123-flux.sql',
       '20261123-secours-perimetres-vehicules.sql',
     ] : ['20261025-priorites.sql', '20261025-simulation.sql'];
     // La vérification porte déjà une transaction.
