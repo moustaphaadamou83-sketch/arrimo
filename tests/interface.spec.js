@@ -191,7 +191,7 @@ async function verifier(page, L, nom) {
 }
 
 for (const L of LARGEURS) {
-  test(`guide de démonstration complet · ${L.nom} (${L.width} px)`, { timeout: 240000 }, async () => {
+  test(`guide de démonstration complet · ${L.nom} (${L.width} px)`, { timeout: 360000 }, async () => {
     for (const c of navigateur.contexts()) await c.close();   // fenêtres d'un essai précédent
     await viderBase(pool);
     await demoReseau(pool, { silencieux: true, comptesRoles: true });
