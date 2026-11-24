@@ -41,7 +41,7 @@ test('formulaires de structure et dashboards A/B/C isolés', {timeout:180000}, a
   const ctx=await browser.newContext({viewport:{width:1440,height:1000},acceptDownloads:true});const page=await ctx.newPage();
   page.setDefaultTimeout(6000);
   const errs=[];page.on('pageerror',e=>errs.push(String(e)));page.on('console',m=>{if(m.type()==='error')errs.push(m.text())});
-  const ouvrirEditeurStructure=async()=>page.locator('#admin-corps > details.panneau-c:not(.nouvel-etab)').evaluate(x=>{x.open=true});
+  const ouvrirEditeurStructure=async()=>page.locator('#s-dept-code').evaluate(x=>{x.closest('details').open=true});
   await page.goto(base);await page.fill('#c-email','admin.a@demo.arrimo');await page.fill('#c-mdp',motsDePasse.A);await page.click('#f-connexion button[type=submit]');await page.waitForSelector('#f-2fa:not([hidden])');
   await page.fill('#c-code',totp.codePourPas(secrets.A,totp.pasActuel()));await page.click('#f-2fa button[type=submit]');await page.waitForSelector('body[data-pret="1"]');
   const premiersPas=page.locator('#b-premiers-pas-ok');if(await premiersPas.isVisible().catch(()=>false))await premiersPas.click();
@@ -50,7 +50,7 @@ test('formulaires de structure et dashboards A/B/C isolés', {timeout:180000}, a
   await page.evaluate((v) => window.ArrimoEspaces?.reveler(v), 'admin'); await page.locator('#onglets button[data-v="admin"]').click();await page.waitForTimeout(700);
   await page.waitForFunction(()=>document.querySelector('#v-admin').hidden===false,{timeout:10000}).catch(async()=>{throw new Error(`admin non visible; utilisateur=${await page.locator('#nom-utilisateur').innerText().catch(()=>'?')}; tabs=${await page.locator('#onglets').innerText().catch(()=>'?')}; statut=${await page.locator('#onglets button[data-v="admin"]').getAttribute('hidden')}`)});
   await page.waitForSelector('[data-ao="structure"]',{timeout:6000});
-  await page.click('[data-ao="structure"]');await page.locator('#admin-corps > details.panneau-c:not(.nouvel-etab)').evaluate(x=>{x.open=true});await page.waitForSelector('#b-dept');
+  await page.click('[data-ao="structure"]');await ouvrirEditeurStructure();await page.waitForSelector('#b-dept');
   await page.fill('#s-dept-code','DEMO-UNIT');await page.fill('#s-dept-nom','Département Démonstration');await page.click('#b-dept');await page.waitForTimeout(250);await ouvrirEditeurStructure();
   await page.fill('#s-serv-code','DEMO-SVC');await page.fill('#s-serv-nom','Service Démonstration');await page.selectOption('#s-serv-dept',{label:'Département Démonstration'});await page.click('#b-service');await page.waitForTimeout(250);await ouvrirEditeurStructure();
   await page.fill('#s-nom','Unité Démonstration');await page.selectOption('#s-unite-dept',{label:'Département Démonstration'});await page.selectOption('#s-unite-service',{label:'Service Démonstration'});await page.click('#b-unite');await page.waitForTimeout(250);await ouvrirEditeurStructure();
@@ -70,7 +70,7 @@ test('formulaires de structure et dashboards A/B/C isolés', {timeout:180000}, a
     (select count(*)::int from lits l where l.chambre_id=ch.id and l.actif) n from chambres ch join unites u on u.id=ch.unite_id where ch.id=$1`,[ch.rows[0].id]);
   assert.deepEqual([verify.rows[0].type_chambre,verify.rows[0].capacite_declaree,verify.rows[0].n],['double modifiée',2,1]);
   assert.equal((await pool.query(`select actif from lits where id=$1`,[litA.rows[0].id])).rows[0].actif,false,'un lit indisponible peut être désactivé depuis l’interface');
-  await page.locator('#admin-corps > details.panneau-c:not(.nouvel-etab)').evaluate(x=>{x.open=true});
+  await ouvrirEditeurStructure();
   await page.locator('#v-admin .panneau-c h3').filter({hasText:'Unité Démonstration'}).evaluate(h=>h.closest('.panneau-c').scrollIntoView());
   await page.evaluate(()=>document.querySelectorAll('.toast').forEach(x=>x.remove()));
   await page.screenshot({path:path.join(captures,'arrimo-structure-admin.png')});

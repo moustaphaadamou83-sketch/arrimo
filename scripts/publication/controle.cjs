@@ -227,7 +227,17 @@ async function navigateur(p) {
         await page.locator('body[data-pret="1"]').waitFor({timeout:30000});
         if (p.type==='demo' && compte.nom !== 'reseau') assert.equal(moi.etablissements.length,1,'Isolation du dashboard');
         if (compte.nom==='reseau') assert.equal(moi.utilisateur.gestionnaire,true);
-        const etab = moi.etablissements[0]?.id; assert.ok(etab,'Aucun établissement autorisé');
+        // Le compte Réseau peut arriver dans un contexte CHSLD, où les anciennes releases
+        // masquent encore les onglets globaux. Choisir un hôpital explicitement autorisé par
+        // /moi permet de tester ces vues sur le site actif sans contourner son périmètre.
+        const contexteReseau = compte.nom==='reseau'
+          ? moi.etablissements.find(e => e.type_etablissement==='hopital')
+          : moi.etablissements[0];
+        const etab = contexteReseau?.id; assert.ok(etab,'Aucun établissement autorisé');
+        if (compte.nom==='reseau') {
+          await page.locator('#ctx').selectOption(String(etab));
+          await page.waitForFunction(id => document.body.dataset.typeEtab==='hopital' && document.querySelector('#ctx')?.value===String(id), etab);
+        }
         for (const chemin of ['/admissions','/lits','/civieres','/conges','/nsa','/transferts','/copilote/briefing']) { etape(`api:${compte.nom}:${chemin}`); await appel(chemin+'?etablissement_id='+etab); }
         if (p.type==='demo' && compte.interdit) {
           const interdit = await ctx.request.get(p.base+'/api/lits?etablissement_id='+compte.interdit,{headers});
