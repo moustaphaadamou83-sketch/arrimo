@@ -835,6 +835,8 @@ function creerApp(pool, options = {}) {
   api.post('/secours/quotes-parts', route((req) => require('./quotes-parts').enregistrer(pool, req.utilisateur, req.body)));
   // Nomenclature universelle des mouvements : légende commune (libellé, couleur, forme, icône)
   api.get('/mouvements/categories', route((req) => require('./categories-mouvements').legende(req.utilisateur.langue)));
+  // Plans A, B et C d'OG pour un transfert en attente ou refusé (préparés avant le refus, rien n'est réservé)
+  api.get('/transferts/:id/plans', route((req) => require('./og-alternatives').plans(pool, req.utilisateur, entier(req.params.id, 'id'))));
   api.get('/coordination/plan', route((req) => require('./og-plan').plan(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   api.get('/coordination/escalades', route((req) => suivi.lireGrille(pool, req.utilisateur, req.query)));
   api.put('/coordination/escalades', route((req) => suivi.enregistrerGrille(pool, req.utilisateur, req.body)));

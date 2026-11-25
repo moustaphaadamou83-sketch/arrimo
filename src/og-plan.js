@@ -86,7 +86,7 @@ async function plan(pool, u, etabId) {
   for (const a of v.alertes) { if (!groupes.has(a.type)) groupes.set(a.type, []); groupes.get(a.type).push(a); }
   const alt = await alternativesTransport(pool, (groupes.get('transport_en_retard') || []).map((a) => a.ressource_id));
   const rang = { eleve: 0, modere: 1, faible: 2 };
-  const fiches = [...groupes.entries()].map(([type, as]) => {
+  const fiches = await Promise.all([...groupes.entries()].map(async ([type, as]) => {
     const r = REGLES[type] || REGLES._defaut; const src = SOURCES[type] || SOURCES._defaut;
     const niveau = as.reduce((m, a) => (rang[a.niveau] < rang[m] ? a.niveau : m), 'faible');
     const actions = [...new Set(as.map((a) => a.action))];
@@ -97,6 +97,12 @@ async function plan(pool, u, etabId) {
           ? L(en, `Solutions de rechange autorisées pour ${a.ressource} : ${x.map((o) => `${o.nom} (${o.unites_disponibles} unité(s) déclarée(s) disponible(s))`).join(', ')}.`,
             `Authorized alternatives for ${a.ressource}: ${x.map((o) => `${o.nom} (${o.unites_disponibles} unit(s) reported available)`).join(', ')}.`)
           : L(en, `Aucun autre transporteur autorisé connu dans la région pour ${a.ressource}.`, `No other authorized carrier known in the region for ${a.ressource}.`));
+      }
+    }
+    if (type === 'transfert_sans_reponse') {
+      for (const a of as) {
+        const p = await require('./og-alternatives').plans(pool, u, a.ressource_id).catch(() => null);
+        for (const x of p?.alternatives || []) actions.push(L(en, `Plan ${x.plan} pour ${a.ressource} : ${x.nom} — ${x.disponibilite}, ${x.trajet}.`, `Plan ${x.plan} for ${a.ressource}: ${x.nom} — ${x.disponibilite}, ${x.trajet}.`));
       }
     }
     const hypotheses = as.filter((a) => a.cause?.nature === 'hypothese').length;
@@ -116,7 +122,7 @@ async function plan(pool, u, etabId) {
       validations: [L(en, r.validation[0], r.validation[1]), L(en, 'OG propose ; aucune action n’est exécutée sans décision humaine.', 'OG proposes; no action is carried out without a human decision.')],
       suivis: as.map((a) => a.suivi).filter(Boolean).map((s) => ({ id: s.id, statut: s.statut, responsable_role: s.responsable_role, echeance: s.echeance })),
     };
-  }).sort((a, b) => rang[a.niveau] - rang[b.niveau] || b.nombre - a.nombre);
+  })).then((f) => f.sort((a, b) => rang[a.niveau] - rang[b.niveau] || b.nombre - a.nombre));
 
   // Synthèse anticipative : confirmé, prévisionnel et inconnu séparés ; aucune prévision présentée comme une capacité
   const c = v.capacite;
