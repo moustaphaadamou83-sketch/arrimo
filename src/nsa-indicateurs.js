@@ -49,8 +49,27 @@ async function indicateurs(pool, u, etabId, { semaines = 8 } = {}) {
     WHERE hopital_id = $1 AND statut = 'refusee' AND (modifie_le AT TIME ZONE $3)::date >= $2::date GROUP BY 1 ORDER BY 2 DESC`, [etabId, depuis, fz])).rows.map((x) => [x.code, x.n]));
   const enCours = (await pool.query(`SELECT count(*)::int AS patients, COALESCE(sum(floor(EXTRACT(EPOCH FROM (now() - debut_le)) / 86400)), 0)::int AS jours,
       COALESCE(max(floor(EXTRACT(EPOCH FROM (now() - debut_le)) / 86400)), 0)::int AS plus_long FROM nsa_episodes WHERE etablissement_id = $1 AND statut = 'actif'`, [etabId])).rows[0];
+  // Refonte unifiée (pilier 4, cahiers du 26 nov. 2026) : taux NSA, médiane d'attente, parcours par étapes, coordination vs pénurie (indicatif)
+  const { rows: [tx] } = await pool.query(`SELECT (SELECT count(*)::int FROM lits WHERE etablissement_id = $1 AND actif AND etat = 'occupe') AS occupes,
+      (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (now() - debut_le)) / 86400)::float FROM nsa_episodes WHERE etablissement_id = $1 AND statut = 'actif') AS mediane_j`, [etabId]);
+  const etapes = (await pool.query(`SELECT ep.id, (SELECT d.statut FROM demandes_hebergement d WHERE d.hopital_id = ep.etablissement_id AND d.hopital_lit_id = ep.lit_id
+        AND d.reference_externe IS NOT DISTINCT FROM ep.patient_ref AND d.cree_le >= ep.debut_le - interval '1 day' AND d.statut NOT IN ('refusee', 'annulee') ORDER BY d.id DESC LIMIT 1) AS demande,
+      (SELECT d.depart_hopital_le IS NULL AND (d.modifie_le < now() - interval '48 hours') FROM demandes_hebergement d WHERE d.hopital_id = ep.etablissement_id AND d.hopital_lit_id = ep.lit_id
+        AND d.reference_externe IS NOT DISTINCT FROM ep.patient_ref AND d.statut IN ('recue', 'documents_manquants', 'en_verification', 'acceptee') ORDER BY d.id DESC LIMIT 1) AS sans_suite_48h
+    FROM nsa_episodes ep WHERE ep.etablissement_id = $1 AND ep.statut = 'actif'`, [etabId])).rows;
+  const compte = (f) => etapes.filter(f).length;
+  const parcours = { sans_demande: compte((x) => !x.demande), demande_envoyee: compte((x) => ['recue', 'documents_manquants', 'en_verification'].includes(x.demande)),
+    place_proposee: compte((x) => x.demande === 'place_proposee'), acceptee_depart_a_organiser: compte((x) => x.demande === 'acceptee') };
+  const coordination = parcours.acceptee_depart_a_organiser + compte((x) => x.sans_suite_48h);
+  const refusAucunePlace = Object.entries(motifs).filter(([k]) => /place|capacite|lit/.test(k)).reduce((a, [, v]) => a + v, 0);
+  const pilotage = {
+    taux_nsa_pct: tx.occupes ? Math.round((enCours.patients / tx.occupes) * 1000) / 10 : null, denominateur: 'lits occupés de l’établissement',
+    attente_mediane_jours: arrondi(tx.mediane_j), parcours,
+    diagnostic: { indicatif: true, coordination, penurie_possible: parcours.sans_demande + refusAucunePlace,
+      regle: 'Coordination : placement accepté sans départ ou demande sans suite depuis 48 h. Pénurie possible : sans demande ou refus faute de place. À confirmer par l’équipe.' },
+  };
   const total = (k) => parSemaine.reduce((a, r) => a + (r[k] || 0), 0);
-  return { semaines: n, depuis, fuseau: fz, en_cours: enCours, par_semaine: parSemaine, par_ressource: parRessource, motifs_refus: motifs,
+  return { semaines: n, depuis, fuseau: fz, en_cours: enCours, pilotage, par_semaine: parSemaine, par_ressource: parRessource, motifs_refus: motifs,
     totaux: { nouveaux_nsa: total('nouveaux_nsa'), sorties: total('sorties'), demandes: total('demandes'), refus: total('refus'), lits_liberes: total('lits_liberes') } };
 }
 
