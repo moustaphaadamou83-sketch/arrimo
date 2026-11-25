@@ -823,6 +823,9 @@ function creerApp(pool, options = {}) {
   api.get('/quotes-parts', route((req) => require('./quotes-parts').historique(pool, req.utilisateur, req.query)));
   api.post('/quotes-parts', route((req) => require('./quotes-parts').enregistrer(pool, req.utilisateur, req.body)));
   // Les rôles des secours n'ont accès qu'à /api/secours/* : mêmes fonctions, mêmes contrôles
+  // Couverture ambulancière (lot 6, scénario E) : tableau du CCS, documentation de la rupture (cause, gravité, mesure décidée)
+  api.get('/secours/couverture', route((req) => require('./couverture').tableau(pool, req.utilisateur)));
+  api.post('/secours/couverture/:id', route((req) => require('./couverture').documenter(pool, req.utilisateur, req.params.id, req.body)));
   api.get('/secours/quotes-parts', route((req) => require('./quotes-parts').historique(pool, req.utilisateur, req.query)));
   api.post('/secours/quotes-parts', route((req) => require('./quotes-parts').enregistrer(pool, req.utilisateur, req.body)));
   api.get('/coordination/plan', route((req) => require('./og-plan').plan(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));

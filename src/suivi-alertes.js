@@ -134,6 +134,7 @@ async function tourner(pool) {
     catch (err) { console.error(`Suivi des alertes, établissement ${e.id} :`, err.code || err.message); }
   }
   const escalades = await escalader(pool);
+  try { await require('./couverture').controler(pool); } catch (err) { console.error('Couverture :', err.code || err.message); }
   if (ouverts || levees || escalades) require('./flux').signaler();
   return { ouverts, levees, escalades };
 }
