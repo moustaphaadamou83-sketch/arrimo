@@ -12,7 +12,8 @@ const { exigerEtablissement } = require('./auth');
 const { DEPART_NSA_SQL, BROUILLON_PRIVE_SQL } = require('./transports');
 const cat = require('./categories-mouvements');
 /** Catégorie universelle (même code chez tous les acteurs), libellé dans la langue de l'utilisateur. */
-const categorie = (m, langue) => { const c = cat.classer(m); return { code: c.code, libelle: cat.libelle(c.code, langue), certain: c.certain }; };
+const categorie = (m, langue) => { const c = cat.classer(m); const d = cat.CATEGORIES[c.code];
+  return { code: c.code, libelle: cat.libelle(c.code, langue), certain: c.certain, couleur: d.couleur, texte: d.texte, fond: d.fond, forme: d.forme }; };
 const ETAPES_TR = { a_valider: 'a_valider', demandee: 'demande', acceptee: 'accepte', en_route: 'en_route_depart', pris_en_charge: 'en_transport', arrivee: 'arrive', refusee: 'refuse', annulee: 'annule' };
 
 async function preparation(db, litId) {

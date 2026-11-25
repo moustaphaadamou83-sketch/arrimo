@@ -145,6 +145,11 @@ async function choisirApparence(choix) {
   } catch (err) { toast(err.message, true); majApparence(); }
 }
 $('#apparence-barre')?.addEventListener('change', (e) => choisirApparence(e.target.value));
+// Ambiance personnelle (design system du 26 nov. 2026) : appliquée tout de suite, enregistrée sur le compte
+$('#ambiance-barre')?.addEventListener('change', async (e) => {
+  window.ArrimoApparence?.definirAmbiance(e.target.value);
+  try { const r = await api('PUT', '/moi/ambiance', { ambiance: e.target.value }); if (etat.moi) etat.moi.utilisateur.ambiance = r.ambiance; toast(t('apparence.ambiance_ok')); } catch (err) { toast(err.message, true); }
+});
 // Bascule de l'en-tête : clair → sombre → automatique (système), sans ouvrir les Paramètres.
 $('#b-theme')?.addEventListener('click', () => {
   const ordre = ['clair', 'sombre', 'automatique'];
@@ -511,6 +516,8 @@ async function demarrer() {
   if (choixAppareil) { if (choixAppareil !== langueCompte) api('PUT', '/moi/langue', { langue_interface: choixAppareil }).then((r) => { if (etat.moi) etat.moi.utilisateur.langue_interface = r.langue_interface; }).catch(() => {}); }
   else if (LANGUES.includes(langueCompte) && langueCompte !== langue) { langue = langueCompte; ecrire('arrimo-langue', langue); appliquerLangue(); window.dispatchEvent(new Event('arrimo:langue')); }
   window.ArrimoApparence?.definir(etat.moi.utilisateur.apparence || 'automatique', { lieu: lieuApparence() });
+  window.ArrimoApparence?.definirAmbiance(etat.moi.utilisateur.ambiance || 'glacier');
+  { const s = $('#ambiance-barre'); if (s) s.value = etat.moi.utilisateur.ambiance || 'glacier'; }
   majApparence();
   bandeauEnvironnement(etat.moi.environnement);
   if (etat.moi.utilisateur.mdp_temporaire) { montrerFormulaire('#f-mdp-temp'); $('#t-actuel').focus(); return; }

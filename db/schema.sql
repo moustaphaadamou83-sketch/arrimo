@@ -2656,3 +2656,7 @@ ALTER TABLE config_pays ADD COLUMN IF NOT EXISTS objectif_liberation_min int NOT
 ALTER TABLE config_pays ADD COLUMN IF NOT EXISTS objectif_escalade_majeure_min int NOT NULL DEFAULT 45 CHECK (objectif_escalade_majeure_min BETWEEN 1 AND 600);
 ALTER TABLE config_pays ADD COLUMN IF NOT EXISTS excellence_remise_min int NOT NULL DEFAULT 5 CHECK (excellence_remise_min BETWEEN 1 AND 240);
 ALTER TABLE config_pays ADD COLUMN IF NOT EXISTS excellence_liberation_min int NOT NULL DEFAULT 10 CHECK (excellence_liberation_min BETWEEN 1 AND 480);
+
+-- Refonte unifiée, design system (26 nov. 2026, maquette validée par Moustafa) : ambiance personnelle (Glacier, Horizon) en mode clair ;
+-- Crépuscule = mode sombre. Préférence de chaque utilisateur, sans effet sur les couleurs métier (modules, mouvements, alertes).
+ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS ambiance text NOT NULL DEFAULT 'glacier' CHECK (ambiance IN ('glacier', 'horizon'));

@@ -5,6 +5,10 @@
   const MODES = ['clair', 'sombre', 'automatique', 'soleil'];
   const CLE = 'arrimo-apparence';
   const CLE_LIEU = 'arrimo-apparence-lieu';
+  // Ambiance (design system du 26 nov. 2026) : Glacier ou Horizon en clair, Crépuscule en sombre. Seulement sur les pages
+  // d'Arrimo (attribut data-arrimo) : la console SH garde sa présentation.
+  const AMBIANCES = ['glacier', 'horizon'];
+  const CLE_AMB = 'arrimo-ambiance';
   const RAD = Math.PI / 180;
 
   /** Lever et coucher du soleil (équation solaire, précision de quelques minutes) pour le jour de `date`. */
@@ -43,6 +47,10 @@
   const media = racine.matchMedia ? racine.matchMedia('(prefers-color-scheme: dark)') : null;
   let mode = MODES.includes(lire(CLE)) ? lire(CLE) : 'automatique';
   let lieu = null; try { lieu = JSON.parse(lire(CLE_LIEU) || 'null'); } catch { lieu = null; }
+  let ambiance = AMBIANCES.includes(lire(CLE_AMB)) ? lire(CLE_AMB) : 'glacier';
+  const CLE_V2 = 'arrimo-design-v2';
+  try { const q = new URLSearchParams(racine.location?.search || ''); if (q.get('design') === 'v2') ecrire(CLE_V2, '1'); if (q.get('design') === 'v1') ecrire(CLE_V2, null); } catch { /* sans adresse */ }
+  const apercuV2 = () => lire(CLE_V2) === '1';
 
   function appliquer() {
     const theme = resoudre(mode, { systemeSombre: !!media?.matches, lieu });
@@ -50,6 +58,9 @@
     // Changement de thème : couleurs appliquées d'un coup, sans fondu (aucun état intermédiaire mal contrasté)
     if (html.dataset.theme && html.dataset.theme !== theme) { html.classList.add('theme-bascule'); setTimeout(() => html.classList.remove('theme-bascule'), 300); }
     html.dataset.theme = theme; html.dataset.apparence = mode;
+    // Nouveau design en APERÇU seulement tant que la maquette n'est pas validée par Moustafa : ?design=v2 l'active, ?design=v1 le retire
+    if (html.hasAttribute('data-arrimo') && apercuV2()) { html.dataset.design = 'v2'; html.dataset.ambiance = ambiance; }
+    else { delete html.dataset.design; delete html.dataset.ambiance; }
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.content = theme === 'sombre' ? '#0B1820' : '#0E5E6F';
     return theme;
@@ -61,6 +72,9 @@
   racine.ArrimoApparence = {
     MODES, soleil, resoudre, appliquer,
     mode: () => mode,
+    AMBIANCES, ambiance: () => ambiance, apercuV2: () => apercuV2(),
+    /** Ambiance personnelle (enregistrée sur le compte par l'application, mise en cache ici pour éviter un éclair au chargement). */
+    definirAmbiance(nouvelle) { if (AMBIANCES.includes(nouvelle)) { ambiance = nouvelle; ecrire(CLE_AMB, ambiance); } return appliquer(); },
     lieu: () => lieu,
     /** Applique le mode choisi (serveur ou utilisateur) et le met en cache pour le prochain chargement. */
     definir(nouveau, { lieu: nouveauLieu } = {}) {

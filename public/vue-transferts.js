@@ -32,7 +32,7 @@
     const ligne = (l) => {
       const champs = {
         sens: cellules.sens?.(l),
-        ref: `<strong>${texte(l.reference)}</strong>${l.personne ? `<div class="note">${texte(l.personne)}</div>` : ''}`,
+        ref: `<strong>${texte(l.reference)}</strong>${l.categorie ? `<div><span class="cat-mvt" data-forme="${texte(l.categorie.forme)}" style="--cat-couleur:${texte(l.categorie.couleur)};--cat-texte:${texte(l.categorie.texte)};--cat-fond:${texte(l.categorie.fond)}">${texte(l.categorie.libelle)}${l.categorie.certain ? '' : ' ?'}</span></div>` : ''}${l.personne ? `<div class="note">${texte(l.personne)}</div>` : ''}`,
         type: texte(x.types[l.type] || l.type), origine: texte(l.origine), destination: texte(l.destination), vehicule: texte(l.vehicule),
         priorite: texte(x.priorites[l.priorite] || l.priorite),
         prevue: cellules.prevue ? cellules.prevue(l) : l.prevue ? texte(h(l.prevue)) : '—',

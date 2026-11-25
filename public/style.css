@@ -95,6 +95,57 @@
   color-scheme: dark;
 }
 
+/* ===== Design system Arrimo (refonte unifiée, maquette validée le 26 nov. 2026) =====
+   APERÇU (?design=v2) tant que la maquette n’est pas validée. Ambiances personnelles, seulement sur les pages d'Arrimo (data-arrimo) : Glacier (défaut) et Horizon en clair, Crépuscule en sombre.
+   La couleur principale de la marque (#0E5E6F) et les couleurs de statut ne changent pas. Couleurs des modules : identiques pour tous. */
+:root[data-arrimo][data-design="v2"] {
+  --m-accueil: #0E7C86; --m-patients: #7C3AED; --m-transferts: #2B59C3; --m-capacites: #047857; --m-urgences: #BE185D;
+  --m-operations: #B45309; --m-pilotage: #4338CA; --m-reseau: #0F766E; --m-national: #86198F; --m-administration: #475569;
+}
+:root[data-arrimo][data-design="v2"][data-ambiance="glacier"]:not([data-theme="sombre"]) {
+  --fond: #EDF4FA; --carte: #FFFFFF; --doux: #E5EDF5; --bordure: #D5E0EA; --texte: #20334D; --texte-2: #475569; --texte-2-fond: #475569;
+  --ombre: 0 1px 2px rgba(32, 51, 77, 0.06), 0 6px 18px rgba(32, 51, 77, 0.05);
+}
+:root[data-arrimo][data-design="v2"][data-ambiance="horizon"]:not([data-theme="sombre"]) {
+  --fond: #F6F3EE; --carte: #FFFFFF; --doux: #EFE9E1; --bordure: #E3DACE; --texte: #2B2A33; --texte-2: #5B5560; --texte-2-fond: #5B5560;
+  --ombre: 0 1px 2px rgba(43, 42, 51, 0.06), 0 6px 18px rgba(43, 42, 51, 0.05);
+}
+/* Crépuscule : sombre raffiné ; modules en nuances claires lisibles sur fond sombre */
+:root[data-arrimo][data-design="v2"][data-theme="sombre"] {
+  --fond: #0B141D; --carte: #13212D; --doux: #1A2B39; --bordure: #293D4C; --texte: #F1F5F9; --texte-2: #A9BAC9; --texte-2-fond: #A9BAC9;
+  --principal: #5BC4D0; --th-surface: #13212D; --th-doux: #1A2B39; --th-bordure: #2E4A5C;
+  --m-accueil: #5BC4D0; --m-patients: #B794F6; --m-transferts: #8AA8F0; --m-capacites: #5DD3A6; --m-urgences: #F38DB8;
+  --m-operations: #F4B35E; --m-pilotage: #A5A9F5; --m-reseau: #5ED1C4; --m-national: #E79BF0; --m-administration: #A9BAC9;
+}
+/* Navigation : chaque grand module porte sa couleur (icône et indicateur actif), toujours avec son libellé */
+:root[data-arrimo][data-design="v2"] .espace-btn .ic { color: var(--m-espace, currentColor); }
+:root[data-arrimo][data-design="v2"] .espace-btn[aria-pressed="true"], :root[data-arrimo][data-design="v2"] .espace-btn.actif { box-shadow: inset 0 -3px 0 var(--m-espace, var(--principal)); }
+:root[data-arrimo][data-design="v2"] .espace-btn[data-espace="accueil"] { --m-espace: var(--m-accueil); }
+:root[data-arrimo][data-design="v2"] .espace-btn[data-espace="patients"] { --m-espace: var(--m-patients); }
+:root[data-arrimo][data-design="v2"] .espace-btn[data-espace="transferts"] { --m-espace: var(--m-transferts); }
+:root[data-arrimo][data-design="v2"] .espace-btn[data-espace="capacites"] { --m-espace: var(--m-capacites); }
+:root[data-arrimo][data-design="v2"] .espace-btn[data-espace="urgences"] { --m-espace: var(--m-urgences); }
+:root[data-arrimo][data-design="v2"] .espace-btn[data-espace="operations"] { --m-espace: var(--m-operations); }
+:root[data-arrimo][data-design="v2"] .espace-btn[data-espace="pilotage"] { --m-espace: var(--m-pilotage); }
+:root[data-arrimo][data-design="v2"] .espace-btn[data-espace="reseau"] { --m-espace: var(--m-reseau); }
+:root[data-arrimo][data-design="v2"] .espace-btn[data-espace="national"] { --m-espace: var(--m-national); }
+:root[data-arrimo][data-design="v2"] .espace-btn[data-espace="administration"] { --m-espace: var(--m-administration); }
+/* Sélecteur d'ambiance de la barre supérieure */
+.barre-ambiance { display: none; }
+:root[data-design="v2"] .barre-ambiance { display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; height: var(--h-bouton); border-radius: var(--rayon); }
+.barre-ambiance select { border: none; background: transparent; color: inherit; font: inherit; font-size: var(--t-note); cursor: pointer; }
+/* Catégories universelles des mouvements : couleur + forme + libellé (jamais la couleur seule) */
+.cat-mvt { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px; font-size: var(--t-note); font-weight: 600; background: var(--cat-fond); color: var(--cat-texte); }
+.cat-mvt::before { content: ""; width: 9px; height: 9px; background: var(--cat-couleur); flex: none; }
+.cat-mvt[data-forme="rond"]::before, .cat-mvt[data-forme="anneau"]::before { border-radius: 50%; }
+.cat-mvt[data-forme="losange"]::before { transform: rotate(45deg); width: 8px; height: 8px; }
+.cat-mvt[data-forme="triangle"]::before { width: 0; height: 0; background: none; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 9px solid var(--cat-couleur); }
+.cat-mvt[data-forme="pilule"]::before { width: 12px; height: 6px; border-radius: 3px; }
+.cat-mvt[data-forme="contour"]::before { background: none; border: 2px solid var(--cat-couleur); width: 7px; height: 7px; }
+.cat-mvt[data-forme="anneau"]::before { background: none; border: 2px solid var(--cat-couleur); width: 7px; height: 7px; }
+:root[data-theme="sombre"] .cat-mvt { background: color-mix(in srgb, var(--cat-couleur) 22%, var(--carte)); color: var(--texte); }
+@media (prefers-reduced-motion: reduce) { :root[data-arrimo][data-design="v2"] * { transition: none !important; animation: none !important; } }
+
 * { box-sizing: border-box; }
 html, body { margin: 0; }
 body { background: var(--fond); color: var(--texte); font: 400 var(--t-texte)/1.5 var(--police); font-variant-numeric: tabular-nums;

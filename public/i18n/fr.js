@@ -14,7 +14,7 @@ window.ARRIMO_I18N.fr = {
     f_patients: 'Patients fictifs (démo et recette)', f_documents: 'Lecture de documents', f_rapports: 'Rapports', couleur_n: 'Teinte {n}', peau_n: 'Teinte {n}' },
   types_etab: { hopitaux: 'Hôpitaux', chsld: 'CHSLD', hebergement: 'Hébergement pour aînés' },
   nav: { operations: 'Opérations', pilotage: 'Pilotage', gestion: 'Gestion', principale: 'Navigation principale', ouvrir: 'Ouvrir le menu', fermer: 'Fermer le menu', plus: 'Plus', plus_aide: 'Autres écrans' },
-  apparence: { basculer: 'Changer le thème', choisir: 'Apparence', clair: 'Clair', sombre: 'Sombre', automatique: 'Automatique (système)', soleil: 'Selon le soleil (établissement)', enregistree: 'Apparence enregistrée.' },
+  apparence: { ambiance: 'Ambiance (Glacier ou Horizon en clair ; Crépuscule en sombre)', ambiance_ok: 'Ambiance enregistrée.', basculer: 'Changer le thème', choisir: 'Apparence', clair: 'Clair', sombre: 'Sombre', automatique: 'Automatique (système)', soleil: 'Selon le soleil (établissement)', enregistree: 'Apparence enregistrée.' },
   priorites_ui: {
     "titre": "Priorités et attribution",
     "regle": "Seules les priorités explicitement validées sont classées. À rang égal, la demande la plus ancienne passe en premier. L’attente ne détermine pas la gravité. Toute attribution reste humaine.",

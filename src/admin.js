@@ -60,6 +60,13 @@ function brancher(api, pool, route, entier, options = {}) {
     await journalAdmin(pool, req.utilisateur, 'Mot de passe changé', req.utilisateur.email, null);
   }));
 
+  // Ambiance personnelle (design system du 26 nov. 2026) : Glacier ou Horizon en clair ; ne touche jamais aux couleurs métier
+  api.put('/moi/ambiance', route(async (req) => {
+    const ambiance = String(req.body.ambiance || '');
+    if (!['glacier', 'horizon'].includes(ambiance)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'ambiance' });
+    await pool.query('UPDATE utilisateurs SET ambiance = $2 WHERE id = $1', [req.utilisateur.id, ambiance]);
+    return { ambiance };
+  }));
   api.put('/moi/apparence', route(async (req) => {
     const apparence = String(req.body.apparence || '');
     if (!['clair', 'sombre', 'automatique', 'soleil'].includes(apparence)) throw new ErreurHttp(400, 'apparence_invalide');

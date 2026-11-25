@@ -8,7 +8,7 @@
       aucun: 'Aucun mouvement prévu pour cette période.', retard: 'En retard', ouvrir: 'Ouvrir', accuser: 'Accuser réception', prealertes: 'Préalertes reçues', prochains: 'Prochains mouvements',
       voir_flux: 'Voir tout Arrimo Flux', recue: 'reçue', a_acquitter: 'à acquitter', eta: 'arrivée estimée {h}', aucune_pa: 'Aucune préalerte en attente.', fait: 'Accusé de réception enregistré.',
       bourse: 'Bourse des places', voir_bourse: 'Ouvrir la Bourse', lits_libres: 'lits libres : {n}', declarees: 'places déclarées : {n}', a_venir: '{n} à venir', aucune_place: 'Aucune place libre dans la région pour le moment.', bourse_note: 'Une place n’est jamais présentée comme disponible si elle est occupée, réservée ou bloquée.',
-      resume: '{a} arrivées · {d} départs · {r} en retard · {p} préparations en cours', historique: 'Historique', hist_intro: 'Mouvements clos des {n} derniers jours (arrivés, terminés, refusés, annulés).', debut: 'Début', fin: 'Fin', type: 'Type', ensemble: 'Vue d’ensemble par statut',
+      categories: 'Catégories de mouvements (cliquer pour filtrer)', resume: '{a} arrivées · {d} départs · {r} en retard · {p} préparations en cours', historique: 'Historique', hist_intro: 'Mouvements clos des {n} derniers jours (arrivés, terminés, refusés, annulés).', debut: 'Début', fin: 'Fin', type: 'Type', ensemble: 'Vue d’ensemble par statut',
       gr: { attente: 'En attente', acceptes: 'Acceptés', preparation: 'En préparation', transport: 'En transport', arrives: 'Arrivés', termines: 'Terminés', annules: 'Annulés' }, ty: { transport: 'Transport', transfert: 'Transfert' }, tout_statut: 'Tous les statuts', fiche: 'Fiche', fermer: 'Fermer', chronologie: 'Chronologie du parcours',
       et: { demande: 'Demande', demande_transmise: 'Demande transmise', acceptation: 'Acceptation', refus: 'Refus', en_route: 'En route vers le départ', sur_place: 'Sur place', depart: 'Prise en charge du patient', depart_confirme: 'Départ confirmé', prealerte: 'Préalerte envoyée', prealerte_recue: 'Préalerte reçue', arrivee: 'Arrivée du véhicule', reception: 'Patient remis', cloture: 'Mission terminée', incident: 'Incident', annulation: 'Annulation', preparation: 'Chambre prête' },
       st: { a_valider: 'À valider', demande: 'Demandé', accepte: 'Accepté', en_route_depart: 'En route vers le départ', en_transport: 'En transport', arrive: 'Arrivé', refuse: 'Refusé', annule: 'Annulé', prevu: 'Prévu', termine: 'Terminé' },
@@ -19,7 +19,7 @@
       aucun: 'No movement planned for this period.', retard: 'Delayed', ouvrir: 'Open', accuser: 'Acknowledge', prealertes: 'Received pre-alerts', prochains: 'Next movements',
       voir_flux: 'See all of Arrimo Flow', recue: 'received', a_acquitter: 'to acknowledge', eta: 'estimated arrival {h}', aucune_pa: 'No pending pre-alert.', fait: 'Acknowledgement recorded.',
       bourse: 'Placement exchange', voir_bourse: 'Open the exchange', lits_libres: 'free beds: {n}', declarees: 'declared places: {n}', a_venir: '{n} upcoming', aucune_place: 'No free place in the region right now.', bourse_note: 'A place is never shown as available if it is occupied, reserved or blocked.',
-      resume: '{a} arrivals · {d} departures · {r} delayed · {p} preparations in progress', historique: 'History', hist_intro: 'Closed movements of the last {n} days (arrived, done, declined, cancelled).', debut: 'Start', fin: 'End', type: 'Type', ensemble: 'Overview by status',
+      categories: 'Movement categories (click to filter)', resume: '{a} arrivals · {d} departures · {r} delayed · {p} preparations in progress', historique: 'History', hist_intro: 'Closed movements of the last {n} days (arrived, done, declined, cancelled).', debut: 'Start', fin: 'End', type: 'Type', ensemble: 'Overview by status',
       gr: { attente: 'Waiting', acceptes: 'Accepted', preparation: 'In preparation', transport: 'In transport', arrives: 'Arrived', termines: 'Done', annules: 'Cancelled' }, ty: { transport: 'Transport', transfert: 'Transfer' }, tout_statut: 'All statuses', fiche: 'Record', fermer: 'Close', chronologie: 'Path timeline',
       et: { demande: 'Request', demande_transmise: 'Request sent', acceptation: 'Acceptance', refus: 'Declined', en_route: 'On the way to pick-up', sur_place: 'On site', depart: 'Patient picked up', depart_confirme: 'Departure confirmed', prealerte: 'Pre-alert sent', prealerte_recue: 'Pre-alert received', arrivee: 'Vehicle arrival', reception: 'Patient handed over', cloture: 'Mission complete', incident: 'Incident', annulation: 'Cancellation', preparation: 'Room ready' },
       st: { a_valider: 'To validate', demande: 'Requested', accepte: 'Accepted', en_route_depart: 'On the way to pick-up', en_transport: 'In transport', arrive: 'Arrived', refuse: 'Declined', annule: 'Cancelled', prevu: 'Planned', termine: 'Done' },
@@ -71,10 +71,13 @@
     }
     const d0 = await charger(o);
     const cpt = {}; for (const l of d0.mouvements) cpt[groupe(l)] = (cpt[groupe(l)] || 0) + 1;
-    const d = { ...d0, mouvements: d0.mouvements.filter((l) => !etat.groupe || groupe(l) === etat.groupe) };
+    const d = { ...d0, mouvements: d0.mouvements.filter((l) => (!etat.groupe || groupe(l) === etat.groupe) && (!etat.categorie || l.categorie?.code === etat.categorie)) };
+    // Légende commune des catégories de mouvements : cliquer filtre (et un second clic retire le filtre)
+    const vues = new Map(); for (const l of d0.mouvements) if (l.categorie) vues.set(l.categorie.code, l.categorie);
+    const legende = vues.size ? `<div class="flux-groupes" role="group" aria-label="${T('categories')}">${[...vues.values()].map((c) => `<button type="button" class="cat-mvt${etat.categorie === c.code ? ' actif' : ''}" aria-pressed="${etat.categorie === c.code}" data-flux-cat="${e(c.code)}" data-forme="${e(c.forme)}" style="--cat-couleur:${e(c.couleur)};--cat-texte:${e(c.texte)};--cat-fond:${e(c.fond)};border:2px solid ${etat.categorie === c.code ? e(c.couleur) : 'transparent'};cursor:pointer">${e(c.libelle)} · ${d0.resume.par_categorie?.[c.code] ?? 0}</button>`).join('')}</div>` : '';
     const ensemble = `<div class="flux-groupes" role="group" aria-label="${T('ensemble')}">${Object.keys(X().gr).map((k) => `<button type="button" class="acc-mini-k flux-groupe${etat.groupe === k ? ' actif' : ''}" data-flux-groupe="${k}" aria-pressed="${etat.groupe === k}"><b>${cpt[k] || 0}</b><span>${e(X().gr[k])}</span></button>`).join('')}</div>`;
     v.innerHTML = `<div class="entete"><div><h2>${T('titre')}</h2><p class="note">${T('intro')}</p></div><p class="note" aria-live="polite">${T('actualise', { h: h(d.genere_le) })}</p></div>
-      ${barre}${ensemble}
+      ${barre}${ensemble}${legende}
       <p class="note">${T('resume', { a: d.resume.arrivees, d: d.resume.departs, r: d.resume.retards, p: d.resume.preparations })}</p>
       ${window.ArrimoVueTransferts.rendre(d.mouvements.map((l, i) => ({ ...l, statut: l.statut_detail || l.statut, ligne: i })), {
         cellules: { sens: (l) => T(l.mouvement === 'arrivee' ? 'arr' : 'dep'), prevue: quand, eta: estimee, prep: (l) => prep(l.preparation) },
@@ -82,6 +85,7 @@
           ${l.fiche ? `<button class="btn" data-flux-fiche="${l.ligne}">${T('fiche')}</button>` : ''}<button class="btn" data-flux-ouvrir="${e(l.ecran)}">${T('ouvrir')}</button>`,
       })}`;
     lierFiltres();
+    v.querySelectorAll('[data-flux-cat]').forEach((b) => { b.onclick = () => { etat.categorie = etat.categorie === b.dataset.fluxCat ? null : b.dataset.fluxCat; afficher(v, o); }; });
     o.lierActionsTransfert?.(v);
     v.querySelectorAll('[data-flux-ouvrir]').forEach((b) => { b.onclick = () => o.ouvrir?.(b.dataset.fluxOuvrir); });
     v.querySelectorAll('[data-flux-fiche]').forEach((b) => { b.onclick = () => ouvrirFiche(o, d.mouvements[Number(b.dataset.fluxFiche)].fiche); });

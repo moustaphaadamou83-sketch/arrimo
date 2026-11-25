@@ -471,7 +471,7 @@ function creerApp(pool, options = {}) {
          FROM config_pays c LEFT JOIN types_unite t ON t.config_id = c.id
         WHERE c.id = ANY($1::int[]) GROUP BY c.id`, [[...new Set(rows.map((e) => e.config_id))]]);
     return { utilisateur: { id: u.id, nom: u.nom, email: u.email, role: u.role, admin: u.admin, gestionnaire: u.gestionnaire,
-      totp_actif: u.totp_actif, mdp_temporaire: u.mdp_temporaire, premiers_pas_vus: u.premiers_pas_vus, apparence: u.apparence || 'automatique',
+      totp_actif: u.totp_actif, mdp_temporaire: u.mdp_temporaire, premiers_pas_vus: u.premiers_pas_vus, apparence: u.apparence || 'automatique', ambiance: u.ambiance || 'glacier',
       langue_interface: u.langue_interface || null, preferences_og: u.preferences_og || {} },
     organisations: (await pool.query(`SELECT o.id, o.code, o.nom, o.type, (SELECT fuseau FROM config_pays WHERE id = o.config_id) AS fuseau FROM utilisateur_organisations uo JOIN organisations_secours o ON o.id = uo.organisation_id
       WHERE uo.utilisateur_id = $1 AND o.actif ORDER BY o.nom`, [u.id])).rows,
