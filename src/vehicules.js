@@ -141,6 +141,19 @@ async function capacites(pool, hop) {
   const si = (await pool.query(`SELECT l.etablissement_id, count(*)::int AS total, count(*) FILTER (WHERE l.etat = 'libre')::int AS libres
     FROM lits l JOIN unites un ON un.id = l.unite_id JOIN types_unite t ON t.id = un.type_id WHERE t.code = 'SI' AND un.actif AND l.etablissement_id = ANY($1)
     GROUP BY l.etablissement_id`, [ids])).rows;
+  // Chantier coordination, lot 3 (26 nov. 2026) : ambulances déjà annoncées, à la porte, délai porte observé (Chrono, 24 h)
+  const flux = new Map((await pool.query(`SELECT e.id,
+      (SELECT count(*)::int FROM prealertes p WHERE p.destination_id = e.id AND p.statut IN ('envoyee', 'recue', 'consultee', 'prise_en_compte', 'preparation', 'preparation_terminee')
+        AND p.arrivee_signalee_le IS NULL) AS annoncees,
+      (SELECT count(*)::int FROM passages_chrono pc WHERE pc.etablissement_id = e.id AND pc.statut = 'a_la_porte') AS a_la_porte,
+      (SELECT round((percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (h14.heure - h11.heure)) / 60))::numeric, 0)::int
+         FROM passages_chrono pc JOIN v_horodatages_courants h11 ON h11.objet = 'passage_chrono' AND h11.objet_id = pc.id AND h11.etape = 'H11'
+         JOIN v_horodatages_courants h14 ON h14.objet = 'passage_chrono' AND h14.objet_id = pc.id AND h14.etape = 'H14'
+        WHERE pc.etablissement_id = e.id AND h11.heure > now() - interval '24 hours' AND h14.heure >= h11.heure) AS porte_mediane_24h,
+      (SELECT count(*)::int FROM passages_chrono pc JOIN v_horodatages_courants h11 ON h11.objet = 'passage_chrono' AND h11.objet_id = pc.id AND h11.etape = 'H11'
+         JOIN v_horodatages_courants h14 ON h14.objet = 'passage_chrono' AND h14.objet_id = pc.id AND h14.etape = 'H14'
+        WHERE pc.etablissement_id = e.id AND h11.heure > now() - interval '24 hours' AND h14.heure >= h11.heure) AS porte_mesures_24h
+    FROM etablissements e WHERE e.id = ANY($1)`, [ids])).rows.map((r) => [r.id, r]));
   return hop.map((e) => {
     const st = stats.get(e.id);
     const sv = services.filter((x) => x.etablissement_id === e.id);
@@ -149,7 +162,9 @@ async function capacites(pool, hop) {
     return { id: e.id, nom: e.nom, ville: e.ville, latitude: e.latitude, longitude: e.longitude,
       liaison_secours: TE.moduleActif(e, 'liaison_secours'), chrono: TE.moduleActif(e, 'chrono'),
       urgence: st ? { niveau: cv.niveauCivieres(st, e), civieres_libres: st.libres, taux: st.fonctionnelles > 0 ? st.taux : null } : null,
-      statut_declare: pa.declaration(e), services_ouverts: ouverts, soins_intensifs: lits ? { libres: lits.libres, total: lits.total } : null };
+      statut_declare: pa.declaration(e), services_ouverts: ouverts, soins_intensifs: lits ? { libres: lits.libres, total: lits.total } : null,
+      ambulances: { annoncees: flux.get(e.id)?.annoncees ?? 0, a_la_porte: flux.get(e.id)?.a_la_porte ?? 0,
+        porte_mediane_24h_min: flux.get(e.id)?.porte_mediane_24h ?? null, porte_mesures_24h: flux.get(e.id)?.porte_mesures_24h ?? 0 } };
   });
 }
 const SQL_HOPITAUX = `SELECT e.id, e.nom, e.ville, e.latitude, e.longitude, e.modules, e.type_etablissement,
@@ -204,7 +219,8 @@ async function urgencesProches(pool, u, etabId) {
   if (!ici) throw new ErreurHttp(404, 'etab_introuvable');
   if ((ici.type_etablissement || 'hopital') === 'hopital') throw new ErreurHttp(403, 'role_insuffisant');
   if (!TE.moduleActif(ici, 'transport_ambulancier')) throw new ErreurHttp(403, 'module_desactive', { module: 'transport_ambulancier' });
-  const hops = await capacites(pool, (await pool.query(SQL_HOPITAUX, [await configsRegion(pool, id)])).rows);
+  // Minimisation : un établissement d'hébergement ne voit pas le flux d'ambulances des urgences (réservé au CCS et aux ambulances)
+  const hops = (await capacites(pool, (await pool.query(SQL_HOPITAUX, [await configsRegion(pool, id)])).rows)).map(({ ambulances, ...h }) => h);
   // Les 8 plus proches à vol d'oiseau sont classées par le routeur (requête légère) ; les autres suivent
   const proches = hops.map((h) => ({ ...h, vol: km(ici, h) })).sort((a, b) => (a.vol ?? 1e9) - (b.vol ?? 1e9));
   const c = await classer(proches.slice(0, 8).map(({ vol, ...h }) => h), ici, { pool });

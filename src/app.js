@@ -818,6 +818,7 @@ function creerApp(pool, options = {}) {
   for (const op of ['accuser', 'action', 'attribuer', 'resoudre']) {
     api.post(`/coordination/alertes/:id/${op}`, route((req) => suivi.agir(pool, req.utilisateur, req.params.id, op, req.body)));
   }
+  api.get('/coordination/plan', route((req) => require('./og-plan').plan(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   api.get('/coordination/escalades', route((req) => suivi.lireGrille(pool, req.utilisateur, req.query)));
   api.put('/coordination/escalades', route((req) => suivi.enregistrerGrille(pool, req.utilisateur, req.body)));
 

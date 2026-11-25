@@ -56,6 +56,11 @@ async function repondre(pool, u, etabId, question, langue) {
     const r = await chambre(pool, etabs, code[0].toUpperCase(), L); if (r) return rep(r, 'chambre', 'c-chambres');
   }
   if (!etabId || !etabs.includes(Number(etabId))) return null;
+  // P. Plan de coordination (chantier coordination, lot 3) : « que faire ? », « pourquoi saturé ? », « plan de coordination »
+  if (u.role !== 'entretien' && /\b(plan de coordination|que faire|quoi faire|pourquoi .*(sature\w*|deborde\w*|plein\w*)|risque de saturation|coordination plan|what should we do|why .*(full|saturated|overcrowded)|saturation risk)\b/.test(qn)) {
+    const r = await require('./og-plan').repondre(pool, { ...u, langue: L }, etabId);
+    return { ...rep(r.texte, 'plan_coordination', 'vigilance'), sources: r.sources };
+  }
   // K. Explication d'un indicateur (catalogue central des KPI) : formule, source, période ; jamais une valeur inventée
   if (/\b(comment (est|sont) calcule\w*|que (signifie|veut dire)|explique\w* (l.?indicateur|le kpi|le chiffre)|how is .* calculated|what does .* mean|explain (the )?(kpi|indicator))\b/.test(qn)) {
     const cat = require('./kpi-catalogue').catalogue(L);
