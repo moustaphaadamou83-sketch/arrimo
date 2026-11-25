@@ -382,6 +382,7 @@ function creerApp(pool, options = {}) {
   api.post('/secours/crise/alertes/:id/action', route((req) => crise.agirAlerte(pool, req.utilisateur, req.params.id, req.body)));
   api.get('/crise/evacuations/:id', route((req) => crise.vue(pool, req.utilisateur, req.params.id)));
   api.post('/crise/evacuations/:id/residents/:rid', route((req) => crise.agir(pool, req.utilisateur, req.params.id, req.params.rid, req.body)));
+  api.get('/crise/evacuations/:id/rapport', route((req) => crise.rapport(pool, req.utilisateur, req.params.id)));
   api.post('/crise/evacuations/:id/lever', route((req) => crise.lever(pool, req.utilisateur, req.params.id)));
   // Données (20 nov. 2026) : tableaux régionaux, listes d'attente, petits nombres masqués, CSV sans référence
   const donnees = require('./donnees');

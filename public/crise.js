@@ -15,7 +15,7 @@
       apercu: 'Voir les lieux proposés', recap: 'Récapitulatif avant déclenchement', recap_txt: '{n} résidents · {p} places libres dans la région · {s} sans lieu proposé', alertes_prevues: 'Acteurs qui seront alertés', modifier: 'Modifier',
       confirmer_final: 'Confirmer et déclencher l’évacuation', confirmer_final_sim: 'Confirmer et lancer la simulation', aucune_alerte: 'Aucun service de secours connecté : prévenez-les directement.', urgence_911: 'Danger immédiat : appelez d’abord le 911. Arrimo ne remplace pas les appels d’urgence.',
       bandeau_sim: 'SIMULATION — aucune alerte, réservation ni notification réelle', alertes: 'Alertes aux secours', a_st: { envoyee: 'Alerte envoyée', recue: 'Alerte reçue', acceptee: 'Mission acceptée', vehicule_affecte: 'Véhicule affecté', refusee: 'Refusée', escaladee: 'Sans réponse : escaladée', cloturee: 'Close' },
-      accueilli: 'Accueil confirmé', lever_confirmer: 'Confirmer la levée', coordination: 'Coordination', transport: 'Transport', unite: 'unité {u}', eta: 'arrivée dans {n} min' },
+      accueilli: 'Accueil confirmé', changer: 'Changer de destination', nouvelle_dest: 'Nouvelle destination', annuler_depart: 'Transport annulé', rapport: 'Rapport post-incident', rapport_txt: '{n} résident(s) · accueil confirmé : {a} · sans accueil confirmé : {s} · changements de destination : {c} · transports annulés : {t} · familles avisées : {f}', rapport_durees: 'Déclenchement → premier départ : {p} min · → dernier accueil confirmé : {d} min', lever_confirmer: 'Confirmer la levée', coordination: 'Coordination', transport: 'Transport', unite: 'unité {u}', eta: 'arrivée dans {n} min' },
     en: { titre: 'Crisis mode · evacuation', intro: 'Arrimo proposes a place per resident (nearest first); a person confirms. The place is reserved by the bed rules; families are notified without details.',
       declencher: 'Start an evacuation', motif: 'Reason', aucune: 'No evacuation in progress.', en_cours: 'Evacuation {numero} in progress ({motif})', lever: 'Lift the evacuation', levee_ok: 'Evacuation lifted.',
       resume: '{total} residents · {a_placer} to place · {confirmes} confirmed · {partis} on the way · {arrives} arrived · {familles} families notified', places: 'Free places in the region',
@@ -28,7 +28,7 @@
       apercu: 'See the suggested places', recap: 'Summary before starting', recap_txt: '{n} residents · {p} free places in the region · {s} with no suggested place', alertes_prevues: 'Services that will be alerted', modifier: 'Edit',
       confirmer_final: 'Confirm and start the evacuation', confirmer_final_sim: 'Confirm and start the simulation', aucune_alerte: 'No emergency service connected: contact them directly.', urgence_911: 'Immediate danger: call 911 first. Arrimo does not replace emergency calls.',
       bandeau_sim: 'SIMULATION — no real alert, reservation or notification', alertes: 'Alerts to emergency services', a_st: { envoyee: 'Alert sent', recue: 'Alert received', acceptee: 'Mission accepted', vehicule_affecte: 'Vehicle assigned', refusee: 'Declined', escaladee: 'No answer: escalated', cloturee: 'Closed' },
-      accueilli: 'Reception confirmed', lever_confirmer: 'Confirm lifting', coordination: 'Coordination', transport: 'Transport', unite: 'unit {u}', eta: 'arriving in {n} min' },
+      accueilli: 'Reception confirmed', changer: 'Change destination', nouvelle_dest: 'New destination', annuler_depart: 'Transport cancelled', rapport: 'Post-incident report', rapport_txt: '{n} resident(s) · reception confirmed: {a} · without confirmed reception: {s} · destination changes: {c} · cancelled transports: {t} · families notified: {f}', rapport_durees: 'Start → first departure: {p} min · → last confirmed reception: {d} min', lever_confirmer: 'Confirm lifting', coordination: 'Coordination', transport: 'Transport', unite: 'unit {u}', eta: 'arriving in {n} min' },
   };
   const e = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   /** Affiche l'évacuation en cours de l'établissement (ou de la région) dans v. o = { api, langue, etablissement_id, etablissements (direction) }. */
@@ -67,7 +67,11 @@
     }
     const d = await o.api('GET', `/crise/evacuations/${active.id}`);
     const btn = (r, a, lib, extra = '') => `<button class="btn${a === 'confirmer' ? ' pri' : ''}" data-cr="${a}" data-r="${r.id}"${extra}>${T(lib)}</button>`;
-    const actions = (r) => (r.statut === 'a_placer' ? (r.proposition ? btn(r, 'confirmer', 'confirmer', ` data-dest="${r.proposition.id}" data-lieu="${e(r.proposition.nom)}"`) : '')
+    // Complémentaire nº 3 : changement de destination (avant l'arrivée) et transport annulé, sans perdre ni doubler le résident
+    const changer = (r) => (['confirme', 'parti'].includes(r.statut) && d.places.some((p) => p.id !== r.destination_id)
+      ? `<select data-nd="${r.id}" aria-label="${T('nouvelle_dest')}">${d.places.filter((p) => p.id !== r.destination_id).map((p) => `<option value="${p.id}">${e(p.nom)}</option>`).join('')}</select>${btn(r, 'changer_destination', 'changer')}` : '')
+      + (r.statut === 'parti' ? btn(r, 'annuler_depart', 'annuler_depart') : '');
+    const actions = (r) => changer(r) + (r.statut === 'a_placer' ? (r.proposition ? btn(r, 'confirmer', 'confirmer', ` data-dest="${r.proposition.id}" data-lieu="${e(r.proposition.nom)}"`) : '')
       : r.statut === 'confirme' ? `<select data-mode="${r.id}" aria-label="${T('mode')}">${Object.entries(X.t).map(([k, l]) => `<option value="${k}">${e(l)}</option>`).join('')}</select>${btn(r, 'depart', 'depart')}`
         : r.statut === 'parti' ? btn(r, 'arrivee', 'arrivee') : r.statut === 'arrive' ? `${btn(r, 'accueilli', 'accueilli')}${btn(r, 'planifier_retour', 'retour')}` : r.statut === 'accueilli' ? btn(r, 'planifier_retour', 'retour') : r.statut === 'retour_planifie' ? btn(r, 'revenu', 'revenu') : '');
     const alertes = (d.alertes || []).map((x) => `<li>${e(x.organisation)} · ${T(x.role)} · <b>${e(X.a_st[x.statut])}</b>${x.unite ? ` · ${T('unite', { u: x.unite })}` : ''}${x.eta_min != null ? ` · ${T('eta', { n: x.eta_min })}` : ''}</li>`).join('');
@@ -78,10 +82,19 @@
         ${d.residents.map((r) => `<tr><td>${e(r.resident_ref)}${r.prenom ? ` · <span class="donnee">${e(r.prenom)} ${e(r.nom)}</span>` : ''}</td><td>${e(X.s[r.statut])}${r.destination ? ` · ${e(r.destination)}${r.lit ? ` (${T('lit', { lit: r.lit })})` : ''}` : ''}</td>
           <td>${r.statut === 'a_placer' ? (r.proposition ? `${e(r.proposition.nom)} · ${r.proposition.distance_km ?? '—'} km` : T('aucun_lieu')) : ''}</td><td>${actions(r)}</td></tr>`).join('')}</tbody></table></div>
       <h3>${T('places')}</h3><ul class="liste-simple">${d.places.map((p) => `<li>${e(p.nom)} · ${p.libres} · ${p.distance_km ?? '—'} km</li>`).join('')}</ul>
-      <button class="btn" id="cr-lever">${T('lever')}</button>`;
+      <div class="ligne"><button class="btn" id="cr-rapport" type="button">${T('rapport')}</button><button class="btn" id="cr-lever">${T('lever')}</button></div><div id="cr-rapport-zone"></div>`;
+    v.querySelector('#cr-rapport').onclick = async () => {
+      const r = await o.api('GET', `/crise/evacuations/${active.id}/rapport`).catch((err) => { alert(err.message); return null; }); if (!r) return;
+      v.querySelector('#cr-rapport-zone').innerHTML = `<section class="panneau-c"><h3>${T('rapport')} · ${e(r.numero)}</h3>
+        <p>${T('rapport_txt', { n: r.residents, a: r.accueil_confirme, s: r.sans_accueil_confirme.length, c: r.changements_destination, t: r.departs_annules, f: r.familles_avisees })}</p>
+        <p>${T('rapport_durees', { p: r.durees_min.jusqu_au_premier_depart ?? '—', d: r.durees_min.jusqu_au_dernier_accueil ?? '—' })}</p>
+        ${r.sans_accueil_confirme.length ? `<ul class="liste-simple">${r.sans_accueil_confirme.map((x) => `<li>${e(x.resident_ref)} · ${e(X.s[x.statut])}</li>`).join('')}</ul>` : ''}
+        <p class="note">${e(r.regle)}</p></section>`;
+    };
     v.querySelectorAll('[data-cr]').forEach((b) => { b.onclick = async () => {
       const a = b.dataset.cr; const corps = { action: a };
       if (a === 'confirmer') corps.destination_id = Number(b.dataset.dest);
+      if (a === 'changer_destination') corps.destination_id = Number(v.querySelector(`[data-nd="${b.dataset.r}"]`).value);
       if (a === 'depart') corps.transport_mode = v.querySelector(`[data-mode="${b.dataset.r}"]`).value;
       if (a === 'planifier_retour') { const j = prompt(X.retour_date, new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10)); if (!j) return; corps.retour_prevu_le = new Date(`${j}T12:00:00`).toISOString(); }
       try { await o.api('POST', `/crise/evacuations/${active.id}/residents/${b.dataset.r}`, corps); } catch (err) { alert(err.message); }

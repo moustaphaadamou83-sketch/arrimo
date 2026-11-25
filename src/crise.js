@@ -132,6 +132,26 @@ async function agir(pool, u, evId, rid, b = {}) {
       if (!ev.simulation) await changerEtat(c, pool, u.id, lit.id, 'reserve', { patientRef: r.resident_ref, detail: `Évacuation ${ev.numero}` });
       n = await maj("statut = 'confirme', destination_id = $2, lit_id = $3, confirme_le = now()", [dest.id, ev.simulation ? null : lit.id]);
       if (!ev.simulation) await require('./services').notifier(c, dest.id, null, 'crise_place_demandee', { numero: ev.numero });
+    } else if (a === 'changer_destination') {
+      // Changement de destination (avant l'arrivée) : la même ligne change de lieu, jamais deux lignes pour un résident ;
+      // l'ancienne place est rendue, la nouvelle est réservée par les règles des lits (verrou, version, journal)
+      if (!['confirme', 'parti'].includes(r.statut)) throw new ErreurHttp(409, 'evacuation_statut');
+      const dest = (await c.query("SELECT id, nom FROM etablissements WHERE id = $1 AND actif AND type_etablissement = 'chsld' AND id <> $2", [entier(b.destination_id), ev.etablissement_id])).rows[0];
+      if (!dest) throw new ErreurHttp(404, 'etab_introuvable');
+      if (dest.id === r.destination_id) throw new ErreurHttp(409, 'evacuation_statut');
+      const lit = (await c.query(`SELECT id FROM lits WHERE etablissement_id = $1 AND etat = 'libre' AND actif ORDER BY code LIMIT 1 FOR NO KEY UPDATE SKIP LOCKED`, [dest.id])).rows[0];
+      if (!lit) throw new ErreurHttp(409, 'evacuation_plus_de_place');
+      if (!ev.simulation) {
+        const ancien = r.lit_id ? (await c.query('SELECT etat FROM lits WHERE id = $1', [r.lit_id])).rows[0] : null;
+        if (ancien?.etat === 'reserve') await changerEtat(c, pool, u.id, r.lit_id, 'libre', { detail: `Évacuation ${ev.numero} : destination changée` });
+        await changerEtat(c, pool, u.id, lit.id, 'reserve', { patientRef: r.resident_ref, detail: `Évacuation ${ev.numero}` });
+        await require('./services').notifier(c, dest.id, null, 'crise_place_demandee', { numero: ev.numero });
+      }
+      n = await maj('destination_id = $2, lit_id = $3, changements_destination = changements_destination + 1', [dest.id, ev.simulation ? null : lit.id]);
+    } else if (a === 'annuler_depart') {
+      // Transport annulé : le résident revient « lieu confirmé » (toujours suivi), sa place reste réservée
+      if (r.statut !== 'parti') throw new ErreurHttp(409, 'evacuation_statut');
+      n = await maj("statut = 'confirme', transport_mode = NULL, depart_le = NULL, departs_annules = departs_annules + 1");
     } else if (a === 'depart') {
       if (r.statut !== 'confirme') throw new ErreurHttp(409, 'evacuation_statut');
       if (!MODES.includes(b.transport_mode)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'transport_mode' });
@@ -161,6 +181,28 @@ async function agir(pool, u, evId, rid, b = {}) {
     await c.query(`INSERT INTO journal (etablissement_id, utilisateur_id, action, detail) VALUES ($1, $2, 'Évacuation : étape', $3)`, [ev.etablissement_id, u.id, `${ev.numero} · ${r.resident_ref} · ${a}`]);
     return n;
   }).finally(() => require('./flux').signaler());
+}
+
+/**
+ * Rapport post-incident (complémentaire nº 3, §3.6) : décompte par étape, résidents sans accueil confirmé, changements de destination,
+ * transports annulés, durées mesurées (déclenchement → premier départ, → dernier accueil confirmé), alertes aux partenaires.
+ * Aucun résident n'est compté comme arrivé ou accueilli sans la confirmation correspondante.
+ */
+async function rapport(pool, u, id) {
+  const v = await vue(pool, u, id); const ev = v.evacuation; const rs = v.residents;
+  const min = (a, b) => (a && b ? Math.round((new Date(b) - new Date(a)) / 60000) : null);
+  const max = (k) => rs.reduce((m, r) => (r[k] && (!m || new Date(r[k]) > new Date(m)) ? r[k] : m), null);
+  const mini = (k) => rs.reduce((m, r) => (r[k] && (!m || new Date(r[k]) < new Date(m)) ? r[k] : m), null);
+  const accueillis = rs.filter((r) => ['accueilli', 'retour_planifie', 'revenu'].includes(r.statut) && r.accueilli_le).length;
+  return { numero: ev.numero, simulation: ev.simulation, motif: ev.motif, gravite: ev.gravite, statut: ev.statut, declenchee_le: ev.debut_le, levee_le: ev.levee_le,
+    residents: rs.length, par_etape: v.resume, accueil_confirme: accueillis,
+    sans_accueil_confirme: rs.filter((r) => !r.accueilli_le).map((r) => ({ resident_ref: r.resident_ref, statut: r.statut })),
+    changements_destination: rs.reduce((s, r) => s + (r.changements_destination || 0), 0), departs_annules: rs.reduce((s, r) => s + (r.departs_annules || 0), 0),
+    familles_avisees: v.resume.familles_avisees,
+    durees_min: { jusqu_au_premier_depart: min(ev.debut_le, mini('depart_le')), jusqu_au_dernier_accueil: accueillis === rs.length ? min(ev.debut_le, max('accueilli_le')) : null },
+    alertes_partenaires: v.alertes.map((a) => ({ organisation: a.organisation, role: a.role, statut: a.statut })),
+    complet: accueillis === rs.length,
+    regle: 'Un résident n’est compté accueilli que sur confirmation de l’établissement d’accueil ; les durées manquantes ne sont pas estimées.' };
 }
 
 async function lever(pool, u, evId) {
@@ -237,4 +279,4 @@ async function echeances(pool) {
   return r.rowCount;
 }
 
-module.exports = { declencher, apercu, vue, agir, lever, liste, alertesSecours, agirAlerte, echeances, MOTIFS, MODES, GRAVITES };
+module.exports = { rapport, declencher, apercu, vue, agir, lever, liste, alertesSecours, agirAlerte, echeances, MOTIFS, MODES, GRAVITES };
