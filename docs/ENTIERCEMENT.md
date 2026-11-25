@@ -21,6 +21,7 @@ Fichier `.env` de chaque environnement (droits 600, jamais dans le dépôt) :
 | Itinéraires (OSRM) | `ARRIMO_ROUTEUR_URL`, `ARRIMO_ROUTEUR_NOM`, `ARRIMO_ROUTEUR_PROFIL`, `ARRIMO_ROUTEUR_CLE`, `ARRIMO_ROUTAGE_TIMEOUT_MS` |
 | Notifications push | `ARRIMO_VAPID_PUBLIQUE`, `ARRIMO_VAPID_PRIVEE`, `ARRIMO_VAPID_SUJET`, `ARRIMO_PUSH_HOTES` |
 | Démonstration | `ARRIMO_DEMO`, `DEMO_MOT_DE_PASSE`, `ARRIMO_PATIENTS_FICTIFS`, `ARRIMO_METEO`, `ARRIMO_METEO_LIEU`, `SIMULATION_MINUTES` |
+| Coordination (tâches périodiques) | `SUIVI_ALERTES_MINUTES` (période du suivi des alertes et du contrôle de couverture, 2 min par défaut) |
 | OG (facultatif) | `COPILOTE_IA_URL`, `COPILOTE_IA_MODELE`, `COPILOTE_IA_CLE` |
 | Données ouvertes (facultatif) | `ARRIMO_MSSS_URGENCES` (1 = lecture horaire du fichier des urgences du MSSS), `ARRIMO_MSSS_URGENCES_URL` |
 
