@@ -94,8 +94,8 @@ async function plan(pool, u, etabId) {
       for (const a of as) {
         const x = alt.get(a.ressource_id) || [];
         actions.push(x.length
-          ? L(en, `Solutions de rechange autorisées pour ${a.ressource} : ${x.map((o) => `${o.nom} (${o.unites_disponibles} unité(s) déclarée(s) disponible(s))`).join(', ')}.`,
-            `Authorized alternatives for ${a.ressource}: ${x.map((o) => `${o.nom} (${o.unites_disponibles} unit(s) reported available)`).join(', ')}.`)
+          ? L(en, `Solutions de rechange autorisées pour ${a.ressource} : ${x.map((o) => `${o.nom} (unités déclarées disponibles : ${o.unites_disponibles})`).join(', ')}.`,
+            `Authorized alternatives for ${a.ressource}: ${x.map((o) => `${o.nom} (units reported available: ${o.unites_disponibles})`).join(', ')}.`)
           : L(en, `Aucun autre transporteur autorisé connu dans la région pour ${a.ressource}.`, `No other authorized carrier known in the region for ${a.ressource}.`));
       }
     }
@@ -115,7 +115,7 @@ async function plan(pool, u, etabId) {
       acteurs: [...new Set(as.map((a) => a.suivi?.responsable_role || null).filter(Boolean))].map((role) => ({ role, source: 'suivi' }))
         .concat([...new Set(as.map((a) => a.responsable))].map((nom) => ({ nom, source: 'grille_proposee' }))),
       incertitudes: [
-        ...(hypotheses ? [L(en, `${hypotheses} cause(s) non documentée(s) : hypothèse à vérifier, jamais un fait.`, `${hypotheses} undocumented cause(s): hypothesis to check, never a fact.`)] : []),
+        ...(hypotheses ? [L(en, `Causes non documentées : ${hypotheses} (hypothèse à vérifier, jamais un fait).`, `Undocumented causes: ${hypotheses} (hypothesis to check, never a fact).`)] : []),
         ...(silencieux.length && type !== 'connecteur_silencieux' ? [L(en, 'Un connecteur est silencieux : certaines données peuvent être périmées.', 'A connector is silent: some data may be outdated.')] : []),
         ...(controleRetard ? [L(en, 'Le contrôle périodique est en retard.', 'The periodic check is late.')] : []),
       ],
@@ -138,9 +138,9 @@ async function plan(pool, u, etabId) {
     inconnu: { lits_vides_non_confirmes: c.lits.non_confirmes },
     demande: { ambulances_annoncees: c.ambulances_attendues, transports_bloquants: transportsBloquants, placements_bloques: placementsBloques },
     texte: saturation
-      ? L(en, `Risque de saturation : ${c.lits.operationnels} lit(s) opérationnel(s), ${c.civieres.libres} civière(s) libre(s) pour ${c.ambulances_attendues} ambulance(s) annoncée(s). ${placementsBloques} placement(s) accepté(s) bloqué(s) et ${transportsBloquants} transport(s) non confirmé(s) ou en retard. ${c.lits.sorties_prevues_24h} sortie(s) prévue(s) et ${c.lits.nettoyage} nettoyage(s) pourraient libérer des lits après validation.`,
-        `Saturation risk: ${c.lits.operationnels} operational bed(s), ${c.civieres.libres} free stretcher(s) for ${c.ambulances_attendues} announced ambulance(s). ${placementsBloques} accepted placement(s) blocked and ${transportsBloquants} transport(s) unconfirmed or late. ${c.lits.sorties_prevues_24h} planned discharge(s) and ${c.lits.nettoyage} cleaning(s) could free beds after validation.`)
-      : L(en, `Pas de risque de saturation établi : ${c.lits.operationnels} lit(s) opérationnel(s), ${c.civieres.libres} civière(s) libre(s).`, `No established saturation risk: ${c.lits.operationnels} operational bed(s), ${c.civieres.libres} free stretcher(s).`),
+      ? L(en, `Risque de saturation. Lits opérationnels : ${c.lits.operationnels} · civières libres : ${c.civieres.libres} · ambulances annoncées : ${c.ambulances_attendues} · placements acceptés bloqués : ${placementsBloques} · transports non confirmés ou en retard : ${transportsBloquants}. Sorties prévues (${c.lits.sorties_prevues_24h}) et nettoyages (${c.lits.nettoyage}) pourraient libérer des lits après validation.`,
+        `Saturation risk. Operational beds: ${c.lits.operationnels} · free stretchers: ${c.civieres.libres} · announced ambulances: ${c.ambulances_attendues} · accepted placements blocked: ${placementsBloques} · transports unconfirmed or late: ${transportsBloquants}. Planned discharges (${c.lits.sorties_prevues_24h}) and cleanings (${c.lits.nettoyage}) could free beds after validation.`)
+      : L(en, `Pas de risque de saturation établi. Lits opérationnels : ${c.lits.operationnels} · civières libres : ${c.civieres.libres}.`, `No established saturation risk. Operational beds: ${c.lits.operationnels} · free stretchers: ${c.civieres.libres}.`),
     donnees_insuffisantes: donneesInsuffisantes,
     limite: donneesInsuffisantes ? L(en, 'Recommandation limitée : données possiblement périmées (connecteur silencieux ou contrôle en retard). Confirmer sur place avant d’agir.',
       'Limited recommendation: data possibly outdated (silent connector or late check). Confirm on site before acting.') : null,

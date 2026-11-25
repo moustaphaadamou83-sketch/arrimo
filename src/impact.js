@@ -59,32 +59,35 @@ async function tableau(pool, u, q = {}) {
   const devise = prm.cout_heure_ambulance?.devise || prm.cout_journee_hospitalisation?.devise || prm.cout_heure_administrative?.devise || null;
   const constatees = (await pool.query(`SELECT categorie, devise, sum(montant)::float AS montant FROM economies_constatees WHERE etablissement_id = $1
       AND periode_debut < $3::date AND periode_fin >= $2::date GROUP BY categorie, devise`, [etabId, per.courante.debut, per.courante.fin])).rows;
-  const sources = { chrono: 'Chrono (H11 → H15) au-delà de l’objectif de libération', nsa: 'Épisodes NSA terminés', transferts: 'Transferts (demande → réponse)',
-    suivis: 'Suivis d’alertes ouverts automatiquement', lits: 'Départs après placement', prealertes: 'Préalertes (envoi → réception)' };
+  const en = u.langue === 'en'; const L = (fr, eng) => (en ? eng : fr);
+  const sources = { chrono: L('Chrono (H11 → H15) au-delà de l’objectif de libération', 'Chrono (H11 → H15) beyond the release target'), nsa: L('Épisodes NSA terminés', 'Completed ALC episodes'),
+    transferts: L('Transferts (demande → réponse)', 'Transfers (request → response)'), suivis: L('Suivis d’alertes ouverts automatiquement', 'Alert follow-ups opened automatically'),
+    lits: L('Départs après placement', 'Departures after placement'), prealertes: L('Préalertes (envoi → réception)', 'Pre-alerts (sent → received)'), alertes: L('Suivis d’alertes', 'Alert follow-ups') };
+  const U = { jours: L('jours', 'days'), lits: L('lits', 'beds'), alertes: L('alertes', 'alerts') };
   const piliers = {
     temps: {
       heures_ambulancieres_recuperees: val(heuresRecuperees, 'h', 'mesure', sources.chrono, { reference: r1(mR.chrono.heures_au_dela), courante: r1(mC.chrono.heures_au_dela) }),
-      journees_nsa_evitees: val(joursNsaEvites, 'jours', 'estimation', sources.nsa, { regle: 'écart de durée moyenne NSA × sorties de la période' }),
+      journees_nsa_evitees: val(joursNsaEvites, U.jours, 'estimation', sources.nsa, { regle: L('écart de durée moyenne NSA × sorties de la période', 'difference in mean ALC length × discharges in the period') }),
       delai_reponse_transfert_reduit_min: val(diff(coordR.transferts.reponse_mediane_min, coordC.transferts.reponse_mediane_min), 'min', 'mesure', sources.transferts),
     },
     argent: {
-      valeur_heures_ambulancieres: val(estim(heuresRecuperees, 'cout_heure_ambulance'), devise, 'estimation', 'heures récupérées × coût horaire configuré', { parametre: prm.cout_heure_ambulance || null }),
-      valeur_journees_nsa: val(estim(joursNsaEvites, 'cout_journee_hospitalisation'), devise, 'estimation', 'journées évitées × coût journalier configuré', { parametre: prm.cout_journee_hospitalisation || null }),
-      valeur_temps_administratif: val(estim(tempsAdminH, 'cout_heure_administrative'), devise, 'estimation', 'temps administratif × coût horaire configuré', { parametre: prm.cout_heure_administrative || null }),
-      economies_constatees: { nature: 'constate', lignes: constatees, regle: 'Seules ces économies, saisies avec justificatif, sont des économies réelles.' },
+      valeur_heures_ambulancieres: val(estim(heuresRecuperees, 'cout_heure_ambulance'), devise, 'estimation', L('heures récupérées × coût horaire configuré', 'hours recovered × configured hourly cost'), { parametre: prm.cout_heure_ambulance || null }),
+      valeur_journees_nsa: val(estim(joursNsaEvites, 'cout_journee_hospitalisation'), devise, 'estimation', L('journées évitées × coût journalier configuré', 'days avoided × configured daily cost'), { parametre: prm.cout_journee_hospitalisation || null }),
+      valeur_temps_administratif: val(estim(tempsAdminH, 'cout_heure_administrative'), devise, 'estimation', L('temps administratif × coût horaire configuré', 'administrative time × configured hourly cost'), { parametre: prm.cout_heure_administrative || null }),
+      economies_constatees: { nature: 'constate', lignes: constatees, regle: L('Seules ces économies, saisies avec justificatif, sont des économies réelles.', 'Only these savings, entered with supporting evidence, are real savings.') },
     },
     coordination: {
       transferts_realises_pct: val(coordC.transferts.taux_realises_pct, '%', 'mesure', sources.transferts),
-      alertes_resolues: val(coordC.alertes.resolues_confirmees, 'alertes', 'mesure', 'Suivis d’alertes'),
-      delai_resolution_alertes_min: val(coordC.alertes.resolution_mediane_min, 'min', 'mesure', 'Suivis d’alertes'),
+      alertes_resolues: val(coordC.alertes.resolues_confirmees, U.alertes, 'mesure', sources.alertes),
+      delai_resolution_alertes_min: val(coordC.alertes.resolution_mediane_min, 'min', 'mesure', sources.alertes),
     },
     gestion: {
-      capacites_recuperees_lits: val(mC.lits_liberes, 'lits', 'mesure', sources.lits, { reference: mR.lits_liberes }),
+      capacites_recuperees_lits: val(mC.lits_liberes, U.lits, 'mesure', sources.lits, { reference: mR.lits_liberes }),
       temps_administratif_economise_h: val(tempsAdminH, 'h', 'estimation', sources.suivis, { parametre: prm.minutes_par_suivi_automatise || null }),
     },
     information: {
       reception_prealerte_mediane_min: val(mC.prealerte_reception_mediane_min, 'min', 'mesure', sources.prealertes, { reference: mR.prealerte_reception_mediane_min }),
-      delai_accuse_alertes_min: val(coordC.alertes.accuse_mediane_min, 'min', 'mesure', 'Suivis d’alertes'),
+      delai_accuse_alertes_min: val(coordC.alertes.accuse_mediane_min, 'min', 'mesure', sources.alertes),
     },
   };
   return { etablissement_id: etabId, periode: per.courante, periode_reference: per.reference, piliers, devise,

@@ -108,7 +108,7 @@ async function transmettreReleve(pool, u, b = {}) {
   const contenu = await preparerReleve(pool, id);
   const r = (await pool.query('INSERT INTO releves_equipe (etablissement_id, quart, transmis_par, contenu) VALUES ($1, $2, $3, $4) RETURNING *', [id, b.quart, u.id, contenu])).rows[0];
   await pool.query("INSERT INTO journal (etablissement_id, utilisateur_id, action, detail) VALUES ($1, $2, 'Relève transmise', $3)",
-    [id, u.id, `${b.quart} · ${contenu.compteurs.taches} tâche(s), ${contenu.compteurs.en_retard} en retard, ${contenu.compteurs.alertes} alerte(s)`]);
+    [id, u.id, `${b.quart} · tâches ouvertes : ${contenu.compteurs.taches}, en retard : ${contenu.compteurs.en_retard}, alertes : ${contenu.compteurs.alertes}`]);
   require('./flux').signaler();
   return { ...r, id: Number(r.id) };
 }

@@ -120,7 +120,7 @@ test('scénario A : ambulances annoncées au-delà des civières libres ; aucune
   const avant = (await pool.query("SELECT id, statut, version FROM prealertes WHERE numero LIKE 'PA-CO%' ORDER BY id")).rows;
   const v = await vigilance();
   const a = alerte(v, 'ambulances_attendues');
-  assert.ok(a); assert.strictEqual(a.titre, `${libres + 1} ambulance(s) annoncée(s) pour ${libres} civière(s) libre(s) à l’urgence.`);
+  assert.ok(a); assert.strictEqual(a.titre, `Ambulances annoncées : ${libres + 1} · civières libres à l’urgence : ${libres}.`);
   assert.strictEqual(a.niveau, libres === 0 ? 'eleve' : 'modere');
   assert.match(a.action, /La destination reste décidée par le CCS/);
   assert.strictEqual(v.capacite.ambulances_attendues, libres + 1);

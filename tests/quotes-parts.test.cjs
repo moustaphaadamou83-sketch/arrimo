@@ -88,7 +88,7 @@ test('scénario B : quote-part non atteinte mais aucune civière libre → signa
     const v = await appel('tremblay', 'GET', `/vigilance?etablissement_id=${ids.mb}`);
     const a = v.corps.alertes.find((x) => x.type === 'quote_part_contradiction');
     assert.ok(a, 'contradiction signalée');
-    assert.strictEqual(a.titre, 'Quote-part non atteinte (0 reçue(s) et 1 attendue(s) sur 3 par 120 min) alors qu’aucune civière n’est libre.');
+    assert.strictEqual(a.titre, 'Quote-part non atteinte (reçues : 0, attendues : 1, quote-part : 3 par 120 min) alors qu’aucune civière n’est libre.');
     assert.match(a.action, /la destination reste décidée par le répartiteur/);
     assert.match(a.seuil.regle, /aucune marge n’est calculée/);
     const pa = (await pool.query("SELECT destination_id, statut FROM prealertes WHERE numero = 'PA-QP1'")).rows[0];
