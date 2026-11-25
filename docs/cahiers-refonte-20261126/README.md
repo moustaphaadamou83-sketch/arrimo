@@ -38,6 +38,10 @@ Deux documents reçus en double à l'identique (« Coordination temporelle et an
 
 Références officielles du MSSS conservées ; objectifs internes Arrimo 15/30 et 5/10 affichés en parallèle. Maquette visuelle : en examen (aperçu `?design=v2`), pas de généralisation avant sa validation définitive.
 
+### Décision de Moustafa (26 nov. 2026, portail des proches)
+
+Mise à jour autorisée : les proches autorisés (catégorie « mouvements ») voient les étapes d'une évacuation et d'un transfert entre hébergements, avec l'établissement d'accueil ; jamais la chambre, le lit ni une donnée clinique.
+
 ### Point à trancher par Moustafa (cibles Chrono) — tranché, voir ci-dessus
 
 Les cibles actuelles de Chrono (porte 20 min, sortie 25 min, total 45 min) viennent des définitions du MSSS (décision du 19 nov. 2026). Les cahiers 11 et 15 demandent l'objectif **Arrimo 15/30** (et 5/10 d'excellence). Proposition : garder les cibles MSSS comme référence officielle et ajouter « Arrimo 15/30 » et « 5/10 » comme **objectifs internes configurables**, affichés à côté, jamais à la place.
