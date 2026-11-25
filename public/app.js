@@ -1914,6 +1914,15 @@ async function afficherHistoriquePatient(id) {
 }
 
 /* ---------------- Congés et alertes : congés par lit, disponibilités prévues, blocages explicables ---------------- */
+/** Mesure des résultats (lot 4) : période courante et période de référence de même durée ; écart observé, jamais attribué. */
+function mesuresCoordinationHTML(m, F) {
+  const L = [['chrono', 'porte_mediane_min'], ['chrono', 'porte_p90_min'], ['chrono', 'immobilisation_heures'], ['transferts', 'taux_realises_pct'], ['transferts', 'reponse_mediane_min'],
+    ['transports', 'prise_en_charge_mediane_min'], ['placements', 'acceptation_depart_mediane_min'], ['alertes', 'resolues_confirmees'], ['alertes', 'accuse_mediane_min'], ['alertes', 'resolution_mediane_min']];
+  const v = (x) => (x == null ? '—' : x);
+  return `<div class="panneau-c"><h3>${F('mesure_titre')}</h3><div class="tableau"><table><thead><tr><th></th><th>${F('mesure_courante')}</th><th>${F('mesure_reference')}</th><th>${F('mesure_ecart')}</th></tr></thead><tbody>
+    ${L.map(([g, k]) => `<tr><th>${F(`mesure_${g}_${k}`)}</th><td class="num">${v(m.courante[g][k])}</td><td class="num">${v(m.reference[g][k])}</td><td class="num">${v(m.ecart[g][k])}</td></tr>`).join('')}
+    </tbody></table></div><p class="note">${esc(m.avertissement)}</p></div>`;
+}
 /** Plan de coordination d'OG (lot 3) : synthèse confirmé / prévisionnel / inconnu, puis une fiche en 7 points par groupe de blocages. */
 function planCoordinationHTML(p, F) {
   const s = p.synthese; const li = (xs) => xs.length ? `<ul class="liste-simple">${xs.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : `<p class="note">—</p>`;
@@ -1959,6 +1968,7 @@ async function vueVigilance() {
   const qs = new URLSearchParams({ etablissement_id: etat.ctx, ...(f.jour ? { jour: f.jour } : f.horizon ? { horizon: f.horizon } : {}), ...(f.unite ? { unite: f.unite } : {}), ...(f.statut ? { statut: f.statut } : {}) });
   const [c, al, lits, plan] = await Promise.all([api('GET', `/conges?${qs}`), api('GET', `/vigilance?etablissement_id=${etat.ctx}`), api('GET', `/lits?etablissement_id=${etat.ctx}`),
     api('GET', `/coordination/plan?etablissement_id=${etat.ctx}`).catch(() => null)]);
+  const mesures = await api('GET', `/coordination/indicateurs?etablissement_id=${etat.ctx}`).catch(() => null);
   const unites = [...new Map(lits.map((l) => [l.unite_id, l.unite])).entries()];
   const filtres = [['4', F('h4')], ['12', F('h12')], ['24', F('h24')], ['aujourdhui', F('aujourdhui')], ['demain', F('demain')]];
   const fraicheur = `<p class="note">${F('lu_a', { heure: heure(c.donnees_lues_le) })} · ${c.controle_periodique.dernier_le ? F('controle', { heure: heure(c.controle_periodique.dernier_le), min: c.controle_periodique.periode_min }) : F('controle_jamais')}${c.controle_periodique.en_retard ? ` · <span class="alerte">${F('controle_retard')}</span>` : ''}</p>`;
@@ -1986,7 +1996,7 @@ async function vueVigilance() {
       ${c.lignes.length ? `<div class="tableau"><table><thead><tr><th>${F('lit')}</th><th>${F('service_unite')}</th><th>${F('chambre_col')}</th><th>${F('occupation')}</th><th>${F('conge_prevu')}</th><th>${F('statut')}</th><th>${F('depart_reel')}</th><th>${F('nettoyage')}</th><th>${F('dispo_estimee')}</th><th>${F('source')}</th></tr></thead><tbody>${c.lignes.map(ligne).join('')}</tbody></table></div>`
     : `<p class="vide">${F('aucun_conge')}</p>`}
       <p class="note">${esc(c.regles.deterministe)} ${esc(c.regles.retard)} ${esc(c.regles.estimation)}</p></div>
-    ${al.capacite ? capaciteReelleHTML(al.capacite, F) : ''}${plan ? planCoordinationHTML(plan, F) : ''}
+    ${al.capacite ? capaciteReelleHTML(al.capacite, F) : ''}${plan ? planCoordinationHTML(plan, F) : ''}${mesures ? mesuresCoordinationHTML(mesures, F) : ''}
     <div class="panneau-c"><h3>${F('alertes_titre', { n: al.alertes.length })}</h3><p class="note">${Object.values(al.regles_couleurs).map(esc).join(' ')}</p>
       <div class="pile">${alertes || `<p class="vide">${F('aucune_alerte')}</p>`}</div></div>`;
   v.querySelectorAll('[data-suivi-op]').forEach((b) => { b.onclick = async () => {

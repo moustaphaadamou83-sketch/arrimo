@@ -124,6 +124,7 @@ window.ARRIMO_I18N.en = {
     activer: 'Activate the organization', desactiver: 'Deactivate the organization',
   },
   chrono: {
+    p90: '90th percentile', pilote_mesures: '{h} h of cumulative downtime · {au_dela} min beyond the total target (indicative, potentially avoidable) · up to {simultanes} ambulances at the door at once',
     pilote_observe: '{n} completed visits measured · {minutes} min of observed vehicle downtime · {depasses} waits over target',
     filtre_vehicule: 'Vehicle', filtre_organisation: 'Company', filtre_periode: 'Visits completed within', periode_heures: '{n} hours', filtrer: 'Filter',
     attente_seuil: 'At or over threshold', attente_moyenne: 'Average current wait', attente_mediane: 'Median current wait', attente_cumulee: 'Combined current wait', actualise: 'Updated at {h}',
@@ -480,6 +481,10 @@ window.ARRIMO_I18N.en = {
     suivi_act_contact_responsable: 'Person responsible contacted', suivi_act_relance_partenaire: 'Partner followed up', suivi_act_ressource_mobilisee: 'Resource mobilized', suivi_act_reaffectation: 'Reassignment', suivi_act_escalade_demandee: 'Escalation requested', suivi_act_attente_externe: 'Waiting for a third party',
     suivi_fait_accuser: 'Acknowledgement recorded.', suivi_fait_action: 'Action recorded.', suivi_fait_resoudre: 'Resolution confirmed.',
     suivi_regle: 'An acknowledgement resolves nothing. Without a response before the deadline, the alert moves to the next level of the escalation grid.',
+    mesure_titre: 'Results (last 30 days and previous 30 days)', mesure_courante: 'Last 30 days', mesure_reference: 'Previous 30 days', mesure_ecart: 'Observed difference',
+    mesure_chrono_porte_mediane_min: 'Door → handover, median (min)', mesure_chrono_porte_p90_min: 'Door → handover, 90th percentile (min)', mesure_chrono_immobilisation_heures: 'Cumulative downtime (h)',
+    mesure_transferts_taux_realises_pct: 'Transfers completed (%)', mesure_transferts_reponse_mediane_min: 'Transfer response, median (min)', mesure_transports_prise_en_charge_mediane_min: 'Request → transport pickup, median (min)',
+    mesure_placements_acceptation_depart_mediane_min: 'Placement accepted → departure, median (min)', mesure_alertes_resolues_confirmees: 'Alerts resolved (confirmed)', mesure_alertes_accuse_mediane_min: 'Time to acknowledge, median (min)', mesure_alertes_resolution_mediane_min: 'Time to resolve, median (min)',
     plan_titre: 'Coordination plan proposed by OG', plan_situation: 'Observed situation', plan_donnees: 'Data used', plan_contraintes: 'Applicable constraints', plan_actions: 'Possible actions', plan_acteurs: 'People involved', plan_incertitudes: 'Uncertainties', plan_validations: 'Human validations required',
     capacite_titre: 'Actual capacity', capacite_note: 'Each category is counted separately. An empty bed is operational only if its availability was confirmed less than {min} min ago; a planned discharge remains an occupied bed.',
     cap_vides: 'Empty beds', cap_operationnels: 'Operational', cap_non_confirmes: 'Empty, unconfirmed', cap_reserves: 'Reserved', cap_occupes: 'Occupied', cap_sorties: 'incl. planned discharges < 24 h: {n}',

@@ -124,6 +124,7 @@ window.ARRIMO_I18N.fr = {
     activer: 'Activer l’organisation', desactiver: 'Désactiver l’organisation',
   },
   chrono: {
+    p90: '90e percentile', pilote_mesures: '{h} h d’immobilisation cumulées · {au_dela} min au-delà de la cible totale (indicatif, potentiellement évitables) · jusqu’à {simultanes} ambulances à la porte en même temps',
     pilote_observe: '{n} passages terminés mesurés · {minutes} min d’immobilisation observées · {depasses} attentes hors cible',
     filtre_vehicule: 'Véhicule', filtre_organisation: 'Entreprise', filtre_periode: 'Passages terminés depuis', periode_heures: '{n} heures', filtrer: 'Filtrer',
     attente_seuil: 'Au seuil ou au-delà', attente_moyenne: 'Attente en cours moyenne', attente_mediane: 'Attente en cours médiane', attente_cumulee: 'Attente en cours cumulée', actualise: 'Actualisé à {h}',
@@ -481,6 +482,10 @@ window.ARRIMO_I18N.fr = {
     suivi_act_contact_responsable: 'Responsable contacté', suivi_act_relance_partenaire: 'Partenaire relancé', suivi_act_ressource_mobilisee: 'Ressource mobilisée', suivi_act_reaffectation: 'Réaffectation', suivi_act_escalade_demandee: 'Escalade demandée', suivi_act_attente_externe: 'En attente d’un tiers',
     suivi_fait_accuser: 'Réception consignée.', suivi_fait_action: 'Action consignée.', suivi_fait_resoudre: 'Résolution confirmée.',
     suivi_regle: 'Un accusé de réception ne résout rien. Sans réponse avant l’échéance, l’alerte passe au niveau suivant de la grille d’escalade.',
+    mesure_titre: 'Mesure des résultats (30 derniers jours et 30 jours précédents)', mesure_courante: '30 derniers jours', mesure_reference: '30 jours précédents', mesure_ecart: 'Écart observé',
+    mesure_chrono_porte_mediane_min: 'Porte → remise, médiane (min)', mesure_chrono_porte_p90_min: 'Porte → remise, 90e percentile (min)', mesure_chrono_immobilisation_heures: 'Immobilisation cumulée (h)',
+    mesure_transferts_taux_realises_pct: 'Transferts réalisés (%)', mesure_transferts_reponse_mediane_min: 'Réponse à un transfert, médiane (min)', mesure_transports_prise_en_charge_mediane_min: 'Demande → prise en charge du transport, médiane (min)',
+    mesure_placements_acceptation_depart_mediane_min: 'Placement accepté → départ, médiane (min)', mesure_alertes_resolues_confirmees: 'Alertes résolues (confirmées)', mesure_alertes_accuse_mediane_min: 'Délai d’accusé, médiane (min)', mesure_alertes_resolution_mediane_min: 'Délai de résolution, médiane (min)',
     plan_titre: 'Plan de coordination proposé par OG', plan_situation: 'Situation observée', plan_donnees: 'Données utilisées', plan_contraintes: 'Contraintes applicables', plan_actions: 'Actions possibles', plan_acteurs: 'Acteurs concernés', plan_incertitudes: 'Incertitudes', plan_validations: 'Validations humaines nécessaires',
     capacite_titre: 'Capacité réelle', capacite_note: 'Chaque catégorie est comptée à part. Un lit vide n’est opérationnel que si sa disponibilité a été confirmée depuis moins de {min} min ; une sortie prévue reste un lit occupé.',
     cap_vides: 'Lits vides', cap_operationnels: 'Opérationnels', cap_non_confirmes: 'Vides non confirmés', cap_reserves: 'Réservés', cap_occupes: 'Occupés', cap_sorties: 'dont sorties prévues < 24 h : {n}',

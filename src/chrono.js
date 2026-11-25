@@ -371,6 +371,22 @@ async function notifierAttentes(pool) {
 
 /* ------------------------------------------------------------------ rapport mensuel, écarts */
 const mediane = (xs) => { if (!xs.length) return null; const s = [...xs].sort((a, b) => a - b); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : Math.round(((s[m - 1] + s[m]) / 2) * 10) / 10; };
+/** Percentile p (0-1) par interpolation linéaire ; null si aucune mesure. */
+const percentile = (xs, p) => { if (!xs.length) return null; const s = [...xs].sort((a, b) => a - b); const i = (s.length - 1) * p; const b = Math.floor(i);
+  return Math.round((s[b] + (s[Math.min(b + 1, s.length - 1)] - s[b]) * (i - b)) * 10) / 10; };
+/** Nombre maximal d'ambulances simultanément à la porte (intervalles H11 → H14, ou maintenant si la remise n'a pas eu lieu). */
+function simultanesMax(rows) {
+  const ev = [];
+  for (const r of rows) {
+    if (!r.heures.H11) continue;
+    const debut = new Date(r.heures.H11.heure).getTime(); const fin = r.heures.H14 ? new Date(r.heures.H14.heure).getTime() : r.statut === 'a_la_porte' ? Date.now() : null;
+    if (fin == null || fin < debut) continue;
+    ev.push([debut, 1], [fin, -1]);
+  }
+  ev.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  let n = 0; let max = 0; for (const [, d] of ev) { n += d; max = Math.max(max, n); }
+  return max;
+}
 const moyenne = (xs) => (xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10 : null);
 function mois(q) {
   const m = String(q.mois || new Date().toISOString().slice(0, 7));
@@ -388,7 +404,7 @@ async function rapport(pool, u, q = {}) {
     const mesures = rows.filter((r) => r.durees[k] != null);
     const xs = mesures.map((r) => r.durees[k]);
     const seuils = new Set(mesures.map((r) => r.cibles[k]));
-    return { n: xs.length, moyenne_min: moyenne(xs), mediane_min: mediane(xs),
+    return { n: xs.length, moyenne_min: moyenne(xs), mediane_min: mediane(xs), p90_min: percentile(xs, 0.9),
       cible_min: seuils.size > 1 ? null : [...seuils][0] ?? cible,
       hors_cible_pct: xs.length ? Math.round((mesures.filter((r) => r.durees[k] > r.cibles[k]).length / xs.length) * 1000) / 10 : null };
   };
@@ -398,6 +414,11 @@ async function rapport(pool, u, q = {}) {
     passages_mesures: visitesMesurees.length,
     immobilisation_min: visitesMesurees.length ? Math.round(visitesMesurees.reduce((total, r) => total + r.durees.total, 0) * 10) / 10 : null,
     porte_hors_cible: rows.filter((r) => r.durees.porte != null && r.durees.porte > r.cibles.porte).length,
+    // Chantier coordination, lot 4 : heures cumulées, simultanéité, part au-delà de la cible totale (indicatif : « potentiellement évitable »,
+    // jamais un gain attribué ; la cible n'est pas une norme clinique)
+    immobilisation_h: visitesMesurees.length ? Math.round(visitesMesurees.reduce((t, r) => t + r.durees.total, 0) / 6) / 10 : null,
+    au_dela_cible_min: visitesMesurees.length ? Math.round(visitesMesurees.reduce((t, r) => t + Math.max(0, r.durees.total - r.cibles.total), 0) * 10) / 10 : null,
+    simultanes_max: simultanesMax(rows),
   };
   return { mois: m, cote: per.cote, cibles: c, indicatif: true, passages: rows.length, pilote: pilotes,
     completude_pct: rows.length ? Math.round((complets / rows.length) * 1000) / 10 : null,
@@ -436,4 +457,4 @@ async function fiche(pool, u, id, q = {}) {
   return { ...e, historique, historique_retards: motifs.rows };
 }
 
-module.exports = { traiterPosition, arriveeSignalee, remise, tableau, marquerEtape, depart, corriger, signalerRetard, notifierAttentes, rapport, csv, ecarts, fiche, metres, ETAPES, MOTIFS_RETARD, palier, peutLireAlerte: (u) => ROLES_HOPITAL.includes(u.role), ZONE_DEFAUT_M };
+module.exports = { percentile, simultanesMax, traiterPosition, arriveeSignalee, remise, tableau, marquerEtape, depart, corriger, signalerRetard, notifierAttentes, rapport, csv, ecarts, fiche, metres, ETAPES, MOTIFS_RETARD, palier, peutLireAlerte: (u) => ROLES_HOPITAL.includes(u.role), ZONE_DEFAUT_M };

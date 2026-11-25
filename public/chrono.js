@@ -84,10 +84,10 @@
     const z = $('#ch-rapport-corps'); if (!z) return;
     const r = await api('GET', `/chrono/rapport?etablissement_id=${etat.ctx}&mois=${etatC.mois}&${paramsFiltres()}`).catch((e) => { z.innerHTML = `<p class="note">${esc(e.message)}</p>`; return null; });
     if (!r) return;
-    const ligne = (k) => `<tr><th>${K(k)}</th><td>${r[k].n}</td><td>${r[k].moyenne_min ?? '—'}</td><td>${r[k].mediane_min ?? '—'}</td><td>${r[k].cible_min ?? '—'}</td><td>${r[k].hors_cible_pct ?? '—'}</td></tr>`;
+    const ligne = (k) => `<tr><th>${K(k)}</th><td>${r[k].n}</td><td>${r[k].moyenne_min ?? '—'}</td><td>${r[k].mediane_min ?? '—'}</td><td>${r[k].p90_min ?? '—'}</td><td>${r[k].cible_min ?? '—'}</td><td>${r[k].hors_cible_pct ?? '—'}</td></tr>`;
     z.innerHTML = `<p>${K('rapport_resume', { n: r.passages, completude: r.completude_pct ?? '—', corrections: r.corrections })}</p>
-      ${r.pilote ? `<p class="note">${K('pilote_observe', { n: r.pilote.passages_mesures, minutes: r.pilote.immobilisation_min ?? '—', depasses: r.pilote.porte_hors_cible })}</p>` : ''}
-      <div class="tableau"><table><thead><tr><th></th><th>${K('n')}</th><th>${K('moyenne')}</th><th>${K('mediane')}</th><th>${K('cible')}</th><th>${K('hors_cible')}</th></tr></thead>
+      ${r.pilote ? `<p class="note">${K('pilote_observe', { n: r.pilote.passages_mesures, minutes: r.pilote.immobilisation_min ?? '—', depasses: r.pilote.porte_hors_cible })}<br>${K('pilote_mesures', { h: r.pilote.immobilisation_h ?? '—', au_dela: r.pilote.au_dela_cible_min ?? '—', simultanes: r.pilote.simultanes_max ?? 0 })}</p>` : ''}
+      <div class="tableau"><table><thead><tr><th></th><th>${K('n')}</th><th>${K('moyenne')}</th><th>${K('mediane')}</th><th>${K('p90')}</th><th>${K('cible')}</th><th>${K('hors_cible')}</th></tr></thead>
       <tbody>${['porte', 'sortie', 'total'].map(ligne).join('')}</tbody></table></div>
       <p class="note">${K('manquantes')} ${ETAPES.map((e) => `${e} : ${r.etapes_manquantes[e]}`).join(' · ')}</p>
       <ul class="liste-simple">${Object.entries(r.motifs_retard || {}).filter(([, n]) => n > 0)
