@@ -51,6 +51,9 @@ test('Flux : même référence, même catégorie au départ et à l’arrivée',
     assert.ok(a && b, 'visible des deux côtés');
     assert.strictEqual(a.mouvement, 'depart'); assert.strictEqual(b.mouvement, 'arrivee');
     assert.deepStrictEqual(a.categorie, b.categorie); assert.strictEqual(a.categorie.code, 'interhospitalier');
+    // Indice de préparation (arrivée, côté receveur) : acceptation manquante tant que le transfert n'est pas accepté, jamais « prêt »
+    assert.ok(b.preparation_accueil); assert.strictEqual(b.preparation_accueil.pret, false); assert.ok(b.preparation_accueil.manquantes.includes('acceptation'));
+    assert.strictEqual(a.preparation_accueil, undefined, 'pas d’indice pour un départ');
     const leg = await (await fetch(`${base}/api/mouvements/categories`, { headers: { Authorization: `Bearer ${await jeton('tremblay')}` } })).json();
     assert.strictEqual(leg.length, 7);
   } finally { serveur.close(); await pool.end(); }

@@ -100,9 +100,27 @@ async function mouvements(pool, u, q = {}) {
     // Préparation en retard (cahier Personnel & Tâches, 15) : chambre pas prête à moins de 30 min de l'arrivée prévue ou estimée
     if (l.preparation && ['a_faire', 'en_cours'].includes(l.preparation.etat) && l.mouvement === 'arrivee' && !l.arrivee_reelle && repere && new Date(repere).getTime() - now < 30 * 60000) l.preparation.retard = true;
   }
+  // Indice de préparation de l'accueil (cahier final §6) : conditions vérifiables seulement ; null = non applicable ou inconnu (jamais « fait »).
+  // Un pourcentage élevé ne remplace pas une condition obligatoire : `pret` exige toutes les conditions obligatoires remplies.
+  for (const l of res) {
+    if (l.mouvement !== 'arrivee' || ['termine', 'arrive', 'refuse', 'annule'].includes(l.statut)) continue;
+    const prep = l.preparation?.etat;
+    const conditions = [
+      { code: 'capacite_prete', obligatoire: true, ok: prep == null ? null : prep === 'prete' },
+      { code: 'acceptation', obligatoire: l.type === 'transfert' || l.type === 'hebergement', ok: l.type === 'transfert' ? !['demande'].includes(l.statut_brut) : l.type === 'hebergement' ? true : null },
+      { code: 'prealerte_recue', obligatoire: l.type === 'prealerte' || !!l.prealerte, ok: l.type === 'prealerte' ? l.statut_brut !== 'envoyee' : l.prealerte ? !!l.prealerte.recue_le : null },
+    ].filter((c) => c.ok !== null || c.obligatoire);
+    const connues = conditions.filter((c) => c.ok !== null);
+    const repere = l.eta || l.prevue; const avant = repere ? Math.round((new Date(repere).getTime() - now) / 60000) : null;
+    const manquantes = conditions.filter((c) => c.obligatoire && c.ok !== true).map((c) => c.code);
+    l.preparation_accueil = { conditions, pct: connues.length ? Math.round((connues.filter((c) => c.ok).length / connues.length) * 100) : null,
+      pret: manquantes.length === 0, manquantes, minutes_avant_arrivee: avant, estimation: !!l.eta && l.eta_source !== 'confirme',
+      risque: manquantes.length > 0 && avant != null && avant <= 15 };
+  }
   return { genere_le: new Date().toISOString(), mouvements: res,
     resume: { arrivees: res.filter((l) => l.mouvement === 'arrivee').length, departs: res.filter((l) => l.mouvement === 'depart').length, retards: res.filter((l) => l.retard).length,
       prealertes_a_acquitter: res.filter((l) => l.actions.includes('accuser_prealerte')).length,
+      arrivees_a_risque: res.filter((l) => l.preparation_accueil?.risque).length,
       par_categorie: Object.fromEntries(cat.legende().map((c) => [c.code, res.filter((l) => l.categorie?.code === c.code).length])), preparations: res.filter((l) => l.preparation && ['a_faire', 'en_cours'].includes(l.preparation.etat)).length } };
 }
 
