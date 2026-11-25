@@ -113,8 +113,13 @@ async function demander(pool, u, coordinationId, b) {
       const deja = (await c.query('SELECT * FROM demandes_transport WHERE origine_id = $1 AND cle_idempotence = $2', [co.origine_id, cle])).rows[0];
       if (deja) return { ...deja, rejoue: true };
     }
-    // Avant le départ : la coordination est transmise ou acceptée (le transport ne remplace pas ces étapes)
-    if (!['envoyee', 'acceptee'].includes(co.statut)) throw new ErreurHttp(409, 'coordination_statut_incompatible');
+    // Avant le départ : la coordination est transmise ou acceptée (le transport ne remplace pas ces étapes).
+    // Parcours planifiés (inter-CHSLD, vers l'hôpital, retour) : acceptation du receveur obligatoire avant tout transport
+    // (refonte unifiée, §6.1 / §4.7) ; l'hospitalisation urgente n'est jamais retardée par cette règle.
+    const ACCEPTATION_REQUISE = ['transfert_chsld', 'transfert_hopital', 'retour'];
+    if (!(ACCEPTATION_REQUISE.includes(co.type) ? ['acceptee'] : ['envoyee', 'acceptee']).includes(co.statut)) {
+      throw new ErreurHttp(409, ACCEPTATION_REQUISE.includes(co.type) && co.statut === 'envoyee' ? 'acceptation_requise' : 'coordination_statut_incompatible');
+    }
     const ouverte = (await c.query('SELECT numero FROM demandes_transport WHERE coordination_id = $1 AND statut = ANY($2)', [co.id, OUVERTES])).rows[0];
     if (ouverte) throw new ErreurHttp(409, 'transport_deja_demande', { numero: ouverte.numero });
     const i = co.infos_operationnelles || {};

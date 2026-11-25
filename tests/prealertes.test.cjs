@@ -1045,3 +1045,24 @@ test('équipage restreint : un véhicule attribué, sans accès au second véhic
     await pool.query('UPDATE organisations_secours SET restreindre_equipages_aux_unites = false WHERE id = $1', [ids.ambA]);
   }
 });
+
+test('acceptation obligatoire (refonte unifiée §6.1) : retour hôpital → CHSLD sans transport avant l’accord du CHSLD, même par l’API ; urgence non retardée', async () => {
+  const TE = require('../src/types-etablissement');
+  const cfgCh = await TE.configChsld(pool, (await pool.query('SELECT config_id FROM etablissements WHERE id = $1', [ids.mb])).rows[0].config_id);
+  const a = (await pool.query(`INSERT INTO etablissements (code, nom, ville, adresse, latitude, longitude, config_id, partage, module_actif, type_etablissement, modules)
+    VALUES ('CH-AC1', 'CHSLD AC1', 'Sherbrooke', '1, rue fictive', 45.41, -71.90, $1, 'complet', true, 'chsld', '{"transport_ambulancier": true}') RETURNING id`, [cfgCh])).rows[0].id;
+  await pool.query(`UPDATE etablissements SET modules = COALESCE(modules, '{}'::jsonb) || '{"transport_ambulancier": true}' WHERE id = $1`, [ids.mb]);
+  const res = (await pool.query(`INSERT INTO residents (etablissement_id, reference, prenom, nom, date_naissance, statut) VALUES ($1, 'R-90501', 'Prénom', 'Fictif', '1940-01-01', 'hospitalise') RETURNING id`, [a])).rows[0].id;
+  const co = (await pool.query(`INSERT INTO coordinations (numero, type, resident_id, resident_ref, origine_id, destination_id, statut) VALUES ('CO-90501', 'retour', $1, 'R-90501', $2, $3, 'envoyee') RETURNING id`, [res, ids.mb, a])).rows[0].id;
+  const r = await appel('tremblay', 'POST', `/coordinations/${co}/transport`, { organisation_id: ids.ambA });
+  assert.strictEqual(r.statut, 409, JSON.stringify(r.corps)); assert.strictEqual(r.corps.code, 'acceptation_requise');
+  await pool.query("UPDATE coordinations SET statut = 'acceptee' WHERE id = $1", [co]);
+  const ok = await appel('tremblay', 'POST', `/coordinations/${co}/transport`, { organisation_id: ids.ambA });
+  assert.strictEqual(ok.statut, 200, JSON.stringify(ok.corps));
+  // Hospitalisation urgente : transport possible dès la transmission, sans attendre d'acceptation
+  const coordo = await compte('coord.ac1@demo.arrimo', 'Coordination AC1', 'coordonnateur', null);
+  await pool.query('INSERT INTO utilisateur_etablissements VALUES ($1, $2)', [coordo, a]); await connecter('ac1', 'coord.ac1@demo.arrimo');
+  const res2 = (await pool.query(`INSERT INTO residents (etablissement_id, reference, prenom, nom, date_naissance, statut) VALUES ($1, 'R-90502', 'Prénom', 'Fictif', '1940-01-01', 'present') RETURNING id`, [a])).rows[0].id;
+  const co2 = (await pool.query(`INSERT INTO coordinations (numero, type, resident_id, resident_ref, origine_id, destination_id, statut) VALUES ('CO-90502', 'hospitalisation', $1, 'R-90502', $2, $3, 'envoyee') RETURNING id`, [res2, a, ids.mb])).rows[0].id;
+  assert.strictEqual((await appel('ac1', 'POST', `/coordinations/${co2}/transport`, { organisation_id: ids.ambA })).statut, 200);
+});

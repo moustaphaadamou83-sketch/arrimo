@@ -483,6 +483,7 @@ const MESSAGES = {
   connecteur_introuvable: 'Connecteur introuvable.',
   connecteur_cle_manquante: 'Clé de connecteur manquante.',
   connecteur_cle_invalide: 'Clé de connecteur invalide.',
+  acceptation_requise: 'L’établissement receveur doit accepter avant que le transport soit organisé (parcours planifié).',
   statut_incompatible: 'Cette action n’est pas possible dans l’état actuel de l’alerte.',
   releve_meme_personne: 'La relève doit être accusée par une autre personne que celle qui l’a transmise.',
   visites_suspendues_crise: 'Visites suspendues : la résidence est en cours d’évacuation.',
