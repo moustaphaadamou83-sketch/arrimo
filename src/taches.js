@@ -77,6 +77,53 @@ async function miennes(pool, u, q = {}) {
   return { taches: toutes, terminees, parametres: { taches: pt, nettoyage: { delai_nettoyage_min: pn.delai_nettoyage_min, types_intervention: pn.types_intervention } }, chsld: e?.type_etablissement === 'chsld', personnel, non_attribuees: resp ? t.filter((x) => !x.assigne_a).length : undefined, ecran: e?.type_etablissement === 'chsld' ? 'c-taches' : 'nettoyage' };
 }
 
+/**
+ * Relève entre équipes (complémentaire nº 3, §6 ; 26 nov. 2026) : l'équipe sortante transmet ce qui reste ouvert (tâches non faites,
+ * en retard, nettoyages, alertes suivies sans résolution), l'équipe entrante accuse la relève. Numéros et compteurs seulement :
+ * aucun titre libre, aucune donnée clinique. Les indicateurs ne servent jamais à sanctionner une personne.
+ */
+async function preparerReleve(db, etabId) {
+  const taches = (await db.query(`SELECT t.id, t.type, t.statut, t.echeance, t.assigne_role, (t.echeance < now()) AS en_retard, l.code AS lieu
+      FROM taches_etab t LEFT JOIN lits l ON l.id = t.lit_id WHERE t.etablissement_id = $1 AND t.statut IN ('a_faire', 'en_cours') ORDER BY t.echeance NULLS LAST, t.id`, [etabId])).rows;
+  const nettoyages = (await db.query(`SELECT code FROM lits WHERE etablissement_id = $1 AND etat = 'nettoyage' AND actif ORDER BY etat_depuis`, [etabId])).rows.map((x) => x.code);
+  const alertes = (await db.query(`SELECT id, type, niveau, statut, responsable_role, echeance FROM suivis_alertes WHERE etablissement_id = $1 AND statut IN ('ouverte', 'accusee', 'en_action', 'levee')
+      ORDER BY (niveau = 'eleve') DESC, cree_le`, [etabId])).rows.map((x) => ({ ...x, id: Number(x.id) }));
+  return { taches: taches.map(({ id, type, statut, echeance, assigne_role, en_retard, lieu }) => ({ id, type, statut, echeance, assigne_role, en_retard: !!en_retard, lieu })),
+    nettoyages, alertes,
+    compteurs: { taches: taches.length, en_retard: taches.filter((x) => x.en_retard).length, nettoyages: nettoyages.length, alertes: alertes.length,
+      alertes_elevees: alertes.filter((x) => x.niveau === 'eleve').length, resolutions_a_confirmer: alertes.filter((x) => x.statut === 'levee').length } };
+}
+async function releve(pool, u, q = {}) {
+  const id = Number(q.etablissement_id); if (!Number.isSafeInteger(id) || id < 1) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'etablissement_id' });
+  exigerEtablissement(u, id);
+  const derniere = (await pool.query(`SELECT r.*, a.nom AS transmis_par_nom, b.nom AS accuse_par_nom FROM releves_equipe r JOIN utilisateurs a ON a.id = r.transmis_par
+      LEFT JOIN utilisateurs b ON b.id = r.accuse_par WHERE r.etablissement_id = $1 ORDER BY r.transmis_le DESC LIMIT 1`, [id])).rows[0] || null;
+  return { maintenant: await preparerReleve(pool, id), derniere: derniere && { ...derniere, id: Number(derniere.id) } };
+}
+async function transmettreReleve(pool, u, b = {}) {
+  const id = Number(b.etablissement_id); if (!Number.isSafeInteger(id) || id < 1) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'etablissement_id' });
+  exigerEtablissement(u, id);
+  if (![...RESPONSABLES, 'equipe_soins', 'entretien'].includes(u.role)) throw new ErreurHttp(403, 'role_insuffisant');
+  if (!['jour', 'soir', 'nuit'].includes(b.quart)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'quart' });
+  const contenu = await preparerReleve(pool, id);
+  const r = (await pool.query('INSERT INTO releves_equipe (etablissement_id, quart, transmis_par, contenu) VALUES ($1, $2, $3, $4) RETURNING *', [id, b.quart, u.id, contenu])).rows[0];
+  await pool.query("INSERT INTO journal (etablissement_id, utilisateur_id, action, detail) VALUES ($1, $2, 'Relève transmise', $3)",
+    [id, u.id, `${b.quart} · ${contenu.compteurs.taches} tâche(s), ${contenu.compteurs.en_retard} en retard, ${contenu.compteurs.alertes} alerte(s)`]);
+  require('./flux').signaler();
+  return { ...r, id: Number(r.id) };
+}
+async function accuserReleve(pool, u, releveId) {
+  const r = (await pool.query('SELECT * FROM releves_equipe WHERE id = $1', [Number(releveId)])).rows[0];
+  if (!r) throw new ErreurHttp(404, 'objet_introuvable');
+  exigerEtablissement(u, r.etablissement_id);
+  if (r.transmis_par === u.id) throw new ErreurHttp(409, 'releve_meme_personne');
+  if (r.accuse_le) return { ...r, id: Number(r.id), deja: true };
+  const n = (await pool.query('UPDATE releves_equipe SET accuse_par = $2, accuse_le = now() WHERE id = $1 AND accuse_le IS NULL RETURNING *', [r.id, u.id])).rows[0];
+  await pool.query("INSERT INTO journal (etablissement_id, utilisateur_id, action, detail) VALUES ($1, $2, 'Relève accusée', $3)", [r.etablissement_id, u.id, `${r.quart}`]);
+  require('./flux').signaler();
+  return { ...(n || r), id: Number(r.id) };
+}
+
 /** Attribution (responsable) : à une personne active de l'établissement, ou retour à la file (utilisateur_id null). Journalisée. */
 async function attribuer(pool, u, tacheId, b = {}) {
   if (!RESPONSABLES.includes(u.role)) throw new ErreurHttp(403, 'role_insuffisant');
@@ -105,4 +152,4 @@ async function notifierRetards(pool) {
   for (const t of r) await require('./services').notifier(pool, t.etablissement_id, null, 'tache_en_retard', { titre: String(t.titre).replace(/\s*[RP]-\d{4,6}/g, '') }).catch(() => {});
   return r.length;
 }
-module.exports = { notifierRetards, miennes, attribuer, parametres, enregistrerParametres, lireParametres };
+module.exports = { releve, transmettreReleve, accuserReleve, notifierRetards, miennes, attribuer, parametres, enregistrerParametres, lireParametres };

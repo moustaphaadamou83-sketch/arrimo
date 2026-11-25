@@ -75,7 +75,9 @@ async function horaire(pool, u, q = {}) {
   const fin = new Date(jour.getTime() + jours * 86400000);
   if (u.role === 'intervenant') {
     const ids = await prestatairesDe(pool, u);
-    return (await pool.query(`SELECT ${CHAMPS}, e.latitude, e.longitude ${FROM} WHERE v.prestataire_id = ANY($1) AND v.debut_prevu < $3 AND v.fin_prevue >= $2 AND v.statut <> 'annulee' ORDER BY v.debut_prevu`, [ids, jour, fin])).rows;
+    return (await pool.query(`SELECT ${CHAMPS}, e.latitude, e.longitude,
+        EXISTS (SELECT 1 FROM evacuations ev WHERE ev.etablissement_id = v.etablissement_id AND ev.statut = 'active' AND NOT ev.simulation) AS suspendue_crise
+      ${FROM} WHERE v.prestataire_id = ANY($1) AND v.debut_prevu < $3 AND v.fin_prevue >= $2 AND v.statut <> 'annulee' ORDER BY v.debut_prevu`, [ids, jour, fin])).rows;
   }
   const e = await residence(pool, u, q.etablissement_id);
   return (await pool.query(`SELECT ${CHAMPS}, r.prenom, r.nom ${FROM} JOIN residents r ON r.id = v.resident_id WHERE v.etablissement_id = $1 AND v.debut_prevu < $3 AND v.fin_prevue >= $2 ORDER BY v.debut_prevu`, [e.id, jour, fin])).rows;
@@ -93,6 +95,10 @@ async function pointer(pool, u, id, b = {}) {
     const v = (await c.query(`SELECT v.*, e.latitude, e.longitude, e.visites_rayon_m FROM visites v JOIN etablissements e ON e.id = v.etablissement_id WHERE v.id = $1 FOR UPDATE OF v`, [entier(id)])).rows[0];
     if (!v || !ids.includes(v.prestataire_id)) throw new ErreurHttp(404, 'visite_introuvable');
     if (etape === 'arrivee' && !['prevue', 'manquee'].includes(v.statut)) throw new ErreurHttp(409, 'visite_statut');
+    // Complémentaire nº 3, §4 : résidence en cours d'évacuation (réelle) → visites suspendues ; aucune arrivée enregistrée
+    if (etape === 'arrivee' && (await c.query("SELECT 1 FROM evacuations WHERE etablissement_id = $1 AND statut = 'active' AND NOT simulation", [v.etablissement_id])).rowCount) {
+      throw new ErreurHttp(409, 'visites_suspendues_crise');
+    }
     if (etape === 'depart' && v.statut !== 'en_cours') throw new ErreurHttp(409, 'visite_statut');
     let source = 'clic'; let heure = new Date();
     if (b.latitude != null && b.longitude != null) {

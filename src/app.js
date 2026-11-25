@@ -308,6 +308,10 @@ function creerApp(pool, options = {}) {
   // Personnel & Tâches : « Mes tâches » (moteur unique) et attribution
   api.get('/kpi/catalogue', route((req) => require('./kpi-catalogue').catalogue(req.query.langue || req.utilisateur.langue)));
   api.get('/taches/miennes', route((req) => require('./taches').miennes(pool, req.utilisateur, req.query)));
+  // Relève entre équipes (complémentaire nº 3, §6)
+  api.get('/taches/releve', route((req) => require('./taches').releve(pool, req.utilisateur, req.query)));
+  api.post('/taches/releve', route((req) => require('./taches').transmettreReleve(pool, req.utilisateur, req.body)));
+  api.post('/taches/releve/:id/accuser', route((req) => require('./taches').accuserReleve(pool, req.utilisateur, req.params.id)));
   api.get('/parametres-modules/:module', route((req) => require('./taches').parametres(pool, req.utilisateur, req.params.module, req.query)));
   api.put('/parametres-modules/:module', route((req) => require('./taches').enregistrerParametres(pool, req.utilisateur, req.params.module, req.body)));
   api.post('/taches/:id/attribuer', route((req) => require('./taches').attribuer(pool, req.utilisateur, req.params.id, req.body)));
