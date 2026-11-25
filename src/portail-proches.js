@@ -188,6 +188,23 @@ async function situation(pool, p) {
     return [pas('transfert_preparation', h?.cree_le), pas('depart_confirme', h?.depart_le), ...(h?.ambulance_le ? [pas('ambulance_en_route', h.ambulance_le)] : []), pas('hospitalisation_en_cours', h?.arrivee_le),
       pas('retour_prevu', accepte ? ret.retour_prevu_le : null), pas('arrivee_confirmee', ret?.arrivee_le), pas('reintegre', ret?.reintegree_le)];
   };
+  // Mise à jour du cahier « Famille » (accord de Moustafa, 26 nov. 2026) : étapes d'une évacuation et d'un transfert entre hébergements,
+  // avec l'établissement d'accueil ; jamais la chambre, le lit ni une donnée clinique. Catégorie « mouvements » requise.
+  if (voitMouvements) {
+    const pas = (code, date) => ({ code, date: date || null, fait: !!date });
+    const ev = (await pool.query(`SELECT er.*, ev.debut_le, d.nom AS destination FROM evacuation_residents er JOIN evacuations ev ON ev.id = er.evacuation_id
+        LEFT JOIN etablissements d ON d.id = er.destination_id WHERE er.resident_id = $1 AND ev.statut = 'active' AND NOT ev.simulation ORDER BY er.id DESC LIMIT 1`, [p.resident_id])).rows[0];
+    if (ev) return { ...s, statut: ev.accueilli_le ? 'evacuation_accueilli' : ev.arrivee_le ? 'evacuation_arrive' : ev.depart_le ? 'evacuation_en_route' : 'evacuation_en_cours',
+      hopital: ev.destination || null, depuis: ev.accueilli_le || ev.arrivee_le || ev.depart_le || ev.debut_le,
+      parcours: [pas('evacuation_declenchee', ev.debut_le), pas('lieu_confirme', ev.confirme_le), pas('depart_confirme', ev.depart_le), pas('arrivee_confirmee', ev.arrivee_le), pas('accueil_confirme', ev.accueilli_le)] };
+    const tc = (await pool.query(`SELECT c.*, d.nom AS destination, (SELECT max(x.date) FROM coordination_etapes x WHERE x.coordination_id = c.id AND x.statut = 'acceptee') AS acceptee_le,
+        (SELECT max(x.date) FROM coordination_etapes x WHERE x.coordination_id = c.id AND x.statut = 'en_cours') AS depart_le
+      FROM coordinations c JOIN etablissements d ON d.id = c.destination_id WHERE c.resident_id = $1 AND c.type = 'transfert_chsld'
+        AND (c.statut IN ('envoyee', 'acceptee', 'en_cours') OR (c.statut = 'recue' AND c.modifie_le > now() - interval '7 days')) ORDER BY c.id DESC LIMIT 1`, [p.resident_id])).rows[0];
+    if (tc) return { ...s, statut: tc.statut === 'recue' ? 'transfert_hebergement_arrive' : tc.statut === 'en_cours' ? 'transfert_hebergement_en_route' : 'transfert_hebergement_prevu',
+      hopital: tc.destination, depuis: tc.arrivee_le || tc.depart_le || tc.acceptee_le || tc.cree_le,
+      parcours: [pas('demande_envoyee', tc.cree_le), pas('accepte', tc.acceptee_le), pas('depart_confirme', tc.depart_le), pas('arrivee_confirmee', tc.arrivee_le)] };
+  }
   if (r.statut === 'hospitalise') {
     if (!voitMouvements) return { ...s, statut: 'absent_etablissement' };
     const retourActif = ouvert(retour) && ['acceptee', 'en_cours'].includes(retour.statut) ? retour : null;
