@@ -246,7 +246,7 @@ class Publication:
             v = dict(x.split('=',1) for x in unite.splitlines() if '=' in x)
             # systemctl show répète EnvironmentFiles une fois par fichier (unité puis drop-ins).
             fichiers = [x.split('=',1)[1].split(' (ignore_errors=')[0] for x in unite.splitlines() if x.startswith('EnvironmentFiles=')]
-            if v.get('ActiveState') != 'active' or v.get('WorkingDirectory') != str(root / 'current') or not fichiers or fichiers[0] != str(env_file) or any(pathlib.Path(f) != env_file for f in fichiers) or NODE not in v.get('ExecStart',''):
+            if v.get('ActiveState') != 'active' or v.get('WorkingDirectory') != str(root / 'current') or not fichiers or fichiers[0] != str(env_file) or any(pathlib.Path(f).parent != env_file.parent for f in fichiers) or NODE not in v.get('ExecStart',''):
                 raise Refus('Unité systemd inattendue : ' + t)
             if v.get('User') in ('', 'root', None): raise Refus('Compte applicatif dédié requis')
             nginx = pathlib.Path('/etc/nginx/sites-available') / service
