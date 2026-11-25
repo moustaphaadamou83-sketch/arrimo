@@ -58,3 +58,24 @@ test('Flux : même référence, même catégorie au départ et à l’arrivée',
     assert.strictEqual(leg.length, 7);
   } finally { serveur.close(); await pool.end(); }
 });
+
+test('file virtuelle des arrivées : tranches, priorité clinique d’abord, capacité confirmée seulement', async () => {
+  require('./routeur-fictif.cjs').activer();
+  const pool = creerPool(process.env.TEST_DATABASE_URL); await viderBase(pool); await seed(pool, { silencieux: true });
+  const serveur = await demarrerServeur(creerApp(pool)); const base = `http://127.0.0.1:${serveur.address().port}`;
+  try {
+    const mb = (await pool.query("SELECT id, config_id FROM etablissements WHERE code = 'MB'")).rows[0];
+    const org = (await pool.query("INSERT INTO organisations_secours (code, nom, type, profils, config_id) VALUES ('AMB-FI', 'AMB-FI', 'ambulancier', ARRAY['ambulance'], $1) RETURNING id", [mb.config_id])).rows[0].id;
+    for (const [n, prio, min] of [['PA-FI1', 'non_urgente', 8], ['PA-FI2', 'immediate', 9], ['PA-FI3', 'urgente', 50]]) {
+      const un = (await pool.query("INSERT INTO unites_secours (organisation_id, numero) VALUES ($1, $2) RETURNING id", [org, `5${n.slice(-1)}-01`])).rows[0].id;
+      await pool.query(`INSERT INTO prealertes (numero, organisation_id, unite_id, destination_id, priorite, categorie, heure_prevue) VALUES ($1, $2, $3, $4, $5, 'medicale', now() + make_interval(mins => $6))`, [n, org, un, mb.id, prio, min]);
+    }
+    const jeton = (await (await fetch(`${base}/api/connexion`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'tremblay@demo.arrimo', mot_de_passe: MOT_DE_PASSE_DEMO }) })).json()).token;
+    const r = await (await fetch(`${base}/api/arrivees/file?etablissement_id=${mb.id}`, { headers: { Authorization: `Bearer ${jeton}` } })).json();
+    const t10 = r.tranches.find((t) => t.jusqu_a_min === 10).arrivees.map((a) => a.reference);
+    assert.deepStrictEqual(t10, ['PA-FI2', 'PA-FI1'], 'priorité immédiate avant l’heure');
+    assert.ok(r.tranches.find((t) => t.jusqu_a_min === 60).arrivees.some((a) => a.reference === 'PA-FI3'));
+    assert.ok(Number.isInteger(r.capacite_confirmee.civieres_libres)); assert.strictEqual(r.horizons.length, 4);
+    assert.match(r.regle, /seulement la capacité confirmée/);
+  } finally { serveur.close(); await pool.end(); }
+});

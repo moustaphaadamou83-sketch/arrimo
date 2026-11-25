@@ -189,4 +189,26 @@ async function fiche(pool, u, q = {}) {
     chronologie: ev.map((x) => ({ etape: NOM[x.type] || x.type, quand: x.cree_le, acteur: x.acteur || null })), incident: d.incident_le ? { le: d.incident_le, motif: d.incident_motif } : null };
 }
 
-module.exports = { historiqueCapacites, historique, mouvements, fiche };
+/**
+ * File virtuelle des arrivées (cahier final §9 ; coordination temporelle §5) : arrivées attendues par échéance (5, 10, 15, 30, 60, 120 min),
+ * indice de préparation, et en face la capacité CONFIRMÉE (jamais une prévision). Dans une tranche, la priorité clinique déclarée passe avant
+ * l'heure. Une arrivée sans heure connue est listée à part (jamais inventée).
+ */
+const TRANCHES = [5, 10, 15, 30, 60, 120];
+const RANG_PRIORITE = { immediate: 0, urgente: 1, non_urgente: 2 };
+async function fileArrivees(pool, u, q = {}) {
+  const f = await mouvements(pool, u, { ...q, sens: 'arrivees' });
+  const ouvertes = f.mouvements.filter((l) => !['termine', 'arrive', 'refuse', 'annule'].includes(l.statut));
+  const tranches = TRANCHES.map((max, i) => ({ jusqu_a_min: max, arrivees: ouvertes.filter((l) => { const m = l.preparation_accueil?.minutes_avant_arrivee; return m != null && m <= max && m > (i ? TRANCHES[i - 1] : -Infinity); })
+    .sort((a, b) => (RANG_PRIORITE[a.priorite] ?? 3) - (RANG_PRIORITE[b.priorite] ?? 3) || a.preparation_accueil.minutes_avant_arrivee - b.preparation_accueil.minutes_avant_arrivee) }));
+  const sansHeure = ouvertes.filter((l) => l.preparation_accueil?.minutes_avant_arrivee == null);
+  const cap = (await require('./vigilance').blocages(pool, u, Number(q.etablissement_id))).capacite;
+  const dans = (max) => ouvertes.filter((l) => { const m = l.preparation_accueil?.minutes_avant_arrivee; return m != null && m <= max; }).length;
+  return { genere_le: f.genere_le, tranches, sans_heure: sansHeure,
+    capacite_confirmee: { lits_operationnels: cap.lits.operationnels, civieres_libres: cap.civieres.libres, prevision_non_comptee: cap.lits.sorties_prevues_24h + cap.lits.nettoyage },
+    horizons: [15, 30, 60, 120].map((h) => ({ minutes: h, arrivees: dans(h), civieres_libres: cap.civieres.libres, risque: dans(h) > cap.civieres.libres + cap.lits.operationnels })),
+    regle: u.langue === 'en' ? 'Times are estimates unless confirmed. Clinical priority comes first. Capacity shown is confirmed only.'
+      : 'Les heures sont des estimations sauf confirmation. La priorité clinique passe d’abord. La capacité affichée est seulement la capacité confirmée.' };
+}
+
+module.exports = { fileArrivees, historiqueCapacites, historique, mouvements, fiche };

@@ -316,6 +316,7 @@ function creerApp(pool, options = {}) {
   api.put('/parametres-modules/:module', route((req) => require('./taches').enregistrerParametres(pool, req.utilisateur, req.params.module, req.body)));
   api.post('/taches/:id/attribuer', route((req) => require('./taches').attribuer(pool, req.utilisateur, req.params.id, req.body)));
   // Arrimo Flux (cahier ultime, 21 nov. 2026) : arrivées et départs de l'établissement
+  api.get('/arrivees/file', route((req) => require('./arrimo-flux').fileArrivees(pool, req.utilisateur, req.query)));
   api.get('/arrimo-flux', route((req) => require('./arrimo-flux').mouvements(pool, req.utilisateur, req.query)));
   api.get('/capacites/historique', route((req) => require('./arrimo-flux').historiqueCapacites(pool, req.utilisateur, req.query)));
   api.get('/arrimo-flux/historique', route((req) => require('./arrimo-flux').historique(pool, req.utilisateur, req.query)));
