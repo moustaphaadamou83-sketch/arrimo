@@ -10,6 +10,9 @@ const { ErreurHttp } = require('./db');
 const { exigerEtablissement } = require('./auth');
 
 const { DEPART_NSA_SQL, BROUILLON_PRIVE_SQL } = require('./transports');
+const cat = require('./categories-mouvements');
+/** Catégorie universelle (même code chez tous les acteurs), libellé dans la langue de l'utilisateur. */
+const categorie = (m, langue) => { const c = cat.classer(m); return { code: c.code, libelle: cat.libelle(c.code, langue), certain: c.certain }; };
 const ETAPES_TR = { a_valider: 'a_valider', demandee: 'demande', acceptee: 'accepte', en_route: 'en_route_depart', pris_en_charge: 'en_transport', arrivee: 'arrive', refusee: 'refuse', annulee: 'annule' };
 
 async function preparation(db, litId) {
@@ -28,6 +31,7 @@ async function mouvements(pool, u, q = {}) {
   const lignes = [];
   // 1. Transports (source principale : ils portent véhicule, statut et préalerte)
   const tr = (await pool.query(`SELECT d.*, eo.nom AS origine, COALESCE(ed.nom, d.destination_libelle) AS destination, un.numero AS unite, ed.type_etablissement AS destination_type,
+      eo.type_etablissement AS origine_type, (SELECT dp.categorie FROM demande_transport_preferences dp WHERE dp.demande_id = d.id) AS categorie_urgence,
       dh.resident_id, dh.lit_propose_id, r.lit_id AS resident_lit,
       COALESCE(hd.heure, ${DEPART_NSA_SQL},
         CASE WHEN d.motif_transport IS NULL THEN d.pris_en_charge_le END) AS depart_reel
@@ -41,7 +45,8 @@ async function mouvements(pool, u, q = {}) {
   for (const d of tr) {
     const arrivee = d.destination_id === id;
     const eta = arrivee && d.prealerte_eta_min != null && d.prealerte_eta_le ? new Date(new Date(d.prealerte_eta_le).getTime() + d.prealerte_eta_min * 60000) : null;   // ETA = arrivée chez nous seulement
-    lignes.push({ cle: `transport:${d.id}`, mouvement: arrivee ? 'arrivee' : 'depart', type: 'transport', reference: d.numero, personne: d.resident_ref, origine: d.origine, destination: d.destination,
+    lignes.push({ cle: `transport:${d.id}`, mouvement: arrivee ? 'arrivee' : 'depart', type: 'transport', reference: d.numero,
+      categorie: categorie({ type: 'transport', origine_type: d.origine_type, destination_type: d.destination_type, destination_libre: !d.destination_id, motif_transport: d.motif_transport, urgence: !!d.categorie_urgence }, u.langue), personne: d.resident_ref, origine: d.origine, destination: d.destination,
       creneau: d.plage_confirmee_debut || d.plage_debut ? { debut: d.plage_confirmee_debut || d.plage_debut, fin: d.plage_confirmee_fin || d.plage_fin, confirme: !!d.plage_confirmee_debut } : null,
       prevue: d.plage_confirmee_debut || d.plage_debut || d.heure_souhaitee, depart_reel: d.depart_reel, eta, eta_source: eta ? 'prealerte' : null, arrivee_reelle: d.arrivee_le,
       vehicule: d.unite, statut: d.terminee_le ? 'termine' : ETAPES_TR[d.statut] || d.statut, statut_brut: d.statut,
@@ -55,7 +60,7 @@ async function mouvements(pool, u, q = {}) {
       WHERE (t.origine_id = $1 OR t.destination_id = $1) AND (t.statut IN ('demande', 'validee', 'transport', 'en_route') OR t.date_reception > now() - interval '18 hours')`, [id])).rows) {
     const arrivee = t.destination_id === id;
     const eta = t.date_depart && t.minutes_route ? new Date(new Date(t.date_depart).getTime() + t.minutes_route * 60000) : null;
-    lignes.push({ cle: `transfert:${t.id}`, mouvement: arrivee ? 'arrivee' : 'depart', type: 'transfert', reference: t.numero, personne: t.patient_ref, origine: t.origine, destination: t.destination,
+    lignes.push({ cle: `transfert:${t.id}`, mouvement: arrivee ? 'arrivee' : 'depart', type: 'transfert', reference: t.numero, categorie: categorie({ type: 'transfert' }, u.langue), personne: t.patient_ref, origine: t.origine, destination: t.destination,
       creneau: null, prevue: t.date_validation || t.date_demande, depart_reel: t.date_depart, eta, eta_source: eta ? 'itineraire' : null, arrivee_reelle: t.date_reception,
       vehicule: null, priorite: t.urgent ? 'urgente' : 'non_urgente', statut: { demande: 'demande', validee: 'accepte', transport: 'en_route_depart', en_route: 'en_transport', recu: 'arrive', refuse: 'refuse' }[t.statut] || t.statut, statut_brut: t.statut,
       preparation: arrivee && t.lit_id ? { etat: t.date_chambre_prete ? 'prete' : 'a_verifier' } : null, ecran: 'transferts',
@@ -64,13 +69,14 @@ async function mouvements(pool, u, q = {}) {
         origine_id: t.origine_id, destination_id: t.destination_id, date_chambre_prete: t.date_chambre_prete } });
   }
   // 3. Hébergement : départs/arrivées programmés sans transport lié
-  for (const h of (await pool.query(`SELECT dh.*, eo.nom AS origine, ed.nom AS destination, r.lit_id AS resident_lit FROM demandes_hebergement dh JOIN etablissements ed ON ed.id = dh.etablissement_id
+  for (const h of (await pool.query(`SELECT dh.*, eo.nom AS origine, eo.type_etablissement AS origine_type, ed.nom AS destination, r.lit_id AS resident_lit FROM demandes_hebergement dh JOIN etablissements ed ON ed.id = dh.etablissement_id
       LEFT JOIN etablissements eo ON eo.id = dh.hopital_id LEFT JOIN residents r ON r.id = dh.resident_id
       WHERE (dh.etablissement_id = $1 OR dh.hopital_id = $1) AND dh.depart_prevu_le IS NOT NULL AND dh.statut NOT IN ('refusee', 'annulee', 'admise', 'transferee')
         AND dh.depart_prevu_le::date BETWEEN current_date - 1 AND current_date + 1 + $2::int`, [id, jour]).catch(() => ({ rows: [] }))).rows) {
     if (dhAvecTransport.has(h.id)) continue;
     const arrivee = h.etablissement_id === id;
-    lignes.push({ cle: `hebergement:${h.id}`, mouvement: arrivee ? 'arrivee' : 'depart', type: 'hebergement', reference: h.numero, personne: h.reference_externe, origine: h.origine || '—', destination: h.destination,
+    lignes.push({ cle: `hebergement:${h.id}`, mouvement: arrivee ? 'arrivee' : 'depart', type: 'hebergement', reference: h.numero,
+      categorie: categorie({ type: 'hebergement', provenance: h.provenance, origine_type: h.origine_type }, u.langue), personne: h.reference_externe, origine: h.origine || '—', destination: h.destination,
       creneau: null, prevue: h.depart_prevu_le, depart_reel: h.depart_hopital_le, eta: null, eta_source: null, arrivee_reelle: null, vehicule: null,
       statut: h.depart_hopital_le ? 'en_transport' : 'prevu', statut_brut: h.statut, preparation: arrivee ? await preparation(pool, h.resident_lit || h.lit_propose_id) : null, ecran: arrivee ? 'c-admissions' : 'nsa', actions: [] });
   }
@@ -79,7 +85,7 @@ async function mouvements(pool, u, q = {}) {
       FROM prealertes p JOIN unites_secours un ON un.id = p.unite_id WHERE p.destination_id = $1 AND p.demande_transport_id IS NULL
         AND (p.statut IN ('envoyee', 'recue', 'consultee', 'prise_en_compte', 'preparation', 'preparation_terminee', 'arrivee') OR p.cloturee_le > now() - interval '6 hours')`, [id]).catch(() => ({ rows: [] }))).rows) {
     const eta = p.eta_min != null && p.eta_le ? new Date(new Date(p.eta_le).getTime() + p.eta_min * 60000) : null;
-    lignes.push({ cle: `prealerte:${p.id}`, mouvement: 'arrivee', type: 'prealerte', reference: p.numero, personne: null, origine: 'Ambulance', destination: null, creneau: null,
+    lignes.push({ cle: `prealerte:${p.id}`, mouvement: 'arrivee', type: 'prealerte', reference: p.numero, categorie: categorie({ type: 'prealerte' }, u.langue), personne: null, origine: 'Ambulance', destination: null, creneau: null,
       prevue: p.heure_prevue, depart_reel: null, eta, eta_source: eta ? 'position' : null, arrivee_reelle: p.arrivee_confirmee_le, vehicule: p.unite,
       statut: p.statut === 'arrivee' ? 'arrive' : p.cloturee_le ? 'termine' : 'en_transport', statut_brut: p.statut, priorite: p.priorite, preparation: null, ecran: 'secours', actions: [] });
   }
@@ -96,7 +102,8 @@ async function mouvements(pool, u, q = {}) {
   }
   return { genere_le: new Date().toISOString(), mouvements: res,
     resume: { arrivees: res.filter((l) => l.mouvement === 'arrivee').length, departs: res.filter((l) => l.mouvement === 'depart').length, retards: res.filter((l) => l.retard).length,
-      prealertes_a_acquitter: res.filter((l) => l.actions.includes('accuser_prealerte')).length, preparations: res.filter((l) => l.preparation && ['a_faire', 'en_cours'].includes(l.preparation.etat)).length } };
+      prealertes_a_acquitter: res.filter((l) => l.actions.includes('accuser_prealerte')).length,
+      par_categorie: Object.fromEntries(cat.legende().map((c) => [c.code, res.filter((l) => l.categorie?.code === c.code).length])), preparations: res.filter((l) => l.preparation && ['a_faire', 'en_cours'].includes(l.preparation.etat)).length } };
 }
 
 /** Historique des disponibilités (cahier directeur, 9) : par jour, d'après le journal immuable des lits (source unique) ; état actuel. */
