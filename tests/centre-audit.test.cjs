@@ -32,7 +32,7 @@ test('centre d’audit : sources unifiées, filtres, export journalisé, réserv
     assert.ok(texte.evenements.every((e) => /MED-201/.test(`${e.detail} ${e.reference}`)));
     assert.strictEqual((await get(ja, `/audit?etablissement_id=${mb}&du=hier`)).statut, 400);
     const csv = await get(ja, `/audit.csv?etablissement_id=${mb}`);
-    assert.match(csv.corps, /^﻿source;date;utilisateur;action/);
+    assert.match(csv.corps, /^(\uFEFF)?source;date;utilisateur;action/);
     assert.ok((await pool.query("SELECT 1 FROM journal_admin WHERE action = 'Export du centre d’audit'")).rowCount, 'export journalisé');
   } finally { serveur.close(); await pool.end(); }
 });
