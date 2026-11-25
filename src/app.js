@@ -763,7 +763,7 @@ function creerApp(pool, options = {}) {
 
   /* ---------- Copilote ---------- */
   api.get('/copilote/briefing', route((req) => copilote.briefing(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
-  api.get('/copilote/previsions', route((req) => require('./previsions').previsions(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
+  api.get('/copilote/previsions', route((req) => require('./previsions').previsions(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'), { etendus: req.query.horizons === 'etendus' })));
   api.get('/copilote/reseau', route((req) => copilote.briefingReseau(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   // Fonctions OG contrôlées côté serveur selon la licence SH et les réglages de l'établissement.
   const avecFonctionOg = (fonction, champ, fn) => route(async (req) => {

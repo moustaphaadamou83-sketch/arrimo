@@ -25,7 +25,7 @@ const marge = (variance) => (variance > 0 ? Math.max(1, Math.round(1.64 * Math.s
  * Moyenne historique des événements par heure de la semaine, pour une fenêtre de H heures à partir de maintenant.
  * `filtre` : condition SQL sur journal (alias j) ; retourne { cle -> moyenne attendue dans la fenêtre } pour chaque horizon.
  */
-async function historique(pool, etabId, fuseau, filtre, cle) {
+async function historique(pool, etabId, fuseau, filtre, cle, H = HORIZONS) {
   const { rows } = await pool.query(
     `WITH ev AS (
        SELECT ${cle} AS cle, EXTRACT(ISODOW FROM j.date AT TIME ZONE $2)::int AS jour, EXTRACT(HOUR FROM j.date AT TIME ZONE $2)::int AS heure
@@ -43,19 +43,22 @@ async function historique(pool, etabId, fuseau, filtre, cle) {
   // Heures à venir (jour de semaine et heure locaux)
   const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: fuseau, weekday: 'short', hour: 'numeric', hourCycle: 'h23' });
   const JOURS = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 };
-  const heures = Array.from({ length: Math.max(...HORIZONS) }, (_, i) => {
+  const heures = Array.from({ length: Math.max(...H) }, (_, i) => {
     const p = Object.fromEntries(fmt.formatToParts(new Date(Date.now() + i * 3600000)).map((x) => [x.type, x.value]));
     return `${JOURS[p.weekday]}-${Number(p.hour)}`;
   });
   const res = new Map();
   for (const [k, m] of parCle) {
-    res.set(k, Object.fromEntries(HORIZONS.map((h) => [h, heures.slice(0, h).reduce((a, x) => a + (m.get(x) || 0), 0)])));
+    res.set(k, Object.fromEntries(H.map((h) => [h, heures.slice(0, h).reduce((a, x) => a + (m.get(x) || 0), 0)])));
   }
   return { parCle: res, semaines };
 }
 
 /** Prévisions de l'établissement : par type d'unité et pour les civières de l'urgence, à 4 h, 12 h et 24 h. */
-async function previsions(pool, utilisateur, etabId) {
+// Horizons étendus (chantier B, 26 nov. 2026 ; cahier nº 2 « Singapour ») : 6 h et 48 h en plus, sur demande ; le défaut reste 4/12/24
+const HORIZONS_ETENDUS = [4, 6, 12, 24, 48];
+async function previsions(pool, utilisateur, etabId, { etendus = false } = {}) {
+  const H = etendus ? HORIZONS_ETENDUS : HORIZONS;
   exigerEtablissement(utilisateur, etabId);
   const etab = await s.etablissement(pool, etabId);
   const fuseau = etab.config.fuseau;
@@ -69,18 +72,18 @@ async function previsions(pool, utilisateur, etabId) {
   const conges = (await pool.query(
     `SELECT type_id, conge_statut, EXTRACT(EPOCH FROM (sortie_prevue - now())) / 3600 AS dans_h
        FROM lits WHERE etablissement_id = $1 AND etat = 'occupe' AND nsa_depuis IS NULL AND sortie_prevue IS NOT NULL
-        AND sortie_prevue < now() + make_interval(hours => $2)`, [etabId, Math.max(...HORIZONS)])).rows;
+        AND sortie_prevue < now() + make_interval(hours => $2)`, [etabId, Math.max(...H)])).rows;
   const attente = new Map((await pool.query(
     `SELECT type_id, count(*)::int AS n FROM demandes_admission WHERE etablissement_id = $1 AND statut = 'attente' GROUP BY type_id`, [etabId])).rows
     .map((r) => [r.type_id, r.n]));
   // Historique : départs (occupé → nettoyage) et admissions (→ occupé) par type d'unité
   const joint = { joint: 'JOIN lits l ON l.id = j.lit_id' };
-  const departs = await historique(pool, etabId, fuseau, { ...joint, condition: `j.ancien_etat = 'occupe' AND j.nouvel_etat = 'nettoyage'` }, 'l.type_id');
-  const admissions = await historique(pool, etabId, fuseau, { ...joint, condition: `j.nouvel_etat = 'occupe' AND j.ancien_etat IS DISTINCT FROM 'occupe'` }, 'l.type_id');
+  const departs = await historique(pool, etabId, fuseau, { ...joint, condition: `j.ancien_etat = 'occupe' AND j.nouvel_etat = 'nettoyage'` }, 'l.type_id', H);
+  const admissions = await historique(pool, etabId, fuseau, { ...joint, condition: `j.nouvel_etat = 'occupe' AND j.ancien_etat IS DISTINCT FROM 'occupe'` }, 'l.type_id', H);
 
   const resUnites = unites.map((u) => {
     const parH = {};
-    for (const h of HORIZONS) {
+    for (const h of H) {
       const cs = conges.filter((c) => c.type_id === u.type_id && Number(c.dans_h) <= h);
       const planifies = cs.reduce((a, c) => a + (POIDS_CONGE[c.conge_statut] ?? POIDS_CONGE.prevu), 0);
       const varPlan = cs.reduce((a, c) => { const p = POIDS_CONGE[c.conge_statut] ?? POIDS_CONGE.prevu; return a + p * (1 - p); }, 0);
@@ -105,11 +108,11 @@ async function previsions(pool, utilisateur, etabId) {
   let civieres = null;
   if (urg) {
     const jc = { condition: `j.civiere_id IS NOT NULL AND j.nouvel_etat = 'occupee'` };
-    const arrivees = await historique(pool, etabId, fuseau, jc, '0');
-    const sorties = await historique(pool, etabId, fuseau, { condition: `j.civiere_id IS NOT NULL AND j.ancien_etat = 'occupee' AND j.nouvel_etat = 'nettoyage'` }, '0');
+    const arrivees = await historique(pool, etabId, fuseau, jc, '0', H);
+    const sorties = await historique(pool, etabId, fuseau, { condition: `j.civiere_id IS NOT NULL AND j.ancien_etat = 'occupee' AND j.nouvel_etat = 'nettoyage'` }, '0', H);
     const assignes = (await pool.query(`SELECT count(*)::int AS n FROM demandes_admission WHERE etablissement_id = $1 AND statut = 'assignee' AND civiere_id IS NOT NULL`, [etabId])).rows[0].n;
     const parH = {};
-    for (const h of HORIZONS) {
+    for (const h of H) {
       const a = arrivees.parCle.get(0)?.[h] || 0;
       const d = Math.max(sorties.parCle.get(0)?.[h] || 0, assignes);
       const occ = Math.max(0, urg.occupees + a - d);
@@ -117,7 +120,7 @@ async function previsions(pool, utilisateur, etabId) {
     }
     civieres = { fonctionnelles: urg.fonctionnelles, occupees: urg.occupees, taux: urg.taux, horizons: parH };
   }
-  return { horizons: HORIZONS, semaines: Math.max(departs.semaines, admissions.semaines), unites: resUnites, civieres, genere_le: new Date().toISOString() };
+  return { horizons: H, semaines: Math.max(departs.semaines, admissions.semaines), unites: resUnites, civieres, genere_le: new Date().toISOString() };
 }
 
-module.exports = { previsions, HORIZONS, POIDS_CONGE };
+module.exports = { previsions, HORIZONS, HORIZONS_ETENDUS, POIDS_CONGE };
