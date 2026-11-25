@@ -33,7 +33,7 @@ MIGRATIONS_APPLICATION = ['20261025-priorites.sql','20261025-simulation.sql',
                           '20261123-chrono-alertes.sql','20261123-chrono-motifs-retard.sql',
                           '20261123-dsn-sync.sql','20261123-flux.sql',
                           '20261123-interventions-ccs-demo.sql','20261123-secours-perimetres-vehicules.sql',
-                          '20261126-coordination-detection.sql','20261126-coordination-suivi.sql','20261126-quotes-parts.sql','20261126-couverture.sql','20261126-crise-suivi.sql','20261126-connecteurs-suspension.sql','20261126-releves.sql']
+                          '20261126-coordination-detection.sql','20261126-coordination-suivi.sql','20261126-quotes-parts.sql','20261126-couverture.sql','20261126-crise-suivi.sql','20261126-connecteurs-suspension.sql','20261126-releves.sql','20261126-chrono-objectifs.sql']
 NODE = '/opt/arrimo-runtime/node-v24.22.1/bin/node'
 
 

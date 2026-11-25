@@ -179,7 +179,9 @@ async function perimetre(db, u, etabId) {
 const SELECT_PASSAGES = `SELECT p.id, p.numero, p.statut, p.source, p.etablissement_id, e.nom AS hopital, p.unite_id, un.numero AS unite, un.type_vehicule,
     p.organisation_id, o.nom AS organisation, p.prealerte_id, pa.numero AS prealerte, pa.priorite, p.cree_le, p.version,
     COALESCE(cfg.chrono_cible_porte_min, 20) AS cible_porte, COALESCE(cfg.chrono_orange_min, 15) AS cible_orange,
-    COALESCE(cfg.chrono_cible_sortie_min, 25) AS cible_sortie, COALESCE(cfg.chrono_cible_total_min, 45) AS cible_total, retard.motif AS motif_retard
+    COALESCE(cfg.chrono_cible_sortie_min, 25) AS cible_sortie, COALESCE(cfg.chrono_cible_total_min, 45) AS cible_total, retard.motif AS motif_retard,
+    COALESCE(cfg.objectif_remise_min, 15) AS obj_remise, COALESCE(cfg.objectif_liberation_min, 30) AS obj_liberation,
+    COALESCE(cfg.objectif_escalade_majeure_min, 45) AS obj_escalade, COALESCE(cfg.excellence_remise_min, 5) AS exc_remise, COALESCE(cfg.excellence_liberation_min, 10) AS exc_liberation
   FROM passages_chrono p JOIN etablissements e ON e.id = p.etablissement_id JOIN unites_secours un ON un.id = p.unite_id
   JOIN organisations_secours o ON o.id = p.organisation_id LEFT JOIN prealertes pa ON pa.id = p.prealerte_id
   LEFT JOIN config_pays cfg ON cfg.id = e.config_id
@@ -203,13 +205,20 @@ async function enrichir(db, rows) {
     parPassage.get(heure.objet_id)[heure.etape] = heure;
   }
   const maintenant = Date.now();
-  return rows.map(({ cible_porte, cible_orange, cible_sortie, cible_total, ...r }) => {
+  return rows.map(({ cible_porte, cible_orange, cible_sortie, cible_total, obj_remise, obj_liberation, obj_escalade, exc_remise, exc_liberation, ...r }) => {
     const h = parPassage.get(r.id) || {};
     const cibles = { porte: cible_porte, orange: cible_orange, sortie: cible_sortie, total: cible_total };
     const ms = h.H11 ? maintenant - new Date(h.H11.heure).getTime() : null;
     const attente = r.statut === 'a_la_porte' && !h.H14 && ms != null && ms >= 0 ? Math.floor(ms / 60000) : null;
     const niveau = attente == null ? null : attente >= cibles.porte ? 'rouge' : attente >= cibles.orange ? 'orange' : 'vert';
-    return { ...r, cibles, heures: vueHeures(h), durees: durees(h), a_la_porte_min: attente, niveau, palier: palier(attente, cibles),
+    const d = durees(h);
+    // Objectifs internes Arrimo 15/30 (et 5/10 d'excellence), configurables, à côté des cibles MSSS : remise = H11 → H14, libération = H11 → H15
+    const ecouleLib = h.H11 && !h.H15 && ['a_la_porte', 'remis'].includes(r.statut) ? Math.max(0, Math.floor((maintenant - new Date(h.H11.heure).getTime()) / 60000)) : null;
+    const objectif = (mesure, ecoule, cible, excellence) => ({ cible_min: cible, excellence_min: excellence, mesure_min: mesure, ecoule_min: mesure == null ? ecoule : null,
+      respecte: mesure == null ? null : mesure <= cible, excellence: mesure == null ? null : mesure <= excellence, depasse: mesure == null ? (ecoule != null && ecoule > cible) : mesure > cible });
+    const arrimo = { indicatif: true, escalade_majeure_min: obj_escalade,
+      remise: objectif(d.porte, attente, obj_remise, exc_remise), liberation: objectif(d.total, ecouleLib, obj_liberation, exc_liberation) };
+    return { ...r, cibles, arrimo, heures: vueHeures(h), durees: d, a_la_porte_min: attente, niveau, palier: palier(attente, cibles),
       prochaine: BOUTONS.find((e) => !h[e] && h.H11 && !(e !== 'H14' && h.H14)) || null };
   });
 }
@@ -420,7 +429,14 @@ async function rapport(pool, u, q = {}) {
     au_dela_cible_min: visitesMesurees.length ? Math.round(visitesMesurees.reduce((t, r) => t + Math.max(0, r.durees.total - r.cibles.total), 0) * 10) / 10 : null,
     simultanes_max: simultanesMax(rows),
   };
-  return { mois: m, cote: per.cote, cibles: c, indicatif: true, passages: rows.length, pilote: pilotes,
+  // Objectifs Arrimo (indicatifs) : part respectée, part « excellence », heures-véhicules au-delà de l'objectif de libération
+  const pct = (xs, f) => (xs.length ? Math.round((xs.filter(f).length / xs.length) * 1000) / 10 : null);
+  const remises = rows.filter((r) => r.arrimo.remise.mesure_min != null); const liberations = rows.filter((r) => r.arrimo.liberation.mesure_min != null);
+  const objectifsArrimo = { indicatif: true,
+    remise: { n: remises.length, respecte_pct: pct(remises, (r) => r.arrimo.remise.respecte), excellence_pct: pct(remises, (r) => r.arrimo.remise.excellence) },
+    liberation: { n: liberations.length, respecte_pct: pct(liberations, (r) => r.arrimo.liberation.respecte), excellence_pct: pct(liberations, (r) => r.arrimo.liberation.excellence),
+      heures_vehicules_au_dela: liberations.length ? Math.round(liberations.reduce((t, r) => t + Math.max(0, r.arrimo.liberation.mesure_min - r.arrimo.liberation.cible_min), 0) / 6) / 10 : null } };
+  return { mois: m, cote: per.cote, cibles: c, indicatif: true, passages: rows.length, pilote: pilotes, objectifs_arrimo: objectifsArrimo,
     completude_pct: rows.length ? Math.round((complets / rows.length) * 1000) / 10 : null,
     etapes_manquantes: Object.fromEntries(ETAPES.map((e) => [e, rows.filter((r) => !r.heures[e]).length])),
     porte: stat('porte', c.porte), sortie: stat('sortie', c.sortie), total: stat('total', c.total),
