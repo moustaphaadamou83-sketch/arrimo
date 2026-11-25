@@ -149,3 +149,11 @@ test('isolation et journal immuable', async () => {
   await assert.rejects(pool.query('UPDATE suivis_alertes_journal SET action = $1', ['x']));
   await assert.rejects(pool.query('DELETE FROM suivis_alertes_journal'));
 });
+
+test('notifications : l’escalade désigne son suivi exact ; « traité » suit l’état réel, distinct de « lu »', async () => {
+  const n = (await appel('tremblay', 'GET', `/notifications?etablissement_id=${ids.mb}`)).corps.find((x) => x.code === 'alerte_escalade');
+  assert.ok(n, 'notification d’escalade'); assert.strictEqual(n.objet.type, 'suivi_alerte'); assert.strictEqual(n.ecran, 'vigilance');
+  const s = (await pool.query('SELECT statut FROM suivis_alertes WHERE id = $1', [n.objet.id])).rows[0];
+  assert.strictEqual(n.traite, ['resolue', 'levee'].includes(s.statut));
+  assert.strictEqual(n.lu, false, 'lu et traité sont deux choses distinctes');
+});

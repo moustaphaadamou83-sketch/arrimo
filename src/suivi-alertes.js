@@ -119,7 +119,7 @@ async function escalader(pool) {
           echeance = now() + make_interval(mins => $5), version = version + 1 WHERE id = $1`,
       [s.id, suivant, g[suivant][0], g[suivant + 1]?.[0] || null, g[suivant][1]]);
       await journaliser(c, s.id, 'escalade', null, { de: s.escalade_niveau, vers: suivant, role: g[suivant][0] });
-      await require('./services').notifier(c, s.etablissement_id, null, 'alerte_escalade', { ressource, niveau: suivant, role: g[suivant][0] });
+      await require('./services').notifier(c, s.etablissement_id, null, 'alerte_escalade', { ressource, niveau: suivant, role: g[suivant][0], suivi_id: Number(s.id) });
       n += 1;
     });
   }

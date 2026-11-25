@@ -694,6 +694,18 @@ async function lireNotifications(pool, utilisateur, etabId) {
     if (vars.min != null) vars.duree = duree(utilisateur.langue, vars.min);
     n.message = tr(utilisateur.langue, `notif.${n.code}`, vars);
   }
+  // Navigation contextuelle (refonte unifiée, cahier « interactivité universelle ») : chaque notification désigne son objet exact
+  // et l'écran à ouvrir ; « traité » (état réel de l'objet) est distinct de « lu ».
+  const suivis = rows.filter((n) => n.vars?.suivi_id).map((n) => Number(n.vars.suivi_id));
+  const etatsSuivis = new Map(suivis.length ? (await pool.query('SELECT id, statut FROM suivis_alertes WHERE id = ANY($1)', [suivis])).rows.map((r) => [Number(r.id), r.statut]) : []);
+  const etatsTr = new Map((await pool.query('SELECT id, statut FROM transferts WHERE id = ANY($1)', [rows.filter((n) => n.transfert_id).map((n) => n.transfert_id)])).rows.map((r) => [r.id, r.statut]));
+  for (const n of rows) {
+    if (n.vars?.suivi_id) { const st = etatsSuivis.get(Number(n.vars.suivi_id)); n.objet = { type: 'suivi_alerte', id: Number(n.vars.suivi_id) }; n.ecran = 'vigilance'; n.traite = st ? ['resolue', 'levee'].includes(st) : null; }
+    else if (n.transfert_id) { const st = etatsTr.get(n.transfert_id); n.objet = { type: 'transfert', id: n.transfert_id, numero: n.numero }; n.ecran = 'transferts'; n.traite = st ? !['demande'].includes(st) : null; }
+    else if (n.vars?.passage) { n.objet = { type: 'passage_chrono', numero: n.vars.passage }; n.ecran = 'chrono'; n.traite = null; }
+    else if (n.vars?.numero && /^(EV|SIM)-/.test(n.vars.numero)) { n.objet = { type: 'evacuation', numero: n.vars.numero }; n.ecran = 'crise'; n.traite = null; }
+    else { n.objet = null; n.ecran = null; n.traite = null; }
+  }
   return rows;
 }
 
