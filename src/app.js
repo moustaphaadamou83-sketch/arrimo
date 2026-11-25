@@ -904,6 +904,8 @@ function creerApp(pool, options = {}) {
   // Mise à jour en direct (SSE) : hors du routeur API pour ne pas retenir la remise à zéro de la démo
   // Session absente ou expirée (démo remise à zéro…) : 204 sans contenu, l'écran cesse d'écouter sans erreur affichée
   const sessionFlux = exigerSession(pool);
+  // Surveillance de la synchronisation (séquence, abonnés, délai de regroupement p50/p95/p99) : gestion et administration seulement
+  api.get('/flux/etat', route(async (req) => { if (!['gestionnaire', 'admin_etab'].includes(req.utilisateur.role)) throw new ErreurHttp(403, 'role_insuffisant'); return require('./flux').etat(); }));
   app.get('/api/flux', (req, res) => sessionFlux(req, res, (err) => (err ? res.status(204).end() : require('./flux').brancher(req, res))));
   app.use('/api', api);
 
