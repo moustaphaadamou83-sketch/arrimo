@@ -28,6 +28,7 @@ const RESPONSABLES = {
   transfert_sans_reponse: 'Établissement d’accueil',
   connecteur_silencieux: 'Responsable des intégrations de l’établissement',
   quote_part_contradiction: 'Responsable opérationnel de l’urgence, avec le CCS',
+  incoherence: 'Coordination des lits de l’établissement',
 };
 const PALIERS = {
   vigilance: { niveau: 'modere', texte: 'vigilance' },
@@ -304,11 +305,46 @@ async function transversales(pool, utilisateur, etabId, cfg, ajouter) {
       action: 'Relancer l’établissement d’accueil depuis Transferts, ou consulter les solutions de rechange (décision humaine).' });
   }
 
+  // 5 bis. Incohérences entre modules (gouvernance des données) : deux faits enregistrés qui se contredisent ; rien n'est corrigé automatiquement
+  const incoherences = (await pool.query(`
+      SELECT 'lit_reserve_transfert_clos' AS code, l.id AS rid, l.code AS ressource, t.numero AS ref, t.statut AS detail, l.etat_depuis AS depuis
+        FROM lits l JOIN transferts t ON t.id = l.transfert_id WHERE l.etablissement_id = $1 AND l.etat = 'reserve' AND t.statut IN ('refuse', 'recu')
+      UNION ALL
+      SELECT 'placement_admis_sans_depart', d.id, d.numero, d.numero, d.statut, d.modifie_le
+        FROM demandes_hebergement d WHERE d.hopital_id = $1 AND d.statut = 'admise' AND d.depart_hopital_le IS NULL AND d.hopital_lit_id IS NOT NULL
+      UNION ALL
+      SELECT 'arrivee_sans_chrono', p.id, p.numero, p.numero, p.statut, p.arrivee_confirmee_le
+        FROM prealertes p JOIN etablissements e ON e.id = p.destination_id
+       WHERE p.destination_id = $1 AND e.modules->>'chrono' = 'true' AND p.arrivee_confirmee_le < now() - interval '30 minutes'
+         AND p.arrivee_confirmee_le > now() - interval '24 hours' AND NOT EXISTS (SELECT 1 FROM passages_chrono pc WHERE pc.prealerte_id = p.id)`, [etabId])).rows;
+  const TEXTES_INC = {
+    lit_reserve_transfert_clos: (x) => [`Lit ${x.ressource} encore réservé pour le transfert ${x.ref}, déjà clos (${x.detail}).`, 'Vérifier le lit dans Lits et Transferts ; annuler la réservation ou admettre (correction tracée).'],
+    placement_admis_sans_depart: (x) => [`Placement ${x.ref} admis à l’hébergement, mais aucun départ de l’hôpital enregistré.`, 'Enregistrer le départ réel dans Liaison CHSLD, ou corriger le statut (correction tracée).'],
+    arrivee_sans_chrono: (x) => [`Préalerte ${x.ref} : arrivée confirmée sans passage Chrono correspondant.`, 'Vérifier l’arrivée dans Chrono ; corriger l’heure H11 si elle manque (correction tracée).'],
+  };
+  for (const x of incoherences) {
+    const [titre, action] = TEXTES_INC[x.code](x);
+    ajouter({ genre: 'incoherence', ressource_id: `${x.code}:${x.rid}`, ressource: x.ressource, unite: 'Données', chambre: null, depuis: x.depuis,
+      duree_min: x.depuis ? Math.round((Date.now() - new Date(x.depuis).getTime()) / 60000) : 0, type: 'incoherence', niveau: 'faible',
+      titre, evenement: 'Comparaison de deux modules', seuil: { valeur_min: 0, regle: 'Deux faits enregistrés se contredisent.' },
+      cause: { nature: 'fait', texte: 'Les deux enregistrements existent ; l’un des deux est probablement à corriger.' }, action });
+  }
+
   // 6. Connecteur de l'établissement silencieux : données possiblement obsolètes (scénario G)
   const connecteurs = (await pool.query(
-    `SELECT c.id, c.nom, c.cree_le, (SELECT max(recu_le) FROM messages_connecteur m WHERE m.connecteur_id = c.id) AS dernier
+    `SELECT c.id, c.nom, c.cree_le, c.suspendu_le, (SELECT max(recu_le) FROM messages_connecteur m WHERE m.connecteur_id = c.id) AS dernier
        FROM connecteurs c WHERE c.etablissement_id = $1 AND c.actif`, [etabId])).rows;
   for (const c of connecteurs) {
+    if (c.suspendu_le) {
+      ajouter({ genre: 'connecteur', ressource_id: c.id, ressource: c.nom, unite: 'Arrimo Connect', chambre: null, depuis: c.suspendu_le,
+        duree_min: Math.round((Date.now() - new Date(c.suspendu_le).getTime()) / 60000), type: 'connecteur_silencieux', niveau: 'modere',
+        titre: `Connecteur ${c.nom} suspendu : les données qu’il alimente ne sont plus actualisées.`,
+        evenement: 'Suspension du connecteur',
+        seuil: { valeur_min: 0, regle: 'Suspension décidée par l’administration de l’établissement.' },
+        cause: { nature: 'fait', texte: 'Connecteur suspendu ; le partenaire conserve ses messages jusqu’à la reprise.' },
+        action: 'Vérifier la liaison avec l’équipe informatique ; confirmer les disponibilités manuellement en attendant.' });
+      continue;
+    }
     const ref = c.dernier || c.cree_le;
     const age = (Date.now() - new Date(ref).getTime()) / 60000;
     if (age <= cfg.connecteur_silence_max_min) continue;

@@ -27,6 +27,8 @@ async function identifier(pool, cle) {
   if (!cle) throw new ErreurHttp(401, 'connecteur_cle_manquante');
   const { rows } = await pool.query('SELECT * FROM connecteurs WHERE cle_hash = $1 AND actif', [hacherCle(cle)]);
   if (!rows[0]) throw new ErreurHttp(401, 'connecteur_cle_invalide');
+  // Suspension réversible (complémentaire nº 3, §12) : 503 pour que le partenaire garde ses messages et réessaie à la reprise
+  if (rows[0].suspendu_le) throw new ErreurHttp(503, 'connecteur_suspendu');
   return rows[0];
 }
 

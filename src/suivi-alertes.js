@@ -29,6 +29,7 @@ const GRILLE_DEFAUT = {
   attente_admission: [['coordonnateur', 30], ['gestionnaire', 60]],
   reservation_prolongee: [['coordonnateur', 30], ['gestionnaire', 60]],
   quote_part_contradiction: [['coordonnateur', 15], ['gestionnaire', 30]],
+  incoherence: [['coordonnateur', 120], ['gestionnaire', 240]],
   _defaut: [['coordonnateur', 60], ['gestionnaire', 120]],
 };
 

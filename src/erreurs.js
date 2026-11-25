@@ -483,6 +483,7 @@ const MESSAGES = {
   connecteur_introuvable: 'Connecteur introuvable.',
   connecteur_cle_manquante: 'Clé de connecteur manquante.',
   connecteur_cle_invalide: 'Clé de connecteur invalide.',
+  connecteur_suspendu: 'Connecteur suspendu par l’établissement : réessayez plus tard, les messages ne sont pas perdus de votre côté.',
   simulation_session_requise: "Une clé de simulation exige aussi une session humaine et le parcours de simulation.",
   simulation_reference_invalide: "Référence de simulation invalide.",
   simulation_evenement_invalide: "Événement fictif invalide ou champ non autorisé.",

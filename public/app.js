@@ -3027,14 +3027,16 @@ async function vueAdmin() {
         <button class="btn pri" id="b-con">${D('creer_cle')}</button>
         <p class="note">${D('connecteur_aide')}</p></div>
       <div class="tableau"><table><thead><tr><th>${D('th_nom')}</th><th>${D('etablissement')}</th><th>${D('th_dernier')}</th><th>${D('th_rejets')}</th><th></th></tr></thead><tbody>${cons.map((c) => `<tr>
-        <td><span class="donnee">${esc(c.nom)}</span>${c.actif ? '' : ` <span class="badge">${D('revoque')}</span>`}</td><td>${esc(c.etablissement || t('admin.reseau_lect'))}</td>
+        <td><span class="donnee">${esc(c.nom)}</span>${c.actif ? '' : ` <span class="badge">${D('revoque')}</span>`}${c.actif && c.sante ? ` <span class="badge${['erreurs', 'suspendu', 'silencieux'].includes(c.sante) ? ' refuse' : ''}">${D(`sante_${c.sante}`)}</span>` : ''}</td><td>${esc(c.etablissement || t('admin.reseau_lect'))}</td>
         <td class="note">${c.dernier_message ? heure(c.dernier_message) : esc(t('general.aucun'))}</td><td class="num${c.rejets_24h ? ' refuse' : ''}">${c.rejets_24h}</td>
-        <td><div class="ligne"><button class="btn" data-con-messages="${c.id}">${D('con_messages')}</button>${c.etablissement_id ? `<button class="btn" data-con-corr="${c.id}">${D('con_correspondances')}</button>` : ''}${c.actif ? `<button class="btn dan" data-revoquer="${c.id}">${D('revoquer')}</button>` : ''}</div></td></tr>`).join('') || `<tr><td colspan="5" class="muted">${D('aucun_connecteur')}</td></tr>`}</tbody></table></div></div>`;
+        <td><div class="ligne"><button class="btn" data-con-messages="${c.id}">${D('con_messages')}</button>${c.etablissement_id ? `<button class="btn" data-con-corr="${c.id}">${D('con_correspondances')}</button>` : ''}${c.actif ? (c.suspendu_le ? `<button class="btn" data-con-reprendre="${c.id}">${D('con_reprendre')}</button>` : `<select data-con-motif="${c.id}" aria-label="${D('con_motif')}">${['erreurs_repetees', 'donnees_incoherentes', 'maintenance_partenaire', 'securite', 'autre'].map((k) => `<option value="${k}">${D(`con_motif_${k}`)}</option>`).join('')}</select><button class="btn" data-con-suspendre="${c.id}">${D('con_suspendre')}</button>`) : ''}${c.actif ? `<button class="btn dan" data-revoquer="${c.id}">${D('revoquer')}</button>` : ''}</div></td></tr>`).join('') || `<tr><td colspan="5" class="muted">${D('aucun_connecteur')}</td></tr>`}</tbody></table></div></div>`;
     $('#b-con').onclick = (ev) => agir(ev.target, async () => {
       // Clé jamais affichée : remise unique au contact technique du client
       const r = await api('POST', '/admin/connecteurs', { nom: $('#c-nom-con').value || t('admin.connecteur_defaut'), etablissement_id: $('#c-etab-con').value ? Number($('#c-etab-con').value) : null, courriel_technique: $('#c-courriel-con').value });
       toast(t(r.remise.envoyee ? 'admin.remise_envoyee' : 'admin.remise_non_envoyee', { a: r.remise.destinataire }));
     });
+    corps.querySelectorAll('[data-con-suspendre]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/admin/connecteurs/${b.dataset.conSuspendre}/suspendre`, { motif: corps.querySelector(`[data-con-motif="${b.dataset.conSuspendre}"]`).value }), D('con_suspendu_ok')); });
+    corps.querySelectorAll('[data-con-reprendre]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/admin/connecteurs/${b.dataset.conReprendre}/reprendre`), D('con_repris_ok')); });
     corps.querySelectorAll('[data-revoquer]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/admin/connecteurs/${b.dataset.revoquer}/revoquer`), t('admin.revoque_ok')); });
     // Connecteur DSN (22 nov. 2026) : messages reçus et correspondance des codes de lits
     corps.querySelectorAll('[data-con-messages]').forEach((b) => { b.onclick = async () => {

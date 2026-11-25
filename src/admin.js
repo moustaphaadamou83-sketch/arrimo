@@ -662,9 +662,15 @@ function brancher(api, pool, route, entier, options = {}) {
     const { rows } = await pool.query(
       `SELECT c.id, c.nom, c.etablissement_id, e.nom AS etablissement, c.actif, c.cree_le,
               (SELECT max(recu_le) FROM messages_connecteur m WHERE m.connecteur_id = c.id) AS dernier_message,
-              (SELECT count(*)::int FROM messages_connecteur m WHERE m.connecteur_id = c.id AND m.statut = 'rejete' AND m.recu_le > now() - interval '1 day') AS rejets_24h
-         FROM connecteurs c LEFT JOIN etablissements e ON e.id = c.etablissement_id ORDER BY c.cree_le DESC`);
-    return rows.filter((r) => req.utilisateur.gestionnaire || (r.etablissement_id && gerables.includes(r.etablissement_id)));
+              (SELECT count(*)::int FROM messages_connecteur m WHERE m.connecteur_id = c.id AND m.statut = 'rejete' AND m.recu_le > now() - interval '1 day') AS rejets_24h,
+              (SELECT count(*)::int FROM messages_connecteur m WHERE m.connecteur_id = c.id AND m.recu_le > now() - interval '1 day') AS messages_24h,
+              c.suspendu_le, c.motif_suspension, COALESCE(cfg.connecteur_silence_max_min, 60) AS silence_max_min
+         FROM connecteurs c LEFT JOIN etablissements e ON e.id = c.etablissement_id LEFT JOIN config_pays cfg ON cfg.id = e.config_id ORDER BY c.cree_le DESC`);
+    // État de santé (complémentaire nº 3, §12) : révoqué, suspendu, silencieux, erreurs (≥ 20 % de rejets sur 24 h), sain
+    const sante = (r) => (!r.actif ? 'revoque' : r.suspendu_le ? 'suspendu'
+      : !r.dernier_message || Date.now() - new Date(r.dernier_message) > r.silence_max_min * 60000 ? 'silencieux'
+        : r.messages_24h && r.rejets_24h / r.messages_24h >= 0.2 ? 'erreurs' : 'sain');
+    return rows.filter((r) => req.utilisateur.gestionnaire || (r.etablissement_id && gerables.includes(r.etablissement_id))).map((r) => ({ ...r, sante: sante(r) }));
   }));
   api.post('/admin/connecteurs', route(async (req) => {
     exigerAdmin(req);
@@ -718,6 +724,22 @@ function brancher(api, pool, route, entier, options = {}) {
     });
     await journalAdmin(pool, req.utilisateur, 'Connecteur : correspondances', c.nom, `${ok.length} codes`, c.etablissement_id);
     return { enregistre: true, lignes: ok.length };
+  }));
+  // Suspension réversible d'un connecteur défaillant : Arrimo continue ; le partenaire reçoit 503 et garde ses messages ; reprise contrôlée
+  api.post('/admin/connecteurs/:id/suspendre', route(async (req) => {
+    const c = await connecteurGerable(req);
+    const motif = String(req.body.motif || '');
+    if (!['erreurs_repetees', 'donnees_incoherentes', 'maintenance_partenaire', 'securite', 'autre'].includes(motif)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'motif' });
+    if (!c.actif) throw new ErreurHttp(409, 'connecteur_introuvable');
+    await pool.query('UPDATE connecteurs SET suspendu_le = now(), suspendu_par = $2, motif_suspension = $3 WHERE id = $1 AND suspendu_le IS NULL', [c.id, req.utilisateur.id, motif]);
+    await journalAdmin(pool, req.utilisateur, 'Connecteur suspendu', c.nom, motif, c.etablissement_id);
+    return { id: c.id, suspendu: true, motif };
+  }));
+  api.post('/admin/connecteurs/:id/reprendre', route(async (req) => {
+    const c = await connecteurGerable(req);
+    await pool.query('UPDATE connecteurs SET suspendu_le = NULL, suspendu_par = NULL, motif_suspension = NULL WHERE id = $1', [c.id]);
+    await journalAdmin(pool, req.utilisateur, 'Connecteur repris', c.nom, null, c.etablissement_id);
+    return { id: c.id, suspendu: false };
   }));
   api.post('/admin/connecteurs/:id/revoquer', route(async (req) => {
     exigerAdmin(req);
