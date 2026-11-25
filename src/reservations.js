@@ -45,9 +45,12 @@ function lireProfil(b) {
 async function reserver(c, pa, utilisateurId) {
   const deja = (await c.query('SELECT * FROM reservations_civieres WHERE prealerte_id = $1', [pa.id])).rows[0];
   if (deja && deja.statut === 'reservee') return deja;
-  const cv = (await c.query(`SELECT cv.id, cv.code FROM civieres cv WHERE cv.etablissement_id = $1 AND cv.actif AND cv.etat = 'libre'
+  // Règle de compatibilité (cahier nº 19) : catégorie de civière compatible avec la préalerte, par ordre de préférence ;
+  // jamais une civière pédiatrique pour un adulte, jamais une civière d'isolement attribuée automatiquement
+  const cats = require('./compatibilite').civieresCompatibles(pa.categorie);
+  const cv = (await c.query(`SELECT cv.id, cv.code FROM civieres cv WHERE cv.etablissement_id = $1 AND cv.actif AND cv.etat = 'libre' AND cv.categorie = ANY($2)
       AND NOT EXISTS (SELECT 1 FROM reservations_civieres r WHERE r.civiere_id = cv.id AND r.statut = 'reservee')
-    ORDER BY (cv.categorie = 'debordement'), cv.code LIMIT 1 FOR UPDATE SKIP LOCKED`, [pa.destination_id])).rows[0];
+    ORDER BY array_position($2::text[], cv.categorie), cv.code LIMIT 1 FOR UPDATE SKIP LOCKED`, [pa.destination_id, cats])).rows[0];
   const r = (await c.query(`INSERT INTO reservations_civieres (prealerte_id, etablissement_id, civiere_id, statut) VALUES ($1, $2, $3, $4)
     ON CONFLICT (prealerte_id) DO UPDATE SET civiere_id = EXCLUDED.civiere_id, statut = EXCLUDED.statut, reservee_le = now(), liberee_le = NULL, version = reservations_civieres.version + 1
     RETURNING *`, [pa.id, pa.destination_id, cv ? cv.id : null, cv ? 'reservee' : 'sans_civiere'])).rows[0];

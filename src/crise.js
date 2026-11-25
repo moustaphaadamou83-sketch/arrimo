@@ -114,6 +114,22 @@ async function ligne(c, u, evId, rid) {
   if (!r) throw new ErreurHttp(404, 'resident_introuvable');
   return { ev, r };
 }
+/**
+ * Règle de compatibilité (cahier nº 19) : à destination, un lit libre du MÊME type d'unité que le lit actuel du résident ;
+ * sinon, seulement avec une exception autorisée, justifiée et tracée (motif, justification) ; jamais un lit pris au hasard.
+ */
+async function litCompatible(c, u, ev, r, destId, b) {
+  const type = (await c.query('SELECT l.type_id FROM residents x JOIN lits l ON l.id = x.lit_id WHERE x.id = $1', [r.resident_id])).rows[0]?.type_id ?? null;
+  const pris = (t) => c.query(`SELECT id, type_id FROM lits WHERE etablissement_id = $1 AND etat = 'libre' AND actif AND ($2::int IS NULL OR type_id = $2)
+    ORDER BY code LIMIT 1 FOR NO KEY UPDATE SKIP LOCKED`, [destId, t]).then((x) => x.rows[0]);
+  const compatible = await pris(type);
+  if (compatible) return compatible;
+  const exc = require('./compatibilite').lireException(u, b.exception);
+  if (!exc) return null;
+  const autre = await pris(null);
+  if (autre) await require('./compatibilite').tracer(c, u, { etablissementId: destId, ressourceType: 'lit', ressourceId: autre.id, objet: 'evacuation', objetId: ev.id, exception: exc, ecart: { type_resident: type, type_lit: autre.type_id } });
+  return autre;
+}
 /** Étapes d'un résident : confirmer le lieu (réserve un lit), départ (famille avisée), arrivée, retour planifié, retour. */
 async function agir(pool, u, evId, rid, b = {}) {
   const a = String(b.action || '');
@@ -126,7 +142,7 @@ async function agir(pool, u, evId, rid, b = {}) {
       const dest = (await c.query("SELECT id, nom FROM etablissements WHERE id = $1 AND actif AND type_etablissement = 'chsld' AND id <> $2", [entier(b.destination_id), ev.etablissement_id])).rows[0];
       if (!dest) throw new ErreurHttp(404, 'etab_introuvable');
       // Un lit libre de la destination, verrouillé : jamais deux résidents sur le même lit
-      const lit = (await c.query(`SELECT id FROM lits WHERE etablissement_id = $1 AND etat = 'libre' AND actif ORDER BY code LIMIT 1 FOR NO KEY UPDATE SKIP LOCKED`, [dest.id])).rows[0];
+      const lit = await litCompatible(c, u, ev, r, dest.id, b);
       if (!lit) throw new ErreurHttp(409, 'evacuation_plus_de_place');
       // Simulation : la place est seulement notée, jamais réservée ; en réel : réservée par les règles des lits et l'accueil est avisé
       if (!ev.simulation) await changerEtat(c, pool, u.id, lit.id, 'reserve', { patientRef: r.resident_ref, detail: `Évacuation ${ev.numero}` });
@@ -139,7 +155,7 @@ async function agir(pool, u, evId, rid, b = {}) {
       const dest = (await c.query("SELECT id, nom FROM etablissements WHERE id = $1 AND actif AND type_etablissement = 'chsld' AND id <> $2", [entier(b.destination_id), ev.etablissement_id])).rows[0];
       if (!dest) throw new ErreurHttp(404, 'etab_introuvable');
       if (dest.id === r.destination_id) throw new ErreurHttp(409, 'evacuation_statut');
-      const lit = (await c.query(`SELECT id FROM lits WHERE etablissement_id = $1 AND etat = 'libre' AND actif ORDER BY code LIMIT 1 FOR NO KEY UPDATE SKIP LOCKED`, [dest.id])).rows[0];
+      const lit = await litCompatible(c, u, ev, r, dest.id, b);
       if (!lit) throw new ErreurHttp(409, 'evacuation_plus_de_place');
       if (!ev.simulation) {
         const ancien = r.lit_id ? (await c.query('SELECT etat FROM lits WHERE id = $1', [r.lit_id])).rows[0] : null;

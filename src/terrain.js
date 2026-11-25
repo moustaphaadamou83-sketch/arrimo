@@ -404,13 +404,21 @@ async function lireDemande(c, utilisateur, id) {
   return d;
 }
 
-async function assignerLit(pool, utilisateur, demandeId, litId, version, client = null) {
+async function assignerLit(pool, utilisateur, demandeId, litId, version, client = null, exception = null) {
+  const exc = require('./compatibilite').lireException(utilisateur, exception);
   const executer = async (c) => {
     const d = await lireDemande(c, utilisateur, demandeId);
     if (d.statut !== 'attente') throw new ErreurHttp(409, 'demande_plus_en_attente');
     const ok = await c.query(`SELECT l.id FROM lits l WHERE l.id = $1 AND l.etablissement_id = $2 AND l.type_id = $3${s.sqlBesoins(besoinsDemande(d))}${sqlAge('l', d.groupe_age)}`,
       [litId, d.etablissement_id, d.type_id]);
-    if (!ok.rows[0]) throw new ErreurHttp(400, 'lit_inadapte');
+    if (!ok.rows[0]) {
+      // Règle de compatibilité (cahier nº 19) : un lit libre mais incompatible n'est attribué qu'à titre exceptionnel, justifié et tracé ;
+      // le groupe d'âge n'admet aucune exception.
+      const memeAge = (await c.query(`SELECT l.id, l.type_id FROM lits l WHERE l.id = $1 AND l.etablissement_id = $2${sqlAge('l', d.groupe_age)}`, [litId, d.etablissement_id])).rows[0];
+      if (!exc || !memeAge) throw new ErreurHttp(400, 'lit_inadapte');
+      await require('./compatibilite').tracer(c, utilisateur, { etablissementId: d.etablissement_id, ressourceType: 'lit', ressourceId: litId, objet: 'demande_admission', objetId: d.id,
+        exception: exc, ecart: { type_demande: d.type_id, type_lit: memeAge.type_id, besoins: besoinsDemande(d) } });
+    }
     const lit = await changerEtat(c, pool, utilisateur.id, litId, 'reserve',
       { versionAttendue: version, patientRef: d.patient_ref, detail: `Assigné à la demande d’admission n° ${d.id} (${d.provenance})` });
     const u = await c.query(`UPDATE demandes_admission SET statut = 'assignee', lit_id = $2, assignee_le = now() WHERE id = $1 RETURNING *`, [d.id, litId]);

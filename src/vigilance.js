@@ -29,6 +29,7 @@ const RESPONSABLES = {
   connecteur_silencieux: 'Responsable des intégrations de l’établissement',
   quote_part_contradiction: 'Responsable opérationnel de l’urgence, avec le CCS',
   incoherence: 'Coordination des lits de l’établissement',
+  reaffectation_exceptionnelle: 'Coordination des lits de l’établissement',
 };
 const PALIERS = {
   vigilance: { niveau: 'modere', texte: 'vigilance' },
@@ -330,6 +331,19 @@ async function transversales(pool, utilisateur, etabId, cfg, ajouter) {
       cause: { nature: 'fait', texte: 'Les deux enregistrements existent ; l’un des deux est probablement à corriger.' }, action });
   }
 
+  // 5 ter. Réaffectations exceptionnelles des dernières 24 h (règle de compatibilité, cahier nº 19) : à revoir par l'équipe
+  for (const x of (await pool.query(`SELECT re.id, re.ressource_type, re.motif, re.cree_le, x.nom AS par, COALESCE(l.code, cv.code) AS code
+      FROM reaffectations_exceptionnelles re JOIN utilisateurs x ON x.id = re.autorise_par LEFT JOIN lits l ON re.ressource_type = 'lit' AND l.id = re.ressource_id
+      LEFT JOIN civieres cv ON re.ressource_type = 'civiere' AND cv.id = re.ressource_id
+     WHERE re.etablissement_id = $1 AND re.cree_le > now() - interval '24 hours'`, [etabId])).rows) {
+    ajouter({ genre: 'reaffectation', ressource_id: Number(x.id), ressource: x.code || '—', unite: 'Capacités', chambre: null, depuis: x.cree_le,
+      duree_min: Math.round((Date.now() - new Date(x.cree_le).getTime()) / 60000), type: 'reaffectation_exceptionnelle', niveau: 'faible',
+      titre: `Réaffectation exceptionnelle de ${x.code || '—'} autorisée par ${x.par} (${x.motif}).`,
+      evenement: 'Réaffectation exceptionnelle autorisée', seuil: { valeur_min: 0, regle: 'Toute attribution incompatible est signalée pendant 24 h.' },
+      cause: { nature: 'fait', texte: 'Ressource attribuée hors compatibilité, avec motif et justification enregistrés.' },
+      action: 'Vérifier que la situation est temporaire et proposer une ressource compatible dès qu’elle se libère.' });
+  }
+
   // 6. Connecteur de l'établissement silencieux : données possiblement obsolètes (scénario G)
   const connecteurs = (await pool.query(
     `SELECT c.id, c.nom, c.cree_le, c.suspendu_le, (SELECT max(recu_le) FROM messages_connecteur m WHERE m.connecteur_id = c.id) AS dernier
@@ -453,6 +467,9 @@ async function blocages(pool, utilisateur, etabId, { interne = false } = {}) {
   }
   const dem = (await pool.query(
     `SELECT d.id, d.patient_ref, d.priorite, d.provenance, d.cree_le, CASE WHEN $3 = 'en' THEN COALESCE(t.nom_en, t.nom) ELSE t.nom END AS type_nom, cv.code AS civiere,
+            (SELECT count(*)::int FROM lits l WHERE l.etablissement_id = d.etablissement_id AND l.type_id = d.type_id AND l.actif AND l.etat = 'libre') AS compatibles_ici,
+            (SELECT count(*)::int FROM lits l JOIN etablissements e2 ON e2.id = l.etablissement_id JOIN types_unite t2 ON t2.id = l.type_id
+              WHERE e2.id <> d.etablissement_id AND e2.actif AND e2.module_actif AND e2.partage <> 'aucun' AND t2.code = t.code AND l.actif AND l.etat = 'libre') AS compatibles_reseau,
             EXTRACT(EPOCH FROM (now() - d.cree_le)) / 60 AS attente_min
        FROM demandes_admission d JOIN types_unite t ON t.id = d.type_id LEFT JOIN civieres cv ON cv.id = d.civiere_id
       WHERE d.etablissement_id = $1 AND d.statut = 'attente' AND d.cree_le < now() - make_interval(mins => $2)`, [etabId, cfg.attente_admission_max_min, utilisateur.langue === 'en' ? 'en' : 'fr'])).rows;
@@ -462,7 +479,11 @@ async function blocages(pool, utilisateur, etabId, { interne = false } = {}) {
       titre: `${d.patient_ref} attend un lit de ${d.type_nom.toLowerCase()} depuis ${dureeTexte(Number(d.attente_min))}${d.civiere ? ` (civière ${d.civiere})` : ''}.`,
       evenement: 'Création de la demande de lit',
       seuil: { valeur_min: cfg.attente_admission_max_min, regle: `Attente maximale configurée (${cfg.attente_admission_max_min} min).` },
-      cause: { nature: 'fait', texte: 'Aucun lit compatible assigné à cette demande.' },
+      // Règle de compatibilité (cahier nº 19) : distinguer pénurie réelle et problème d'affectation, de préparation ou de répartition
+      diagnostic: d.compatibles_ici > 0 ? 'affectation' : d.compatibles_reseau > 0 ? 'repartition' : 'penurie',
+      cause: { nature: 'fait', texte: d.compatibles_ici > 0 ? `Aucun lit assigné alors que ${d.compatibles_ici} lit(s) du même type sont libres ici : problème d’affectation ou de préparation.`
+        : d.compatibles_reseau > 0 ? `Aucun lit du même type libre ici ; ${d.compatibles_reseau} libre(s) ailleurs dans le réseau : problème de répartition.`
+          : 'Aucun lit du même type libre ici ni dans le réseau partagé : pénurie réelle.' },
       action: 'Assigner un lit compatible, ou chercher ailleurs (Réseau) ; la décision reste humaine.' });
   }
   const civ = (await pool.query(

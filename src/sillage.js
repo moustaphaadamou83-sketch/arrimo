@@ -162,6 +162,8 @@ async function fil(pool, u, objet, id) {
     SELECT * FROM heures UNION ALL SELECT * FROM departs_nsa WHERE heure IS NOT NULL
     UNION ALL SELECT op.* FROM operations_transport op WHERE NOT EXISTS
       (SELECT 1 FROM heures h WHERE h.objet = op.objet AND h.objet_id = op.objet_id AND h.etape = op.etape)
+    UNION ALL SELECT re.objet, re.objet_id, 'reaffectation_exceptionnelle', re.cree_le, 'clic', re.motif, u.nom, 0
+      FROM objets_visibles o JOIN reaffectations_exceptionnelles re ON re.objet = o.objet AND re.objet_id = o.id JOIN utilisateurs u ON u.id = re.autorise_par
     UNION ALL SELECT 'passage_chrono', m.passage_id, 'retard_' || m.motif, m.cree_le, 'clic', NULL, u.nom, 0
       FROM objets_visibles o JOIN passages_chrono_motifs m ON o.objet = 'passage_chrono' AND o.id = m.passage_id
       JOIN utilisateurs u ON u.id = m.auteur_id

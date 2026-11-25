@@ -743,7 +743,7 @@ function creerApp(pool, options = {}) {
   api.post('/admissions/:id/:etape', route(async (req) => {
     const id = entier(req.params.id, 'id');
     switch (req.params.etape) {
-      case 'assigner': return t.assignerLit(pool, req.utilisateur, id, entier(req.body.lit_id, 'lit_id'), req.body.version);
+      case 'assigner': return t.assignerLit(pool, req.utilisateur, id, entier(req.body.lit_id, 'lit_id'), req.body.version, null, req.body.exception || null);
       case 'admettre': return t.admettreDemande(pool, req.utilisateur, id);
       case 'annuler': return t.annulerDemande(pool, req.utilisateur, id);
       case 'transferer': return t.transfererDemande(pool, req.utilisateur, id, req.body);
