@@ -2688,6 +2688,26 @@ async function vueIndicateurs() {
       setTimeout(() => URL.revokeObjectURL(url), 2000);
     } catch (e) { toast(e.message, true); }
   };
+  impactRentabilite(v).catch(() => {});
+}
+
+/** Pilotage « Impact et rentabilité » (26 nov. 2026) : 5 piliers ; chaque valeur dit si elle est mesurée, estimée ou constatée. */
+async function impactRentabilite(v) {
+  const r = await api('GET', `/impact?etablissement_id=${etat.ctx}&du=${new Date(Date.now() - etat.jours * 86400000).toISOString()}`);
+  const P = (k, vars) => esc(t(`impact.${k}`, vars));
+  const ligne = (k, x) => `<tr><th>${P(`i_${k}`)}</th><td class="num">${x.valeur == null ? `<span class="note">${P('non_mesurable')}</span>` : `${esc(nb(x.valeur))} ${esc(x.unite || '')}`}</td>
+    <td><span class="badge${x.nature === 'mesure' ? ' fort' : ''}">${P(`nature_${x.nature}`)}</span></td><td class="note">${esc(x.source || '')}</td></tr>`;
+  const piliers = Object.entries(r.piliers).map(([pk, ind]) => `<div class="panneau-c"><h3>${P(`p_${pk}`)}</h3><div class="tableau"><table><tbody>
+      ${Object.entries(ind).filter(([, x]) => x && x.nature !== 'constate').map(([k, x]) => ligne(k, x)).join('')}
+      ${pk === 'argent' ? `<tr><th>${P('constatees')}</th><td colspan="3">${ind.economies_constatees.lignes.length ? ind.economies_constatees.lignes.map((l) => `${esc(nb(l.montant))} ${esc(l.devise)} (${P(`cat_${l.categorie}`)})`).join(' · ') : `<span class="note">${P('aucune_constatee')}</span>`}</td></tr>` : ''}
+    </tbody></table></div></div>`).join('');
+  const zone = document.createElement('section'); zone.className = 'impact-rentabilite';
+  zone.innerHTML = `<div class="entete"><div><h2>${P('titre')}</h2><p class="note">${esc(r.avertissement)}</p></div><button class="btn" id="b-impact-csv" type="button">${P('exporter')}</button></div>${piliers}`;
+  v.appendChild(zone);
+  zone.querySelector('#b-impact-csv').onclick = async () => {
+    try { const x = await fetch(`/api/impact.csv?etablissement_id=${etat.ctx}`, { headers: { Authorization: `Bearer ${etat.token}`, 'X-Langue': langue } }); if (!x.ok) throw new Error(t('indicateurs.export_impossible')); const url = URL.createObjectURL(await x.blob());
+      const a = document.createElement('a'); a.href = url; a.download = 'arrimo-impact.csv'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000); } catch (e) { toast(e.message, true); }
+  };
 }
 
 /** Graphiques (données réelles, lecture seule) : disponibilité actuelle par unité et transferts par jour sur la période. */

@@ -843,6 +843,15 @@ function creerApp(pool, options = {}) {
   api.get('/audit.csv', async (req, res, next) => {
     try { res.set('Content-Type', 'text/csv; charset=utf-8').set('Content-Disposition', 'attachment; filename="audit.csv"').send(await require('./centre-audit').exporter(pool, req.utilisateur, req.query)); } catch (e) { next(e); }
   });
+  // Pilotage « Impact et rentabilité » : 5 piliers, mesuré / estimé / constaté séparés, paramètres économiques par établissement
+  const impact = require('./impact');
+  api.get('/impact', route((req) => impact.tableau(pool, req.utilisateur, req.query)));
+  api.get('/impact/parametres', route((req) => impact.lireParametres(pool, req.utilisateur, req.query)));
+  api.put('/impact/parametres', route((req) => impact.enregistrerParametre(pool, req.utilisateur, req.body)));
+  api.post('/impact/economies', route((req) => impact.constater(pool, req.utilisateur, req.body)));
+  api.get('/impact.csv', async (req, res, next) => {
+    try { res.set('Content-Type', 'text/csv; charset=utf-8').set('Content-Disposition', 'attachment; filename="impact.csv"').send(await impact.csv(pool, req.utilisateur, req.query)); } catch (e) { next(e); }
+  });
   api.get('/coordination/plan', route((req) => require('./og-plan').plan(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   api.get('/coordination/escalades', route((req) => suivi.lireGrille(pool, req.utilisateur, req.query)));
   api.put('/coordination/escalades', route((req) => suivi.enregistrerGrille(pool, req.utilisateur, req.body)));

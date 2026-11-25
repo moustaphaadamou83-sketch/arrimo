@@ -31,7 +31,14 @@ Deux documents reçus en double à l'identique (« Coordination temporelle et an
 | 16 | Moteur de préparation anticipative et de fluidité opérationnelle | Orienter selon les capacités **prêtes, compatibles, confirmées**, pas seulement déclarées ; équipements et équipe d'accueil vérifiés ; délai estimé avant prise en charge effective |
 | 17 | Universalité des nouvelles fonctionnalités | Tout ce qui précède s'applique à tous les comptes concernés ; une seule source de référence par mouvement ; une fonctionnalité n'est terminée qu'une fois sa synchronisation validée entre comptes |
 
-### Point à trancher par Moustafa (cibles Chrono)
+| 18 | Impact et rentabilité (Pilotage) | Tableau de bord des 5 piliers commerciaux (temps, argent, coordination, gestion, information) : heures ambulancières récupérées, journées NSA évitées, délais réduits, capacités récupérées, temps administratif économisé, économies réellement démontrables ; avant/après, graphiques, paramètres économiques par établissement, rapports exportables ; **économies réelles ≠ valeur opérationnelle estimée** ; adaptable aux pays (dont africains), modules québécois non obligatoires |
+| 19 | Règle fondamentale de compatibilité des capacités | Chaque lit, civière, chambre, salle et équipement rattaché à spécialité, département, service, unité ; OG ne recommande **jamais** une ressource seulement parce qu'elle est libre : compatibilité avec les besoins transmis par les professionnels ; appliqué à SH, Secours, Bourse, transferts, préalertes, Performance ; **réaffectation exceptionnelle autorisée, justifiée, sécurisée, tracée dans Sillage** ; contrôlé côté serveur et API ; distinguer pénurie réelle et problème de répartition / affectation / préparation / coordination ; universel (Canada, Afrique), sans nouveau module |
+
+### Décision de Moustafa (26 nov. 2026, cibles Chrono)
+
+Références officielles du MSSS conservées ; objectifs internes Arrimo 15/30 et 5/10 affichés en parallèle. Maquette visuelle : en examen (aperçu `?design=v2`), pas de généralisation avant sa validation définitive.
+
+### Point à trancher par Moustafa (cibles Chrono) — tranché, voir ci-dessus
 
 Les cibles actuelles de Chrono (porte 20 min, sortie 25 min, total 45 min) viennent des définitions du MSSS (décision du 19 nov. 2026). Les cahiers 11 et 15 demandent l'objectif **Arrimo 15/30** (et 5/10 d'excellence). Proposition : garder les cibles MSSS comme référence officielle et ajouter « Arrimo 15/30 » et « 5/10 » comme **objectifs internes configurables**, affichés à côté, jamais à la place.
 
