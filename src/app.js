@@ -852,6 +852,8 @@ function creerApp(pool, options = {}) {
   api.get('/impact.csv', async (req, res, next) => {
     try { res.set('Content-Type', 'text/csv; charset=utf-8').set('Content-Disposition', 'attachment; filename="impact.csv"').send(await impact.csv(pool, req.utilisateur, req.query)); } catch (e) { next(e); }
   });
+  // Blocages en cascade : chaîne remontée à partir de faits enregistrés, liens « fait » ou « hypothèse »
+  api.get('/coordination/cascade', route((req) => require('./cascade').analyser(pool, req.utilisateur, req.query)));
   api.get('/coordination/plan', route((req) => require('./og-plan').plan(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   api.get('/coordination/escalades', route((req) => suivi.lireGrille(pool, req.utilisateur, req.query)));
   api.put('/coordination/escalades', route((req) => suivi.enregistrerGrille(pool, req.utilisateur, req.body)));
