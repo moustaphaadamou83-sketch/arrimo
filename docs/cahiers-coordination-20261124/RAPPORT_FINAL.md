@@ -62,4 +62,7 @@ Point ouvert du lanceur : la base recette a 20 tables au propriétaire `arrimo_r
 
 ## 7. Résultat de la suite complète
 
-*(complété à la fin de l'exécution)*
+Suite complète (`npm test`, 26 nov. 2026, avec `--test-force-exit`) : **417 tests, 414 réussis au premier passage, 3 corrigés ensuite** :
+- « dossier d'entiercement » : variable `SUIVI_ALERTES_MINUTES` non documentée → documentée (`dd85939`) ;
+- deux tests de la console SH : forme de l'adresse de test (`postgres://root@/base?host=…` n'est pas lisible par `new URL`) ; avec `postgres://root@localhost/base?host=/var/run/postgresql`, les deux passent. Aucun code modifié.
+- `npm test` sans `--test-force-exit` peut rester bloqué à la fin d'`api.test.js` quand un test SH échoue (connexions restées ouvertes) : utiliser l'option ou le runner de recette.
