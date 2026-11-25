@@ -1914,6 +1914,20 @@ async function afficherHistoriquePatient(id) {
 }
 
 /* ---------------- Congés et alertes : congés par lit, disponibilités prévues, blocages explicables ---------------- */
+/** Suivi d'une alerte (lot 2 du chantier coordination) : responsable, échéance, accusé ≠ résolution, action, résolution confirmée. */
+const ACTIONS_SUIVI = ['contact_responsable', 'relance_partenaire', 'ressource_mobilisee', 'reaffectation', 'escalade_demandee', 'attente_externe'];
+function suiviAlerteHTML(s, F) {
+  if (!s) return `<p class="note">${F('suivi_en_attente')}</p>`;
+  const role = (r) => esc(t(`roles.${r}`) || r);
+  return `<div class="suivi-alerte"><p><b>${F(`suivi_statut_${s.statut}`)}</b> · ${F('suivi_responsable', { role: role(s.responsable_role), niveau: s.escalade_niveau })}${s.remplacant_role ? ` · ${F('suivi_remplacant', { role: role(s.remplacant_role) })}` : ''}
+      · <span class="${s.echeance_depassee ? 'alerte' : 'note'}">${F('suivi_echeance', { heure: heure(s.echeance) })}</span></p>
+    ${s.accuse_le ? `<p class="note">${F('suivi_accuse', { nom: s.accuse_nom || '—', heure: heure(s.accuse_le) })}${s.action_code ? ` · ${F(`suivi_act_${s.action_code}`)}` : ''}</p>` : ''}
+    <div class="ligne">${s.accuse_le ? '' : `<button class="btn" data-suivi-op="accuser" data-id="${s.id}" data-version="${s.version}">${F('suivi_accuser')}</button>`}
+      <select data-suivi-action="${s.id}" aria-label="${F('suivi_action')}"><option value="">${F('suivi_action')}</option>${ACTIONS_SUIVI.map((k) => `<option value="${k}">${F(`suivi_act_${k}`)}</option>`).join('')}</select>
+      <button class="btn" data-suivi-op="action" data-id="${s.id}" data-version="${s.version}">${F('suivi_engager')}</button>
+      <button class="btn pri" data-suivi-op="resoudre" data-id="${s.id}" data-version="${s.version}">${F('suivi_resoudre')}</button></div>
+    <p class="note">${F('suivi_regle')}</p></div>`;
+}
 /** Capacité réelle (lot 1 du chantier coordination, 26 nov. 2026) : vides, opérationnels et non confirmés affichés séparément. */
 function capaciteReelleHTML(c, F) {
   const tuile = (lbl, val, note = '') => `<div><span class="lbl">${lbl}</span><span class="gros num">${val}</span>${note ? `<span class="note">${note}</span>` : ''}</div>`;
@@ -1948,7 +1962,7 @@ async function vueVigilance() {
       <dl class="explication"><dt>${F('origine')}</dt><dd>${esc(a.evenement)}${a.dernier_evenement ? ` — ${F('dernier_evt', { action: a.dernier_evenement.action, heure: jourHeure(a.dernier_evenement.date) })}` : ''}</dd>
       <dt>${F('seuil')}</dt><dd>${esc(a.seuil.regle)}</dd>
       <dt>${a.cause.nature === 'fait' ? F('fait') : F('hypothese')}</dt><dd>${esc(a.cause.texte)}</dd>
-      <dt>${F('proposition')}</dt><dd>${esc(a.action)} <span class="note">(${esc(a.responsable)})</span></dd></dl></div>`).join('');
+      <dt>${F('proposition')}</dt><dd>${esc(a.action)} <span class="note">(${esc(a.responsable)})</span></dd></dl>${suiviAlerteHTML(a.suivi, F)}</div>`).join('');
   v.innerHTML = `<div class="entete"><div><h2>${F('titre', { etab: etabCtx().nom })}</h2><p>${F('intro')}</p>${fraicheur}</div></div>
     <div class="resume">${resume}<div><span class="lbl">${F('retards')}</span><span class="gros num">${c.retards}</span><span class="note">${F('retards_note')}</span></div></div>
     <div class="panneau-c"><h3>${F('conges_titre')}</h3>
@@ -1961,6 +1975,12 @@ async function vueVigilance() {
     ${al.capacite ? capaciteReelleHTML(al.capacite, F) : ''}
     <div class="panneau-c"><h3>${F('alertes_titre', { n: al.alertes.length })}</h3><p class="note">${Object.values(al.regles_couleurs).map(esc).join(' ')}</p>
       <div class="pile">${alertes || `<p class="vide">${F('aucune_alerte')}</p>`}</div></div>`;
+  v.querySelectorAll('[data-suivi-op]').forEach((b) => { b.onclick = async () => {
+    const corps = { version: Number(b.dataset.version) };
+    if (b.dataset.suiviOp === 'action') { const s = v.querySelector(`[data-suivi-action="${b.dataset.id}"]`); if (!s?.value) return; corps.action = s.value; }
+    try { await api('POST', `/coordination/alertes/${b.dataset.id}/${b.dataset.suiviOp}`, corps); toast(F(`suivi_fait_${b.dataset.suiviOp}`)); } catch (e) { toast(e.message); }
+    rafraichir();
+  }; });
   v.querySelectorAll('[data-fh]').forEach((b) => { b.onclick = () => { const k = b.dataset.fh; if (['aujourdhui', 'demain'].includes(k)) { f.jour = k; f.horizon = ''; } else { f.horizon = k; f.jour = ''; } rafraichir(); }; });
   $('#vg-unite').onchange = (e) => { f.unite = e.target.value; rafraichir(); };
   $('#vg-statut').onchange = (e) => { f.statut = e.target.value; rafraichir(); };

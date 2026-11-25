@@ -962,3 +962,7 @@ th.erp-triable[aria-sort="ascending"]::after { content: " \2191"; } th.erp-triab
   #v-c-urgences table.classe td { display: block; width: auto; min-width: 0; overflow-wrap: anywhere; white-space: normal; padding: 4px 0; text-align: left; }
   #v-c-urgences table.classe tr { padding: 10px 0; border-bottom: 1px solid var(--bordure); }
 }
+
+/* Suivi des alertes (lot 2 du chantier coordination, 26 nov. 2026) */
+.suivi-alerte { border-top: 1px solid var(--bordure, #E2E8F0); margin-top: .5rem; padding-top: .5rem; }
+.suivi-alerte .ligne { flex-wrap: wrap; gap: .4rem; }

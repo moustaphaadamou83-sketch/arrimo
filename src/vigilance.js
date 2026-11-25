@@ -331,8 +331,9 @@ function capaciteReelle(lits, civieres, attendues, cfg) {
 }
 
 /** Blocages et alertes explicables de l'établissement (calculés en direct à partir des données enregistrées). */
-async function blocages(pool, utilisateur, etabId) {
-  exigerEtablissement(utilisateur, etabId);
+async function blocages(pool, utilisateur, etabId, { interne = false } = {}) {
+  // `interne` : lecture par le suivi périodique des alertes (aucune session ; jamais exposé par une route)
+  if (!interne) exigerEtablissement(utilisateur, etabId);
   const cfg = await configEtab(pool, etabId);
   const lits = (await pool.query(
     `SELECT l.id, l.code, l.etat, l.etat_depuis, l.sortie_prevue, l.nettoyage_debut, l.motif_indispo, l.patient_ref,
@@ -449,6 +450,7 @@ async function blocages(pool, utilisateur, etabId) {
     const e = ev.find((x) => (a.genre === 'lit' ? x.lit_id === a.ressource_id : a.genre === 'civiere' && x.civiere_id === a.ressource_id));
     a.dernier_evenement = e ? { date: e.date, action: e.action, detail: e.detail } : null;
   }
+  if (!interne) await require('./suivi-alertes').pourAlertes(pool, etabId, alertes);
   const rang = { eleve: 0, modere: 1, faible: 2 };
   alertes.sort((a, b) => rang[a.niveau] - rang[b.niveau] || b.duree_min - a.duree_min);
   return require('./vigilance-en').traduire({

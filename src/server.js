@@ -40,6 +40,8 @@ tourner();
 setInterval(tourner, intervalle);
 
 setInterval(() => require('./proches-comptes').entretien(pool).catch((e) => console.error('Arrimo Famille, entretien :', e.code || e.name)), 60 * 60000).unref();
+// Suivi des alertes (chantier coordination, lot 2) : ouverture, levée et escalade ; aucune action exécutée automatiquement
+setInterval(() => require('./suivi-alertes').tourner(pool).catch((e) => console.error('Suivi des alertes :', e.code || e.name)), Number(process.env.SUIVI_ALERTES_MINUTES || 2) * 60000).unref();
 setInterval(() => require('./chrono').notifierAttentes(pool).catch((e) => console.error('Alertes Chrono :', e.code || e.name)), 60000).unref();
 setInterval(() => require('./taches').notifierRetards(pool).catch((e) => console.error('Tâches en retard :', e.code || e.name)), 15 * 60000).unref();
 setInterval(() => require('./famille').relancer(pool).catch((e) => console.error('Relances famille :', e.code || e.name)), 15 * 60000).unref();

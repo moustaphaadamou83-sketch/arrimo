@@ -811,6 +811,15 @@ function creerApp(pool, options = {}) {
   api.get('/conges', route((req) => vig.conges(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'), {
     horizon: req.query.horizon, jour: req.query.jour, unite: req.query.unite, statut: req.query.statut })));
   api.get('/vigilance', route((req) => vig.blocages(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
+  /* ---------- suivi des alertes : accusé, action, escalade, résolution confirmée (lot 2 du chantier coordination) ---------- */
+  const suivi = require('./suivi-alertes');
+  api.get('/coordination/alertes', route((req) => suivi.liste(pool, req.utilisateur, req.query)));
+  api.get('/coordination/alertes/:id/journal', route((req) => suivi.journal(pool, req.utilisateur, req.params.id)));
+  for (const op of ['accuser', 'action', 'attribuer', 'resoudre']) {
+    api.post(`/coordination/alertes/:id/${op}`, route((req) => suivi.agir(pool, req.utilisateur, req.params.id, op, req.body)));
+  }
+  api.get('/coordination/escalades', route((req) => suivi.lireGrille(pool, req.utilisateur, req.query)));
+  api.put('/coordination/escalades', route((req) => suivi.enregistrerGrille(pool, req.utilisateur, req.body)));
 
   api.get('/blocages', route(async (req) => {
     const etab = entier(req.query.etablissement_id, 'etablissement_id');
