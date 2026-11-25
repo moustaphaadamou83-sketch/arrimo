@@ -3,12 +3,12 @@
     fr: { titre: 'Motif de retard observé', enregistrer: 'Consigner le retard', choix: 'Choisir un motif', motifs: {
       civiere: 'Civière indisponible', personnel: 'Personnel indisponible', chambre: 'Chambre en préparation',
       dossier: 'Attente de transmission du dossier', saturation: 'Saturation du service', nettoyage: 'Nettoyage',
-      technique: 'Incident technique', autre: 'Autre motif',
+      technique: 'Incident technique', triage: 'Triage saturé', clinique: 'Contraintes cliniques', inconnue: 'Cause inconnue', autre: 'Autre motif',
     } },
     en: { titre: 'Observed reason for delay', enregistrer: 'Record delay', choix: 'Choose a reason', motifs: {
       civiere: 'Stretcher unavailable', personnel: 'Staff unavailable', chambre: 'Room being prepared',
       dossier: 'Waiting for record transfer', saturation: 'Department at capacity', nettoyage: 'Cleaning',
-      technique: 'Technical incident', autre: 'Other reason',
+      technique: 'Technical incident', triage: 'Triage at capacity', clinique: 'Clinical constraints', inconnue: 'Unknown cause', autre: 'Other reason',
     } },
   };
   const dico = () => textes[(document.documentElement.lang || '').startsWith('en') ? 'en' : 'fr'];

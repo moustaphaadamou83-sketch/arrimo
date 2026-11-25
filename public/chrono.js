@@ -14,8 +14,8 @@
   const heureEtape = (h) => (h ? `${heureCourte(h.heure)}${h.corrigee ? ` <span class="note">${K('corrigee')}</span>` : ''}` : '<span class="note">—</span>');
 
   function lignePorte(p) {
-    const n = p.niveau || '';
-    return `<article class="ch-porte niveau-${n}" data-passage="${p.id}">
+    const n = p.palier === 'critique' ? 'critique' : p.niveau || '';
+    return `<article class="ch-porte niveau-${p.niveau || ''}${n === 'critique' ? ' palier-critique' : ''}" data-passage="${p.id}">
       <div class="ch-tete"><strong>${esc(p.unite)}</strong> <span class="note">${esc(p.organisation)}${p.prealerte ? ` · ${esc(p.prealerte)}` : ` · ${K('sans_prealerte')}`}</span>
         ${p.a_la_porte_min != null ? `<span class="ch-minutes" role="timer" aria-label="${K('a_la_porte_depuis', { n: p.a_la_porte_min })}">${K('minutes', { n: p.a_la_porte_min })} · ${K(`niveau_${n}`)}</span>` : ''}</div>
       <ol class="ch-etapes">${ETAPES.map((e) => `<li><span class="ch-code">${e}</span> ${K(`etape_${e}`)} : ${heureEtape(p.heures[e])}</li>`).join('')}</ol>

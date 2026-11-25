@@ -756,6 +756,8 @@ details.voir-carte summary::-webkit-details-marker { display: none; }
 .ch-porte.niveau-vert { border-left-color: #16A34A; }
 .ch-porte.niveau-orange { border-left-color: #F59E0B; }
 .ch-porte.niveau-rouge { border-left-color: #DC2626; }
+/* Palier critique (cible totale dépassée, 26 nov. 2026) : même rouge de statut, bordure plus épaisse et fond teinté ; le mot est toujours écrit */
+.ch-porte.palier-critique { border-left-width: 8px; background: color-mix(in srgb, #DC2626 8%, var(--carte)); }
 .ch-tete { display: flex; flex-wrap: wrap; gap: var(--e2); align-items: baseline; margin-bottom: var(--e2); }
 .ch-minutes { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; }
 .ch-porte.niveau-rouge .ch-minutes { color: #B91C1C; }

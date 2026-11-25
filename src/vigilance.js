@@ -18,7 +18,34 @@ const RESPONSABLES = {
   attente_admission: 'Coordination des lits de l’établissement',
   civiere_nettoyage: 'Équipe d’entretien de l’urgence',
   civiere_sans_demande: 'Équipe médicale de l’urgence',
+  // Vigilance transversale (lot 1 du chantier coordination, 26 nov. 2026) : responsables initiaux proposés par le cahier nº 2 (§5),
+  // à configurer et valider avec chaque établissement.
+  ambulance_immobilisee: 'Responsable opérationnel de l’urgence',
+  ambulances_attendues: 'Responsable opérationnel de l’urgence, avec la coordination des lits',
+  transport_en_retard: 'Responsable du transport',
+  transport_non_confirme: 'Responsable du transport',
+  placement_non_realise: 'Coordination des sorties et placements',
+  transfert_sans_reponse: 'Établissement d’accueil',
+  connecteur_silencieux: 'Responsable des intégrations de l’établissement',
 };
+const PALIERS = {
+  vigilance: { niveau: 'modere', texte: 'vigilance' },
+  escalade: { niveau: 'eleve', texte: 'escalade' },
+  critique: { niveau: 'eleve', texte: 'critique' },
+};
+const ACTIONS_PALIER = {
+  vigilance: 'Identifier le blocage, accuser réception et consigner le motif dans Chrono.',
+  escalade: 'Mobiliser la coordination hospitalière et informer le CCS ; consigner le motif dans Chrono.',
+  critique: 'Mobiliser les responsables de garde et la coordination ambulancière selon le protocole local.',
+};
+const MOTIFS_FR = { civiere: 'civière indisponible', personnel: 'personnel indisponible', chambre: 'chambre en préparation',
+  dossier: 'attente de transmission du dossier', saturation: 'saturation du service', nettoyage: 'nettoyage', technique: 'incident technique',
+  triage: 'triage saturé', clinique: 'contraintes cliniques', inconnue: 'cause inconnue', autre: 'autre motif' };
+const MOTIFS_EN = { civiere: 'stretcher unavailable', personnel: 'staff unavailable', chambre: 'room being prepared',
+  dossier: 'waiting for record transfer', saturation: 'department at capacity', nettoyage: 'cleaning', technique: 'technical incident',
+  triage: 'triage at capacity', clinique: 'clinical constraints', inconnue: 'unknown cause', autre: 'other reason' };
+// Préalerte ouverte dont le véhicule n'est pas encore arrivé
+const PREALERTE_ATTENDUE = `statut IN ('envoyee', 'recue', 'consultee', 'prise_en_compte', 'preparation', 'preparation_terminee') AND arrivee_signalee_le IS NULL`;
 
 /** Début et fin du jour local (aujourd'hui, demain) dans le fuseau de la configuration. */
 async function bornesJour(db, fuseau, decalage) {
@@ -146,6 +173,163 @@ function dureeTexte(min) {
   return `${Math.floor(h / 24)} j ${h % 24} h`;
 }
 
+/**
+ * Vigilance transversale (lot 1 « Détecter », chantier coordination du 26 nov. 2026) : les blocages des autres modules
+ * (Chrono, Liaison Secours, Transport, Transferts, Liaison CHSLD, Connect) lus dans leurs propres tables, sans copie.
+ * Chaque alerte reste un constat : rien n'est annulé, redirigé ni libéré ; aucune cause n'est attribuée sans donnée.
+ */
+async function transversales(pool, utilisateur, etabId, cfg, ajouter) {
+  const en = utilisateur.langue === 'en';
+  // 1. Ambulances immobilisées à la porte (Chrono) : paliers configurables du profil de pays
+  const passages = (await pool.query(
+    `SELECT p.id, p.numero, un.numero AS unite, o.nom AS organisation, h.heure AS arrivee,
+            EXTRACT(EPOCH FROM (now() - h.heure)) / 60 AS attente_min,
+            (SELECT m.motif FROM passages_chrono_motifs m WHERE m.passage_id = p.id ORDER BY m.id DESC LIMIT 1) AS motif
+       FROM passages_chrono p JOIN unites_secours un ON un.id = p.unite_id JOIN organisations_secours o ON o.id = p.organisation_id
+       JOIN v_horodatages_courants h ON h.objet = 'passage_chrono' AND h.objet_id = p.id AND h.etape = 'H11'
+      WHERE p.etablissement_id = $1 AND p.statut = 'a_la_porte'
+        AND NOT EXISTS (SELECT 1 FROM v_horodatages_courants r WHERE r.objet = 'passage_chrono' AND r.objet_id = p.id AND r.etape = 'H14')`,
+    [etabId])).rows;
+  const cibles = { orange: cfg.chrono_orange_min ?? 15, porte: cfg.chrono_cible_porte_min ?? 20, total: cfg.chrono_cible_total_min ?? 45 };
+  for (const p of passages) {
+    const attente = Math.max(0, Math.round(Number(p.attente_min)));
+    const palier = require('./chrono').palier(attente, cibles);
+    if (!PALIERS[palier]) continue;
+    const motif = p.motif ? (en ? MOTIFS_EN : MOTIFS_FR)[p.motif] || p.motif : null;
+    ajouter({ genre: 'ambulance', ressource_id: p.id, ressource: p.unite, unite: 'Urgence', chambre: null, depuis: p.arrivee, duree_min: attente,
+      type: 'ambulance_immobilisee', niveau: PALIERS[palier].niveau, palier, objet: { type: 'passage_chrono', id: p.id, numero: p.numero },
+      titre: `Ambulance ${p.unite} (${p.organisation}) à la porte depuis ${dureeTexte(attente)}, responsabilité non transférée — palier ${PALIERS[palier].texte}.`,
+      evenement: 'Arrivée de l’ambulance à l’urgence (H11)',
+      seuil: { valeur_min: cibles[palier === 'vigilance' ? 'orange' : palier === 'escalade' ? 'porte' : 'total'],
+        regle: `Paliers indicatifs du profil de pays : vigilance ${cibles.orange} min, escalade ${cibles.porte} min, critique ${cibles.total} min (non cliniques, à valider localement).` },
+      cause: motif ? { nature: 'fait', texte: `Motif consigné dans Chrono : ${motif}.` }
+        : { nature: 'hypothese', texte: 'Aucun motif consigné : la cause reste inconnue tant que l’équipe ne l’a pas documentée.' },
+      action: ACTIONS_PALIER[palier] });
+  }
+
+  // 2. Ambulances attendues au-delà des civières libres (Liaison Secours + civières de l'urgence)
+  const { rows: [att] } = await pool.query(
+    `SELECT (SELECT count(*)::int FROM prealertes WHERE destination_id = $1 AND ${PREALERTE_ATTENDUE}) AS attendues,
+            (SELECT count(*)::int FROM civieres WHERE etablissement_id = $1 AND actif AND etat = 'libre') AS libres,
+            (SELECT min(cree_le) FROM prealertes WHERE destination_id = $1 AND ${PREALERTE_ATTENDUE}) AS depuis`, [etabId]);
+  if (att.attendues > 0 && att.attendues > att.libres) {
+    ajouter({ genre: 'urgence', ressource_id: etabId, ressource: 'Urgence', unite: 'Urgence', chambre: null, depuis: att.depuis,
+      duree_min: Math.round((Date.now() - new Date(att.depuis).getTime()) / 60000), type: 'ambulances_attendues', niveau: att.libres === 0 ? 'eleve' : 'modere',
+      titre: `${att.attendues} ambulance(s) annoncée(s) pour ${att.libres} civière(s) libre(s) à l’urgence.`,
+      evenement: 'Préalertes reçues de Liaison Secours',
+      seuil: { valeur_min: 0, regle: 'Ambulances annoncées non encore arrivées supérieures aux civières libres enregistrées.' },
+      cause: { nature: 'fait', texte: 'Comptes lus dans les préalertes ouvertes et l’état des civières ; une civière libre non confirmée peut ne pas être prête.' },
+      action: 'Préparer l’accueil (civières, nettoyage, congés) ; informer le CCS si la réception est contrainte. La destination reste décidée par le CCS.' });
+  }
+
+  // 3. Transports : heure souhaitée dépassée sans prise en charge, ou transport imminent non accepté
+  const transports = (await pool.query(
+    `SELECT d.id, d.numero, d.statut, d.heure_souhaitee, d.origine_id, eo.nom AS origine, COALESCE(ed.nom, d.destination_libelle, '—') AS destination,
+            o.nom AS transporteur, EXTRACT(EPOCH FROM (now() - d.heure_souhaitee)) / 60 AS retard_min
+       FROM demandes_transport d JOIN etablissements eo ON eo.id = d.origine_id LEFT JOIN etablissements ed ON ed.id = d.destination_id
+       JOIN organisations_secours o ON o.id = d.organisation_id
+      WHERE (d.origine_id = $1 OR d.destination_id = $1) AND d.statut IN ('demandee', 'acceptee', 'en_route') AND d.heure_souhaitee IS NOT NULL
+        AND d.heure_souhaitee < now() + interval '2 hours'`, [etabId])).rows;
+  for (const d of transports) {
+    const retard = Number(d.retard_min);
+    const base = { genre: 'transport', ressource_id: d.id, ressource: d.numero, unite: `${d.origine} → ${d.destination}`, chambre: null,
+      depuis: d.heure_souhaitee, objet: { type: 'demande_transport', id: d.id, numero: d.numero } };
+    if (retard > cfg.transport_retard_marge_min) {
+      ajouter({ ...base, type: 'transport_en_retard', niveau: d.statut === 'demandee' ? 'eleve' : 'modere', duree_min: Math.round(retard),
+        titre: `Transport ${d.numero} (${d.transporteur}) : heure souhaitée dépassée de ${dureeTexte(retard)}, résident non pris en charge.`,
+        evenement: 'Heure souhaitée du transport',
+        seuil: { valeur_min: cfg.transport_retard_marge_min, regle: `Marge de retard configurée (${cfg.transport_retard_marge_min} min, transport_retard_marge_min).` },
+        cause: { nature: 'fait', texte: d.statut === 'demandee' ? 'La demande n’a pas été acceptée par le transporteur.' : 'Transport accepté, prise en charge non enregistrée.' },
+        action: 'Joindre le transporteur ; si le transport n’est plus possible, reprogrammer ou chercher une autre solution autorisée (décision humaine).' });
+    } else if (d.statut === 'demandee' && retard < 0) {
+      ajouter({ ...base, type: 'transport_non_confirme', niveau: 'faible', duree_min: 0,
+        titre: `Transport ${d.numero} (${d.transporteur}) prévu dans ${dureeTexte(-retard)}, pas encore accepté.`,
+        evenement: 'Demande de transport transmise',
+        seuil: { valeur_min: 120, regle: 'Transport prévu dans les 2 h sans acceptation du transporteur.' },
+        cause: { nature: 'fait', texte: 'Aucune acceptation enregistrée.' },
+        action: 'Vérifier la disponibilité du transporteur avant l’heure prévue.' });
+    }
+  }
+
+  // 4. Placements acceptés non réalisés (Liaison CHSLD) : départ prévu dépassé, ou acceptation ancienne sans départ prévu
+  const placements = (await pool.query(
+    `SELECT d.id, d.numero, d.depart_prevu_le, COALESCE(d.acceptation_equipe_le, d.modifie_le) AS acceptee_le, e.nom AS hebergement,
+            EXTRACT(EPOCH FROM (now() - COALESCE(d.depart_prevu_le, COALESCE(d.acceptation_equipe_le, d.modifie_le)))) / 60 AS age_min
+       FROM demandes_hebergement d JOIN etablissements e ON e.id = d.etablissement_id
+      WHERE (d.hopital_id = $1 OR d.etablissement_id = $1) AND d.statut = 'acceptee' AND d.depart_hopital_le IS NULL
+        AND ((d.depart_prevu_le IS NOT NULL AND d.depart_prevu_le < now())
+          OR (d.depart_prevu_le IS NULL AND COALESCE(d.acceptation_equipe_le, d.modifie_le) < now() - make_interval(hours => $2)))`,
+    [etabId, cfg.placement_accepte_max_h])).rows;
+  for (const d of placements) {
+    const prevu = d.depart_prevu_le != null;
+    ajouter({ genre: 'placement', ressource_id: d.id, ressource: d.numero, unite: d.hebergement, chambre: null, depuis: prevu ? d.depart_prevu_le : d.acceptee_le,
+      duree_min: Math.round(Number(d.age_min)), type: 'placement_non_realise', niveau: prevu ? 'modere' : 'faible',
+      objet: { type: 'demande_hebergement', id: d.id, numero: d.numero },
+      titre: prevu ? `Placement ${d.numero} accepté : départ prévu dépassé de ${dureeTexte(Number(d.age_min))}, départ de l’hôpital non enregistré.`
+        : `Placement ${d.numero} accepté depuis ${dureeTexte(Number(d.age_min))} sans départ planifié.`,
+      evenement: prevu ? 'Départ prévu du placement' : 'Acceptation du placement',
+      seuil: { valeur_min: prevu ? 0 : cfg.placement_accepte_max_h * 60,
+        regle: prevu ? 'Heure de départ prévue dépassée.' : `Acceptation plus ancienne que la durée configurée (${cfg.placement_accepte_max_h} h, placement_accepte_max_h).` },
+      cause: { nature: 'hypothese', texte: 'Obstacle possible : transport, chambre, documents ou famille ; à vérifier dans Liaison CHSLD.' },
+      action: 'Identifier l’obstacle et le responsable dans Liaison CHSLD ; planifier le transport et confirmer la date de départ.' });
+  }
+
+  // 5. Transferts sans réponse de l'établissement d'accueil
+  const transferts = (await pool.query(
+    `SELECT t.id, t.numero, t.origine_id, t.date_demande, ed.nom AS destination, eo.nom AS origine,
+            EXTRACT(EPOCH FROM (now() - t.date_demande)) / 60 AS attente_min
+       FROM transferts t JOIN etablissements ed ON ed.id = t.destination_id JOIN etablissements eo ON eo.id = t.origine_id
+      WHERE (t.origine_id = $1 OR t.destination_id = $1) AND t.statut = 'demande' AND t.date_demande < now() - make_interval(mins => $2)`,
+    [etabId, cfg.transfert_reponse_max_min])).rows;
+  for (const t of transferts) {
+    ajouter({ genre: 'transfert', ressource_id: t.id, ressource: t.numero, unite: `${t.origine} → ${t.destination}`, chambre: null, depuis: t.date_demande,
+      duree_min: Math.round(Number(t.attente_min)), type: 'transfert_sans_reponse', niveau: 'modere', objet: { type: 'transfert', id: t.id, numero: t.numero },
+      titre: `Transfert ${t.numero} vers ${t.destination} sans réponse depuis ${dureeTexte(Number(t.attente_min))}.`,
+      evenement: 'Demande de transfert',
+      seuil: { valeur_min: cfg.transfert_reponse_max_min, regle: `Délai de réponse configuré (${cfg.transfert_reponse_max_min} min, transfert_reponse_max_min).` },
+      cause: { nature: 'fait', texte: 'Ni acceptation ni refus enregistré par l’établissement d’accueil.' },
+      action: 'Relancer l’établissement d’accueil depuis Transferts, ou consulter les solutions de rechange (décision humaine).' });
+  }
+
+  // 6. Connecteur de l'établissement silencieux : données possiblement obsolètes (scénario G)
+  const connecteurs = (await pool.query(
+    `SELECT c.id, c.nom, c.cree_le, (SELECT max(recu_le) FROM messages_connecteur m WHERE m.connecteur_id = c.id) AS dernier
+       FROM connecteurs c WHERE c.etablissement_id = $1 AND c.actif`, [etabId])).rows;
+  for (const c of connecteurs) {
+    const ref = c.dernier || c.cree_le;
+    const age = (Date.now() - new Date(ref).getTime()) / 60000;
+    if (age <= cfg.connecteur_silence_max_min) continue;
+    ajouter({ genre: 'connecteur', ressource_id: c.id, ressource: c.nom, unite: 'Arrimo Connect', chambre: null, depuis: ref, duree_min: Math.round(age),
+      type: 'connecteur_silencieux', niveau: 'modere',
+      titre: c.dernier ? `Connecteur ${c.nom} : aucun message reçu depuis ${dureeTexte(age)} ; les données qu’il alimente peuvent être périmées.`
+        : `Connecteur ${c.nom} : aucun message reçu depuis sa création.`,
+      evenement: c.dernier ? 'Dernier message reçu du connecteur' : 'Création du connecteur',
+      seuil: { valeur_min: cfg.connecteur_silence_max_min, regle: `Silence maximal configuré (${cfg.connecteur_silence_max_min} min, connecteur_silence_max_min).` },
+      cause: { nature: 'hypothese', texte: 'Interruption possible de la synchronisation ; les disponibilités non confirmées ne doivent pas être tenues pour certaines.' },
+      action: 'Vérifier la liaison avec l’équipe informatique ; confirmer les disponibilités manuellement en attendant.' });
+  }
+  return { attendues: att.attendues };
+}
+
+/**
+ * Capacité réelle (cahier final §6) : chaque catégorie est comptée à part ; un lit vide n'est opérationnel que si sa disponibilité
+ * est confirmée et récente ; une sortie prévue reste un lit occupé ; rien n'est estimé ici.
+ */
+function capaciteReelle(lits, civieres, attendues, cfg) {
+  const n = (f) => lits.filter(f).length;
+  const confirme = (l) => l.disponibilite_confirmee_le && Number(l.confirmation_min) <= cfg.confirmation_lit_validite_min;
+  const dans24h = (l) => l.sortie_prevue && new Date(l.sortie_prevue).getTime() <= Date.now() + 24 * 3600000;
+  const c = (etat) => civieres.filter((x) => x.etat === etat).length;
+  return {
+    lits: { total: lits.length, vides: n((l) => l.etat === 'libre'), operationnels: n((l) => l.etat === 'libre' && confirme(l)),
+      non_confirmes: n((l) => l.etat === 'libre' && !confirme(l)), reserves: n((l) => l.etat === 'reserve'), occupes: n((l) => l.etat === 'occupe'),
+      sorties_prevues_24h: n((l) => l.etat === 'occupe' && dans24h(l)), nettoyage: n((l) => l.etat === 'nettoyage'), indisponibles: n((l) => l.etat === 'indispo') },
+    civieres: { total: civieres.length, libres: c('libre'), occupees: c('occupee'), nettoyage: c('nettoyage'), indisponibles: c('indispo') },
+    ambulances_attendues: attendues,
+    validite_confirmation_min: cfg.confirmation_lit_validite_min,
+  };
+}
+
 /** Blocages et alertes explicables de l'établissement (calculés en direct à partir des données enregistrées). */
 async function blocages(pool, utilisateur, etabId) {
   exigerEtablissement(utilisateur, etabId);
@@ -253,6 +437,7 @@ async function blocages(pool, utilisateur, etabId) {
         action: 'Faire valider par l’équipe compétente si une demande de lit est nécessaire.' });
     }
   }
+  const { attendues } = await transversales(pool, utilisateur, etabId, cfg, ajouter);
   // Dernier événement enregistré pour chaque ressource signalée
   const litsIds = alertes.filter((a) => a.genre === 'lit').map((a) => a.ressource_id);
   const civIds = alertes.filter((a) => a.genre === 'civiere').map((a) => a.ressource_id);
@@ -267,7 +452,7 @@ async function blocages(pool, utilisateur, etabId) {
   const rang = { eleve: 0, modere: 1, faible: 2 };
   alertes.sort((a, b) => rang[a.niveau] - rang[b.niveau] || b.duree_min - a.duree_min);
   return require('./vigilance-en').traduire({
-    etablissement: cfg.nom, alertes,
+    etablissement: cfg.nom, alertes, capacite: capaciteReelle(lits, civ, attendues, cfg),
     par_type: alertes.reduce((m, a) => ({ ...m, [a.type]: (m[a.type] || 0) + 1 }), {}),
     regles_couleurs: {
       eleve: 'Rouge : bloque une admission ou un transfert (réservation sans suite, demande prioritaire en attente au-delà du seuil).',

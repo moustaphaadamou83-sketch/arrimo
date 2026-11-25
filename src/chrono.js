@@ -15,7 +15,19 @@ const horloge = require('./horloge');
 const accesVehicules = require('./acces-vehicules-secours');
 
 const ETAPES = ['H11', 'H12', 'H13', 'H14', 'H15'];
-const MOTIFS_RETARD = ['civiere', 'personnel', 'chambre', 'dossier', 'saturation', 'nettoyage', 'technique', 'autre'];
+// Liste fermée, jamais de texte libre ni d'attribution automatique ; « inconnue » = la cause n'est pas documentée (lot 1 du 26 nov. 2026).
+const MOTIFS_RETARD = ['civiere', 'personnel', 'chambre', 'dossier', 'saturation', 'nettoyage', 'technique', 'autre', 'triage', 'clinique', 'inconnue'];
+/**
+ * Palier d'escalade (cahier final du 24 nov. 2026, §4) : normal → vigilance (orange) → escalade (cible porte) → critique (cible totale).
+ * Seuils configurables par profil de pays, indicatifs et non cliniques ; `niveau` (vert, orange, rouge) reste inchangé pour les écrans existants.
+ */
+function palier(attente, c) {
+  if (attente == null) return null;
+  if (attente >= c.total) return 'critique';
+  if (attente >= c.porte) return 'escalade';
+  if (attente >= c.orange) return 'vigilance';
+  return 'normal';
+}
 const BOUTONS = ['H12', 'H13', 'H14'];               // un clic chacun, côté urgence
 const ROLES_HOPITAL = ['coordonnateur', 'gestionnaire', 'admin_etab', 'equipe_soins'];
 const ROLES_AMBULANCE = ['paramedic', 'superviseur_secours'];
@@ -197,7 +209,7 @@ async function enrichir(db, rows) {
     const ms = h.H11 ? maintenant - new Date(h.H11.heure).getTime() : null;
     const attente = r.statut === 'a_la_porte' && !h.H14 && ms != null && ms >= 0 ? Math.floor(ms / 60000) : null;
     const niveau = attente == null ? null : attente >= cibles.porte ? 'rouge' : attente >= cibles.orange ? 'orange' : 'vert';
-    return { ...r, cibles, heures: vueHeures(h), durees: durees(h), a_la_porte_min: attente, niveau,
+    return { ...r, cibles, heures: vueHeures(h), durees: durees(h), a_la_porte_min: attente, niveau, palier: palier(attente, cibles),
       prochaine: BOUTONS.find((e) => !h[e] && h.H11 && !(e !== 'H14' && h.H14)) || null };
   });
 }
@@ -424,4 +436,4 @@ async function fiche(pool, u, id, q = {}) {
   return { ...e, historique, historique_retards: motifs.rows };
 }
 
-module.exports = { traiterPosition, arriveeSignalee, remise, tableau, marquerEtape, depart, corriger, signalerRetard, notifierAttentes, rapport, csv, ecarts, fiche, metres, ETAPES, MOTIFS_RETARD, peutLireAlerte: (u) => ROLES_HOPITAL.includes(u.role), ZONE_DEFAUT_M };
+module.exports = { traiterPosition, arriveeSignalee, remise, tableau, marquerEtape, depart, corriger, signalerRetard, notifierAttentes, rapport, csv, ecarts, fiche, metres, ETAPES, MOTIFS_RETARD, palier, peutLireAlerte: (u) => ROLES_HOPITAL.includes(u.role), ZONE_DEFAUT_M };

@@ -1914,6 +1914,17 @@ async function afficherHistoriquePatient(id) {
 }
 
 /* ---------------- Congés et alertes : congés par lit, disponibilités prévues, blocages explicables ---------------- */
+/** Capacité réelle (lot 1 du chantier coordination, 26 nov. 2026) : vides, opérationnels et non confirmés affichés séparément. */
+function capaciteReelleHTML(c, F) {
+  const tuile = (lbl, val, note = '') => `<div><span class="lbl">${lbl}</span><span class="gros num">${val}</span>${note ? `<span class="note">${note}</span>` : ''}</div>`;
+  return `<div class="panneau-c"><h3>${F('capacite_titre')}</h3><div class="resume">
+    ${tuile(F('cap_vides'), c.lits.vides)}${tuile(F('cap_operationnels'), c.lits.operationnels)}${tuile(F('cap_non_confirmes'), c.lits.non_confirmes)}
+    ${tuile(F('cap_reserves'), c.lits.reserves)}${tuile(F('cap_occupes'), c.lits.occupes, F('cap_sorties', { n: c.lits.sorties_prevues_24h }))}
+    ${tuile(F('cap_nettoyage'), c.lits.nettoyage)}${tuile(F('cap_indisponibles'), c.lits.indisponibles)}
+    ${c.civieres.total ? tuile(F('cap_civieres'), `${c.civieres.libres} / ${c.civieres.occupees}`, F('cap_civ_detail', { n: c.civieres.nettoyage, i: c.civieres.indisponibles })) : ''}
+    ${c.ambulances_attendues ? tuile(F('cap_ambulances'), c.ambulances_attendues) : ''}</div>
+    <p class="note">${F('capacite_note', { min: c.validite_confirmation_min })}</p></div>`;
+}
 async function vueVigilance() {
   const v = $('#v-vigilance');
   const F = (k, vars) => esc(t(`fin.${k}`, vars));
@@ -1947,6 +1958,7 @@ async function vueVigilance() {
       ${c.lignes.length ? `<div class="tableau"><table><thead><tr><th>${F('lit')}</th><th>${F('service_unite')}</th><th>${F('chambre_col')}</th><th>${F('occupation')}</th><th>${F('conge_prevu')}</th><th>${F('statut')}</th><th>${F('depart_reel')}</th><th>${F('nettoyage')}</th><th>${F('dispo_estimee')}</th><th>${F('source')}</th></tr></thead><tbody>${c.lignes.map(ligne).join('')}</tbody></table></div>`
     : `<p class="vide">${F('aucun_conge')}</p>`}
       <p class="note">${esc(c.regles.deterministe)} ${esc(c.regles.retard)} ${esc(c.regles.estimation)}</p></div>
+    ${al.capacite ? capaciteReelleHTML(al.capacite, F) : ''}
     <div class="panneau-c"><h3>${F('alertes_titre', { n: al.alertes.length })}</h3><p class="note">${Object.values(al.regles_couleurs).map(esc).join(' ')}</p>
       <div class="pile">${alertes || `<p class="vide">${F('aucune_alerte')}</p>`}</div></div>`;
   v.querySelectorAll('[data-fh]').forEach((b) => { b.onclick = () => { const k = b.dataset.fh; if (['aujourdhui', 'demain'].includes(k)) { f.jour = k; f.horizon = ''; } else { f.horizon = k; f.jour = ''; } rafraichir(); }; });
