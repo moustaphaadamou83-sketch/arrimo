@@ -284,8 +284,10 @@ class Publication:
         # (ici propriétaire postgres) : exécutée sous le propriétaire via peer, avec garde d'intégrité
         # des données sur les colonnes préexistantes, puis réattribution des droits DML au rôle app.
         i = self.infos[t]; base = self.etat['environnements'][t]['base']; role = i['role']
-        if set(i['proprietaires']) - {'postgres'}: raise Refus('Propriétaire public inattendu : ' + t)
         if not re.fullmatch(r'[a-z_][a-z0-9_]*', role): raise Refus('Rôle applicatif inattendu')
+        # Propriétaires admis : postgres et le rôle applicatif de la cible (cas de la recette, tables mixtes) ; tout autre propriétaire est refusé.
+        # La migration s'exécute sous postgres (super-utilisateur), puis les droits DML sont réaccordés au rôle applicatif.
+        if set(i['proprietaires']) - {'postgres', role}: raise Refus('Propriétaire public inattendu : ' + t)
         if t == 'sh': raise Refus('Migration propriétaire non prévue pour SH')
         tmp = pathlib.Path('/var/tmp/arrimo-pubmig-' + self.sortie.name.rsplit('_',1)[-1] + '-' + t)
         if tmp.exists(): shutil.rmtree(tmp)

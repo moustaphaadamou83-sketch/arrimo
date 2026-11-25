@@ -155,6 +155,22 @@ class FaussePublication(m.Publication):
     def sante(self,t):return {'base':'ok'}
 
 
+class Proprietaires(unittest.TestCase):
+    """Migration sous postgres : propriétaires admis postgres et le rôle applicatif (tables mixtes de la recette), aucun autre."""
+    def _essai(self, proprietaires):
+        with tempfile.TemporaryDirectory() as d:
+            p = FaussePublication(d); p.infos['demo']['proprietaires'] = proprietaires
+            p.etat['environnements']['demo']['base'] = 'arrimo_fictive'
+            try: p.migration_publique_proprietaire('demo')
+            except m.Refus as e: return str(e)
+            except Exception as e: return 'autre:' + type(e).__name__
+            return 'ok'
+    def test_proprietaire_inconnu_refuse(self):
+        self.assertIn('Propriétaire public inattendu', self._essai(['postgres', 'intrus']))
+    def test_tables_mixtes_postgres_et_role_applicatif_admises(self):
+        self.assertNotIn('Propriétaire public inattendu', self._essai(['postgres', 'role_fictif']))
+        self.assertNotIn('Propriétaire public inattendu', self._essai(['postgres']))
+
 class RetoursArriere(unittest.TestCase):
     def test_aucune_bascule_sans_restauration_verifiee(self):
         with tempfile.TemporaryDirectory() as tmp:
