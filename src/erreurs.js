@@ -483,6 +483,7 @@ const MESSAGES = {
   connecteur_introuvable: 'Connecteur introuvable.',
   connecteur_cle_manquante: 'Clé de connecteur manquante.',
   connecteur_cle_invalide: 'Clé de connecteur invalide.',
+  statut_incompatible: 'Cette action n’est pas possible dans l’état actuel de l’alerte.',
   releve_meme_personne: 'La relève doit être accusée par une autre personne que celle qui l’a transmise.',
   visites_suspendues_crise: 'Visites suspendues : la résidence est en cours d’évacuation.',
   connecteur_suspendu: 'Connecteur suspendu par l’établissement : réessayez plus tard, les messages ne sont pas perdus de votre côté.',

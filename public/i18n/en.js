@@ -1259,6 +1259,7 @@ window.ARRIMO_I18N.en = {
     connecteur_introuvable: 'Connector not found.',
     connecteur_cle_manquante: 'Missing connector key.',
     connecteur_cle_invalide: 'Invalid connector key.',
+    statut_incompatible: 'This action is not possible in the alert’s current state.',
     releve_meme_personne: 'The handover must be acknowledged by someone other than the person who sent it.',
     visites_suspendues_crise: 'Visits suspended: the residence is being evacuated.',
     connecteur_suspendu: 'Connector suspended by the facility: retry later; messages are not lost on your side.',
