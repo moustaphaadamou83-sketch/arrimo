@@ -837,6 +837,11 @@ function creerApp(pool, options = {}) {
   api.get('/mouvements/categories', route((req) => require('./categories-mouvements').legende(req.utilisateur.langue)));
   // Plans A, B et C d'OG pour un transfert en attente ou refusé (préparés avant le refus, rien n'est réservé)
   api.get('/transferts/:id/plans', route((req) => require('./og-alternatives').plans(pool, req.utilisateur, entier(req.params.id, 'id'))));
+  // Centre d'audit : recherche unifiée sur les journaux immuables existants ; export CSV journalisé
+  api.get('/audit', route((req) => require('./centre-audit').rechercher(pool, req.utilisateur, req.query)));
+  api.get('/audit.csv', async (req, res, next) => {
+    try { res.set('Content-Type', 'text/csv; charset=utf-8').set('Content-Disposition', 'attachment; filename="audit.csv"').send(await require('./centre-audit').exporter(pool, req.utilisateur, req.query)); } catch (e) { next(e); }
+  });
   api.get('/coordination/plan', route((req) => require('./og-plan').plan(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   api.get('/coordination/escalades', route((req) => suivi.lireGrille(pool, req.utilisateur, req.query)));
   api.put('/coordination/escalades', route((req) => suivi.enregistrerGrille(pool, req.utilisateur, req.body)));
