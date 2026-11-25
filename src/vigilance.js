@@ -27,6 +27,7 @@ const RESPONSABLES = {
   placement_non_realise: 'Coordination des sorties et placements',
   transfert_sans_reponse: 'Établissement d’accueil',
   connecteur_silencieux: 'Responsable des intégrations de l’établissement',
+  quote_part_contradiction: 'Responsable opérationnel de l’urgence, avec le CCS',
 };
 const PALIERS = {
   vigilance: { niveau: 'modere', texte: 'vigilance' },
@@ -220,6 +221,18 @@ async function transversales(pool, utilisateur, etabId, cfg, ajouter) {
       seuil: { valeur_min: 0, regle: 'Ambulances annoncées non encore arrivées supérieures aux civières libres enregistrées.' },
       cause: { nature: 'fait', texte: 'Comptes lus dans les préalertes ouvertes et l’état des civières ; une civière libre non confirmée peut ne pas être prête.' },
       action: 'Préparer l’accueil (civières, nettoyage, congés) ; informer le CCS si la réception est contrainte. La destination reste décidée par le CCS.' });
+  }
+
+  // 2 bis. Quote-part non atteinte alors qu'aucune civière n'est libre (scénario B) : deux informations distinctes, aucune destination décidée
+  const qp = (await require('./quotes-parts').etat(pool, [etabId])).get(etabId);
+  if (qp && qp.recues + qp.attendues < qp.valeur && att.libres === 0) {
+    ajouter({ genre: 'urgence', ressource_id: etabId, ressource: 'Quote-part', unite: 'Urgence', chambre: null, depuis: qp.actualise_le, duree_min: 0,
+      type: 'quote_part_contradiction', niveau: 'modere',
+      titre: `Quote-part non atteinte (${qp.recues} reçue(s) et ${qp.attendues} attendue(s) sur ${qp.valeur} par ${qp.periode_min} min) alors qu’aucune civière n’est libre.`,
+      evenement: 'Quote-part saisie par l’autorité',
+      seuil: { valeur_min: 0, regle: 'Comparaison de deux informations distinctes ; aucune marge n’est calculée (formule non définie officiellement).' },
+      cause: { nature: 'fait', texte: `Quote-part fixée par ${qp.autorite} ; civières libres enregistrées : 0.` },
+      action: 'Informer le CCS de la contrainte de réception ; la destination reste décidée par le répartiteur.' });
   }
 
   // 3. Transports : heure souhaitée dépassée sans prise en charge, ou transport imminent non accepté

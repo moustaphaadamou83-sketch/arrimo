@@ -42,6 +42,10 @@ const REGLES = {
     contraintes: ['Une disponibilité non confirmée ne doit pas être tenue pour certaine.', 'Unconfirmed availability must not be treated as certain.'],
     validation: ['L’équipe informatique confirme le rétablissement de la liaison.', 'The IT team confirms the link is restored.'],
   },
+  quote_part_contradiction: {
+    contraintes: ['Une quote-part ne remplace ni un critère clinique ni la décision du répartiteur ; aucune marge n’est calculée.', 'A quota replaces neither a clinical criterion nor the dispatcher’s decision; no margin is calculated.'],
+    validation: ['Le CCS décide de la destination en connaissant les deux informations.', 'The dispatch centre decides the destination knowing both pieces of information.'],
+  },
   _defaut: {
     contraintes: ['Rien n’est libéré, annulé ni réservé automatiquement.', 'Nothing is freed, cancelled or reserved automatically.'],
     validation: ['Une personne habilitée décide et enregistre l’action.', 'An authorized person decides and records the action.'],
@@ -55,6 +59,7 @@ const SOURCES = {
   placement_non_realise: ['Liaison CHSLD (demandes d’hébergement)', 'Liaison CHSLD (housing requests)'],
   transfert_sans_reponse: ['Transferts', 'Transfers'],
   connecteur_silencieux: ['Arrimo Connect (messages reçus)', 'Arrimo Connect (received messages)'],
+  quote_part_contradiction: ['Quotes-parts saisies, préalertes, civières', 'Entered quotas, pre-alerts, stretchers'],
   _defaut: ['Lits, civières, demandes d’admission et journal', 'Beds, stretchers, admission requests and log'],
 };
 

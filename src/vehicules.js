@@ -154,6 +154,7 @@ async function capacites(pool, hop) {
          JOIN v_horodatages_courants h14 ON h14.objet = 'passage_chrono' AND h14.objet_id = pc.id AND h14.etape = 'H14'
         WHERE pc.etablissement_id = e.id AND h11.heure > now() - interval '24 hours' AND h14.heure >= h11.heure) AS porte_mesures_24h
     FROM etablissements e WHERE e.id = ANY($1)`, [ids])).rows.map((r) => [r.id, r]));
+  const qp = await require('./quotes-parts').etat(pool, ids);   // lot 5 : null = non renseignée (jamais 0)
   return hop.map((e) => {
     const st = stats.get(e.id);
     const sv = services.filter((x) => x.etablissement_id === e.id);
@@ -164,7 +165,8 @@ async function capacites(pool, hop) {
       urgence: st ? { niveau: cv.niveauCivieres(st, e), civieres_libres: st.libres, taux: st.fonctionnelles > 0 ? st.taux : null } : null,
       statut_declare: pa.declaration(e), services_ouverts: ouverts, soins_intensifs: lits ? { libres: lits.libres, total: lits.total } : null,
       ambulances: { annoncees: flux.get(e.id)?.annoncees ?? 0, a_la_porte: flux.get(e.id)?.a_la_porte ?? 0,
-        porte_mediane_24h_min: flux.get(e.id)?.porte_mediane_24h ?? null, porte_mesures_24h: flux.get(e.id)?.porte_mesures_24h ?? 0 } };
+        porte_mediane_24h_min: flux.get(e.id)?.porte_mediane_24h ?? null, porte_mesures_24h: flux.get(e.id)?.porte_mesures_24h ?? 0 },
+      quote_part: qp.get(e.id) ?? null };
   });
 }
 const SQL_HOPITAUX = `SELECT e.id, e.nom, e.ville, e.latitude, e.longitude, e.modules, e.type_etablissement,
@@ -220,7 +222,7 @@ async function urgencesProches(pool, u, etabId) {
   if ((ici.type_etablissement || 'hopital') === 'hopital') throw new ErreurHttp(403, 'role_insuffisant');
   if (!TE.moduleActif(ici, 'transport_ambulancier')) throw new ErreurHttp(403, 'module_desactive', { module: 'transport_ambulancier' });
   // Minimisation : un établissement d'hébergement ne voit pas le flux d'ambulances des urgences (réservé au CCS et aux ambulances)
-  const hops = (await capacites(pool, (await pool.query(SQL_HOPITAUX, [await configsRegion(pool, id)])).rows)).map(({ ambulances, ...h }) => h);
+  const hops = (await capacites(pool, (await pool.query(SQL_HOPITAUX, [await configsRegion(pool, id)])).rows)).map(({ ambulances, quote_part, ...h }) => h);
   // Les 8 plus proches à vol d'oiseau sont classées par le routeur (requête légère) ; les autres suivent
   const proches = hops.map((h) => ({ ...h, vol: km(ici, h) })).sort((a, b) => (a.vol ?? 1e9) - (b.vol ?? 1e9));
   const c = await classer(proches.slice(0, 8).map(({ vol, ...h }) => h), ici, { pool });

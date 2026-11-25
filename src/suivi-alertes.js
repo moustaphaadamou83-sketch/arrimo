@@ -28,6 +28,7 @@ const GRILLE_DEFAUT = {
   civiere_nettoyage: [['entretien', 15], ['coordonnateur', 15], ['gestionnaire', 30]],
   attente_admission: [['coordonnateur', 30], ['gestionnaire', 60]],
   reservation_prolongee: [['coordonnateur', 30], ['gestionnaire', 60]],
+  quote_part_contradiction: [['coordonnateur', 15], ['gestionnaire', 30]],
   _defaut: [['coordonnateur', 60], ['gestionnaire', 120]],
 };
 

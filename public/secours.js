@@ -54,7 +54,7 @@
       tp_motif: 'Transport non urgent : {m}', tp_m: { retour_domicile: 'retour à domicile', transfert_stable: 'transfert stable', depart_nsa: 'départ NSA', retour_chsld: 'retour en résidence' },
       tp_plage: 'plage demandée {d}-{f}', tp_plage_conf: 'plage confirmée {d}-{f}', tp_v: { ambulance: 'ambulance', transport_adapte: 'transport adapté', autre: 'autre véhicule' },
       o_chrono: 'Chrono', ch_titre: 'Chrono · temps à l’urgence', ch_seuil_actif: 'Passages au seuil Chrono', ch_filtre_vehicule: 'Véhicule', ch_filtre_organisation: 'Entreprise', ch_filtre_etablissement: 'Établissement', ch_filtre_periode: 'Passages terminés depuis', ch_periode: '{n} heures', ch_filtrer: 'Filtrer', ch_intro: 'Mêmes heures que l’urgence : arrivée (H11), triage (H12, H13), civière libérée (H14), départ (H15). Chiffres indicatifs ; aucune prime ni pénalité.',
-      flux_annoncees: '{n} annoncée(s)', flux_porte: '{n} à la porte', flux_mediane: 'porte : médiane {n} min sur 24 h ({m} mesures)', flux_mediane_aucune: 'porte : aucune mesure sur 24 h', ch_porte: 'À la porte', ch_route: 'En route', ch_termines: 'Passages terminés', ch_planifies: 'Durées des transports planifiés', ch_planifies_note: 'Transports actifs et récents. Tiret : événement nécessaire manquant ou incohérent.', ch_delais: { reponse: 'Réponse', mobilisation: 'Mobilisation', vers_prise_en_charge: 'Vers le départ', attente_prise_en_charge: 'Attente au départ', trajet_patient: 'Trajet patient', attente_remise: 'Attente de remise', remise_en_condition: 'Remise en condition', engagement: 'Engagement' }, ch_aucun: 'Aucun passage.', ch_min: '{n} min à la porte', ch_niveaux: { vert: 'Sous le seuil', orange: 'Surveillance', rouge: 'Seuil atteint', critique: 'Critique : cible totale dépassée' }, ch_depart: 'Départ de l’hôpital',
+      qp: 'quote-part : {r} reçue(s) + {a} attendue(s) / {v} par {p} min ({f}) · marge non renseignée', qp_aucune: 'quote-part : non renseignée', qp_saisir: 'Saisir la quote-part fixée par l’autorité', qp_valeur: 'Ambulances', qp_periode: 'Période (min)', qp_autorite: 'Autorité', qp_fiabilite: 'Fiabilité', qp_enregistrer: 'Enregistrer', qp_regle: 'Chaque saisie est conservée dans l’historique. Aucune marge n’est calculée ; la quote-part ne décide d’aucune destination.', qp_fiab: { confirmee_autorite: 'confirmée par l’autorité', declaree: 'déclarée', a_verifier: 'à vérifier' }, flux_annoncees: '{n} annoncée(s)', flux_porte: '{n} à la porte', flux_mediane: 'porte : médiane {n} min sur 24 h ({m} mesures)', flux_mediane_aucune: 'porte : aucune mesure sur 24 h', ch_porte: 'À la porte', ch_route: 'En route', ch_termines: 'Passages terminés', ch_planifies: 'Durées des transports planifiés', ch_planifies_note: 'Transports actifs et récents. Tiret : événement nécessaire manquant ou incohérent.', ch_delais: { reponse: 'Réponse', mobilisation: 'Mobilisation', vers_prise_en_charge: 'Vers le départ', attente_prise_en_charge: 'Attente au départ', trajet_patient: 'Trajet patient', attente_remise: 'Attente de remise', remise_en_condition: 'Remise en condition', engagement: 'Engagement' }, ch_aucun: 'Aucun passage.', ch_min: '{n} min à la porte', ch_niveaux: { vert: 'Sous le seuil', orange: 'Surveillance', rouge: 'Seuil atteint', critique: 'Critique : cible totale dépassée' }, ch_depart: 'Départ de l’hôpital',
       ch_H11: 'Arrivée', ch_H12: 'Début triage', ch_H13: 'Fin triage', ch_H14: 'Civière libérée', ch_H15: 'Départ', ch_corrigee: 'corrigée', ch_total: 'total {n} min', ch_inactif: 'Aucun hôpital de votre secteur n’utilise encore le Chrono.',
       o_regional: 'Vue régionale', o_appels: 'Appels simulés', appels_demo_info: 'Appels fictifs pour la démonstration.', appels_demo_malaise: 'Malaise simulé', appels_demo_chute: 'Chute simulée', appels_demo_attente: 'À affecter', appels_demo_affecter: 'Affecter le véhicule', appels_demo_aucun: 'Aucun appel simulé.', o_flotte: 'Flotte', o_prealertes: 'Préalertes', o_demandes: 'Demandes des établissements', o_historique: 'Historique', o_og: 'OG', o_mission: 'Mission', o_urgences: 'Urgences classées', o_transports: 'Transports',
       k_affecter: 'Missions à affecter', k_attente: 'Interventions en attente', k_pression: 'Établissements sous pression', k_destination: 'Ambulances à destination',
@@ -136,7 +136,7 @@
       tp_motif: 'Non-urgent transport: {m}', tp_m: { retour_domicile: 'return home', transfert_stable: 'stable transfer', depart_nsa: 'ALC departure', retour_chsld: 'return to residence' },
       tp_plage: 'requested slot {d}-{f}', tp_plage_conf: 'confirmed slot {d}-{f}', tp_v: { ambulance: 'ambulance', transport_adapte: 'adapted transport', autre: 'other vehicle' },
       o_chrono: 'Chrono', ch_titre: 'Chrono · emergency department times', ch_seuil_actif: 'Visits at the Chrono threshold', ch_filtre_vehicule: 'Vehicle', ch_filtre_organisation: 'Company', ch_filtre_etablissement: 'Facility', ch_filtre_periode: 'Visits completed within', ch_periode: '{n} hours', ch_filtrer: 'Filter', ch_intro: 'Same times as the emergency department: arrival (H11), triage (H12, H13), stretcher released (H14), departure (H15). Indicative figures; no bonus or penalty.',
-      flux_annoncees: '{n} announced', flux_porte: '{n} at the door', flux_mediane: 'door: median {n} min over 24 h ({m} measurements)', flux_mediane_aucune: 'door: no measurement over 24 h', ch_porte: 'At the door', ch_route: 'On the way', ch_termines: 'Completed visits', ch_planifies: 'Scheduled transport times', ch_planifies_note: 'Active and recent transports. A dash indicates a missing or inconsistent event.', ch_delais: { reponse: 'Response', mobilisation: 'Mobilization', vers_prise_en_charge: 'To pickup location', attente_prise_en_charge: 'Wait at pickup', trajet_patient: 'Patient travel', attente_remise: 'Handover wait', remise_en_condition: 'Reset time', engagement: 'Time committed' }, ch_aucun: 'No visit.', ch_min: '{n} min at the door', ch_niveaux: { vert: 'Below threshold', orange: 'Monitor', rouge: 'Threshold reached', critique: 'Critical: total target exceeded' }, ch_depart: 'Leaving the hospital',
+      qp: 'quota: {r} received + {a} expected / {v} per {p} min ({f}) · margin not provided', qp_aucune: 'quota: not provided', qp_saisir: 'Enter the quota set by the authority', qp_valeur: 'Ambulances', qp_periode: 'Period (min)', qp_autorite: 'Authority', qp_fiabilite: 'Reliability', qp_enregistrer: 'Save', qp_regle: 'Every entry is kept in the history. No margin is calculated; the quota decides no destination.', qp_fiab: { confirmee_autorite: 'confirmed by the authority', declaree: 'declared', a_verifier: 'to be verified' }, flux_annoncees: '{n} announced', flux_porte: '{n} at the door', flux_mediane: 'door: median {n} min over 24 h ({m} measurements)', flux_mediane_aucune: 'door: no measurement over 24 h', ch_porte: 'At the door', ch_route: 'On the way', ch_termines: 'Completed visits', ch_planifies: 'Scheduled transport times', ch_planifies_note: 'Active and recent transports. A dash indicates a missing or inconsistent event.', ch_delais: { reponse: 'Response', mobilisation: 'Mobilization', vers_prise_en_charge: 'To pickup location', attente_prise_en_charge: 'Wait at pickup', trajet_patient: 'Patient travel', attente_remise: 'Handover wait', remise_en_condition: 'Reset time', engagement: 'Time committed' }, ch_aucun: 'No visit.', ch_min: '{n} min at the door', ch_niveaux: { vert: 'Below threshold', orange: 'Monitor', rouge: 'Threshold reached', critique: 'Critical: total target exceeded' }, ch_depart: 'Leaving the hospital',
       ch_H11: 'Arrival', ch_H12: 'Triage start', ch_H13: 'Triage end', ch_H14: 'Stretcher released', ch_H15: 'Departure', ch_corrigee: 'corrected', ch_total: 'total {n} min', ch_inactif: 'No hospital in your area uses Chrono yet.',
       o_regional: 'Regional view', o_appels: 'Simulated calls', appels_demo_info: 'Fictional calls for the demonstration.', appels_demo_malaise: 'Simulated illness', appels_demo_chute: 'Simulated fall', appels_demo_attente: 'Awaiting assignment', appels_demo_affecter: 'Assign vehicle', appels_demo_aucun: 'No simulated calls.', o_flotte: 'Fleet', o_prealertes: 'Pre-alerts', o_demandes: 'Requests from facilities', o_historique: 'History', o_og: 'OG', o_mission: 'Mission', o_urgences: 'Ranked emergencies', o_transports: 'Transports',
       k_affecter: 'Missions to assign', k_attente: 'Waiting interventions', k_pression: 'Facilities under pressure', k_destination: 'Ambulances at destination',
@@ -260,7 +260,7 @@
     // L'heure de lecture change à chaque interrogation et ne doit pas effacer les sélections en cours.
     const chrono = etat.chrono ? { ...etat.chrono, actualise_le: undefined } : null;
     const sig = JSON.stringify([etat.alertesCrise, etat.interventionsDemo, chrono, etat.chronoFiltre && { ...etat.chronoFiltre, actualise_le: undefined }, etat.prealertes, etat.vehicules, etat.transports, etat.destinations, etat.classees, etat.unites, etat.erreur, etat.message, etat.enLigne, L, etat.onglet, etat.alternatives]);
-    if (sig === derniereSignature || (document.activeElement?.matches('[data-tr-horaire]') || document.activeElement?.closest('#secours-chrono-filtres, [data-chrono-retard]'))) { enTete(); return; }
+    if (sig === derniereSignature || (document.activeElement?.matches('[data-tr-horaire]') || document.activeElement?.closest('#secours-chrono-filtres, [data-chrono-retard], [data-quote-part]'))) { enTete(); return; }
     const attente = 1000 - (Date.now() - dernierAppui);
     if (attente > 0) { clearTimeout(renduDiffere); renduDiffere = setTimeout(rendreSiChange, attente); return; }
     derniereSignature = sig; rendre();
@@ -332,8 +332,15 @@
   function fluxAmbulances(h) {
     const a = h.ambulances; if (!a) return '';
     const morceaux = [t('flux_annoncees', { n: a.annoncees }), t('flux_porte', { n: a.a_la_porte }),
-      a.porte_mediane_24h_min != null ? t('flux_mediane', { n: a.porte_mediane_24h_min, m: a.porte_mesures_24h }) : t('flux_mediane_aucune')];
-    return `<div class="note">${esc(morceaux.join(' · '))}</div>`;
+      a.porte_mediane_24h_min != null ? t('flux_mediane', { n: a.porte_mediane_24h_min, m: a.porte_mesures_24h }) : t('flux_mediane_aucune'),
+      h.quote_part ? t('qp', { r: h.quote_part.recues, a: h.quote_part.attendues, v: h.quote_part.valeur, p: h.quote_part.periode_min, f: t(`qp_fiab.${h.quote_part.fiabilite}`) }) : t('qp_aucune')];
+    const saisie = etat.moi?.utilisateur?.role === 'repartiteur' ? `<details class="qp-saisie"><summary>${t('qp_saisir')}</summary>
+      <form data-quote-part="${Number(h.id)}" class="ligne"><label>${t('qp_valeur')} <input name="valeur" type="number" min="0" max="500" required></label>
+        <label>${t('qp_periode')} <input name="periode_min" type="number" min="15" max="10080" required></label>
+        <label>${t('qp_autorite')} <input name="autorite" minlength="2" maxlength="120" required></label>
+        <label>${t('qp_fiabilite')} <select name="fiabilite">${['a_verifier', 'declaree', 'confirmee_autorite'].map((k) => `<option value="${k}">${t('qp_fiab.' + k)}</option>`).join('')}</select></label>
+        <button class="btn" type="submit">${t('qp_enregistrer')}</button></form><p class="note">${t('qp_regle')}</p></details>` : '';
+    return `<div class="note">${esc(morceaux.join(' · '))}</div>${saisie}`;
   }
   const COUL_CF = { en_attente: '#F59E0B', acceptee: '#16A34A', sans_reponse: '#16A34A', avertie: '#2563EB', reorientee: '#DC2626' };
   const restant = (c) => Math.max(0, Math.round((new Date(c.echeance).getTime() - Date.now()) / 1000));
@@ -1019,6 +1026,18 @@
     }
   });
   document.addEventListener('submit', async (ev) => {
+    if (ev.target.matches('[data-quote-part]')) {
+      ev.preventDefault();
+      const f = ev.target; const d = new FormData(f);
+      etat.erreur = null; etat.message = null;
+      try {
+        await api('POST', '/secours/quotes-parts', { etablissement_id: Number(f.dataset.quotePart), valeur: Number(d.get('valeur')), periode_min: Number(d.get('periode_min')),
+          autorite: String(d.get('autorite') || ''), fiabilite: String(d.get('fiabilite')) });
+        etat.message = t('fait');
+      } catch (e) { etat.erreur = e.message; }
+      await charger();
+      return;
+    }
     if (ev.target.matches('[data-chrono-retard]')) {
       ev.preventDefault();
       const f = ev.target;

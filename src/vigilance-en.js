@@ -126,6 +126,12 @@ const MODELES = [
   ['Création du connecteur', 'Connector creation'],
   ['Silence maximal configuré ({n} min, connecteur_silence_max_min).', 'Configured maximum silence ({n} min, connecteur_silence_max_min).'],
   ['Interruption possible de la synchronisation ; les disponibilités non confirmées ne doivent pas être tenues pour certaines.', 'Possible synchronization interruption; unconfirmed availability must not be treated as certain.'],
+  ['Responsable opérationnel de l’urgence, avec le CCS', 'Emergency operations lead, with the dispatch centre'],
+  ['Quote-part non atteinte ({r} reçue(s) et {a} attendue(s) sur {v} par {p} min) alors qu’aucune civière n’est libre.', 'Quota not reached ({r} received and {a} expected out of {v} per {p} min) while no stretcher is free.'],
+  ['Quote-part saisie par l’autorité', 'Quota entered by the authority'],
+  ['Comparaison de deux informations distinctes ; aucune marge n’est calculée (formule non définie officiellement).', 'Comparison of two separate pieces of information; no margin is calculated (formula not officially defined).'],
+  ['Quote-part fixée par {a} ; civières libres enregistrées : 0.', 'Quota set by {a}; recorded free stretchers: 0.'],
+  ['Informer le CCS de la contrainte de réception ; la destination reste décidée par le répartiteur.', 'Inform the dispatch centre of the reception constraint; the destination remains the dispatcher’s decision.'],
   ['Vérifier la liaison avec l’équipe informatique ; confirmer les disponibilités manuellement en attendant.', 'Check the link with the IT team; confirm availability manually in the meantime.'],
 ];
 const echapper = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
