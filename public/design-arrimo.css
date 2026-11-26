@@ -486,3 +486,5 @@ div.ds-kpi { cursor: default; }
 :root[data-design="v2"][data-type-etab="chsld"] .barre .ctx select { background: #FFFFFF; color: var(--ch-petrole); }
 :root[data-design="v2"][data-type-etab="chsld"] .barre .btn:focus-visible, :root[data-design="v2"][data-type-etab="chsld"] .barre select:focus-visible { outline-color: #FFFFFF; }
 :root[data-design="v2"][data-type-etab="chsld"] body.nav-verticale .barre .marque small { color: #FFFFFF; }
+/* Console SH sur téléphone : métrique de police d'origine (Public Sans) ; Inter, plus large, faisait déborder la fiche d'implantation d'1 px */
+@media (max-width: 600px) { :root[data-design="v2"][data-console="sh"] { --police: "Public Sans", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; } }

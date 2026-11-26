@@ -2840,7 +2840,9 @@ test('démonstration : un seul compte par CHSLD (administrateur), six comptes d�
     await ph.addInitScript(({ jeton, id }) => { localStorage.setItem('arrimo-token', jeton); localStorage.setItem('arrimo-ctx', String(id)); localStorage.setItem('arrimo-langue', 'fr'); }, { jeton: sessions.b, id: hy });
     await ph.goto(basePilote); await ph.waitForSelector('body[data-pret="1"]');
     assert.notStrictEqual(await ph.evaluate(() => document.documentElement.dataset.typeEtab), 'chsld');
-    assert.strictEqual(await ph.evaluate(() => getComputedStyle(document.querySelector('.entete-app')).backgroundColor), 'rgb(14, 94, 111)', 'charte hospitalière #0E5E6F');
+    // Cahier correctif final (26 nov. 2026, planche 2 validée) : barre supérieure claire (surface) pour l'hôpital, sans le dégradé CHSLD
+    assert.strictEqual(await ph.evaluate(() => getComputedStyle(document.querySelector('.barre')).backgroundColor), 'rgb(255, 255, 255)', 'barre hospitalière claire (planche 2)');
+    assert.doesNotMatch(await ph.evaluate(() => getComputedStyle(document.querySelector('.barre')).backgroundImage), /linear-gradient/, 'pas de dégradé CHSLD chez l’hôpital');
     await ph.screenshot({ path: `${dossier}/hopital-b-inchange.png` });
     await ctxH.close();
   } finally { await navigateur.close(); }
