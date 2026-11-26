@@ -144,7 +144,8 @@
     const bloque = !!l.retard || ['refuse', 'annule'].includes(l.statut);
     // Heures réelles des jalons (fiche du mouvement) ; une étape sans heure reste « — »
     const [fiche, plans] = await Promise.all([l.fiche ? o.api('GET', `/arrimo-flux/fiche?type=${l.fiche.type}&id=${l.fiche.id}`).catch(() => null) : null,
-      l.transfert?.id ? o.api('GET', `/transferts/${l.transfert.id}/plans`).catch(() => undefined) : null]);
+      // Plans A, B, C : réservés à l'établissement demandeur (départ) ; ailleurs, aucune requête (pas d'erreur 404 attendue)
+      l.transfert?.id && l.mouvement === 'depart' ? o.api('GET', `/transferts/${l.transfert.id}/plans`).catch(() => undefined) : (l.transfert?.id ? undefined : null)]);
     if (!z.isConnected) return;
     const JALON = { demande: 0, demande_transmise: 0, prealerte: 0, acceptation: 1, refus: 1, preparation: 2, en_route: 3, sur_place: 3, depart: 3, depart_confirme: 3, prealerte_recue: 3, arrivee: 4, reception: 5, cloture: 6 };
     const heures = Array(7).fill(null);
@@ -161,7 +162,7 @@
     else corpsPlans = `<div class="ds-plan"><strong>${T('ds_aucun_plan')}</strong><span>${T('ds_cours')}</span></div>`;
     const OBJET = { transport: 'demande_transport', transfert: 'transfert', hebergement: 'demande_hebergement', prealerte: 'prealerte' };
     const sillage = l.fiche ? (window.ArrimoSillage?.bouton?.(OBJET[l.fiche.type] || l.fiche.type, l.fiche.id) || '') : '';
-    z.innerHTML = `<div class="tete"><strong>${e(l.reference)}</strong><span class="catn" style="font-size:12px;font-weight:600;color:${e(l.categorie?.texte || 'inherit')}">${e(l.categorie?.libelle || '')}</span></div>
+    z.innerHTML = `<div class="tete"><strong>${e(l.reference)}</strong><span class="catn ds-cat-texte" style="font-size:12px;font-weight:600;--cat-texte:${e(l.categorie?.texte || 'inherit')};--cat-couleur:${e(l.categorie?.couleur || 'currentColor')}">${e(l.categorie?.libelle || '')}</span></div>
       <div style="font-size:14px;font-weight:600">${e(l.origine || '—')} → ${e(l.destination || '—')}</div>
       ${l.preparation || l.preparation_accueil || l.marge_preparation ? `<div>${prep(l.preparation)}${accueil(l)}</div>` : ''}
       <ol class="ds-jalons">${jalons}</ol>

@@ -142,7 +142,7 @@
         { nom: CA('occupees'), n: p.occupees, couleur: C2('#94A3B8', '#64748B'), aller: 'c-chambres' }, { nom: CA('reservees'), n: p.reservees, couleur: C2('#2563EB', '#8AA8F0'), aller: 'c-chambres' },
         { nom: CA('preparation'), n: p.preparation, couleur: C2('#B45309', '#F4B35E'), aller: 'c-taches' }, { nom: CA('conservees'), n: p.conservees, couleur: C2('#7C3AED', '#B794F6'), aller: 'c-chambres' },
         { nom: CA('libres'), n: p.libres, couleur: C2('#15803D', '#4ADE80'), aller: 'c-chambres' }, { nom: CA('bloquees'), n: p.bloquees, couleur: C2('#475569', '#A9BAC9'), aller: 'c-chambres' }] };
-      await window.ArrimoAccueil.construire(v, { ...window.optsFlux(), bandeau: window.bandeauAccueil(), taches: true, flux: fx, capacite, etablissement: a.etablissement.nom,
+      await window.ArrimoAccueil.construire(v, { ...window.optsFlux(), bandeau: window.bandeauAccueil(), taches: true, flux: fx, capacite, etablissement: a.etablissement.nom, fuseau: typeof fuseau === 'function' ? fuseau() : undefined,
         kpis: [{ code: 'k_places', module: 'capacites', lib: A('k_places'), val: p.libres, aller: 'c-chambres', ton: p.libres ? '' : 'alerte' },
           fx ? { code: 'k_arrivees', lib: A('k_arrivees'), val: fx.resume.arrivees, aller: 'flux' } : null, fx ? { code: 'k_departs', lib: A('k_departs'), val: fx.resume.departs, aller: 'flux' } : null,
           { code: 'k_preparer', lib: A('k_preparer'), val: prep ?? a.entretien.a_nettoyer, aller: 'c-taches' },

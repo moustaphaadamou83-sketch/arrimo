@@ -13,6 +13,8 @@
   const module = (cle) => coul(MODULES, cle);
   const etat = (cle) => coul(ETATS, cle);
   const piste = () => (sombre() ? '#293D4C' : '#E5EDF5');
+  /** Couleur d'état pour un texte : variable CSS (suit le thème courant, contrastes AA vérifiés en clair et en sombre). */
+  const etatVar = (cle) => ({ vert: 'var(--c-vert)', orange: 'var(--c-orange)', rouge: 'var(--c-rouge)', info: 'var(--c-info)' }[cle] || 'var(--texte-2)');
 
   /** Anneau simple (arrivées attendues, planche 2) : pct 0-100 ou null (inconnu : anneau vide, « ? »). */
   function anneau(pct, couleur, { taille = 52, epaisseur = 6, texte, aria } = {}) {
@@ -76,5 +78,5 @@
   const pastille = (niveau, texte) => `<span class="ds-etat ${esc(niveau || '')}">${esc(texte)}</span>`;
   /** Lie les boutons data-ds-aller à une fonction d'ouverture d'écran. */
   function lier(racine, ouvrir) { racine.querySelectorAll('[data-ds-aller]').forEach((b) => { b.onclick = () => ouvrir?.(b.dataset.dsAller); }); }
-  window.ArrimoDS = { esc, module, etat, piste, anneau, doubleAnneau, kpi, capacite, progres, courbe, pastille, lier, MODULES, sombre };
+  window.ArrimoDS = { esc, module, etat, etatVar, piste, anneau, doubleAnneau, kpi, capacite, progres, courbe, pastille, lier, MODULES, sombre };
 })();

@@ -160,7 +160,8 @@ $('#ambiance-barre')?.addEventListener('change', async (e) => {
 function majAmbianceSeg() {
   const theme = document.documentElement.dataset.theme; const amb = window.ArrimoApparence?.ambiance?.() || 'glacier';
   const actif = theme === 'sombre' ? 'crepuscule' : amb;
-  document.querySelectorAll('[data-ambiance-choix]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.ambianceChoix === actif)));
+  const NOMS = langue === 'en' ? { glacier: 'Glacier', horizon: 'Horizon', crepuscule: 'Dusk' } : { glacier: 'Glacier', horizon: 'Horizon', crepuscule: 'Crépuscule' };
+  document.querySelectorAll('[data-ambiance-choix]').forEach((b) => { b.setAttribute('aria-pressed', String(b.dataset.ambianceChoix === actif)); if (b.textContent !== NOMS[b.dataset.ambianceChoix]) b.textContent = NOMS[b.dataset.ambianceChoix]; });
 }
 document.querySelectorAll('[data-ambiance-choix]').forEach((b) => { b.addEventListener('click', async () => {
   const c = b.dataset.ambianceChoix;
@@ -170,7 +171,8 @@ document.querySelectorAll('[data-ambiance-choix]').forEach((b) => { b.addEventLi
   if (document.documentElement.dataset.theme === 'sombre') await choisirApparence('clair'); else toast(t('apparence.ambiance_ok'));
   majAmbianceSeg();
 }); });
-new MutationObserver(majAmbianceSeg).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-ambiance'] });
+new MutationObserver(majAmbianceSeg).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-ambiance', 'lang'] });
+window.addEventListener('arrimo:langue', majAmbianceSeg);
 majAmbianceSeg();
 // Bascule de l'en-tête : clair → sombre → automatique (système), sans ouvrir les Paramètres.
 $('#b-theme')?.addEventListener('click', () => {

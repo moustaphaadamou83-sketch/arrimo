@@ -75,7 +75,7 @@
   /** Priorités proposées par OG (planche 2) : niveau (escalade, vigilance, information), titre, détail ; un clic ouvre l'écran. */
   function carteOg(o) {
     const prios = (o.priorites || []).slice(0, 3);
-    const couleurNiv = { escalade: DS().etat('rouge'), vigilance: DS().etat('orange'), information: DS().etat('info') };
+    const couleurNiv = { escalade: DS().etatVar('rouge'), vigilance: DS().etatVar('orange'), information: DS().etatVar('info') };
     return `<section class="ds-carte acc-priorites"><div class="ds-carte-tete"><h3><span class="ds-og" aria-hidden="true">OG</span>${T('og_titre')}</h3></div>
       <div id="acc-prealertes"></div>
       ${prios.length ? prios.map((p) => { const niv = p.niveau || 'information'; return `<button type="button" class="ds-prio" style="--p-couleur:${couleurNiv[niv] || couleurNiv.information}"${p.aller ? ` data-acc-aller="${e(p.aller)}"` : ''}>
@@ -96,7 +96,7 @@
       const reste = a?.pret || pr === 'prete' ? T('prete') : a?.manquantes?.length ? a.manquantes.map((c) => X().cond?.[c] || c).join(', ') : pr ? T(pr) : T('prep_inconnue');
       const min = Math.round((quand - now) / 60000); const eta = min <= 0 ? T('dans', { n: 0 }) : min < 60 ? `${min} min` : T('dans_h', { h: Math.floor(min / 60), m: String(min % 60).padStart(2, '0') });
       const unite = l.vehicule || l.reference;
-      return `<button type="button" class="ds-arrivee" style="--a-couleur:${DS().etat(ton)}" data-acc-aller="${e(l.ecran || 'flux')}">
+      return `<button type="button" class="ds-arrivee" style="--a-couleur:${DS().etatVar(ton)}" data-acc-aller="${e(l.ecran || 'flux')}">
         ${DS().anneau(pct, DS().etat(ton), { aria: T('prep_aria', { p: pct == null ? '?' : `${pct} %` }) })}
         <span class="txt"><strong>${e(unite)} · ${e(eta)}</strong><span class="cat">${e(l.categorie?.libelle || '')}${l.preparation?.chambre ? ` · ${e(l.preparation.chambre)}` : ''}</span><span class="reste">${e(reste)}</span></span></button>`;
     }).join('') : `<p class="ds-vide">${T('aucune_arrivee')}</p>`;

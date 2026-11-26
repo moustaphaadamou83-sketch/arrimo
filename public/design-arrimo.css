@@ -66,7 +66,6 @@
 :root[data-design="v2"] .ambiance-seg button[aria-pressed="true"] { background: var(--accent-ds); color: var(--accent-ds-texte); }
 .ambiance-seg { display: none; }
 :root[data-design="v2"] .barre-ambiance { display: none !important; }
-:root[data-design="v2"] #b-theme { display: none; }
 @media (max-width: 600px) { :root[data-design="v2"] .ambiance-seg { display: none; } }
 
 /* ---------- Navigation horizontale (même système de couleurs, sur surface claire) ---------- */
@@ -314,7 +313,7 @@ div.ds-kpi { cursor: default; }
 .ds-mvt .ds-col { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .ds-mvt .ref { font-size: 15px; font-weight: 700; }
 .ds-mvt .catn { font-size: 12px; font-weight: 600; color: var(--cat-texte); }
-:root[data-theme="sombre"] .ds-mvt .catn { color: var(--cat-couleur); }
+:root[data-theme="sombre"] .ds-mvt .catn, :root[data-theme="sombre"] .ds-cat-texte { color: color-mix(in srgb, var(--cat-couleur) 45%, #FFFFFF); }
 .ds-mvt .trajet { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
 .ds-mvt .det, .ds-mvt .etape { font-size: 12px; color: var(--texte-2); }
 .ds-mvt .fin { align-items: flex-end; text-align: right; }
@@ -441,7 +440,7 @@ div.ds-kpi { cursor: default; }
 .ds-h li span { white-space: nowrap; }
 .ds-h li strong { display: block; }
 /* Chevron : cible de repli assez grande */
-:root[data-design="v2"] body.nav-verticale .espace-btn .esp-chevron { padding: 4px 2px; margin: -4px -2px; }
+:root[data-design="v2"] body.nav-verticale .espace-btn .esp-chevron { width: 16px; font-family: system-ui, sans-serif; }
 /* Accessibilité (WCAG AA, 4,5:1) : petits textes à la couleur du module, légèrement assombris en ambiance claire.
    Écart assumé avec la planche 2, dont le surtitre #0E7C86 sur #EDF4FA n'atteint que 4,46:1. Même teinte, même sens. */
 :root[data-design="v2"]:not([data-theme="sombre"]) .ds-surtitre, :root[data-design="v2"]:not([data-theme="sombre"]) .surtitre-module { color: color-mix(in srgb, var(--m-courant) 80%, #000); }
@@ -462,3 +461,11 @@ div.ds-kpi { cursor: default; }
 :root[data-design="v2"] .tuile .lbl { text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 600; color: var(--texte-2); display: flex; align-items: center; gap: 6px; }
 :root[data-design="v2"] .tuile .lbl::before { content: ""; width: 8px; height: 8px; border-radius: 3px; background: var(--m-courant); flex: none; }
 :root[data-design="v2"] .tuile .v { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+
+/* Couleurs d'état pour les TEXTES : variables (suivent l'ambiance même après un changement de thème, contraste AA en Crépuscule) */
+:root[data-design="v2"] { --c-info: #0B6870; }
+:root[data-design="v2"][data-theme="sombre"] { --c-info: #5BC4D0; }
+:root[data-theme="sombre"] .ch-porte.niveau-rouge .ch-minutes, :root[data-theme="sombre"] .ds-porte .ch-minutes { color: var(--c-rouge, #FCA5A5); }
+:root[data-theme="sombre"] .ch-porte.niveau-orange .ch-minutes { color: var(--c-orange, #FDBA74); }
+.ds-cat-texte { color: var(--cat-texte); }
+@media (max-width: 600px) { :root[data-design="v2"] .module-sous-onglets button, :root[data-design="v2"] .ds-seg button { min-height: 40px; } }
