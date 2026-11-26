@@ -1,4 +1,6 @@
 'use strict';
+// Jour civil du réseau (Québec), indépendant du fuseau du serveur : « aujourd’hui » ne bascule pas à minuit en Europe.
+const jourQuebec = (d) => new Date(d).toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
 /**
  * OG dans un CHSLD : copilote connecté aux données réelles de l'établissement, avec les mêmes droits que l'interface.
  * - Résolveur de références : résident (R-00001, RES-0024), lit (ERA-117A, era117a), chambre, coordination (CO-00012),
@@ -401,7 +403,7 @@ async function repondreGeneral(pool, u, etabId, e, qn, mots, L, fmt, local) {
   if (has('retour') || /(doivent revenir|revenir de l|come back from)/.test(qn)) {
     const co = (await ch.listeCoordinations(pool, u, etabId, {})).filter((c) => c.type === 'retour' && c.entrante && (['envoyee', 'acceptee', 'en_cours'].includes(c.statut) || c.a_reintegrer));
     const auj = /(aujourd|today)/.test(qn);
-    let l2 = auj ? co.filter((c) => c.retour_prevu_le && new Date(c.retour_prevu_le).toDateString() === new Date().toDateString()) : co;
+    let l2 = auj ? co.filter((c) => c.retour_prevu_le && jourQuebec(c.retour_prevu_le) === jourQuebec(new Date())) : co;
     if (has('confirm') || /(attend|waiting|awaiting|pending)/.test(qn)) l2 = l2.filter((c) => ['envoyee', 'en_cours'].includes(c.statut) || c.a_reintegrer);
     const ligne = (c) => `• ${c.resident_ref} depuis ${c.origine}${c.retour_prevu_le ? ` · ${fmt(c.retour_prevu_le)}` : ''} · ${RETOUR_TXT.fr[c.statut]}${c.reintegration ? ` · place ${c.reintegration.lit?.code || '—'} : ${c.reintegration.pret ? 'prête' : 'non prête'}` : ''}`;
     const ligneEn = (c) => `• ${c.resident_ref} from ${c.origine}${c.retour_prevu_le ? ` · ${fmt(c.retour_prevu_le)}` : ''} · ${RETOUR_TXT.en[c.statut]}${c.reintegration ? ` · place ${c.reintegration.lit?.code || '—'}: ${c.reintegration.pret ? 'ready' : 'not ready'}` : ''}`;

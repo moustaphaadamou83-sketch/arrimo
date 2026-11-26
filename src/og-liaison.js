@@ -1,4 +1,6 @@
 'use strict';
+// Jour civil du réseau (Québec), indépendant du fuseau du serveur : « aujourd’hui » ne bascule pas à minuit en Europe.
+const jourQuebec = (d) => new Date(d).toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
 /**
  * OG dans le module hospitalier Liaison CHSLD : mêmes droits que l'interface (src/liaison-chsld.js).
  * Réponses construites uniquement à partir des étapes enregistrées : OG cite la dernière confirmation et son
@@ -146,7 +148,7 @@ async function traiter(pool, u, etabId, q, L) {
   // Résidents attendus (aujourd'hui) : demandes transmises ou acceptées, départs confirmés
   if (/(attendu|expected|arrivee|arrival|demande|request|aujourd|today)/.test(qn)) {
     const attendus = [...d.arrivees, ...d.a_accueillir.filter((c) => c.etape === 'depart_confirme')];
-    const auj = /(aujourd|today)/.test(qn) ? attendus.filter((c) => new Date(c.cree_le).toDateString() === new Date().toDateString() || new Date(c.modifie_le).toDateString() === new Date().toDateString()) : attendus;
+    const auj = /(aujourd|today)/.test(qn) ? attendus.filter((c) => jourQuebec(c.cree_le) === jourQuebec(new Date()) || jourQuebec(c.modifie_le) === jourQuebec(new Date())) : attendus;
     return local(auj.length ? T(L, `${auj.length} résident(s) de CHSLD attendu(s)${/(aujourd|today)/.test(qn) ? ' aujourd’hui' : ''} :\n${auj.map((c) => ligne(L, c)).join('\n')}\nUne demande transmise n’est pas une arrivée.`,
       `${auj.length} CHSLD resident(s) expected${/(aujourd|today)/.test(qn) ? ' today' : ''}:\n${auj.map((c) => ligne(L, c)).join('\n')}\nA sent request is not an arrival.`)
       : T(L, 'Aucun résident de CHSLD n’est attendu.', 'No CHSLD resident is expected.'));
@@ -158,4 +160,4 @@ async function repondre(pool, u, etabId, q, L) {
   const fuseau = (await pool.query('SELECT c.fuseau FROM etablissements e JOIN config_pays c ON c.id = e.config_id WHERE e.id = $1', [etabId])).rows[0]?.fuseau;
   return fuseauRequete.run(fuseau || 'America/Toronto', () => traiter(pool, u, etabId, q, L));
 }
-module.exports = { repondre, concerne };
+module.exports = { repondre, concerne, jourQuebec };
