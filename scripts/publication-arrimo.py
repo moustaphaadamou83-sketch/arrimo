@@ -328,7 +328,7 @@ class Publication:
                 "    END IF;\n"
                 "  END LOOP;\nEND $ap$;\n"
                 "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO " + role + ";\n"
-                "GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO " + role + ";\n"
+                "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO " + role + ";\n"
                 "COMMIT;\n")
             control.chmod(0o644)
             self.commande('migration-publique-'+t, ['runuser','-u','postgres','--','psql','-X','-v','ON_ERROR_STOP=1','-d',base,'-f',str(control)])
