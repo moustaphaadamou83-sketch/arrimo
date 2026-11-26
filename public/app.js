@@ -1518,6 +1518,11 @@ async function vueParams() {
         <fieldset class="choix-apparence"><legend class="lbl">${esc(t('disposition.titre'))}</legend>${DISPOSITIONS.map((d) =>
           `<label class="case"><input type="radio" name="p-disposition" value="${d}"${disposition() === d ? ' checked' : ''}> ${esc(t(`disposition.${d}`))}</label>`).join('')}</fieldset></div>
       <div class="panneau-c"><h3>${esc(t('langue.choisir'))}</h3><p class="note">${P('langue_aide')}</p><select class="choix-langue" id="p-langue" aria-label="${esc(t('langue.choisir'))}"></select></div>
+      <div class="panneau-c"><h3>${esc(t('apparence.ambiance'))}</h3>
+        <fieldset class="choix-apparence"><legend class="lbl">${esc(t('apparence.ambiance'))}</legend>${['glacier', 'horizon'].map((a) =>
+          `<label class="case"><input type="radio" name="p-ambiance" value="${a}"${(u.ambiance || 'glacier') === a ? ' checked' : ''}> ${a === 'glacier' ? 'Glacier' : 'Horizon'}</label>`).join('')}</fieldset>
+        <fieldset class="choix-apparence"><legend class="lbl">${esc(t('affichage.densite'))}</legend>${['confortable', 'compact'].map((d) =>
+          `<label class="case"><input type="radio" name="p-densite" value="${d}"${densite() === d ? ' checked' : ''}> ${esc(t(`affichage.${d}`))}</label>`).join('')}</fieldset></div>
       <div class="panneau-c"><h3>${esc(t('affichage.restaurer_titre'))}</h3><p class="note">${esc(t('affichage.restaurer_aide'))}</p><button class="btn" type="button" id="p-restaurer">${esc(t('affichage.restaurer'))}</button></div></div>`;
   } else if (section === 'notifications') {
     corps = `<div class="grille"><div class="panneau-c"><h3>${P('alertes_titre')}</h3><p class="note">${P('alertes_aide')}</p>
@@ -1573,6 +1578,11 @@ async function vueParams() {
     sel.value = langue; sel.onchange = () => changerLangue(sel.value);
     document.querySelectorAll('input[name="p-apparence"]').forEach((r) => { r.onchange = () => choisirApparence(r.value); });
     document.querySelectorAll('input[name="p-disposition"]').forEach((r) => { r.onchange = () => choisirDisposition(r.value); });
+    document.querySelectorAll('input[name="p-densite"]').forEach((r) => { r.onchange = () => { ecrire('arrimo-densite', r.value === 'compact' ? 'compact' : null); appliquerDensite(); }; });
+    document.querySelectorAll('input[name="p-ambiance"]').forEach((r) => { r.onchange = async () => {
+      try { const x = await api('PUT', '/moi/ambiance', { ambiance: r.value }); if (etat.moi) etat.moi.utilisateur.ambiance = x.ambiance; window.ArrimoApparence?.definirAmbiance(x.ambiance); const s = $('#ambiance-barre'); if (s) s.value = x.ambiance; toast(t('apparence.enregistree')); }
+      catch (err) { toast(err.message, true); }
+    }; });
     // Restaurer l'apparence par défaut (cahier 6) : thème automatique, ambiance Glacier, affichage confortable, menu horizontal, Accueil complet
     $('#p-restaurer')?.addEventListener('click', async () => {
       for (const k of ['arrimo-densite', 'arrimo-nav-repliee', 'arrimo-accueil-perso']) ecrire(k, null);

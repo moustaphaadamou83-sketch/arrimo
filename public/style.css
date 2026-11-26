@@ -1086,3 +1086,6 @@ th.erp-triable[aria-sort="ascending"]::after { content: " \2191"; } th.erp-triab
 :root[data-densite="compact"] table td, :root[data-densite="compact"] table th { padding-top: 4px; padding-bottom: 4px; }
 body.mode-presentation { font-size: 1.08em; }
 body.mode-presentation #b-notif, body.mode-presentation #b-menu { visibility: hidden; }
+
+/* Téléphone : la barre du haut garde l'essentiel ; ambiance et densité se choisissent dans Paramètres › Apparence */
+@media (max-width: 600px) { :root[data-design="v2"] .barre-ambiance, .barre-densite { display: none !important; } }
