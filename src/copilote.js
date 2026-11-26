@@ -380,6 +380,27 @@ async function questionIa(contexte, question, fetchImpl = fetch, langue = 'fr') 
 }
 
 /** Réponse d'OG, dans la langue de la question ; `langue` indique au navigateur la langue du texte (et donc de la voix). */
+/** Recherche universelle par OG (26 nov. 2026) : numéro de transport (DT-…), de préalerte (PA-…) ou ambulance nommée ; null sinon. */
+async function rechercheMouvement(pool, utilisateur, etabId, q, L) {
+  // Recherche universelle par OG (26 nov. 2026), avant les modules : un numéro exact est plus précis qu'une question générale.
+  // Hôpitaux et établissements d'hébergement : transport (DT-…), préalerte (PA-…) ou ambulance nommée. Mêmes résultats et mêmes
+  // permissions que la barre de recherche ; OG montre les faits trouvés et ouvre l'écran, il ne décide rien.
+  const mvt = q.match(/\b(?:DT|PA)-\d{1,12}\b/i) || q.match(/\b(?:ambulance|unit[ée]|mission|v[ée]hicule|vehicle)\s+(?:de\s+|du\s+|d['’]\s*|of\s+)?([A-Z]{1,5}-?\d{1,6}(?:-\d{1,4})?)\b/i);
+  if (mvt) {
+    const terme = (mvt[1] || mvt[0]).toUpperCase();
+    const r = await require('./recherche').rechercher(pool, utilisateur, etabId, terme).catch(() => null);
+    const trouves = (r?.resultats || []).filter((x) => ['transport', 'transfert', 'prealerte'].includes(x.type)).slice(0, 5);
+    if (r) {
+      const TY = L === 'en' ? { transport: 'transport', transfert: 'transfer', prealerte: 'pre-alert' } : { transport: 'transport', transfert: 'transfert', prealerte: 'préalerte' };
+      const ligne = (x) => `${x.reference} (${TY[x.type]}${x.lieu ? `, ${x.lieu}` : ''}${x.clos ? (L === 'en' ? ', closed' : ', clos') : ''})`;
+      return { mode: 'local', sources: [], intentions: ['recherche'], ...(trouves[0] ? { ouvrir: trouves[0].onglet } : {}),
+        reponse: trouves.length
+          ? (L === 'en' ? `Found for “${terme}”: ${trouves.map(ligne).join('; ')}.` : `Trouvé pour « ${terme} » : ${trouves.map(ligne).join(' ; ')}.`)
+          : (L === 'en' ? `Nothing found for “${terme}” in this facility.` : `Rien trouvé pour « ${terme} » dans cet établissement.`) };
+    }
+  }
+  return null;
+}
 async function question(pool, utilisateur, etabId, q, fetchImpl, patientContexteId) {
   const L = require('./og-localisation').langueDemandee(q, utilisateur.langue);
   // Entretien : OG répond sur les chambres, préparations et messages seulement (permissions minimales), jamais sur le reste
@@ -387,6 +408,8 @@ async function question(pool, utilisateur, etabId, q, fetchImpl, patientContexte
     const r0 = await require('./og-flux').repondre(pool, { ...utilisateur, langue: L }, etabId, q, L);
     return { ...(r0 || { mode: 'local', reponse: L === 'en' ? 'I can answer about rooms to prepare, a room’s status and your messages. Other information is not available to your role.' : 'Je peux répondre sur les chambres à préparer, l’état d’une chambre et vos messages. Les autres informations ne sont pas accessibles à votre rôle.', sources: ['arrimo'], intentions: ['hors_role'] }), langue: L };
   }
+  // Un numéro exact (transport, préalerte, ambulance) passe avant les réponses générales
+  const mvt = await rechercheMouvement(pool, utilisateur, etabId, q, L); if (mvt) return { ...mvt, langue: L };
   // OG central : réponses opérationnelles transverses (Flux, transport, chambres, préalertes, admissions, Connect), pour tous les établissements
   const central = await require('./og-flux').repondre(pool, { ...utilisateur, langue: L }, etabId, q, L).catch((e) => { if (e && e.statut) return null; throw e; });
   if (central) return { ...central, langue: L };

@@ -68,3 +68,13 @@ test('Transfert interhospitalier retrouvé par son numéro, par l’origine et l
   const tiers = (await pool.query('SELECT id FROM etablissements WHERE type_etablissement = \'hopital\' AND id NOT IN ($1, $2) LIMIT 1', [tr.origine_id, tr.destination_id])).rows[0];
   if (tiers) { await compte('tiers', 'coordonnateur', tiers.id); assert.ok(!(await chercher('tiers', tiers.id, tr.numero)).some((x) => x.type === 'transfert'), 'établissement tiers : rien'); }
 });
+
+test('OG : « Retrouve le transport DT-000019 », « dernière mission de SIM-01 » : résultats réels, écran à ouvrir, mêmes permissions', async () => {
+  const og = async (qui, etab, question) => (await (await fetch(`${base}/api/copilote/question`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tok[qui]}` }, body: JSON.stringify({ etablissement_id: etab, question }) })).json());
+  let r = await og('hop', ids.h, 'Retrouve le transport DT-000019');
+  assert.match(r.reponse, /DT-000019/); assert.strictEqual(r.ouvrir, 'flux');
+  r = await og('hop', ids.h, 'Montre-moi la dernière mission de SIM-01');
+  assert.match(r.reponse, /DT-000019/, r.reponse);
+  r = await og('autre', ids.autre, 'Retrouve le transport DT-000019');
+  assert.match(r.reponse, /Rien trouvé/, 'autre établissement : rien'); assert.ok(!r.ouvrir);
+});
