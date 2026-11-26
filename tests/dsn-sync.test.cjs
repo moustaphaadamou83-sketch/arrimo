@@ -129,10 +129,12 @@ test('Transition vers un CHSLD : demande d’hébergement liée (une seule), env
   assert.ok(d.transport && d.transport_statut === 'pris_en_charge' && d.demande_hebergement);
   // Réception puis dossier ouvert deux fois : un seul patient
   assert.strictEqual((await appel('ch', 'POST', `/dsn/transitions/${t.id}/decision`, { decision: 'reception' })).d.statut, 'recu');
+  // DSN réservé aux hôpitaux (27 nov. 2026) : le CHSLD reçoit le paquet, mais n'ouvre jamais de dossier DSN, même avec le drapeau et une habilitation
   await pool.query("INSERT INTO dsn_habilitations SELECT $1, id, 'admission' FROM utilisateurs WHERE email = 'ch@demo.arrimo'", [ids.c]);
   const o = await Promise.all([1, 2].map(() => appel('ch', 'POST', `/dsn/transitions/${t.id}/dossier`)));
-  assert.ok(o.every((x) => x.s === 200), JSON.stringify(o.map((x) => [x.s, x.d.code])));
-  assert.strictEqual((await pool.query("SELECT count(*)::int n FROM patients WHERE etablissement_id = $1 AND nom = 'Sync-Trois' OR etablissement_id = $1 AND nom = 'Sync-Quatre'", [ids.c])).rows[0].n, 1);
+  assert.ok(o.every((x) => x.s === 403 && x.d.code === 'module_desactive'), JSON.stringify(o.map((x) => [x.s, x.d.code])));
+  assert.strictEqual((await pool.query("SELECT count(*)::int n FROM patients WHERE etablissement_id = $1 AND nom = 'Sync-Trois' OR etablissement_id = $1 AND nom = 'Sync-Quatre'", [ids.c])).rows[0].n, 0);
+  assert.strictEqual((await appel('ch', 'GET', `/dsn/patients?etablissement_id=${ids.c}`)).s, 403, 'aucune liste DSN dans un CHSLD');
 });
 
 test('Historique : chaque événement a son auteur (ou « système »), sa source, son statut et son heure ; immuable ; aucune donnée clinique', async () => {

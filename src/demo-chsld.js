@@ -22,6 +22,8 @@ async function peuplerDemo(pool, base) {
   if ((await pool.query('SELECT 1 FROM residents WHERE etablissement_id = ANY($1) LIMIT 1', [etabs.map((e) => e.id)])).rowCount) throw new ErreurHttp(409, 'demo_chsld_deja_peuplee');
   const hopitalB = (await pool.query(`SELECT id FROM etablissements WHERE code = 'HY' AND type_etablissement = 'hopital'`)).rows[0];
   if (!hopitalB) throw new ErreurHttp(409, 'demo_hopital_b_absent');
+  // Chrono universel : activé pour les CHSLD fictifs de la démonstration (comme pour les hôpitaux)
+  await pool.query(`UPDATE etablissements SET modules = COALESCE(modules, '{}'::jsonb) || '{"chrono": true}' WHERE id = ANY($1)`, [etabs.map((e) => e.id)]);
   // Mot de passe de démonstration pour les comptes CHSLD fictifs seulement (rattachés à ces deux établissements)
   const courriels = CHSLD.flatMap((c) => ROLES.map(([, cle]) => courrielDe(c, cle)));
   const hash = await hacherAsync(mdp);

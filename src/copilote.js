@@ -404,18 +404,38 @@ async function rechercheMouvement(pool, utilisateur, etabId, q, L) {
 /** OG temporel (27 nov. 2026) : durée en cours d'une ressource nommée (civière, lit) ou escalades actives, depuis Chrono (lecture seule). */
 async function reponseTemporelle(pool, utilisateur, etabId, q, L) {
   const escalades = /\b(escalades?|alertes?)\b.*\b(actives?|en cours|ouvertes?|encore)\b|\b(active|open|ongoing)\s+(escalations?|alerts?)\b/i.test(q);
-  const code = /\b(depuis combien|combien de temps|how long|since when)\b/i.test(q) && (q.match(/\b([A-Z]{2,5}-\d{1,4}[A-Z]?)\b/) || [])[1];
-  if (!escalades && !code) return null;
+  const code = /\b(depuis combien|combien de temps|how long|since when)\b/i.test(q) && (q.match(/\b([A-Z]{1,5}-\d{1,6}[A-Z]?)\b/i) || [])[1];
+  // Patients et séjours (Chrono) : « combien de patients en escalade / en vigilance ? »
+  const sejours = /\bpatients?\b.*\b(escalade|vigilance|seuil|dépass|depass|retard)|\b(escalat|watch|overdue)\w*\b.*\bpatients?\b|\bpatients?\b.*\b(escalat|watch|overdue)/i.test(q);
+  if (!escalades && !code && !sejours) return null;
   let d; try { d = await require('./chrono-universel').universel(pool, utilisateur, etabId); } catch { return null; }
   const { hhmmss } = { hhmmss: (ms) => { const t = Math.floor(ms / 1000); const j = Math.floor(t / 86400); const p = (n) => String(n).padStart(2, '0'); return `${j ? `${j} ${L === 'en' ? 'd' : 'j'} ` : ''}${p(Math.floor((t % 86400) / 3600))}:${p(Math.floor((t % 3600) / 60))}:${p(t % 60)}`; } };
-  const NIV = L === 'en' ? { vert: 'normal', orange: 'watch', rouge: 'escalation', gris: 'unknown' } : { vert: 'normal', orange: 'vigilance', rouge: 'escalade', gris: 'inconnu' };
+  const NIV = L === 'en' ? { vert: 'normal', orange: 'watch', rouge: 'escalation', gris: 'unknown', bleu: 'in progress, no threshold' } : { vert: 'normal', orange: 'vigilance', rouge: 'escalade', gris: 'inconnu', bleu: 'en cours, sans seuil' };
+  const ETAPE = L === 'en' ? { urgence_civiere: 'in the emergency department on a stretcher', attente_lit: 'waiting for a bed', lit_assigne: 'bed assigned, awaiting move', hospitalise: 'admitted', nsa: 'ALC', conge_prevu: 'discharge planned' }
+    : { urgence_civiere: 'à l’urgence sur civière', attente_lit: 'en attente de lit', lit_assigne: 'lit assigné, en attente du déplacement', hospitalise: 'hospitalisé', nsa: 'NSA', conge_prevu: 'congé prévu' };
+  const ou = (x) => [x.departement, x.unite, x.chambre ? `${L === 'en' ? 'room' : 'ch.'} ${x.chambre}` : null, x.ressource].filter(Boolean).join(' · ');
   if (code) {
-    const x = [...d.patients, ...d.capacites].find((i) => String(i.ressource || '').toUpperCase() === code.toUpperCase());
+    const p = d.patients.find((i) => String(i.reference || '').toUpperCase() === code.toUpperCase());
+    if (p) {
+      const et = p.depuis ? hhmmss(Date.now() - new Date(p.depuis).getTime()) : (L === 'en' ? 'unknown' : 'inconnue');
+      const tot = p.sejour_depuis ? hhmmss(Date.now() - new Date(p.sejour_depuis).getTime()) : (L === 'en' ? 'unknown' : 'inconnue');
+      return { mode: 'local', intentions: ['chrono'], sources: ['chrono'], ouvrir: 'chrono',
+        reponse: L === 'en' ? `Fact (Chrono): ${p.reference} — ${ETAPE[p.etape]} for ${et}; stay ${tot} (${ou(p)}; level: ${NIV[p.niveau] || p.niveau}). Operational time thresholds, never a clinical priority.`
+          : `Fait (Chrono) : ${p.reference} — ${ETAPE[p.etape]} depuis ${et} ; séjour ${tot} (${ou(p)} ; niveau : ${NIV[p.niveau] || p.niveau}). Seuils de temps opérationnels, jamais une priorité clinique.` };
+    }
+    const x = d.capacites.find((i) => String(i.ressource || '').toUpperCase() === code.toUpperCase());
     if (!x) return null;
     const duree = x.depuis ? hhmmss(Date.now() - new Date(x.depuis).getTime()) : (L === 'en' ? 'unknown' : 'inconnue');
     return { mode: 'local', intentions: ['chrono'], sources: ['chrono'], ouvrir: 'chrono',
       reponse: L === 'en' ? `Fact (Chrono): ${x.ressource} — ${x.phase.replace(/_/g, ' ')} for ${duree} (level: ${NIV[x.niveau]}). Indicative thresholds, never a clinical priority.`
         : `Fait (Chrono) : ${x.ressource} — ${x.phase.replace(/_/g, ' ')} depuis ${duree} (niveau : ${NIV[x.niveau]}). Seuils indicatifs, jamais une priorité clinique.` };
+  }
+  if (sejours && !escalades) {
+    const r = d.patients.filter((x) => x.niveau === 'rouge'); const o = d.patients.filter((x) => x.niveau === 'orange');
+    const top = [...r, ...o].slice(0, 3).map((x) => `${x.reference} (${ETAPE[x.etape]}, ${x.depuis ? hhmmss(Date.now() - new Date(x.depuis).getTime()) : '—'})`);
+    return { mode: 'local', intentions: ['chrono'], sources: ['chrono'], ouvrir: 'chrono',
+      reponse: L === 'en' ? `Fact (Chrono): ${d.patients.length} patient(s) present, ${o.length} on watch, ${r.length} in escalation.${top.length ? ` First: ${top.join('; ')}.` : ''} Time thresholds only, never a clinical priority.`
+        : `Fait (Chrono) : ${d.patients.length} patient(s) présent(s), ${o.length} en vigilance, ${r.length} en escalade.${top.length ? ` En premier : ${top.join(' ; ')}.` : ''} Seuils de temps seulement, jamais une priorité clinique.` };
   }
   const a = d.alertes; const top = a.slice(0, 3).map((x) => `${x.titre} (${x.depuis ? hhmmss(Date.now() - new Date(x.depuis).getTime()) : '—'})`);
   return { mode: 'local', intentions: ['chrono'], sources: ['chrono'], ouvrir: 'chrono',

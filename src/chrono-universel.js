@@ -12,23 +12,38 @@ const { exigerEtablissement } = require('./auth');
 
 // Seuils indicatifs (minutes) : orange, rouge. Une alerte temporelle ne remplace jamais une priorité clinique.
 const SEUILS = {
-  civiere: [24 * 60, 48 * 60], nsa: [7 * 24 * 60, 30 * 24 * 60], nettoyage_attente: [30, 60], nettoyage_en_cours: [45, 90],
+  civiere: [24 * 60, 48 * 60], nsa: [7 * 24 * 60, 30 * 24 * 60], nettoyage_attente: [30, 60], nettoyage_en_cours: [45, 90], nettoyage_civiere: [15, 30],
   reserve: [120, 240], indispo: [24 * 60, 72 * 60], alerte: [15, 30],
 };
 const minutes = (d, now) => (d ? (now - new Date(d).getTime()) / 60000 : null);
-function niveau(type, depuis, now) {
+/** Seuils effectifs : ceux de la configuration de l'établissement quand elle en définit (même source que la Vigilance). */
+function seuilsEffectifs(cfg = {}) {
+  const n = (v) => (Number(v) > 0 ? Number(v) : null);
+  const s = { ...SEUILS };
+  if (n(cfg.reservation_max_min)) s.reserve = [n(cfg.reservation_max_min), 2 * n(cfg.reservation_max_min)];
+  if (n(cfg.nettoyage_cible_min)) s.nettoyage_en_cours = [n(cfg.nettoyage_cible_min), 2 * n(cfg.nettoyage_cible_min)];
+  if (n(cfg.nettoyage_civiere_cible_min)) s.nettoyage_civiere = [n(cfg.nettoyage_civiere_cible_min), 2 * n(cfg.nettoyage_civiere_cible_min)];
+  return s;
+}
+function niveau(type, depuis, now, seuils = SEUILS) {
   const m = minutes(depuis, now); if (m == null) return 'gris';
-  const [o, r] = SEUILS[type] || [Infinity, Infinity];
+  const [o, r] = seuils[type] || SEUILS[type] || [Infinity, Infinity];
   return m >= r ? 'rouge' : m >= o ? 'orange' : 'vert';
 }
-const item = (type, x, depuis, now, extra = {}) => ({ type, depuis: depuis || null, niveau: niveau(type, depuis, now),
-  objectif_min: SEUILS[type] ? SEUILS[type][0] : null, ...x, ...extra });
+const item = (type, x, depuis, now, extra = {}, seuils = SEUILS) => {
+  const s = seuils[type] || SEUILS[type];
+  return { type, depuis: depuis || null, niveau: niveau(type, depuis, now, seuils),
+    objectif_min: s ? s[0] : null, seuils_min: s ? { vigilance: s[0], escalade: s[1] } : null, ...x, ...extra };
+};
 
 async function universel(pool, u, etabId) {
   exigerEtablissement(u, etabId);
   const e = (await pool.query('SELECT id, type_etablissement FROM etablissements WHERE id = $1', [etabId])).rows[0];
   if (!e) throw new ErreurHttp(404, 'etab_introuvable');
   const now = Date.now(); const entretien = u.role === 'entretien';
+  const CS = require('./chrono-sejours'); const cfg = await CS.configDe(pool, etabId);
+  // Seuils propres à CETTE requête (jamais partagés entre établissements)
+  const SC = seuilsEffectifs(cfg); const it = (type, x, depuis, n, extra = {}) => item(type, x, depuis, n, extra, SC);
   const [civ, lits, prealertes, transports, alertes, qualiteBrute] = await Promise.all([
     pool.query(`SELECT id, code, etat, patient_ref, arrivee_le, etat_depuis FROM civieres WHERE etablissement_id = $1 AND etat <> 'libre' ORDER BY code`, [etabId]),
     pool.query(`SELECT l.id, l.code, l.etat, l.patient_ref, l.etat_depuis, l.nsa_depuis, l.nettoyage_debut, un.nom AS unite
@@ -50,17 +65,18 @@ async function universel(pool, u, etabId) {
         (SELECT count(*)::int FROM demandes_transport WHERE (origine_id = $1 OR destination_id = $1) AND statut IN ('en_route', 'pris_en_charge')
            AND prealerte_eta_le IS NOT NULL AND prealerte_eta_le < now() - interval '10 minutes') AS eta_transport_obsoletes`, [etabId]).catch(() => null),
   ]);
-  const patients = entretien ? [] : [
-    ...civ.rows.filter((c) => c.etat === 'occupee').map((c) => item('civiere', { objet: 'civiere', id: c.id, ressource: c.code, reference: c.patient_ref, phase: 'occupation_civiere' }, c.arrivee_le || c.etat_depuis, now)),
-    ...lits.rows.filter((l) => l.nsa_depuis).map((l) => item('nsa', { objet: 'lit', id: l.id, ressource: l.code, unite: l.unite, reference: l.patient_ref, phase: 'nsa' }, l.nsa_depuis, now)),
-  ];
+  // Patients et séjours : TOUS les séjours actifs autorisés (lits occupés, civières, demandes d'admission), étape et seuils configurés
+  const [patients, organisation] = entretien ? [[], null] : await Promise.all([CS.sejoursActifs(pool, etabId, cfg, now), CS.organisation(pool, etabId)]);
   const capacites = [
     ...lits.rows.filter((l) => l.etat === 'nettoyage').map((l) => (l.nettoyage_debut
-      ? item('nettoyage_en_cours', { objet: 'lit', id: l.id, ressource: l.code, unite: l.unite, phase: 'nettoyage_en_cours', attente_avant_nettoyage_min: Math.max(0, Math.round((new Date(l.nettoyage_debut) - new Date(l.etat_depuis)) / 60000)) }, l.nettoyage_debut, now)
-      : item('nettoyage_attente', { objet: 'lit', id: l.id, ressource: l.code, unite: l.unite, phase: 'attente_nettoyage' }, l.etat_depuis, now))),
-    ...lits.rows.filter((l) => ['reserve', 'indispo'].includes(l.etat)).map((l) => item(l.etat, { objet: 'lit', id: l.id, ressource: l.code, unite: l.unite, phase: l.etat }, l.etat_depuis, now)),
-    ...civ.rows.filter((c) => ['nettoyage', 'indispo'].includes(c.etat)).map((c) => item(c.etat === 'nettoyage' ? 'nettoyage_attente' : 'indispo', { objet: 'civiere', id: c.id, ressource: c.code, phase: c.etat === 'nettoyage' ? 'attente_nettoyage' : 'indispo' }, c.etat_depuis, now)),
+      ? it('nettoyage_en_cours', { objet: 'lit', id: l.id, ressource: l.code, unite: l.unite, phase: 'nettoyage_en_cours', attente_avant_nettoyage_min: Math.max(0, Math.round((new Date(l.nettoyage_debut) - new Date(l.etat_depuis)) / 60000)) }, l.nettoyage_debut, now)
+      : it('nettoyage_attente', { objet: 'lit', id: l.id, ressource: l.code, unite: l.unite, phase: 'attente_nettoyage' }, l.etat_depuis, now))),
+    ...lits.rows.filter((l) => ['reserve', 'indispo'].includes(l.etat)).map((l) => it(l.etat, { objet: 'lit', id: l.id, ressource: l.code, unite: l.unite, phase: l.etat }, l.etat_depuis, now)),
+    ...civ.rows.filter((c) => ['nettoyage', 'indispo'].includes(c.etat)).map((c) => it(c.etat === 'nettoyage' ? 'nettoyage_civiere' : 'indispo', { objet: 'civiere', id: c.id, ressource: c.code, phase: c.etat === 'nettoyage' ? 'attente_nettoyage' : 'indispo' }, c.etat_depuis, now)),
   ];
+  // Hébergement : place conservée (résident hospitalisé ou absent) — jamais disponible ; même entretien seulement par le module Entretien
+  for (const p of patients.filter((x) => x.place_conservee)) capacites.push({ type: 'conservee', objet: 'lit', id: p.id, ressource: p.ressource, unite: p.unite, phase: 'place_conservee',
+    depuis: p.depuis, niveau: p.niveau, seuils_min: p.seuils_min, objectif_min: p.objectif_min, reference: entretien ? undefined : p.reference });
   const finEta = (p) => (p.eta?.minutes != null && p.eta?.le ? new Date(new Date(p.eta.le).getTime() + p.eta.minutes * 60000).toISOString() : p.heure_prevue ? new Date(p.heure_prevue).toISOString() : null);
   const ambulances = entretien ? [] : [
     ...prealertes.rows.map((p) => {
@@ -78,7 +94,7 @@ async function universel(pool, u, etabId) {
         niveau: d.patient_etat === 'pret' || d.accueil_pret_le ? 'vert' : ['retarde', 'indisponible'].includes(d.patient_etat) ? 'orange' : depuis ? 'vert' : 'gris' };
     }),
   ];
-  const alertesItems = alertes.rows.map((a) => item('alerte', { objet: 'alerte', id: Number(a.id), titre: a.titre, statut: a.statut, escalade_niveau: a.escalade_niveau,
+  const alertesItems = alertes.rows.map((a) => it('alerte', { objet: 'alerte', id: Number(a.id), titre: a.titre, statut: a.statut, escalade_niveau: a.escalade_niveau,
     reaction_min: a.accuse_le ? Math.round((new Date(a.accuse_le) - new Date(a.cree_le)) / 60000) : null, echeance: a.echeance }, a.cree_le, now));
   let previsions = null;
   if (!entretien) { try { previsions = await require('./previsions').previsions(pool, u, etabId); } catch { previsions = null; } }
@@ -106,9 +122,9 @@ async function universel(pool, u, etabId) {
     accueils_prets_t5_pct: taux(t5.accueils_prets_t5, t5.accueils_mesures), accueils_mesures: t5.accueils_mesures,
     prets_avant_arrivee_pct: taux(t5.prets_avant_arrivee, t5.arrivees_mesurees), arrivees_mesurees: t5.arrivees_mesurees, motifs_non_preparation: motifs };
   const compte = (l) => ({ total: l.length, rouge: l.filter((x) => x.niveau === 'rouge').length, orange: l.filter((x) => x.niveau === 'orange').length, gris: l.filter((x) => x.niveau === 'gris').length });
-  return { etablissement_id: etabId, genere_le: new Date(now).toISOString(), seuils_min: SEUILS,
+  return { etablissement_id: etabId, genere_le: new Date(now).toISOString(), seuils_min: SC, seuils_etapes: entretien ? null : CS.seuilsDe(cfg),
     resume: { patients: compte(patients), capacites: compte(capacites), ambulances: compte(ambulances), alertes: compte(alertesItems) },
-    patients, capacites, ambulances, alertes: alertesItems, previsions, qualite, performance_t5: performanceT5 };
+    patients, organisation, capacites, ambulances, alertes: alertesItems, previsions, qualite, performance_t5: performanceT5 };
 }
 
-module.exports = { universel, SEUILS, niveau };
+module.exports = { universel, SEUILS, niveau, seuilsEffectifs };

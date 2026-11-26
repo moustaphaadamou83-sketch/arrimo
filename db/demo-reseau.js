@@ -343,6 +343,8 @@ async function demoReseau(pool, { silencieux = false, comptesRoles = false, avec
   // Préhospitalier (cahier du 12 nov. 2026, section 18.1) : 2 entreprises ambulancières, 1 CCS, Liaison Secours dans 3 hôpitaux.
   // Organisations, unités et équipages fictifs ; la préalerte en cours est créée par les vraies règles (src/prealertes.js).
   await pool.query(`UPDATE etablissements SET modules = COALESCE(modules, '{}'::jsonb) || '{"liaison_secours": true, "transport_ambulancier": true}' WHERE id = ANY($1)`, [[ids.HX, ids.HY, ids.HA]]);
+  // Chrono universel (27 nov. 2026) : activé pour tous les établissements fictifs de la démonstration (hôpitaux et hébergement)
+  await pool.query(`UPDATE etablissements SET modules = COALESCE(modules, '{}'::jsonb) || '{"chrono": true}' WHERE type_etablissement IN ('hopital', 'chsld')`);
   // Services et règles de correspondance de chaque hôpital (validées par l'établissement) : base de la proposition d'OG
   const SERVICES_SECOURS = [['URGG', 'Urgence générale', { secours_defaut: true, categories_secours: ['medicale', 'respiratoire', 'sante_mentale', 'autre'] }],
     ['REA', 'Réanimation / soins intensifs', {}], ['CARD', 'Cardiologie', { categories_secours: ['cardiaque'] }], ['NEURO', 'Neurologie / AVC', { categories_secours: ['neurologique'] }],
@@ -352,6 +354,19 @@ async function demoReseau(pool, { silencieux = false, comptesRoles = false, avec
       await pool.query(`INSERT INTO services (etablissement_id, code, nom, attributs) VALUES ($1, $2, $3, $4) ON CONFLICT (etablissement_id, code) DO UPDATE SET attributs = services.attributs || EXCLUDED.attributs`, [h, code, nom, JSON.stringify(attributs)]);
     }
   }
+  // Départements fictifs (27 nov. 2026) : chaque hôpital de démonstration a une organisation réelle (départements → services → unités),
+  // pour que Chrono, Capacités et Performance se filtrent par département. Les civières sans unité relèvent du département « Urgences ».
+  await pool.query(`INSERT INTO departements (etablissement_id, code, nom)
+    SELECT e.id, d.code, d.nom FROM etablissements e CROSS JOIN (VALUES ('URG', 'Urgences'), ('SI', 'Soins intensifs'), ('MED', 'Médecine'), ('CHIR', 'Chirurgie'), ('MAT', 'Mère-enfant')) d(code, nom)
+    WHERE e.type_etablissement = 'hopital' ON CONFLICT (etablissement_id, code) DO NOTHING`);
+  await pool.query(`UPDATE unites u SET departement_id = dp.id FROM types_unite t, departements dp
+    WHERE t.id = u.type_id AND dp.etablissement_id = u.etablissement_id AND dp.code = t.code AND u.departement_id IS NULL`);
+  await pool.query(`UPDATE services s SET departement_id = dp.id FROM departements dp
+    WHERE dp.etablissement_id = s.etablissement_id AND s.departement_id IS NULL AND dp.code = CASE s.code WHEN 'URGG' THEN 'URG' WHEN 'TRAUMA' THEN 'URG' WHEN 'REA' THEN 'SI'
+      WHEN 'CARD' THEN 'MED' WHEN 'NEURO' THEN 'MED' WHEN 'PED' THEN 'MAT' WHEN 'OBST' THEN 'MAT' END`);
+  // Unités rattachées à un service quand la correspondance est univoque (soins intensifs → réanimation, mère-enfant → obstétrique)
+  await pool.query(`UPDATE unites u SET service_id = s.id FROM types_unite t, services s
+    WHERE t.id = u.type_id AND s.etablissement_id = u.etablissement_id AND u.service_id IS NULL AND s.code = CASE t.code WHEN 'SI' THEN 'REA' WHEN 'MAT' THEN 'OBST' END`);
   const cfgQc = (await pool.query('SELECT config_id FROM etablissements WHERE id = $1', [ids.HX])).rows[0].config_id;
   const orgSecours = async (code, nom, type) => (await pool.query('INSERT INTO organisations_secours (code, nom, type, profils, config_id) VALUES ($1, $2, $3, $4, $5) RETURNING id', [code, nom, type, type === 'ccs' ? ['ccs'] : ['ambulance'], cfgQc])).rows[0].id;
   const ambA = await orgSecours('AMB-NORD', 'Ambulances du Nord (fictif)', 'ambulancier');

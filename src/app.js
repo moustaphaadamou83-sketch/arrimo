@@ -217,6 +217,13 @@ function creerApp(pool, options = {}) {
   require('./portail-proches').brancherPublic(api, pool, route);
   api.use(exigerSession(pool));
   api.use((req, res, next) => { req.utilisateur.langue = req.langue; next(); });
+  // Synchronisation de Chrono (27 nov. 2026) : toute écriture réussie sur un lit, une civière, une admission, la NSA, un congé, un
+  // patient ou le DSN prévient les écrans en direct APRÈS la réponse (donc après validation) ; le signal ne porte aucune donnée.
+  const ECRITURES_SEJOUR = /^\/(lits|civieres|nettoyage|nsa|admissions|conges|patients|dsn|chsld\/places)(\/|$)/;
+  api.use((req, res, next) => {
+    if (req.method !== 'GET' && ECRITURES_SEJOUR.test(req.path)) res.on('finish', () => { if (res.statusCode < 400) require('./flux').signaler(); });
+    next();
+  });
 
   // Le rôle entretien n'a accès qu'à l'écran Nettoyage
   api.use((req, res, next) => {
@@ -348,6 +355,8 @@ function creerApp(pool, options = {}) {
   const chrono = require('./chrono');
   // Chrono universel (27 nov. 2026) : durées en cours de l'établissement, en lecture seule, mêmes droits que l'établissement
   api.get('/chrono/universel', route((req) => require('./chrono-universel').universel(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
+  // Décomposition complète d'un séjour (fiche cliquable de Chrono · Patients) : lecture des historiques existants, référence seulement
+  api.get('/chrono/sejour', route((req) => require('./chrono-sejours').decomposition(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'), req.query.reference)));
   for (const pre of ['/chrono', '/secours/chrono']) {
     api.get(`${pre}`, route((req) => chrono.tableau(pool, req.utilisateur, req.query)));
     api.get(`${pre}/rapport`, route((req) => chrono.rapport(pool, req.utilisateur, req.query)));

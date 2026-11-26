@@ -1148,3 +1148,97 @@ body.mode-presentation #b-notif, body.mode-presentation #b-menu { visibility: hi
   body[data-impression="oui"] .rapport-entete-impression { display: flex; gap: 10px; align-items: center; border-bottom: 2px solid #0E5E6F; padding-bottom: 8px; margin-bottom: 12px; color: #1F2937; }
   body[data-impression="oui"] table { font-size: 9pt; } body[data-impression="oui"] tr { break-inside: avoid; }
 }
+
+/* ---------- Chrono : composants communs (27 nov. 2026) ----------
+   Grand compteur circulaire, cartes de supervision, cartes de séjour, grilles à deux colonnes, frise. Couleurs de niveau = statuts
+   seulement (vert, orange, rouge, gris, bleu « en cours sans seuil ») ; la couleur n'est jamais seule (mot écrit). Thèmes : variables. */
+.anneau-grand { position: relative; width: 132px; height: 132px; flex: none; }
+.anneau-grand.petit { width: 112px; height: 112px; }
+.anneau-grand svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.anneau-grand .ag-fond { fill: none; stroke: var(--bordure); stroke-width: 9; }
+.anneau-grand .ag-arc { fill: none; stroke: #94A3B8; stroke-width: 9; stroke-linecap: round; transition: stroke-dasharray .6s linear, stroke .3s; }
+.anneau-grand .ag-repere { fill: none; stroke: var(--texte); stroke-width: 13; opacity: .55; }
+.anneau-grand .ag-centre { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 0 12px; }
+.anneau-grand .ag-val { font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.01em; line-height: 1.15; }
+.anneau-grand.petit .ag-val { font-size: 13px; }
+.anneau-grand .ag-val .ag-jours { display: block; font-size: .78em; font-weight: 600; }
+.anneau-grand .ag-lib { font-size: 11px; color: var(--texte-2); margin-top: 2px; line-height: 1.2; }
+.anneau-grand.niveau-vert .ag-arc { stroke: #16A34A; } .anneau-grand.niveau-orange .ag-arc { stroke: #F59E0B; }
+.anneau-grand.niveau-rouge .ag-arc { stroke: #DC2626; } .anneau-grand.niveau-gris .ag-arc { stroke: #94A3B8; } .anneau-grand.niveau-bleu .ag-arc { stroke: #2563EB; }
+.anneau-grand.niveau-rouge .ag-val { color: #DC2626; }
+.pastille-niveau { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #94A3B8; margin-right: 6px; vertical-align: middle; flex: none; }
+.niveau-vert .pastille-niveau { background: #16A34A; } .niveau-orange .pastille-niveau { background: #F59E0B; } .niveau-rouge .pastille-niveau { background: #DC2626; } .niveau-bleu .pastille-niveau { background: #2563EB; }
+.cc-niveau { display: inline-flex; align-items: center; font-weight: 600; font-size: 13px; margin: 0; }
+
+.carte-chrono { display: flex; gap: var(--e4); align-items: center; border: 1px solid var(--bordure); border-left: 5px solid #94A3B8; border-radius: var(--rayon-carte); background: var(--carte); padding: var(--e4); min-width: 0; }
+.carte-chrono[data-sejour] { cursor: pointer; }
+.carte-chrono[data-sejour]:hover, .carte-chrono[data-sejour]:focus-visible { box-shadow: 0 0 0 2px #57C5B6; outline: none; }
+.carte-chrono.niveau-vert { border-left-color: #16A34A; } .carte-chrono.niveau-orange { border-left-color: #F59E0B; } .carte-chrono.niveau-rouge { border-left-color: #DC2626; } .carte-chrono.niveau-bleu { border-left-color: #2563EB; }
+.carte-chrono .cc-corps { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.carte-chrono .cc-corps h4 { margin: 0; font-size: 15px; }
+.carte-chrono .cc-corps p { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+
+.carte-sejour { flex-direction: column; align-items: stretch; }
+.carte-sejour .cs-tete { display: flex; justify-content: space-between; align-items: center; gap: var(--e2); }
+.carte-sejour .cs-tete h4 { margin: 0; font-size: 17px; }
+.carte-sejour .cs-anneaux { display: flex; justify-content: space-around; align-items: center; gap: var(--e2); }
+.ref-patient { font-variant-numeric: tabular-nums; }
+.etape-badge { display: inline-block; border: 1px solid var(--bordure); background: var(--doux, #EEF2F6); color: var(--texte); border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.cs-og { background: var(--doux, #EEF2F6); border-radius: var(--rayon); padding: 6px 8px; }
+.cs-og b { color: #0E5E6F; margin-right: 4px; }
+.grille-sejours { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--e3); margin: var(--e3) 0; align-items: stretch; }
+.grille-sejours.compacte { grid-template-columns: 1fr; }
+.grille-sejours.compacte .carte-chrono { padding: var(--e3); }
+
+.filtres-chrono { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--e2) var(--e3); align-items: end; margin-bottom: var(--e3);
+  background: var(--carte); border: 1px solid var(--bordure); border-radius: var(--rayon-carte); padding: var(--e3); }
+.filtres-chrono label { display: grid; gap: 4px; font-size: 13px; font-weight: 600; min-width: 0; }
+.filtres-chrono select, .filtres-chrono input { min-height: 38px; width: 100%; }
+.bascule-vue { display: inline-flex; border: 1px solid var(--bordure); border-radius: var(--rayon); overflow: hidden; align-self: end; }
+.bascule-vue button { border: 0; background: var(--carte); color: var(--texte); padding: 8px 12px; min-height: 38px; cursor: pointer; font-weight: 600; }
+.bascule-vue button[aria-pressed="true"] { background: #0E5E6F; color: #fff; }
+.tuiles-sejours { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.tuiles-sejours .tuile-c[aria-pressed="true"] { box-shadow: 0 0 0 2px #0E5E6F; }
+.tuiles-sejours .ton-orange { border-left: 5px solid #F59E0B; } .tuiles-sejours .ton-rouge { border-left: 5px solid #DC2626; } .tuiles-sejours .ton-gris { border-left: 5px solid #94A3B8; }
+.etapes-compte { display: flex; flex-wrap: wrap; gap: 6px; margin: var(--e3) 0; }
+.puce-etape { border: 1px solid var(--bordure); background: var(--carte); color: var(--texte); border-radius: 999px; padding: 5px 12px; min-height: 34px; cursor: pointer; font-size: 13px; }
+.puce-etape[aria-pressed="true"] { background: #0E5E6F; border-color: #0E5E6F; color: #fff; }
+.table-sejours tr[data-sejour] { cursor: pointer; } .table-sejours tr[data-sejour]:hover { background: var(--doux, #EEF2F6); }
+.table-sejours th { white-space: nowrap; }
+
+/* Vue générale : cartes de supervision (grille), deux colonnes harmonisées pour les blocs */
+.grille-supervision { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--e3); margin-bottom: var(--e4); }
+.carte-supervision { display: flex; gap: var(--e3); align-items: center; text-align: left; border: 1px solid var(--bordure); border-top: 5px solid #94A3B8; border-radius: var(--rayon-carte);
+  background: var(--carte); color: var(--texte); padding: var(--e3) var(--e4); cursor: pointer; min-height: 160px; font: inherit; }
+.carte-supervision:hover, .carte-supervision:focus-visible { box-shadow: 0 0 0 2px #57C5B6; outline: none; }
+.carte-supervision.niveau-vert { border-top-color: #16A34A; } .carte-supervision.niveau-orange { border-top-color: #F59E0B; } .carte-supervision.niveau-rouge { border-top-color: #DC2626; } .carte-supervision.niveau-bleu { border-top-color: #2563EB; }
+.carte-supervision .sv-corps { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.carte-supervision .sv-nombre { font-size: 30px; font-weight: 700; line-height: 1; }
+.carte-supervision .sv-lib { font-weight: 600; font-size: 14px; }
+.carte-supervision .sv-ident { font-size: 12px; color: var(--texte-2); overflow-wrap: anywhere; }
+.grille-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--e4); align-items: stretch; margin: var(--e4) 0; }
+.grille-2 > .bloc-c { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--bordure); border-radius: var(--rayon-carte); background: var(--carte); padding: var(--e4); }
+.bloc-tete { display: flex; justify-content: space-between; align-items: center; gap: var(--e2); margin-bottom: var(--e2); }
+.bloc-tete h3 { margin: 0; font-size: 16px; }
+.og-priorites { margin: 0; padding-left: 20px; display: grid; gap: 8px; }
+.og-priorites li { padding-left: 4px; }
+.og-priorites li::marker { font-weight: 700; color: #0E5E6F; }
+.lien { background: none; border: 0; padding: 0; color: #0E5E6F; text-decoration: underline; cursor: pointer; font: inherit; }
+@media (max-width: 900px) { .grille-2 { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .grille-sejours, .grille-supervision { grid-template-columns: 1fr; } .anneau-grand { width: 112px; height: 112px; } .anneau-grand.petit { width: 92px; height: 92px; } .carte-supervision { min-height: 0; } }
+
+/* Fiche de séjour : frise proportionnelle + tableau des étapes */
+#modale .boite.large { width: min(1100px, 96vw); max-height: 92vh; overflow: auto; }
+.sejour-tete { display: flex; gap: var(--e4); align-items: center; flex-wrap: wrap; margin-bottom: var(--e3); }
+.sejour-tete p { margin: 2px 0; }
+.gros-ref { font-size: 22px; font-weight: 700; }
+.frise-sejour { display: grid; gap: 6px; margin: var(--e2) 0 var(--e3); }
+.frise-ligne { display: grid; grid-template-columns: minmax(120px, 210px) 1fr; gap: var(--e2); align-items: center; font-size: 13px; }
+.frise-piste { position: relative; height: 14px; background: var(--doux, #EEF2F6); border-radius: 7px; }
+.frise-seg { position: absolute; top: 0; bottom: 0; border-radius: 7px; background: #94A3B8; }
+.frise-seg.niveau-vert { background: #16A34A; } .frise-seg.niveau-orange { background: #F59E0B; } .frise-seg.niveau-rouge { background: #DC2626; } .frise-seg.niveau-bleu { background: #2563EB; }
+.frise-axe { display: flex; justify-content: space-between; margin-left: min(218px, 30%); }
+.puces-dep { list-style: none; padding: 0; margin: 0 0 var(--e2); display: flex; flex-wrap: wrap; gap: 6px; }
+.puces-dep li { border: 1px solid var(--bordure); border-radius: 999px; padding: 4px 12px; font-size: 13px; }
+.table-sejour tr.rang-delai th { font-weight: 700; }
+.actions-sejour { display: flex; flex-wrap: wrap; gap: 8px; }

@@ -73,7 +73,8 @@ const MODULES = [
   { code: 'messagerie_securisee', categorie: 'optionnel', types: ['chsld'], statut: 'disponible', drapeau: 'portail_proches', nom: 'Messagerie sécurisée', nom_en: 'Secure messaging', note: 'Dans le portail des proches', dependances: ['portail_proches'] },
   { code: 'appels_video', categorie: 'optionnel', types: ['chsld'], statut: 'etude', nom: 'Appels audio et vidéo', nom_en: 'Audio and video calls', note: 'Étude seulement' },
   // Chantier « moteur commun + modules » (cahier v2, 19 nov. 2026) : affichés « Bientôt » jusqu'à leur livraison, jamais activables avant
-  { code: 'chrono', categorie: 'optionnel', types: ['hopital', ...TYPES_SECOURS], statut: 'disponible', drapeau: 'chrono', nom: 'Chrono (temps à l’urgence)', nom_en: 'Chrono (emergency offload times)',
+  // Chrono universel (27 nov. 2026) : TOUS les types (hôpital, hébergement, secours) ; activé depuis SH, un seul moteur
+  { code: 'chrono', categorie: 'optionnel', types: Object.keys(TYPES), statut: 'disponible', drapeau: 'chrono', nom: 'Chrono (temps opérationnels)', nom_en: 'Chrono (operational times)',
     // Activable seul (26 nov. 2026) : alimenté par Liaison Secours si elle est active, sinon par les logiciels externes autorisés (connecteur)
     note: 'Heures H11 à H15, chrono à la porte, rapport mensuel ; seul ou avec Liaison Secours', note_en: 'H11 to H15 times, door clock, monthly report; standalone or with Emergency liaison' },
   { code: 'urgences_direct', categorie: 'optionnel', types: ['hopital', ...TYPES_SECOURS], statut: 'disponible', drapeau: 'urgences_direct', nom: 'Urgences en direct', nom_en: 'Live emergency status',
@@ -88,7 +89,8 @@ const MODULES = [
     note: 'Tableaux régionaux, petits nombres masqués, CSV', note_en: 'Regional dashboards, small counts masked, CSV' },
   { code: 'mode_crise', categorie: 'optionnel', types: ['hopital', 'chsld'], statut: 'disponible', drapeau: 'mode_crise', nom: 'Mode crise (évacuation)', nom_en: 'Crisis mode (evacuation)',
     note: 'Places de la région, lieu proposé par résident, suivi', note_en: 'Regional places, proposed site per resident, tracking' },
-  { code: 'dsn', categorie: 'optionnel', types: ['hopital', 'chsld'], statut: 'disponible', drapeau: 'dsn', nom: 'Dossier santé numérique (DSN)', nom_en: 'Electronic health record (EHR)',
+  // DSN (27 nov. 2026, décision de Moustafa) : hôpitaux seulement ; jamais CHSLD, RPA ni autre type (le CHSLD reçoit le paquet de transition sans DSN)
+  { code: 'dsn', categorie: 'optionnel', types: ['hopital'], statut: 'disponible', drapeau: 'dsn', nom: 'Dossier santé numérique (DSN)', nom_en: 'Electronic health record (EHR)',
     note: 'Dossier clinique : démonstration et recette seulement, patients synthétiques', note_en: 'Clinical record: demo and testing only, synthetic patients' },
   { code: 'formation', categorie: 'optionnel', types: ['hopital', 'chsld', ...Object.keys(TYPES).filter((t) => TYPES[t].famille === 'secours')], statut: 'disponible', drapeau: 'formation', nom: 'Formation', nom_en: 'Training',
     note: 'Parcours par rôle, capsules courtes, exercices et attestations', note_en: 'Role-based paths, short lessons, exercises and certificates' },

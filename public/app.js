@@ -622,7 +622,7 @@ function appliquerModules() {
     const autreType = b.dataset.type && b.dataset.type !== type;
     // Entretien : nettoyage (et ses tâches en CHSLD) seulement
     // Entretien : Nettoyage et Mes tâches (vue personnelle unique ; le tableau des tâches de l'établissement reste aux responsables : pas de doublon)
-    const entretienInterdit = entretien && !(b.dataset.v === 'nettoyage' || b.dataset.v === 'mes-taches');
+    const entretienInterdit = entretien && !(b.dataset.v === 'nettoyage' || b.dataset.v === 'mes-taches' || b.dataset.v === 'chrono');  // Chrono : capacités seulement (serveur)
     b.hidden = autreType || (chsldInterdit && b.dataset.type === 'chsld') || entretienInterdit || (b.dataset.v === 'admin' && !etat.moi.utilisateur.admin) || (mod && mods[mod] === false)
       || (b.dataset.module && mods[b.dataset.module] === false) || (b.dataset.v === 'patients' && !etat.moi.patients_fictifs)
       // Module optionnel (Liaison Secours) : visible seulement s'il a été activé pour cet établissement

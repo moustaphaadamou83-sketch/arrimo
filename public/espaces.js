@@ -31,11 +31,13 @@
   function appliquer(force) {
     const vus = boutons().filter(visible);
     const presents = ESPACES.filter((x) => vus.some((b) => x[4].includes(b.dataset.v)));
-    const sig = presents.map((x) => x[0]).join(',') + (en() ? ':en' : ':fr') + (hebergement() ? ':heb' : '');
+    // DSN réservé aux hôpitaux (27 nov. 2026) : sans module DSN visible, l'espace s'appelle « Patients », jamais « Patients & DSN »
+    const avecDsn = vus.some((b) => b.dataset.v === 'dsn');
+    const sig = presents.map((x) => x[0]).join(',') + (en() ? ':en' : ':fr') + (hebergement() ? ':heb' : '') + (avecDsn ? ':dsn' : '');
     if (sig !== construit) {
       nav.querySelectorAll('.espace-btn, .espace-saut').forEach((x) => x.remove());
       const frag = document.createDocumentFragment();
-      for (const [cle, ic, fr0, an0] of ordonnes(presents)) { const [fr, an] = hebergement() && LIB_HEB[cle] ? LIB_HEB[cle] : [fr0, an0]; const b = document.createElement('button'); b.type = 'button'; b.className = 'espace-btn'; b.dataset.espace = cle;
+      for (const [cle, ic, fr0, an0] of ordonnes(presents)) { const [fr, an] = hebergement() && LIB_HEB[cle] ? LIB_HEB[cle] : cle === 'patients' && !avecDsn ? ['Patients', 'Patients'] : [fr0, an0]; const b = document.createElement('button'); b.type = 'button'; b.className = 'espace-btn'; b.dataset.espace = cle;
         // Planche 2 : point de couleur du module, libellé, compteur, chevron (barre latérale) ; icône en navigation horizontale et barre repliée
         b.innerHTML = `<svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-${ic}"/></svg><span class="esp-point" aria-hidden="true"></span><span class="esp-nom">${en() ? an : fr}</span><span class="esp-compte"></span><span class="esp-chevron" aria-hidden="true"></span>`; frag.appendChild(b); }
       const saut = document.createElement('span'); saut.className = 'espace-saut'; saut.setAttribute('aria-hidden', 'true'); frag.appendChild(saut);
