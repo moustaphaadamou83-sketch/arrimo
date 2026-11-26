@@ -660,7 +660,7 @@ async function rafraichir() {
     bandeau.innerHTML = !e || e.module_actif ? '' : `<div>${t('barre.bandeau_inactif', { etab: esc(e.nom) })}</div>`;
     await Promise.all([e ? majCompteurs() : null, ({
       copilote: vueCopilote, reseau: vueReseau, national: vueNational, lits: vueLits, urgence: vueUrgence, admissions: vueAdmissions, transferts: vueTransferts,
-      nettoyage: vueNettoyage, vigilance: async () => { await vueVigilance(); await window.ArrimoSillage?.vigilance($('#v-vigilance'), etat.ctx); }, nsa: vueNsa, indicateurs: vueIndicateurs, journal: vueJournal, params: vueParams,
+      nettoyage: vueNettoyage, vigilance: async () => { await vueVigilance(); await window.ArrimoSillage?.vigilance($('#v-vigilance'), etat.ctx); if (['demo', 'recette', 'developpement'].includes(etat.moi?.environnement)) await window.ArrimoExercice?.panneau($('#v-vigilance'), etat.ctx); }, nsa: vueNsa, indicateurs: vueIndicateurs, journal: vueJournal, params: vueParams,
       admin: vueAdmin, compte: vueCompte, support:vueSupportClient, patients: vuePatients, continuite: vueContinuite, ...(window.ArrimoChsld?.vues || {}), ...(window.ArrimoSecours?.vues || {}), ...(window.ArrimoChrono?.vues || {}), ...(window.ArrimoTransportPlanifie?.vues || {}), ...(window.ArrimoBourse?.vues || {}), flux: () => window.ArrimoFluxVue.afficher($('#v-flux'), optsFlux()), 'mes-taches': () => window.ArrimoMesTaches.afficher($('#v-mes-taches'), optsFlux()), donnees: () => window.ArrimoDonnees.afficher($('#v-donnees'), { api, langue, etablissement_id: etat.ctx }), dsn: vueDsn, ...(window.ArrimoVisitesEviter?.vues || {}), crise: () => window.ArrimoCrise.afficher($('#v-crise'), { api, langue, etablissement_id: etat.ctx }),
     })[etat.vue]()]);
     poserMenuParametres();

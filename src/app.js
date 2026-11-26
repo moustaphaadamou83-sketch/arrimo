@@ -264,6 +264,13 @@ function creerApp(pool, options = {}) {
 
   // Module Formation (22 nov. 2026) : ouvert à tous les rôles connectés, AVANT les filtres des rôles limités ; chacun ne voit que ses parcours
   const fp = require('./formation-parcours');
+  // Exercice de formation isolé avec injection d'événements (démo et recette seulement) : aucun objet réel modifié
+  const exo = require('./exercices');
+  api.get('/formation/exercices', route((req) => exo.etat(pool, req.utilisateur, req.query)));
+  api.post('/formation/exercices', route((req) => exo.ouvrir(pool, req.utilisateur, req.body)));
+  api.post('/formation/exercices/:id/injecter', route((req) => exo.injecter(pool, req.utilisateur, req.params.id, req.body)));
+  api.post('/formation/exercices/:id/evenements/:ev/repondre', route((req) => exo.repondre(pool, req.utilisateur, req.params.id, req.params.ev, req.body)));
+  api.post('/formation/exercices/:id/terminer', route((req) => exo.terminer(pool, req.utilisateur, req.params.id)));
   api.get('/formation/moi', route((req) => fp.moi(pool, req.utilisateur, req.langue)));
   api.get('/formation/aide', route((req) => fp.aideEcrans(pool, req.utilisateur, req.langue)));
   api.put('/formation/parcours', route((req) => fp.choisir(pool, req.utilisateur, req.body)));
