@@ -98,6 +98,22 @@ test('5-7. départs, transport annulé, changement de destination sans doublon n
   ids.r1 = r1.id;
 });
 
+test('3.5. coupure réseau : gestes de terrain rejoués avec leur heure réelle ; conflit de version jamais écrasé', async () => {
+  const r = (await vue()).residents.find((x) => x.statut === 'parti');
+  assert.ok(r, 'un résident en route');
+  const conflit = await agir(r.id, { action: 'arrivee', version_attendue: r.version - 1, heure_terrain: new Date(Date.now() - 20 * 60000).toISOString() });
+  assert.strictEqual(conflit.statut, 409); assert.strictEqual(conflit.corps.code, 'evacuation_conflit');
+  assert.strictEqual((await vue()).residents.find((x) => x.id === r.id).statut, 'parti', 'rien n’est écrasé');
+  assert.strictEqual((await agir(r.id, { action: 'arrivee', version_attendue: r.version, heure_terrain: new Date(Date.now() + 3600000).toISOString() })).statut, 400, 'jamais dans le futur');
+  assert.strictEqual((await agir(r.id, { action: 'changer_destination', heure_terrain: new Date().toISOString() })).statut, 400, 'affecter un lieu exige la connexion');
+  const heure = new Date(Date.now() - 20 * 60000);
+  const ok = await agir(r.id, { action: 'arrivee', version_attendue: r.version, heure_terrain: heure.toISOString() });
+  assert.strictEqual(ok.statut, 200, JSON.stringify(ok.corps));
+  assert.ok(Math.abs(new Date(ok.corps.arrivee_le) - heure) < 1000, 'heure réelle de terrain conservée');
+  const j = (await pool.query("SELECT detail FROM journal WHERE action = 'Évacuation : étape' ORDER BY id DESC LIMIT 1")).rows[0].detail;
+  assert.match(j, /saisi hors connexion/);
+});
+
 test('11. arrivée et accueil : jamais « accueilli » sans confirmation ; rapport post-incident exact', async () => {
   assert.strictEqual((await agir(ids.r1, { action: 'arrivee' })).corps.code, 'evacuation_statut', 'pas d’arrivée sans départ');
   await agir(ids.r1, { action: 'depart', transport_mode: 'ambulance' });

@@ -6,6 +6,9 @@
     fr: { titre: 'Mode crise · évacuation', intro: 'Arrimo propose un lieu par résident (proximité d’abord) ; une personne confirme. La place est réservée par les règles des lits ; les familles sont avisées sans détail.',
       declencher: 'Déclencher une évacuation', motif: 'Motif', aucune: 'Aucune évacuation en cours.', en_cours: 'Évacuation {numero} en cours ({motif})', lever: 'Lever l’évacuation', levee_ok: 'Évacuation levée.',
       resume: '{total} résidents · {a_placer} à placer · {confirmes} confirmés · {partis} en route · {arrives} arrivés · {familles} familles avisées', places: 'Places libres de la région',
+      hl_bandeau: 'Hors connexion : vue enregistrée à {h} sur cet appareil. Départs, arrivées et accueils sont notés ici et envoyés au retour du réseau ; les autres gestes attendent la connexion.',
+      hl_file: 'Gestes en attente d’envoi : {n}', hl_envoye: 'Gestes envoyés après la coupure : {n}', hl_conflits: 'À vérifier après la coupure (rien n’a été écrasé)', hl_note: 'noté hors connexion à {h}',
+      hl_aucune_vue: 'Hors connexion et aucune vue enregistrée sur cet appareil.',
       resident: 'Résident', propose: 'Lieu proposé', aucun_lieu: 'aucune place libre', confirmer: 'Confirmer', depart: 'Départ', arrivee: 'Arrivé', retour: 'Planifier le retour', revenu: 'Revenu',
       statut: 'Étape', lit: 'lit {lit}', mode: 'Transport', confirme_lieu: 'Confirmer {lieu} ?', retour_date: 'Retour prévu le', fait: 'Étape enregistrée.', etablissement: 'Établissement',
       m: { incendie: 'Incendie', inondation: 'Inondation', panne_electrique: 'Panne électrique', panne_chauffage: 'Panne de chauffage', contamination: 'Contamination', autre: 'Autre' },
@@ -19,6 +22,9 @@
     en: { titre: 'Crisis mode · evacuation', intro: 'Arrimo proposes a place per resident (nearest first); a person confirms. The place is reserved by the bed rules; families are notified without details.',
       declencher: 'Start an evacuation', motif: 'Reason', aucune: 'No evacuation in progress.', en_cours: 'Evacuation {numero} in progress ({motif})', lever: 'Lift the evacuation', levee_ok: 'Evacuation lifted.',
       resume: '{total} residents · {a_placer} to place · {confirmes} confirmed · {partis} on the way · {arrives} arrived · {familles} families notified', places: 'Free places in the region',
+      hl_bandeau: 'Offline: view saved at {h} on this device. Departures, arrivals and receptions are noted here and sent when the network returns; other steps wait for the connection.',
+      hl_file: 'Steps waiting to be sent: {n}', hl_envoye: 'Steps sent after the outage: {n}', hl_conflits: 'To check after the outage (nothing was overwritten)', hl_note: 'noted offline at {h}',
+      hl_aucune_vue: 'Offline and no view saved on this device.',
       resident: 'Resident', propose: 'Proposed place', aucun_lieu: 'no free place', confirmer: 'Confirm', depart: 'Departure', arrivee: 'Arrived', retour: 'Plan the return', revenu: 'Returned',
       statut: 'Step', lit: 'bed {lit}', mode: 'Transport', confirme_lieu: 'Confirm {lieu}?', retour_date: 'Expected return on', fait: 'Step recorded.', etablissement: 'Facility',
       m: { incendie: 'Fire', inondation: 'Flood', panne_electrique: 'Power outage', panne_chauffage: 'Heating failure', contamination: 'Contamination', autre: 'Other' },
@@ -32,9 +38,42 @@
   };
   const e = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   /** Affiche l'évacuation en cours de l'établissement (ou de la région) dans v. o = { api, langue, etablissement_id, etablissements (direction) }. */
+  /* Fonctionnement sans connexion (complémentaire nº 3, §3.5) : la dernière vue est gardée sur l'appareil SANS identité (référence seulement) ;
+     départ, arrivée et accueil sont mis en file avec l'heure réelle et la version vue ; au retour du réseau ils sont rejoués dans l'ordre.
+     Un conflit (ligne changée entre-temps) n'écrase rien : il est montré pour décision humaine. Affecter ou changer un lieu exige la connexion. */
+  const HL = { cle: (id) => `arrimo-crise-vue-${id}`, file: 'arrimo-crise-file', conflits: 'arrimo-crise-conflits', derniere: 'arrimo-crise-derniere' };
+  const stock = { lire: (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }, ecrire: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* plein ou bloqué */ } } };
+  const reseau = (err) => err instanceof TypeError || !navigator.onLine;
+  const GESTES_HL = ['depart', 'arrivee', 'accueilli'];
+  function garder(d, active) {
+    const sansIdentite = { ...d, residents: d.residents.map(({ prenom, nom, ...r }) => r) };
+    stock.ecrire(HL.cle(active.id), { le: new Date().toISOString(), active, d: sansIdentite }); stock.ecrire(HL.derniere, active.id);
+  }
+  async function rejouer(o) {
+    const file = stock.lire(HL.file, []); if (!file.length || !navigator.onLine) return 0;
+    const reste = []; const conflits = stock.lire(HL.conflits, []); let envoyes = 0;
+    for (const g of file) {
+      try { await o.api('POST', `/crise/evacuations/${g.ev}/residents/${g.r}`, g.corps); envoyes += 1; }
+      catch (err) {
+        if (reseau(err)) { reste.push(g); continue; }
+        conflits.push({ ref: g.ref, action: g.corps.action, heure: g.corps.heure_terrain, message: err.message });
+      }
+    }
+    stock.ecrire(HL.file, reste); stock.ecrire(HL.conflits, conflits.slice(-50));
+    return envoyes;
+  }
+  window.addEventListener('online', () => { document.dispatchEvent(new CustomEvent('arrimo-crise-reseau')); });
   async function afficher(v, o) {
     const L = o.langue === 'en' ? 'en' : 'fr'; const X = TXT[L]; const T = (k, x = {}) => e(String(X[k]).replace(/\{(\w+)\}/g, (m, y) => x[y] ?? m));
-    const liste = await o.api('GET', `/crise/evacuations${o.etablissement_id ? `?etablissement_id=${o.etablissement_id}` : ''}`);
+    const envoyes = await rejouer(o);
+    let liste; let horsLigne = null;
+    try { liste = await o.api('GET', `/crise/evacuations${o.etablissement_id ? `?etablissement_id=${o.etablissement_id}` : ''}`); }
+    catch (err) {
+      if (!reseau(err)) throw err;
+      horsLigne = stock.lire(HL.cle(stock.lire(HL.derniere, 0)), null);
+      if (!horsLigne) { v.innerHTML = `<h2>${T('titre')}</h2><p class="alerte" role="alert">${T('hl_aucune_vue')}</p>`; return; }
+      liste = [horsLigne.active];
+    }
     const active = liste.find((x) => x.statut === 'active');
     const choixEtab = o.etablissements?.length ? `<select id="cr-etab" aria-label="${T('etablissement')}">${o.etablissements.map((x) => `<option value="${x.id}">${e(x.nom)}</option>`).join('')}</select>` : '';
     if (!active) {
@@ -65,8 +104,19 @@
       formulaire();
       return;
     }
-    const d = await o.api('GET', `/crise/evacuations/${active.id}`);
-    const btn = (r, a, lib, extra = '') => `<button class="btn${a === 'confirmer' ? ' pri' : ''}" data-cr="${a}" data-r="${r.id}"${extra}>${T(lib)}</button>`;
+    let d;
+    if (horsLigne) d = horsLigne.d;
+    else {
+      try { d = await o.api('GET', `/crise/evacuations/${active.id}`); garder(d, active); }
+      catch (err) { if (!reseau(err)) throw err; horsLigne = stock.lire(HL.cle(active.id), null); if (!horsLigne) throw err; d = horsLigne.d; }
+    }
+    const file = stock.lire(HL.file, []); const conflits = stock.lire(HL.conflits, []);
+    const enFile = (r) => file.filter((g) => g.r === r.id);
+    // Étape projetée : un geste en file fait avancer l'affichage localement (la version vue reste celle du serveur)
+    const PROJ = { depart: 'parti', arrivee: 'arrive', accueilli: 'accueilli' };
+    d = { ...d, residents: d.residents.map((r) => { const q = enFile(r); return q.length ? { ...r, statut: PROJ[q[q.length - 1].corps.action] } : r; }) };
+    const btn = (r, a, lib, extra = '') => (horsLigne && !GESTES_HL.includes(a) ? ''
+      : `<button class="btn${a === 'confirmer' ? ' pri' : ''}" data-cr="${a}" data-r="${r.id}"${extra}>${T(lib)}</button>`);
     // Complémentaire nº 3 : changement de destination (avant l'arrivée) et transport annulé, sans perdre ni doubler le résident
     const changer = (r) => (['confirme', 'parti'].includes(r.statut) && d.places.some((p) => p.id !== r.destination_id)
       ? `<select data-nd="${r.id}" aria-label="${T('nouvelle_dest')}">${d.places.filter((p) => p.id !== r.destination_id).map((p) => `<option value="${p.id}">${e(p.nom)}</option>`).join('')}</select>${btn(r, 'changer_destination', 'changer')}` : '')
@@ -75,11 +125,15 @@
       : r.statut === 'confirme' ? `<select data-mode="${r.id}" aria-label="${T('mode')}">${Object.entries(X.t).map(([k, l]) => `<option value="${k}">${e(l)}</option>`).join('')}</select>${btn(r, 'depart', 'depart')}`
         : r.statut === 'parti' ? btn(r, 'arrivee', 'arrivee') : r.statut === 'arrive' ? `${btn(r, 'accueilli', 'accueilli')}${btn(r, 'planifier_retour', 'retour')}` : r.statut === 'accueilli' ? btn(r, 'planifier_retour', 'retour') : r.statut === 'retour_planifie' ? btn(r, 'revenu', 'revenu') : '');
     const alertes = (d.alertes || []).map((x) => `<li>${e(x.organisation)} · ${T(x.role)} · <b>${e(X.a_st[x.statut])}</b>${x.unite ? ` · ${T('unite', { u: x.unite })}` : ''}${x.eta_min != null ? ` · ${T('eta', { n: x.eta_min })}` : ''}</li>`).join('');
-    v.innerHTML = `<h2>${T('titre')}</h2>${d.evacuation.simulation ? `<p class="bandeau" role="note"><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-flask-conical"/></svg> ${T('bandeau_sim')}</p>` : ''}<p class="bandeau" role="status">${T('en_cours', { numero: d.evacuation.numero, motif: X.m[d.evacuation.motif] })} · ${e(d.evacuation.etablissement)}${d.evacuation.gravite ? ` · ${e(X.g[d.evacuation.gravite])}` : ''}</p>
+    const heureL = (x) => new Date(x).toLocaleTimeString(L === 'en' ? 'en-CA' : 'fr-CA', { hour: '2-digit', minute: '2-digit' });
+    const bandeauHL = `${horsLigne ? `<p class="bandeau hors-ligne" role="alert">${T('hl_bandeau', { h: heureL(horsLigne.le) })}</p>` : ''}
+      ${file.length ? `<p class="note" role="status">${T('hl_file', { n: file.length })}</p>` : ''}${envoyes ? `<p class="note" role="status">${T('hl_envoye', { n: envoyes })}</p>` : ''}
+      ${conflits.length ? `<section class="panneau-c"><h3>${T('hl_conflits')}</h3><ul class="liste-simple">${conflits.map((c) => `<li><b>${e(c.ref)}</b> · ${e(X[c.action] || c.action)} · ${e(heureL(c.heure))} · ${e(c.message)}</li>`).join('')}</ul></section>` : ''}`;
+    v.innerHTML = `<h2>${T('titre')}</h2>${bandeauHL}${d.evacuation.simulation ? `<p class="bandeau" role="note"><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-flask-conical"/></svg> ${T('bandeau_sim')}</p>` : ''}<p class="bandeau" role="status">${T('en_cours', { numero: d.evacuation.numero, motif: X.m[d.evacuation.motif] })} · ${e(d.evacuation.etablissement)}${d.evacuation.gravite ? ` · ${e(X.g[d.evacuation.gravite])}` : ''}</p>
       <section class="panneau-c"><h3>${T('alertes')}</h3>${alertes ? `<ul class="liste-simple">${alertes}</ul>` : `<p class="alerte">${T('aucune_alerte')}</p>`}</section>
       <p>${T('resume', { ...d.resume, familles: d.resume.familles_avisees })}</p>
       <div class="tableau"><table><thead><tr><th>${T('resident')}</th><th>${T('statut')}</th><th>${T('propose')}</th><th></th></tr></thead><tbody>
-        ${d.residents.map((r) => `<tr><td>${e(r.resident_ref)}${r.prenom ? ` · <span class="donnee">${e(r.prenom)} ${e(r.nom)}</span>` : ''}</td><td>${e(X.s[r.statut])}${r.destination ? ` · ${e(r.destination)}${r.lit ? ` (${T('lit', { lit: r.lit })})` : ''}` : ''}</td>
+        ${d.residents.map((r) => `<tr><td>${e(r.resident_ref)}${r.prenom ? ` · <span class="donnee">${e(r.prenom)} ${e(r.nom)}</span>` : ''}</td><td>${e(X.s[r.statut])}${enFile(r).map((g) => ` · <span class="badge">${e(X[g.corps.action] || g.corps.action)} ${T('hl_note', { h: heureL(g.corps.heure_terrain) })}</span>`).join('')}${r.destination ? ` · ${e(r.destination)}${r.lit ? ` (${T('lit', { lit: r.lit })})` : ''}` : ''}</td>
           <td>${r.statut === 'a_placer' ? (r.proposition ? `${e(r.proposition.nom)} · ${r.proposition.distance_km ?? '—'} km` : T('aucun_lieu')) : ''}</td><td>${actions(r)}</td></tr>`).join('')}</tbody></table></div>
       <h3>${T('places')}</h3><ul class="liste-simple">${d.places.map((p) => `<li>${e(p.nom)} · ${p.libres} · ${p.distance_km ?? '—'} km</li>`).join('')}</ul>
       <div class="ligne"><button class="btn" id="cr-rapport" type="button">${T('rapport')}</button><button class="btn" id="cr-lever">${T('lever')}</button></div><div id="cr-rapport-zone"></div>`;
@@ -97,7 +151,11 @@
       if (a === 'changer_destination') corps.destination_id = Number(v.querySelector(`[data-nd="${b.dataset.r}"]`).value);
       if (a === 'depart') corps.transport_mode = v.querySelector(`[data-mode="${b.dataset.r}"]`).value;
       if (a === 'planifier_retour') { const j = prompt(X.retour_date, new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10)); if (!j) return; corps.retour_prevu_le = new Date(`${j}T12:00:00`).toISOString(); }
-      try { await o.api('POST', `/crise/evacuations/${active.id}/residents/${b.dataset.r}`, corps); } catch (err) { alert(err.message); }
+      const r = d.residents.find((x) => String(x.id) === b.dataset.r);
+      const mettreEnFile = () => { const f = stock.lire(HL.file, []); f.push({ ev: active.id, r: r.id, ref: r.resident_ref, corps: { ...corps, version_attendue: r.version + enFile(r).length, heure_terrain: new Date().toISOString() } }); stock.ecrire(HL.file, f); };
+      if (horsLigne && GESTES_HL.includes(a)) { mettreEnFile(); return afficher(v, o); }
+      try { await o.api('POST', `/crise/evacuations/${active.id}/residents/${b.dataset.r}`, corps); }
+      catch (err) { if (reseau(err) && GESTES_HL.includes(a)) mettreEnFile(); else alert(err.message); }
       afficher(v, o);
     }; });
     v.querySelector('#cr-lever').onclick = (ev) => {

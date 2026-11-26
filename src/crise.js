@@ -131,11 +131,28 @@ async function litCompatible(c, u, ev, r, destId, b) {
   return autre;
 }
 /** Étapes d'un résident : confirmer le lieu (réserve un lit), départ (famille avisée), arrivée, retour planifié, retour. */
+/** Heure réelle d'un geste de terrain saisi hors connexion : départ, arrivée ou accueil ; jamais dans le futur ni au-delà de 12 h. */
+const GESTES_HORS_CONNEXION = ['depart', 'arrivee', 'accueilli'];
+function heureTerrain(b, a) {
+  if (b.heure_terrain == null) return null;
+  if (!GESTES_HORS_CONNEXION.includes(a)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'heure_terrain' });
+  const d = new Date(b.heure_terrain);
+  if (Number.isNaN(d.getTime()) || d.getTime() > Date.now() + 60000 || d.getTime() < Date.now() - 12 * 3600000) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'heure_terrain' });
+  return d;
+}
 async function agir(pool, u, evId, rid, b = {}) {
   const a = String(b.action || '');
   return transaction(pool, async (c) => {
     const { ev, r } = await ligne(c, u, evId, rid);
-    const maj = async (sql, vals = []) => (await c.query(`UPDATE evacuation_residents SET ${sql}, version = version + 1 WHERE id = $1 RETURNING *`, [r.id, ...vals])).rows[0];
+    // Réconciliation après une coupure (complémentaire nº 3, §3.5) : un geste saisi hors connexion porte la version vue sur l'appareil ;
+    // si la ligne a changé entre-temps, rien n'est écrasé : conflit présenté pour décision humaine.
+    if (b.version_attendue != null && Number(b.version_attendue) !== r.version) throw new ErreurHttp(409, 'evacuation_conflit', { statut: r.statut, version: r.version });
+    const terrain = heureTerrain(b, a);
+    // Heure de terrain : now() remplacé par un paramètre supplémentaire (geste saisi hors connexion)
+    const maj = async (sql, vals = []) => {
+      const texte = terrain ? sql.replaceAll('now()', `$${vals.length + 2}::timestamptz`) : sql;
+      return (await c.query(`UPDATE evacuation_residents SET ${texte}, version = version + 1 WHERE id = $1 RETURNING *`, terrain ? [r.id, ...vals, terrain] : [r.id, ...vals])).rows[0];
+    };
     let n;
     if (a === 'confirmer') {
       if (r.statut !== 'a_placer') throw new ErreurHttp(409, 'evacuation_statut');
@@ -194,7 +211,8 @@ async function agir(pool, u, evId, rid, b = {}) {
       n = await maj("statut = 'revenu', revenu_le = now()");
       if (!ev.simulation) await require('./portail-notifications').signaler(c, r.resident_id, 'mouvements');
     } else throw new ErreurHttp(400, 'action_inconnue');
-    await c.query(`INSERT INTO journal (etablissement_id, utilisateur_id, action, detail) VALUES ($1, $2, 'Évacuation : étape', $3)`, [ev.etablissement_id, u.id, `${ev.numero} · ${r.resident_ref} · ${a}`]);
+    await c.query(`INSERT INTO journal (etablissement_id, utilisateur_id, action, detail) VALUES ($1, $2, 'Évacuation : étape', $3)`,
+      [ev.etablissement_id, u.id, `${ev.numero} · ${r.resident_ref} · ${a}${terrain ? ` · saisi hors connexion à ${terrain.toISOString()}` : ''}`]);
     return n;
   }).finally(() => require('./flux').signaler());
 }

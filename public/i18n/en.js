@@ -999,6 +999,7 @@ window.ARRIMO_I18N.en = {
     evacuation_deja_active: "An evacuation is already in progress for this facility.",
     evacuation_introuvable: "Evacuation not found.",
     evacuation_levee: "This evacuation has been lifted.",
+    evacuation_conflit: "This resident changed during the outage: the step entered offline was not applied. Check their current situation.",
     evacuation_statut: "This step does not follow the resident’s current step.",
     evacuation_plus_de_place: "No free bed left at this destination: choose another one.",
     lit_non_nsa: "This bed is not in alternate level of care.",

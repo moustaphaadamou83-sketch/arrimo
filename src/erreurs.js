@@ -335,6 +335,7 @@ const MESSAGES = {
   evacuation_deja_active: "Une évacuation est déjà en cours pour cet établissement.",
   evacuation_introuvable: "Évacuation introuvable.",
   evacuation_levee: "Cette évacuation est levée.",
+  evacuation_conflit: "Ce résident a changé pendant la coupure : le geste saisi hors connexion n’a pas été appliqué. Vérifiez sa situation actuelle.",
   evacuation_statut: "Cette étape ne suit pas l’étape actuelle du résident.",
   evacuation_plus_de_place: "Plus aucun lit libre à cette destination : choisissez-en une autre.",
   lit_non_nsa: "Ce lit n’est pas en niveau de soins alternatif.",
