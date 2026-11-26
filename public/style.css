@@ -1089,3 +1089,16 @@ body.mode-presentation #b-notif, body.mode-presentation #b-menu { visibility: hi
 
 /* Téléphone : la barre du haut garde l'essentiel ; ambiance et densité se choisissent dans Paramètres › Apparence */
 @media (max-width: 600px) { :root[data-design="v2"] .barre-ambiance, .barre-densite { display: none !important; } }
+
+/* Annonces vocales Chrono (26 nov. 2026) : bandeau visuel toujours affiché, même sans voix ; réglages du poste */
+.annonce-chrono { position: fixed; left: 16px; bottom: 16px; z-index: 2990; max-width: min(92vw, 480px); display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  background: #0E5E6F; color: #fff; border-radius: 12px; padding: 10px 14px; box-shadow: 0 8px 24px rgba(0,0,0,.22); font-weight: 600; }
+.annonce-chrono span { flex: 1 1 220px; }
+.annonce-chrono .btn { background: #fff; color: #0E5E6F; border: 0; }
+.annonce-chrono .btn.discret { background: transparent; color: #fff; }
+.reglages-annonces { border: 1px solid #E2E8F0; border-radius: 14px; padding: 18px 20px; max-width: 420px; width: calc(100vw - 32px); }
+.reglages-annonces label { display: grid; gap: 4px; margin: 10px 0; font-weight: 600; }
+.reglages-annonces label.ligne { display: flex; align-items: center; gap: 8px; }
+.reglages-annonces input[type="number"] { min-height: 40px; max-width: 120px; }
+.reglages-annonces .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+#b-voix.voix-indispo { opacity: .55; }

@@ -340,6 +340,7 @@
     if (!['coordonnateur', 'gestionnaire', 'admin_etab', 'equipe_soins'].includes(etat.moi.utilisateur.role)) return;
     const d = await api('GET', `/secours/prealertes?etablissement_id=${etat.ctx}`).catch(() => null); if (!d) return;
     const ouvertes = d.prealertes.filter((p) => OUVERTES.includes(p.statut));
+    window.ArrimoAnnonces?.traiter(ouvertes);   // annonces vocales Chrono, quel que soit l'onglet consulté
     const compteur = $('#n-secours'); if (compteur) { const n = ouvertes.filter((p) => !p.prise_en_compte_le || p.confirmation?.statut === 'en_attente').length; compteur.textContent = n; compteur.hidden = !n; }
     const nouvelles = ouvertes.filter((p) => ['en_attente', 'avertie'].includes(p.confirmation?.statut) && !dejaAlertees.has(p.id));
     nouvelles.forEach((p) => dejaAlertees.add(p.id));
