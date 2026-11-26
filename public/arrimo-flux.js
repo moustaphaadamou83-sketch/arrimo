@@ -107,17 +107,25 @@
     v.querySelectorAll('[data-flux-cat]').forEach((b) => { b.onclick = () => { etat.categorie = etat.categorie === b.dataset.fluxCat ? null : b.dataset.fluxCat; afficher(v, o); }; });
     o.lierActionsTransfert?.(v);
     v.querySelectorAll('[data-flux-ouvrir]').forEach((b) => { b.onclick = () => o.ouvrir?.(b.dataset.fluxOuvrir); });
-    v.querySelectorAll('[data-flux-fiche]').forEach((b) => { b.onclick = () => ouvrirFiche(o, d.mouvements[Number(b.dataset.fluxFiche)].fiche); });
+    v.querySelectorAll('[data-flux-fiche]').forEach((b) => { b.onclick = () => ouvrirFiche(o, d.mouvements[Number(b.dataset.fluxFiche)].fiche, d.mouvements[Number(b.dataset.fluxFiche)]); });
     v.querySelectorAll('[data-flux-accuser]').forEach((b) => { b.onclick = async () => { try { await accuser(o, d.mouvements[Number(b.dataset.fluxAccuser)]); o.toast?.(T('fait')); } catch (err) { o.toast?.(err.message, true); } afficher(v, o); }; });
   }
   /** Fiche opérationnelle interactive : en-tête, créneau, véhicule, incident, chronologie avec acteur et heure. */
-  async function ouvrirFiche(o, f) {
+  async function ouvrirFiche(o, f, l = null) {
     let x; try { x = await o.api('GET', `/arrimo-flux/fiche?type=${f.type}&id=${f.id}`); } catch (err) { o.toast?.(err.message, true); return; }
     const corps = `<dl class="fiche-flux"><dt>${T('origine')}</dt><dd>${e(x.origine)}</dd><dt>${T('destination')}</dt><dd>${e(x.destination || '—')}</dd>
       <dt>${T('statut')}</dt><dd>${e(x.statut)}</dd><dt>${T('vehicule')}</dt><dd>${e(x.vehicule || '—')}</dd>${x.creneau ? `<dt>${T('prevue')}</dt><dd>${T('creneau', { d: `${jour(x.creneau.debut)} ${h(x.creneau.debut)}`, f: h(x.creneau.fin) })}</dd>` : ''}</dl>
       ${x.incident ? `<p class="erreur"><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-triangle-alert"/></svg> ${e(x.incident.motif)} (${h(x.incident.le)})</p>` : ''}
       <h3>${T('chronologie')}</h3><ol class="chrono-flux">${x.chronologie.map((c) => `<li><b>${e(X().et[c.etape === 'depart' && x.type === 'transfert' ? 'depart_confirme' : c.etape] || c.etape)}</b> · ${jour(c.quand)} ${h(c.quand)}${c.acteur ? ` · ${e(c.acteur)}` : ''}</li>`).join('') || `<li class="note">—</li>`}</ol>`;
-    if (o.modale) o.modale(`${x.reference}${x.personne ? ` · ${x.personne}` : ''}`, corps, [{ label: T('fermer'), pri: true }]);
+    const titre = `${x.reference}${x.personne ? ` · ${x.personne}` : ''}`;
+    // Panneau latéral universel (cahier 10) : la vue, ses filtres et son défilement restent en place derrière
+    const OBJET = { transport: 'demande_transport', transfert: 'transfert', hebergement: 'demande_hebergement', prealerte: 'prealerte' };
+    if (window.ArrimoPanneau) {
+      window.ArrimoPanneau.ouvrir({ titre, sous_titre: `${x.origine} → ${x.destination || '—'}`, numero: x.reference, objet: OBJET[f.type] || null, id: f.id, details: corps,
+        actions: l?.ecran ? [{ label: T('ouvrir'), pri: true, run: () => o.ouvrir?.(l.ecran) }] : [] });
+      return;
+    }
+    if (o.modale) o.modale(titre, corps, [{ label: T('fermer'), pri: true }]);
   }
   /** Panneau compact de l'Accueil : préalertes reçues (à acquitter) et prochains mouvements. */
   async function panneau(zone, o) {

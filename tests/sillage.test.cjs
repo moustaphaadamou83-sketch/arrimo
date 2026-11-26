@@ -93,3 +93,13 @@ test('composant commun FR/EN : mêmes clés dans les deux langues', () => {
   for (const o of require('../src/horloge').OBJETS) assert.ok(fr.o[o] && en.o[o], o);
   for (const e of require('../src/horloge').ETAPES) assert.ok(fr.e[e] && en.e[e], e);
 });
+
+test('panneau latéral universel (cahier 10) : chargé sur les écrans hôpital et secours, onglets bilingues, réutilise Sillage et OG', () => {
+  const fs = require('node:fs'); const path = require('node:path');
+  const lire = (f) => fs.readFileSync(path.join(__dirname, '..', 'public', f), 'utf8');
+  for (const h of ['index.html', 'secours.html']) assert.match(lire(h), /<script src="sillage\.js"><\/script>\s*<script src="panneau-lateral\.js"><\/script>/);
+  const pl = lire('panneau-lateral.js');
+  for (const k of ['details', 'sillage', 'og', 'actions', 'fermer']) assert.match(pl, new RegExp(`${k}: '`), k);
+  assert.match(pl, /ArrimoSillage\.contenu/); assert.match(pl, /demanderOg/);
+  assert.match(lire('arrimo-flux.js'), /ArrimoPanneau\.ouvrir/); assert.match(lire('liaison-secours.js'), /ArrimoPanneau\.ouvrir/);
+});

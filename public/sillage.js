@@ -56,20 +56,25 @@
     if (ouvrir && champ) { ouvrir.click(); setTimeout(() => { champ.value = question; champ.form?.requestSubmit(); }, 150); return; }
     if (champ) { champ.value = question; champ.focus(); }
   }
-  async function ouvrir(objet, id) {
-    const d = panneau(); const x = X();
-    d.innerHTML = `<div class="sillage-corps"><p class="note">…</p></div>`; if (!d.open) d.showModal();
-    try {
-      const s = await api(`${secours() ? '/secours' : ''}/sillage?objet=${encodeURIComponent(objet)}&id=${Number(id)}`);
-      const aOnglet = (v) => v && document.querySelector(`#onglets button[data-v="${v}"]:not([hidden])`);
-      d.innerHTML = `<div class="sillage-corps"><header class="sillage-tete"><h2 id="sillage-titre">${esc(f(x.titre, { p: s.parcours }))}</h2><button type="button" class="btn" data-sillage-fermer>${esc(x.fermer)}</button></header>
+  /** Contenu du parcours (sans en-tête), réutilisé par le panneau latéral universel (cahier 10). */
+  async function contenu(objet, id) {
+    const x = X();
+    const s = await api(`${secours() ? '/secours' : ''}/sillage?objet=${encodeURIComponent(objet)}&id=${Number(id)}`);
+    const aOnglet = (v) => v && document.querySelector(`#onglets button[data-v="${v}"]:not([hidden])`);
+    return { s, html: `<div class="sillage-corps"><header class="sillage-tete"><h2 id="sillage-titre">${esc(f(x.titre, { p: s.parcours }))}</h2><button type="button" class="btn" data-sillage-fermer>${esc(x.fermer)}</button></header>
         <h3>${esc(x.objets)}</h3><ol class="sillage-objets">${s.objets.map((o) => `<li><span class="badge">${esc(x.o[o.objet] || o.objet)}</span> <b>${esc(o.numero)}</b> · ${esc(String(o.statut).replaceAll('_', ' '))}${o.lieu ? ` · <span class="note">${esc(o.lieu)}</span>` : ''}
           ${aOnglet(o.ecran) && !(o.objet === objet && o.id === Number(id)) ? ` <button type="button" class="btn lien" data-sillage-ecran="${esc(o.ecran)}">${esc(x.ouvrir)}</button>` : ''}</li>`).join('')}</ol>
         <h3>${esc(x.chrono)}</h3>${s.evenements.length ? `<ol class="sillage-fil">${s.evenements.map((e) => `<li><time>${esc(h(e.heure))}</time><div><b>${esc(x.e[e.etape] || (e.etape.startsWith('retard_') && window.ArrimoChronoRetards?.libelle(e.etape.slice(7))) || e.etape)}</b> · ${esc(e.numero)}
           <div class="note">${esc(x.source[e.source] || e.source)}${e.auteur ? ` · ${esc(e.auteur)}` : ''}${e.lieu ? ` · ${esc(e.lieu)}` : ''}${e.corrigee ? ` · <span class="badge">${esc(x.corrigee)}</span>` : ''}</div></div></li>`).join('')}</ol>` : `<p class="note">${esc(x.aucun)}</p>`}
         ${s.incompletes.length ? `<div class="sillage-manques" role="status"><b>${esc(x.incompletes)}</b> : ${s.incompletes.map((m) => `${esc(m.numero)} · ${esc(x.e[m.etape] || m.etape)}`).join(' ; ')}</div>` : ''}
         ${s.autres_organismes ? `<p class="note">${esc(f(x.autres, { n: s.autres_organismes }))}</p>` : ''}
-        <div class="ligne"><button type="button" class="btn pri" data-sillage-og="${esc(s.objets.find((o) => o.objet === objet && o.id === Number(id))?.numero || s.parcours)}">${esc(x.og)}</button></div></div>`;
+        <div class="ligne"><button type="button" class="btn pri" data-sillage-og="${esc(s.objets.find((o) => o.objet === objet && o.id === Number(id))?.numero || s.parcours)}">${esc(x.og)}</button></div></div>` };
+  }
+  async function ouvrir(objet, id) {
+    const d = panneau(); const x = X();
+    d.innerHTML = `<div class="sillage-corps"><p class="note">…</p></div>`; if (!d.open) d.showModal();
+    try {
+      d.innerHTML = (await contenu(objet, id)).html;
       d.querySelector('[data-sillage-fermer]')?.focus();
     } catch (err) { d.innerHTML = `<div class="sillage-corps"><p class="note" role="alert">${esc(err.message)}</p><button type="button" class="btn" data-sillage-fermer>${esc(x.fermer)}</button></div>`; }
   }
@@ -85,5 +90,5 @@
     const titre = conteneur.querySelector('.entete, h2'); if (titre) (titre.closest('.entete') || titre).after(s); else conteneur.prepend(s);
   }
   document.addEventListener('click', (e) => { const b = e.target.closest('[data-sillage]'); if (!b) return; e.preventDefault(); const [o, i] = b.dataset.sillage.split(':'); ouvrir(o, i); });
-  window.ArrimoSillage = { ouvrir, bouton, vigilance, TXT };
+  window.ArrimoSillage = { ouvrir, contenu, demanderOg, bouton, vigilance, TXT };
 })();

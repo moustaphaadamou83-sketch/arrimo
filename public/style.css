@@ -1049,3 +1049,17 @@ th.erp-triable[aria-sort="ascending"]::after { content: " \2191"; } th.erp-triab
 .ch-barre .val { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: var(--principal); }
 .ch-barre .prec { position: absolute; top: -3px; width: 2px; height: 16px; background: var(--texte); }
 @media (max-width: 600px) { .ch-barre { grid-template-columns: 1fr auto; } .ch-barre .piste { grid-column: 1 / -1; } }
+
+/* Panneau latéral universel (cahier 10, maquette validée) : à droite, la vue reste en place ; plein écran sur téléphone */
+.panneau-lateral { margin: 0 0 0 auto; height: 100vh; max-height: 100vh; width: min(480px, 100vw); border: 0; border-left: 1px solid var(--bordure);
+  padding: 0; background: var(--carte); color: var(--texte); box-shadow: -8px 0 24px rgba(15, 23, 42, .18); }
+.panneau-lateral::backdrop { background: rgba(15, 23, 42, .35); }
+.panneau-lateral .pl-cadre { display: flex; flex-direction: column; height: 100%; }
+.panneau-lateral .pl-tete { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; padding: 16px; border-bottom: 1px solid var(--bordure); }
+.panneau-lateral .pl-tete h2 { margin: 0; font-size: 1.15rem; }
+.panneau-lateral .pl-onglets { display: flex; gap: 4px; padding: 8px 16px 0; border-bottom: 1px solid var(--bordure); overflow-x: auto; }
+.panneau-lateral .pl-onglets [role="tab"] { min-height: 40px; padding: 8px 12px; border: 0; background: none; color: var(--texte); border-bottom: 3px solid transparent; cursor: pointer; font: inherit; }
+.panneau-lateral .pl-onglets [aria-selected="true"] { border-bottom-color: var(--principal); font-weight: 700; }
+.panneau-lateral .pl-corps { padding: 16px; overflow-y: auto; flex: 1; }
+.panneau-lateral .pl-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 600px) { .panneau-lateral { width: 100vw; border-left: 0; } }

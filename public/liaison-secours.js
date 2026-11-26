@@ -250,7 +250,10 @@
       if (a === 'details') {
         const f = await api('GET', `/secours/prealertes/${p.id}?etablissement_id=${etat.ctx}`);
         const hist = f.historique_chrono ? `<h3>${S('hist_titre')}</h3>${f.historique_chrono.length ? `<ul>${f.historique_chrono.map((h) => `<li>${h.porte_min != null ? S('hist_ligne', { numero: h.numero, n: h.porte_min }) : S('hist_sans', { numero: h.numero })}</li>`).join('')}</ul>` : `<p class="note">${S('hist_aucun')}</p>`}` : '';
-        modale(p.numero, `${blocMarge(f)}${hist}<ol class="ch-historique">${f.evenements.map((ev) => `<li><span class="note num">${esc(heure(ev.cree_le))}</span> ${S(`ev_${ev.type}`)}${ev.par ? ` · ${esc(ev.par)}` : ''}${ev.detail?.unite_vue ? ` · ${esc(ev.detail.unite_vue)}` : ''}</li>`).join('')}</ol>`, [{ label: t('general.fermer') }]);
+        const corpsFiche = `${blocMarge(f)}${hist}<ol class="ch-historique">${f.evenements.map((ev) => `<li><span class="note num">${esc(heure(ev.cree_le))}</span> ${S(`ev_${ev.type}`)}${ev.par ? ` · ${esc(ev.par)}` : ''}${ev.detail?.unite_vue ? ` · ${esc(ev.detail.unite_vue)}` : ''}</li>`).join('')}</ol>`;
+        // Panneau latéral universel (cahier 10) : fiche ambulance, Sillage, OG, sans quitter la liste
+        if (window.ArrimoPanneau) window.ArrimoPanneau.ouvrir({ titre: p.numero, sous_titre: `${p.organisation} · ${p.unite}`, numero: p.numero, objet: 'prealerte', id: p.id, details: corpsFiche });
+        else modale(p.numero, corpsFiche, [{ label: t('general.fermer') }]);
         return vueSecours();
       }
       if (a === 'confirmer_vehicule') {
