@@ -155,3 +155,12 @@ test('Colonnes communes (référence : transferts interhospitaliers) : chaque st
   assert.strictEqual((html.match(/class="col"/g) || []).length, 6);
   assert.match(html, /Demande <span class="num">1<\/span>/);
 });
+
+test('Grand compteur Chrono de l’équipage : repères du serveur, mis à jour chaque seconde, dépassement jamais figé', () => {
+  const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'public', 'secours.js'), 'utf8');
+  assert.match(src, /function compteurMission\(u\)/);
+  assert.match(src, /setInterval\(tictac, 1000\)/, 'chaque seconde');
+  assert.match(src, /p\.eta\?\.minutes != null && p\.eta\?\.le/, 'ETA du serveur (GPS) d’abord');
+  assert.match(src, /enRetard \? `\+\$\{txt\}` : txt/, 'dépassement affiché et qui avance');
+  assert.match(src, /chrono: `\$\{compteurMission\(u\)\}<details/, 'compteur en tête de l’onglet Chrono');
+});

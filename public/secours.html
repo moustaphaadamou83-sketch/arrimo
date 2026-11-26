@@ -119,6 +119,25 @@
   @media (max-width: 760px) { :root .secours .tuiles-c.tuiles-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   .secours details.flotte-ccs > summary { cursor: pointer; font-weight: 700; min-height: 48px; display: flex; align-items: center; }
   .sec-nav button.esp { width: 100%; }
+  /* Grand compteur Chrono (équipage) : charte Arrimo ; orange = statut « retard » seulement */
+  .secours .chrono-grand .cg-corps { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
+  .secours .cg-anneau { position: relative; width: min(62vw, 260px); aspect-ratio: 1; flex: none; }
+  .secours .cg-anneau svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .secours .cg-fond { fill: none; stroke: #E2E8F0; stroke-width: 9; }
+  .secours .cg-arc { fill: none; stroke: #159895; stroke-width: 9; stroke-linecap: round; transition: stroke-dasharray .9s linear; }
+  .secours .cg-anneau.retard .cg-arc { stroke: #F59E0B; }
+  .secours .cg-centre { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  .secours .cg-valeur { font-size: clamp(32px, 9vw, 50px); font-weight: 700; color: #0E5E6F; letter-spacing: .02em; }
+  .secours .cg-lib { font-size: 15px; color: #64748B; max-width: 80%; }
+  .secours .cg-infos { display: grid; grid-template-columns: repeat(2, minmax(120px, 1fr)); gap: 10px 20px; margin: 0; flex: 1 1 260px; }
+  .secours .cg-infos dt { font-size: 13px; color: #64748B; } .secours .cg-infos dd { margin: 0; font-size: 19px; font-weight: 700; }
+  .secours .cg-anneau.retard .cg-valeur { color: #B45309; }
+  .secours .cg-etapes { list-style: none; padding: 0; margin: 16px 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 6px; }
+  .secours .cg-etapes li { border: 1px solid #E2E8F0; border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+  .secours .cg-etapes li.fait { background: #0E5E6F; border-color: #0E5E6F; color: #fff; }
+  .secours .cg-etapes li.courant { border: 2px solid #159895; font-weight: 700; }
+  .secours details.ch-detail > summary { cursor: pointer; font-weight: 700; min-height: 48px; display: flex; align-items: center; }
+  @media (prefers-reduced-motion: reduce) { .secours .cg-arc { transition: none; } }
   .visuellement-cache { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   @media (max-width: 600px) { .secours .gros { font-size: 24px; } .secours .tete .contexte { display: none; }
     .secours .tete { padding: 8px 12px; gap: 6px; } .secours .tete h1 { font-size: 17px; } .secours .tete .sous-titre { font-size: 13px; } .secours .tete .marque img { width: 28px; height: 28px; }
