@@ -35,7 +35,8 @@
       vehicule: 'État du véhicule', vehicule_aide: 'Un geste suffit ; le CCS le voit. Il passe seul à « Transport du patient » à l’envoi d’une préalerte et à « À l’hôpital » à l’arrivée confirmée.',
       vehicules: 'Véhicules de la région', vehicules_aide: 'Arrimo transmet, le CCS décide : proposez une mission à une unité disponible, l’équipage accepte ou refuse. Votre système de répartition reste la référence.',
       aucun_vehicule: 'Aucun véhicule.', non_declare: 'état non déclaré', maj: 'mis à jour à {heure}', maj_auto: 'automatique', sans_position: 'position non partagée',
-      ev: { disponible: 'Disponible', en_route: 'En route', sur_place: 'Sur place', transport_hopital: 'Transport du patient', a_l_hopital: 'À destination', hors_service: 'Hors service' },
+      ev: { disponible: 'Disponible', en_route: 'En route', sur_place: 'Sur place', transport_hopital: 'Transport du patient', a_l_hopital: 'À destination', en_preparation: 'En préparation', desinfection: 'Désinfection', hors_service: 'Hors service' },
+      fl_cat: { disponibles: 'Disponibles', en_intervention: 'En intervention', en_transport: 'En transport', a_l_hopital: 'À l’hôpital', en_preparation: 'En préparation', indisponibles: 'Indisponibles', sans_etat: 'Sans état déclaré' }, fl_resume: 'Flotte',
       carte_amb: 'Urgences proches et trajet', classees: 'Urgences classées', classees_aide: 'Depuis {depart} · position {heure}. Tri : disponibilité, puis temps de route.',
       c_urgence: 'Urgence', c_temps: 'Temps de route', c_dist: 'Distance', c_taux_civieres: 'Occupation des civières', c_attente_chrono: 'Ambulances à la porte', c_civ: 'Civières libres', c_statut: 'Statut', c_services: 'Services ouverts',
       og_meilleur: 'OG : meilleur choix', og_phrase: 'OG propose {nom} : {temps}, {civ} civières libres{services}. Information seulement : la destination reste décidée par l’équipage et les protocoles.',
@@ -120,7 +121,8 @@
       vehicule: 'Vehicle status', vehicule_aide: 'One tap is enough; the CCS sees it. It switches automatically to “Patient transport” when a pre-alert is sent and to “At hospital” when arrival is confirmed.',
       vehicules: 'Vehicles in the region', vehicules_aide: 'Arrimo relays, the CCS decides: offer a mission to an available unit; the crew accepts or declines. Your dispatch system remains the reference.',
       aucun_vehicule: 'No vehicle.', non_declare: 'status not declared', maj: 'updated at {heure}', maj_auto: 'automatic', sans_position: 'position not shared',
-      ev: { disponible: 'Available', en_route: 'En route', sur_place: 'On scene', transport_hopital: 'Patient transport', a_l_hopital: 'At destination', hors_service: 'Out of service' },
+      ev: { disponible: 'Available', en_route: 'En route', sur_place: 'On scene', transport_hopital: 'Patient transport', a_l_hopital: 'At destination', en_preparation: 'Being prepared', desinfection: 'Disinfection', hors_service: 'Out of service' },
+      fl_cat: { disponibles: 'Available', en_intervention: 'On a call', en_transport: 'In transport', a_l_hopital: 'At the hospital', en_preparation: 'Being prepared', indisponibles: 'Unavailable', sans_etat: 'No declared status' }, fl_resume: 'Fleet',
       carte_amb: 'Nearby emergencies and route', classees: 'Ranked emergencies', classees_aide: 'From {depart} · position {heure}. Sorted by availability, then driving time.',
       c_urgence: 'Emergency', c_temps: 'Driving time', c_dist: 'Distance', c_taux_civieres: 'Stretcher occupancy', c_attente_chrono: 'Ambulances at the door', c_civ: 'Free stretchers', c_statut: 'Status', c_services: 'Open services',
       og_meilleur: 'OG: best choice', og_phrase: 'OG suggests {nom}: {temps}, {civ} free stretchers{services}. Information only: the destination remains decided by the crew and protocols.',
@@ -414,8 +416,8 @@
     </section>`;
   }
   /* État du véhicule : couleurs de statut seulement, toujours accompagnées du libellé */
-  const ETATS_V = ['disponible', 'en_route', 'sur_place', 'transport_hopital', 'a_l_hopital', 'hors_service'];
-  const COUL_V = { disponible: '#16A34A', en_route: '#2563EB', sur_place: '#F59E0B', transport_hopital: '#DC2626', a_l_hopital: '#0E5E6F', hors_service: '#94A3B8' };
+  const ETATS_V = ['disponible', 'en_route', 'sur_place', 'transport_hopital', 'a_l_hopital', 'en_preparation', 'desinfection', 'hors_service'];
+  const COUL_V = { disponible: '#16A34A', en_route: '#2563EB', sur_place: '#F59E0B', transport_hopital: '#DC2626', a_l_hopital: '#0E5E6F', en_preparation: '#94A3B8', desinfection: '#94A3B8', hors_service: '#94A3B8' };
   // Contraste AA (cahier ultime, section 3) : texte foncé sur vert, orange et gris ; blanc sur rouge, bleu et pétrole
   const texteSur = (bg) => (['#16A34A', '#F59E0B', '#94A3B8'].includes(bg) ? '#0B1220' : '#fff');
   const pastilleV = (e) => `<span class="reseau-s" style="background:${COUL_V[e] || '#94A3B8'};color:${texteSur(COUL_V[e] || '#94A3B8')}">${esc(e ? t('ev.' + e) : t('non_declare'))}</span>`;
@@ -605,7 +607,12 @@
     const choisi = F[etat.flotteFiltre] ? etat.flotteFiltre : 'tous';
     const nom = (k) => (k === 'tous' ? t('fl_tous') : k === 'engages' ? t('fl_engages') : t('ev.' + k));
     const L0 = etat.vehicules; const lignes = L0.filter(F[choisi]); const td = (l, v) => `<td data-l="${l}">${v}</td>`; const dest = t('destination').split(' (')[0];
-    return `<section class="carte-s"><h2>${t('flotte')}</h2><p class="note">${t('vehicules_aide')}</p>
+    // Résumé de flotte par catégorie (cahier 3) : même correspondance que le serveur (src/vehicules.js, CATEGORIES_FLOTTE)
+    const CAT = { disponible: 'disponibles', en_route: 'en_intervention', sur_place: 'en_intervention', transport_hopital: 'en_transport', a_l_hopital: 'a_l_hopital', en_preparation: 'en_preparation', desinfection: 'en_preparation', hors_service: 'indisponibles' };
+    const parCat = { disponibles: 0, en_intervention: 0, en_transport: 0, a_l_hopital: 0, en_preparation: 0, indisponibles: 0, sans_etat: 0 };
+    for (const v of L0) parCat[CAT[v.etat] || 'sans_etat'] += 1;
+    const resume = `<dl class="compteurs flotte-resume" aria-label="${esc(t('fl_resume'))}">${Object.entries(parCat).filter(([k, n]) => k !== 'sans_etat' || n).map(([k, n]) => `<div><dt>${esc(t('fl_cat.' + k))}</dt><dd class="num">${n}</dd></div>`).join('')}</dl>`;
+    return `<section class="carte-s"><h2>${t('flotte')}</h2><p class="note">${t('vehicules_aide')}</p>${resume}
       <div class="actions" role="group" aria-label="${t('fl_chercher')}">${Object.keys(F).map((k) => `<button type="button" class="btn" data-flotte-filtre="${k}" aria-pressed="${k === choisi}">${esc(nom(k))} · ${L0.filter(F[k]).length}</button>`).join('')}</div>
       <table class="classe"><thead><tr><th>${t('c_unite')}</th><th>${t('fl_org')}</th><th>${t('c_etat')}</th><th>${t('c_mission')}</th><th>${dest}</th><th>${t('c_lieu')}</th><th>${t('fl_engagement')}</th><th>${t('fl_maj')}</th></tr></thead><tbody>
       ${lignes.map((v) => `<tr data-vehicule="${esc(v.numero)}"><td data-l="${t('c_unite')}"><button type="button" class="btn" data-fiche-vehicule="${v.id}">${esc(v.numero)}</button>${v.plaque ? `<div class="note">${esc(v.plaque)}</div>` : ''}</td>${td(t('fl_org'), esc(v.organisation || '—'))}${td(t('c_etat'), pastilleV(v.etat))}

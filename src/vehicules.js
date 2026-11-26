@@ -13,7 +13,10 @@ const { exigerEtablissement } = require('./auth');
 const TE = require('./types-etablissement');
 const accesVehicules = require('./acces-vehicules-secours');
 
-const ETATS = ['disponible', 'en_route', 'sur_place', 'transport_hopital', 'a_l_hopital', 'hors_service'];
+const ETATS = ['disponible', 'en_route', 'sur_place', 'transport_hopital', 'a_l_hopital', 'en_preparation', 'desinfection', 'hors_service'];
+// Catégories de flotte (cahier 3, entreprises ambulancières) : un état réel = une catégorie, jamais deux
+const CATEGORIES_FLOTTE = { disponible: 'disponibles', en_route: 'en_intervention', sur_place: 'en_intervention', transport_hopital: 'en_transport',
+  a_l_hopital: 'a_l_hopital', en_preparation: 'en_preparation', desinfection: 'en_preparation', hors_service: 'indisponibles' };
 const AVEC_DESTINATION = ['transport_hopital', 'a_l_hopital'];
 const ROLES_AMBULANCE = ['paramedic', 'superviseur_secours'];
 const ROLES_ETAB = ['coordonnateur', 'admin_etab', 'gestionnaire', 'equipe_soins'];
@@ -271,4 +274,10 @@ async function hebergements(pool, u) {
   [[...new Set(orgs.map((o) => o.config_id))]])).rows;
 }
 
-module.exports = { ETATS, fixer, definir, liste, fiche, missionActive, urgencesProches, urgencesClassees, hebergements, classer, rangDisponibilite };
+/** Résumé de flotte par catégorie (sans état déclaré : compté à part, jamais « disponible »). */
+function resumeFlotte(vehicules) {
+  const r = { disponibles: 0, en_intervention: 0, en_transport: 0, a_l_hopital: 0, en_preparation: 0, indisponibles: 0, sans_etat: 0 };
+  for (const v of vehicules) { const c = CATEGORIES_FLOTTE[v.etat]; if (c) r[c] += 1; else r.sans_etat += 1; }
+  return r;
+}
+module.exports = { resumeFlotte, CATEGORIES_FLOTTE, ETATS, fixer, definir, liste, fiche, missionActive, urgencesProches, urgencesClassees, hebergements, classer, rangDisponibilite };

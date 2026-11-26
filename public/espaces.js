@@ -16,6 +16,12 @@
     ['administration', 'settings', 'Administration', 'Administration', ['params', 'admin', 'journal', 'support']],
   ];
   const en = () => (document.documentElement.lang || '').startsWith('en');
+  // Comptes Hébergement (cahier 2) : même socle, navigation métier Accueil, Résidents, Capacités, Transferts, Urgences, Opérations,
+  // Coordination, Pilotage, Administration (mêmes modules, mêmes routes ; seuls le libellé et l'ordre changent)
+  const hebergement = () => document.documentElement.dataset.typeEtab === 'chsld';
+  const LIB_HEB = { patients: ['Résidents', 'Residents'], reseau: ['Coordination', 'Coordination'] };
+  const ORDRE_HEB = ['accueil', 'patients', 'capacites', 'transferts', 'urgences', 'operations', 'reseau', 'pilotage', 'national', 'administration'];
+  const ordonnes = (liste) => (hebergement() ? [...liste].sort((a, b) => ORDRE_HEB.indexOf(a[0]) - ORDRE_HEB.indexOf(b[0])) : liste);
   const espaceDe = (v) => ESPACES.find((x) => x[4].includes(v))?.[0] || null;
   let actif = 'accueil'; let construit = ''; let dernierSel = null;
   const boutons = () => [...nav.querySelectorAll('button[role="tab"][data-v]')];
@@ -23,11 +29,11 @@
   function appliquer(force) {
     const vus = boutons().filter(visible);
     const presents = ESPACES.filter((x) => vus.some((b) => x[4].includes(b.dataset.v)));
-    const sig = presents.map((x) => x[0]).join(',') + (en() ? ':en' : ':fr');
+    const sig = presents.map((x) => x[0]).join(',') + (en() ? ':en' : ':fr') + (hebergement() ? ':heb' : '');
     if (sig !== construit) {
       nav.querySelectorAll('.espace-btn, .espace-saut').forEach((x) => x.remove());
       const frag = document.createDocumentFragment();
-      for (const [cle, ic, fr, an] of presents) { const b = document.createElement('button'); b.type = 'button'; b.className = 'espace-btn'; b.dataset.espace = cle; b.innerHTML = `<svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-${ic}"/></svg> ${en() ? an : fr}`; frag.appendChild(b); }
+      for (const [cle, ic, fr0, an0] of ordonnes(presents)) { const [fr, an] = hebergement() && LIB_HEB[cle] ? LIB_HEB[cle] : [fr0, an0]; const b = document.createElement('button'); b.type = 'button'; b.className = 'espace-btn'; b.dataset.espace = cle; b.innerHTML = `<svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-${ic}"/></svg> ${en() ? an : fr}`; frag.appendChild(b); }
       const saut = document.createElement('span'); saut.className = 'espace-saut'; saut.setAttribute('aria-hidden', 'true'); frag.appendChild(saut);
       nav.prepend(frag); construit = sig;
     }
