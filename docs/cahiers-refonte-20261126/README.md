@@ -57,7 +57,7 @@ Les cibles actuelles de Chrono (porte 20 min, sortie 25 min, total 45 min) vienn
 
 | # | Réalisé | Où |
 |---|---|---|
-| 1, 2 | Socle commun Hôpital / Hébergement ; navigation Hébergement Accueil, Résidents, Capacités, Transferts, Urgences, Opérations, Coordination, Pilotage, Administration (mêmes modules et routes) ; thème CHSLD conservé | `public/espaces.js`, `public/style.css` |
+| 1, 2 | Socle commun Hôpital / Hébergement ; navigation Hébergement Accueil, Résidents, Capacités, Transferts, Urgences, Opérations, Coordination réseau, Pilotage, Administration (mêmes modules et routes) ; thème CHSLD conservé | `public/espaces.js`, `public/style.css` |
 | 3 | Flotte ambulancière par catégorie (disponibles, en intervention, en transport, à l'hôpital, en préparation, indisponibles) ; états « en préparation » et « désinfection » ; écran embarqué distinct (`secours.html`, existant) ; CCS : tuiles, couverture, quotes-parts, flux | `src/vehicules.js`, `public/secours.js` |
 | 4 | Catégories et couleurs universelles des mouvements, légende filtrante | `src/categories-mouvements.js`, `public/arrimo-flux.js` |
 | 5, 6, 7 | Design system validé appliqué par défaut (retour personnel `?design=v1`) ; couleurs de modules ; ambiances Glacier, Horizon, Crépuscule ; menu vertical dépliable ; densité compact / confortable ; Accueil personnalisable ; mode présentation (démo) ; restauration de l'apparence | `public/apparence.js`, `public/app.js`, `public/accueil.js` |
