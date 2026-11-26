@@ -321,6 +321,24 @@
     const cpt = { prealertes: ouv, demandes: dem, transports: dem };
     const cur = ongletCourant(amb);
     $('#onglets-s').innerHTML = ONGLETS[amb ? 'amb' : 'ccs'].filter((o) => o !== 'appels' || etat.interventionsDemo).map((o) => `<button type="button" role="tab" data-onglet="${o}" aria-selected="${o === cur}">${t('o_' + o)}${cpt[o] ? `<span class="pastille-n">${cpt[o]}</span>` : ''}</button>`).join('');
+    // Planche 2 (proposition visuelle validée) : modules colorés, sous-onglets indentés au filet de couleur ; parité complète avec les onglets du haut
+    const EN = L === 'en';
+    const GROUPES = amb
+      ? [['accueil', EN ? 'Home' : 'Accueil', ['mission']], ['urgences', EN ? 'Emergency' : 'Urgences', ['urgences', 'chrono']], ['transferts', EN ? 'Transports' : 'Transports', ['transports']], ['pilotage', EN ? 'Steering' : 'Pilotage', ['historique', 'og']]]
+      : [['accueil', EN ? 'Command centre' : 'Centre de commandement', ['regional', 'appels']], ['transferts', EN ? 'Ambulance fleet' : 'Flotte ambulancière', ['flotte']], ['urgences', EN ? 'Emergency' : 'Urgences', ['prealertes', 'chrono']],
+        ['reseau', EN ? 'Coordination' : 'Coordination', ['demandes']], ['pilotage', EN ? 'Steering' : 'Pilotage', ['historique', 'og']]];
+    const permis = ONGLETS[amb ? 'amb' : 'ccs'].filter((o) => o !== 'appels' || etat.interventionsDemo);
+    let nav = document.getElementById('sec-nav');
+    if (!nav) { nav = document.createElement('nav'); nav.id = 'sec-nav'; nav.className = 'sec-nav'; document.body.prepend(nav); }
+    nav.setAttribute('aria-label', EN ? 'Main navigation' : 'Navigation principale');
+    const org = (etat.moi.organisations || []).map((o) => o.nom).join(', ');
+    nav.innerHTML = `<div class="nav-marque"><img src="logo.svg" alt="" width="30" height="30"><div><strong>Arrimo</strong><small>${esc(amb ? t('profil_amb') : t('profil_ccs'))}</small></div></div>${GROUPES.map(([mod, nom, sous]) => {
+      const vis = sous.filter((o) => permis.includes(o)); if (!vis.length) return '';
+      const n = vis.reduce((x, o) => x + (cpt[o] || 0), 0); const ouvert = vis.includes(cur) || true;
+      return `<div class="esp ${vis.includes(cur) ? 'ouvert' : ''}" style="--m-sec:var(--m-${mod})"><i aria-hidden="true"></i><span>${esc(nom)}</span><b>${n || ''}</b></div>
+        ${ouvert ? `<div class="sous" style="--m-sec:var(--m-${mod})">${vis.map((o) => `<button type="button" data-onglet="${o}" aria-current="${o === cur}">${t('o_' + o)}${cpt[o] ? ` · ${cpt[o]}` : ''}</button>`).join('')}</div>` : ''}`; }).join('')}
+      ${org ? `<p class="note" style="margin:auto 10px 0;font-size:12px">${esc(org)}</p>` : ''}`;
+    document.body.classList.toggle('sec-lateral', document.documentElement.dataset.design === 'v2' && window.matchMedia('(min-width: 1100px)').matches);
     document.title = `Arrimo · ${amb ? t('titre_amb') : t('titre_ccs')}`;
     const n = lireFile().length; const r = $('#reseau');
     r.className = `reseau-s ${n ? 'attente' : etat.enLigne ? 'en-ligne' : 'hors-ligne'}`;
@@ -420,7 +438,8 @@
   const COUL_V = { disponible: '#16A34A', en_route: '#2563EB', sur_place: '#F59E0B', transport_hopital: '#DC2626', a_l_hopital: '#0E5E6F', en_preparation: '#94A3B8', desinfection: '#94A3B8', hors_service: '#94A3B8' };
   // Contraste AA (cahier ultime, section 3) : texte foncé sur vert, orange et gris ; blanc sur rouge, bleu et pétrole
   const texteSur = (bg) => (['#16A34A', '#F59E0B', '#94A3B8'].includes(bg) ? '#0B1220' : '#fff');
-  const pastilleV = (e) => `<span class="reseau-s" style="background:${COUL_V[e] || '#94A3B8'};color:${texteSur(COUL_V[e] || '#94A3B8')}">${esc(e ? t('ev.' + e) : t('non_declare'))}</span>`;
+  const pastilleV = (e) => (document.documentElement.dataset.design === 'v2' ? `<span class="sec-etat" data-etat="${esc(e || 'inconnu')}">${esc(e ? t('ev.' + e) : t('non_declare'))}</span>`
+    : `<span class="reseau-s" style="background:${COUL_V[e] || '#94A3B8'};color:${texteSur(COUL_V[e] || '#94A3B8')}">${esc(e ? t('ev.' + e) : t('non_declare'))}</span>`);
   /** Mission active du véhicule (cahier Secours, 8 et 9) : une seule action principale, celle de l'étape ; le reste est dans Transports. */
   function missionActive(u) {
     const rang = { arrivee: 0, pris_en_charge: 1, en_route: 2, acceptee: 3, demandee: 4 };
@@ -497,8 +516,11 @@
     const now = Date.now(); const tr = etat.transports || [];
     const retardsTr = tr.filter((x) => ['demandee', 'acceptee'].includes(x.statut) && (x.plage_confirmee_debut || x.plage_debut) && new Date(x.plage_confirmee_debut || x.plage_debut).getTime() < now - 15 * 60000).length;
     const incidents = tr.filter((x) => x.incident_le && !x.terminee_le).length;
-    const tuile = (n, l, onglet, rouge = false) => `<button type="button" class="tuile-c" data-onglet="${onglet}"${onglet === 'regional' ? ' data-ancre="ccs-capacites"' : ''}>
-      <span class="gros"${rouge ? ' style="color:#DC2626"' : ''}>${esc(n)}</span><span class="note">${esc(l)}</span></button>`;
+    // Planche 2 : chaque indicateur porte la couleur et le nom de son module ; valeur en 30 px ; le clic ouvre l'onglet
+    const MODS = { appels: ['accueil', L === 'en' ? 'Command' : 'Commandement'], regional: ['urgences', L === 'en' ? 'Emergency' : 'Urgences'], flotte: ['transferts', L === 'en' ? 'Fleet' : 'Flotte'],
+      prealertes: ['urgences', L === 'en' ? 'Pre-alerts' : 'Préalertes'], demandes: ['reseau', L === 'en' ? 'Coordination' : 'Coordination'], chrono: ['urgences', 'Chrono'] };
+    const tuile = (n, l, onglet, rouge = false) => { const [mod, nomMod] = MODS[onglet] || ['accueil', '']; return `<button type="button" class="tuile-c ds-kpi${rouge ? ' alerte' : ''}" style="--k-couleur:var(--m-${mod})" data-onglet="${onglet}"${onglet === 'regional' ? ' data-ancre="ccs-capacites"' : ''}>
+      <span class="ds-kpi-mod">${esc(nomMod)}</span><span class="gros ds-kpi-val num">${esc(n)}</span><span class="note ds-kpi-lib">${esc(l)}</span></button>`; };
     const chrono = etat.chrono?.attente;
     const aAffecter = (etat.interventionsDemo || []).filter((x) => !x.mission || ['refusee', 'annulee'].includes(x.statut)).length;
     const missionsAttente = (etat.missions || []).filter((m) => m.statut === 'proposee').length;
@@ -776,7 +798,7 @@
       ${Object.entries(filtres).filter(([cle]) => cle !== 'rm_toutes').map(([cle, garder]) => {
         const n = lignes.filter(garder).length;
         const alerte = n && ['rm_a_accepter', 'rm_retards', 'rm_incidents'].includes(cle);
-        return `<button type="button" class="kpi-amb${alerte ? ' kpi-alerte' : ''}" data-filtre-missions="${cle}"><b class="num">${n}</b><span>${esc(t(cle))}</span></button>`;
+        return `<button type="button" class="kpi-amb ds-kpi${alerte ? ' kpi-alerte alerte' : ''}" style="--k-couleur:var(--m-${alerte ? 'urgences' : 'transferts'})" data-filtre-missions="${cle}"><b class="num ds-kpi-val">${n}</b><span class="ds-kpi-lib">${esc(t(cle))}</span></button>`;
       }).join('')}</div></section>`;
   }
   function rendreEcran() {

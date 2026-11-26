@@ -33,7 +33,9 @@
     if (sig !== construit) {
       nav.querySelectorAll('.espace-btn, .espace-saut').forEach((x) => x.remove());
       const frag = document.createDocumentFragment();
-      for (const [cle, ic, fr0, an0] of ordonnes(presents)) { const [fr, an] = hebergement() && LIB_HEB[cle] ? LIB_HEB[cle] : [fr0, an0]; const b = document.createElement('button'); b.type = 'button'; b.className = 'espace-btn'; b.dataset.espace = cle; b.innerHTML = `<svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-${ic}"/></svg> ${en() ? an : fr}`; frag.appendChild(b); }
+      for (const [cle, ic, fr0, an0] of ordonnes(presents)) { const [fr, an] = hebergement() && LIB_HEB[cle] ? LIB_HEB[cle] : [fr0, an0]; const b = document.createElement('button'); b.type = 'button'; b.className = 'espace-btn'; b.dataset.espace = cle;
+        // Planche 2 : point de couleur du module, libellé, compteur, chevron (barre latérale) ; icône en navigation horizontale et barre repliée
+        b.innerHTML = `<svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-${ic}"/></svg><span class="esp-point" aria-hidden="true"></span><span class="esp-nom">${en() ? an : fr}</span><span class="esp-compte"></span><span class="esp-chevron" aria-hidden="true"></span>`; frag.appendChild(b); }
       const saut = document.createElement('span'); saut.className = 'espace-saut'; saut.setAttribute('aria-hidden', 'true'); frag.appendChild(saut);
       nav.prepend(frag); construit = sig;
     }
@@ -57,6 +59,55 @@
     // Un espace d'un seul module n'a pas besoin de seconde ligne
     const seuls = boutons().filter((b) => visible(b) && !b.classList.contains('hors-espace')); if (nav.querySelector('.espace-params')) seuls.push(null);
     nav.classList.toggle('espace-unique', seuls.length <= 1);
+    lateral(presents);
+    document.documentElement.dataset.espace = actif;
+    surtitre();
+  }
+  /* Barre latérale (planche 2 de la proposition visuelle validée) : chaque module est un accordéon ; ses sous-onglets autorisés
+     apparaissent dessous, indentés, au filet de sa couleur. Plusieurs modules peuvent rester ouverts ; le module actif l'est toujours.
+     Les boutons existants ne bougent pas dans le document (mêmes routes, mêmes droits, même parité avec la navigation horizontale) :
+     seul l'ordre d'affichage (propriété CSS order) les range sous leur module. */
+  const CLE_OUVERTS = 'arrimo-nav-ouverts';
+  const lireOuverts = () => { try { return new Set(JSON.parse(localStorage.getItem(CLE_OUVERTS) || '[]')); } catch { return new Set(); } };
+  const ecrireOuverts = (s) => { try { localStorage.setItem(CLE_OUVERTS, JSON.stringify([...s])); } catch { /* stockage indisponible */ } };
+  const accordeon = () => document.body.classList.contains('nav-verticale') || window.matchMedia('(max-width: 600px)').matches;
+  function lateral(presents) {
+    if (!nav.querySelector('.nav-marque')) { const m = document.createElement('div'); m.className = 'nav-marque'; m.innerHTML = '<img src="/logo.svg" alt="" width="30" height="30"><strong>Arrimo</strong>'; nav.prepend(m); }
+    const modeAcc = accordeon(); const ouverts = lireOuverts();
+    // Le module qui devient actif s'ouvre (une fois) ; l'utilisateur peut ensuite le replier
+    if (lateral.dernier !== actif) { lateral.dernier = actif; if (!ouverts.has(actif)) { ouverts.add(actif); ecrireOuverts(ouverts); } }
+    const ordre = ordonnes(presents).map((x) => x[0]);
+    nav.classList.toggle('nav-accordeon', modeAcc);
+    for (const b of nav.querySelectorAll('.espace-btn')) {
+      const cle = b.dataset.espace; const i = ordre.indexOf(cle); const membres = ESPACES.find((x) => x[0] === cle)?.[4] || [];
+      const vis = boutons().filter((x) => visible(x) && membres.includes(x.dataset.v));
+      const ouvert = modeAcc && ouverts.has(cle);
+      b.style.order = modeAcc ? String(i * 100) : '';
+      b.classList.toggle('ouvert', ouvert); b.setAttribute('aria-expanded', String(modeAcc ? ouvert : cle === actif));
+      b.style.setProperty('--m-espace', `var(--m-${cle})`);
+      const ch = b.querySelector('.esp-chevron'); const chv = vis.length > 1 ? (ouvert ? '▾' : '▸') : ''; if (ch && ch.textContent !== chv) ch.textContent = chv;
+      // Compteur du module : somme des compteurs visibles de ses sous-onglets (jamais inventé)
+      const total = vis.reduce((s, x) => { const n = x.querySelector('.n'); return s + (n && !n.hidden && /^\d+$/.test(n.textContent.trim()) ? Number(n.textContent.trim()) : 0); }, 0);
+      const cpt = b.querySelector('.esp-compte'); const cv = total ? String(total) : ''; if (cpt && cpt.textContent !== cv) cpt.textContent = cv;
+      // Module d'un seul écran : le module lui-même ouvre l'écran (pas de sous-onglet en double)
+      b.classList.toggle('unique', vis.length === 1);
+      membres.forEach((v, j) => { for (const x of nav.querySelectorAll(`button[role="tab"][data-v="${v}"]`)) {
+        x.classList.toggle('seul-du-module', modeAcc && vis.length === 1);
+        x.style.order = modeAcc ? String(i * 100 + 1 + j) : ''; x.style.setProperty('--m-sous', `var(--m-${cle})`);
+        x.classList.toggle('ferme-lateral', modeAcc && !ouvert);
+      } });
+    }
+    const pr = nav.querySelector('.espace-params'); if (pr) pr.style.order = modeAcc ? String(ordre.indexOf(actif) * 100 + 99) : '';
+  }
+  /** Surtitre de module en capitales au-dessus du titre de chaque écran (planches 2 à 4) : « Transferts · Flux ». */
+  function surtitre() {
+    const sel = boutons().find((b) => b.getAttribute('aria-selected') === 'true'); if (!sel) return;
+    const v = document.getElementById(`v-${sel.dataset.v}`); const h = v?.querySelector(':scope > .entete h2'); if (!h) return;
+    const esp = nav.querySelector(`.espace-btn[data-espace="${espaceDe(sel.dataset.v) || actif}"] .esp-nom`)?.textContent || '';
+    const mod = sel.querySelector('span:not(.n)')?.textContent?.trim() || '';
+    const texte = esp && mod && esp !== mod ? `${esp} · ${mod}` : (esp || mod);
+    let s = h.previousElementSibling; if (!s || !s.classList.contains('surtitre-module')) { s = document.createElement('span'); s.className = 'surtitre-module'; h.before(s); }
+    if (s.textContent !== texte) s.textContent = texte;
   }
   /** Ouvre l'espace d'un module (utilisé aussi par les tests et les raccourcis : le bouton du module devient visible). */
   function reveler(v) { const x = espaceDe(v); if (x) { actif = x; appliquer(true); } }
@@ -68,11 +119,25 @@
       return;
     }
     const b = ev.target.closest('.espace-btn'); if (!b) return;
+    // Barre latérale : un clic déplie ou replie le module ; un module d'un seul écran l'ouvre directement
+    if (accordeon() && !document.body.classList.contains('nav-repliee')) {
+      const cle = b.dataset.espace; const membres = ESPACES.find((x) => x[0] === cle)?.[4] || [];
+      const vis = boutons().filter((x) => visible(x) && membres.includes(x.dataset.v));
+      if (vis.length > 1) {
+        // Le chevron replie ou déplie ; un module fermé s'ouvre et devient le module courant ; un module ouvert autre que le courant se replie
+        const o = lireOuverts(); const surChevron = !!ev.target.closest('.esp-chevron');
+        if (o.has(cle) && (surChevron || cle !== actif)) o.delete(cle); else { o.add(cle); actif = cle; }
+        ecrireOuverts(o); lateral.dernier = actif; appliquer(true); return;
+      }
+    }
     actif = b.dataset.espace; appliquer(true);
     const premier = boutons().find((x) => visible(x) && !x.classList.contains('hors-espace'));
     if (premier && premier.getAttribute('aria-selected') !== 'true') premier.click();
   });
-  new MutationObserver(() => { clearTimeout(appliquer.t); appliquer.t = setTimeout(appliquer, 30); }).observe(nav, { subtree: true, attributes: true, attributeFilter: ['aria-selected', 'hidden'] });
+  new MutationObserver(() => { clearTimeout(appliquer.t); appliquer.t = setTimeout(appliquer, 30); }).observe(nav, { subtree: true, attributes: true, attributeFilter: ['aria-selected', 'hidden'], characterData: true, childList: true });
+  // Le surtitre suit chaque nouveau rendu d'écran ; la disposition (horizontale, verticale, téléphone) réordonne la barre
+  const contenu = document.querySelector('.contenu'); if (contenu) new MutationObserver(() => { clearTimeout(surtitre.t); surtitre.t = setTimeout(surtitre, 40); }).observe(contenu, { childList: true, subtree: true });
+  new MutationObserver(() => { clearTimeout(appliquer.t); appliquer.t = setTimeout(appliquer, 30); }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
   window.ArrimoEspaces = { reveler, espaceDe, ESPACES, appliquer };
   setTimeout(appliquer, 0);
 })();

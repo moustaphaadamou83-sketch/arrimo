@@ -443,6 +443,30 @@ async function rapport(pool, u, q = {}) {
     motifs_retard: Object.fromEntries(MOTIFS_RETARD.map((motif) => [motif, rows.filter((r) => r.motif_retard === motif).length])),
     corrections: rows.reduce((n, r) => n + ETAPES.filter((e) => r.heures[e]?.corrigee).length, 0), lignes: rows };
 }
+/**
+ * Tendance hebdomadaire (proposition visuelle validée, planche 3) : médiane porte → remise (H11 → H14) par semaine, 8 semaines par défaut.
+ * Lecture seule, même périmètre que le rapport ; une semaine sans mesure reste « null » (jamais 0).
+ */
+async function tendance(pool, u, q = {}) {
+  const per = await perimetre(pool, u, q.etablissement_id);
+  const semaines = Math.min(26, Math.max(2, Math.trunc(Number(q.semaines)) || 8));
+  const filtre = filtresTableau(q, per.vals);
+  const rows = await enrichir(pool, (await pool.query(`${SELECT_PASSAGES} WHERE ${per.sql}${filtre.sql} AND p.statut IN ('a_la_porte', 'termine')
+    AND p.cree_le >= (date_trunc('week', now() AT TIME ZONE 'America/Toronto') - make_interval(weeks => $${filtre.parametres.length + 1}::int - 1)) AT TIME ZONE 'America/Toronto' ORDER BY p.id`, [...filtre.parametres, semaines])).rows);
+  const lundi = (d) => {
+    const x = new Date(new Date(d).toLocaleString('en-US', { timeZone: 'America/Toronto' }));
+    x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+    return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+  };
+  const cles = [];
+  for (let i = semaines - 1; i >= 0; i -= 1) cles.push(lundi(new Date(Date.now() - i * 7 * 86400000)));
+  const groupes = new Map(cles.map((k) => [k, []]));
+  for (const r of rows) { if (r.durees.porte == null) continue; const k = lundi(r.cree_le); if (groupes.has(k)) groupes.get(k).push(r.durees.porte); }
+  const objectif = rows.find((r) => r.arrimo)?.arrimo.remise.cible_min ?? null;
+  return { indicatif: true, mesure: 'H11 → H14', objectif_remise_min: objectif,
+    semaines: cles.map((k) => ({ debut: k, n: groupes.get(k).length, mediane_min: mediane(groupes.get(k)) })) };
+}
+
 function csv(r, langue = 'fr') {
   const en = langue === 'en';
   const tete = en ? ['Number', 'Hospital', 'Company', 'Unit', 'H11', 'H12', 'H13', 'H14', 'H15', 'Door (min)', 'Exit (min)', 'Total (min)', 'Corrected']
@@ -473,4 +497,4 @@ async function fiche(pool, u, id, q = {}) {
   return { ...e, historique, historique_retards: motifs.rows };
 }
 
-module.exports = { percentile, simultanesMax, traiterPosition, arriveeSignalee, remise, tableau, marquerEtape, depart, corriger, signalerRetard, notifierAttentes, rapport, csv, ecarts, fiche, metres, ETAPES, MOTIFS_RETARD, palier, peutLireAlerte: (u) => ROLES_HOPITAL.includes(u.role), ZONE_DEFAUT_M };
+module.exports = { tendance, percentile, simultanesMax, traiterPosition, arriveeSignalee, remise, tableau, marquerEtape, depart, corriger, signalerRetard, notifierAttentes, rapport, csv, ecarts, fiche, metres, ETAPES, MOTIFS_RETARD, palier, peutLireAlerte: (u) => ROLES_HOPITAL.includes(u.role), ZONE_DEFAUT_M };

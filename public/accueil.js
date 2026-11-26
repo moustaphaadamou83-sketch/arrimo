@@ -16,7 +16,11 @@
       vue: 'Vue d’ensemble', chrono: 'Chrono · ambulances à la porte', a_porte: 'À la porte', attente_max: 'Attente la plus longue', moyen: 'Délai moyen des derniers passages (H11→H14)', depasse: 'Au-delà du seuil ({s} min)', en_route: 'Annoncées en route',
       ouvrir_chrono: 'Ouvrir Chrono', min: '{n} min', aucune_porte: 'Aucune ambulance à la porte.', priorites: 'Préalertes et priorités', voir_tout: 'Tout voir', agir: 'Ouvrir et agir', aucune_priorite: 'Aucune priorité en attente.',
       taches: 'Mes tâches', ouvrir_taches: 'Ouvrir Mes tâches', a_faire: 'à faire', en_cours: 'en cours', retard: 'en retard', aucune_tache: 'Aucune tâche ouverte pour vous.', attribuer: 'Attribuer', file: 'File du rôle (non attribuée)', non_attr: 'Non attribuées : {n}', attribuee: 'Tâche attribuée.', a_qui: 'Attribuer à', previsions: 'Prévisions',
-      prev_ligne: 'Dans {h} h : ~{n} lits libres (± {m})', prev_risque: 'risque de saturation : {u}', prev_note: 'Estimation sur {s} semaines d’historique : une projection, pas une certitude.', details: 'Analyse détaillée d’OG (recommandations, plans, réseau, capacités)', donnees: 'Données lues à {h}', supervision: 'Mode supervision', kpi_comment: 'Comment est calculé : {k}', kpi_formule: 'Formule', kpi_source: 'Source', kpi_perimetre: 'Périmètre', kpi_periode: 'Période', kpi_actualisation: 'Actualisation', kpi_exclusions: 'Exclusions', kpi_manquantes: 'Données manquantes', kpi_permissions: 'Qui le voit', kpi_lu: 'Valeur lue à {h}', quitter_supervision: 'Quitter la supervision' },
+      prev_ligne: 'Dans {h} h : ~{n} lits libres (± {m})', prev_risque: 'risque de saturation : {u}', prev_note: 'Estimation sur {s} semaines d’historique : une projection, pas une certitude.', details: 'Analyse détaillée d’OG (recommandations, plans, réseau, capacités)', donnees: 'Données lues à {h}', supervision: 'Mode supervision', kpi_comment: 'Comment est calculé : {k}', kpi_formule: 'Formule', kpi_source: 'Source', kpi_perimetre: 'Périmètre', kpi_periode: 'Période', kpi_actualisation: 'Actualisation', kpi_exclusions: 'Exclusions', kpi_manquantes: 'Données manquantes', kpi_permissions: 'Qui le voit', kpi_lu: 'Valeur lue à {h}', quitter_supervision: 'Quitter la supervision',
+      surtitre: 'Accueil · {e}', situation_a: 'Situation à {h}', capacite: 'Capacité réelle · {n} lits', capacite_places: 'Capacité réelle · {n} places', lu_a: 'lu à {h} · confirmations valables {m} min', lu: 'lu à {h}',
+      og_titre: 'Priorités proposées par OG', og_pied: 'OG propose, une personne habilitée décide.', niv: { escalade: 'Escalade', vigilance: 'Vigilance', information: 'Information' },
+      arrivees: 'Arrivées attendues · 120 prochaines minutes', arrivees_note: 'estimations identifiées comme telles · la priorité clinique prime', aucune_arrivee: 'Aucune arrivée annoncée dans les 120 prochaines minutes.',
+      cond: { capacite_prete: 'capacité à préparer', acceptation: 'acceptation attendue', prealerte_recue: 'préalerte à acquitter' }, dans: 'dans {n} min', dans_h: '{h} h {m}', eta_inconnue: 'heure inconnue', prete: 'Prêt', a_preparer: 'À préparer', en_cours: 'Préparation en cours', a_verifier: 'Préparation à vérifier', prep_inconnue: 'Préparation inconnue', prep_aria: 'Préparation {p}' },
     en: { fermer: 'Close', personnaliser: 'Customize Home', perso_titre: 'Zones shown on your Home', perso_note: 'Choice saved on this device; data and rights do not change.',
       monter: 'Move up', z: { flux: 'Arrimo Flow and Exchange', chrono: 'Chrono', priorites: 'Pre-alerts and priorities', taches: 'My tasks', previsions: 'Forecasts', syntheses: 'Module summaries' },
       presentation: 'Presentation mode', quitter_presentation: 'Leave presentation', presentation_note: 'Demonstration only: screens rotate every 20 s (Esc to stop).',
@@ -29,23 +33,74 @@
       vue: 'Overview', chrono: 'Chrono · ambulances at the door', a_porte: 'At the door', attente_max: 'Longest wait', moyen: 'Average time for recent visits (H11→H14)', depasse: 'Over threshold ({s} min)', en_route: 'Announced on the way',
       ouvrir_chrono: 'Open Chrono', min: '{n} min', aucune_porte: 'No ambulance at the door.', priorites: 'Pre-alerts and priorities', voir_tout: 'See all', agir: 'Open and act', aucune_priorite: 'No pending priority.',
       taches: 'My tasks', ouvrir_taches: 'Open My tasks', a_faire: 'to do', en_cours: 'in progress', retard: 'overdue', aucune_tache: 'No open task for you.', attribuer: 'Assign', file: 'Role queue (unassigned)', non_attr: 'Unassigned: {n}', attribuee: 'Task assigned.', a_qui: 'Assign to', previsions: 'Forecasts',
-      prev_ligne: 'In {h} h: ~{n} free beds (± {m})', prev_risque: 'saturation risk: {u}', prev_note: 'Estimate based on {s} weeks of history: a projection, not a certainty.', details: 'OG detailed analysis (recommendations, plans, network, capacity)', donnees: 'Data read at {h}', supervision: 'Wall display mode', kpi_comment: 'How it is calculated: {k}', kpi_formule: 'Formula', kpi_source: 'Source', kpi_perimetre: 'Scope', kpi_periode: 'Period', kpi_actualisation: 'Refresh', kpi_exclusions: 'Exclusions', kpi_manquantes: 'Missing data', kpi_permissions: 'Who sees it', kpi_lu: 'Value read at {h}', quitter_supervision: 'Leave wall display' },
+      prev_ligne: 'In {h} h: ~{n} free beds (± {m})', prev_risque: 'saturation risk: {u}', prev_note: 'Estimate based on {s} weeks of history: a projection, not a certainty.', details: 'OG detailed analysis (recommendations, plans, network, capacity)', donnees: 'Data read at {h}', supervision: 'Wall display mode', kpi_comment: 'How it is calculated: {k}', kpi_formule: 'Formula', kpi_source: 'Source', kpi_perimetre: 'Scope', kpi_periode: 'Period', kpi_actualisation: 'Refresh', kpi_exclusions: 'Exclusions', kpi_manquantes: 'Missing data', kpi_permissions: 'Who sees it', kpi_lu: 'Value read at {h}', quitter_supervision: 'Leave wall display',
+      surtitre: 'Home · {e}', situation_a: 'Status at {h}', capacite: 'Real capacity · {n} beds', capacite_places: 'Real capacity · {n} places', lu_a: 'read at {h} · confirmations valid {m} min', lu: 'read at {h}',
+      og_titre: 'Priorities proposed by OG', og_pied: 'OG proposes, an authorized person decides.', niv: { escalade: 'Escalation', vigilance: 'Watch', information: 'Information' },
+      arrivees: 'Expected arrivals · next 120 minutes', arrivees_note: 'estimates are labelled as such · clinical priority comes first', aucune_arrivee: 'No arrival announced in the next 120 minutes.',
+      cond: { capacite_prete: 'capacity to prepare', acceptation: 'acceptance pending', prealerte_recue: 'pre-alert to acknowledge' }, dans: 'in {n} min', dans_h: '{h} h {m}', eta_inconnue: 'time unknown', prete: 'Ready', a_preparer: 'To prepare', en_cours: 'Preparation in progress', a_verifier: 'Preparation to check', prep_inconnue: 'Preparation unknown', prep_aria: 'Preparation {p}' },
   };
   const e = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const L = () => ((document.documentElement.lang || '').startsWith('en') ? 'en' : 'fr');
   const X = () => TXT[L()]; const T = (k, v = {}) => e(String(k.split('.').reduce((o, x) => o?.[x], X()) ?? k).replace(/\{(\w+)\}/g, (m, y) => v[y] ?? m));
-  const h = (d) => new Date(d).toLocaleTimeString(L() === 'en' ? 'en-CA' : 'fr-CA', { hour: '2-digit', minute: '2-digit' });
+  let fuseauCourant;   // fuseau de l'établissement (heure lue et heure affichée identiques)
+  const h = (d) => new Date(d).toLocaleTimeString(L() === 'en' ? 'en-CA' : 'fr-CA', { hour: '2-digit', minute: '2-digit', timeZone: fuseauCourant || undefined });
 
-  /** Zone B : situation (niveau) compacte et 4 à 6 indicateurs ; un clic ouvre l'écran (ou les détails du niveau). */
+  /* Planche 2 (Accueil — centre de commandement), reproduite sur les données réelles :
+     en-tête (surtitre de module + « Situation à HH h MM ») · 6 indicateurs cliquables · Capacité réelle | Priorités OG · Arrivées attendues (anneaux).
+     Aucune valeur inventée : un indicateur absent n'est pas affiché ; une préparation inconnue reste « ? », jamais 0. */
+  const DS = () => window.ArrimoDS;
+  const ESP_NOMS = { accueil: ['Accueil', 'Home'], patients: ['Patients', 'Patients'], transferts: ['Transferts', 'Transfers'], capacites: ['Capacités', 'Capacity'], urgences: ['Urgences', 'Emergency'],
+    operations: ['Opérations', 'Operations'], pilotage: ['Pilotage', 'Steering'], reseau: ['Réseau', 'Network'], national: ['National', 'National'], administration: ['Administration', 'Administration'] };
+  const espaceKpi = (k) => k.module || window.ArrimoEspaces?.espaceDe?.(k.aller) || 'accueil';
   function vueEnsemble(o) {
     const n = o.niveau; const kpis = (o.kpis || []).filter((k) => k && k.val != null).slice(0, 6);
-    return `<section class="acc-vue" aria-label="${T('vue')}"><div class="acc-vue-tete"><h3>${T('vue')}</h3>
-      <div class="ligne">${n ? `<button type="button" class="acc-niveau n-${e(n.code)}" data-acc-niveau aria-expanded="false"><span class="pastille-niveau" aria-hidden="true"></span>${T('situation')} <b>${T(`niveau.${n.code}`)}</b></button>` : ''}
+    const maintenant = new Date().toLocaleTimeString(L() === 'en' ? 'en-CA' : 'fr-CA', { hour: '2-digit', minute: '2-digit', timeZone: o.fuseau || undefined }).replace(':', ' h ');
+    const tete = `<div class="ds-tete"><div class="ds-tete-titre"><span class="ds-surtitre">${T('surtitre', { e: o.etablissement || '' })}</span><h2>${T('situation_a', { h: maintenant })}</h2></div>
+      <div class="ds-tete-outils">${n ? `<button type="button" class="acc-niveau n-${e(n.code)}" data-acc-niveau aria-expanded="false"><span class="pastille-niveau" aria-hidden="true"></span>${T('situation')} <b>${T(`niveau.${n.code}`)}</b></button>` : ''}
       <button type="button" class="btn" data-acc-supervision aria-pressed="${document.body.classList.contains('supervision')}"><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-monitor"/></svg> ${T(document.body.classList.contains('supervision') ? 'quitter_supervision' : 'supervision')}</button>
       <button type="button" class="btn" data-acc-perso><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-palette"/></svg> ${T('personnaliser')}</button>
       ${o.presentation ? `<button type="button" class="btn" data-acc-presentation aria-pressed="${!!window.__presentation}" title="${T('presentation_note')}">${T(window.__presentation ? 'quitter_presentation' : 'presentation')}</button>` : ''}</div></div>
-      ${n ? `<div class="acc-niveau-details" hidden>${n.details || ''}<p class="note">${n.le ? T('calcule', { h: h(n.le) }) : ''}</p><button type="button" class="btn" data-acc-og="${e(n.question)}">${T('pourquoi')}</button></div>` : ''}
-      <div class="acc-kpis">${kpis.map((k) => `<div class="acc-kpi-c">${k.code ? `<button type="button" class="acc-kpi-i" data-acc-kpi="${e(k.code)}" aria-label="${e(T('kpi_comment', { k: k.lib }))}" title="${e(T('kpi_comment', { k: k.lib }))}"><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-info"/></svg></button>` : ''}<${k.aller ? `button type="button" data-acc-aller="${e(k.aller)}"` : 'div'} class="acc-kpi${k.ton ? ` ${k.ton}` : ''}"><span class="v num">${e(k.val)}</span><span class="lbl">${e(k.lib)}</span>${k.note ? `<span class="note">${e(k.note)}</span>` : ''}</${k.aller ? 'button' : 'div'}></div>`).join('')}</div></section>`;
+      ${n ? `<div class="acc-niveau-details ds-carte" hidden>${n.details || ''}<p class="note">${n.le ? T('calcule', { h: h(n.le) }) : ''}</p><button type="button" class="btn" data-acc-og="${e(n.question)}">${T('pourquoi')}</button></div>` : ''}`;
+    const cartes = kpis.map((k) => { const esp = espaceKpi(k); return DS().kpi({ module: k.moduleNom || ESP_NOMS[esp]?.[L() === 'en' ? 1 : 0] || '', couleur: DS().module(esp), valeur: k.val, libelle: k.lib, detail: k.note || k.detail,
+      aller: k.aller, alerte: k.ton === 'alerte', code: k.code, info: String(X().kpi_comment).replace('{k}', k.lib) }); }).join('');
+    return `<div class="acc-vue ds-vue">${tete}<section class="ds-kpis acc-kpis" aria-label="${T('vue')}">${cartes.replaceAll('data-ds-aller=', 'data-acc-aller=')}</section></div>`;
+  }
+  /** Capacité réelle (planche 2) : segments réels (cycle de disponibilité ou chambres d'hébergement), légende cliquable. */
+  function carteCapacite(c) {
+    if (!c || !c.segments?.length) return '';
+    const total = c.total ?? c.segments.reduce((s, x) => s + (x.n || 0), 0);
+    return `<section class="ds-carte ds-capacite-carte"><div class="ds-carte-tete"><h3>${T(c.places ? 'capacite_places' : 'capacite', { n: total })}</h3><span class="note">${c.validite ? T('lu_a', { h: h(c.lu || new Date()), m: c.validite }) : T('lu', { h: h(c.lu || new Date()) })}</span></div>
+      ${DS().capacite(c.segments, total, T(c.places ? 'capacite_places' : 'capacite', { n: total }))}${c.note ? `<p class="ds-texte">${e(c.note)}</p>` : ''}</section>`;
+  }
+  /** Priorités proposées par OG (planche 2) : niveau (escalade, vigilance, information), titre, détail ; un clic ouvre l'écran. */
+  function carteOg(o) {
+    const prios = (o.priorites || []).slice(0, 3);
+    const couleurNiv = { escalade: DS().etat('rouge'), vigilance: DS().etat('orange'), information: DS().etat('info') };
+    return `<section class="ds-carte acc-priorites"><div class="ds-carte-tete"><h3><span class="ds-og" aria-hidden="true">OG</span>${T('og_titre')}</h3></div>
+      <div id="acc-prealertes"></div>
+      ${prios.length ? prios.map((p) => { const niv = p.niveau || 'information'; return `<button type="button" class="ds-prio" style="--p-couleur:${couleurNiv[niv] || couleurNiv.information}"${p.aller ? ` data-acc-aller="${e(p.aller)}"` : ''}>
+        <span class="niv">${T(`niv.${niv}`)}</span><span class="tit">${e(p.texte)}</span>${p.raison ? `<span class="det">${e(p.raison)}</span>` : ''}</button>`; }).join('') : `<p class="ds-vide">${T('aucune_priorite')}</p>`}
+      <span class="ds-note">${T('og_pied')}</span></section>`;
+  }
+  /** Arrivées attendues dans les 120 prochaines minutes (planche 2) : anneau = préparation de l'accueil (indice réel) ; ETA = estimation déclarée. */
+  function carteArrivees(o) {
+    const fx = o.flux; if (!fx?.mouvements) return '';
+    const now = Date.now();
+    const liste = fx.mouvements.filter((l) => l.mouvement === 'arrivee' && !l.arrivee_reelle && !['arrive', 'termine', 'annule', 'refuse'].includes(l.statut))
+      .map((l) => ({ l, quand: new Date(l.eta || l.prevue || 0).getTime() })).filter((x) => x.quand && x.quand - now <= 120 * 60000 && x.quand - now > -60 * 60000)
+      .sort((a, b) => a.quand - b.quand).slice(0, 4);
+    const corps = liste.length ? liste.map(({ l, quand }) => {
+      const a = l.preparation_accueil; const pr = l.preparation?.etat;
+      const pct = a?.pct ?? (pr === 'prete' ? 100 : pr === 'en_cours' ? 50 : pr === 'a_faire' ? 25 : null);
+      const ton = a?.pret || pr === 'prete' || pct === 100 ? 'vert' : pct == null ? 'gris' : (a?.risque || l.marge_preparation?.verdict === 'risque_retard') ? 'rouge' : 'orange';
+      const reste = a?.pret || pr === 'prete' ? T('prete') : a?.manquantes?.length ? a.manquantes.map((c) => X().cond?.[c] || c).join(', ') : pr ? T(pr) : T('prep_inconnue');
+      const min = Math.round((quand - now) / 60000); const eta = min <= 0 ? T('dans', { n: 0 }) : min < 60 ? `${min} min` : T('dans_h', { h: Math.floor(min / 60), m: String(min % 60).padStart(2, '0') });
+      const unite = l.vehicule || l.reference;
+      return `<button type="button" class="ds-arrivee" style="--a-couleur:${DS().etat(ton)}" data-acc-aller="${e(l.ecran || 'flux')}">
+        ${DS().anneau(pct, DS().etat(ton), { aria: T('prep_aria', { p: pct == null ? '?' : `${pct} %` }) })}
+        <span class="txt"><strong>${e(unite)} · ${e(eta)}</strong><span class="cat">${e(l.categorie?.libelle || '')}${l.preparation?.chambre ? ` · ${e(l.preparation.chambre)}` : ''}</span><span class="reste">${e(reste)}</span></span></button>`;
+    }).join('') : `<p class="ds-vide">${T('aucune_arrivee')}</p>`;
+    return `<section class="ds-carte"><div class="ds-carte-tete"><h3>${T('arrivees')}</h3><span class="note">${T('arrivees_note')}</span></div><div class="ds-arrivees">${corps}</div></section>`;
   }
   /** Zone D : Chrono compact, d'après le moteur Chrono existant (passages réels, seuils configurés). */
   async function chrono(zone, o) {
@@ -146,19 +201,20 @@
    *   priorites ([{ texte, aller }]), previsions (objet du moteur), taches (bool), details (Node : ancien contenu, replié) }.
    */
   async function construire(v, o) {
-    const details = o.details;
-    v.innerHTML = `${o.bandeau || ''}${vueEnsemble(o)}<div id="acc-flux"></div>
-      <div class="acc-grille">${o.chrono ? '<div id="acc-chrono"></div>' : ''}<section class="panneau-c acc-priorites"><div class="ligne" style="justify-content:space-between"><h3><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-megaphone"/></svg> ${T(o.reseau ? 'synthese_og' : 'priorites')}</h3></div><div id="acc-prealertes"></div>
-        ${(o.priorites || []).length ? `<ul class="liste-simple">${o.priorites.slice(0, 4).map((p) => `<li class="acc-prio"><div><b>${e(p.texte)}</b>${p.raison ? `<div class="note">${e(p.raison)}</div>` : ''}</div>${p.aller ? `<button type="button" class="btn" data-acc-aller="${e(p.aller)}">${T('agir')}</button>` : ''}</li>`).join('')}</ul>` : ''}</section>
-        ${o.taches ? '<div id="acc-taches"></div>' : ''}${previsions(o.previsions)}</div>`;
+    const details = o.details; fuseauCourant = o.fuseau;
+    v.innerHTML = `<div class="ds-accueil">${vueEnsemble(o)}
+      <div class="ds-deux">${carteCapacite(o.capacite) || '<div id="acc-flux"></div>'}${carteOg(o)}</div>
+      ${carteArrivees(o)}
+      <div class="ds-secondaire">${o.chrono ? '<div id="acc-chrono"></div>' : ''}${o.taches ? '<div id="acc-taches"></div>' : ''}${previsions(o.previsions)}</div>
+      ${carteCapacite(o.capacite) ? '<div id="acc-flux"></div>' : ''}</div>`;
     const synthesesZone = document.createElement('div');
-    synthesesZone.className = 'acc-grille';
+    synthesesZone.className = 'ds-secondaire';
     synthesesZone.hidden = true;
-    v.appendChild(synthesesZone);
+    (v.querySelector('.ds-accueil') || v).appendChild(synthesesZone);
     if (details) { const d = document.createElement('details'); d.className = 'panneau-c acc-details'; d.innerHTML = `<summary><b>${T('details')}</b></summary>`; d.appendChild(details); v.appendChild(d);
       // L'analyse détaillée garde son état (ouverte ou repliée) d'une actualisation à l'autre
       d.open = window.__accDetailsOuvert === true; d.addEventListener('toggle', () => { window.__accDetailsOuvert = d.open; }); }
-    lier(v, o);
+    lier(v, o); DS().lier(v, o.ouvrir);
     // Mode supervision (écran mural) : plein écran, gros caractères, actualisation chaque minute ; rien de personnel (bandeau, tâches, détails masqués)
     v.querySelector('[data-acc-supervision]')?.addEventListener('click', () => {
       const actif = document.body.classList.toggle('supervision');

@@ -27,7 +27,7 @@ async function session(email) {
   await pg.waitForSelector('body[data-pret="1"]', { timeout: 30000 });
   if (await pg.locator('#b-premiers-pas-ok').isVisible().catch(() => false)) await pg.click('#b-premiers-pas-ok');
   await allerOnglet(pg, 'flux');
-  await pg.waitForSelector('#v-flux:not([hidden]) table', { timeout: 20000 });
+  await pg.waitForSelector('#v-flux:not([hidden]) .ds-mvts', { timeout: 20000 });
   return pg;
 }
 
@@ -61,6 +61,6 @@ test('scénario F : deux sessions sur Arrimo Flux ; la préalerte de l’équipa
   // La session A accuse réception ; la session B le voit sans rechargement, sans doublon de ligne
   await a.click('[data-flux-accuser]');
   await b.waitForFunction(() => !document.querySelector('#v-flux [data-flux-accuser]'), null, { timeout: 60000 });
-  assert.strictEqual(await b.locator('#v-flux tbody tr', { hasText: 'DT-009001' }).count(), 1, 'une seule ligne pour le transport');
+  assert.strictEqual(await b.locator('#v-flux .ds-mvt', { hasText: 'DT-009001' }).count(), 1, 'une seule ligne pour le transport');
   assert.deepStrictEqual([...a.erreurs, ...b.erreurs], []);
 });

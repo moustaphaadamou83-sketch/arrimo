@@ -5,8 +5,8 @@
   const MODES = ['clair', 'sombre', 'automatique', 'soleil'];
   const CLE = 'arrimo-apparence';
   const CLE_LIEU = 'arrimo-apparence-lieu';
-  // Ambiance (design system du 26 nov. 2026) : Glacier ou Horizon en clair, Crépuscule en sombre. Seulement sur les pages
-  // d'Arrimo (attribut data-arrimo) : la console SH garde sa présentation.
+  // Ambiance (design system du 26 nov. 2026) : Glacier ou Horizon en clair, Crépuscule en sombre, sur toutes les pages d'Arrimo
+  // (attribut data-arrimo), console SH comprise depuis le cahier correctif final du 26 nov. 2026.
   const AMBIANCES = ['glacier', 'horizon'];
   const CLE_AMB = 'arrimo-ambiance';
   const RAD = Math.PI / 180;

@@ -48,15 +48,64 @@
         <text x="32" y="36" text-anchor="middle" font-size="15" font-weight="700" fill="var(--texte)" class="min">${p.a_la_porte_min}</text></svg>
       <span class="note">${K('anneau_obj', { obj: obj ?? '—', ref })}</span></span>`;
   }
+  /* Planche 3 de la proposition visuelle validée : une carte par ambulance, double anneau (extérieur : remise du patient, objectif Arrimo ;
+     intérieur : libération du véhicule), palier écrit (Normal, Vigilance, Escalade, Critique), chronologie H11 à H15, motif du retard.
+     La couleur n'est jamais seule : minutes, objectifs et mot du palier sont écrits. Les actions restent celles du moteur Chrono. */
+  const TX = {
+    fr: { titre: 'Ambulances à la porte · {n} en cours', objectifs: 'Objectifs', cibles: 'Cibles configurées : porte {p} · sortie {s} · total {t} min', arrimo: 'Arrimo {r}/{l} · excellence {er}/{el} (internes, configurables)',
+      acquitter_son: 'Acquitter le son', son_acquitte: 'Son acquitté', remise: 'Remise du patient', liberation: 'Libération du véhicule', avant: '{n} min avant l’objectif', depasse: 'objectif {o} min dépassé de {n} min',
+      motif: 'Motif : {m}', aucun_motif: 'aucun consigné', paliers: { normal: 'Normal', vigilance: 'Vigilance', escalade: 'Escalade', critique: 'Critique' }, min_porte: 'min à la porte',
+      aria: '{n} minutes à la porte, palier {p}', tendance: 'Porte → remise, médiane par semaine (min)', source: 'source : Chrono H11 → H14 · {n} semaines · objectif Arrimo {o}',
+      respect: 'Objectif {o} respecté', passages: '{n} passages mesurés', p90: '90e percentile', porte_remise: 'porte → remise', heures: 'Heures-véhicules au-delà de {o} min',
+      recuperables: 'potentiellement récupérables (indicatif) · récupérées : non mesurées', simultanes: 'Simultanées à la porte', max_mois: 'maximum du mois',
+      pied: 'Orange : son bref et notification. Rouge : pulsation lente (désactivée si l’utilisateur réduit les animations) et son prioritaire. L’acquittement coupe le son, pas le chrono ni l’alerte. Une urgence clinique suit toujours les protocoles médicaux, quel que soit le chrono.',
+      aucune: 'Aucune ambulance à la porte.', tendance_vide: 'Pas encore de mesure H11 → H14 sur la période.', semaine: 'sem. du {d}' },
+    en: { titre: 'Ambulances at the door · {n} in progress', objectifs: 'Targets', cibles: 'Configured targets: door {p} · exit {s} · total {t} min', arrimo: 'Arrimo {r}/{l} · excellence {er}/{el} (internal, configurable)',
+      acquitter_son: 'Acknowledge sound', son_acquitte: 'Sound acknowledged', remise: 'Patient handover', liberation: 'Vehicle release', avant: '{n} min before target', depasse: '{o} min target exceeded by {n} min',
+      motif: 'Reason: {m}', aucun_motif: 'none recorded', paliers: { normal: 'Normal', vigilance: 'Watch', escalade: 'Escalation', critique: 'Critical' }, min_porte: 'min at the door',
+      aria: '{n} minutes at the door, level {p}', tendance: 'Door → handover, weekly median (min)', source: 'source: Chrono H11 → H14 · {n} weeks · Arrimo target {o}',
+      respect: '{o}-minute target met', passages: '{n} measured visits', p90: '90th percentile', porte_remise: 'door → handover', heures: 'Vehicle-hours beyond {o} min',
+      recuperables: 'potentially recoverable (indicative) · recovered: not measured', simultanes: 'Simultaneous at the door', max_mois: 'monthly maximum',
+      pied: 'Orange: short sound and notification. Red: slow pulse (off when the user reduces motion) and priority sound. Acknowledging stops the sound, not the timer or the alert. A clinical emergency always follows medical protocols, whatever the timer shows.',
+      aucune: 'No ambulance at the door.', tendance_vide: 'No H11 → H14 measurement yet for this period.', semaine: 'wk of {d}' },
+  };
+  const X = (k, v = {}) => { const d = TX[typeof langue === 'string' && langue === 'en' ? 'en' : 'fr']; const val = k.split('.').reduce((o, x) => o?.[x], d) ?? k; return esc(String(val).replace(/\{(\w+)\}/g, (m, y) => v[y] ?? m)); };
+  const PALIER = (p) => (p.palier === 'critique' ? 'critique' : p.niveau === 'rouge' ? 'escalade' : p.niveau === 'orange' ? 'vigilance' : 'normal');
+  const etatMin = (m, obj, rouge) => (m == null ? 'gris' : m >= rouge ? 'rouge' : m >= obj ? 'orange' : 'vert');
   function lignePorte(p) {
+    const DS = window.ArrimoDS; const m = p.a_la_porte_min; const pal = PALIER(p);
+    const rem = p.arrimo?.remise?.cible_min ?? 15; const lib = p.arrimo?.liberation?.cible_min ?? 30; const esc2 = p.arrimo?.escalade_majeure_min ?? 45;
+    const cR = DS.etat(etatMin(m, rem, rem * 2)); const cL = DS.etat(etatMin(m, lib, esc2));
+    const texte = (obj) => (m == null ? '—' : m >= obj ? X('depasse', { o: obj, n: m - obj }) : X('avant', { n: obj - m }));
+    const fond = { normal: 'ok', vigilance: 'vigilance', escalade: 'escalade', critique: 'critique' }[pal];
     const n = p.palier === 'critique' ? 'critique' : p.niveau || '';
-    return `<article class="ch-porte niveau-${p.niveau || ''}${n === 'critique' ? ' palier-critique' : ''}" data-passage="${p.id}">
-      <div class="ch-tete"><strong>${esc(p.unite)}</strong> <span class="note">${esc(p.organisation)}${p.prealerte ? ` · ${esc(p.prealerte)}` : ` · ${K('sans_prealerte')}`}</span>
-        ${anneau(p)}${p.niveau === 'rouge' && !sons.acquittes.has(p.id) ? `<button class="btn" type="button" data-ch-acquitter="${p.id}">${K('acquitter')}</button>` : ''}
-        ${p.a_la_porte_min != null ? `<span class="ch-minutes" role="timer" aria-label="${K('a_la_porte_depuis', { n: p.a_la_porte_min })}">${K('minutes', { n: p.a_la_porte_min })} · ${K(`niveau_${n}`)}</span>` : ''}</div>
-      <ol class="ch-etapes">${ETAPES.map((e) => `<li><span class="ch-code">${e}</span> ${K(`etape_${e}`)} : ${heureEtape(p.heures[e])}</li>`).join('')}</ol>
-      <div class="ligne">${p.prochaine ? `<button class="btn pri" data-ch-etape="${p.prochaine}" data-id="${p.id}">${K(`bouton_${p.prochaine}`)}</button>` : ''}
+    return `<article class="ds-porte ch-porte niveau-${p.niveau || ''} p-${pal}" data-passage="${p.id}" data-h11="${esc(p.heures.H11?.heure || '')}" data-rem="${rem}" data-lib="${lib}" data-esc="${esc2}">
+      <div class="ds-porte-tete"><strong>${esc(p.unite)}</strong>${window.ArrimoDS.pastille(fond, X(`paliers.${pal}`))}</div>
+      <div class="ds-porte-corps">${DS.doubleAnneau({ minutes: m, remise: rem, liberation: lib, couleurRemise: cR, couleurLib: cL, aria: X('aria', { n: m ?? '—', p: X(`paliers.${pal}`) }), legende: X('min_porte') })}
+        <div class="ds-porte-infos">${m != null ? `<span class="ch-minutes" role="timer" aria-label="${K('a_la_porte_depuis', { n: m })}">${K('minutes', { n: m })} · ${K(`niveau_${n}`)}</span>` : ''}<span class="trait"><i style="background:${cR}"></i>${X('remise')} : ${texte(rem)}</span><span class="trait"><i style="background:${cL}"></i>${X('liberation')} : ${texte(lib)}</span>
+          <span class="note">${esc(p.organisation)}${p.prealerte ? ` · ${esc(p.prealerte)}` : ` · ${K('sans_prealerte')}`}</span>
+          <span class="note">${X('motif', { m: p.motif_retard ? (window.ArrimoChronoRetards?.libelle(p.motif_retard) || p.motif_retard) : X('aucun_motif') })}</span></div></div>
+      <ol class="ds-h">${ETAPES.map((e) => `<li class="${p.heures[e] ? 'fait' : ''}"><i></i><span><strong>${e}</strong> ${p.heures[e] ? heureCourte(p.heures[e].heure) : '—'}</span></li>`).join('')}</ol>
+      <div class="ds-porte-actions">${p.prochaine ? `<button class="btn pri" data-ch-etape="${p.prochaine}" data-id="${p.id}">${K(`bouton_${p.prochaine}`)}</button>` : ''}
         <button class="btn" data-ch-corriger="${p.id}">${K('corriger')}</button>${(window.ArrimoSillage?.bouton('passage_chrono', p.id) || '')}</div>${window.ArrimoChronoRetards?.champ(p, true) || ''}</article>`;
+  }
+  /** Partie basse de la planche 3 : courbe hebdomadaire (H11 → H14) et quatre mesures du mois (réelles, indicatives). */
+  async function basChrono() {
+    const z = $('#ch-bas'); if (!z) return;
+    const [td, r] = await Promise.all([api('GET', `/chrono/tendance?etablissement_id=${etat.ctx}&semaines=8&${paramsFiltres()}`).catch(() => null),
+      api('GET', `/chrono/rapport?etablissement_id=${etat.ctx}&mois=${new Date().toISOString().slice(0, 7)}&${paramsFiltres()}`).catch(() => null)]);
+    if (!z.isConnected) return;
+    const obj = td?.objectif_remise_min ?? r?.lignes?.[0]?.arrimo?.remise?.cible_min ?? 15;
+    const libObj = r?.lignes?.[0]?.arrimo?.liberation?.cible_min ?? 30;
+    const pts = (td?.semaines || []).map((x) => ({ etiquette: x.debut.slice(5).split('-').reverse().join('/'), valeur: x.mediane_min }));
+    const courbe = pts.some((x) => x.valeur != null) ? window.ArrimoDS.courbe(pts, { objectif: obj, couleur: window.ArrimoDS.module('urgences'), aria: X('tendance') }) : `<p class="ds-vide">${X('tendance_vide')}</p>`;
+    const oa = r?.objectifs_arrimo; const val = (v, suf = '') => (v == null ? '—' : `${String(v).replace('.', langue === 'en' ? '.' : ',')}${suf}`);
+    z.innerHTML = `<section class="ds-carte"><div class="ds-carte-tete"><h3>${X('tendance')}</h3><span class="note">${X('source', { n: td?.semaines?.length ?? 8, o: obj })}</span></div>${courbe}</section>
+      <section class="ds-carte ds-stats">
+        <div><span class="ds-lbl">${X('respect', { o: obj })}</span><strong>${val(oa?.remise?.respecte_pct, ' %')}</strong><span class="note">${X('passages', { n: oa?.remise?.n ?? 0 })}</span></div>
+        <div><span class="ds-lbl">${X('p90')}</span><strong>${val(r?.porte?.p90_min, ' min')}</strong><span class="note">${X('porte_remise')}</span></div>
+        <div><span class="ds-lbl">${X('heures', { o: libObj })}</span><strong>${val(oa?.liberation?.heures_vehicules_au_dela, ' h')}</strong><span class="note">${X('recuperables')}</span></div>
+        <div><span class="ds-lbl">${X('simultanes')}</span><strong>${val(r?.pilote?.simultanes_max)}</strong><span class="note">${X('max_mois')}</span></div></section>`;
   }
 
   async function vueChrono() {
@@ -72,25 +121,28 @@
       { lbl: K('attente_mediane'), val: minute(attente.mediane_min) },
       { lbl: K('attente_cumulee'), val: minute(attente.minutes_cumulees) },
     ].map((x) => tuile(x)).join('') : '';
-    v.innerHTML = `<div class="entete"><div><h2>${K('titre')}</h2><p class="note">${K('intro', { porte: c.porte, sortie: c.sortie, total: c.total })}</p>
-        <p class="note">${K('indicatif')}${d.actualise_le ? ` · ${K('actualise', { h: heureCourte(d.actualise_le) })}` : ''}</p></div></div>
-      <form id="ch-filtres" class="ligne">
+    const ar = d.a_la_porte.find((p) => p.arrimo)?.arrimo; const sonCoupe = !sonActif() || (d.a_la_porte.filter((p) => p.niveau === 'rouge').length > 0 && d.a_la_porte.filter((p) => p.niveau === 'rouge').every((p) => sons.acquittes.has(p.id)));
+    v.innerHTML = `<div class="entete ds-chrono-tete"><div><h2>${X('titre', { n: d.a_la_porte.length })}</h2><p class="note">${K('indicatif')}${d.actualise_le ? ` · ${K('actualise', { h: heureCourte(d.actualise_le) })}` : ''}</p></div>
+        <div class="ds-objectifs"><strong>${X('objectifs')}</strong><span class="note">${X('cibles', { p: c.porte, s: c.sortie, t: c.total })}</span><span class="sep"></span><span class="note">${X('arrimo', { r: ar?.remise?.cible_min ?? 15, l: ar?.liberation?.cible_min ?? 30, er: ar?.remise?.excellence_min ?? 5, el: ar?.liberation?.excellence_min ?? 10 })}</span></div>
+        <button type="button" class="ds-son" id="ch-acquitter-son" aria-pressed="${sonCoupe}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="${sonCoupe ? 'M16 9l6 6M22 9l-6 6' : 'M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14'}"/></svg>${X(sonCoupe ? 'son_acquitte' : 'acquitter_son')}</button></div>
+      <details class="panneau-c ch-filtres-zone"${Object.keys(etatC.filtres).length ? ' open' : ''}><summary><b>${K('filtrer')}</b> · <span class="note">${tuilesAttente ? '' : ''}${t('chrono.en_route')} : ${nb(d.en_route.length)}</span></summary><form id="ch-filtres" class="ligne">
         <label>${K('filtre_vehicule')} <input name="vehicule" type="search" maxlength="100" value="${esc(etatC.filtres.vehicule || '')}"></label>
         <label>${K('filtre_organisation')} <input name="organisation" type="search" maxlength="100" value="${esc(etatC.filtres.organisation || '')}"></label>
         <label>${K('filtre_periode')} <select name="heures_historique">${[12, 24, 48, 168].map((h) => `<option value="${h}"${h === d.heures_historique ? ' selected' : ''}>${K('periode_heures', { n: h })}</option>`).join('')}</select></label>
         <button type="submit" class="btn">${K('filtrer')}</button>
         <label class="ch-son"><input type="checkbox" id="ch-son"${sonActif() ? ' checked' : ''}> ${K('son')}</label>
-      </form>
-      <div class="tuiles">${tuile({ lbl: t('chrono.en_route'), val: nb(d.en_route.length) })}${tuile({ lbl: t('chrono.a_la_porte'), val: nb(d.a_la_porte.length),
-        etat: d.a_la_porte.some((p) => p.niveau === 'rouge') ? 'critique' : null })}${tuilesAttente}</div>
-      <section class="panneau-c"><h3>${K('a_la_porte')}</h3>${d.a_la_porte.length ? d.a_la_porte.map(lignePorte).join('') : `<p class="note">${K('aucune_porte')}</p>`}</section>
+      </form><div class="tuiles">${tuile({ lbl: t('chrono.en_route'), val: nb(d.en_route.length) })}${tuile({ lbl: t('chrono.a_la_porte'), val: nb(d.a_la_porte.length),
+        etat: d.a_la_porte.some((p) => p.niveau === 'rouge') ? 'critique' : null })}${tuilesAttente}</div></details>
+      <section class="ds-portes" aria-label="${K('a_la_porte')}">${d.a_la_porte.length ? d.a_la_porte.map(lignePorte).join('') : `<p class="ds-vide">${X('aucune')}</p>`}</section>
+      <div class="ds-chrono-bas" id="ch-bas"></div>
       <section class="panneau-c"><h3>${K('en_route')}</h3>${d.en_route.length ? `<ul class="liste-simple">${d.en_route.map((p) => `<li><strong>${esc(p.unite)}</strong> · ${esc(p.organisation)} · ${esc(p.numero)}
         · ${p.eta_min != null ? K('arrive_dans', { n: p.eta_min, km: p.eta_km ?? '—' }) : p.heure_prevue ? K('prevue', { heure: heureCourte(p.heure_prevue) }) : K('heure_inconnue')}</li>`).join('')}</ul>` : `<p class="note">${K('aucune_route')}</p>`}</section>
       <section class="panneau-c"><h3>${K('termines')}</h3>${d.termines.length ? `<div class="tableau"><table><thead><tr><th>${K('unite')}</th>${ETAPES.map((e) => `<th>${e}</th>`).join('')}<th>${K('porte')}</th><th>${K('sortie')}</th><th>${K('total')}</th></tr></thead>
         <tbody>${d.termines.map((p) => `<tr><td>${esc(p.unite)}</td>${ETAPES.map((e) => `<td>${heureEtape(p.heures[e])}</td>`).join('')}<td>${p.durees.porte ?? '—'}</td><td>${p.durees.sortie ?? '—'}</td><td>${p.durees.total ?? '—'}</td></tr>`).join('')}</tbody></table></div>` : `<p class="note">${K('aucun_termine')}</p>`}</section>
       <section class="panneau-c" id="ch-rapport"><h3>${K('rapport')}</h3><div class="ligne"><label class="lbl" for="ch-mois">${K('mois')}</label>
         <input type="month" id="ch-mois" value="${esc(etatC.mois)}"><button class="btn" id="ch-csv">${K('csv')}</button></div><div id="ch-rapport-corps"><p class="note">${K('chargement')}</p></div></section>
-      <section class="panneau-c"><h3>${K('ecarts')}</h3><div id="ch-ecarts"></div></section>`;
+      <section class="panneau-c"><h3>${K('ecarts')}</h3><div id="ch-ecarts"></div></section>
+      <p class="note ds-chrono-pied">${X('pied')}</p>`;
     v.querySelector('#ch-filtres').onsubmit = (ev) => {
       ev.preventDefault();
       etatC.filtres = Object.fromEntries(new FormData(ev.currentTarget));
@@ -111,19 +163,23 @@
       const url = URL.createObjectURL(await r.blob()); const a = document.createElement('a');
       a.href = url; a.download = `arrimo-chrono-${etatC.mois}.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     };
-    rapport(); ecarts();
+    rapport(); ecarts(); basChrono();
     alertesSonores(d.a_la_porte);
+    // Planche 3 : l'acquittement coupe le son (toutes les alertes rouges présentes), jamais le chrono ni l'alerte
+    $('#ch-acquitter-son').onclick = () => { d.a_la_porte.filter((p) => p.niveau === 'rouge').forEach((p) => sons.acquittes.add(p.id)); toast(t('chrono.alerte_acquittee')); vueChrono(); };
     $('#ch-son').onchange = (e) => ls.ecrire('arrimo-chrono-son', e.target.checked ? '1' : '0');
     v.querySelectorAll('[data-ch-acquitter]').forEach((b) => { b.onclick = () => { sons.acquittes.add(Number(b.dataset.chAcquitter)); toast(t('chrono.alerte_acquittee')); vueChrono(); }; });
     // Les anneaux avancent entre deux actualisations (toutes les 15 s, sans appel au serveur)
     clearInterval(etatC.tic);
     etatC.tic = setInterval(() => {
       if (etat.vue !== 'chrono') return clearInterval(etatC.tic);
-      v.querySelectorAll('.ch-anneau[data-h11]').forEach((a) => {
+      v.querySelectorAll('.ds-porte[data-h11]').forEach((a) => {
         if (!a.dataset.h11) return;
-        const n = Math.max(0, Math.floor((Date.now() - new Date(a.dataset.h11).getTime()) / 60000)); const ref = Number(a.dataset.ref);
-        const arc = a.querySelector('.arc'); const tour = 2 * Math.PI * 26;
-        arc.setAttribute('stroke-dasharray', `${(Math.min(1, n / ref) * tour).toFixed(1)} ${tour.toFixed(1)}`); a.querySelector('.min').textContent = n;
+        const n = Math.max(0, Math.floor((Date.now() - new Date(a.dataset.h11).getTime()) / 60000));
+        const R1 = 2 * Math.PI * 56; const R2 = 2 * Math.PI * 40; const rem = Number(a.dataset.rem); const lib = Number(a.dataset.lib);
+        a.querySelector('.arc-remise')?.setAttribute('stroke-dasharray', `${(Math.min(1, n / rem) * R1).toFixed(1)} ${R1.toFixed(1)}`);
+        a.querySelector('.arc-lib')?.setAttribute('stroke-dasharray', `${(Math.min(1, n / lib) * R2).toFixed(1)} ${R2.toFixed(1)}`);
+        const t2 = a.querySelector('.min'); if (t2) t2.textContent = n;
       });
     }, 15000);
     // Le chrono avance seul : la vue se redessine chaque minute tant qu'elle est affichée
@@ -138,7 +194,7 @@
     // Avant / après (cahier 11) : même rapport pour le mois précédent, mesures seulement
     const [a, m] = etatC.mois.split('-').map(Number); const prec = new Date(Date.UTC(a, m - 2, 1)).toISOString().slice(0, 7);
     const rp = await api('GET', `/chrono/rapport?etablissement_id=${etat.ctx}&mois=${prec}&${paramsFiltres()}`).catch(() => null);
-    const barre = (lbl, v, vp) => `<div class="ch-barre"><span class="lbl">${lbl}</span>
+    const barre = (lbl, v, vp) => `<div class="ch-barre"><span class="ds-lbl">${lbl}</span>
       <span class="piste" role="img" aria-label="${K('obj_aria', { lbl, v: v ?? '—', vp: vp ?? '—' })}"><span class="val" style="width:${v ?? 0}%"></span>${vp != null ? `<span class="prec" style="left:${vp}%"></span>` : ''}</span>
       <b class="num">${v == null ? '—' : `${v} %`}</b><span class="note">${K('obj_prec', { v: vp == null ? '—' : `${vp} %` })}</span></div>`;
     const oa = r.objectifs_arrimo; const op = rp?.objectifs_arrimo;

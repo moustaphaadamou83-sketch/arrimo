@@ -155,6 +155,23 @@ $('#ambiance-barre')?.addEventListener('change', async (e) => {
   window.ArrimoApparence?.definirAmbiance(e.target.value);
   try { const r = await api('PUT', '/moi/ambiance', { ambiance: e.target.value }); if (etat.moi) etat.moi.utilisateur.ambiance = r.ambiance; toast(t('apparence.ambiance_ok')); } catch (err) { toast(err.message, true); }
 });
+/* Sélecteur d'ambiance segmenté de la barre supérieure (planche 2) : Glacier et Horizon (clairs), Crépuscule (sombre).
+   Mêmes préférences que Paramètres › Apparence : ambiance du compte + apparence du compte ; rien d'autre ne change. */
+function majAmbianceSeg() {
+  const theme = document.documentElement.dataset.theme; const amb = window.ArrimoApparence?.ambiance?.() || 'glacier';
+  const actif = theme === 'sombre' ? 'crepuscule' : amb;
+  document.querySelectorAll('[data-ambiance-choix]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.ambianceChoix === actif)));
+}
+document.querySelectorAll('[data-ambiance-choix]').forEach((b) => { b.addEventListener('click', async () => {
+  const c = b.dataset.ambianceChoix;
+  if (c === 'crepuscule') { await choisirApparence('sombre'); majAmbianceSeg(); return; }
+  window.ArrimoApparence?.definirAmbiance(c);
+  try { const r = await api('PUT', '/moi/ambiance', { ambiance: c }); if (etat.moi) etat.moi.utilisateur.ambiance = r.ambiance; const s = $('#ambiance-barre'); if (s) s.value = r.ambiance; } catch (err) { toast(err.message, true); }
+  if (document.documentElement.dataset.theme === 'sombre') await choisirApparence('clair'); else toast(t('apparence.ambiance_ok'));
+  majAmbianceSeg();
+}); });
+new MutationObserver(majAmbianceSeg).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-ambiance'] });
+majAmbianceSeg();
 // Bascule de l'en-tête : clair → sombre → automatique (système), sans ouvrir les Paramètres.
 $('#b-theme')?.addEventListener('click', () => {
   const ordre = ['clair', 'sombre', 'automatique'];
@@ -408,7 +425,9 @@ $('#b-compte').onclick = () => allerA('compte');
 /* ---------------- Disposition de la navigation : barre horizontale ou barre verticale à gauche ---------------- */
 // Préférence propre à cet appareil (un écran large et un téléphone ne se prêtent pas à la même disposition).
 const DISPOSITIONS = ['horizontale', 'verticale'];
-const disposition = () => (lire('arrimo-disposition') === 'verticale' ? 'verticale' : 'horizontale');
+// Par défaut (planche 2 validée) : barre latérale sur ordinateur, menu horizontal sinon ; le choix de l'utilisateur prime toujours.
+const disposition = () => { const d = lire('arrimo-disposition'); if (d === 'verticale' || d === 'horizontale') return d;
+  return document.documentElement.dataset.design === 'v2' && window.matchMedia('(min-width: 1100px)').matches ? 'verticale' : 'horizontale'; };
 function appliquerDisposition(d) {
   const v = d === 'verticale';
   document.body.classList.toggle('nav-verticale', v);
@@ -1586,7 +1605,7 @@ async function vueParams() {
     // Restaurer l'apparence par défaut (cahier 6) : thème automatique, ambiance Glacier, affichage confortable, menu horizontal, Accueil complet
     $('#p-restaurer')?.addEventListener('click', async () => {
       for (const k of ['arrimo-densite', 'arrimo-nav-repliee', 'arrimo-accueil-perso']) ecrire(k, null);
-      appliquerDensite(); ecrire('arrimo-disposition', 'horizontale'); appliquerDisposition('horizontale');
+      appliquerDensite(); ecrire('arrimo-disposition', null); for (const k of ['arrimo-nav-ouverts']) ecrire(k, null); appliquerDisposition(disposition());
       try { const r = await api('PUT', '/moi/ambiance', { ambiance: 'glacier' }); if (etat.moi) etat.moi.utilisateur.ambiance = r.ambiance; window.ArrimoApparence?.definirAmbiance('glacier'); const s = $('#ambiance-barre'); if (s) s.value = 'glacier'; } catch { /* conservé */ }
       await choisirApparence('automatique');
       vueParams();
@@ -1733,20 +1752,37 @@ async function vueCopilote() {
   const niv = v.querySelector('.alerte-copilote'); const detailsNiveau = niv ? niv.innerHTML : '';
   const ancien = document.createElement('div'); while (v.firstChild) ancien.appendChild(v.firstChild);
   const mods = etabCtx().modules || {};
-  const [fx, ch] = await Promise.all([api('GET', `/arrimo-flux?etablissement_id=${etat.ctx}`).catch(() => null), mods.chrono === true ? api('GET', `/chrono?etablissement_id=${etat.ctx}`).catch(() => null) : null]);
+  const [fx, ch, cy] = await Promise.all([api('GET', `/arrimo-flux?etablissement_id=${etat.ctx}`).catch(() => null), mods.chrono === true ? api('GET', `/chrono?etablissement_id=${etat.ctx}`).catch(() => null) : null,
+    api('GET', `/capacites/cycle?etablissement_id=${etat.ctx}`).catch(() => null)]);
   const A = (k, vars) => t(`accueil.${k}`, vars);
+  // Planche 2 : six indicateurs, chacun rattaché à son module (couleur) ; valeurs réelles seulement
+  const cc = cy?.compte; const vides = cc ? cc.prete + cc.confirmee + cc.preparation : null;
+  const civ = b.vue?.civieres; const enRoute = (ch?.en_route || []).map((p) => p.eta_min).filter((x) => x != null);
+  const vig = Number($('#n-vigilance')?.hidden ? NaN : $('#n-vigilance')?.textContent);
   const kpis = [
-    { code: 'k_lits', lib: A('k_lits'), val: b.vue?.lits?.libres, aller: 'lits', ton: b.vue?.lits?.libres === 0 ? 'alerte' : '' },
-    b.vue?.civieres ? { code: 'k_urgence', lib: A('k_urgence'), val: pct(b.vue.civieres.taux), aller: 'urgence', ton: ['orange', 'rouge'].includes(b.alerte?.urgence?.niveau) ? 'alerte' : '' } : null,
-    fx ? { code: 'k_arrivees', lib: A('k_arrivees'), val: fx.resume.arrivees, aller: 'flux' } : null,
-    fx ? { code: 'k_prealertes', lib: A('k_prealertes'), val: fx.mouvements.filter((l) => (l.prealerte || l.type === 'prealerte') && !['arrive', 'termine', 'annule'].includes(l.statut)).length, aller: 'secours' } : null,
-    ch ? { code: 'k_porte', lib: A('k_porte'), val: (ch.a_la_porte || []).length, aller: 'chrono', ton: (ch.a_la_porte || []).some((p) => p.niveau === 'rouge') ? 'alerte' : '' } : null,
-    { code: 'k_transferts', lib: A('k_transferts'), val: (b.vue?.transferts?.entrants || 0) + (b.vue?.transferts?.sortants || 0), aller: 'transferts' },
+    cc ? { code: 'k_lits', module: 'capacites', lib: A('k_operationnels'), val: cc.confirmee, note: A('d_operationnels', { n: vides }), aller: 'lits', ton: cc.confirmee === 0 ? 'alerte' : '' }
+      : { code: 'k_lits', module: 'capacites', lib: A('k_lits'), val: b.vue?.lits?.libres, note: b.vue?.lits?.nettoyage != null ? A('d_lits', { n: b.vue.lits.nettoyage }) : '', aller: 'lits', ton: b.vue?.lits?.libres === 0 ? 'alerte' : '' },
+    civ ? { code: 'k_urgence', module: 'urgences', lib: A('k_civieres'), val: `${Math.max(0, civ.fonctionnelles - civ.occupees)} / ${civ.fonctionnelles}`, note: A('d_civieres', { n: pct(civ.taux) }), aller: 'urgence', ton: ['orange', 'rouge'].includes(b.alerte?.urgence?.niveau) ? 'alerte' : '' } : null,
+    ch ? { code: 'k_porte', module: 'urgences', lib: A('k_approche'), val: (ch.en_route || []).length, note: enRoute.length ? A('d_approche', { n: Math.min(...enRoute) }) : A('d_porte', { n: (ch.a_la_porte || []).length }), aller: 'chrono', ton: (ch.a_la_porte || []).some((p) => p.niveau === 'rouge') ? 'alerte' : '' }
+      : fx ? { code: 'k_prealertes', module: 'urgences', lib: A('k_prealertes'), val: fx.mouvements.filter((l) => (l.prealerte || l.type === 'prealerte') && !['arrive', 'termine', 'annule'].includes(l.statut)).length, aller: 'secours' } : null,
+    { code: 'k_transferts', module: 'transferts', lib: A('k_transferts'), val: (b.vue?.transferts?.entrants || 0) + (b.vue?.transferts?.sortants || 0), note: A('d_transferts', { e: b.vue?.transferts?.entrants || 0, s: b.vue?.transferts?.sortants || 0 }), aller: 'transferts' },
+    b.vue?.nsa != null ? { code: 'k_nsa', module: 'patients', lib: A('k_nsa'), val: b.vue.nsa, aller: 'nsa' } : fx ? { code: 'k_arrivees', module: 'transferts', lib: A('k_arrivees'), val: fx.resume.arrivees, aller: 'flux' } : null,
+    Number.isFinite(vig) ? { code: 'k_vigilances', module: 'pilotage', lib: A('k_vigilances'), val: vig, note: A('d_vigilances'), aller: 'vigilance', ton: vig ? 'alerte' : '' } : fx ? { code: 'k_arrivees', module: 'transferts', lib: A('k_arrivees'), val: fx.resume.arrivees, aller: 'flux' } : null,
   ];
-  await window.ArrimoAccueil.construire(v, { ...optsFlux(), presentation: etat.moi?.environnement === 'demo', bandeau: bandeauAccueil(), kpis,
+  // Capacité réelle (planche 2) : cycle de disponibilité (vue dérivée en lecture seule de src/regles.js)
+  const C2 = (cl, so) => (document.documentElement.dataset.theme === 'sombre' ? so : cl);
+  const capacite = cc ? { total: cy.lits.length, validite: cy.validite_confirmation_min, lu: new Date(), note: A('cap_note', { op: cc.confirmee, vides, nc: cc.prete }), segments: [
+    { nom: A('cap_occupes'), n: cc.occupee + cc.liberation_previsionnelle, couleur: C2('#94A3B8', '#64748B'), aller: 'lits' },
+    { nom: A('cap_reserves'), n: cc.attribuee, couleur: C2('#2563EB', '#8AA8F0'), aller: 'lits' },
+    { nom: A('cap_nettoyage'), n: cc.liberee + cc.nettoyage + cc.preparation, couleur: C2('#B45309', '#F4B35E'), aller: 'nettoyage' },
+    { nom: A('cap_non_confirmes'), n: cc.prete, couleur: C2('#CBD5E1', '#41576A'), aller: 'lits' },
+    { nom: A('cap_operationnels'), n: cc.confirmee, couleur: C2('#15803D', '#4ADE80'), aller: 'lits' },
+    { nom: A('cap_indispo'), n: cc.indisponible, couleur: C2('#475569', '#A9BAC9'), aller: 'lits' }] } : null;
+  const niveauPrio = (p) => (p === 1 ? 'escalade' : p === 2 ? 'vigilance' : 'information');
+  await window.ArrimoAccueil.construire(v, { ...optsFlux(), presentation: etat.moi?.environnement === 'demo', bandeau: bandeauAccueil(), kpis, capacite, etablissement: etabCtx()?.nom, fuseau: fuseau(),
     niveau: b.alerte?.niveau ? { code: b.alerte.niveau, details: detailsNiveau, le: b.genere_le, question: A('q_niveau', { niveau: t(`niveaux.${b.alerte.niveau}`) }) } : null,
     chrono: mods.chrono === true, taches: true, previsions: b.previsions, reseau: r, flux: fx,
-    priorites: (b.recommandations || []).slice(0, 4).map((x) => ({ texte: x.titre, raison: x.raison,
+    priorites: (b.recommandations || []).slice(0, 4).map((x) => ({ texte: x.titre, raison: x.raison, niveau: niveauPrio(x.priorite),
       aller: { assigner: 'admissions', debut_nettoyage: 'nettoyage', lit: 'lits', plan_b: 'transferts', transfert: 'transferts', transferer: 'transferts', recherche_reseau: 'reseau' }[x.action?.type] || x.action?.vue || null })), details: ancien });
 }
 /** Bandeau d'accueil : nom réel, rôle, établissement, date et heure locales de l'établissement (jamais d'horaire inventé). */

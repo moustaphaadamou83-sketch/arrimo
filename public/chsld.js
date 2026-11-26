@@ -136,13 +136,19 @@
       const fx = await api('GET', `/arrimo-flux?etablissement_id=${ctx()}`).catch(() => null);
       const A = (k) => t(`accueil.${k}`);
       const prep = fx ? fx.resume.preparations : null;
-      await window.ArrimoAccueil.construire(v, { ...window.optsFlux(), bandeau: window.bandeauAccueil(), taches: true, flux: fx,
-        kpis: [{ code: 'k_places', lib: A('k_places'), val: p.libres, aller: 'c-chambres', ton: p.libres ? '' : 'alerte' },
+      // Planche 2 : capacité réelle des places (mêmes chiffres que l'écran Chambres), segments cliquables
+      const C2 = (cl, so) => (document.documentElement.dataset.theme === 'sombre' ? so : cl); const CA = (k) => t(`chsld.accueil.${k}`);
+      const capacite = { places: true, total: p.dotees, lu: new Date(), segments: [
+        { nom: CA('occupees'), n: p.occupees, couleur: C2('#94A3B8', '#64748B'), aller: 'c-chambres' }, { nom: CA('reservees'), n: p.reservees, couleur: C2('#2563EB', '#8AA8F0'), aller: 'c-chambres' },
+        { nom: CA('preparation'), n: p.preparation, couleur: C2('#B45309', '#F4B35E'), aller: 'c-taches' }, { nom: CA('conservees'), n: p.conservees, couleur: C2('#7C3AED', '#B794F6'), aller: 'c-chambres' },
+        { nom: CA('libres'), n: p.libres, couleur: C2('#15803D', '#4ADE80'), aller: 'c-chambres' }, { nom: CA('bloquees'), n: p.bloquees, couleur: C2('#475569', '#A9BAC9'), aller: 'c-chambres' }] };
+      await window.ArrimoAccueil.construire(v, { ...window.optsFlux(), bandeau: window.bandeauAccueil(), taches: true, flux: fx, capacite, etablissement: a.etablissement.nom,
+        kpis: [{ code: 'k_places', module: 'capacites', lib: A('k_places'), val: p.libres, aller: 'c-chambres', ton: p.libres ? '' : 'alerte' },
           fx ? { code: 'k_arrivees', lib: A('k_arrivees'), val: fx.resume.arrivees, aller: 'flux' } : null, fx ? { code: 'k_departs', lib: A('k_departs'), val: fx.resume.departs, aller: 'flux' } : null,
           { code: 'k_preparer', lib: A('k_preparer'), val: prep ?? a.entretien.a_nettoyer, aller: 'c-taches' },
           fx ? { code: 'k_prealertes', lib: A('k_prealertes'), val: fx.resume.prealertes_a_acquitter, aller: 'flux', ton: fx.resume.prealertes_a_acquitter ? 'alerte' : '' } : null,
           { code: 'k_taches', lib: A('k_taches'), val: a.taches.en_retard, aller: 'c-taches', ton: a.taches.en_retard ? 'alerte' : '' }],
-        priorites: actions.slice(0, 3).map((x) => ({ texte: String(x).replace(/<[^>]+>/g, '') })), details: ancien });
+        priorites: actions.slice(0, 3).map((x) => ({ texte: String(x).replace(/<[^>]+>/g, ''), niveau: 'vigilance' })), details: ancien });
     }
     v.insertAdjacentHTML('beforeend', `<details class="panneau-c ch-communications" id="ch-comm"><summary><b><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-mail"/></svg> ${esc(t('chsld.accueil.communications'))}</b></summary><div id="ch-comm-zone"></div></details>`);
     const comm = v.querySelector('#ch-comm'); comm.open = window.__chCommOuvert === true; comm.addEventListener('toggle', () => { window.__chCommOuvert = comm.open; });

@@ -15,7 +15,11 @@
       ind_titre: 'Préparation de l’accueil : {p} %', ind_inconnu: 'Préparation de l’accueil : inconnue', ind_pret: 'accueil prêt', ind_reste: 'reste : {c}',
       cond: { capacite_prete: 'capacité prête', acceptation: 'acceptation', prealerte_recue: 'préalerte reçue' },
       mg: { marge: 'marge de préparation : {m} min', marge_faible: 'marge faible : {m} min', risque_retard: 'risque de retard de préparation', inconnu: 'marge de préparation inconnue' },
-      pr: { a_faire: 'À préparer', en_cours: 'En cours', prete: 'Prête', a_verifier: 'À vérifier' } },
+      pr: { a_faire: 'À préparer', en_cours: 'En cours', prete: 'Prête', a_verifier: 'À vérifier' },
+      ds_titre: 'Un seul dossier par mouvement, vu par chaque établissement concerné', ds_etapes: ['Demande', 'Acceptation', 'Préparation', 'Transport', 'Arrivée', 'Réception', 'Clôture'],
+      ds_etape: 'Étape : {e}', ds_plans: 'Plans préparés', ds_aucun_plan: 'Aucune alternative nécessaire', ds_cours: 'Le mouvement suit son cours.', ds_911: 'Parcours d’urgence', ds_911_t: 'Aucune acceptation préalable requise.',
+      ds_plans_inaccessibles: 'Plans visibles par l’établissement demandeur seulement.', ds_choisir: 'Choisissez un mouvement pour voir son dossier.', ds_reservation: 'Une proposition n’est jamais une réservation : une personne habilitée décide.',
+      ds_depuis: 'depuis {d}', ds_prevu: 'prévu {h}', ds_eta: 'arrivée estimée {h}', ds_aucun: 'Aucun mouvement dans les catégories choisies.', ds_vehicule: 'véhicule {v}', ds_sillage: 'Sillage', ds_dossier: 'Dossier du mouvement' },
     en: { titre: 'Arrimo Flow', intro: 'Facility arrivals and departures: transports, transfers, housing and ambulances, live.', tous: 'All', arrivees: 'Arrivals', departs: 'Departures',
       aujourdhui: 'Today', demain: 'Tomorrow', actualise: 'Updated at {h}', mvt: 'Movement', ref: 'Reference', origine: 'Origin', destination: 'Destination', prevue: 'Scheduled', estimee: 'Estimated',
       vehicule: 'Vehicle', statut: 'Status', prep: 'Preparation', action: 'Action', arr: 'Arrival', dep: 'Departure', eta_ind: 'ETA unavailable', creneau: 'slot {d}–{f}', reelle: 'actual {h}',
@@ -29,7 +33,11 @@
       ind_titre: 'Reception readiness: {p} %', ind_inconnu: 'Reception readiness: unknown', ind_pret: 'reception ready', ind_reste: 'remaining: {c}',
       cond: { capacite_prete: 'capacity ready', acceptation: 'acceptance', prealerte_recue: 'pre-alert received' },
       mg: { marge: 'preparation margin: {m} min', marge_faible: 'low margin: {m} min', risque_retard: 'preparation delay risk', inconnu: 'preparation margin unknown' },
-      pr: { a_faire: 'To prepare', en_cours: 'In progress', prete: 'Ready', a_verifier: 'To check' } },
+      pr: { a_faire: 'To prepare', en_cours: 'In progress', prete: 'Ready', a_verifier: 'To check' },
+      ds_titre: 'One record per movement, seen by every facility involved', ds_etapes: ['Request', 'Acceptance', 'Preparation', 'Transport', 'Arrival', 'Reception', 'Closure'],
+      ds_etape: 'Step: {e}', ds_plans: 'Prepared plans', ds_aucun_plan: 'No alternative needed', ds_cours: 'The movement is on track.', ds_911: 'Emergency pathway', ds_911_t: 'No prior acceptance required.',
+      ds_plans_inaccessibles: 'Plans are visible to the requesting facility only.', ds_choisir: 'Choose a movement to see its record.', ds_reservation: 'A proposal is never a reservation: an authorized person decides.',
+      ds_depuis: 'since {d}', ds_prevu: 'planned {h}', ds_eta: 'estimated arrival {h}', ds_aucun: 'No movement in the selected categories.', ds_vehicule: 'vehicle {v}', ds_sillage: 'Trail', ds_dossier: 'Movement record' },
   };
   const e = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const L = () => (typeof langue === 'string' && langue === 'en' ? 'en' : (document.documentElement.lang || '').startsWith('en') ? 'en' : 'fr');
@@ -90,25 +98,80 @@
     }
     const d0 = await charger(o);
     const cpt = {}; for (const l of d0.mouvements) cpt[groupe(l)] = (cpt[groupe(l)] || 0) + 1;
-    const d = { ...d0, mouvements: d0.mouvements.filter((l) => (!etat.groupe || groupe(l) === etat.groupe) && (!etat.categorie || l.categorie?.code === etat.categorie)) };
-    // Légende commune des catégories de mouvements : cliquer filtre (et un second clic retire le filtre)
-    const vues = new Map(); for (const l of d0.mouvements) if (l.categorie) vues.set(l.categorie.code, l.categorie);
-    const legende = vues.size ? `<div class="flux-groupes" role="group" aria-label="${T('categories')}">${[...vues.values()].map((c) => `<button type="button" class="cat-mvt${etat.categorie === c.code ? ' actif' : ''}" aria-pressed="${etat.categorie === c.code}" data-flux-cat="${e(c.code)}" data-forme="${e(c.forme)}" style="--cat-couleur:${e(c.couleur)};--cat-texte:${e(c.texte)};--cat-fond:${e(c.fond)};border:2px solid ${etat.categorie === c.code ? e(c.couleur) : 'transparent'};cursor:pointer">${e(c.libelle)} · ${d0.resume.par_categorie?.[c.code] ?? 0}</button>`).join('')}</div>` : '';
+    // Planche 4 : les 7 catégories toujours présentes (couleur + forme + libellé + compteur) ; un clic masque ou montre la catégorie
+    const CATS = [['interhospitalier', '#2563EB', '#1D4ED8', '#DBE7FE', 'carre'], ['interhebergement', '#7C3AED', '#6D28D9', '#EDE5FD', 'rond'], ['hopital_hebergement', '#0D9488', '#0F766E', '#D5F3EF', 'losange'],
+      ['secours_911', '#C026D3', '#A21CAF', '#FBE2F7', 'triangle'], ['transport_planifie', '#0891B2', '#0E7490', '#D6F1F8', 'pilule'], ['domicile', '#64748B', '#475569', '#E5E9EF', 'contour'], ['autre', '#4F46E5', '#4338CA', '#E2E3FB', 'anneau']];
+    const NOMS_CAT = { fr: { interhospitalier: 'Interhospitalier', interhebergement: 'Interhébergement', hopital_hebergement: 'Hôpital et hébergement', secours_911: 'Secours 911', transport_planifie: 'Transport planifié', domicile: 'Domicile', autre: 'Autres mouvements' },
+      en: { interhospitalier: 'Inter-hospital', interhebergement: 'Between residences', hopital_hebergement: 'Hospital and residence', secours_911: '911 emergency', transport_planifie: 'Scheduled transport', domicile: 'Home', autre: 'Other movements' } };
+    etat.masquees = etat.masquees || [];
+    const d = { ...d0, mouvements: d0.mouvements.filter((l) => (!etat.groupe || groupe(l) === etat.groupe) && !etat.masquees.includes(l.categorie?.code)) };
+    const legende = `<div class="ds-cats" role="group" aria-label="${T('categories')}">${CATS.map(([code, c, tx, f, forme]) => { const vu = !etat.masquees.includes(code);
+      return `<button type="button" class="ds-cat cat-mvt" data-forme="${forme}" data-flux-cat="${code}" aria-pressed="${vu}" style="--cat-couleur:${c};--cat-texte:${tx};--cat-fond:${f}">${e(NOMS_CAT[L()][code])} · ${d0.resume.par_categorie?.[code] ?? d0.mouvements.filter((l) => l.categorie?.code === code).length}</button>`; }).join('')}</div>`;
     const ensemble = `<div class="flux-groupes" role="group" aria-label="${T('ensemble')}">${Object.keys(X().gr).map((k) => `<button type="button" class="acc-mini-k flux-groupe${etat.groupe === k ? ' actif' : ''}" data-flux-groupe="${k}" aria-pressed="${etat.groupe === k}"><b>${cpt[k] || 0}</b><span>${e(X().gr[k])}</span></button>`).join('')}</div>`;
-    v.innerHTML = `<div class="entete"><div><h2>${T('titre')}</h2><p class="note">${T('intro')}</p></div><p class="note" aria-live="polite">${T('actualise', { h: h(d.genere_le) })}</p></div>
-      ${barre}${ensemble}${legende}
-      <p class="note">${T('resume', { a: d.resume.arrivees, d: d.resume.departs, r: d.resume.retards, p: d.resume.preparations })}</p>
-      ${window.ArrimoVueTransferts.rendre(d.mouvements.map((l, i) => ({ ...l, statut: l.statut_detail || l.statut, ligne: i })), {
-        cellules: { sens: (l) => T(l.mouvement === 'arrivee' ? 'arr' : 'dep'), prevue: quand, eta: estimee, prep: (l) => `${prep(l.preparation)}${accueil(l)}` },
-        actions: (l) => `${l.transfert ? o.boutonsTransfert?.(l.transfert) || '' : ''}${l.actions.includes('accuser_prealerte') ? `<button class="btn pri" data-flux-accuser="${l.ligne}">${T('accuser')}</button>` : ''}
-          ${l.fiche ? `<button class="btn" data-flux-fiche="${l.ligne}">${T('fiche')}</button>` : ''}<button class="btn" data-flux-ouvrir="${e(l.ecran)}">${T('ouvrir')}</button>`,
-      })}`;
+    // Étapes communes : Demande, Acceptation, Préparation, Transport, Arrivée, Réception, Clôture
+    const ETAPE = { a_valider: 1, demande: 1, prevu: 1, accepte: 2, en_route_depart: 3, en_transport: 3, arrive: 5, remis: 6, termine: 7, refuse: 1, annule: 1 };
+    const fait = (l) => { const st = l.statut_detail || l.statut; let f = ETAPE[st] ?? 1; if (f === 2 && l.preparation?.etat === 'prete') f = 3; return f; };
+    const bloque = (l) => !!l.retard || ['refuse', 'annule'].includes(l.statut);
+    const pastilleEtat = (l) => { const st = l.statut_detail || l.statut; const niv = ['arrive', 'termine', 'remis'].includes(st) ? 'ok' : ['refuse', 'annule'].includes(st) ? 'escalade' : l.retard ? 'vigilance' : '';
+      return window.ArrimoDS.pastille(niv, `${X().st[st] || st}${l.retard ? ` · ${X().retard}` : ''}`); };
+    const quandCourt = (l) => (l.arrivee_reelle ? T('reelle', { h: h(l.arrivee_reelle) }) : l.eta && l.mouvement === 'arrivee' ? T('ds_eta', { h: h(l.eta) }) : l.prevue ? T('ds_prevu', { h: `${jour(l.prevue)} ${h(l.prevue)}` }) : '');
+    // Dossier ouvert par défaut : d'abord un mouvement qui attend un accusé de réception (action à faire), sinon le premier
+    if (!d.mouvements.some((l) => l.cle === etat.sel)) etat.sel = (d.mouvements.find((l) => l.actions?.includes('accuser_prealerte')) || d.mouvements[0])?.cle || null;
+    const ligne = (l, i) => { const c = CATS.find((x) => x[0] === l.categorie?.code) || CATS[6]; const f = fait(l);
+      return `<button type="button" class="ds-mvt" data-flux-sel="${i}" aria-current="${l.cle === etat.sel}" style="--cat-couleur:${c[1]};--cat-texte:${c[2]}">
+        <span class="ds-col"><span class="ref">${e(l.reference)}</span><span class="catn">${e(l.categorie?.libelle || NOMS_CAT[L()][c[0]])}</span></span>
+        <span class="ds-col"><span class="trajet">${e(l.origine || '—')} → ${e(l.destination || '—')}</span><span class="det">${e(X().ty[l.type] || l.type)}${l.vehicule ? ` · ${T('ds_vehicule', { v: l.vehicule })}` : ''}${l.priorite ? ` · ${e(l.priorite)}` : ''}${l.personne ? ` · ${e(l.personne)}` : ''}</span></span>
+        <span class="ds-col">${window.ArrimoDS.progres(f, { bloque: bloque(l), noms: X().ds_etapes })}<span class="etape">${T('ds_etape', { e: X().ds_etapes[Math.min(f, 6)] })}</span></span>
+        <span class="ds-col fin">${pastilleEtat(l)}<span class="det">${quandCourt(l)}</span></span></button>`; };
+    const sel = d.mouvements.find((l) => l.cle === etat.sel);
+    v.innerHTML = `<div class="ds-mvt-page"><div class="ds-mvt-main">
+      <div class="entete ds-mvt-tete"><div><h2>${T('ds_titre')}</h2><p class="note" aria-live="polite">${T('actualise', { h: h(d.genere_le) })} · ${T('resume', { a: d.resume.arrivees, d: d.resume.departs, r: d.resume.retards, p: d.resume.preparations })}</p></div>
+        <div class="ds-seg" role="group">${[['sens', '', 'tous'], ['sens', 'arrivees', 'arrivees'], ['sens', 'departs', 'departs']].map(([k, val, lib]) => `<button type="button" data-flux-${k}="${val}" aria-pressed="${etat[k] === val}">${T(lib)}</button>`).join('')}</div>
+        <div class="ds-seg" role="group">${[['jour', 'aujourdhui', 'aujourdhui'], ['jour', 'demain', 'demain'], ['jour', 'historique', 'historique']].map(([k, val, lib]) => `<button type="button" data-flux-${k}="${val}" aria-pressed="${etat[k] === val}">${T(lib)}</button>`).join('')}</div></div>
+      ${legende}${ensemble}
+      <div class="ds-mvts">${d.mouvements.length ? d.mouvements.map(ligne).join('') : `<p class="ds-vide">${T('ds_aucun')}</p>`}</div></div>
+      <aside class="ds-mvt-aside" aria-label="${T('ds_dossier')}" id="flux-dossier">${sel ? '' : `<p class="ds-vide">${T('ds_choisir')}</p>`}</aside></div>`;
     lierFiltres();
-    v.querySelectorAll('[data-flux-cat]').forEach((b) => { b.onclick = () => { etat.categorie = etat.categorie === b.dataset.fluxCat ? null : b.dataset.fluxCat; afficher(v, o); }; });
-    o.lierActionsTransfert?.(v);
-    v.querySelectorAll('[data-flux-ouvrir]').forEach((b) => { b.onclick = () => o.ouvrir?.(b.dataset.fluxOuvrir); });
-    v.querySelectorAll('[data-flux-fiche]').forEach((b) => { b.onclick = () => ouvrirFiche(o, d.mouvements[Number(b.dataset.fluxFiche)].fiche, d.mouvements[Number(b.dataset.fluxFiche)]); });
-    v.querySelectorAll('[data-flux-accuser]').forEach((b) => { b.onclick = async () => { try { await accuser(o, d.mouvements[Number(b.dataset.fluxAccuser)]); o.toast?.(T('fait')); } catch (err) { o.toast?.(err.message, true); } afficher(v, o); }; });
+    v.querySelectorAll('[data-flux-cat]').forEach((b) => { b.onclick = () => { const c = b.dataset.fluxCat; etat.masquees = etat.masquees.includes(c) ? etat.masquees.filter((x) => x !== c) : [...etat.masquees, c]; afficher(v, o); }; });
+    v.querySelectorAll('[data-flux-sel]').forEach((b) => { b.onclick = () => { etat.sel = d.mouvements[Number(b.dataset.fluxSel)].cle; v.querySelectorAll('[data-flux-sel]').forEach((x) => x.setAttribute('aria-current', String(x === b))); dossier(v, o, d.mouvements[Number(b.dataset.fluxSel)]); }; });
+    if (sel) dossier(v, o, sel);
+  }
+  /** Panneau de droite de la planche 4 : référence, catégorie, trajet, jalons horodatés, plans préparés par OG, actions autorisées, Sillage. */
+  async function dossier(v, o, l) {
+    const z = v.querySelector('#flux-dossier'); if (!z) return;
+    const ETAPE = { a_valider: 1, demande: 1, prevu: 1, accepte: 2, en_route_depart: 3, en_transport: 3, arrive: 5, remis: 6, termine: 7, refuse: 1, annule: 1 };
+    const st = l.statut_detail || l.statut; let f = ETAPE[st] ?? 1; if (f === 2 && l.preparation?.etat === 'prete') f = 3;
+    const bloque = !!l.retard || ['refuse', 'annule'].includes(l.statut);
+    // Heures réelles des jalons (fiche du mouvement) ; une étape sans heure reste « — »
+    const [fiche, plans] = await Promise.all([l.fiche ? o.api('GET', `/arrimo-flux/fiche?type=${l.fiche.type}&id=${l.fiche.id}`).catch(() => null) : null,
+      l.transfert?.id ? o.api('GET', `/transferts/${l.transfert.id}/plans`).catch(() => undefined) : null]);
+    if (!z.isConnected) return;
+    const JALON = { demande: 0, demande_transmise: 0, prealerte: 0, acceptation: 1, refus: 1, preparation: 2, en_route: 3, sur_place: 3, depart: 3, depart_confirme: 3, prealerte_recue: 3, arrivee: 4, reception: 5, cloture: 6 };
+    const heures = Array(7).fill(null);
+    for (const c of fiche?.chronologie || []) { const i = JALON[c.etape]; if (i != null && !heures[i]) heures[i] = c.quand; }
+    if (!heures[4] && l.arrivee_reelle) heures[4] = l.arrivee_reelle;
+    const jalons = X().ds_etapes.map((nom, i) => `<li class="${i < f ? 'fait' : i === f ? (bloque ? 'bloque' : 'cours') : ''}"><i></i><span>${e(nom)}</span><span class="h">${heures[i] ? `${jour(heures[i])} ${h(heures[i])}` : '—'}</span></li>`).join('');
+    let corpsPlans;
+    if (l.type === 'prealerte' || l.categorie?.code === 'secours_911') corpsPlans = `<div class="ds-plan"><strong>${T('ds_911')}</strong><span>${T('ds_911_t')}</span></div>`;
+    else if (plans) {
+      const liste = [{ nom: 'Plan A', texte: `${plans.plan_a.nom} : ${plans.plan_a.situation}` }, ...plans.alternatives.map((x) => ({ nom: `Plan ${x.plan}`, texte: `${x.nom} : ${x.disponibilite}${x.confirme_le ? ` (${h(x.confirme_le)})` : ''}, ${x.trajet}` }))];
+      corpsPlans = (plans.alternatives.length ? liste : [{ nom: T('ds_aucun_plan'), texte: plans.regle || T('ds_cours') }]).map((x) => `<div class="ds-plan"><strong>${e(x.nom)}</strong><span>${e(x.texte)}</span></div>`).join('')
+        + (plans.incertitude ? `<p class="ds-note">${e(plans.incertitude)}</p>` : '');
+    } else if (plans === undefined) corpsPlans = `<p class="ds-note">${T('ds_plans_inaccessibles')}</p>`;
+    else corpsPlans = `<div class="ds-plan"><strong>${T('ds_aucun_plan')}</strong><span>${T('ds_cours')}</span></div>`;
+    const OBJET = { transport: 'demande_transport', transfert: 'transfert', hebergement: 'demande_hebergement', prealerte: 'prealerte' };
+    const sillage = l.fiche ? (window.ArrimoSillage?.bouton?.(OBJET[l.fiche.type] || l.fiche.type, l.fiche.id) || '') : '';
+    z.innerHTML = `<div class="tete"><strong>${e(l.reference)}</strong><span class="catn" style="font-size:12px;font-weight:600;color:${e(l.categorie?.texte || 'inherit')}">${e(l.categorie?.libelle || '')}</span></div>
+      <div style="font-size:14px;font-weight:600">${e(l.origine || '—')} → ${e(l.destination || '—')}</div>
+      ${l.preparation || l.preparation_accueil || l.marge_preparation ? `<div>${prep(l.preparation)}${accueil(l)}</div>` : ''}
+      <ol class="ds-jalons">${jalons}</ol>
+      <div class="ds-plans"><div class="tete-og"><span class="ds-og" aria-hidden="true">OG</span><strong style="font-size:14px">${T('ds_plans')}</strong></div>${corpsPlans}<p class="ds-note">${T('ds_reservation')}</p></div>
+      <div class="ds-aside-actions">${l.transfert ? o.boutonsTransfert?.(l.transfert) || '' : ''}${l.actions.includes('accuser_prealerte') ? `<button class="btn pri" data-flux-accuser>${T('accuser')}</button>` : ''}
+        ${l.fiche ? `<button class="btn" data-flux-fiche>${T('fiche')}</button>` : ''}<button class="btn" data-flux-ouvrir="${e(l.ecran)}">${T('ouvrir')}</button>${sillage}</div>`;
+    o.lierActionsTransfert?.(z);
+    z.querySelector('[data-flux-ouvrir]')?.addEventListener('click', (ev) => o.ouvrir?.(ev.currentTarget.dataset.fluxOuvrir));
+    z.querySelector('[data-flux-fiche]')?.addEventListener('click', () => ouvrirFiche(o, l.fiche, l));
+    z.querySelector('[data-flux-accuser]')?.addEventListener('click', async () => { try { await accuser(o, l); o.toast?.(T('fait')); } catch (err) { o.toast?.(err.message, true); } afficher(v, o); });
   }
   /** Fiche opérationnelle interactive : en-tête, créneau, véhicule, incident, chronologie avec acteur et heure. */
   async function ouvrirFiche(o, f, l = null) {

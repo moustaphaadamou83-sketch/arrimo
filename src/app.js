@@ -349,6 +349,7 @@ function creerApp(pool, options = {}) {
   for (const pre of ['/chrono', '/secours/chrono']) {
     api.get(`${pre}`, route((req) => chrono.tableau(pool, req.utilisateur, req.query)));
     api.get(`${pre}/rapport`, route((req) => chrono.rapport(pool, req.utilisateur, req.query)));
+    api.get(`${pre}/tendance`, route((req) => chrono.tendance(pool, req.utilisateur, req.query)));
     api.get(`${pre}/rapport.csv`, async (req, res, next) => {
       try {
         const r = await chrono.rapport(pool, req.utilisateur, req.query);

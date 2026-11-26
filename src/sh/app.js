@@ -86,7 +86,7 @@ function creerAppSh(pool, { env = process.env } = {}) {
   });
   // Interface de la console, et les fichiers partagés avec Arrimo (charte, icônes, police, mise en forme des nombres)
   app.use(express.static(PUBLIC_SH));
-  for (const f of ['style.css', 'apparence.js', 'icones.svg', 'logo.svg', 'i18n/format.js', 'i18n/fr.js']) app.get(`/${f}`, (req, res) => res.sendFile(path.join(PUBLIC, f)));
+  for (const f of ['style.css', 'design-arrimo.css', 'apparence.js', 'icones.svg', 'logo.svg', 'i18n/format.js', 'i18n/fr.js', 'formation/polices/inter-latin-wght-normal.woff2', 'formation/polices/inter-latin-ext-wght-normal.woff2']) app.get(`/${f}`, (req, res) => res.sendFile(path.join(PUBLIC, f)));
   app.use('/polices', express.static(path.join(PUBLIC, 'polices')));
 
   const ciblesSh = () => cibles(env);
