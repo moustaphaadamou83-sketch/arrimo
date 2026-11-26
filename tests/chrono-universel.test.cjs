@@ -72,3 +72,12 @@ test('Rapports Excel : tableaux affichés, en-tête et confidentialité, formule
   assert.strictEqual((await post('autre', { etablissement_id: ids.h, titre: 'x', lignes })).status, 403);
   assert.strictEqual((await post('coord', { etablissement_id: ids.h, titre: 'x', lignes: 'pas un tableau' })).status, 400);
 });
+
+test('OG temporel : durée d’une ressource nommée et escalades actives, faits Chrono, écran à ouvrir', async () => {
+  const og = async (question) => (await (await fetch(`${base}/api/copilote/question`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tok.coord}` }, body: JSON.stringify({ etablissement_id: ids.h, question }) })).json());
+  const code = (await pool.query('SELECT code FROM lits WHERE id = $1', [ids.l1])).rows[0].code;
+  const r = await og(`Depuis combien de temps le lit ${code} attend-il ?`);
+  assert.match(r.reponse, new RegExp(`${code}.*attente nettoyage depuis 0?1:1\\d:\\d\\d`), r.reponse); assert.strictEqual(r.ouvrir, 'chrono');
+  const e = await og('Quelles escalades sont encore actives ?');
+  assert.match(e.reponse, /^Fait : (aucune alerte|\d+ alerte)/, e.reponse);
+});

@@ -401,6 +401,27 @@ async function rechercheMouvement(pool, utilisateur, etabId, q, L) {
   }
   return null;
 }
+/** OG temporel (27 nov. 2026) : durée en cours d'une ressource nommée (civière, lit) ou escalades actives, depuis Chrono (lecture seule). */
+async function reponseTemporelle(pool, utilisateur, etabId, q, L) {
+  const escalades = /\b(escalades?|alertes?)\b.*\b(actives?|en cours|ouvertes?|encore)\b|\b(active|open|ongoing)\s+(escalations?|alerts?)\b/i.test(q);
+  const code = /\b(depuis combien|combien de temps|how long|since when)\b/i.test(q) && (q.match(/\b([A-Z]{2,5}-\d{1,4}[A-Z]?)\b/) || [])[1];
+  if (!escalades && !code) return null;
+  let d; try { d = await require('./chrono-universel').universel(pool, utilisateur, etabId); } catch { return null; }
+  const { hhmmss } = { hhmmss: (ms) => { const t = Math.floor(ms / 1000); const j = Math.floor(t / 86400); const p = (n) => String(n).padStart(2, '0'); return `${j ? `${j} ${L === 'en' ? 'd' : 'j'} ` : ''}${p(Math.floor((t % 86400) / 3600))}:${p(Math.floor((t % 3600) / 60))}:${p(t % 60)}`; } };
+  const NIV = L === 'en' ? { vert: 'normal', orange: 'watch', rouge: 'escalation', gris: 'unknown' } : { vert: 'normal', orange: 'vigilance', rouge: 'escalade', gris: 'inconnu' };
+  if (code) {
+    const x = [...d.patients, ...d.capacites].find((i) => String(i.ressource || '').toUpperCase() === code.toUpperCase());
+    if (!x) return null;
+    const duree = x.depuis ? hhmmss(Date.now() - new Date(x.depuis).getTime()) : (L === 'en' ? 'unknown' : 'inconnue');
+    return { mode: 'local', intentions: ['chrono'], sources: ['chrono'], ouvrir: 'chrono',
+      reponse: L === 'en' ? `Fact (Chrono): ${x.ressource} — ${x.phase.replace(/_/g, ' ')} for ${duree} (level: ${NIV[x.niveau]}). Indicative thresholds, never a clinical priority.`
+        : `Fait (Chrono) : ${x.ressource} — ${x.phase.replace(/_/g, ' ')} depuis ${duree} (niveau : ${NIV[x.niveau]}). Seuils indicatifs, jamais une priorité clinique.` };
+  }
+  const a = d.alertes; const top = a.slice(0, 3).map((x) => `${x.titre} (${x.depuis ? hhmmss(Date.now() - new Date(x.depuis).getTime()) : '—'})`);
+  return { mode: 'local', intentions: ['chrono'], sources: ['chrono'], ouvrir: 'chrono',
+    reponse: a.length ? (L === 'en' ? `Fact: ${a.length} active alert(s)/escalation(s). Oldest: ${top.join('; ')}.` : `Fait : ${a.length} alerte(s) ou escalade(s) active(s). Les plus anciennes : ${top.join(' ; ')}.`)
+      : (L === 'en' ? 'Fact: no active alert or escalation.' : 'Fait : aucune alerte ni escalade active.') };
+}
 async function question(pool, utilisateur, etabId, q, fetchImpl, patientContexteId) {
   const L = require('./og-localisation').langueDemandee(q, utilisateur.langue);
   // Entretien : OG répond sur les chambres, préparations et messages seulement (permissions minimales), jamais sur le reste
@@ -411,6 +432,8 @@ async function question(pool, utilisateur, etabId, q, fetchImpl, patientContexte
   // OG central : réponses opérationnelles transverses (Flux, transport, chambres, préalertes, admissions, Connect), pour tous les établissements
   const central = await require('./og-flux').repondre(pool, { ...utilisateur, langue: L }, etabId, q, L).catch((e) => { if (e && e.statut) return null; throw e; });
   if (central) return { ...central, langue: L };
+  // Durées Chrono (ressource nommée, escalades actives) : faits mesurés, écran Chrono à ouvrir
+  const tempo = await reponseTemporelle(pool, utilisateur, etabId, q, L); if (tempo) return { ...tempo, langue: L };
   // Numéro de transport, de préalerte ou d'ambulance que l'OG central n'a pas traité : recherche universelle (avant les modules)
   const mvt = await rechercheMouvement(pool, utilisateur, etabId, q, L); if (mvt) return { ...mvt, langue: L };
   const r = await repondreQuestion(pool, { ...utilisateur, langue: L }, etabId, q, fetchImpl, patientContexteId, L);
