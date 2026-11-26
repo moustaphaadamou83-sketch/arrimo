@@ -52,3 +52,27 @@ Les cibles actuelles de Chrono (porte 20 min, sortie 25 min, total 45 min) vienn
 - **Décisions d'architecture et propositions visuelles présentées à Moustafa avant généralisation.**
 - Graphiques alimentés par des données réelles seulement (fictives en démo, identifiées) ; jamais d'estimation présentée comme une mesure.
 - Pas de déploiement sans validation ; publication complète unique à la fin.
+
+## État de réalisation (26 nov. 2026, avant la publication complète unique)
+
+| # | Réalisé | Où |
+|---|---|---|
+| 1, 2 | Socle commun Hôpital / Hébergement ; navigation Hébergement Accueil, Résidents, Capacités, Transferts, Urgences, Opérations, Coordination, Pilotage, Administration (mêmes modules et routes) ; thème CHSLD conservé | `public/espaces.js`, `public/style.css` |
+| 3 | Flotte ambulancière par catégorie (disponibles, en intervention, en transport, à l'hôpital, en préparation, indisponibles) ; états « en préparation » et « désinfection » ; écran embarqué distinct (`secours.html`, existant) ; CCS : tuiles, couverture, quotes-parts, flux | `src/vehicules.js`, `public/secours.js` |
+| 4 | Catégories et couleurs universelles des mouvements, légende filtrante | `src/categories-mouvements.js`, `public/arrimo-flux.js` |
+| 5, 6, 7 | Design system validé appliqué par défaut (retour personnel `?design=v1`) ; couleurs de modules ; ambiances Glacier, Horizon, Crépuscule ; menu vertical dépliable ; densité compact / confortable ; Accueil personnalisable ; mode présentation (démo) ; restauration de l'apparence | `public/apparence.js`, `public/app.js`, `public/accueil.js` |
+| 8 | OG proactif : plan de coordination, plans A/B/C, limites ; NSA pilotage | `src/og-plan.js`, `src/og-alternatives.js`, `src/nsa-indicateurs.js` |
+| 9 | Libre ≠ disponible confirmé partout (source, heure) ; indicateurs cliquables ; inconnu jamais 0 | moteur existant + cycle (15) |
+| 10 | Panneau latéral universel (Détails, Sillage, OG, actions) ; notifications liées à leur objet, lu ≠ traité | `public/panneau-lateral.js`, `src/services.js` |
+| 11 | Chronomètres circulaires (référence MSSS, repère objectif Arrimo), son orange, pulsation et son prioritaire rouge acquittables ; objectifs Arrimo et heures-véhicules avant / après | `public/chrono.js`, `src/chrono.js` |
+| 12 | Fiche ambulance côté hôpital (position, ETA, préalerte, service, historique Chrono) ; marge de préparation (arrivée vs civière, nettoyage, lit) | `src/marge-preparation.js`, `public/liaison-secours.js` |
+| 13 | Temps réel avec séquence, rattrapage (Last-Event-ID), état du flux mesuré ; blocages en cascade ; prévisions 4 / 6 / 12 / 24 / 48 h | `src/flux.js`, `src/cascade.js`, `src/previsions.js` |
+| 14 | Indicateurs NSA ; coordination ≠ pénurie (diagnostic de l'attente) | `src/nsa-indicateurs.js`, `src/vigilance.js` |
+| 15 | Cycle de disponibilité dérivé (lecture seule, 9 états distincts) ; indice de préparation de l'accueil en anneau, conditions restantes | `src/cycle-disponibilite.js`, `src/arrimo-flux.js` |
+| 16 | Prise en charge effective : prête et confirmée, besoins vérifiés, équipe d'accueil non présumée, délai estimé | `src/services.js` (`priseEnCharge`) |
+| 17 | Mêmes moteurs pour tous les comptes ; synchronisation validée par la suite « inter-acteurs temps réel » de la recette | `tests/` |
+| 18 | Impact et rentabilité (5 piliers ; économies réelles ≠ valeur estimée) | `src/impact.js` |
+| 19 | Compatibilité des capacités, réaffectation exceptionnelle tracée ; contrôle des rattachements | `src/compatibilite.js`, `src/rattachements.js` |
+
+Limites du chantier coordination levées : mode crise sans connexion avec réconciliation (`public/crise.js`, `src/crise.js`), exercice de formation isolé (`src/exercices.js`), liste de préparation des admissions (`src/admissions-preparation.js`), coopération entre territoires (`src/services.js`, `cooperationTerritoires`).
+Limites restantes, dépendant d'une décision ou d'un tiers : salles et équipements autonomes non modélisés (décision de modèle) ; équipe d'accueil non modélisée (jamais présumée) ; mode sans connexion seulement si la page est déjà ouverte au moment de la coupure ; accord inter-territorial à définir avant d'afficher les noms d'établissements d'un autre territoire ; connexions réelles (DSN, répartition, transporteurs) non présentées comme opérationnelles.
