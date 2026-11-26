@@ -36,7 +36,7 @@ Deux documents reçus en double à l'identique (« Coordination temporelle et an
 
 ### Décision de Moustafa (26 nov. 2026, cibles Chrono)
 
-Références officielles du MSSS conservées ; objectifs internes Arrimo 15/30 et 5/10 affichés en parallèle. Maquette visuelle : en examen (aperçu `?design=v2`), pas de généralisation avant sa validation définitive.
+Références officielles du MSSS conservées ; objectifs internes Arrimo 15/30 et 5/10 affichés en parallèle. Maquette visuelle (4 planches : design system, Accueil, Chrono, Transferts & Liaisons) : **validée par Moustafa le 26 nov. 2026**. Le design v2 est généralisé à tous les comptes (cahiers 1, 2, 3, 5 et 7).
 
 ### Décision de Moustafa (26 nov. 2026, portail des proches)
 
