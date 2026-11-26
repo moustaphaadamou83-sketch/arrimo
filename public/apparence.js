@@ -49,8 +49,9 @@
   let lieu = null; try { lieu = JSON.parse(lire(CLE_LIEU) || 'null'); } catch { lieu = null; }
   let ambiance = AMBIANCES.includes(lire(CLE_AMB)) ? lire(CLE_AMB) : 'glacier';
   const CLE_V2 = 'arrimo-design-v2';
-  try { const q = new URLSearchParams(racine.location?.search || ''); if (q.get('design') === 'v2') ecrire(CLE_V2, '1'); if (q.get('design') === 'v1') ecrire(CLE_V2, null); } catch { /* sans adresse */ }
-  const apercuV2 = () => lire(CLE_V2) === '1';
+  // Maquette validée par Moustafa le 26 nov. 2026 : le design system est appliqué par défaut ; ?design=v1 reste un retour personnel
+  try { const q = new URLSearchParams(racine.location?.search || ''); if (q.get('design') === 'v1') ecrire(CLE_V2, '0'); if (q.get('design') === 'v2') ecrire(CLE_V2, null); } catch { /* sans adresse */ }
+  const apercuV2 = () => lire(CLE_V2) !== '0';
 
   function appliquer() {
     const theme = resoudre(mode, { systemeSombre: !!media?.matches, lieu });
@@ -58,7 +59,7 @@
     // Changement de thème : couleurs appliquées d'un coup, sans fondu (aucun état intermédiaire mal contrasté)
     if (html.dataset.theme && html.dataset.theme !== theme) { html.classList.add('theme-bascule'); setTimeout(() => html.classList.remove('theme-bascule'), 300); }
     html.dataset.theme = theme; html.dataset.apparence = mode;
-    // Nouveau design en APERÇU seulement tant que la maquette n'est pas validée par Moustafa : ?design=v2 l'active, ?design=v1 le retire
+    // Design system validé (26 nov. 2026) : actif sur les pages d'Arrimo ; la console SH garde sa présentation
     if (html.hasAttribute('data-arrimo') && apercuV2()) { html.dataset.design = 'v2'; html.dataset.ambiance = ambiance; }
     else { delete html.dataset.design; delete html.dataset.ambiance; }
     const meta = document.querySelector('meta[name="theme-color"]');

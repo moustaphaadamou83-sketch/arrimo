@@ -23,6 +23,7 @@ window.ARRIMO_I18N.en = {
     i_capacites_recuperees_lits: 'Beds freed after placement', i_temps_administratif_economise_h: 'Administrative time saved',
     i_reception_prealerte_mediane_min: 'Pre-alert reception (median)', i_delai_accuse_alertes_min: 'Alert acknowledgement time',
     cat_heures_ambulancieres: 'ambulance hours', cat_journees_nsa: 'ALC days', cat_capacite: 'capacity', cat_administratif: 'administrative', cat_autre: 'other' },
+  affichage: { densite: 'Display density', confortable: 'Comfortable', compact: 'Compact' },
   apparence: { ambiance: 'Ambience (Glacier or Horizon in light mode; Dusk in dark mode)', ambiance_ok: 'Ambience saved.', basculer: 'Switch theme', choisir: 'Appearance', clair: 'Light', sombre: 'Dark', automatique: 'Automatic (system)', soleil: 'Follow sunrise and sunset (facility)', enregistree: 'Appearance saved.' },
   priorites_ui: {
     "titre": "Priorities and allocation",
@@ -79,6 +80,7 @@ window.ARRIMO_I18N.en = {
     demo: 'Demonstration · fictitious data',
   },
   disposition: {
+    replier: 'Collapse the menu (icons only)', deplier: 'Expand the menu',
     basculer: 'Menu layout', horizontale: 'Horizontal bar at the top', verticale: 'Vertical bar on the left',
     titre: 'Menu layout', aide: 'Choose where the main menu appears. This choice is specific to this device; on a small screen, the menu stays at the top.',
     enregistree: 'Menu layout saved.',

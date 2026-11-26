@@ -146,6 +146,11 @@ async function choisirApparence(choix) {
 }
 $('#apparence-barre')?.addEventListener('change', (e) => choisirApparence(e.target.value));
 // Ambiance personnelle (design system du 26 nov. 2026) : appliquée tout de suite, enregistrée sur le compte
+/* Densité d'affichage (cahier 7) : confortable ou compact, préférence de cet appareil */
+const densite = () => (lire('arrimo-densite') === 'compact' ? 'compact' : 'confortable');
+function appliquerDensite() { document.documentElement.dataset.densite = densite(); const s = $('#densite-barre'); if (s) s.value = densite(); }
+appliquerDensite();
+$('#densite-barre')?.addEventListener('change', (e) => { ecrire('arrimo-densite', e.target.value === 'compact' ? 'compact' : null); appliquerDensite(); });
 $('#ambiance-barre')?.addEventListener('change', async (e) => {
   window.ArrimoApparence?.definirAmbiance(e.target.value);
   try { const r = await api('PUT', '/moi/ambiance', { ambiance: e.target.value }); if (etat.moi) etat.moi.utilisateur.ambiance = r.ambiance; toast(t('apparence.ambiance_ok')); } catch (err) { toast(err.message, true); }
@@ -412,6 +417,15 @@ function appliquerDisposition(d) {
   if (infos && nav && (infos.parentElement === nav) !== dansNav) { if (dansNav) nav.prepend(infos); else $('.barre-in .marque')?.after(infos); }
   const b = $('#b-disposition');
   if (b) { const l = `${t('disposition.basculer')} · ${t(`disposition.${d}`)}`; b.setAttribute('aria-label', l); b.title = l; b.setAttribute('aria-pressed', String(v)); }
+  // Barre verticale dépliable (cahier 5) : repliée, seules les icônes restent ; le libellé reste lu par les lecteurs d'écran et en infobulle
+  const replie = v && lire('arrimo-nav-repliee') === '1';
+  document.body.classList.toggle('nav-repliee', replie);
+  const r = $('#b-replier-nav');
+  if (r) { r.hidden = !v; r.setAttribute('aria-pressed', String(replie)); const l = t(replie ? 'disposition.deplier' : 'disposition.replier'); r.setAttribute('aria-label', l); r.title = l; }
+  document.querySelectorAll('#onglets button').forEach((x) => {
+    if (replie) { if (!x.title) { x.title = x.textContent.trim(); x.dataset.titreAuto = '1'; } }
+    else if (x.dataset.titreAuto) { x.removeAttribute('title'); delete x.dataset.titreAuto; }
+  });
   majHauteurBarre();
 }
 function choisirDisposition(d) {
@@ -441,6 +455,7 @@ telephone.addEventListener?.('change', () => { ouvrirNav(false); appliquerDispos
 /** Changement d'écran : la page repart du haut (pas de position héritée de l'écran précédent ni de saut). */
 const hautDePage = () => { if (window.scrollY) window.scrollTo(0, 0); };
 $('#b-disposition')?.addEventListener('click', () => choisirDisposition(disposition() === 'verticale' ? 'horizontale' : 'verticale'));
+$('#b-replier-nav')?.addEventListener('click', () => { ecrire('arrimo-nav-repliee', lire('arrimo-nav-repliee') === '1' ? null : '1'); appliquerDisposition(disposition()); });
 
 /* ---------------- Météo, heure et date de l'établissement (fuseau de sa configuration) ---------------- */
 // Codes météo de l'OMM regroupés en familles lisibles ; l'icône accompagne toujours un libellé (jamais l'icône seule).
@@ -1709,7 +1724,7 @@ async function vueCopilote() {
     ch ? { code: 'k_porte', lib: A('k_porte'), val: (ch.a_la_porte || []).length, aller: 'chrono', ton: (ch.a_la_porte || []).some((p) => p.niveau === 'rouge') ? 'alerte' : '' } : null,
     { code: 'k_transferts', lib: A('k_transferts'), val: (b.vue?.transferts?.entrants || 0) + (b.vue?.transferts?.sortants || 0), aller: 'transferts' },
   ];
-  await window.ArrimoAccueil.construire(v, { ...optsFlux(), bandeau: bandeauAccueil(), kpis,
+  await window.ArrimoAccueil.construire(v, { ...optsFlux(), presentation: etat.moi?.environnement === 'demo', bandeau: bandeauAccueil(), kpis,
     niveau: b.alerte?.niveau ? { code: b.alerte.niveau, details: detailsNiveau, le: b.genere_le, question: A('q_niveau', { niveau: t(`niveaux.${b.alerte.niveau}`) }) } : null,
     chrono: mods.chrono === true, taches: true, previsions: b.previsions, reseau: r, flux: fx,
     priorites: (b.recommandations || []).slice(0, 4).map((x) => ({ texte: x.titre, raison: x.raison,

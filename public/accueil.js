@@ -4,7 +4,10 @@
    Chaque zone n'apparaît que si elle est pertinente (type, rôle, modules, données) ; aucune donnée inventée ; détails dans les modules. */
 (() => {
   const TXT = {
-    fr: { reseau: 'Réseau', national: 'National', ouvrir_reseau: 'Ouvrir Réseau', ouvrir_national: 'Ouvrir National',
+    fr: { fermer: 'Fermer', personnaliser: 'Personnaliser l’Accueil', perso_titre: 'Zones affichées sur votre Accueil', perso_note: 'Choix enregistré sur cet appareil ; les données et les droits ne changent pas.',
+      monter: 'Monter', z: { flux: 'Arrimo Flux et Bourse', chrono: 'Chrono', priorites: 'Préalertes et priorités', taches: 'Mes tâches', previsions: 'Prévisions', syntheses: 'Synthèses des modules' },
+      presentation: 'Mode présentation', quitter_presentation: 'Quitter la présentation', presentation_note: 'Démonstration seulement : les écrans défilent toutes les 20 s (Échap pour arrêter).',
+      reseau: 'Réseau', national: 'National', ouvrir_reseau: 'Ouvrir Réseau', ouvrir_national: 'Ouvrir National',
       etablissements: 'Établissements visibles', regions: 'Régions représentées', places_libres: 'Places d’hébergement libres', lits_libres: 'Lits libres',
       attentes_visibles: 'Admissions en attente dans les établissements qui partagent ce chiffre',
       transports_locaux: 'Transports en cours depuis ou vers cet établissement', niveaux_eleve: 'Établissements en orange ou rouge',
@@ -14,7 +17,10 @@
       ouvrir_chrono: 'Ouvrir Chrono', min: '{n} min', aucune_porte: 'Aucune ambulance à la porte.', priorites: 'Préalertes et priorités', voir_tout: 'Tout voir', agir: 'Ouvrir et agir', aucune_priorite: 'Aucune priorité en attente.',
       taches: 'Mes tâches', ouvrir_taches: 'Ouvrir Mes tâches', a_faire: 'à faire', en_cours: 'en cours', retard: 'en retard', aucune_tache: 'Aucune tâche ouverte pour vous.', attribuer: 'Attribuer', file: 'File du rôle (non attribuée)', non_attr: 'Non attribuées : {n}', attribuee: 'Tâche attribuée.', a_qui: 'Attribuer à', previsions: 'Prévisions',
       prev_ligne: 'Dans {h} h : ~{n} lits libres (± {m})', prev_risque: 'risque de saturation : {u}', prev_note: 'Estimation sur {s} semaines d’historique : une projection, pas une certitude.', details: 'Analyse détaillée d’OG (recommandations, plans, réseau, capacités)', donnees: 'Données lues à {h}', supervision: 'Mode supervision', kpi_comment: 'Comment est calculé : {k}', kpi_formule: 'Formule', kpi_source: 'Source', kpi_perimetre: 'Périmètre', kpi_periode: 'Période', kpi_actualisation: 'Actualisation', kpi_exclusions: 'Exclusions', kpi_manquantes: 'Données manquantes', kpi_permissions: 'Qui le voit', kpi_lu: 'Valeur lue à {h}', quitter_supervision: 'Quitter la supervision' },
-    en: { reseau: 'Network', national: 'National', ouvrir_reseau: 'Open Network', ouvrir_national: 'Open National',
+    en: { fermer: 'Close', personnaliser: 'Customize Home', perso_titre: 'Zones shown on your Home', perso_note: 'Choice saved on this device; data and rights do not change.',
+      monter: 'Move up', z: { flux: 'Arrimo Flow and Exchange', chrono: 'Chrono', priorites: 'Pre-alerts and priorities', taches: 'My tasks', previsions: 'Forecasts', syntheses: 'Module summaries' },
+      presentation: 'Presentation mode', quitter_presentation: 'Leave presentation', presentation_note: 'Demonstration only: screens rotate every 20 s (Esc to stop).',
+      reseau: 'Network', national: 'National', ouvrir_reseau: 'Open Network', ouvrir_national: 'Open National',
       etablissements: 'Visible facilities', regions: 'Regions represented', places_libres: 'Available care home places', lits_libres: 'Available beds',
       attentes_visibles: 'Pending admissions at facilities that share this count',
       transports_locaux: 'Active transport to or from this facility', niveaux_eleve: 'Facilities at orange or red level',
@@ -35,7 +41,9 @@
     const n = o.niveau; const kpis = (o.kpis || []).filter((k) => k && k.val != null).slice(0, 6);
     return `<section class="acc-vue" aria-label="${T('vue')}"><div class="acc-vue-tete"><h3>${T('vue')}</h3>
       <div class="ligne">${n ? `<button type="button" class="acc-niveau n-${e(n.code)}" data-acc-niveau aria-expanded="false"><span class="pastille-niveau" aria-hidden="true"></span>${T('situation')} <b>${T(`niveau.${n.code}`)}</b></button>` : ''}
-      <button type="button" class="btn" data-acc-supervision aria-pressed="${document.body.classList.contains('supervision')}"><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-monitor"/></svg> ${T(document.body.classList.contains('supervision') ? 'quitter_supervision' : 'supervision')}</button></div></div>
+      <button type="button" class="btn" data-acc-supervision aria-pressed="${document.body.classList.contains('supervision')}"><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-monitor"/></svg> ${T(document.body.classList.contains('supervision') ? 'quitter_supervision' : 'supervision')}</button>
+      <button type="button" class="btn" data-acc-perso><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-palette"/></svg> ${T('personnaliser')}</button>
+      ${o.presentation ? `<button type="button" class="btn" data-acc-presentation aria-pressed="${!!window.__presentation}" title="${T('presentation_note')}">${T(window.__presentation ? 'quitter_presentation' : 'presentation')}</button>` : ''}</div></div>
       ${n ? `<div class="acc-niveau-details" hidden>${n.details || ''}<p class="note">${n.le ? T('calcule', { h: h(n.le) }) : ''}</p><button type="button" class="btn" data-acc-og="${e(n.question)}">${T('pourquoi')}</button></div>` : ''}
       <div class="acc-kpis">${kpis.map((k) => `<div class="acc-kpi-c">${k.code ? `<button type="button" class="acc-kpi-i" data-acc-kpi="${e(k.code)}" aria-label="${e(T('kpi_comment', { k: k.lib }))}" title="${e(T('kpi_comment', { k: k.lib }))}"><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-info"/></svg></button>` : ''}<${k.aller ? `button type="button" data-acc-aller="${e(k.aller)}"` : 'div'} class="acc-kpi${k.ton ? ` ${k.ton}` : ''}"><span class="v num">${e(k.val)}</span><span class="lbl">${e(k.lib)}</span>${k.note ? `<span class="note">${e(k.note)}</span>` : ''}</${k.aller ? 'button' : 'div'}></div>`).join('')}</div></section>`;
   }
@@ -162,11 +170,47 @@
     if (nb) nb.onclick = () => { const p = v.querySelector('.acc-niveau-details'); p.hidden = !p.hidden; nb.setAttribute('aria-expanded', String(!p.hidden)); };
     v.querySelector('[data-acc-og]')?.addEventListener('click', (ev) => { const q = ev.currentTarget.dataset.accOg; document.querySelector('#og-open')?.click(); setTimeout(() => { const i = document.querySelector('#og-question'); if (i) { i.value = q; i.form?.requestSubmit(); } }, 400); });
     // Zones alimentées par les modules (en parallèle, chacune se retire proprement si son module est absent)
+    // Tableau de bord personnalisable (cahier 7) : zones masquées et ordre, propres à l'utilisateur sur cet appareil
+    const zones = { flux: v.querySelector('#acc-flux'), chrono: v.querySelector('#acc-chrono'), priorites: v.querySelector('.acc-priorites'),
+      taches: v.querySelector('#acc-taches'), previsions: v.querySelector('.acc-prev'), syntheses: synthesesZone };
+    appliquerPerso(zones);
+    v.querySelector('[data-acc-perso]')?.addEventListener('click', () => personnaliser(zones, o));
+    v.querySelector('[data-acc-presentation]')?.addEventListener('click', () => presentation(o));
     const travaux = [syntheses(synthesesZone, o)];
     if (window.ArrimoFluxVue) travaux.push(window.ArrimoFluxVue.panneau(v.querySelector('#acc-flux'), { ...o, prealertesDans: v.querySelector('#acc-prealertes') }));
     if (o.chrono) travaux.push(chrono(v.querySelector('#acc-chrono'), o));
     if (o.taches) travaux.push(taches(v.querySelector('#acc-taches'), o));
     await Promise.all(travaux.map((p) => p.catch(() => {})));
+  }
+  const cle = 'arrimo-accueil-perso';
+  const lirePerso = () => { try { return JSON.parse(localStorage.getItem(cle)) || { masquees: [], ordre: [] }; } catch { return { masquees: [], ordre: [] }; } };
+  const ecrirePerso = (p) => { try { localStorage.setItem(cle, JSON.stringify(p)); } catch { /* stockage indisponible */ } };
+  function appliquerPerso(zones) {
+    const p = lirePerso();
+    for (const [k, z] of Object.entries(zones)) if (z) { z.classList.toggle('acc-masquee', p.masquees.includes(k)); const i = p.ordre.indexOf(k); z.style.order = i >= 0 ? String(i) : ''; }
+  }
+  function personnaliser(zones, o) {
+    const p = lirePerso(); const presentes = Object.keys(zones).filter((k) => zones[k]);
+    const liste = [...p.ordre.filter((k) => presentes.includes(k)), ...presentes.filter((k) => !p.ordre.includes(k))];
+    const corps = `<p class="note">${T('perso_note')}</p><ol class="liste-simple acc-perso">${liste.map((k, i) => `<li><label><input type="checkbox" data-perso-z="${k}"${p.masquees.includes(k) ? '' : ' checked'}> ${T(`z.${k}`)}</label>
+      ${i ? `<button type="button" class="btn lien" data-perso-monter="${k}">${T('monter')}</button>` : ''}</li>`).join('')}</ol>`;
+    o.modale?.(T('perso_titre'), corps, [{ label: T('fermer'), pri: true }]);
+    const boite = document.querySelector('#modale');
+    boite?.querySelectorAll('[data-perso-z]').forEach((c) => { c.onchange = () => {
+      const q = lirePerso(); q.masquees = c.checked ? q.masquees.filter((x) => x !== c.dataset.persoZ) : [...new Set([...q.masquees, c.dataset.persoZ])]; ecrirePerso(q); appliquerPerso(zones); }; });
+    boite?.querySelectorAll('[data-perso-monter]').forEach((b) => { b.onclick = () => {
+      const q = lirePerso(); const l = [...liste]; const i = l.indexOf(b.dataset.persoMonter); [l[i - 1], l[i]] = [l[i], l[i - 1]]; q.ordre = l; ecrirePerso(q); appliquerPerso(zones); personnaliser(zones, o); }; });
+  }
+  /** Mode présentation (cahier 7) : démonstration seulement ; les écrans principaux défilent ; Échap arrête. */
+  function presentation(o) {
+    if (window.__presentation) { clearInterval(window.__presentation); window.__presentation = null; document.body.classList.remove('mode-presentation'); o.rafraichir?.(); return; }
+    document.body.classList.add('mode-presentation');
+    const ecrans = ['accueil', 'vigilance', 'chrono', 'transferts'].filter((x) => document.querySelector(`#onglets button[data-v="${x}"]`));
+    let i = 0;
+    window.__presentation = setInterval(() => { i = (i + 1) % ecrans.length; o.ouvrir?.(ecrans[i]); }, 20000);
+    const arret = (e) => { if (e.key === 'Escape' && window.__presentation) { clearInterval(window.__presentation); window.__presentation = null; document.body.classList.remove('mode-presentation'); document.removeEventListener('keydown', arret); } };
+    document.addEventListener('keydown', arret);
+    o.rafraichir?.();
   }
   window.ArrimoAccueil = { construire };
 })();

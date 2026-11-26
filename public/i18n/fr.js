@@ -23,6 +23,7 @@ window.ARRIMO_I18N.fr = {
     i_capacites_recuperees_lits: 'Lits libérés après placement', i_temps_administratif_economise_h: 'Temps administratif économisé',
     i_reception_prealerte_mediane_min: 'Réception des préalertes (médiane)', i_delai_accuse_alertes_min: 'Délai d’accusé des alertes',
     cat_heures_ambulancieres: 'heures ambulancières', cat_journees_nsa: 'journées NSA', cat_capacite: 'capacité', cat_administratif: 'administratif', cat_autre: 'autre' },
+  affichage: { densite: 'Densité d’affichage', confortable: 'Confortable', compact: 'Compact' },
   apparence: { ambiance: 'Ambiance (Glacier ou Horizon en clair ; Crépuscule en sombre)', ambiance_ok: 'Ambiance enregistrée.', basculer: 'Changer le thème', choisir: 'Apparence', clair: 'Clair', sombre: 'Sombre', automatique: 'Automatique (système)', soleil: 'Selon le soleil (établissement)', enregistree: 'Apparence enregistrée.' },
   priorites_ui: {
     "titre": "Priorités et attribution",
@@ -79,6 +80,7 @@ window.ARRIMO_I18N.fr = {
     demo: 'Démonstration · données fictives',
   },
   disposition: {
+    replier: 'Replier le menu (icônes seulement)', deplier: 'Déplier le menu',
     basculer: 'Disposition du menu', horizontale: 'Barre horizontale en haut', verticale: 'Barre verticale à gauche',
     titre: 'Disposition du menu', aide: 'Choisissez où s’affiche le menu principal. Ce choix est propre à cet appareil ; sur un petit écran, le menu reste en haut.',
     enregistree: 'Disposition du menu enregistrée.',
