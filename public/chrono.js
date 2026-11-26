@@ -237,12 +237,12 @@
   const SOUS = ['generale', 'patients', 'ambulances', 'capacites', 'previsions', 'qualite', 'alertes', 'historique'];
   const ENTRETIEN_SOUS = ['capacites'];
   const sousPermis = () => (etat.moi?.utilisateur?.role === 'entretien' ? ENTRETIEN_SOUS : SOUS);
-  const nav = (cur) => `<nav class="sous-chrono" aria-label="${K('u_nav')}">${sousPermis().map((k) => `<button type="button" data-sous-chrono="${k}" aria-current="${k === cur}">${K('u_' + k)}</button>`).join('')}</nav>`;
+  const nav = (cur) => `<nav class="sous-chrono" aria-label="${K('u_nav')}">${sousPermis().map((k) => `<button type="button" data-sous-chrono="${k}" aria-current="${k === cur}">${K(`u_${k}`)}</button>`).join('')}</nav>`;
   /** Anneau commun : durée écoulée depuis un horodatage serveur ; proportion réelle seulement s'il existe un objectif. */
   const anneauDuree = (x, { libelle, sous } = {}) => `<div class="anneau-chrono niveau-${esc(x.niveau || 'gris')}"${x.depuis ? ` data-depuis="${esc(x.depuis)}"` : ''}${x.objectif_min ? ` data-objectif-min="${esc(x.objectif_min)}"` : ''}>
       <svg viewBox="0 0 44 44" aria-hidden="true"><circle class="ac-fond" cx="22" cy="22" r="19"/><circle class="ac-arc" cx="22" cy="22" r="19" pathLength="100" stroke-dasharray="0 100"/></svg>
       <div><b class="ac-val num">--:--:--</b><span>${esc(libelle || '')}</span>${sous ? `<small class="note">${esc(sous)}</small>` : ''}</div></div>`;
-  const phase = (k) => K('ph_' + k);
+  const phase = (k) => K(`ph_${k}`);
   const liste = (items, rendu, vide) => (items.length ? `<div class="grille-chrono">${items.map(rendu).join('')}</div>` : `<p class="note">${vide}</p>`);
   /** Indicateurs T−5 (30 jours) : taux sur les confirmations mesurées ; « inconnu » sans données. Exportables (Imprimer, PDF, CSV, Excel). */
   const tableT5 = (p) => (!p ? '' : `<section><h3>${K('t5_titre')}</h3><div class="tableau"><table><thead><tr><th>${K('t5_indicateur')}</th><th>${K('t5_valeur')}</th><th>${K('t5_base')}</th></tr></thead><tbody>
@@ -255,7 +255,7 @@
     const cur = sousPermis().includes(etatC.sous) ? etatC.sous : sousPermis()[0];
     if (cur === 'ambulances') { await vueAmbulancesChrono(); v.insertAdjacentHTML('afterbegin', nav(cur)); return; }
     const d = await api('GET', `/chrono/universel?etablissement_id=${etat.ctx}`); if (!d) return;
-    const r = d.resume; const tuileN = (k, x) => `<button type="button" class="tuile-c ds-kpi${x.rouge ? ' alerte' : ''}" data-sous-chrono="${k}"><span class="gros ds-kpi-val num">${x.total}</span><span class="note ds-kpi-lib">${K('u_' + k)}${x.rouge ? ` · ${K('u_rouge', { n: x.rouge })}` : ''}${x.orange ? ` · ${K('u_orange', { n: x.orange })}` : ''}</span></button>`;
+    const r = d.resume; const tuileN = (k, x) => `<button type="button" class="tuile-c ds-kpi${x.rouge ? ' alerte' : ''}" data-sous-chrono="${k}"><span class="gros ds-kpi-val num">${x.total}</span><span class="note ds-kpi-lib">${K(`u_${k}`)}${x.rouge ? ` · ${K('u_rouge', { n: x.rouge })}` : ''}${x.orange ? ` · ${K('u_orange', { n: x.orange })}` : ''}</span></button>`;
     const patient = (x) => anneauDuree(x, { libelle: `${x.ressource}${x.unite ? ` · ${x.unite}` : ''}`, sous: `${phase(x.phase)} · ${x.reference || '—'}` });
     const ressource = (x) => anneauDuree(x, { libelle: `${x.ressource}${x.unite ? ` · ${x.unite}` : ''}`, sous: `${phase(x.phase)}${x.attente_avant_nettoyage_min != null ? ` · ${K('u_attente_avant', { n: x.attente_avant_nettoyage_min })}` : ''}` });
     const ambulance = (x) => `<div class="anneau-chrono niveau-${esc(x.niveau)}"${x.depuis ? ` data-depuis="${esc(x.depuis)}"` : ''}>
@@ -263,7 +263,7 @@
         <div><b class="${x.depuis ? 'ac-val ' : ''}num">${x.depuis ? '--:--:--' : x.arrivee_estimee ? `<span data-decompte="${esc(x.arrivee_estimee)}" data-decompte-fin="${K('u_eta_passee')}">--:--:--</span>` : K('u_eta_inconnue')}</b>
         <span>${esc(x.unite || '—')} · ${esc(x.numero)}</span><small class="note">${phase(x.phase)}${x.objet === 'prealerte' && !x.depuis && !x.estimation_fiable ? ` · ${K('u_estimation_non_fiable')}` : ''}</small>
         ${x.objet === 'transport' ? window.ArrimoVueTransferts.preparation({ ...x, destination_id: x.sens === 'arrivee' ? 1 : null }, { heure: heureCourte }) : ''}</div></div>`;
-    const alerte = (x) => anneauDuree(x, { libelle: x.titre, sous: `${K('u_statut_' + x.statut)}${x.escalade_niveau ? ` · ${K('u_escalade', { n: x.escalade_niveau })}` : ''}${x.reaction_min != null ? ` · ${K('u_reaction', { n: x.reaction_min })}` : ''}` });
+    const alerte = (x) => anneauDuree(x, { libelle: x.titre, sous: `${K(`u_statut_${x.statut}`)}${x.escalade_niveau ? ` · ${K('u_escalade', { n: x.escalade_niveau })}` : ''}${x.reaction_min != null ? ` · ${K('u_reaction', { n: x.reaction_min })}` : ''}` });
     const q = d.qualite;
     const corps = {
       generale: () => `<div class="tuiles-c tuiles-chrono">${tuileN('patients', r.patients)}${tuileN('capacites', r.capacites)}${tuileN('ambulances', r.ambulances)}${tuileN('alertes', r.alertes)}</div>
@@ -282,7 +282,7 @@
       historique: () => `<p class="note">${K('u_hist_note')}</p><p><button type="button" class="btn" id="ch-u-recherche">${K('u_hist_chercher')}</button></p>`,
     };
     const amb = cur === 'generale' ? `<h3>${K('u_ambulances')}</h3>${liste(d.ambulances, ambulance, K('u_aucun'))}` : '';
-    v.innerHTML = `${nav(cur)}<div class="entete"><div><h2>${K('u_titre')} · ${K('u_' + cur)}</h2><p class="note">${K('u_seuils')}</p></div></div><section class="panneau-c">${corps[cur]()}${amb}</section>`;
+    v.innerHTML = `${nav(cur)}<div class="entete"><div><h2>${K('u_titre')} · ${K(`u_${cur}`)}</h2><p class="note">${K('u_seuils')}</p></div></div><section class="panneau-c">${corps[cur]()}${amb}</section>`;
     $('#ch-u-recherche')?.addEventListener('click', () => $('#b-recherche')?.click());
     window.ArrimoDuree?.tic();
   }
