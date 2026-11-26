@@ -320,6 +320,9 @@ window.ARRIMO_I18N.en = {
     'Établissement modifié': 'Facility changed', 'Démo remise à zéro': 'Demo reset', 'Civière créée': 'Stretcher created',
   },
   reseau: {
+    ht_titre: 'No confirmed capacity within {km} km: farther options', ht_ligne: 'confirmed beds: {n} · {km} km straight line', ht_aucun: 'No confirmed capacity elsewhere in the territory.',
+    ht_autres: 'Other territories: facilities with confirmed capacity: {e} · confirmed beds: {n} (no names until an inter-territorial agreement is defined).',
+    ht_regle: 'An authorized person decides; no request is sent automatically.',
     pec_prete_confirmee: 'Bed ready and confirmed', pec_confirmee_en_preparation: 'Bed confirmed, room preparation in progress', pec_confirmee_lit_non_partage: 'Capacity confirmed (bed assigned by the receiver)',
     pec_declaree_non_confirmee: 'Capacity declared, not confirmed', pec_prevision: 'Forecast only, no confirmed place',
     pec_besoins_verifies: 'transmitted needs checked', pec_besoins_non_transmis: 'needs not transmitted: compatibility not established', pec_equipe: 'receiving team: not provided',

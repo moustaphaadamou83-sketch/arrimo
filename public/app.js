@@ -868,6 +868,11 @@ async function vueReseau() {
         <div class="note num">${esc(s.raison)}${s.statut_route === 'calcule' ? ` · ${esc(t('reseau.route_actualisee', { heure: heureCourte(s.confirmation.route_actualise_le) }))}` : ''}</div>${s.pourquoi ? `<div class="note">${esc(s.pourquoi)}</div>` : ''}${exclusionsHTML(s.exclusions)}</div>
         ${s.libres_confirmes && s.statut_route === 'calcule' ? `<button class="btn${choisi ? ' pri' : ''}" data-choix="${s.etablissement_id}">${esc(t(choisi ? 'reseau.propose' : 'reseau.proposer'))}</button>` : ''}</div>`;
     }).join('') : `<p class="note">${esc(t('reseau.aucun_rayon', { km: cfg.rayon_km }))}</p>`;
+    // Coopération entre territoires : affichée seulement sans capacité confirmée dans le rayon ; décision humaine, aucune demande envoyée
+    const ht = R.res.hors_territoire;
+    if (ht) resHTML += `<section class="panneau-c hors-territoire"><h4>${esc(t('reseau.ht_titre', { km: ht.rayon_km }))}</h4>
+      ${ht.meme_territoire_hors_rayon.length ? `<ul class="liste-simple">${ht.meme_territoire_hors_rayon.map((x) => `<li><b>${esc(x.nom)}</b> · ${esc(x.ville)} · ${esc(t('reseau.ht_ligne', { n: x.confirmes, km: x.distance_geographique_km }))}</li>`).join('')}</ul>` : `<p class="note">${esc(t('reseau.ht_aucun'))}</p>`}
+      <p class="note">${esc(t('reseau.ht_autres', { e: ht.autres_territoires.etablissements, n: ht.autres_territoires.lits_confirmes }))}</p><p class="note">${esc(t('reseau.ht_regle'))}</p></section>`;
     const suiviRoute = R.res.routage.disponible
       ? t('reseau.route_source', { source: R.res.routage.fournisseur, heure: heureCourte(R.res.routage.actualise_le) })
       : t('reseau.routeur_indisponible');

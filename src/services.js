@@ -317,9 +317,31 @@ async function recommander(pool, utilisateur, depuisId, typeId, besoins = {}) {
   const loc = await pool.query(
     `SELECT count(*) FILTER (WHERE l.etat = 'libre'${filtre})::int AS libres FROM lits l WHERE l.etablissement_id = $1 AND l.type_id = $2`,
     [ici.id, typeId]);
-  return { libres_ici: loc.rows[0].libres, suggestions: res, routage: metaRoutage, groupe_age: groupeAge,
+  const horsTerritoire = res.some((x) => x.libres_confirmes > 0) ? null : await cooperationTerritoires(pool, ici, Number(typeId), filtre, cfg.rayon_km);
+  return { libres_ici: loc.rows[0].libres, suggestions: res, routage: metaRoutage, groupe_age: groupeAge, hors_territoire: horsTerritoire,
     origine: { latitude: Number(ici.latitude), longitude: Number(ici.longitude), nom: ici.nom },
     capacite_verifiee_le: new Date().toISOString() };
+}
+
+/**
+ * Coopération entre territoires (limite du chantier coordination, 26 nov. 2026) : seulement quand aucune capacité confirmée compatible
+ * n'existe dans le rayon. (1) Même territoire, au-delà du rayon : établissements nommés (mêmes règles de partage). (2) Autres territoires :
+ * nombre agrégé seulement, sans nom d'établissement, tant qu'aucun accord inter-territorial n'est défini. Aucune demande n'est envoyée.
+ */
+async function cooperationTerritoires(pool, ici, typeId, filtre, rayonKm) {
+  const conf = `l.etat = 'libre' AND l.disponibilite_confirmee_le >= now() - make_interval(mins => c.confirmation_lit_validite_min)${filtre}`;
+  const memes = (await pool.query(`SELECT e.id, e.nom, e.ville, e.latitude, e.longitude, count(*)::int AS confirmes
+      FROM lits l JOIN etablissements e ON e.id = l.etablissement_id JOIN config_pays c ON c.id = e.config_id
+     WHERE e.config_id = $1 AND e.id <> $2 AND e.actif AND e.module_actif AND e.partage = 'complet' AND l.type_id = $3 AND l.actif AND ${conf}
+     GROUP BY e.id`, [ici.config_id, ici.id, typeId])).rows
+    .map((r) => ({ etablissement_id: r.id, nom: r.nom, ville: r.ville, confirmes: r.confirmes, distance_geographique_km: distanceKm(ici, r) }))
+    .filter((r) => r.distance_geographique_km > rayonKm).sort((a, b) => a.distance_geographique_km - b.distance_geographique_km).slice(0, 3);
+  const autres = (await pool.query(`SELECT count(DISTINCT e.id)::int AS etablissements, count(*)::int AS confirmes
+      FROM lits l JOIN etablissements e ON e.id = l.etablissement_id JOIN config_pays c ON c.id = e.config_id
+     WHERE e.config_id <> $1 AND e.actif AND e.module_actif AND e.partage <> 'aucun' AND l.type_id = $2 AND l.actif AND ${conf}`, [ici.config_id, typeId])).rows[0];
+  return { rayon_km: rayonKm, meme_territoire_hors_rayon: memes,
+    autres_territoires: { etablissements: autres.etablissements, lits_confirmes: autres.confirmes, accord_requis: true },
+    regle: 'Aucune capacité confirmée dans le rayon : options hors rayon et hors territoire affichées pour décision humaine ; aucune demande envoyée automatiquement.' };
 }
 
 /**
@@ -818,7 +840,7 @@ async function assistant(pool, utilisateur, etabId, question) {
   return tr(L, 'q_aide');
 }
 
-module.exports = { priseEnCharge,
+module.exports = { priseEnCharge, cooperationTerritoires,
   distanceKm, minutesRoute, heureLocale, etablissement, capaciteReseau, recommander, alternativesTransfert, itineraireReseau, litsEtablissement, litVisible, confirmerDisponibilite,
   creerTransfert, avancerTransfert, definirServiceResponsable, relancerTransfert, listeTransferts, lireJournal, lireNotifications,
   detecterBlocages, assistant, exigerActif, exigerModule, motifBlocage, sqlAge, groupeAgeEffectif, GROUPES_AGE, curseur, taillePage, sqlCurseur, sqlAvant, niveauDepuis, lireBesoins, sqlBesoins, notifier, SQL_CAPACITE, risque,

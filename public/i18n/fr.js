@@ -321,6 +321,9 @@ window.ARRIMO_I18N.fr = {
     'Établissement modifié': 'Établissement modifié', 'Démo remise à zéro': 'Démo remise à zéro', 'Civière créée': 'Civière créée',
   },
   reseau: {
+    ht_titre: 'Aucune capacité confirmée à moins de {km} km : options plus éloignées', ht_ligne: 'lits confirmés : {n} · à {km} km à vol d’oiseau', ht_aucun: 'Aucune capacité confirmée ailleurs dans le territoire.',
+    ht_autres: 'Autres territoires : établissements avec capacité confirmée : {e} · lits confirmés : {n} (sans nom tant qu’aucun accord inter-territorial n’est défini).',
+    ht_regle: 'Une personne habilitée décide ; aucune demande n’est envoyée automatiquement.',
     pec_prete_confirmee: 'Lit prêt et confirmé', pec_confirmee_en_preparation: 'Lit confirmé, préparation de chambre en cours', pec_confirmee_lit_non_partage: 'Capacité confirmée (lit attribué par le receveur)',
     pec_declaree_non_confirmee: 'Capacité déclarée, non confirmée', pec_prevision: 'Prévision seulement, aucune place confirmée',
     pec_besoins_verifies: 'besoins transmis vérifiés', pec_besoins_non_transmis: 'besoins non transmis : compatibilité non établie', pec_equipe: 'équipe d’accueil : non renseignée',
