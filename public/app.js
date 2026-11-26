@@ -1517,7 +1517,8 @@ async function vueParams() {
       <div class="panneau-c"><h3>${esc(t('disposition.titre'))}</h3><p class="note">${esc(t('disposition.aide'))}</p>
         <fieldset class="choix-apparence"><legend class="lbl">${esc(t('disposition.titre'))}</legend>${DISPOSITIONS.map((d) =>
           `<label class="case"><input type="radio" name="p-disposition" value="${d}"${disposition() === d ? ' checked' : ''}> ${esc(t(`disposition.${d}`))}</label>`).join('')}</fieldset></div>
-      <div class="panneau-c"><h3>${esc(t('langue.choisir'))}</h3><p class="note">${P('langue_aide')}</p><select class="choix-langue" id="p-langue" aria-label="${esc(t('langue.choisir'))}"></select></div></div>`;
+      <div class="panneau-c"><h3>${esc(t('langue.choisir'))}</h3><p class="note">${P('langue_aide')}</p><select class="choix-langue" id="p-langue" aria-label="${esc(t('langue.choisir'))}"></select></div>
+      <div class="panneau-c"><h3>${esc(t('affichage.restaurer_titre'))}</h3><p class="note">${esc(t('affichage.restaurer_aide'))}</p><button class="btn" type="button" id="p-restaurer">${esc(t('affichage.restaurer'))}</button></div></div>`;
   } else if (section === 'notifications') {
     corps = `<div class="grille"><div class="panneau-c"><h3>${P('alertes_titre')}</h3><p class="note">${P('alertes_aide')}</p>
       ${u.admin ? `<div class="ligne"><div class="champ"><label class="lbl" for="p-rayon">${P('alertes_rayon')}</label>
@@ -1572,6 +1573,14 @@ async function vueParams() {
     sel.value = langue; sel.onchange = () => changerLangue(sel.value);
     document.querySelectorAll('input[name="p-apparence"]').forEach((r) => { r.onchange = () => choisirApparence(r.value); });
     document.querySelectorAll('input[name="p-disposition"]').forEach((r) => { r.onchange = () => choisirDisposition(r.value); });
+    // Restaurer l'apparence par défaut (cahier 6) : thème automatique, ambiance Glacier, affichage confortable, menu horizontal, Accueil complet
+    $('#p-restaurer')?.addEventListener('click', async () => {
+      for (const k of ['arrimo-densite', 'arrimo-nav-repliee', 'arrimo-accueil-perso']) ecrire(k, null);
+      appliquerDensite(); ecrire('arrimo-disposition', 'horizontale'); appliquerDisposition('horizontale');
+      try { const r = await api('PUT', '/moi/ambiance', { ambiance: 'glacier' }); if (etat.moi) etat.moi.utilisateur.ambiance = r.ambiance; window.ArrimoApparence?.definirAmbiance('glacier'); const s = $('#ambiance-barre'); if (s) s.value = 'glacier'; } catch { /* conservé */ }
+      await choisirApparence('automatique');
+      vueParams();
+    });
   }
   if (section === 'notifications') { const n = $('#p-voir-notifs'); if (n) n.onclick = () => $('#b-notif').click(); }
   const br = $('#b-rayon');
