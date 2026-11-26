@@ -27,5 +27,5 @@ test('cahiers 5 et 7 : menu vertical dépliable, densité, Accueil personnalisab
   assert.match(html, /id="densite-barre"/); assert.match(app, /dataset\.densite = densite\(\)/);
   assert.match(acc, /arrimo-accueil-perso/); assert.match(acc, /data-acc-perso/);
   assert.match(app, /presentation: etat\.moi\?\.environnement === 'demo'/);
-  for (const L of ['fr', 'en']) { const i = lire(`i18n/${L}.js`); assert.match(i, /replier:/); assert.match(i, /affichage: \{ densite:/); }
+  for (const L of ['fr', 'en']) { const i = lire(`i18n/${L}.js`); assert.match(i, /replier:/); assert.match(i, /affichage: \{[^}]*densite:/); }
 });

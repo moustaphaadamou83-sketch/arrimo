@@ -2257,7 +2257,8 @@ async function vueAdmissions() {
     const z = $('#adm-prep-z');
     try {
       const p = await api('GET', `/admissions/preparation?etablissement_id=${etat.ctx}`);
-      const marque = (x) => (x.ok === true ? '✓' : x.ok === false ? '○' : '?');
+      const ic = (n) => `<svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-${n}"/></svg>`;
+      const marque = (x) => (x.ok === true ? ic('check') : x.ok === false ? ic('minus') : '?');
       z.innerHTML = `<p class="note">${A('prep_resume', { n: p.demandes.length, p: p.pretes })}</p>${p.demandes.length ? `<div class="tableau"><table><thead><tr><th>${A('prep_ref')}</th>
         ${['priorite_validee', 'lit_compatible', 'lit_assigne', 'chambre_prete', 'plan_b'].map((c) => `<th>${A(`prep_${c}`)}</th>`).join('')}<th>${A('prep_prochaine')}</th></tr></thead><tbody>
         ${p.demandes.map((d) => { const e = Object.fromEntries(d.etapes.map((x) => [x.code, x]));
