@@ -21,6 +21,10 @@ test('publication application : le plan contient les migrations récentes requis
     assert.ok(MIGRATIONS_APP.includes(nom),`migration absente : ${nom}`);
   }
   assert.equal(new Set(MIGRATIONS_APP).size,MIGRATIONS_APP.length);
+  // Même liste que le lanceur Python (MIGRATIONS_APPLICATION) : une migration oubliée ici laisse la démo sans colonne requise.
+  const py=require('node:fs').readFileSync(require('node:path').join(__dirname,'../scripts/publication-arrimo.py'),'utf8');
+  const bloc=py.slice(py.indexOf('MIGRATIONS_APPLICATION = ['),py.indexOf(']',py.indexOf('MIGRATIONS_APPLICATION = [')));
+  assert.deepEqual([...bloc.matchAll(/'([^']+\.sql)'/g)].map((m)=>m[1]),MIGRATIONS_APP);
 });
 test('catalogue SH : seules les migrations de modules répertoriées peuvent ajouter une entrée ; les 6 modules historiques en sont exclus',()=>{
   const { MODULES }=require('../src/types-etablissement');
