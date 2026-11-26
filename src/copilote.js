@@ -408,11 +408,11 @@ async function question(pool, utilisateur, etabId, q, fetchImpl, patientContexte
     const r0 = await require('./og-flux').repondre(pool, { ...utilisateur, langue: L }, etabId, q, L);
     return { ...(r0 || { mode: 'local', reponse: L === 'en' ? 'I can answer about rooms to prepare, a room’s status and your messages. Other information is not available to your role.' : 'Je peux répondre sur les chambres à préparer, l’état d’une chambre et vos messages. Les autres informations ne sont pas accessibles à votre rôle.', sources: ['arrimo'], intentions: ['hors_role'] }), langue: L };
   }
-  // Un numéro exact (transport, préalerte, ambulance) passe avant les réponses générales
-  const mvt = await rechercheMouvement(pool, utilisateur, etabId, q, L); if (mvt) return { ...mvt, langue: L };
   // OG central : réponses opérationnelles transverses (Flux, transport, chambres, préalertes, admissions, Connect), pour tous les établissements
   const central = await require('./og-flux').repondre(pool, { ...utilisateur, langue: L }, etabId, q, L).catch((e) => { if (e && e.statut) return null; throw e; });
   if (central) return { ...central, langue: L };
+  // Numéro de transport, de préalerte ou d'ambulance que l'OG central n'a pas traité : recherche universelle (avant les modules)
+  const mvt = await rechercheMouvement(pool, utilisateur, etabId, q, L); if (mvt) return { ...mvt, langue: L };
   const r = await repondreQuestion(pool, { ...utilisateur, langue: L }, etabId, q, fetchImpl, patientContexteId, L);
   return r && typeof r === 'object' ? { ...r, langue: L } : r;
 }

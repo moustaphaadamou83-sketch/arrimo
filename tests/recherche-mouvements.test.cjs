@@ -72,9 +72,10 @@ test('Transfert interhospitalier retrouvé par son numéro, par l’origine et l
 test('OG : « Retrouve le transport DT-000019 », « dernière mission de SIM-01 » : résultats réels, écran à ouvrir, mêmes permissions', async () => {
   const og = async (qui, etab, question) => (await (await fetch(`${base}/api/copilote/question`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tok[qui]}` }, body: JSON.stringify({ etablissement_id: etab, question }) })).json());
   let r = await og('hop', ids.h, 'Retrouve le transport DT-000019');
-  assert.match(r.reponse, /DT-000019/); assert.strictEqual(r.ouvrir, 'flux');
+  // L'OG central (existant, sourcé) répond en premier sur un transport connu ; sinon la recherche universelle
+  assert.match(r.reponse, /DT-000019/, r.reponse); assert.ok(r.ouvrir, 'écran à ouvrir');
   r = await og('hop', ids.h, 'Montre-moi la dernière mission de SIM-01');
   assert.match(r.reponse, /DT-000019/, r.reponse);
   r = await og('autre', ids.autre, 'Retrouve le transport DT-000019');
-  assert.match(r.reponse, /Rien trouvé/, 'autre établissement : rien'); assert.ok(!r.ouvrir);
+  assert.match(r.reponse, /Rien trouvé|Je ne trouve pas/, 'autre établissement : rien'); assert.ok(!/DT-000019 \(/.test(r.reponse), 'aucun détail');
 });
