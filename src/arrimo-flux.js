@@ -82,14 +82,19 @@ async function mouvements(pool, u, q = {}) {
       statut: h.depart_hopital_le ? 'en_transport' : 'prevu', statut_brut: h.statut, preparation: arrivee ? await preparation(pool, h.resident_lit || h.lit_propose_id) : null, ecran: arrivee ? 'c-admissions' : 'nsa', actions: [] });
   }
   // 4. Préalertes d'urgence des ambulances (hôpital)
+  const prealertesOuvertes = [];
   for (const p of (await pool.query(`SELECT p.*, un.numero AS unite, (SELECT ea.minutes FROM eta_prealertes ea WHERE ea.prealerte_id = p.id) AS eta_min, (SELECT ea.calcule_le FROM eta_prealertes ea WHERE ea.prealerte_id = p.id) AS eta_le
       FROM prealertes p JOIN unites_secours un ON un.id = p.unite_id WHERE p.destination_id = $1 AND p.demande_transport_id IS NULL
         AND (p.statut IN ('envoyee', 'recue', 'consultee', 'prise_en_compte', 'preparation', 'preparation_terminee', 'arrivee') OR p.cloturee_le > now() - interval '6 hours')`, [id]).catch(() => ({ rows: [] }))).rows) {
     const eta = p.eta_min != null && p.eta_le ? new Date(new Date(p.eta_le).getTime() + p.eta_min * 60000) : null;
     lignes.push({ cle: `prealerte:${p.id}`, mouvement: 'arrivee', type: 'prealerte', reference: p.numero, categorie: categorie({ type: 'prealerte' }, u.langue), personne: null, origine: 'Ambulance', destination: null, creneau: null,
       prevue: p.heure_prevue, depart_reel: null, eta, eta_source: eta ? 'position' : null, arrivee_reelle: p.arrivee_confirmee_le, vehicule: p.unite,
-      statut: p.statut === 'arrivee' ? 'arrive' : p.cloturee_le ? 'termine' : 'en_transport', statut_brut: p.statut, priorite: p.priorite, preparation: null, ecran: 'secours', actions: [] });
+      statut: p.statut === 'arrivee' ? 'arrive' : p.cloturee_le ? 'termine' : 'en_transport', statut_brut: p.statut, priorite: p.priorite, preparation: null, ecran: 'secours', actions: [], prealerte_id: p.id });
+    if (!p.cloturee_le && p.statut !== 'arrivee') prealertesOuvertes.push({ ...p, eta: p.eta_min != null ? { minutes: p.eta_min, le: p.eta_le } : null });
   }
+  // Marge de préparation (cahier 12) : arrivée comparée au délai mesuré de préparation civière / lit
+  const marges = await require('./marge-preparation').pourPrealertes(pool, id, prealertesOuvertes).catch(() => new Map());
+  for (const l of lignes) if (l.prealerte_id && marges.has(l.prealerte_id)) l.marge_preparation = marges.get(l.prealerte_id);
   const sens = q.sens === 'arrivees' ? 'arrivee' : q.sens === 'departs' ? 'depart' : null;
   const rang = (l) => new Date(l.arrivee_reelle || l.eta || l.prevue || 0).getTime();
   const res = lignes.filter((l) => !sens || l.mouvement === sens).sort((a, b) => rang(a) - rang(b));
@@ -122,6 +127,7 @@ async function mouvements(pool, u, q = {}) {
     resume: { arrivees: res.filter((l) => l.mouvement === 'arrivee').length, departs: res.filter((l) => l.mouvement === 'depart').length, retards: res.filter((l) => l.retard).length,
       prealertes_a_acquitter: res.filter((l) => l.actions.includes('accuser_prealerte')).length,
       arrivees_a_risque: res.filter((l) => l.preparation_accueil?.risque).length,
+      ambulances_risque_retard: res.filter((l) => l.marge_preparation?.verdict === 'risque_retard').length,
       par_categorie: Object.fromEntries(cat.legende().map((c) => [c.code, res.filter((l) => l.categorie?.code === c.code).length])), preparations: res.filter((l) => l.preparation && ['a_faire', 'en_cours'].includes(l.preparation.etat)).length } };
 }
 

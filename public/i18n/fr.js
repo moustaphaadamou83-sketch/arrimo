@@ -199,6 +199,12 @@ window.ARRIMO_I18N.fr = {
     a_medecin_garde: 'Médecin de garde', a_infirmiere_praticienne: 'Infirmière praticienne', a_info_sante: 'Info-Santé', a_soutien_domicile: 'Soutien à domicile', a_telesoins: 'Télésoins', a_autre: 'Autre',
   },
   liaison_secours: {
+    mp_titre: 'Marge de préparation', mp_marge: 'Arrivée dans {a} min · civière prête dans {c} min · marge : {m} min', mp_marge_faible: 'Marge faible : arrivée dans {a} min, civière prête dans {c} min (marge : {m} min)',
+    mp_risque: 'Risque de retard : arrivée dans {a} min, civière prête dans {c} min', mp_aucune: 'Risque de retard : aucune civière libre ni en nettoyage',
+    mp_inconnu_arrivee: 'Marge inconnue : heure d’arrivée inconnue', mp_inconnu_nettoyage: 'Marge inconnue : durée de nettoyage des civières non mesurée',
+    mp_estimation: 'Estimation : médiane de {n} nettoyages mesurés sur 30 jours.', mp_lit_libre: 'Lit : lits libres dans l’établissement (compatibilité à vérifier).',
+    mp_lit_nett: 'Lit : premier lit prêt dans environ {n} min (nettoyage, médiane mesurée).', mp_lit_inconnu: 'Lit : délai inconnu.',
+    hist_titre: 'Passages Chrono récents de cette unité', hist_ligne: '{numero} · temps à la porte : {n} min', hist_sans: '{numero} · temps à la porte : non mesuré', hist_aucun: 'Aucun passage Chrono récent de cette unité ici.',
     alerte_fermer: 'Fermer l’alerte',
     alerte_globale: 'Ambulance {unite} annoncée ({numero}) : confirmez dans Liaison Secours', alerte_immediate: 'Priorité immédiate : {unite} arrive ({numero})', alerte_ouvrir: 'Ouvrir Liaison Secours',
     cf_question: 'Ambulance annoncée : confirmez-vous ?', cf_aide: 'Sans réponse dans {n} s, la demande est acceptée et le transport continue.', cf_accepter: 'Accepté, on vous attend', cf_reorienter: 'Réorienter',

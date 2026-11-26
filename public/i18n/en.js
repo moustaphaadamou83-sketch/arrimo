@@ -199,6 +199,12 @@ window.ARRIMO_I18N.en = {
     a_medecin_garde: 'On-call physician', a_infirmiere_praticienne: 'Nurse practitioner', a_info_sante: 'Info-Santé', a_soutien_domicile: 'Home support', a_telesoins: 'Telehealth', a_autre: 'Other',
   },
   liaison_secours: {
+    mp_titre: 'Preparation margin', mp_marge: 'Arrival in {a} min · stretcher ready in {c} min · margin: {m} min', mp_marge_faible: 'Low margin: arrival in {a} min, stretcher ready in {c} min (margin: {m} min)',
+    mp_risque: 'Delay risk: arrival in {a} min, stretcher ready in {c} min', mp_aucune: 'Delay risk: no stretcher free or being cleaned',
+    mp_inconnu_arrivee: 'Margin unknown: arrival time unknown', mp_inconnu_nettoyage: 'Margin unknown: stretcher cleaning time not measured',
+    mp_estimation: 'Estimate: median of {n} cleanings measured over 30 days.', mp_lit_libre: 'Bed: free beds in the facility (compatibility to be checked).',
+    mp_lit_nett: 'Bed: first bed ready in about {n} min (cleaning, measured median).', mp_lit_inconnu: 'Bed: delay unknown.',
+    hist_titre: 'Recent Chrono passages of this unit', hist_ligne: '{numero} · time at the door: {n} min', hist_sans: '{numero} · time at the door: not measured', hist_aucun: 'No recent Chrono passage of this unit here.',
     alerte_fermer: 'Close the alert',
     alerte_globale: 'Ambulance {unite} announced ({numero}): confirm in Emergency liaison', alerte_immediate: 'Immediate priority: {unite} is coming ({numero})', alerte_ouvrir: 'Open Emergency liaison',
     cf_question: 'Ambulance announced: do you confirm?', cf_aide: 'Without an answer within {n} s, the request is accepted and the transport continues.', cf_accepter: 'Accepted, we are expecting you', cf_reorienter: 'Redirect',

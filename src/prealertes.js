@@ -199,8 +199,10 @@ async function liste(pool, u, q = {}) {
   const cs = require('./correspondance-simulee');
   const out = [];
   const rv = await require('./reservations').vue(pool, rows.map((p) => p.id), { hopital: ROLES_HOPITAL.includes(u.role) });
+  const marges = ROLES_HOPITAL.includes(u.role)
+    ? await require('./marge-preparation').pourPrealertes(pool, args[0], rows.filter((p) => OUVERTES.includes(p.statut) && p.statut !== 'arrivee')) : new Map();
   for (const p of rows) {
-    out.push(ROLES_HOPITAL.includes(u.role) ? { ...sansCorrespondance(p), ...rv.get(p.id), actions: actions(p, u), etat_preparation: etatPreparation(p), synthese: synthese(p, urg), correspondance: await cs.pourHopital(pool, p) }
+    out.push(ROLES_HOPITAL.includes(u.role) ? { ...sansCorrespondance(p), ...rv.get(p.id), actions: actions(p, u), etat_preparation: etatPreparation(p), synthese: synthese(p, urg), correspondance: await cs.pourHopital(pool, p), marge_preparation: marges.get(p.id) || null }
       : { ...sansCorrespondance(p), ...rv.get(p.id), actions: actions(p, u), etat_preparation: etatPreparation(p) });
   }
   return { prealertes: out, priorites: PRIORITES, categories: CATEGORIES };
@@ -223,7 +225,10 @@ async function fiche(pool, u, id, q = {}) {
     WHERE ev.prealerte_id = $1 ORDER BY ev.id`, [pa0.id])).rows;
   const urg = ROLES_HOPITAL.includes(u.role) ? await urgenceAvecDeclaration(pool, p.destination_id) : null;
   const hop = ROLES_HOPITAL.includes(u.role);
-  return { ...sansCorrespondance(p), ...(await require('./reservations').vue(pool, [p.id], { hopital: hop })).get(p.id), actions: actions(p, u), etat_preparation: etatPreparation(p),
+  // Fiche ambulance côté hôpital (cahier 12) : marge de préparation et passages Chrono récents de l'unité
+  const mp = hop ? require('./marge-preparation') : null;
+  const anticipation = hop ? { marge_preparation: (await mp.pourPrealertes(pool, p.destination_id, [p])).get(p.id), historique_chrono: await mp.historiqueChrono(pool, p.destination_id, p.unite_id) } : {};
+  return { ...sansCorrespondance(p), ...anticipation, ...(await require('./reservations').vue(pool, [p.id], { hopital: hop })).get(p.id), actions: actions(p, u), etat_preparation: etatPreparation(p),
     ...(hop ? { synthese: synthese(p, urg), correspondance: await require('./correspondance-simulee').pourHopital(pool, p) } : {}), evenements };
 }
 async function exigerVisibilite(db, u, pa, etabId) {

@@ -74,6 +74,19 @@
     }
     if (sonner) { bip(); setTimeout(bip, 450); }
   }
+  /** Marge de préparation (cahier 12) : arrivée comparée au délai mesuré de la civière ; « inconnu » n'est jamais compté 0. */
+  function blocMarge(p) {
+    const m = p.marge_preparation; if (!m) return '';
+    const v = { a: m.arrivee.minutes, c: m.civiere.delai_min, m: m.marge_min };
+    const txt = m.verdict === 'marge' ? S('mp_marge', v) : m.verdict === 'marge_faible' ? S('mp_marge_faible', v)
+      : m.verdict === 'risque_retard' ? (m.civiere.etat === 'aucune_civiere' ? S('mp_aucune') : S('mp_risque', v))
+        : m.arrivee.minutes == null ? S('mp_inconnu_arrivee') : S('mp_inconnu_nettoyage');
+    const coul = { marge: '#16A34A', marge_faible: '#F59E0B', risque_retard: '#DC2626', inconnu: '#94A3B8' }[m.verdict];
+    const lit = m.lit.etat === 'libre' ? S('mp_lit_libre') : m.lit.delai_min != null ? S('mp_lit_nett', { n: m.lit.delai_min }) : S('mp_lit_inconnu');
+    return `<div class="ls-marge" data-verdict="${esc(m.verdict)}" style="margin:6px 0;padding:6px 10px;border-left:4px solid ${coul};border-radius:6px">
+      <div class="note"><b>${S('mp_titre')}</b></div><div><b>${txt}</b></div>
+      <div class="note">${lit}${m.civiere.source === 'estimation_mediane' ? ` ${S('mp_estimation', { n: m.civiere.mesures })}` : ''}</div></div>`;
+  }
   function carteP(p) {
     const a = p.actions || [];
     const boutons = a.filter((x) => x !== 'signaler_probleme').map((x) => `<button class="btn${['prendre_en_compte', 'confirmer_vehicule', 'confirmer_service'].includes(x) ? ' pri' : ''}" type="button" data-ls="${x}" data-id="${p.id}">${S(`act_${x}`)}</button>`).join('');
@@ -81,7 +94,7 @@
       <div><b class="num">${esc(p.numero)}</b> ${pastillePrio(p)} <span class="ch-etat">${S(`s_${p.statut}`)}</span> ${(window.ArrimoSillage?.bouton('prealerte', p.id) || '')}</div>
       <div><b>${esc(p.organisation)}</b> · ${S('unite', { numero: p.unite })}${p.plaque ? ` · ${S('plaque', { plaque: p.plaque })}` : ''}</div>
       ${p.eta && OUVERTES.includes(p.statut) && p.statut !== 'arrivee' ? `<div class="ls-eta" style="font-size:1.15em;margin:4px 0"><b>${p.eta.minutes != null ? S('arrive_dans', { unite: p.unite, n: p.eta.minutes, km: p.eta.distance_km }) : S('arrive_km', { unite: p.unite, km: p.eta.distance_km })}</b> <span class="note">${S('eta_calcul', { heure: heureCourte(p.eta.le) })}</span></div>` : ''}
-      ${blocConfirmation(p)}${blocProximite(p)}${blocReservation(p)}${blocProfil(p)}
+      ${blocConfirmation(p)}${blocProximite(p)}${blocReservation(p)}${blocMarge(p)}${blocProfil(p)}
       ${p.transport ? `<div class="note"><b>${S('transport_lien', { ref: p.transport.resident_ref, origine: p.transport.origine, numero: p.transport.numero })}</b></div>` : ''}
       <div class="note">${S('categorie', { cat: t(`liaison_secours.cat_${p.categorie}`) })}${(p.equipage_noms || []).length ? ` · ${S('equipage', { noms: p.equipage_noms.join(', ') })}` : ''}</div>
       ${OUVERTES.includes(p.statut) && p.statut !== 'arrivee' ? `<div><b>${delai(p)}</b> · <span class="note">${p.position ? S('position_le', { heure: heureCourte(p.position.le) }) : S('sans_position')}</span></div>` : ''}
@@ -236,7 +249,8 @@
       const action = (corps = {}) => api('POST', `/secours/prealertes/${p.id}/action`, { etablissement_id: etat.ctx, version: p.version, action: a, ...corps });
       if (a === 'details') {
         const f = await api('GET', `/secours/prealertes/${p.id}?etablissement_id=${etat.ctx}`);
-        modale(p.numero, `<ol class="ch-historique">${f.evenements.map((ev) => `<li><span class="note num">${esc(heure(ev.cree_le))}</span> ${S(`ev_${ev.type}`)}${ev.par ? ` · ${esc(ev.par)}` : ''}${ev.detail?.unite_vue ? ` · ${esc(ev.detail.unite_vue)}` : ''}</li>`).join('')}</ol>`, [{ label: t('general.fermer') }]);
+        const hist = f.historique_chrono ? `<h3>${S('hist_titre')}</h3>${f.historique_chrono.length ? `<ul>${f.historique_chrono.map((h) => `<li>${h.porte_min != null ? S('hist_ligne', { numero: h.numero, n: h.porte_min }) : S('hist_sans', { numero: h.numero })}</li>`).join('')}</ul>` : `<p class="note">${S('hist_aucun')}</p>`}` : '';
+        modale(p.numero, `${blocMarge(f)}${hist}<ol class="ch-historique">${f.evenements.map((ev) => `<li><span class="note num">${esc(heure(ev.cree_le))}</span> ${S(`ev_${ev.type}`)}${ev.par ? ` · ${esc(ev.par)}` : ''}${ev.detail?.unite_vue ? ` · ${esc(ev.detail.unite_vue)}` : ''}</li>`).join('')}</ol>`, [{ label: t('general.fermer') }]);
         return vueSecours();
       }
       if (a === 'confirmer_vehicule') {
