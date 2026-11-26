@@ -1176,6 +1176,14 @@ async function vueLits() {
   v.querySelectorAll('[data-confirmer-libre]').forEach((b) => { b.onclick = () => agir(b,
     () => api('POST', `/lits/${b.dataset.confirmerLibre}/confirmer-disponibilite`), t('lits.confirmation_lit_ok', { code: b.dataset.code })); });
   brancherActionsLit(v);
+  // Cycle de disponibilité (cahier 15) : vue dérivée, l'état réel du lit est inchangé ; « prête » n'est pas « confirmée »
+  api('GET', `/capacites/cycle?etablissement_id=${etat.ctx}`).then((cy) => {
+    if (!document.body.contains(v)) return;
+    const C = (k, x) => esc(t(`lits.cycle_${k}`, x));
+    v.insertAdjacentHTML('afterbegin', `<section class="panneau-c cycle-dispo" aria-labelledby="cycle-t"><h3 id="cycle-t">${C('titre')}</h3>
+      <ol class="cycle-etapes">${cy.etats.map((e) => `<li data-cycle="${e}"><span class="num">${cy.compte[e]}</span> ${C(e)}</li>`).join('')}</ol>
+      <p class="note">${C('regle', { n: cy.validite_confirmation_min })}</p></section>`);
+  }).catch(() => {});
   // Historique des disponibilités (cahier directeur, Capacités) : journal immuable des lits, par jour ; chargé à l'ouverture seulement
   v.insertAdjacentHTML('beforeend', `<details class="panneau-c" id="hist-dispo"><summary><b>${esc(t('lits.hist_titre'))}</b></summary><div id="hist-dispo-z"><p class="note">…</p></div></details>`);
   $('#hist-dispo').addEventListener('toggle', async (ev) => {

@@ -12,6 +12,9 @@
       gr: { attente: 'En attente', acceptes: 'Acceptés', preparation: 'En préparation', transport: 'En transport', arrives: 'Arrivés', termines: 'Terminés', annules: 'Annulés' }, ty: { transport: 'Transport', transfert: 'Transfert' }, tout_statut: 'Tous les statuts', fiche: 'Fiche', fermer: 'Fermer', chronologie: 'Chronologie du parcours',
       et: { demande: 'Demande', demande_transmise: 'Demande transmise', acceptation: 'Acceptation', refus: 'Refus', en_route: 'En route vers le départ', sur_place: 'Sur place', depart: 'Prise en charge du patient', depart_confirme: 'Départ confirmé', prealerte: 'Préalerte envoyée', prealerte_recue: 'Préalerte reçue', arrivee: 'Arrivée du véhicule', reception: 'Patient remis', cloture: 'Mission terminée', incident: 'Incident', annulation: 'Annulation', preparation: 'Chambre prête' },
       st: { a_valider: 'À valider', demande: 'Demandé', accepte: 'Accepté', en_route_depart: 'En route vers le départ', en_transport: 'En transport', arrive: 'Arrivé', refuse: 'Refusé', annule: 'Annulé', prevu: 'Prévu', termine: 'Terminé' },
+      ind_titre: 'Préparation de l’accueil : {p} %', ind_inconnu: 'Préparation de l’accueil : inconnue', ind_pret: 'accueil prêt', ind_reste: 'reste : {c}',
+      cond: { capacite_prete: 'capacité prête', acceptation: 'acceptation', prealerte_recue: 'préalerte reçue' },
+      mg: { marge: 'marge de préparation : {m} min', marge_faible: 'marge faible : {m} min', risque_retard: 'risque de retard de préparation', inconnu: 'marge de préparation inconnue' },
       pr: { a_faire: 'À préparer', en_cours: 'En cours', prete: 'Prête', a_verifier: 'À vérifier' } },
     en: { titre: 'Arrimo Flow', intro: 'Facility arrivals and departures: transports, transfers, housing and ambulances, live.', tous: 'All', arrivees: 'Arrivals', departs: 'Departures',
       aujourdhui: 'Today', demain: 'Tomorrow', actualise: 'Updated at {h}', mvt: 'Movement', ref: 'Reference', origine: 'Origin', destination: 'Destination', prevue: 'Scheduled', estimee: 'Estimated',
@@ -23,6 +26,9 @@
       gr: { attente: 'Waiting', acceptes: 'Accepted', preparation: 'In preparation', transport: 'In transport', arrives: 'Arrived', termines: 'Done', annules: 'Cancelled' }, ty: { transport: 'Transport', transfert: 'Transfer' }, tout_statut: 'All statuses', fiche: 'Record', fermer: 'Close', chronologie: 'Path timeline',
       et: { demande: 'Request', demande_transmise: 'Request sent', acceptation: 'Acceptance', refus: 'Declined', en_route: 'On the way to pick-up', sur_place: 'On site', depart: 'Patient picked up', depart_confirme: 'Departure confirmed', prealerte: 'Pre-alert sent', prealerte_recue: 'Pre-alert received', arrivee: 'Vehicle arrival', reception: 'Patient handed over', cloture: 'Mission complete', incident: 'Incident', annulation: 'Cancellation', preparation: 'Room ready' },
       st: { a_valider: 'To validate', demande: 'Requested', accepte: 'Accepted', en_route_depart: 'On the way to pick-up', en_transport: 'In transport', arrive: 'Arrived', refuse: 'Declined', annule: 'Cancelled', prevu: 'Planned', termine: 'Done' },
+      ind_titre: 'Reception readiness: {p} %', ind_inconnu: 'Reception readiness: unknown', ind_pret: 'reception ready', ind_reste: 'remaining: {c}',
+      cond: { capacite_prete: 'capacity ready', acceptation: 'acceptance', prealerte_recue: 'pre-alert received' },
+      mg: { marge: 'preparation margin: {m} min', marge_faible: 'low margin: {m} min', risque_retard: 'preparation delay risk', inconnu: 'preparation margin unknown' },
       pr: { a_faire: 'To prepare', en_cours: 'In progress', prete: 'Ready', a_verifier: 'To check' } },
   };
   const e = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -36,6 +42,19 @@
     : l.preparation && ['a_faire', 'en_cours'].includes(l.preparation.etat) ? 'preparation' : l.statut === 'accepte' ? 'acceptes' : 'attente');
   const badge = (st, retard) => `<span class="badge-flux ${['arrive', 'termine'].includes(st) ? 'ok' : ['refuse', 'annule'].includes(st) ? 'ko' : retard ? 'retard' : 'cours'}">${e(X().st[st] || st)}${retard ? ` · ${T('retard')}` : ''}</span>`;
   const prep = (p) => (p ? `<span class="badge-flux ${p.etat === 'prete' ? 'ok' : p.retard ? 'retard' : p.etat === 'a_verifier' ? '' : 'cours'}">${e(X().pr[p.etat] || p.etat)}${p.chambre ? ` · ${e(p.chambre)}` : ''}${p.retard ? ` · ${T('retard')}` : ''}</span>` : '—');
+  /** Indice de préparation de l'accueil (cahier 15) : anneau + conditions obligatoires restantes ; un % élevé ne remplace pas une condition. */
+  const accueil = (l) => {
+    const a = l.preparation_accueil; const m = l.marge_preparation; let html = '';
+    if (a) {
+      const reste = a.manquantes.map((c) => e(X().cond[c] || c)).join(', ');
+      const ton = a.pret ? 'ok' : a.risque ? 'retard' : 'cours';
+      html += `<span class="indice-accueil ${ton}" title="${a.pct == null ? T('ind_inconnu') : T('ind_titre', { p: a.pct })}">`
+        + `<span class="anneau" style="--pct:${a.pct ?? 0}" role="img" aria-label="${a.pct == null ? T('ind_inconnu') : T('ind_titre', { p: a.pct })}"><span class="num">${a.pct == null ? '?' : a.pct}</span></span>`
+        + `<span class="note">${a.pret ? T('ind_pret') : T('ind_reste', { c: reste })}</span></span>`;
+    }
+    if (m) html += `<div class="note marge-${e(m.verdict)}">${e(String(X().mg[m.verdict]).replace('{m}', m.marge_min ?? '—'))}</div>`;
+    return html;
+  };
   const quand = (l) => {
     const prevue = l.prevue ? `${jour(l.prevue)} ${h(l.prevue)}` : '—';
     const cr = l.creneau ? `<div class="note">${T('creneau', { d: h(l.creneau.debut), f: h(l.creneau.fin) })}</div>` : '';
@@ -80,7 +99,7 @@
       ${barre}${ensemble}${legende}
       <p class="note">${T('resume', { a: d.resume.arrivees, d: d.resume.departs, r: d.resume.retards, p: d.resume.preparations })}</p>
       ${window.ArrimoVueTransferts.rendre(d.mouvements.map((l, i) => ({ ...l, statut: l.statut_detail || l.statut, ligne: i })), {
-        cellules: { sens: (l) => T(l.mouvement === 'arrivee' ? 'arr' : 'dep'), prevue: quand, eta: estimee, prep: (l) => prep(l.preparation) },
+        cellules: { sens: (l) => T(l.mouvement === 'arrivee' ? 'arr' : 'dep'), prevue: quand, eta: estimee, prep: (l) => `${prep(l.preparation)}${accueil(l)}` },
         actions: (l) => `${l.transfert ? o.boutonsTransfert?.(l.transfert) || '' : ''}${l.actions.includes('accuser_prealerte') ? `<button class="btn pri" data-flux-accuser="${l.ligne}">${T('accuser')}</button>` : ''}
           ${l.fiche ? `<button class="btn" data-flux-fiche="${l.ligne}">${T('fiche')}</button>` : ''}<button class="btn" data-flux-ouvrir="${e(l.ecran)}">${T('ouvrir')}</button>`,
       })}`;

@@ -854,6 +854,7 @@ function creerApp(pool, options = {}) {
   });
   // Blocages en cascade : chaîne remontée à partir de faits enregistrés, liens « fait » ou « hypothèse »
   api.get('/capacites/rattachements', route((req) => require('./rattachements').controler(pool, req.utilisateur, req.query)));
+  api.get('/capacites/cycle', route((req) => require('./cycle-disponibilite').cycle(pool, req.utilisateur, req.query)));
   api.get('/coordination/cascade', route((req) => require('./cascade').analyser(pool, req.utilisateur, req.query)));
   api.get('/coordination/plan', route((req) => require('./og-plan').plan(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   api.get('/coordination/escalades', route((req) => suivi.lireGrille(pool, req.utilisateur, req.query)));

@@ -1020,3 +1020,18 @@ th.erp-triable[aria-sort="ascending"]::after { content: " \2191"; } th.erp-triab
 .suivi-alerte .ligne { flex-wrap: wrap; gap: .4rem; }
 .fiche-plan { border: 1px solid var(--bordure, #E2E8F0); border-radius: 8px; padding: .4rem .6rem; }
 .fiche-plan summary { cursor: pointer; }
+
+/* Cycle de disponibilité (cahier 15) : étapes en ligne, repli sur téléphone */
+.cycle-etapes { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 8px 0; }
+.cycle-etapes li { border: 1px solid var(--bordure); border-radius: 999px; padding: 4px 10px; font-size: .9em; }
+.cycle-etapes li .num { font-weight: 700; }
+.cycle-etapes li[data-cycle="confirmee"] { border-color: #16A34A; }
+.cycle-etapes li[data-cycle="liberee"], .cycle-etapes li[data-cycle="prete"] { border-color: #F59E0B; }
+
+/* Indice de préparation de l'accueil (cahier 15, maquette validée) : anneau de progression, conditions restantes */
+.indice-accueil { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; }
+.indice-accueil .anneau { --c: #2563EB; width: 34px; height: 34px; border-radius: 50%; display: inline-grid; place-items: center;
+  background: conic-gradient(var(--c) calc(var(--pct) * 1%), var(--bordure) 0); }
+.indice-accueil .anneau .num { width: 26px; height: 26px; border-radius: 50%; background: var(--carte); color: var(--texte); display: grid; place-items: center; font-size: 11px; font-weight: 700; }
+.indice-accueil.ok .anneau { --c: #16A34A; } .indice-accueil.retard .anneau { --c: #DC2626; }
+.marge-risque_retard { color: var(--critique-texte); font-weight: 600; } .marge-marge_faible { color: var(--attention-texte); }
