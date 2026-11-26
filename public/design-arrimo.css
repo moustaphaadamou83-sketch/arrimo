@@ -469,3 +469,19 @@ div.ds-kpi { cursor: default; }
 :root[data-theme="sombre"] .ch-porte.niveau-orange .ch-minutes { color: var(--c-orange, #FDBA74); }
 .ds-cat-texte { color: var(--cat-texte); }
 @media (max-width: 600px) { :root[data-design="v2"] .module-sous-onglets button, :root[data-design="v2"] .ds-seg button { min-height: 40px; } }
+/* Console SH : informations du siège (lieu, date, heure, météo) lisibles sur la barre claire */
+:root[data-design="v2"] .barre .infos-siege, :root[data-design="v2"] .barre .infos-siege .is-meteo, :root[data-design="v2"] .barre .infos-siege .is-heure { color: var(--texte); }
+:root[data-design="v2"] .barre .infos-siege { color: var(--texte-2); }
+/* CHSLD (décision du 1er nov. 2026) : leur bandeau en dégradé forêt → pétrole est conservé ; textes et commandes en blanc dessus */
+:root[data-design="v2"][data-type-etab="chsld"] .entete-app, :root[data-design="v2"][data-type-etab="chsld"] .barre { background: linear-gradient(100deg, var(--ch-foret) 0%, var(--ch-petrole) 100%); color: #FFFFFF; border-bottom-color: transparent; }
+:root[data-design="v2"][data-type-etab="chsld"] .barre .marque, :root[data-design="v2"][data-type-etab="chsld"] .barre .marque strong, :root[data-design="v2"][data-type-etab="chsld"] .barre .marque small,
+:root[data-design="v2"][data-type-etab="chsld"] .barre .ctx, :root[data-design="v2"][data-type-etab="chsld"] .barre .infos-lieu, :root[data-design="v2"][data-type-etab="chsld"] .barre .infos-lieu * { color: #FFFFFF; }
+:root[data-design="v2"][data-type-etab="chsld"] .barre .btn, :root[data-design="v2"][data-type-etab="chsld"] .barre .bascule-langue button { background: transparent; color: #FFFFFF; border-color: rgba(255, 255, 255, 0.45); }
+:root[data-design="v2"][data-type-etab="chsld"] .barre .btn:hover { background: rgba(255, 255, 255, 0.14); color: #FFFFFF; }
+:root[data-design="v2"][data-type-etab="chsld"] .barre .bascule-langue { border-color: rgba(255, 255, 255, 0.45); }
+:root[data-design="v2"][data-type-etab="chsld"] .barre .bascule-langue button[aria-pressed="true"] { background: #FFFFFF; color: var(--ch-petrole); }
+:root[data-design="v2"][data-type-etab="chsld"] .barre .ambiance-seg { background: transparent; border-color: rgba(255, 255, 255, 0.45); }
+:root[data-design="v2"][data-type-etab="chsld"] .barre .ambiance-seg button, :root[data-design="v2"][data-type-etab="chsld"] .barre .ambiance-seg > .ic { color: #FFFFFF; }
+:root[data-design="v2"][data-type-etab="chsld"] .barre .ambiance-seg button[aria-pressed="true"] { background: #FFFFFF; color: var(--ch-petrole); }
+:root[data-design="v2"][data-type-etab="chsld"] .barre .ctx select { background: #FFFFFF; color: var(--ch-petrole); }
+:root[data-design="v2"][data-type-etab="chsld"] .barre .btn:focus-visible, :root[data-design="v2"][data-type-etab="chsld"] .barre select:focus-visible { outline-color: #FFFFFF; }
