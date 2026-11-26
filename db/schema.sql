@@ -2738,3 +2738,14 @@ DROP TRIGGER IF EXISTS exercice_evenements_immuables ON exercice_evenements;
 CREATE TRIGGER exercice_evenements_immuables BEFORE UPDATE OR DELETE ON exercice_evenements FOR EACH ROW EXECUTE FUNCTION journal_immuable();
 DROP TRIGGER IF EXISTS exercice_reponses_immuables ON exercice_reponses;
 CREATE TRIGGER exercice_reponses_immuables BEFORE UPDATE OR DELETE ON exercice_reponses FOR EACH ROW EXECUTE FUNCTION journal_immuable();
+
+-- Chrono T−5 (27 nov. 2026) : voir db/migrations/20261127-chrono-t5.sql
+ALTER TABLE demandes_transport ADD COLUMN IF NOT EXISTS patient_etat text CHECK (patient_etat IS NULL OR patient_etat IN ('non_commence', 'en_cours', 'pret', 'retarde', 'indisponible', 'a_renouveler'));
+ALTER TABLE demandes_transport ADD COLUMN IF NOT EXISTS patient_etat_motif text CHECK (patient_etat_motif IS NULL OR patient_etat_motif IN ('soins_en_cours', 'documents', 'personnel', 'examen', 'etat_clinique', 'autre'));
+ALTER TABLE demandes_transport ADD COLUMN IF NOT EXISTS patient_etat_le timestamptz;
+ALTER TABLE demandes_transport ADD COLUMN IF NOT EXISTS patient_pret_le timestamptz;
+ALTER TABLE demandes_transport ADD COLUMN IF NOT EXISTS patient_pret_par int REFERENCES utilisateurs(id);
+ALTER TABLE demandes_transport ADD COLUMN IF NOT EXISTS patient_pret_eta_min int;
+ALTER TABLE demandes_transport ADD COLUMN IF NOT EXISTS accueil_pret_le timestamptz;
+ALTER TABLE demandes_transport ADD COLUMN IF NOT EXISTS accueil_pret_par int REFERENCES utilisateurs(id);
+ALTER TABLE demandes_transport ADD COLUMN IF NOT EXISTS accueil_pret_eta_min int;

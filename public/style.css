@@ -1108,3 +1108,8 @@ body.mode-presentation #b-notif, body.mode-presentation #b-menu { visibility: hi
 
 /* Téléphone : pas de bouton d'annonces vocales dans l'en-tête (annonces destinées aux postes ; en-tête sans débordement) */
 @media (max-width: 700px) { #b-voix { display: none; } }
+
+/* Chrono T−5 : états de préparation (vert = prêt, orange = retard, gris = inconnu) toujours accompagnés du libellé */
+.prep-etats { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0; }
+.prep-badge { font-size: 12px; }
+.prep-t5 b.depasse { color: #B45309; }

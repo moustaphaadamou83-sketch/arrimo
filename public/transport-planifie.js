@@ -11,6 +11,8 @@
     if (!liste) return;
     const planifies = liste.filter((d) => d.motif_transport);
     const vt = window.ArrimoVueTransferts;
+    // Chrono T−5 : l'origine indique l'état du patient, la destination confirme l'accueil ; rien ne bloque l'ambulance
+    const actionsPrep = (d) => `${d.actions.includes('etat_patient') && d.patient_etat !== 'pret' ? `<button type="button" class="btn pri" data-tp-prep="pret" data-id="${d.id}">${P('prep_pret')}</button>` : ''}${d.actions.includes('etat_patient') ? `<button type="button" class="btn discret" data-tp-prep-autre="${d.id}">${P('prep_changer')}</button>` : ''}${d.actions.includes('accueil_pret') ? `<button type="button" class="btn pri" data-tp-accueil="${d.id}">${P('accueil_pret')}</button>` : ''}`;
     // Actions propres au transport planifié (inchangées) : transmettre, annuler, retirer le brouillon, archiver, Sillage
     const actions = (d) => `${d.statut === 'a_valider' && d.origine_id === etat.ctx ? `<button class="btn pri" data-tp-transmettre="${d.id}">${P('transmettre')}</button>` : ''}${d.statut !== 'a_valider' && d.actions.includes('annuler') ? `<button class="btn discret" data-tp-annuler="${d.id}" data-v="${d.version}">${P('annuler')}</button>` : ''}${d.actions.map((action) => action === 'annuler' && d.statut === 'a_valider' ? 'retirer_brouillon' : action).filter((action) => ['retirer_brouillon', 'archiver'].includes(action)).map((action) =>
       `<button type="button" class="btn discret" data-tp-action="${action}" data-id="${d.id}" data-v="${d.version}">${P(action)}</button>`).join('')}${d.archivee ? `<span class="note">${P('archive')}</span>` : ''}${(window.ArrimoSillage?.bouton('demande_transport', d.id) || '')}`;
@@ -22,8 +24,19 @@
         <div class="note"><span class="donnee">${esc(d.resident_ref)}</span>${d.lit_code ? ` · ${P('lit', { lit: d.lit_code })}` : ''}</div>
         <div class="note">${d.plage_confirmee_debut ? `<strong>${P('confirmee', { debut: heureCourte(d.plage_confirmee_debut), fin: heureCourte(d.plage_confirmee_fin) })}</strong>` : P('demandee', { jour: heure(d.plage_debut), fin: heureCourte(d.plage_fin) })}</div>
         <div class="note">${P(`s_${d.statut}`)}${d.unite ? ` · ${esc(d.unite)}` : ''}</div>
-        <div class="actions">${actions(d)}</div>` }) : `<p class="note">${P('aucun')}</p>`}</section>`;
+        ${['demandee', 'acceptee', 'en_route', 'pris_en_charge'].includes(d.statut) ? vt.preparation(d, { heure: heureCourte }) : ''}
+        <div class="actions">${actionsPrep(d)}${actions(d)}</div>` }) : `<p class="note">${P('aucun')}</p>`}</section>`;
     $('#tp-reserver').onclick = () => reserver(orgs);
+    const prep = (id, corps, msg) => agir(null, () => api('POST', `/transports/${id}/action`, { etablissement_id: etat.ctx, ...corps }), t(`transport_planifie.${msg}`));
+    v.querySelectorAll('[data-tp-prep]').forEach((b) => { b.onclick = () => prep(b.dataset.id, { action: 'etat_patient', etat: b.dataset.tpPrep }, 'prep_ok'); });
+    v.querySelectorAll('[data-tp-accueil]').forEach((b) => { b.onclick = () => prep(b.dataset.tpAccueil, { action: 'accueil_pret' }, 'accueil_ok'); });
+    v.querySelectorAll('[data-tp-prep-autre]').forEach((b) => { b.onclick = () => {
+      const E = window.ArrimoVueTransferts.PREP[langue === 'en' ? 'en' : 'fr'];
+      const opt = (o, cles) => cles.map((k) => `<option value="${k}">${esc(o[k])}</option>`).join('');
+      modale(t('transport_planifie.prep_titre'), `<div class="champ"><label class="lbl" for="prep-etat">${P('prep_etat')}</label><select id="prep-etat">${opt(E.e, ['en_cours', 'retarde', 'indisponible', 'non_commence', 'a_renouveler'])}</select></div>
+        <div class="champ"><label class="lbl" for="prep-motif">${P('prep_motif')}</label><select id="prep-motif">${opt(E.m, ['soins_en_cours', 'documents', 'personnel', 'examen', 'etat_clinique', 'autre'])}</select></div><p class="note">${P('prep_note')}</p>`,
+      [{ label: t('general.annuler') }, { label: t('transport_planifie.prep_enregistrer'), pri: true, run: async () => (await prep(b.dataset.tpPrepAutre, { action: 'etat_patient', etat: $('#prep-etat').value, motif: $('#prep-motif').value }, 'prep_ok')) !== false }]);
+    }; });
     $('#tp-historique').onclick = () => { historique = !historique; rafraichir(); };
     v.querySelectorAll('[data-tp-action]').forEach((b) => { b.onclick = () => agir(b,
       () => api('POST', `/transports/${b.dataset.id}/action`, { etablissement_id: etat.ctx, action: b.dataset.tpAction, version: Number(b.dataset.v) }),

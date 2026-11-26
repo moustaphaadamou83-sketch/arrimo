@@ -300,13 +300,21 @@ function actions(d, u, cote, etabId) {
     if (d.statut === 'pris_en_charge' && d.motif_transport && !d.depart_reel) base.unshift('partir_destination');
     return ['en_route', 'pris_en_charge'].includes(d.statut) && d.destination_id && d.destination_type && d.destination_type !== 'hopital' ? [...base, 'prealerter'] : base;
   }
-  if (cote === 'etablissement' && Number(etabId) === d.destination_id && d.prealerte_le && !d.prealerte_recue_le) return ['accuser_prealerte'];
-  if (cote === 'etablissement' && Number(etabId) === d.origine_id && ['demandee', 'acceptee', 'en_route'].includes(d.statut)) return ['annuler'];
+  if (cote === 'etablissement' && Number(etabId) === d.destination_id) {
+    return [...(d.prealerte_le && !d.prealerte_recue_le ? ['accuser_prealerte'] : []), ...(!d.accueil_pret_le ? ['accueil_pret'] : [])];
+  }
+  if (cote === 'etablissement' && Number(etabId) === d.origine_id && ['demandee', 'acceptee', 'en_route'].includes(d.statut)) return ['etat_patient', 'annuler'];
   return [];
 }
 const MOTIFS = ['aucune_unite', 'hors_territoire', 'autre'];
 // Libellés du journal (traduits par l'interface : journal_actions)
-const ACTIONS_JOURNAL = { transmettre: 'Transport transmis au transporteur', accepter: 'Transport accepté', refuser: 'Transport refusé', en_route: 'Ambulance en route', pris_en_charge: 'Résident pris en charge', arrivee: 'Transport arrivé', annuler: 'Transport annulé' };
+// Chrono T−5 (27 nov. 2026) : préparation du patient (origine) et accueil (destination) ; objectif organisationnel, jamais bloquant
+const ETATS_PATIENT = ['non_commence', 'en_cours', 'pret', 'retarde', 'indisponible', 'a_renouveler'];
+const MOTIFS_PREPARATION = ['soins_en_cours', 'documents', 'personnel', 'examen', 'etat_clinique', 'autre'];
+/** Minutes restantes avant l'arrivée estimée transmise par l'équipage (préalerte) ; null si inconnue, jamais inventée. */
+const etaRestante = (d) => (d.prealerte_eta_min != null && d.prealerte_eta_le
+  ? Math.round(d.prealerte_eta_min - (Date.now() - new Date(d.prealerte_eta_le).getTime()) / 60000) : null);
+const ACTIONS_JOURNAL = { etat_patient: 'Préparation du patient mise à jour', accueil_pret: 'Accueil prêt pour la réception', transmettre: 'Transport transmis au transporteur', accepter: 'Transport accepté', refuser: 'Transport refusé', en_route: 'Ambulance en route', pris_en_charge: 'Résident pris en charge', arrivee: 'Transport arrivé', annuler: 'Transport annulé' };
 /** Sérialise les affectations d'un même véhicule et vérifie la plage avant de l'enregistrer. */
 async function verifierAffectation(c, d, uniteId, debut, fin, { depart = false } = {}) {
   const unite = (await c.query(`SELECT id, numero, type_vehicule FROM unites_secours
@@ -338,7 +346,7 @@ async function agir(pool, u, id, b) {
     if (!ok) throw new ErreurHttp(404, 'transport_introuvable');
     cote = 'ambulance';
   } else if (ROLES_ETAB.includes(u.role) && Number(b.etablissement_id) === d0.origine_id) { exigerEtablissement(u, d0.origine_id); cote = 'etablissement'; }
-  else if (ROLES_ETAB.includes(u.role) && b.action === 'accuser_prealerte' && !d0.brouillon_prive && Number(b.etablissement_id) === d0.destination_id) { exigerEtablissement(u, d0.destination_id); cote = 'destination'; }
+  else if (ROLES_ETAB.includes(u.role) && ['accuser_prealerte', 'accueil_pret'].includes(b.action) && !d0.brouillon_prive && Number(b.etablissement_id) === d0.destination_id) { exigerEtablissement(u, d0.destination_id); cote = 'destination'; }
   else throw new ErreurHttp(403, 'role_insuffisant');
   const a = String(b.action || '');
   return transaction(pool, async (c) => {
@@ -373,6 +381,15 @@ async function agir(pool, u, id, b) {
     const maj = async (sql, vals = []) => (await c.query(`UPDATE demandes_transport SET ${sql}, version = version + 1, modifie_le = now() WHERE id = $1 RETURNING *`, [d.id, ...vals])).rows[0];
     const attendu = { accepter: 'demandee', refuser: 'demandee', en_route: 'acceptee', pris_en_charge: 'en_route', arrivee: 'pris_en_charge' };
     let n; let detail = {};
+    if (cote === 'destination' && a === 'accueil_pret') {
+      // Accueil prêt pour la réception (T−5) : confirmé par la destination, avec l'arrivée estimée du moment
+      if (d.accueil_pret_le) return { ...d, deja: true };
+      const eta = etaRestante(d);
+      n = await maj('accueil_pret_le = now(), accueil_pret_par = $2, accueil_pret_eta_min = $3', [u.id, eta]);
+      await evenement(c, n, 'accueil_pret', u, { eta_min: eta });
+      await journaliser(c, { etablissementId: n.destination_id, utilisateurId: u.id || null, action: ACTIONS_JOURNAL.accueil_pret, detail: n.numero });
+      return n;
+    }
     if (cote === 'destination') {
       // Préalerte d'arrivée acquittée par la destination (accusé de réception humain, historisé)
       if (!d.prealerte_le) throw new ErreurHttp(409, 'transport_statut_incompatible');
@@ -514,6 +531,16 @@ async function agir(pool, u, id, b) {
           await fixer(c, n.unite_id, 'disponible', { source: 'transport_termine', utilisateurId: u.id || null });
         }
       }
+    } else if (a === 'etat_patient') {
+      // Préparation du patient par l'établissement d'origine (T−5). Un état « prêt » puis « indisponible » reste dans l'historique.
+      if (!['demandee', 'acceptee', 'en_route'].includes(d.statut)) throw new ErreurHttp(409, 'transport_statut_incompatible');
+      const etatP = String(b.etat || ''); if (!ETATS_PATIENT.includes(etatP)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'etat' });
+      if (etatP === d.patient_etat && etatP === 'pret') return { ...d, deja: true };
+      const motif = ['retarde', 'indisponible'].includes(etatP) ? (MOTIFS_PREPARATION.includes(b.motif) ? b.motif : 'autre') : null;
+      const eta = etaRestante(d); const pret = etatP === 'pret';
+      n = await maj(`patient_etat = $2, patient_etat_motif = $3, patient_etat_le = now(), patient_pret_le = CASE WHEN $4 THEN now() ELSE NULL END,
+        patient_pret_par = CASE WHEN $4 THEN $5::int ELSE NULL END, patient_pret_eta_min = CASE WHEN $4 THEN $6::int ELSE NULL END`, [etatP, motif, pret, u.id || null, eta]);
+      detail = { etat: etatP, motif, eta_min: eta };
     } else {
       if (a === 'transmettre') {
         // COR-001 : validation humaine avant transmission ; l'établissement peut ajuster la plage, le véhicule et le transporteur autorisé
@@ -578,4 +605,4 @@ async function fiche(pool, u, id, q = {}) {
     WHERE ev.demande_id = $1 ORDER BY ev.id`, [d.id])).rows;
   return { ...d, evenements };
 }
-module.exports = { DEPART_NSA_SQL, dureesPlanifiees, BROUILLON_PRIVE_SQL, destinations, preparerDepuisHebergement, organisations, demander, planifier, liste, agir, fiche, OUVERTES, MOTIFS_TRANSPORT, TYPES_VEHICULE };
+module.exports = { ETATS_PATIENT, MOTIFS_PREPARATION, DEPART_NSA_SQL, dureesPlanifiees, BROUILLON_PRIVE_SQL, destinations, preparerDepuisHebergement, organisations, demander, planifier, liste, agir, fiche, OUVERTES, MOTIFS_TRANSPORT, TYPES_VEHICULE };

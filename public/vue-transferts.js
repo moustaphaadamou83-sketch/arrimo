@@ -80,5 +80,47 @@
         ${tous.length > vus.length ? `<p class="note">${echapper(x.plus.replace('{n}', tous.length - vus.length))}</p>` : ''}</div>`;
     }).join('')}</div>`;
   }
-  window.ArrimoVueTransferts = { rendre, depuisTransport, kanban, colonneTransport, COLONNES };
+  /* Chrono T−5 (27 nov. 2026) : état de préparation du patient (origine) et de l'accueil (destination), distincts de l'ambulance.
+     Objectif organisationnel (T−5 par défaut), jamais clinique ; compte à rebours seulement si l'arrivée estimée est connue. */
+  const PREP = {
+    fr: { patient: 'Patient', accueil: 'Accueil', pret: 'Patient prêt au transfert', accueil_pret: 'Accueil prêt', inconnu: 'non confirmé', t5: 'Objectif T−5', t5_atteint: 'objectif T−5 dépassé', eta_inconnue: 'arrivée estimée inconnue',
+      e: { non_commence: 'Préparation non commencée', en_cours: 'Préparation en cours', pret: 'Patient prêt au transfert', retarde: 'Préparation retardée', indisponible: 'Patient temporairement indisponible', a_renouveler: 'Confirmation à renouveler' },
+      m: { soins_en_cours: 'soins en cours', documents: 'documents manquants', personnel: 'personnel indisponible', examen: 'examen en cours', etat_clinique: 'état clinique', autre: 'autre motif' } },
+    en: { patient: 'Patient', accueil: 'Reception', pret: 'Patient ready for transfer', accueil_pret: 'Reception ready', inconnu: 'not confirmed', t5: 'T−5 target', t5_atteint: 'T−5 target passed', eta_inconnue: 'estimated arrival unknown',
+      e: { non_commence: 'Preparation not started', en_cours: 'Preparation in progress', pret: 'Patient ready for transfer', retarde: 'Preparation delayed', indisponible: 'Patient temporarily unavailable', a_renouveler: 'Confirmation to renew' },
+      m: { soins_en_cours: 'care in progress', documents: 'missing documents', personnel: 'staff unavailable', examen: 'test in progress', etat_clinique: 'clinical condition', autre: 'other reason' } },
+  };
+  const prepTxt = () => PREP[(document.documentElement.lang || '').startsWith('en') ? 'en' : 'fr'];
+  /** Heure d'arrivée estimée (préalerte de l'équipage) ; null si inconnue. */
+  const arriveeEstimee = (d) => (d.prealerte_eta_min != null && d.prealerte_eta_le ? new Date(new Date(d.prealerte_eta_le).getTime() + d.prealerte_eta_min * 60000) : null);
+  /** Badges de préparation (+ compte à rebours T−5 mis à jour par ArrimoDuree.tic). Vert = prêt ; orange = retard ; gris = inconnu. */
+  function preparation(d, { heure, objectifMin = 5 } = {}) {
+    const x = prepTxt(); const h = heure || ((v) => new Date(v).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    const ton = (e) => (e === 'pret' ? 'ok' : ['retarde', 'indisponible', 'a_renouveler'].includes(e) ? 'retard' : '');
+    const patient = d.patient_etat
+      ? `<span class="badge-flux prep-badge ${ton(d.patient_etat)}">${echapper(x.e[d.patient_etat])}${d.patient_etat === 'pret' && d.patient_pret_le ? ` · ${echapper(h(d.patient_pret_le))}` : ''}${d.patient_etat_motif ? ` · ${echapper(x.m[d.patient_etat_motif])}` : ''}</span>`
+      : `<span class="badge-flux prep-badge">${echapper(x.patient)} : ${echapper(x.inconnu)}</span>`;
+    const accueil = d.destination_id ? `<span class="badge-flux prep-badge ${d.accueil_pret_le ? 'ok' : ''}">${d.accueil_pret_le ? `${echapper(x.accueil_pret)} · ${echapper(h(d.accueil_pret_le))}` : `${echapper(x.accueil)} : ${echapper(x.inconnu)}`}</span>` : '';
+    const eta = arriveeEstimee(d);
+    const t5 = eta ? `<span class="note prep-t5">${echapper(x.t5)} : <b class="num" data-decompte="${echapper(new Date(eta.getTime() - objectifMin * 60000).toISOString())}" data-decompte-fin="${echapper(x.t5_atteint)}">--:--:--</b></span>` : '';
+    return `<div class="prep-etats">${patient}${accueil}${t5}</div>`;
+  }
+  window.ArrimoVueTransferts = { rendre, depuisTransport, kanban, colonneTransport, COLONNES, preparation, PREP, arriveeEstimee };
+  /* Format des durées (cahier Chrono ultime, 20) : HH:MM:SS, jours au-delà de 24 h ; inconnu → « --:--:-- », jamais 0. */
+  function hhmmss(ms) {
+    if (!Number.isFinite(ms)) return '--:--:--';
+    const tot = Math.floor(Math.abs(ms) / 1000); const j = Math.floor(tot / 86400); const hh = Math.floor((tot % 86400) / 3600);
+    const p = (n) => String(n).padStart(2, '0'); const fr = !(document.documentElement.lang || '').startsWith('en');
+    return `${j ? `${j} ${fr ? (j > 1 ? 'jours' : 'jour') : (j > 1 ? 'days' : 'day')} ` : ''}${p(hh)}:${p(Math.floor((tot % 3600) / 60))}:${p(tot % 60)}`;
+  }
+  /** Comptes à rebours [data-decompte] (échéance ISO) : chaque seconde ; une fois l'échéance passée, le libellé de fin. */
+  function tic() {
+    document.querySelectorAll('[data-decompte]').forEach((el) => {
+      const ms = new Date(el.dataset.decompte).getTime() - Date.now();
+      el.textContent = ms >= 0 ? hhmmss(ms) : `${el.dataset.decompteFin || ''} (+${hhmmss(ms)})`;
+      el.classList.toggle('depasse', ms < 0);
+    });
+  }
+  window.ArrimoDuree = { hhmmss, tic };
+  if (typeof setInterval === 'function' && typeof document.querySelectorAll === 'function') setInterval(tic, 1000);
 })();
