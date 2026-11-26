@@ -120,6 +120,12 @@
       el.textContent = ms >= 0 ? hhmmss(ms) : `${el.dataset.decompteFin || ''} (+${hhmmss(ms)})`;
       el.classList.toggle('depasse', ms < 0);
     });
+    // Durées écoulées [data-depuis] : HH:MM:SS ; l'anneau ne montre une proportion que s'il existe un objectif (sinon vide, jamais arbitraire)
+    document.querySelectorAll('[data-depuis]').forEach((el) => {
+      const ms = Date.now() - new Date(el.dataset.depuis).getTime(); const val = el.querySelector('.ac-val'); if (val) val.textContent = hhmmss(ms);
+      const obj = Number(el.dataset.objectifMin); const arc = el.querySelector('.ac-arc');
+      if (arc && obj > 0 && Number.isFinite(ms)) arc.setAttribute('stroke-dasharray', `${Math.min(100, Math.max(0, (ms / 60000 / obj) * 100)).toFixed(1)} 100`);
+    });
   }
   window.ArrimoDuree = { hhmmss, tic };
   if (typeof setInterval === 'function' && typeof document.querySelectorAll === 'function') setInterval(tic, 1000);

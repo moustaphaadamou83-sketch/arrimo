@@ -8,7 +8,9 @@
     ['patients', 'stethoscope', 'Patients & DSN', 'Patients & EHR', ['patients', 'dsn', 'admissions', 'c-residents', 'c-admissions', 'nsa']],
     ['transferts', 'arrow-right-left', 'Transferts', 'Transfers', ['flux', 'transferts', 'liaison', 'c-demandes', 'c-mouvements', 'transports-planifies']],
     ['capacites', 'bed-double', 'Capacités', 'Capacity', ['lits', 'c-chambres', 'bourse', 'c-urgences']],
-    ['urgences', 'siren', 'Urgences', 'Emergency', ['urgence', 'secours', 'chrono', 'eviter', 'crise']],
+    // Chrono : module principal (cahier V4 3.1, 27 nov. 2026), sorti d'Urgences ; un seul moteur, plusieurs vues
+    ['chrono', 'timer', 'Chrono', 'Chrono', ['chrono']],
+    ['urgences', 'siren', 'Urgences', 'Emergency', ['urgence', 'secours', 'eviter', 'crise']],
     ['operations', 'spray-can', 'Opérations', 'Operations', ['mes-taches', 'nettoyage', 'c-taches', 'visites']],
     ['pilotage', 'chart-column', 'Pilotage', 'Steering', ['continuite', 'vigilance', 'indicateurs', 'c-indicateurs', 'donnees']],
     ['reseau', 'network', 'Réseau', 'Network', ['reseau', 'c-reseau']],

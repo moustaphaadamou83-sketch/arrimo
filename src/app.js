@@ -222,7 +222,7 @@ function creerApp(pool, options = {}) {
   api.use((req, res, next) => {
     if (req.utilisateur.role !== 'entretien') return next();
     // La météo de l'en-tête et le nom de l'assistant (lecture seule, propres à l'établissement) s'affichent aussi pour l'entretien.
-    const ok = (req.method === 'GET' && ['/moi', '/nettoyage', '/meteo', '/og/configuration', '/chsld/taches', '/chsld/places'].includes(req.path)) || req.path.startsWith('/moi/')
+    const ok = (req.method === 'GET' && ['/moi', '/nettoyage', '/meteo', '/og/configuration', '/chsld/taches', '/chsld/places', '/chrono/universel'].includes(req.path)) || req.path.startsWith('/moi/')
       || req.path.startsWith('/formation/')   // Module Formation : son parcours Hygiène et salubrité
       || (req.method === 'GET' && req.path === '/taches/miennes')
       || req.path.startsWith('/messagerie/')   // Arrimo Connect : communications internes (mêmes droits que tout employé)
@@ -346,6 +346,8 @@ function creerApp(pool, options = {}) {
   });
   // Chrono (19 nov. 2026) : mêmes routes pour l'urgence (/chrono) et pour l'ambulance et le CCS (/secours/chrono)
   const chrono = require('./chrono');
+  // Chrono universel (27 nov. 2026) : durées en cours de l'établissement, en lecture seule, mêmes droits que l'établissement
+  api.get('/chrono/universel', route((req) => require('./chrono-universel').universel(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   for (const pre of ['/chrono', '/secours/chrono']) {
     api.get(`${pre}`, route((req) => chrono.tableau(pool, req.utilisateur, req.query)));
     api.get(`${pre}/rapport`, route((req) => chrono.rapport(pool, req.utilisateur, req.query)));

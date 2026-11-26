@@ -100,7 +100,7 @@
    Validé par Moustafa le 26 nov. 2026 : appliqué par défaut (?design=v1 : retour personnel). Ambiances personnelles, seulement sur les pages d'Arrimo (data-arrimo) : Glacier (défaut) et Horizon en clair, Crépuscule en sombre.
    La couleur principale de la marque (#0E5E6F) et les couleurs de statut ne changent pas. Couleurs des modules : identiques pour tous. */
 :root[data-arrimo][data-design="v2"] {
-  --m-accueil: #0E7C86; --m-patients: #7C3AED; --m-transferts: #2B59C3; --m-capacites: #047857; --m-urgences: #BE185D;
+  --m-accueil: #0E7C86; --m-patients: #7C3AED; --m-transferts: #2B59C3; --m-capacites: #047857; --m-urgences: #BE185D; --m-chrono: #0E5E6F;
   --m-operations: #B45309; --m-pilotage: #4338CA; --m-reseau: #0F766E; --m-national: #86198F; --m-administration: #475569;
 }
 :root[data-arrimo][data-design="v2"][data-ambiance="glacier"]:not([data-theme="sombre"]):not([data-type-etab="chsld"]) {
@@ -117,7 +117,7 @@
   --principal: #5BC4D0; --th-surface: #13212D; --th-doux: #1A2B39; --th-bordure: #2E4A5C;
 }
 :root[data-arrimo][data-design="v2"][data-theme="sombre"] {
-  --m-accueil: #5BC4D0; --m-patients: #B794F6; --m-transferts: #8AA8F0; --m-capacites: #5DD3A6; --m-urgences: #F38DB8;
+  --m-accueil: #5BC4D0; --m-patients: #B794F6; --m-transferts: #8AA8F0; --m-capacites: #5DD3A6; --m-urgences: #F38DB8; --m-chrono: #57C5B6;
   --m-operations: #F4B35E; --m-pilotage: #A5A9F5; --m-reseau: #5ED1C4; --m-national: #E79BF0; --m-administration: #A9BAC9;
 }
 /* Navigation : chaque grand module porte sa couleur (icône et indicateur actif), toujours avec son libellé */
@@ -1113,3 +1113,24 @@ body.mode-presentation #b-notif, body.mode-presentation #b-menu { visibility: hi
 .prep-etats { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0; }
 .prep-badge { font-size: 12px; }
 .prep-t5 b.depasse { color: #B45309; }
+
+/* Chrono unifié (27 nov. 2026) : sous-menus, anneaux de durée communs ; vert/orange/rouge/gris = niveaux, toujours avec le texte */
+.sous-chrono { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--e3); }
+.sous-chrono button { border: 1px solid var(--bordure); background: var(--carte); color: var(--texte); border-radius: 999px; padding: 6px 14px; min-height: 36px; font-weight: 600; cursor: pointer; }
+.sous-chrono button[aria-current="true"] { background: #0E5E6F; border-color: #0E5E6F; color: #fff; }
+.grille-chrono { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--e2); margin: var(--e2) 0; }
+.anneau-chrono { display: flex; gap: 10px; align-items: center; border: 1px solid var(--bordure); border-left: 4px solid #94A3B8; border-radius: var(--rayon); background: var(--carte); padding: 8px 10px; }
+.anneau-chrono svg { width: 44px; height: 44px; flex: none; transform: rotate(-90deg); }
+.anneau-chrono .ac-fond { fill: none; stroke: var(--bordure); stroke-width: 5; }
+.anneau-chrono .ac-arc { fill: none; stroke: #94A3B8; stroke-width: 5; stroke-linecap: round; }
+.anneau-chrono > div { display: flex; flex-direction: column; min-width: 0; }
+.anneau-chrono .ac-val, .anneau-chrono b.num { font-size: 18px; font-variant-numeric: tabular-nums; }
+.anneau-chrono.niveau-vert { border-left-color: #16A34A; } .anneau-chrono.niveau-vert .ac-arc { stroke: #16A34A; }
+.anneau-chrono.niveau-orange { border-left-color: #F59E0B; } .anneau-chrono.niveau-orange .ac-arc { stroke: #F59E0B; }
+.anneau-chrono.niveau-rouge { border-left-color: #DC2626; } .anneau-chrono.niveau-rouge .ac-arc { stroke: #DC2626; }
+.qualite-chrono { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--e2); }
+.qualite-chrono div { border: 1px solid var(--bordure); border-radius: var(--rayon); padding: 8px 10px; background: var(--carte); }
+.qualite-chrono dt { font-size: 13px; color: var(--texte-2-fond); } .qualite-chrono dd { margin: 0; font-size: 20px; font-weight: 700; }
+.tuiles-chrono { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--e2); }
+.tuiles-chrono .tuile-c { text-align: left; border: 1px solid var(--bordure); border-radius: var(--rayon-carte); background: var(--carte); padding: 12px 14px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
+.tuiles-chrono .tuile-c .gros { font-size: 30px; font-weight: 700; }

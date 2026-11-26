@@ -108,7 +108,7 @@
         <div><span class="ds-lbl">${X('simultanes')}</span><strong>${val(r?.pilote?.simultanes_max)}</strong><span class="note">${X('max_mois')}</span></div></section>`;
   }
 
-  async function vueChrono() {
+  async function vueAmbulancesChrono() {
     const v = $('#v-chrono');
     const d = await api('GET', `/chrono?etablissement_id=${etat.ctx}&${paramsFiltres(true)}`);
     if (!d) return;
@@ -232,5 +232,54 @@
     [{ label: t('general.annuler') }, { label: t('chrono.corriger'), pri: true, run: async () => (await agir(null, () => api('POST', `/chrono/passages/${p.id}/corriger`, {
       etablissement_id: etat.ctx, etape: $('#chc-etape').value, heure: new Date($('#chc-heure').value).toISOString(), motif: $('#chc-motif').value }), t('chrono.corrigee_ok'))) !== null || false }]);
   }
+  /* Chrono unifié (27 nov. 2026) : un seul module, huit sous-menus, une seule source (GET /chrono/universel, lecture seule).
+     Les ambulances (H11 à H15) gardent leur écran existant ; aucun second moteur. Durées HH:MM:SS ; inconnu en gris, jamais 0. */
+  const SOUS = ['generale', 'patients', 'ambulances', 'capacites', 'previsions', 'qualite', 'alertes', 'historique'];
+  const ENTRETIEN_SOUS = ['capacites'];
+  const sousPermis = () => (etat.moi?.utilisateur?.role === 'entretien' ? ENTRETIEN_SOUS : SOUS);
+  const nav = (cur) => `<nav class="sous-chrono" aria-label="${K('u_nav')}">${sousPermis().map((k) => `<button type="button" data-sous-chrono="${k}" aria-current="${k === cur}">${K('u_' + k)}</button>`).join('')}</nav>`;
+  /** Anneau commun : durée écoulée depuis un horodatage serveur ; proportion réelle seulement s'il existe un objectif. */
+  const anneauDuree = (x, { libelle, sous } = {}) => `<div class="anneau-chrono niveau-${esc(x.niveau || 'gris')}"${x.depuis ? ` data-depuis="${esc(x.depuis)}"` : ''}${x.objectif_min ? ` data-objectif-min="${esc(x.objectif_min)}"` : ''}>
+      <svg viewBox="0 0 44 44" aria-hidden="true"><circle class="ac-fond" cx="22" cy="22" r="19"/><circle class="ac-arc" cx="22" cy="22" r="19" pathLength="100" stroke-dasharray="0 100"/></svg>
+      <div><b class="ac-val num">--:--:--</b><span>${esc(libelle || '')}</span>${sous ? `<small class="note">${esc(sous)}</small>` : ''}</div></div>`;
+  const phase = (k) => K('ph_' + k);
+  const liste = (items, rendu, vide) => (items.length ? `<div class="grille-chrono">${items.map(rendu).join('')}</div>` : `<p class="note">${vide}</p>`);
+  async function vueChrono() {
+    const v = $('#v-chrono');
+    const cur = sousPermis().includes(etatC.sous) ? etatC.sous : sousPermis()[0];
+    if (cur === 'ambulances') { await vueAmbulancesChrono(); v.insertAdjacentHTML('afterbegin', nav(cur)); return; }
+    const d = await api('GET', `/chrono/universel?etablissement_id=${etat.ctx}`); if (!d) return;
+    const r = d.resume; const tuileN = (k, x) => `<button type="button" class="tuile-c ds-kpi${x.rouge ? ' alerte' : ''}" data-sous-chrono="${k}"><span class="gros ds-kpi-val num">${x.total}</span><span class="note ds-kpi-lib">${K('u_' + k)}${x.rouge ? ` · ${K('u_rouge', { n: x.rouge })}` : ''}${x.orange ? ` · ${K('u_orange', { n: x.orange })}` : ''}</span></button>`;
+    const patient = (x) => anneauDuree(x, { libelle: `${x.ressource}${x.unite ? ` · ${x.unite}` : ''}`, sous: `${phase(x.phase)} · ${x.reference || '—'}` });
+    const ressource = (x) => anneauDuree(x, { libelle: `${x.ressource}${x.unite ? ` · ${x.unite}` : ''}`, sous: `${phase(x.phase)}${x.attente_avant_nettoyage_min != null ? ` · ${K('u_attente_avant', { n: x.attente_avant_nettoyage_min })}` : ''}` });
+    const ambulance = (x) => `<div class="anneau-chrono niveau-${esc(x.niveau)}"${x.depuis ? ` data-depuis="${esc(x.depuis)}"` : ''}>
+        <svg viewBox="0 0 44 44" aria-hidden="true"><circle class="ac-fond" cx="22" cy="22" r="19"/><circle class="ac-arc" cx="22" cy="22" r="19" pathLength="100" stroke-dasharray="0 100"/></svg>
+        <div><b class="${x.depuis ? 'ac-val ' : ''}num">${x.depuis ? '--:--:--' : x.arrivee_estimee ? `<span data-decompte="${esc(x.arrivee_estimee)}" data-decompte-fin="${K('u_eta_passee')}">--:--:--</span>` : K('u_eta_inconnue')}</b>
+        <span>${esc(x.unite || '—')} · ${esc(x.numero)}</span><small class="note">${phase(x.phase)}${x.objet === 'prealerte' && !x.depuis && !x.estimation_fiable ? ` · ${K('u_estimation_non_fiable')}` : ''}</small>
+        ${x.objet === 'transport' ? window.ArrimoVueTransferts.preparation({ ...x, destination_id: x.sens === 'arrivee' ? 1 : null }, { heure: heureCourte }) : ''}</div></div>`;
+    const alerte = (x) => anneauDuree(x, { libelle: x.titre, sous: `${K('u_statut_' + x.statut)}${x.escalade_niveau ? ` · ${K('u_escalade', { n: x.escalade_niveau })}` : ''}${x.reaction_min != null ? ` · ${K('u_reaction', { n: x.reaction_min })}` : ''}` });
+    const q = d.qualite;
+    const corps = {
+      generale: () => `<div class="tuiles-c tuiles-chrono">${tuileN('patients', r.patients)}${tuileN('capacites', r.capacites)}${tuileN('ambulances', r.ambulances)}${tuileN('alertes', r.alertes)}</div>
+        <p class="note">${K('u_intro')}</p>${liste([...d.patients, ...d.capacites].filter((x) => x.niveau === 'rouge').slice(0, 8), (x) => (x.reference ? patient(x) : ressource(x)), K('u_aucun_rouge'))}`,
+      patients: () => liste(d.patients, patient, K('u_aucun')),
+      capacites: () => liste(d.capacites, ressource, K('u_aucun')),
+      previsions: () => d.previsions ? `<p class="note">${K('u_prev_note')}</p><div class="tableau"><table><thead><tr><th>${K('u_type')}</th><th>${K('u_libres')}</th><th>${K('u_nettoyage')}</th>${(d.previsions.horizons || []).map((h) => `<th>${K('u_dans', { h })}</th>`).join('')}</tr></thead><tbody>
+        ${(d.previsions.unites || []).map((u) => `<tr><th>${esc(u.type_nom)}</th><td>${u.libres}</td><td>${u.horizons?.[d.previsions.horizons?.[0]]?.liberations ?? '—'}</td>${(d.previsions.horizons || []).map((h) => { const x = u.horizons?.[h]; return `<td>${x ? `${esc(x.libres_prevus)} <span class="note">± ${esc(x.marge)}</span>${x.risque ? ` <span class="badge-flux retard">${K('u_risque')}</span>` : ''}` : '—'}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>` : `<p class="note">${K('u_prev_indispo')}</p>`,
+      qualite: () => q ? `<p class="note">${K('u_qualite_note')}</p><dl class="qualite-chrono">
+        <div><dt>${K('u_q_sync')}</dt><dd>${q.synchronisation_ms?.p50 != null ? `${q.synchronisation_ms.p50} ms (p95 ${q.synchronisation_ms.p95} ms)` : K('u_inconnu')}</dd></div>
+        <div><dt>${K('u_q_notifs')}</dt><dd>${q.notifications_non_lues_15min ?? K('u_inconnu')}</dd></div>
+        <div><dt>${K('u_q_pa')}</dt><dd>${q.prealertes_non_recues ?? K('u_inconnu')}</dd></div>
+        <div><dt>${K('u_q_gps')}</dt><dd>${q.gps_obsoletes}</dd></div>
+        <div><dt>${K('u_q_eta')}</dt><dd>${q.eta_transport_obsoletes ?? K('u_inconnu')}</dd></div></dl>` : `<p class="note">${K('u_inconnu')}</p>`,
+      alertes: () => liste(d.alertes, alerte, K('u_aucun')),
+      historique: () => `<p class="note">${K('u_hist_note')}</p><p><button type="button" class="btn" id="ch-u-recherche">${K('u_hist_chercher')}</button></p>`,
+    };
+    const amb = cur === 'generale' ? `<h3>${K('u_ambulances')}</h3>${liste(d.ambulances, ambulance, K('u_aucun'))}` : '';
+    v.innerHTML = `${nav(cur)}<div class="entete"><div><h2>${K('u_titre')} · ${K('u_' + cur)}</h2><p class="note">${K('u_seuils')}</p></div></div><section class="panneau-c">${corps[cur]()}${amb}</section>`;
+    $('#ch-u-recherche')?.addEventListener('click', () => $('#b-recherche')?.click());
+    window.ArrimoDuree?.tic();
+  }
+  document.addEventListener('click', (ev) => { const b = ev.target.closest('[data-sous-chrono]'); if (!b || !document.getElementById('v-chrono')?.contains(b)) return; etatC.sous = b.dataset.sousChrono; vueChrono(); });
   window.ArrimoChrono = { vues: { chrono: vueChrono } };
 })();
