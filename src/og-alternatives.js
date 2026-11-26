@@ -20,14 +20,14 @@ function expliquer(u, s) {
   return {
     etablissement_id: s.etablissement_id, nom: s.nom, ville: s.ville,
     disponibilite: confirme
-      ? L(u, `${s.libres_confirmes} lit(s) compatible(s) confirmé(s)`, `${s.libres_confirmes} compatible bed(s) confirmed`)
-      : s.libres_non_confirmes ? L(u, `${s.libres_non_confirmes} lit(s) déclaré(s), non confirmé(s)`, `${s.libres_non_confirmes} bed(s) declared, not confirmed`)
+      ? L(u, `Lits compatibles confirmés : ${s.libres_confirmes}`, `Confirmed compatible beds: ${s.libres_confirmes}`)
+      : s.libres_non_confirmes ? L(u, `Lits déclarés, non confirmés : ${s.libres_non_confirmes}`, `Beds declared, not confirmed: ${s.libres_non_confirmes}`)
         : L(u, 'aucune disponibilité confirmée', 'no confirmed availability'),
     confirme, confirme_le: s.confirmation?.confirme_le || null, trajet: route, trajet_calcule: s.statut_route === 'calcule',
     a_verifier: [
       ...(confirme ? [] : [L(u, 'disponibilité à confirmer par l’établissement', 'availability to be confirmed by the facility')]),
       L(u, 'acceptation de l’établissement receveur', 'acceptance by the receiving facility'),
-      ...(s.transferts_a_repondre ? [L(u, `${s.transferts_a_repondre} autre(s) demande(s) en attente chez lui`, `${s.transferts_a_repondre} other request(s) pending there`)] : []),
+      ...(s.transferts_a_repondre ? [L(u, `Autres demandes en attente chez lui : ${s.transferts_a_repondre}`, `Other requests pending there: ${s.transferts_a_repondre}`)] : []),
     ],
   };
 }

@@ -218,7 +218,7 @@ async function transversales(pool, utilisateur, etabId, cfg, ajouter) {
   if (att.attendues > 0 && att.attendues > att.libres) {
     ajouter({ genre: 'urgence', ressource_id: etabId, ressource: 'Urgence', unite: 'Urgence', chambre: null, depuis: att.depuis,
       duree_min: Math.round((Date.now() - new Date(att.depuis).getTime()) / 60000), type: 'ambulances_attendues', niveau: att.libres === 0 ? 'eleve' : 'modere',
-      titre: `${att.attendues} ambulance(s) annoncée(s) pour ${att.libres} civière(s) libre(s) à l’urgence.`,
+      titre: `Ambulances annoncées : ${att.attendues} · civières libres à l’urgence : ${att.libres}.`,
       evenement: 'Préalertes reçues de Liaison Secours',
       seuil: { valeur_min: 0, regle: 'Ambulances annoncées non encore arrivées supérieures aux civières libres enregistrées.' },
       cause: { nature: 'fait', texte: 'Comptes lus dans les préalertes ouvertes et l’état des civières ; une civière libre non confirmée peut ne pas être prête.' },
@@ -230,7 +230,7 @@ async function transversales(pool, utilisateur, etabId, cfg, ajouter) {
   if (qp && qp.recues + qp.attendues < qp.valeur && att.libres === 0) {
     ajouter({ genre: 'urgence', ressource_id: etabId, ressource: 'Quote-part', unite: 'Urgence', chambre: null, depuis: qp.actualise_le, duree_min: 0,
       type: 'quote_part_contradiction', niveau: 'modere',
-      titre: `Quote-part non atteinte (${qp.recues} reçue(s) et ${qp.attendues} attendue(s) sur ${qp.valeur} par ${qp.periode_min} min) alors qu’aucune civière n’est libre.`,
+      titre: `Quote-part non atteinte (reçues : ${qp.recues}, attendues : ${qp.attendues}, quote-part : ${qp.valeur} par ${qp.periode_min} min) alors qu’aucune civière n’est libre.`,
       evenement: 'Quote-part saisie par l’autorité',
       seuil: { valeur_min: 0, regle: 'Comparaison de deux informations distinctes ; aucune marge n’est calculée (formule non définie officiellement).' },
       cause: { nature: 'fait', texte: `Quote-part fixée par ${qp.autorite} ; civières libres enregistrées : 0.` },
@@ -481,8 +481,8 @@ async function blocages(pool, utilisateur, etabId, { interne = false } = {}) {
       seuil: { valeur_min: cfg.attente_admission_max_min, regle: `Attente maximale configurée (${cfg.attente_admission_max_min} min).` },
       // Règle de compatibilité (cahier nº 19) : distinguer pénurie réelle et problème d'affectation, de préparation ou de répartition
       diagnostic: d.compatibles_ici > 0 ? 'affectation' : d.compatibles_reseau > 0 ? 'repartition' : 'penurie',
-      cause: { nature: 'fait', texte: d.compatibles_ici > 0 ? `Aucun lit assigné alors que ${d.compatibles_ici} lit(s) du même type sont libres ici : problème d’affectation ou de préparation.`
-        : d.compatibles_reseau > 0 ? `Aucun lit du même type libre ici ; ${d.compatibles_reseau} libre(s) ailleurs dans le réseau : problème de répartition.`
+      cause: { nature: 'fait', texte: d.compatibles_ici > 0 ? `Aucun lit assigné alors que des lits du même type sont libres ici (${d.compatibles_ici}) : problème d’affectation ou de préparation.`
+        : d.compatibles_reseau > 0 ? `Aucun lit du même type libre ici ; lits libres ailleurs dans le réseau : ${d.compatibles_reseau} : problème de répartition.`
           : 'Aucun lit du même type libre ici ni dans le réseau partagé : pénurie réelle.' },
       action: 'Assigner un lit compatible, ou chercher ailleurs (Réseau) ; la décision reste humaine.' });
   }

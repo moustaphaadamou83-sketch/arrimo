@@ -51,7 +51,7 @@ async function enregistrer(pool, u, b = {}) {
   const { rows: [q] } = await pool.query(`INSERT INTO quotes_parts (etablissement_id, ccs_id, autorite, valeur, periode_min, valide_du, valide_au, exception, source, fiabilite, saisi_par)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'saisie_manuelle', $9, $10) RETURNING *`, [etabId, ccsId, autorite, valeur, periode, du, au, exception, fiabilite, u.id]);
   await pool.query(`INSERT INTO journal (etablissement_id, utilisateur_id, action, detail) VALUES ($1, $2, 'Quote-part', $3)`,
-    [etabId, u.id, `${valeur} ambulance(s) / ${periode} min · ${autorite} · ${fiabilite}`]);
+    [etabId, u.id, `Quote-part : ${valeur} par ${periode} min · ${autorite} · ${fiabilite}`]);
   require('./flux').signaler();
   return q;
 }

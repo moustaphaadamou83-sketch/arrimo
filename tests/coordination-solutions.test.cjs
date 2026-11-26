@@ -73,7 +73,7 @@ test('plan : chaque fiche a les 7 points ; aucune action exécutée', async () =
 test('solutions de rechange : autres transporteurs autorisés de la région avec unités disponibles (hors service exclues)', async () => {
   const f = (await plan()).fiches.find((x) => x.type === 'transport_en_retard');
   assert.ok(f); assert.strictEqual(f.niveau, 'eleve');
-  assert.ok(f.actions.includes('Solutions de rechange autorisées pour DT-SO1 : Ambulances B (2 unité(s) déclarée(s) disponible(s)).'), f.actions.join(' | '));
+  assert.ok(f.actions.includes('Solutions de rechange autorisées pour DT-SO1 : Ambulances B (unités déclarées disponibles : 2).'), f.actions.join(' | '));
   assert.ok(!f.actions.some((a) => a.includes('CCS S')), 'un CCS n’est pas un transporteur');
 });
 
@@ -88,7 +88,7 @@ test('synthèse : confirmé, prévisionnel et inconnu séparés ; risque de satu
   await require('../src/vigilance').noterControle(pool, 'blocages', Date.now(), {});
   s = (await plan()).synthese;
   assert.strictEqual(s.risque_saturation, true); assert.strictEqual(s.demande.ambulances_annoncees, libres + 1);
-  assert.match(s.texte, /^Risque de saturation : /);
+  assert.match(s.texte, /^Risque de saturation\. /);
   assert.strictEqual(s.donnees_insuffisantes, false);
 });
 
