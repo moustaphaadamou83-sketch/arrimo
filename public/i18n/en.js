@@ -540,6 +540,9 @@ window.ARRIMO_I18N.en = {
     liberer_titre: 'Patient leaves · {code}', liberer_aide: '{ref} leaves the ER without being admitted (discharge, other service). The stretcher goes to cleaning.', libere_ok: '{code} goes to cleaning.',
   },
   admissions: {
+    prep_titre: 'Admission preparation list', prep_resume: 'Requests to prepare: {n} · ready: {p}', prep_ref: 'Request', prep_priorite_validee: 'Priority validated',
+    prep_lit_compatible: 'Compatible free bed', prep_lit_assigne: 'Bed assigned', prep_chambre_prete: 'Room ready', prep_plan_b: 'Plan B (transfer)', prep_prochaine: 'Next step',
+    prep_prete: 'Ready for admission', prep_aucune: 'No admission request in progress.', prep_etat_fait: 'done', prep_etat_a_faire: 'to do', prep_etat_inconnu: 'unknown', prep_sans_objet: 'not applicable',
     titre: 'Admission queue · {etab}', intro: 'Patients waiting for a bed, often on a stretcher in the ER. After {h} h, the request is flagged.',
     nouvelle: 'New bed request', type_unite: 'Unit type', ref_patient: 'Patient reference', priorite: 'Priority', provenance: 'Origin',
     ajouter: 'Add to queue', ref_seulement: 'Reference only. No medical information.', ajoutee: 'Request added to the queue.',

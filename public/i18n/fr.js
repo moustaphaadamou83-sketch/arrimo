@@ -541,6 +541,9 @@ window.ARRIMO_I18N.fr = {
     liberer_titre: 'Départ du patient · {code}', liberer_aide: '{ref} quitte l’urgence sans être admis (congé, autre service). La civière part au nettoyage.', libere_ok: '{code} part au nettoyage.',
   },
   admissions: {
+    prep_titre: 'Liste de préparation des admissions', prep_resume: 'Demandes à préparer : {n} · prêtes : {p}', prep_ref: 'Demande', prep_priorite_validee: 'Priorité validée',
+    prep_lit_compatible: 'Lit compatible libre', prep_lit_assigne: 'Lit assigné', prep_chambre_prete: 'Chambre prête', prep_plan_b: 'Plan B (transfert)', prep_prochaine: 'Prochaine étape',
+    prep_prete: 'Prête pour l’admission', prep_aucune: 'Aucune demande d’admission en cours.', prep_etat_fait: 'fait', prep_etat_a_faire: 'à faire', prep_etat_inconnu: 'inconnu', prep_sans_objet: 'sans objet',
     titre: 'File d’admission · {etab}', intro: 'Patients qui attendent un lit, souvent sur civière à l’urgence. Au-delà de {h} h, la demande passe en alerte.',
     nouvelle: 'Nouvelle demande de lit', type_unite: 'Type d’unité', ref_patient: 'Référence patient', priorite: 'Priorité', provenance: 'Provenance',
     ajouter: 'Ajouter à la file', ref_seulement: 'Référence seulement. Aucune information médicale.', ajoutee: 'Demande ajoutée à la file.',

@@ -632,6 +632,7 @@ function creerApp(pool, options = {}) {
   api.post('/og/actions/:id/confirmer', route((req) => ogActions.confirmer(pool, req.utilisateur, entier(req.body.etablissement_id, 'etablissement_id'), String(req.params.id), req.body)));
   api.post('/og/actions/:id/annuler', route((req) => ogActions.annuler(pool, req.utilisateur, entier(req.body.etablissement_id, 'etablissement_id'), String(req.params.id))));
   const priorites = require('./priorites');
+  api.get('/admissions/preparation', route((req) => require('./admissions-preparation').liste(pool, req.utilisateur, req.query)));
   api.get('/admissions/referentiel', route((req) => priorites.referentiel(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   api.put('/admissions/referentiel', route((req) => priorites.configurer(pool, req.utilisateur, entier(req.body.etablissement_id, 'etablissement_id'), req.body)));
   api.get('/admissions/habilitations', route((req) => priorites.habilitations(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));

@@ -2221,6 +2221,22 @@ async function vueAdmissions() {
       return null;
     };
   });
+  // Liste de préparation des admissions (chantier coordination) : faits enregistrés, prochaine étape ; rien n'est assigné automatiquement
+  v.insertAdjacentHTML('beforeend', `<details class="panneau-c" id="adm-prep"><summary><b>${A('prep_titre')}</b></summary><div id="adm-prep-z"><p class="note">…</p></div></details>`);
+  $('#adm-prep').addEventListener('toggle', async (ev) => {
+    if (!ev.target.open || ev.target.dataset.charge) return; ev.target.dataset.charge = '1';
+    const z = $('#adm-prep-z');
+    try {
+      const p = await api('GET', `/admissions/preparation?etablissement_id=${etat.ctx}`);
+      const marque = (x) => (x.ok === true ? '✓' : x.ok === false ? '○' : '?');
+      z.innerHTML = `<p class="note">${A('prep_resume', { n: p.demandes.length, p: p.pretes })}</p>${p.demandes.length ? `<div class="tableau"><table><thead><tr><th>${A('prep_ref')}</th>
+        ${['priorite_validee', 'lit_compatible', 'lit_assigne', 'chambre_prete', 'plan_b'].map((c) => `<th>${A(`prep_${c}`)}</th>`).join('')}<th>${A('prep_prochaine')}</th></tr></thead><tbody>
+        ${p.demandes.map((d) => { const e = Object.fromEntries(d.etapes.map((x) => [x.code, x]));
+          return `<tr><td><b>${esc(d.patient_ref)}</b> · ${esc(d.priorite)}</td>${['priorite_validee', 'lit_compatible', 'lit_assigne', 'chambre_prete', 'plan_b'].map((c) => `<td class="num" aria-label="${e[c] ? A(`prep_etat_${e[c].ok === true ? 'fait' : e[c].ok === false ? 'a_faire' : 'inconnu'}`) : A('prep_sans_objet')}">${e[c] ? marque(e[c]) : '—'}</td>`).join('')}
+            <td>${d.prochaine ? A(`prep_${d.prochaine}`) : A('prep_prete')}</td></tr>`; }).join('')}</tbody></table></div>` : `<p class="note">${A('prep_aucune')}</p>`}
+        <p class="note">${esc(p.regle)}</p>`;
+    } catch (err) { z.innerHTML = `<p class="note">${esc(err.message)}</p>`; }
+  });
 }
 
 /* ---------------- Nettoyage ---------------- */
