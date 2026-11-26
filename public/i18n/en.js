@@ -133,6 +133,11 @@ window.ARRIMO_I18N.en = {
     activer: 'Activate the organization', desactiver: 'Deactivate the organization',
   },
   chrono: {
+    obj_titre: 'Arrimo internal targets (indicative, alongside MSSS references)', obj_remise: 'Handover in 15 min or less (passages: {n})', obj_remise_exc: 'Handover in 5 min or less (excellence)',
+    obj_liberation: 'Release in 30 min or less (passages: {n})', obj_liberation_exc: 'Release in 10 min or less (excellence)', obj_prec: 'previous month: {v}',
+    obj_aria: '{lbl}: {v} % this month, {vp} % the previous month', obj_heures: 'Vehicle hours beyond the release target: {h} h (previous month: {hp} h). Measured, never attributed to Arrimo.',
+    anneau_label: 'At the door for {n} min; Arrimo target {obj} min; MSSS reference {ref} min', anneau_obj: 'Arrimo target {obj} min · MSSS {ref} min',
+    acquitter: 'Acknowledge alert', alerte_acquittee: 'Alert acknowledged: the priority sound is off for this ambulance.', son: 'Sound alerts',
     p90: '90th percentile', pilote_mesures: '{h} h of cumulative downtime · {au_dela} min beyond the total target (indicative, potentially avoidable) · up to {simultanes} ambulances at the door at once',
     pilote_observe: '{n} completed visits measured · {minutes} min of observed vehicle downtime · {depasses} waits over target',
     filtre_vehicule: 'Vehicle', filtre_organisation: 'Company', filtre_periode: 'Visits completed within', periode_heures: '{n} hours', filtrer: 'Filter',

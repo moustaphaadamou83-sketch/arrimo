@@ -13,10 +13,46 @@
   const ETAPES = ['H11', 'H12', 'H13', 'H14', 'H15'];
   const heureEtape = (h) => (h ? `${heureCourte(h.heure)}${h.corrigee ? ` <span class="note">${K('corrigee')}</span>` : ''}` : '<span class="note">—</span>');
 
+  /* Chronomètres circulaires et sons (cahier 11, maquette validée) : anneau = temps à la porte / référence MSSS, repère de l'objectif Arrimo ;
+     orange : un son bref ; rouge : pulsation lente + son prioritaire répété tant qu'il n'est pas acquitté. Couleur jamais seule (minutes et mot écrits). */
+  const ls = { lire: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, ecrire: (k, v) => { try { localStorage.setItem(k, v); } catch { /* indisponible */ } } };
+  const sonActif = () => ls.lire('arrimo-chrono-son') !== '0';
+  const sons = { vus: new Map(), acquittes: new Set() };
+  function ton(freq, duree, debut = 0) {
+    try {
+      const ac = sons.ac || (sons.ac = new (window.AudioContext || window.webkitAudioContext)()); const o = ac.createOscillator(); const g = ac.createGain();
+      o.frequency.value = freq; g.gain.value = 0.12; o.connect(g); g.connect(ac.destination); o.start(ac.currentTime + debut); o.stop(ac.currentTime + debut + duree);
+    } catch { /* son indisponible */ }
+  }
+  function alertesSonores(passages) {
+    if (!sonActif()) return;
+    let orange = false; let rouge = false;
+    for (const p of passages) {
+      const avant = sons.vus.get(p.id); sons.vus.set(p.id, p.niveau);
+      if (p.niveau === 'orange' && avant !== 'orange' && avant !== 'rouge') orange = true;
+      if (p.niveau === 'rouge' && !sons.acquittes.has(p.id)) rouge = true;
+    }
+    if (rouge) { ton(988, 0.25); ton(740, 0.25, 0.3); ton(988, 0.25, 0.6); } else if (orange) ton(660, 0.2);
+  }
+  function anneau(p) {
+    if (p.a_la_porte_min == null) return '';
+    const ref = p.cibles.porte; const obj = p.arrimo?.remise?.cible_min;
+    const r = 26; const tour = 2 * Math.PI * r; const frac = Math.min(1, p.a_la_porte_min / ref);
+    const coul = { vert: '#16A34A', orange: '#F59E0B', rouge: '#DC2626' }[p.niveau] || '#94A3B8';
+    const repere = obj ? (obj / ref) * 360 - 90 : null;
+    const pulse = p.niveau === 'rouge' && !sons.acquittes.has(p.id) ? ' pulse' : '';
+    return `<span class="ch-anneau${pulse}" data-h11="${esc(p.heures.H11?.heure || '')}" data-ref="${ref}" role="img" aria-label="${K('anneau_label', { n: p.a_la_porte_min, ref, obj: obj ?? '—' })}">
+      <svg viewBox="0 0 64 64" width="64" height="64" aria-hidden="true" focusable="false"><circle cx="32" cy="32" r="${r}" fill="none" stroke="var(--bordure)" stroke-width="6"/>
+        <circle class="arc" cx="32" cy="32" r="${r}" fill="none" stroke="${coul}" stroke-width="6" stroke-linecap="round" stroke-dasharray="${(frac * tour).toFixed(1)} ${tour.toFixed(1)}" transform="rotate(-90 32 32)"/>
+        ${repere != null && obj < ref ? `<line x1="32" y1="3" x2="32" y2="10" stroke="var(--texte)" stroke-width="2" transform="rotate(${(repere + 90).toFixed(1)} 32 32)"/>` : ''}
+        <text x="32" y="36" text-anchor="middle" font-size="15" font-weight="700" fill="var(--texte)" class="min">${p.a_la_porte_min}</text></svg>
+      <span class="note">${K('anneau_obj', { obj: obj ?? '—', ref })}</span></span>`;
+  }
   function lignePorte(p) {
     const n = p.palier === 'critique' ? 'critique' : p.niveau || '';
     return `<article class="ch-porte niveau-${p.niveau || ''}${n === 'critique' ? ' palier-critique' : ''}" data-passage="${p.id}">
       <div class="ch-tete"><strong>${esc(p.unite)}</strong> <span class="note">${esc(p.organisation)}${p.prealerte ? ` · ${esc(p.prealerte)}` : ` · ${K('sans_prealerte')}`}</span>
+        ${anneau(p)}${p.niveau === 'rouge' && !sons.acquittes.has(p.id) ? `<button class="btn" type="button" data-ch-acquitter="${p.id}">${K('acquitter')}</button>` : ''}
         ${p.a_la_porte_min != null ? `<span class="ch-minutes" role="timer" aria-label="${K('a_la_porte_depuis', { n: p.a_la_porte_min })}">${K('minutes', { n: p.a_la_porte_min })} · ${K(`niveau_${n}`)}</span>` : ''}</div>
       <ol class="ch-etapes">${ETAPES.map((e) => `<li><span class="ch-code">${e}</span> ${K(`etape_${e}`)} : ${heureEtape(p.heures[e])}</li>`).join('')}</ol>
       <div class="ligne">${p.prochaine ? `<button class="btn pri" data-ch-etape="${p.prochaine}" data-id="${p.id}">${K(`bouton_${p.prochaine}`)}</button>` : ''}
@@ -43,6 +79,7 @@
         <label>${K('filtre_organisation')} <input name="organisation" type="search" maxlength="100" value="${esc(etatC.filtres.organisation || '')}"></label>
         <label>${K('filtre_periode')} <select name="heures_historique">${[12, 24, 48, 168].map((h) => `<option value="${h}"${h === d.heures_historique ? ' selected' : ''}>${K('periode_heures', { n: h })}</option>`).join('')}</select></label>
         <button type="submit" class="btn">${K('filtrer')}</button>
+        <label class="ch-son"><input type="checkbox" id="ch-son"${sonActif() ? ' checked' : ''}> ${K('son')}</label>
       </form>
       <div class="tuiles">${tuile({ lbl: t('chrono.en_route'), val: nb(d.en_route.length) })}${tuile({ lbl: t('chrono.a_la_porte'), val: nb(d.a_la_porte.length),
         etat: d.a_la_porte.some((p) => p.niveau === 'rouge') ? 'critique' : null })}${tuilesAttente}</div>
@@ -75,6 +112,20 @@
       a.href = url; a.download = `arrimo-chrono-${etatC.mois}.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     };
     rapport(); ecarts();
+    alertesSonores(d.a_la_porte);
+    $('#ch-son').onchange = (e) => ls.ecrire('arrimo-chrono-son', e.target.checked ? '1' : '0');
+    v.querySelectorAll('[data-ch-acquitter]').forEach((b) => { b.onclick = () => { sons.acquittes.add(Number(b.dataset.chAcquitter)); toast(t('chrono.alerte_acquittee')); vueChrono(); }; });
+    // Les anneaux avancent entre deux actualisations (toutes les 15 s, sans appel au serveur)
+    clearInterval(etatC.tic);
+    etatC.tic = setInterval(() => {
+      if (etat.vue !== 'chrono') return clearInterval(etatC.tic);
+      v.querySelectorAll('.ch-anneau[data-h11]').forEach((a) => {
+        if (!a.dataset.h11) return;
+        const n = Math.max(0, Math.floor((Date.now() - new Date(a.dataset.h11).getTime()) / 60000)); const ref = Number(a.dataset.ref);
+        const arc = a.querySelector('.arc'); const tour = 2 * Math.PI * 26;
+        arc.setAttribute('stroke-dasharray', `${(Math.min(1, n / ref) * tour).toFixed(1)} ${tour.toFixed(1)}`); a.querySelector('.min').textContent = n;
+      });
+    }, 15000);
     // Le chrono avance seul : la vue se redessine chaque minute tant qu'elle est affichée
     clearTimeout(etatC.minuteur);
     etatC.minuteur = setTimeout(() => { if (etat.vue === 'chrono' && $('#modale').hidden && !document.activeElement?.closest('#ch-filtres, [data-chrono-retard]')) vueChrono(); }, 60000);
@@ -84,8 +135,21 @@
     const z = $('#ch-rapport-corps'); if (!z) return;
     const r = await api('GET', `/chrono/rapport?etablissement_id=${etat.ctx}&mois=${etatC.mois}&${paramsFiltres()}`).catch((e) => { z.innerHTML = `<p class="note">${esc(e.message)}</p>`; return null; });
     if (!r) return;
+    // Avant / après (cahier 11) : même rapport pour le mois précédent, mesures seulement
+    const [a, m] = etatC.mois.split('-').map(Number); const prec = new Date(Date.UTC(a, m - 2, 1)).toISOString().slice(0, 7);
+    const rp = await api('GET', `/chrono/rapport?etablissement_id=${etat.ctx}&mois=${prec}&${paramsFiltres()}`).catch(() => null);
+    const barre = (lbl, v, vp) => `<div class="ch-barre"><span class="lbl">${lbl}</span>
+      <span class="piste" role="img" aria-label="${K('obj_aria', { lbl, v: v ?? '—', vp: vp ?? '—' })}"><span class="val" style="width:${v ?? 0}%"></span>${vp != null ? `<span class="prec" style="left:${vp}%"></span>` : ''}</span>
+      <b class="num">${v == null ? '—' : `${v} %`}</b><span class="note">${K('obj_prec', { v: vp == null ? '—' : `${vp} %` })}</span></div>`;
+    const oa = r.objectifs_arrimo; const op = rp?.objectifs_arrimo;
+    const objectifs = oa ? `<div class="ch-objectifs"><h4>${K('obj_titre')}</h4>
+      ${barre(K('obj_remise', { n: oa.remise.n }), oa.remise.respecte_pct, op?.remise.respecte_pct)}
+      ${barre(K('obj_remise_exc'), oa.remise.excellence_pct, op?.remise.excellence_pct)}
+      ${barre(K('obj_liberation', { n: oa.liberation.n }), oa.liberation.respecte_pct, op?.liberation.respecte_pct)}
+      ${barre(K('obj_liberation_exc'), oa.liberation.excellence_pct, op?.liberation.excellence_pct)}
+      <p class="note">${K('obj_heures', { h: oa.liberation.heures_vehicules_au_dela ?? '—', hp: op?.liberation.heures_vehicules_au_dela ?? '—' })}</p></div>` : '';
     const ligne = (k) => `<tr><th>${K(k)}</th><td>${r[k].n}</td><td>${r[k].moyenne_min ?? '—'}</td><td>${r[k].mediane_min ?? '—'}</td><td>${r[k].p90_min ?? '—'}</td><td>${r[k].cible_min ?? '—'}</td><td>${r[k].hors_cible_pct ?? '—'}</td></tr>`;
-    z.innerHTML = `<p>${K('rapport_resume', { n: r.passages, completude: r.completude_pct ?? '—', corrections: r.corrections })}</p>
+    z.innerHTML = `<p>${K('rapport_resume', { n: r.passages, completude: r.completude_pct ?? '—', corrections: r.corrections })}</p>${objectifs}
       ${r.pilote ? `<p class="note">${K('pilote_observe', { n: r.pilote.passages_mesures, minutes: r.pilote.immobilisation_min ?? '—', depasses: r.pilote.porte_hors_cible })}<br>${K('pilote_mesures', { h: r.pilote.immobilisation_h ?? '—', au_dela: r.pilote.au_dela_cible_min ?? '—', simultanes: r.pilote.simultanes_max ?? 0 })}</p>` : ''}
       <div class="tableau"><table><thead><tr><th></th><th>${K('n')}</th><th>${K('moyenne')}</th><th>${K('mediane')}</th><th>${K('p90')}</th><th>${K('cible')}</th><th>${K('hors_cible')}</th></tr></thead>
       <tbody>${['porte', 'sortie', 'total'].map(ligne).join('')}</tbody></table></div>

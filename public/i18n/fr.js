@@ -133,6 +133,11 @@ window.ARRIMO_I18N.fr = {
     activer: 'Activer l’organisation', desactiver: 'Désactiver l’organisation',
   },
   chrono: {
+    obj_titre: 'Objectifs internes Arrimo (indicatifs, à côté des références MSSS)', obj_remise: 'Remise en 15 min ou moins (passages : {n})', obj_remise_exc: 'Remise en 5 min ou moins (excellence)',
+    obj_liberation: 'Libération en 30 min ou moins (passages : {n})', obj_liberation_exc: 'Libération en 10 min ou moins (excellence)', obj_prec: 'mois précédent : {v}',
+    obj_aria: '{lbl} : {v} % ce mois-ci, {vp} % le mois précédent', obj_heures: 'Heures-véhicules au-delà de l’objectif de libération : {h} h (mois précédent : {hp} h). Mesuré, jamais attribué à Arrimo.',
+    anneau_label: 'À la porte depuis {n} min ; objectif Arrimo {obj} min ; référence MSSS {ref} min', anneau_obj: 'objectif Arrimo {obj} min · MSSS {ref} min',
+    acquitter: 'Acquitter l’alerte', alerte_acquittee: 'Alerte acquittée : le son prioritaire est coupé pour cette ambulance.', son: 'Alertes sonores',
     p90: '90e percentile', pilote_mesures: '{h} h d’immobilisation cumulées · {au_dela} min au-delà de la cible totale (indicatif, potentiellement évitables) · jusqu’à {simultanes} ambulances à la porte en même temps',
     pilote_observe: '{n} passages terminés mesurés · {minutes} min d’immobilisation observées · {depasses} attentes hors cible',
     filtre_vehicule: 'Véhicule', filtre_organisation: 'Entreprise', filtre_periode: 'Passages terminés depuis', periode_heures: '{n} heures', filtrer: 'Filtrer',
