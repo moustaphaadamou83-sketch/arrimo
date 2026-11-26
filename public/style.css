@@ -1134,3 +1134,4 @@ body.mode-presentation #b-notif, body.mode-presentation #b-menu { visibility: hi
 .tuiles-chrono { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--e2); }
 .tuiles-chrono .tuile-c { text-align: left; border: 1px solid var(--bordure); border-radius: var(--rayon-carte); background: var(--carte); padding: 12px 14px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
 .tuiles-chrono .tuile-c .gros { font-size: 30px; font-weight: 700; }
+.net-chrono { margin-top: 6px; max-width: 260px; }

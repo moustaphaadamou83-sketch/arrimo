@@ -2418,6 +2418,16 @@ async function chargerConfigNettoyage(superviseur) {
   z.querySelectorAll('[data-epi]').forEach((b) => { b.onchange = () => agir(null, () => api('PUT', '/nettoyage/epi', { etablissement_id: etat.ctx, epi: b.dataset.epi, disponible: b.checked }), t('nettoyage.ok')); });
   $('#net-form').onsubmit = (e) => { e.preventDefault(); agir(e.submitter, () => api('PUT', '/nettoyage/formations', { etablissement_id: etat.ctx, utilisateur_id: Number($('#nf-agent').value), formation: $('#nf-formation').value, expire_le: $('#nf-expire').value }), t('nettoyage.ok')); };
 }
+/* Chrono du nettoyage (27 nov. 2026) : même anneau que Chrono (HH:MM:SS) ; attente avant intervention puis durée du nettoyage.
+   Seuils indicatifs (attente 30/60 min, nettoyage 45/90 min) : la qualité de la désinfection passe avant tout objectif de temps. */
+function compteurNettoyage(l) {
+  const depuisH = l.nettoyage_debut || l.etat_depuis; if (!depuisH) return '';
+  const [o, r] = l.nettoyage_debut ? [45, 90] : [30, 60]; const m = (Date.now() - new Date(depuisH).getTime()) / 60000;
+  const niveau = m >= r ? 'rouge' : m >= o ? 'orange' : 'vert';
+  return `<div class="anneau-chrono niveau-${niveau} net-chrono" data-depuis="${esc(new Date(depuisH).toISOString())}" data-objectif-min="${o}">
+    <svg viewBox="0 0 44 44" aria-hidden="true"><circle class="ac-fond" cx="22" cy="22" r="19"/><circle class="ac-arc" cx="22" cy="22" r="19" pathLength="100" stroke-dasharray="0 100"/></svg>
+    <div><b class="ac-val num">--:--:--</b><span class="note">${esc(t(l.nettoyage_debut ? 'nettoyage.chrono_en_cours' : 'nettoyage.chrono_attente'))}</span></div></div>`;
+}
 async function vueNettoyage() {
   const v = $('#v-nettoyage');
   const liste = await api('GET', `/nettoyage?etablissement_id=${etat.ctx}`);
@@ -2432,7 +2442,7 @@ async function vueNettoyage() {
       <div class="note">${l.genre === 'civiere' ? N('civiere', { cat: t(`urgence.une_${l.categorie}`) }) : `${N('chambre', { unite: l.unite, ch: l.chambre })}${l.isolement ? N('isolement') : ''}`}</div>
       <div style="font-size:13px">${esc(l.raison)}</div>
       ${l.genre === 'lit' ? consignesNettoyageHTML(l) : ''}
-      <div class="note">${l.nettoyage_debut ? N('commence_il_y_a', { duree: depuis(l.nettoyage_debut) }) : N('attente_depuis', { duree: depuis(l.etat_depuis) })}</div></div>
+      <div class="note">${l.nettoyage_debut ? N('commence_il_y_a', { duree: depuis(l.nettoyage_debut) }) : N('attente_depuis', { duree: depuis(l.etat_depuis) })}</div>${compteurNettoyage(l)}</div>
       <div class="actions">${l.precautions?.length || l.intervention ? actionsSous(l) : l.nettoyage_debut || l.genre === 'civiere' ? '' : `<button class="btn" data-debut="${l.id}">${N('commencer')}</button>`}
         ${l.precautions?.length || l.intervention ? '' : `<button class="btn pri" data-fini="${l.id}" data-genre="${l.genre}" data-version="${l.version}" data-code="${esc(l.code)}">${N('termine')}</button>`}</div></div>`).join('') || `<p class="note">${N('aucun')}</p>`}</div>`;
   // Cahier ultime (section 9) : les préparations de chambres (tâches de l'entretien) sont visibles ici aussi, même source que « Personnel et tâches »
