@@ -82,3 +82,12 @@ test('Durées au format HH:MM:SS, jours au-delà de 24 h ; inconnu jamais affich
   const html = c.window.ArrimoVueTransferts.preparation({ destination_id: 1, patient_etat: 'pret', patient_pret_le: new Date().toISOString(), prealerte_eta_min: 10, prealerte_eta_le: new Date().toISOString() }, { heure: () => '12 h 00' });
   assert.match(html, /prep-badge ok">Patient prêt au transfert · 12 h 00/); assert.match(html, /Objectif T−5/); assert.match(html, /Accueil : non confirmé/);
 });
+
+test('Indicateurs T−5 : taux observés (accueil prêt à T−5), motifs de non-préparation ; inconnu sans mesure, jamais 0 %', async () => {
+  const hopital = (await appel('hop', 'GET', `/chrono/universel?etablissement_id=${ids.h}`)).d.performance_t5;
+  assert.strictEqual(hopital.accueils_mesures, 1); assert.strictEqual(hopital.accueils_prets_t5_pct, 100);
+  assert.strictEqual(hopital.patients_prets_t5_pct, null, 'aucun patient mesuré à l’hôpital : inconnu');
+  const chsld = (await appel('ch', 'GET', `/chrono/universel?etablissement_id=${ids.c}`)).d.performance_t5;
+  const motifs = Object.fromEntries(chsld.motifs_non_preparation.map((m) => [m.motif, m.n]));
+  assert.deepStrictEqual(motifs, { examen: 1, autre: 1 });
+});

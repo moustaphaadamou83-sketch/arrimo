@@ -244,6 +244,12 @@
       <div><b class="ac-val num">--:--:--</b><span>${esc(libelle || '')}</span>${sous ? `<small class="note">${esc(sous)}</small>` : ''}</div></div>`;
   const phase = (k) => K('ph_' + k);
   const liste = (items, rendu, vide) => (items.length ? `<div class="grille-chrono">${items.map(rendu).join('')}</div>` : `<p class="note">${vide}</p>`);
+  /** Indicateurs T−5 (30 jours) : taux sur les confirmations mesurées ; « inconnu » sans données. Exportables (Imprimer, PDF, CSV, Excel). */
+  const tableT5 = (p) => (!p ? '' : `<section><h3>${K('t5_titre')}</h3><div class="tableau"><table><thead><tr><th>${K('t5_indicateur')}</th><th>${K('t5_valeur')}</th><th>${K('t5_base')}</th></tr></thead><tbody>
+      ${[['t5_patients', p.patients_prets_t5_pct, p.patients_mesures], ['t5_accueils', p.accueils_prets_t5_pct, p.accueils_mesures], ['t5_avant', p.prets_avant_arrivee_pct, p.arrivees_mesurees]]
+        .map(([k, v, n]) => `<tr><th>${K(k)}</th><td>${v == null ? K('u_inconnu') : `${v} %`}</td><td>${n}</td></tr>`).join('')}
+      ${p.motifs_non_preparation.map((m) => `<tr><th>${K('t5_motif')} · ${esc(window.ArrimoVueTransferts.PREP[langue === 'en' ? 'en' : 'fr'].m[m.motif] || m.motif)}</th><td>${m.n}</td><td>—</td></tr>`).join('')}
+    </tbody></table></div><p class="note">${K('t5_note')}</p></section>`);
   async function vueChrono() {
     const v = $('#v-chrono');
     const cur = sousPermis().includes(etatC.sous) ? etatC.sous : sousPermis()[0];
@@ -261,7 +267,7 @@
     const q = d.qualite;
     const corps = {
       generale: () => `<div class="tuiles-c tuiles-chrono">${tuileN('patients', r.patients)}${tuileN('capacites', r.capacites)}${tuileN('ambulances', r.ambulances)}${tuileN('alertes', r.alertes)}</div>
-        <p class="note">${K('u_intro')}</p>${liste([...d.patients, ...d.capacites].filter((x) => x.niveau === 'rouge').slice(0, 8), (x) => (x.reference ? patient(x) : ressource(x)), K('u_aucun_rouge'))}`,
+        <p class="note">${K('u_intro')}</p>${liste([...d.patients, ...d.capacites].filter((x) => x.niveau === 'rouge').slice(0, 8), (x) => (x.reference ? patient(x) : ressource(x)), K('u_aucun_rouge'))}${tableT5(d.performance_t5)}`,
       patients: () => liste(d.patients, patient, K('u_aucun')),
       capacites: () => liste(d.capacites, ressource, K('u_aucun')),
       previsions: () => d.previsions ? `<p class="note">${K('u_prev_note')}</p><div class="tableau"><table><thead><tr><th>${K('u_type')}</th><th>${K('u_libres')}</th><th>${K('u_nettoyage')}</th>${(d.previsions.horizons || []).map((h) => `<th>${K('u_dans', { h })}</th>`).join('')}</tr></thead><tbody>

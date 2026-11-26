@@ -90,10 +90,25 @@ async function universel(pool, u, etabId) {
     eta_transport_obsoletes: q?.eta_transport_obsoletes ?? null,
     gps_obsoletes: ambulances.filter((a) => a.objet === 'prealerte' && a.phase === 'en_approche' && !a.estimation_fiable).length,
   };
+  // Indicateurs T−5 (30 jours) : tirés des confirmations enregistrées ; taux null (inconnu) sans données, jamais 0 %
+  const t5 = entretien ? null : (await pool.query(`SELECT
+      count(*) FILTER (WHERE d.origine_id = $1 AND d.patient_pret_eta_min IS NOT NULL)::int AS patients_mesures,
+      count(*) FILTER (WHERE d.origine_id = $1 AND d.patient_pret_eta_min >= 5)::int AS patients_prets_t5,
+      count(*) FILTER (WHERE d.destination_id = $1 AND d.accueil_pret_eta_min IS NOT NULL)::int AS accueils_mesures,
+      count(*) FILTER (WHERE d.destination_id = $1 AND d.accueil_pret_eta_min >= 5)::int AS accueils_prets_t5,
+      count(*) FILTER (WHERE d.origine_id = $1 AND d.patient_pret_le IS NOT NULL AND d.sur_place_le IS NOT NULL AND d.patient_pret_le <= d.sur_place_le)::int AS prets_avant_arrivee,
+      count(*) FILTER (WHERE d.origine_id = $1 AND d.sur_place_le IS NOT NULL AND d.patient_etat IS NOT NULL)::int AS arrivees_mesurees
+    FROM demandes_transport d WHERE (d.origine_id = $1 OR d.destination_id = $1) AND d.cree_le > now() - interval '30 days'`, [etabId])).rows[0];
+  const motifs = entretien ? [] : (await pool.query(`SELECT ev.detail->>'motif' AS motif, count(*)::int AS n FROM demande_transport_evenements ev JOIN demandes_transport d ON d.id = ev.demande_id
+    WHERE d.origine_id = $1 AND ev.type = 'etat_patient' AND ev.detail->>'motif' IS NOT NULL AND ev.cree_le > now() - interval '30 days' GROUP BY 1 ORDER BY 2 DESC`, [etabId])).rows;
+  const taux = (a, b) => (b ? Math.round((a / b) * 1000) / 10 : null);
+  const performanceT5 = t5 && { periode_jours: 30, patients_prets_t5_pct: taux(t5.patients_prets_t5, t5.patients_mesures), patients_mesures: t5.patients_mesures,
+    accueils_prets_t5_pct: taux(t5.accueils_prets_t5, t5.accueils_mesures), accueils_mesures: t5.accueils_mesures,
+    prets_avant_arrivee_pct: taux(t5.prets_avant_arrivee, t5.arrivees_mesurees), arrivees_mesurees: t5.arrivees_mesurees, motifs_non_preparation: motifs };
   const compte = (l) => ({ total: l.length, rouge: l.filter((x) => x.niveau === 'rouge').length, orange: l.filter((x) => x.niveau === 'orange').length, gris: l.filter((x) => x.niveau === 'gris').length });
   return { etablissement_id: etabId, genere_le: new Date(now).toISOString(), seuils_min: SEUILS,
     resume: { patients: compte(patients), capacites: compte(capacites), ambulances: compte(ambulances), alertes: compte(alertesItems) },
-    patients, capacites, ambulances, alertes: alertesItems, previsions, qualite };
+    patients, capacites, ambulances, alertes: alertesItems, previsions, qualite, performance_t5: performanceT5 };
 }
 
 module.exports = { universel, SEUILS, niveau };
