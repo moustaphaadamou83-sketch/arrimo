@@ -597,10 +597,10 @@ window.ARRIMO_I18N.en = {
     dossier_existant: 'Existing record', utiliser_dossier: 'Arrival for this patient',
   },
   recherche: {
-    titre: 'Find a patient or resident', aide: 'By reference, first name or last name, in this facility only. Names never leave the facility that entered them.',
-    champ: 'Reference, first or last name', exemple: 'e.g. P-01005 or Tremblay', aucun: 'No result in this facility.',
+    titre: 'Find a patient, resident or movement', aide: 'By reference, first or last name, transfer, transport, pre-alert or ambulance number, in this facility only. Names never leave the facility that entered them.',
+    champ: 'Reference, name or number', exemple: 'e.g. P-01005, DT-000019 or SIM-01', aucun: 'No result in this facility.',
     production: 'Outside the demo, search is by reference only.', onglet_absent: 'This module is not open for this account.', nsa: 'ALC',
-    t_lit: 'Bed', t_civiere: 'Emergency stretcher', t_liaison: 'Liaison in progress', t_patient: 'Record (no location)', t_resident: 'Resident', t_demande: 'Placement request',
+    t_lit: 'Bed', t_civiere: 'Emergency stretcher', t_liaison: 'Liaison in progress', t_patient: 'Record (no location)', t_resident: 'Resident', t_demande: 'Placement request', t_transport: 'Transport', t_transfert: 'Transfer', t_prealerte: 'Ambulance pre-alert', clos: 'closed',
   },
   continuite: {
     titre: 'Arrimo Trail · resident journeys', intro: 'Each resident’s full journey between the CHSLD, the ambulance and the hospital: six steps, one owner per step, confirmations received and an alert when a step waits too long. Read only: each action stays in its module.',

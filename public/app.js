@@ -837,7 +837,7 @@ $('#b-recherche').onclick = () => {
     if (moi !== n) return;
     zone.innerHTML = r.resultats.length ? `<ul class="liste-simple" id="r-liste">${r.resultats.map((x, i) => `<li><button class="btn" type="button" data-r="${i}" style="width:100%;text-align:left;justify-content:flex-start">
       <span><b class="num">${esc(x.reference)}</b>${x.prenom ? ` · ${esc(x.prenom)} ${esc(x.nom)}${x.date_naissance ? ` <span class="note">(${esc(x.date_naissance)})</span>` : ''}` : ''}
-      <br><span class="note">${esc(t(`recherche.t_${x.type}`))}${x.lieu ? ` · ${esc(x.lieu)}` : ''}${x.numero ? ` · ${esc(x.numero)}` : ''}${x.nsa ? ` · ${esc(t('recherche.nsa'))}` : ''}</span></span></button></li>`).join('')}</ul>`
+      <br><span class="note">${esc(t(`recherche.t_${x.type}`))}${x.lieu ? ` · ${esc(x.lieu)}` : ''}${x.numero ? ` · ${esc(x.numero)}` : ''}${x.nsa ? ` · ${esc(t('recherche.nsa'))}` : ''}${x.clos ? ` · ${esc(t('recherche.clos'))}` : ''}</span></span></button></li>`).join('')}</ul>`
       : `<p class="muted">${R('aucun')}</p>${r.noms ? '' : `<p class="note">${R('production')}</p>`}`;
     zone.querySelectorAll('[data-r]').forEach((b) => { b.onclick = () => {
       const x = r.resultats[Number(b.dataset.r)]; $('#modale').hidden = true;

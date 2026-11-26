@@ -598,10 +598,10 @@ window.ARRIMO_I18N.fr = {
     dossier_existant: 'Dossier existant', utiliser_dossier: 'Arrivée pour ce patient',
   },
   recherche: {
-    titre: 'Rechercher un patient ou un résident', aide: 'Par référence, prénom ou nom, dans cet établissement seulement. Les noms ne quittent jamais l’établissement qui les a saisis.',
-    champ: 'Référence, prénom ou nom', exemple: 'ex. P-01005 ou Tremblay', aucun: 'Aucun résultat dans cet établissement.',
+    titre: 'Rechercher un patient, un résident ou un mouvement', aide: 'Par référence, prénom ou nom, numéro de transfert, de transport, de préalerte ou d’ambulance, dans cet établissement seulement. Les noms ne quittent jamais l’établissement qui les a saisis.',
+    champ: 'Référence, nom ou numéro', exemple: 'ex. P-01005, DT-000019 ou SIM-01', aucun: 'Aucun résultat dans cet établissement.',
     production: 'Hors démonstration, la recherche se fait par référence seulement.', onglet_absent: 'Ce module n’est pas ouvert pour ce compte.', nsa: 'NSA',
-    t_lit: 'Lit', t_civiere: 'Civière de l’urgence', t_liaison: 'Liaison en cours', t_patient: 'Fiche (aucun emplacement)', t_resident: 'Résident', t_demande: 'Demande d’hébergement',
+    t_lit: 'Lit', t_civiere: 'Civière de l’urgence', t_liaison: 'Liaison en cours', t_patient: 'Fiche (aucun emplacement)', t_resident: 'Résident', t_demande: 'Demande d’hébergement', t_transport: 'Transport', t_transfert: 'Transfert', t_prealerte: 'Préalerte ambulance', clos: 'clos',
   },
   continuite: {
     titre: 'Arrimo Sillage · parcours des résidents', intro: 'Le parcours complet de chaque résident entre le CHSLD, l’ambulance et l’hôpital : six étapes, un responsable par étape, les confirmations reçues et une alerte quand une étape attend trop longtemps. Lecture seule : chaque action reste dans son module.',
