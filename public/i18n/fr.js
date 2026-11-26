@@ -316,6 +316,10 @@ window.ARRIMO_I18N.fr = {
     'Établissement modifié': 'Établissement modifié', 'Démo remise à zéro': 'Démo remise à zéro', 'Civière créée': 'Civière créée',
   },
   reseau: {
+    pec_prete_confirmee: 'Lit prêt et confirmé', pec_confirmee_en_preparation: 'Lit confirmé, préparation de chambre en cours', pec_confirmee_lit_non_partage: 'Capacité confirmée (lit attribué par le receveur)',
+    pec_declaree_non_confirmee: 'Capacité déclarée, non confirmée', pec_prevision: 'Prévision seulement, aucune place confirmée',
+    pec_besoins_verifies: 'besoins transmis vérifiés', pec_besoins_non_transmis: 'besoins non transmis : compatibilité non établie', pec_equipe: 'équipe d’accueil : non renseignée',
+    pec_delai: 'prise en charge estimée dans {n} min', pec_delai_inconnu: 'délai de prise en charge inconnu',
     titre: 'Capacité du réseau', intro: 'Lits avec personnel, vus depuis {etab}. Le chiffre « +n » indique les lits qui devraient se libérer d’ici {h} h.',
     inactif: 'La capacité du réseau est disponible une fois le module activé.',
     libres_sur: '{libres} <small>{libres|libre|libre|libres} sur {dotes}</small>', occupation: 'Non-disponibilité {n}',

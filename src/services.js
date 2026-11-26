@@ -279,9 +279,16 @@ async function recommander(pool, utilisateur, depuisId, typeId, besoins = {}) {
       metaRoutage = { disponible: false, fournisseur: null, actualise_le: null, code: err.code || 'routeur_indisponible' };
     }
   }
-  // Capacité confirmée d'abord, puis sécurité (niveau d'alerte), durée et distance routières.
+  // Prise en charge effective (cahier 16) : capacité prête ET confirmée, besoins vérifiés, délai estimé avant prise en charge.
+  const litsChoisis = res.filter((x) => x.lit).map((x) => x.lit.id);
+  const enPreparation = new Set(litsChoisis.length ? (await pool.query(`SELECT DISTINCT lit_id FROM taches_etab
+    WHERE lit_id = ANY($1) AND type = 'preparation_chambre' AND statut IN ('a_faire', 'en_cours')`, [litsChoisis])).rows.map((r) => r.lit_id) : []);
+  const besoinsTransmis = Object.keys(besoins || {}).some((k) => k !== 'groupe_age' && besoins[k]);
+  for (const x of res) x.prise_en_charge = priseEnCharge(x, enPreparation, besoinsTransmis);
+  // Capacité confirmée d'abord (prête avant « en préparation »), puis sécurité (niveau d'alerte), durée et distance routières.
   const ordreRisque = { vert: 0, jaune: 1, orange: 2, rouge: 3 };
   res.sort((a, b) => ((b.libres_confirmes > 0) - (a.libres_confirmes > 0))
+    || ((a.prise_en_charge.capacite === 'prete_confirmee' ? 0 : 1) - (b.prise_en_charge.capacite === 'prete_confirmee' ? 0 : 1))
     || (ordreRisque[a.niveau] - ordreRisque[b.niveau])
     || ((a.minutes_route ?? Infinity) - (b.minutes_route ?? Infinity))
     || ((a.distance_km ?? Infinity) - (b.distance_km ?? Infinity)) || (b.libres - a.libres));
@@ -313,6 +320,20 @@ async function recommander(pool, utilisateur, depuisId, typeId, besoins = {}) {
   return { libres_ici: loc.rows[0].libres, suggestions: res, routage: metaRoutage, groupe_age: groupeAge,
     origine: { latitude: Number(ici.latitude), longitude: Number(ici.longitude), nom: ici.nom },
     capacite_verifiee_le: new Date().toISOString() };
+}
+
+/**
+ * Prise en charge effective d'une destination (cahier « moteur de préparation anticipative », nº 16) :
+ * prête + confirmée, besoins transmis vérifiés par le filtre, équipe d'accueil (non modélisée : jamais présumée),
+ * délai estimé = trajet calculé + préparation (0 si prête et confirmée ; inconnu sinon). Aucune décision automatique.
+ */
+function priseEnCharge(x, enPreparation, besoinsTransmis) {
+  const capacite = x.libres_confirmes > 0 ? (x.lit && enPreparation.has(x.lit.id) ? 'confirmee_en_preparation' : x.lit ? 'prete_confirmee' : 'confirmee_lit_non_partage')
+    : x.libres_non_confirmes || x.libres_perimes ? 'declaree_non_confirmee' : 'prevision';
+  const route = x.statut_route === 'calcule' && x.minutes_route != null ? x.minutes_route : null;
+  const preparation = capacite === 'prete_confirmee' ? 0 : null;
+  return { capacite, besoins: besoinsTransmis ? 'verifies' : 'non_transmis', equipe_accueil: 'non_renseignee',
+    delai: { route_min: route, preparation_min: preparation, total_min: route != null && preparation != null ? route + preparation : null, estimation: true } };
 }
 
 /* ------------------------------------------------------------------ lits */
@@ -797,7 +818,7 @@ async function assistant(pool, utilisateur, etabId, question) {
   return tr(L, 'q_aide');
 }
 
-module.exports = {
+module.exports = { priseEnCharge,
   distanceKm, minutesRoute, heureLocale, etablissement, capaciteReseau, recommander, alternativesTransfert, itineraireReseau, litsEtablissement, litVisible, confirmerDisponibilite,
   creerTransfert, avancerTransfert, definirServiceResponsable, relancerTransfert, listeTransferts, lireJournal, lireNotifications,
   detecterBlocages, assistant, exigerActif, exigerModule, motifBlocage, sqlAge, groupeAgeEffectif, GROUPES_AGE, curseur, taillePage, sqlCurseur, sqlAvant, niveauDepuis, lireBesoins, sqlBesoins, notifier, SQL_CAPACITE, risque,

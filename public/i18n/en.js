@@ -315,6 +315,10 @@ window.ARRIMO_I18N.en = {
     'Établissement modifié': 'Facility changed', 'Démo remise à zéro': 'Demo reset', 'Civière créée': 'Stretcher created',
   },
   reseau: {
+    pec_prete_confirmee: 'Bed ready and confirmed', pec_confirmee_en_preparation: 'Bed confirmed, room preparation in progress', pec_confirmee_lit_non_partage: 'Capacity confirmed (bed assigned by the receiver)',
+    pec_declaree_non_confirmee: 'Capacity declared, not confirmed', pec_prevision: 'Forecast only, no confirmed place',
+    pec_besoins_verifies: 'transmitted needs checked', pec_besoins_non_transmis: 'needs not transmitted: compatibility not established', pec_equipe: 'receiving team: not provided',
+    pec_delai: 'care estimated in {n} min', pec_delai_inconnu: 'time to care unknown',
     titre: 'Network capacity', intro: 'Staffed beds, seen from {etab}. The “+n” figure shows beds expected to free up within {h} h.',
     inactif: 'Network capacity is available once the module is enabled.',
     libres_sur: '{libres} <small>available of {dotes}</small>', occupation: 'Unavailable {n}',
