@@ -29,7 +29,7 @@ function creerApp(pool, options = {}) {
   app.set('trust proxy', 'loopback');   // derrière Nginx : l'adresse du client vient de X-Forwarded-For
   app.use('/api', limiteur());
   // Import CSV : jusqu'à 1 Mo (même limite que Nginx) ; ailleurs 50 Ko
-  app.use(['/api/admin/import', '/api/sh/import'], express.json({ limit: '1mb' }));
+  app.use(['/api/admin/import', '/api/sh/import', '/api/rapports/excel'], express.json({ limit: '1mb' }));   // rapports : tableaux affichés
   app.use('/api/support', express.json({ limit: '15mb' }));
   // HL7 v2 brut (moteur d'interface de l'hôpital) : corps texte, sur HTTPS seulement (aucun port MLLP)
   app.use('/api/connecteurs/hl7v2', express.text({ type: ['application/hl7-v2', 'x-application/hl7-v2+er7', 'text/plain'], limit: '100kb' }));
@@ -596,6 +596,12 @@ function creerApp(pool, options = {}) {
   api.get('/nsa/chsld', route((req) => nc.destinations(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   api.get('/nsa/orientations-chsld', route((req) => nc.liste(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   api.post('/nsa/lits/:id/orienter-chsld', route((req) => nc.orienter(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
+  // Rapports (27 nov. 2026) : export Excel des tableaux affichés dans Performance (générateur XLSX existant, export journalisé)
+  api.post('/rapports/excel', async (req, res, next) => {
+    try { const r = await require('./rapports').excel(pool, req.utilisateur, req.body);
+      res.set({ 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': `attachment; filename="${r.nom}"`, 'Cache-Control': 'no-store' }).send(r.fichier);
+    } catch (e) { next(e); }
+  });
   const ni = require('./nsa-indicateurs');
   api.get('/nsa/indicateurs', route((req) => ni.indicateurs(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'), { semaines: req.query.semaines })));
   api.get('/nsa/indicateurs.csv', async (req, res, next) => {

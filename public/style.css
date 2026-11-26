@@ -1135,3 +1135,16 @@ body.mode-presentation #b-notif, body.mode-presentation #b-menu { visibility: hi
 .tuiles-chrono .tuile-c { text-align: left; border: 1px solid var(--bordure); border-radius: var(--rayon-carte); background: var(--carte); padding: 12px 14px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
 .tuiles-chrono .tuile-c .gros { font-size: 30px; font-weight: 700; }
 .net-chrono { margin-top: 6px; max-width: 260px; }
+
+/* Rapports (27 nov. 2026) : barre d'export ; impression / PDF sans menus ni boutons, en-tête Arrimo, numéros de page */
+.barre-rapport { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.rapport-entete-impression { display: none; }
+@media print {
+  @page { margin: 14mm 12mm 16mm; @bottom-right { content: counter(page) " / " counter(pages); font-size: 9pt; color: #64748B; } }
+  body[data-impression="oui"] * { visibility: hidden; }
+  body[data-impression="oui"] [data-imprimer], body[data-impression="oui"] [data-imprimer] * { visibility: visible; }
+  body[data-impression="oui"] [data-imprimer] { position: absolute; left: 0; top: 0; width: 100%; }
+  body[data-impression="oui"] [data-imprimer] button, body[data-impression="oui"] [data-imprimer] select, body[data-impression="oui"] .barre-rapport, body[data-impression="oui"] .sous-chrono { display: none !important; }
+  body[data-impression="oui"] .rapport-entete-impression { display: flex; gap: 10px; align-items: center; border-bottom: 2px solid #0E5E6F; padding-bottom: 8px; margin-bottom: 12px; color: #1F2937; }
+  body[data-impression="oui"] table { font-size: 9pt; } body[data-impression="oui"] tr { break-inside: avoid; }
+}

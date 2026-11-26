@@ -58,3 +58,17 @@ test('Chrono : module principal du menu, huit sous-menus, un seul moteur (lectur
   assert.match(lire('public/chrono.js'), /const SOUS = \['generale', 'patients', 'ambulances', 'capacites', 'previsions', 'qualite', 'alertes', 'historique'\]/);
   assert.ok(!/INSERT|UPDATE|DELETE/.test(lire('src/chrono-universel.js').replace(/\/\*[\s\S]*?\*\//g, '')), 'lecture seule');
 });
+
+test('Rapports Excel : tableaux affichés, en-tête et confidentialité, formules neutralisées, export journalisé ; entretien exclu', async () => {
+  const post = (qui, b) => fetch(`${base}/api/rapports/excel`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tok[qui]}` }, body: JSON.stringify(b) });
+  const lignes = [['Indicateur', 'Valeur'], ['Durée de nettoyage', '01:36:00'], ['=HYPERLINK("x")', '-5']];
+  const r = await post('coord', { etablissement_id: ids.h, titre: 'Indicateurs · Hôpital', lignes });
+  assert.strictEqual(r.status, 200); assert.match(r.headers.get('content-type'), /spreadsheetml/); assert.match(r.headers.get('content-disposition'), /arrimo-indicateurs-hopital\.xlsx/);
+  const x = require('../src/sh/xlsx').lireXlsx(Buffer.from(await r.arrayBuffer()));
+  const l = x.lignes || x.rows || x; const plat = JSON.stringify(l);
+  assert.match(plat, /Confidentiel/); assert.match(plat, /01:36:00/); assert.match(plat, /'=HYPERLINK/, 'formule neutralisée'); assert.match(plat, /"-5"/, 'nombre négatif conservé');
+  assert.ok((await pool.query("SELECT 1 FROM journal WHERE action = 'Export Excel' AND etablissement_id = $1", [ids.h])).rowCount, 'export journalisé');
+  assert.strictEqual((await post('ent', { etablissement_id: ids.h, titre: 'x', lignes })).status, 403);
+  assert.strictEqual((await post('autre', { etablissement_id: ids.h, titre: 'x', lignes })).status, 403);
+  assert.strictEqual((await post('coord', { etablissement_id: ids.h, titre: 'x', lignes: 'pas un tableau' })).status, 400);
+});
