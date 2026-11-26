@@ -485,3 +485,4 @@ div.ds-kpi { cursor: default; }
 :root[data-design="v2"][data-type-etab="chsld"] .barre .ambiance-seg button[aria-pressed="true"] { background: #FFFFFF; color: var(--ch-petrole); }
 :root[data-design="v2"][data-type-etab="chsld"] .barre .ctx select { background: #FFFFFF; color: var(--ch-petrole); }
 :root[data-design="v2"][data-type-etab="chsld"] .barre .btn:focus-visible, :root[data-design="v2"][data-type-etab="chsld"] .barre select:focus-visible { outline-color: #FFFFFF; }
+:root[data-design="v2"][data-type-etab="chsld"] body.nav-verticale .barre .marque small { color: #FFFFFF; }
