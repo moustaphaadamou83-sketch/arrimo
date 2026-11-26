@@ -1102,3 +1102,6 @@ body.mode-presentation #b-notif, body.mode-presentation #b-menu { visibility: hi
 .reglages-annonces input[type="number"] { min-height: 40px; max-width: 120px; }
 .reglages-annonces .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
 #b-voix.voix-indispo { opacity: .55; }
+
+/* Numéros de mission sur une seule ligne dans les colonnes communes */
+.fiche .t b { white-space: nowrap; }

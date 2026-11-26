@@ -10,13 +10,19 @@
     const [liste, orgs] = await Promise.all([api('GET', `/transports?etablissement_id=${etat.ctx}${historique ? '&historique=1' : ''}`), api('GET', `/transports/organisations?etablissement_id=${etat.ctx}`).catch(() => [])]);
     if (!liste) return;
     const planifies = liste.filter((d) => d.motif_transport);
+    const vt = window.ArrimoVueTransferts;
+    // Actions propres au transport planifié (inchangées) : transmettre, annuler, retirer le brouillon, archiver, Sillage
+    const actions = (d) => `${d.statut === 'a_valider' && d.origine_id === etat.ctx ? `<button class="btn pri" data-tp-transmettre="${d.id}">${P('transmettre')}</button>` : ''}${d.statut !== 'a_valider' && d.actions.includes('annuler') ? `<button class="btn discret" data-tp-annuler="${d.id}" data-v="${d.version}">${P('annuler')}</button>` : ''}${d.actions.map((action) => action === 'annuler' && d.statut === 'a_valider' ? 'retirer_brouillon' : action).filter((action) => ['retirer_brouillon', 'archiver'].includes(action)).map((action) =>
+      `<button type="button" class="btn discret" data-tp-action="${action}" data-id="${d.id}" data-v="${d.version}">${P(action)}</button>`).join('')}${d.archivee ? `<span class="note">${P('archive')}</span>` : ''}${(window.ArrimoSillage?.bouton('demande_transport', d.id) || '')}`;
     v.innerHTML = `<div class="entete"><div><h2>${P('titre')}</h2><p class="note">${P('intro')}</p></div><div class="actions"><button type="button" class="btn" id="tp-historique" aria-pressed="${historique}">${P(historique ? 'activite' : 'historique')}</button>
       <button class="btn pri" id="tp-reserver">${P('reserver')}</button></div></div>
-      <section class="panneau-c">${planifies.length ? `<div class="tableau"><table><thead><tr><th>${P('numero')}</th><th>${P('motif')}</th><th>${P('patient')}</th><th>${P('destination')}</th><th>${P('plage')}</th><th>${P('statut')}</th><th></th></tr></thead><tbody>
-        ${planifies.map((d) => `<tr><td>${esc(d.numero)}</td><td>${P(`m_${d.motif_transport}`)}</td><td><span class="donnee">${esc(d.resident_ref)}</span>${d.lit_code ? ` · ${P('lit', { lit: d.lit_code })}` : ''}</td>
-          <td>${esc(d.destination || '')}</td><td>${d.plage_confirmee_debut ? `<strong>${P('confirmee', { debut: heureCourte(d.plage_confirmee_debut), fin: heureCourte(d.plage_confirmee_fin) })}</strong>` : P('demandee', { jour: heure(d.plage_debut), fin: heureCourte(d.plage_fin) })}</td>
-          <td>${P(`s_${d.statut}`)}${d.unite ? ` · ${esc(d.unite)}` : ''}</td><td>${d.statut === 'a_valider' && d.origine_id === etat.ctx ? `<button class="btn pri" data-tp-transmettre="${d.id}">${P('transmettre')}</button>` : ''}${d.statut !== 'a_valider' && d.actions.includes('annuler') ? `<button class="btn discret" data-tp-annuler="${d.id}" data-v="${d.version}">${P('annuler')}</button>` : ''}${d.actions.map((action) => action === 'annuler' && d.statut === 'a_valider' ? 'retirer_brouillon' : action).filter((action) => ['retirer_brouillon', 'archiver'].includes(action)).map((action) =>
-            `<button type="button" class="btn discret" data-tp-action="${action}" data-id="${d.id}" data-v="${d.version}">${P(action)}</button>`).join('')}${d.archivee ? `<span class="note">${P('archive')}</span>` : ''}${(window.ArrimoSillage?.bouton('demande_transport', d.id) || '')}</td></tr>`).join('')}</tbody></table></div>` : `<p class="note">${P('aucun')}</p>`}</section>`;
+      <section class="panneau-c">${planifies.length ? vt.kanban(planifies, { colonne: vt.colonneTransport, carte: (d) => `
+        <div class="t"><b>${esc(d.numero)}</b><span class="note">${P(`m_${d.motif_transport}`)}</span></div>
+        <div style="font-size:12px">${esc(d.origine || '')} → ${esc(d.destination || '')}</div>
+        <div class="note"><span class="donnee">${esc(d.resident_ref)}</span>${d.lit_code ? ` · ${P('lit', { lit: d.lit_code })}` : ''}</div>
+        <div class="note">${d.plage_confirmee_debut ? `<strong>${P('confirmee', { debut: heureCourte(d.plage_confirmee_debut), fin: heureCourte(d.plage_confirmee_fin) })}</strong>` : P('demandee', { jour: heure(d.plage_debut), fin: heureCourte(d.plage_fin) })}</div>
+        <div class="note">${P(`s_${d.statut}`)}${d.unite ? ` · ${esc(d.unite)}` : ''}</div>
+        <div class="actions">${actions(d)}</div>` }) : `<p class="note">${P('aucun')}</p>`}</section>`;
     $('#tp-reserver').onclick = () => reserver(orgs);
     $('#tp-historique').onclick = () => { historique = !historique; rafraichir(); };
     v.querySelectorAll('[data-tp-action]').forEach((b) => { b.onclick = () => agir(b,

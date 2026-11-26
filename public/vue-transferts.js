@@ -53,5 +53,32 @@
     const clos = lignes.filter((l) => l.clos);
     return `<section><h3>${texte(x.actif)}</h3>${tableau(actifs)}</section><section><h3>${texte(x.clos)}</h3>${tableau(clos)}</section>`;
   }
-  window.ArrimoVueTransferts = { rendre, depuisTransport };
+  /**
+   * Colonnes communes (26 nov. 2026), reprises de la vue des transferts interhospitaliers (référence graphique) :
+   * Demandés → Validés → Transport organisé → En transfert → Reçus → Refusés, mêmes couleurs de statut.
+   * Seule la PRÉSENTATION est commune : chaque parcours garde ses règles, ses validations et ses actions (carte fournie par l'écran).
+   */
+  const COLONNES = [['demande', 'var(--attention)'], ['validee', 'var(--secondaire)'], ['transport', 'var(--info)'], ['en_route', 'var(--principal)'], ['recu', 'var(--succes)'], ['refuse', 'var(--critique)']];
+  // Mêmes libellés que la vue de référence (i18n « statuts ») : une seule formulation partout
+  const TITRES = { fr: { demande: 'Demande', validee: 'Validée', transport: 'Transport organisé', en_route: 'En transfert', recu: 'Reçu', refuse: 'Refusé', plus: '{n} plus anciens dans l’historique', aucun: 'Aucun' },
+    en: { demande: 'Requested', validee: 'Accepted', transport: 'Transport arranged', en_route: 'In transit', recu: 'Received', refuse: 'Declined', plus: '{n} older in history', aucun: 'None' } };
+  /** Colonne d'un transport (statuts de demandes_transport). */
+  function colonneTransport(d) {
+    if (['refusee', 'annulee'].includes(d.statut)) return 'refuse';
+    if (d.statut === 'arrivee' || d.terminee_le || d.remis_le) return 'recu';
+    if (['en_route', 'pris_en_charge'].includes(d.statut)) return 'en_route';
+    if (d.statut === 'acceptee') return d.unite_id || d.unite ? 'transport' : 'validee';
+    return 'demande';   // a_valider, demandee
+  }
+  function kanban(elements, { colonne, carte, couleur, maxClos = 8 } = {}) {
+    const x = TITRES[(document.documentElement.lang || '').startsWith('en') ? 'en' : 'fr'];
+    return `<div class="kanban" data-kanban-commun>${COLONNES.map(([k, c]) => {
+      const tous = elements.filter((e) => colonne(e) === k);
+      const vus = ['recu', 'refuse'].includes(k) ? tous.slice(0, maxClos) : tous;
+      return `<div class="col" style="--c:${c}"><h3>${echapper(x[k])} <span class="num">${tous.length}</span></h3>
+        ${vus.map((e) => `<div class="fiche" style="--c:${couleur ? echapper(couleur(e) || c) : c}">${carte(e)}</div>`).join('') || `<div class="vide">${echapper(x.aucun)}</div>`}
+        ${tous.length > vus.length ? `<p class="note">${echapper(x.plus.replace('{n}', tous.length - vus.length))}</p>` : ''}</div>`;
+    }).join('')}</div>`;
+  }
+  window.ArrimoVueTransferts = { rendre, depuisTransport, kanban, colonneTransport, COLONNES };
 })();

@@ -613,9 +613,13 @@
   }
   function demandesEtablissements() {
     const vue = window.ArrimoVueTransferts;
-    return `<section class="carte-s"><h2>${t('demandes_etab')}</h2>${vue.rendre(etat.transports.map(vue.depuisTransport), {
-      seulement: 'actifs', heure, actions: (l) => window.ArrimoSillage?.bouton('demande_transport', l.id) || '',
-    })}</section>`;
+    // Même présentation que les transferts interhospitaliers (colonnes communes) ; les clos restent dans l'Historique
+    const actifs = etat.transports.filter((d) => !d.terminee_le && !['refusee', 'annulee'].includes(d.statut) && !(d.statut === 'arrivee' && !d.motif_transport));
+    return `<section class="carte-s"><h2>${t('demandes_etab')}</h2>${actifs.length ? vue.kanban(actifs, { colonne: vue.colonneTransport, maxClos: 0, carte: (d) => `
+      <div class="t"><b>${esc(d.numero)}</b>${d.unite ? `<span class="note">${esc(d.unite)}</span>` : ''}</div>
+      <div style="font-size:12px">${esc(d.origine || '')} → ${esc(d.destination || '')}</div>
+      <div class="note">${(d.plage_confirmee_debut || d.plage_debut) ? esc(heure(d.plage_confirmee_debut || d.plage_debut)) : ''}</div>
+      <div class="actions">${window.ArrimoSillage?.bouton('demande_transport', d.id) || ''}</div>` }) : `<p class="note">${t('aucune')}</p>`}</section>`;
   }
   function bipMission() {
     if (window.ArrimoSon) return window.ArrimoSon.jouer('alerte');   // même réglage que le reste d'Arrimo (bouton de l'en-tête)

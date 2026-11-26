@@ -132,8 +132,26 @@ test('Écran CCS : quatre espaces (Missions, Capacités, Chrono, Historique), qu
   assert.match(src, /ccs: \['missions', 'capacites', 'chrono', 'historique', 'og'\]/);
   const kpi = src.slice(src.indexOf('function chiffresCcs()'), src.indexOf('/** Couverture de la région'));
   assert.strictEqual((kpi.match(/\$\{tuile\(/g) || []).length, 4, 'quatre indicateurs essentiels');
-  assert.match(src, /seulement: 'actifs'/, 'tableau de bord : transferts actifs seulement');
+  assert.match(src, /vue\.kanban\(actifs, \{ colonne: vue\.colonneTransport, maxClos: 0/, 'tableau de bord : transports actifs seulement, colonnes communes');
   assert.match(src, /historique: historiqueRecherche\(fermees, etat\.transports\)/, 'clos et recherche dans l’Historique');
   const vue = fs.readFileSync(path.join(__dirname, '..', 'public', 'vue-transferts.js'), 'utf8');
   assert.match(vue, /seulement === 'clos'/);
+});
+
+test('Colonnes communes (référence : transferts interhospitaliers) : chaque statut de transport à sa place, règles inchangées', () => {
+  const vm = require('node:vm'); const fs = require('node:fs'); const path = require('node:path');
+  const c = { window: {}, document: { documentElement: { lang: 'fr-CA' } } }; vm.createContext(c);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'public', 'vue-transferts.js'), 'utf8'), c);
+  const v = c.window.ArrimoVueTransferts;
+  const col = (d) => v.colonneTransport(d);
+  assert.strictEqual(col({ statut: 'a_valider' }), 'demande'); assert.strictEqual(col({ statut: 'demandee' }), 'demande');
+  assert.strictEqual(col({ statut: 'acceptee' }), 'validee'); assert.strictEqual(col({ statut: 'acceptee', unite_id: 4 }), 'transport');
+  assert.strictEqual(col({ statut: 'en_route' }), 'en_route'); assert.strictEqual(col({ statut: 'pris_en_charge' }), 'en_route');
+  assert.strictEqual(col({ statut: 'arrivee' }), 'recu'); assert.strictEqual(col({ statut: 'refusee' }), 'refuse'); assert.strictEqual(col({ statut: 'annulee' }), 'refuse');
+  // Mêmes colonnes et mêmes couleurs que la vue de référence (app.js, STATUTS)
+  const app = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+  for (const [k, couleur] of v.COLONNES) assert.ok(app.includes(`['${k}', '${couleur}']`), `${k} : même couleur que la référence`);
+  const html = v.kanban([{ numero: 'DT-1', statut: 'demandee' }], { colonne: col, carte: (d) => d.numero });
+  assert.strictEqual((html.match(/class="col"/g) || []).length, 6);
+  assert.match(html, /Demande <span class="num">1<\/span>/);
 });
