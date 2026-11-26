@@ -1104,7 +1104,7 @@ body.mode-presentation #b-notif, body.mode-presentation #b-menu { visibility: hi
 #b-voix.voix-indispo { opacity: .55; }
 
 /* Numéros de mission sur une seule ligne dans les colonnes communes */
-.fiche .t b { white-space: nowrap; }
+[data-kanban-commun] .fiche .t b { white-space: nowrap; }
 
 /* Téléphone : pas de bouton d'annonces vocales dans l'en-tête (annonces destinées aux postes ; en-tête sans débordement) */
 @media (max-width: 700px) { #b-voix { display: none; } }
