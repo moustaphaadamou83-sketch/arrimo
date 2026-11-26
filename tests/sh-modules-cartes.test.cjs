@@ -90,7 +90,9 @@ test('cartes : 18 au total (DSN compris), seules celles du type apparaissent, é
   const hop = cartes.cartesDuType(catalogue('hopital')).map((c) => c.id);
   assert.ok(hop.includes('hopital') && hop.includes('chrono') && !hop.includes('hebergement') && !hop.includes('visites_confirmees'));
   const chs = cartes.cartesDuType(catalogue('chsld')).map((c) => c.id);
-  assert.ok(chs.includes('hebergement') && chs.includes('visites_confirmees') && !chs.includes('chrono') && !chs.includes('hopital'));
+  // Chrono universel (27 nov. 2026) : proposé aussi aux CHSLD ; DSN : hôpitaux seulement
+  assert.ok(chs.includes('hebergement') && chs.includes('visites_confirmees') && chs.includes('chrono') && !chs.includes('hopital'));
+  assert.ok(!TE.catalogue('chsld').some((m) => m.code === 'dsn') && TE.catalogue('hopital').some((m) => m.code === 'dsn'));
   const amb = cartes.cartesDuType(catalogue('entreprise_ambulanciere')).map((c) => c.id);
   assert.ok(amb.includes('secours') && amb.includes('chrono') && !amb.includes('bourse_places'));
   const carte = (id) => cartes.cartesDuType(catalogue('hopital')).find((c) => c.id === id);
@@ -123,8 +125,8 @@ test('serveur : « Bientôt » refusé, activation et désactivation journalisé
   assert.ok(j.some((x) => /liaison_secours : souscrit → non_selectionne/.test(x.detail)));
   const fiche = await sh('GET', `/hopitaux/${h.id}`);
   assert.ok(!fiche.modules.some((m) => m.code === 'visites_confirmees'), 'Visites confirmées : CHSLD seulement');
-  // Chrono exige Liaison Secours : refusé seul, accepté avec
-  assert.strictEqual((await appelSh('PUT', `/hopitaux/${h.id}/modules`, { modules: [{ code: 'chrono', licence: 'souscrit' }] })).statut, 409);
+  // Chrono activable seul (26 nov. 2026, alimenté par Liaison Secours ou par un connecteur autorisé) et avec Liaison Secours
+  assert.strictEqual((await appelSh('PUT', `/hopitaux/${h.id}/modules`, { modules: [{ code: 'chrono', licence: 'souscrit' }] })).statut, 200);
   await sh('PUT', `/hopitaux/${h.id}/modules`, { modules: [{ code: 'liaison_secours', licence: 'souscrit' }, { code: 'chrono', licence: 'souscrit' }] });
 });
 

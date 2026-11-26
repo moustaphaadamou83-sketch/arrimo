@@ -358,7 +358,7 @@ async function demoReseau(pool, { silencieux = false, comptesRoles = false, avec
   // pour que Chrono, Capacités et Performance se filtrent par département. Les civières sans unité relèvent du département « Urgences ».
   await pool.query(`INSERT INTO departements (etablissement_id, code, nom)
     SELECT e.id, d.code, d.nom FROM etablissements e CROSS JOIN (VALUES ('URG', 'Urgences'), ('SI', 'Soins intensifs'), ('MED', 'Médecine'), ('CHIR', 'Chirurgie'), ('MAT', 'Mère-enfant')) d(code, nom)
-    WHERE e.type_etablissement = 'hopital' ON CONFLICT (etablissement_id, code) DO NOTHING`);
+    WHERE e.id = ANY($1) ON CONFLICT (etablissement_id, code) DO NOTHING`, [[ids.HX, ids.HA]]);
   await pool.query(`UPDATE unites u SET departement_id = dp.id FROM types_unite t, departements dp
     WHERE t.id = u.type_id AND dp.etablissement_id = u.etablissement_id AND dp.code = t.code AND u.departement_id IS NULL`);
   await pool.query(`UPDATE services s SET departement_id = dp.id FROM departements dp

@@ -287,5 +287,17 @@ async function migrerDsn(c) {
   await c.query('INSERT INTO sh_migrations(version) VALUES($1)', [DSN_VERSION]);
   return true;
 }
+/* Migration 62 (27 nov. 2026, décisions de Moustafa) : Chrono universel (tous les types d'organisation) ; DSN réservé aux hôpitaux.
+   Les types reprennent ceux du code (src/types-etablissement.js) ; aucune licence ni donnée d'établissement n'est touchée. */
+const CHRONO_UNIVERSEL_VERSION = 62;
+async function migrerChronoUniversel(c) {
+  if ((await c.query('SELECT 1 FROM sh_migrations WHERE version=$1', [CHRONO_UNIVERSEL_VERSION])).rowCount) return false;
+  const TE = require('../types-etablissement');
+  const chrono = TE.MODULES.find((x) => x.code === 'chrono'); const dsn = TE.MODULES.find((x) => x.code === 'dsn');
+  await c.query('UPDATE sh_modules_catalogue SET types = ARRAY(SELECT DISTINCT unnest(types || $1::text[]) ORDER BY 1), nom = $2, nom_en = $3 WHERE code = \'chrono\'', [chrono.types, chrono.nom, chrono.nom_en]);
+  await c.query("UPDATE sh_modules_catalogue SET types = $1::text[] WHERE code = 'dsn'", [dsn.types]);
+  await c.query('INSERT INTO sh_migrations(version) VALUES($1)', [CHRONO_UNIVERSEL_VERSION]);
+  return true;
+}
 const VERSION_SH = TYPES_AINES_VERSION;
-module.exports = { DSN_VERSION, migrerDsn, FORMATION_VERSION, migrerFormation, TYPES_MODULES_VERSION, migrerTypesModules, DERNIERS_MODULES_VERSION, migrerDerniersModules, EXPORTS_VERSION, migrerExports, CRISE_VERSION, migrerCrise, DONNEES_VERSION, migrerDonnees, BOURSE_VERSION, migrerBourse, TRANSPORT_PLANIFIE_VERSION, migrerTransportPlanifie, TRANSFERTS_VERSION, migrerTransferts, URGENCES_DIRECT_VERSION, migrerUrgencesDirect, CHRONO_VERSION, migrerChrono, MOTEUR_COMMUN_VERSION, MODULES_CHANTIER, migrerMoteurCommun, LIAISON_SECOURS_VERSION, migrerLiaisonSecours, TYPES_ETABLISSEMENT_VERSION, LIAISON_CHSLD_VERSION, PRODUCTIONS_VERSION, TYPES_LOCAUX_VERSION, DEMANDES_SITE_VERSION, VERSION_SH, migrerTypesEtablissement, migrerLiaisonChsld, migrerProductions, migrerTypesLocaux, migrerDemandesSite, migrerTypesAines };
+module.exports = { CHRONO_UNIVERSEL_VERSION, migrerChronoUniversel, DSN_VERSION, migrerDsn, FORMATION_VERSION, migrerFormation, TYPES_MODULES_VERSION, migrerTypesModules, DERNIERS_MODULES_VERSION, migrerDerniersModules, EXPORTS_VERSION, migrerExports, CRISE_VERSION, migrerCrise, DONNEES_VERSION, migrerDonnees, BOURSE_VERSION, migrerBourse, TRANSPORT_PLANIFIE_VERSION, migrerTransportPlanifie, TRANSFERTS_VERSION, migrerTransferts, URGENCES_DIRECT_VERSION, migrerUrgencesDirect, CHRONO_VERSION, migrerChrono, MOTEUR_COMMUN_VERSION, MODULES_CHANTIER, migrerMoteurCommun, LIAISON_SECOURS_VERSION, migrerLiaisonSecours, TYPES_ETABLISSEMENT_VERSION, LIAISON_CHSLD_VERSION, PRODUCTIONS_VERSION, TYPES_LOCAUX_VERSION, DEMANDES_SITE_VERSION, VERSION_SH, migrerTypesEtablissement, migrerLiaisonChsld, migrerProductions, migrerTypesLocaux, migrerDemandesSite, migrerTypesAines };

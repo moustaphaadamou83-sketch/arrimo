@@ -215,7 +215,7 @@ const MVT_ETAPE = { preadmission: 'attente_admission_heb', admission: 'resident_
  */
 async function decomposition(pool, u, etabId, reference) {
   exigerEtablissement(u, etabId);
-  if (u.role === 'entretien') throw new ErreurHttp(403, 'acces_refuse');
+  if (u.role === 'entretien') throw new ErreurHttp(403, 'role_insuffisant');
   const ref = String(reference || '').trim();
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/.test(ref)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'reference' });
   const now = Date.now(); const cfg = await configDe(pool, etabId); const S = seuilsDe(cfg);
