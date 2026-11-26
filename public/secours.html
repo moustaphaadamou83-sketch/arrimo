@@ -103,6 +103,23 @@
   .secours .onglets-s .pastille-n { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 6px; border-radius: 10px; background: #57C5B6; color: #0B2A33; font-size: 12px; font-weight: 700; line-height: 20px; text-align: center; }
   .secours main { max-width: 1600px; }
   :root[data-theme="sombre"] .secours .onglets-s { background: #08262E; }
+  /* Rôle Embarqué : OG et apparence en bas, grands boutons ; l'espace du bas est réservé pour ne rien masquer */
+  .barre-bas-amb { position: fixed; left: 0; right: 0; bottom: 0; z-index: 600; display: flex; gap: 8px; justify-content: center; padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); background: #0B4C59; }
+  .barre-bas-amb[hidden] { display: none; }
+  .barre-bas-amb button { flex: 1 1 0; max-width: 260px; min-height: 56px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 12px; background: rgba(255,255,255,.1); color: #fff; font-size: 17px; font-weight: 600; cursor: pointer; }
+  .barre-bas-amb button[aria-current="true"] { background: #57C5B6; color: #0B2A33; }
+  .barre-bas-amb button:focus-visible { outline: 3px solid #57C5B6; outline-offset: 2px; }
+  .barre-bas-amb .ic { width: 22px; height: 22px; }
+  body.avec-barre-bas { padding-bottom: 88px; }
+  :root[data-theme="sombre"] .barre-bas-amb { background: #08262E; }
+  .secours .gps-etat { font-weight: 600; display: flex; align-items: center; gap: 8px; } .secours .gps-etat::before { content: ''; flex: none; width: 12px; height: 12px; border-radius: 50%; background: #94A3B8; }
+  .secours .gps-etat.ok::before { background: #16A34A; } .secours .gps-etat.ko::before { background: #F59E0B; }
+  .secours details.autres-missions > summary { cursor: pointer; font-weight: 700; min-height: 48px; display: flex; align-items: center; }
+  :root .secours .tuiles-c.tuiles-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  @media (max-width: 760px) { :root .secours .tuiles-c.tuiles-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .secours details.flotte-ccs > summary { cursor: pointer; font-weight: 700; min-height: 48px; display: flex; align-items: center; }
+  .sec-nav button.esp { width: 100%; }
+  .visuellement-cache { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   @media (max-width: 600px) { .secours .gros { font-size: 24px; } .secours .tete .contexte { display: none; }
     .secours .tete { padding: 8px 12px; gap: 6px; } .secours .tete h1 { font-size: 17px; } .secours .tete .sous-titre { font-size: 13px; } .secours .tete .marque img { width: 28px; height: 28px; }
     .secours .tete .outils { gap: 6px; } .secours .tete select, .secours .tete button { min-height: 38px; font-size: 14px; padding: 0 9px; } .secours .tete select { max-width: 52vw; } .secours .onglets-s button { padding: 10px 12px; font-size: 15px; } }

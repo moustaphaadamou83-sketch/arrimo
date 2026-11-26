@@ -23,7 +23,7 @@
       retard: ['demande', 'accepte'].includes(statut) && new Date(d.plage_confirmee_fin || d.plage_fin || Infinity).getTime() < Date.now(),
       incident: d.incident_le && !d.terminee_le };
   }
-  function rendre(lignes, { actions, heure, cellules = {}, sections = false } = {}) {
+  function rendre(lignes, { actions, heure, cellules = {}, sections = false, seulement = null } = {}) {
     const x = dico();
     const texte = (v) => echapper(v ?? '—');
     const h = heure || ((d) => new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
@@ -45,6 +45,9 @@
     };
     const tableau = (liste) => liste.length ? `<div class="tableau flux-tableau"><table data-transferts-commun><thead><tr>${col.map((n) => `<th scope="col">${texte(x[n])}</th>`).join('')}</tr></thead>
       <tbody>${liste.map(ligne).join('')}</tbody></table></div>` : `<p class="note">${texte(x.aucun)}</p>`;
+    // Une seule partie (26 nov. 2026) : actifs sur le tableau de bord, clos dans l'Historique — jamais répétés aux deux endroits
+    if (seulement === 'actifs') return tableau(lignes.filter((l) => !l.clos));
+    if (seulement === 'clos') return tableau(lignes.filter((l) => l.clos));
     if (!sections) return tableau(lignes);
     const actifs = lignes.filter((l) => !l.clos);
     const clos = lignes.filter((l) => l.clos);

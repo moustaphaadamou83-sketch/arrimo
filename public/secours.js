@@ -60,7 +60,7 @@
       cv_mesures: { aucune: 'Aucune', renfort_demande: 'Renfort demandé', redistribution_decidee: 'Redistribution décidée', contingence_autorite: 'Contingence activée par l’autorité', autre_documentee: 'Autre mesure documentée' },
       qp_aucune: 'quote-part : non renseignée', qp_saisir: 'Saisir la quote-part fixée par l’autorité', qp_valeur: 'Ambulances', qp_periode: 'Période (min)', qp_autorite: 'Autorité', qp_fiabilite: 'Fiabilité', qp_enregistrer: 'Enregistrer', qp_regle: 'Chaque saisie est conservée dans l’historique. Aucune marge n’est calculée ; la quote-part ne décide d’aucune destination.', qp_fiab: { confirmee_autorite: 'confirmée par l’autorité', declaree: 'déclarée', a_verifier: 'à vérifier' }, flux_annoncees: 'annoncées : {n}', flux_porte: 'à la porte : {n}', flux_mediane: 'porte : médiane {n} min sur 24 h (mesures : {m})', flux_mediane_aucune: 'porte : aucune mesure sur 24 h', ch_porte: 'À la porte', ch_route: 'En route', ch_termines: 'Passages terminés', ch_planifies: 'Durées des transports planifiés', ch_planifies_note: 'Transports actifs et récents. Tiret : événement nécessaire manquant ou incohérent.', ch_delais: { reponse: 'Réponse', mobilisation: 'Mobilisation', vers_prise_en_charge: 'Vers le départ', attente_prise_en_charge: 'Attente au départ', trajet_patient: 'Trajet patient', attente_remise: 'Attente de remise', remise_en_condition: 'Remise en condition', engagement: 'Engagement' }, ch_aucun: 'Aucun passage.', ch_min: '{n} min à la porte', ch_niveaux: { vert: 'Sous le seuil', orange: 'Surveillance', rouge: 'Seuil atteint', critique: 'Critique : cible totale dépassée' }, ch_depart: 'Départ de l’hôpital',
       ch_H11: 'Arrivée', ch_H12: 'Début triage', ch_H13: 'Fin triage', ch_H14: 'Civière libérée', ch_H15: 'Départ', ch_corrigee: 'corrigée', ch_total: 'total {n} min', ch_inactif: 'Aucun hôpital de votre secteur n’utilise encore le Chrono.',
-      o_regional: 'Vue régionale', o_appels: 'Appels simulés', appels_demo_info: 'Appels fictifs pour la démonstration.', appels_demo_malaise: 'Malaise simulé', appels_demo_chute: 'Chute simulée', appels_demo_attente: 'À affecter', appels_demo_affecter: 'Affecter le véhicule', appels_demo_aucun: 'Aucun appel simulé.', o_flotte: 'Flotte', o_prealertes: 'Préalertes', o_demandes: 'Demandes des établissements', o_historique: 'Historique', o_og: 'OG', o_mission: 'Mission', o_urgences: 'Urgences classées', o_transports: 'Transports',
+      o_regional: 'Vue régionale', o_appels: 'Appels simulés', appels_demo_info: 'Appels fictifs pour la démonstration.', appels_demo_malaise: 'Malaise simulé', appels_demo_chute: 'Chute simulée', appels_demo_attente: 'À affecter', appels_demo_affecter: 'Affecter le véhicule', appels_demo_aucun: 'Aucun appel simulé.', o_flotte: 'Flotte', o_prealertes: 'Préalertes', o_demandes: 'Demandes des établissements', o_historique: 'Historique', o_og: 'OG', o_mission: 'Mission', o_missions: 'Missions', o_capacites: 'Capacités', flotte_details: 'Flotte ambulancière ({n} véhicules)', k_coordonner: 'Missions à coordonner', k_en_cours: 'Missions en cours', k_retards_intervention: 'Retards à traiter', barre_bas: 'OG et apparence', autres_missions: 'Autres missions de l’unité', autres_dest: 'Autres hôpitaux ({n})', gps_actif: 'GPS actif : l’arrivée estimée sera calculée automatiquement.', gps_indispo: 'GPS indisponible : indiquez une estimation manuelle.', estim_manuelle: 'Estimation manuelle de secours (minutes)', estim_manuelle_note: 'À utiliser seulement si le GPS ne transmet plus.', recherche_hist: 'Rechercher un numéro de mission ou de transport', hist_resultats: '{n} résultat(s)', hist_derniers: '{n} plus récentes sur {total} ; tapez un numéro pour chercher', o_urgences: 'Urgences classées', o_transports: 'Transports',
       k_affecter: 'Missions à affecter', k_attente: 'Interventions en attente', k_pression: 'Établissements sous pression', k_destination: 'Ambulances à destination',
       ma_titre: 'Mission active', ma_aucune: 'Aucune mission active pour ce véhicule.', ma_suivante: 'Prochaine action', ma_origine: 'Origine', ma_dest: 'Destination', ma_depart: 'Départ', ma_eta: 'Arrivée estimée', ma_ecoule: 'Temps écoulé', ma_pa: 'Préalerte', ma_detail: 'Détails et autres actions', ma_non_envoyee: 'non envoyée', ma_min: '{n} min',
       ma_a: { accepter: 'Accepter la mission', en_route: 'Partir vers la prise en charge', sur_place: 'Confirmer l’arrivée sur place', pris_en_charge: 'Confirmer la prise en charge', partir_destination: 'Partir vers la destination', arrivee: 'Signaler l’arrivée', remis: 'Confirmer la remise', terminer: 'Terminer la mission' },
@@ -146,7 +146,7 @@
       cv_mesures: { aucune: 'None', renfort_demande: 'Reinforcement requested', redistribution_decidee: 'Redistribution decided', contingence_autorite: 'Contingency activated by the authority', autre_documentee: 'Other documented measure' },
       qp_aucune: 'quota: not provided', qp_saisir: 'Enter the quota set by the authority', qp_valeur: 'Ambulances', qp_periode: 'Period (min)', qp_autorite: 'Authority', qp_fiabilite: 'Reliability', qp_enregistrer: 'Save', qp_regle: 'Every entry is kept in the history. No margin is calculated; the quota decides no destination.', qp_fiab: { confirmee_autorite: 'confirmed by the authority', declaree: 'declared', a_verifier: 'to be verified' }, flux_annoncees: 'announced: {n}', flux_porte: 'at the door: {n}', flux_mediane: 'door: median {n} min over 24 h (measurements: {m})', flux_mediane_aucune: 'door: no measurement over 24 h', ch_porte: 'At the door', ch_route: 'On the way', ch_termines: 'Completed visits', ch_planifies: 'Scheduled transport times', ch_planifies_note: 'Active and recent transports. A dash indicates a missing or inconsistent event.', ch_delais: { reponse: 'Response', mobilisation: 'Mobilization', vers_prise_en_charge: 'To pickup location', attente_prise_en_charge: 'Wait at pickup', trajet_patient: 'Patient travel', attente_remise: 'Handover wait', remise_en_condition: 'Reset time', engagement: 'Time committed' }, ch_aucun: 'No visit.', ch_min: '{n} min at the door', ch_niveaux: { vert: 'Below threshold', orange: 'Monitor', rouge: 'Threshold reached', critique: 'Critical: total target exceeded' }, ch_depart: 'Leaving the hospital',
       ch_H11: 'Arrival', ch_H12: 'Triage start', ch_H13: 'Triage end', ch_H14: 'Stretcher released', ch_H15: 'Departure', ch_corrigee: 'corrected', ch_total: 'total {n} min', ch_inactif: 'No hospital in your area uses Chrono yet.',
-      o_regional: 'Regional view', o_appels: 'Simulated calls', appels_demo_info: 'Fictional calls for the demonstration.', appels_demo_malaise: 'Simulated illness', appels_demo_chute: 'Simulated fall', appels_demo_attente: 'Awaiting assignment', appels_demo_affecter: 'Assign vehicle', appels_demo_aucun: 'No simulated calls.', o_flotte: 'Fleet', o_prealertes: 'Pre-alerts', o_demandes: 'Requests from facilities', o_historique: 'History', o_og: 'OG', o_mission: 'Mission', o_urgences: 'Ranked emergencies', o_transports: 'Transports',
+      o_regional: 'Regional view', o_appels: 'Simulated calls', appels_demo_info: 'Fictional calls for the demonstration.', appels_demo_malaise: 'Simulated illness', appels_demo_chute: 'Simulated fall', appels_demo_attente: 'Awaiting assignment', appels_demo_affecter: 'Assign vehicle', appels_demo_aucun: 'No simulated calls.', o_flotte: 'Fleet', o_prealertes: 'Pre-alerts', o_demandes: 'Requests from facilities', o_historique: 'History', o_og: 'OG', o_mission: 'Mission', o_missions: 'Missions', o_capacites: 'Capacity', flotte_details: 'Ambulance fleet ({n} vehicles)', k_coordonner: 'Missions to coordinate', k_en_cours: 'Missions in progress', k_retards_intervention: 'Delays to handle', barre_bas: 'OG and appearance', autres_missions: 'Other missions of the unit', autres_dest: 'Other hospitals ({n})', gps_actif: 'GPS active: the estimated arrival will be calculated automatically.', gps_indispo: 'GPS unavailable: enter a manual estimate.', estim_manuelle: 'Manual backup estimate (minutes)', estim_manuelle_note: 'Use only if the GPS no longer transmits.', recherche_hist: 'Search a mission or transport number', hist_resultats: '{n} result(s)', hist_derniers: '{n} most recent of {total}; type a number to search', o_urgences: 'Ranked emergencies', o_transports: 'Transports',
       k_affecter: 'Missions to assign', k_attente: 'Waiting interventions', k_pression: 'Facilities under pressure', k_destination: 'Ambulances at destination',
       ma_titre: 'Active mission', ma_aucune: 'No active mission for this vehicle.', ma_suivante: 'Next action', ma_origine: 'Origin', ma_dest: 'Destination', ma_depart: 'Departure', ma_eta: 'Estimated arrival', ma_ecoule: 'Elapsed time', ma_pa: 'Pre-alert', ma_detail: 'Details and other actions', ma_non_envoyee: 'not sent', ma_min: '{n} min',
       ma_a: { accepter: 'Accept the mission', en_route: 'Leave for pick-up', sur_place: 'Confirm arrival on site', pris_en_charge: 'Confirm pick-up', partir_destination: 'Leave for destination', arrivee: 'Report arrival', remis: 'Confirm handover', terminer: 'Close the mission' },
@@ -190,7 +190,7 @@
   const ROLES_AMB = ['paramedic', 'superviseur_secours'];
   const OUVERTES = ['envoyee', 'recue', 'consultee', 'prise_en_compte', 'preparation', 'preparation_terminee', 'arrivee'];
   const ETAPES = ['envoyee', 'recue', 'consultee', 'prise_en_compte', 'preparation', 'preparation_terminee', 'arrivee'];
-  const etat = { token: lire('arrimo-token'), moi: null, unites: [], vehicules: [], prealertes: [], transports: [], destinations: [], formulaire: { priorite: null, categorie: null, destination: null, delai: 10 },
+  const etat = { token: lire('arrimo-token'), moi: null, unites: [], vehicules: [], prealertes: [], transports: [], destinations: [], formulaire: { priorite: null, categorie: null, destination: null, delai: null },
     onglet: lire('arrimo-secours-onglet'), listes: null, demande: null, alternatives: {}, classees: null, depart: lire('arrimo-ccs-depart') || null,
     enLigne: navigator.onLine, message: null, erreur: null, position: null, partage: lire('arrimo-secours-position') === '1', dernierEnvoiPos: 0, choixDest: false, og: null };
   const lireFile = () => { try { return JSON.parse(lire('arrimo-secours-file') || '[]'); } catch { return []; } };
@@ -307,8 +307,12 @@
     return `${heure(p.heure_prevue)} · ${m > 0 ? t('dans', { n: m }) : t('depassee')}`;
   }
 
-  const ONGLETS = { ccs: ['regional', 'appels', 'flotte', 'prealertes', 'demandes', 'chrono', 'historique', 'og'], amb: ['mission', 'urgences', 'transports', 'chrono', 'historique', 'og'] };
-  const ongletCourant = (amb) => { const l = ONGLETS[amb ? 'amb' : 'ccs'].filter((o) => o !== 'appels' || etat.interventionsDemo); return l.includes(etat.onglet) ? etat.onglet : l[0]; };
+  // CCS (directive V4.1, 26 nov. 2026) : quatre espaces — Missions, Capacités, Chrono, Historique — et OG en bas
+  const ONGLETS = { ccs: ['missions', 'capacites', 'chrono', 'historique', 'og'], amb: ['mission', 'chrono', 'historique', 'og'], sup: ['mission', 'transports', 'chrono', 'historique', 'og'] };
+  // Rôle Embarqué (paramédic, directive du 26 nov. 2026) : trois onglets, OG et le mode en bas ; le superviseur (organisation) garde ses transports
+  const EN_BAS = ['og'];
+  const cleOnglets = (amb) => (!amb ? 'ccs' : etat.moi?.utilisateur.role === 'superviseur_secours' ? 'sup' : 'amb');
+  const ongletCourant = (amb) => { const l = ONGLETS[cleOnglets(amb)]; return l.includes(etat.onglet) ? etat.onglet : l[0]; };
   function enTete() {
     const amb = ROLES_AMB.includes(etat.moi.utilisateur.role);
     $('#titre').textContent = 'Arrimo · Liaison Secours';
@@ -318,16 +322,15 @@
     $('#theme').textContent = t('theme_' + (MODES.includes(m) ? m : 'automatique')); $('#theme').title = t('theme_aide');
     const ouv = etat.prealertes.filter((p) => OUVERTES.includes(p.statut)).length;
     const dem = etat.transports.filter((d) => ['demandee', 'acceptee', 'en_route', 'pris_en_charge'].includes(d.statut)).length;
-    const cpt = { prealertes: ouv, demandes: dem, transports: dem };
+    const cpt = { prealertes: ouv, demandes: dem, transports: dem, missions: amb ? 0 : aCoordonner().length };
     const cur = ongletCourant(amb);
-    $('#onglets-s').innerHTML = ONGLETS[amb ? 'amb' : 'ccs'].filter((o) => o !== 'appels' || etat.interventionsDemo).map((o) => `<button type="button" role="tab" data-onglet="${o}" aria-selected="${o === cur}">${t('o_' + o)}${cpt[o] ? `<span class="pastille-n">${cpt[o]}</span>` : ''}</button>`).join('');
+    $('#onglets-s').innerHTML = ONGLETS[cleOnglets(amb)].filter((o) => !EN_BAS.includes(o)).map((o) => `<button type="button" role="tab" data-onglet="${o}" aria-selected="${o === cur}">${t('o_' + o)}${cpt[o] ? `<span class="pastille-n">${cpt[o]}</span>` : ''}</button>`).join('');
     // Planche 2 (proposition visuelle validée) : modules colorés, sous-onglets indentés au filet de couleur ; parité complète avec les onglets du haut
     const EN = L === 'en';
     const GROUPES = amb
-      ? [['accueil', EN ? 'Home' : 'Accueil', ['mission']], ['urgences', EN ? 'Emergency' : 'Urgences', ['urgences', 'chrono']], ['transferts', EN ? 'Transports' : 'Transports', ['transports']], ['pilotage', EN ? 'Steering' : 'Pilotage', ['historique', 'og']]]
-      : [['accueil', EN ? 'Command centre' : 'Centre de commandement', ['regional', 'appels']], ['transferts', EN ? 'Ambulance fleet' : 'Flotte ambulancière', ['flotte']], ['urgences', EN ? 'Emergency' : 'Urgences', ['prealertes', 'chrono']],
-        ['reseau', EN ? 'Coordination' : 'Coordination', ['demandes']], ['pilotage', EN ? 'Steering' : 'Pilotage', ['historique', 'og']]];
-    const permis = ONGLETS[amb ? 'amb' : 'ccs'].filter((o) => o !== 'appels' || etat.interventionsDemo);
+      ? [['accueil', t('o_mission'), ['mission', 'transports']], ['urgences', t('o_chrono'), ['chrono']], ['pilotage', t('o_historique'), ['historique']]]
+      : [['accueil', t('o_missions'), ['missions']], ['reseau', t('o_capacites'), ['capacites']], ['urgences', t('o_chrono'), ['chrono']], ['pilotage', t('o_historique'), ['historique']]];
+    const permis = ONGLETS[cleOnglets(amb)];
     let nav = document.getElementById('sec-nav');
     if (!nav) { nav = document.createElement('nav'); nav.id = 'sec-nav'; nav.className = 'sec-nav'; document.body.prepend(nav); }
     nav.setAttribute('aria-label', EN ? 'Main navigation' : 'Navigation principale');
@@ -335,10 +338,17 @@
     nav.innerHTML = `<div class="nav-marque"><img src="logo.svg" alt="" width="30" height="30"><div><strong>Arrimo</strong><small>${esc(amb ? t('profil_amb') : t('profil_ccs'))}</small></div></div>${GROUPES.map(([mod, nom, sous]) => {
       const vis = sous.filter((o) => permis.includes(o)); if (!vis.length) return '';
       const n = vis.reduce((x, o) => x + (cpt[o] || 0), 0); const ouvert = vis.includes(cur) || true;
+      if (vis.length === 1) return `<button type="button" class="esp ${vis.includes(cur) ? 'ouvert' : ''}" data-onglet="${vis[0]}" aria-current="${vis[0] === cur}" style="--m-sec:var(--m-${mod})"><i aria-hidden="true"></i><span>${esc(nom)}</span><b>${n || ''}</b></button>`;
       return `<div class="esp ${vis.includes(cur) ? 'ouvert' : ''}" style="--m-sec:var(--m-${mod})"><i aria-hidden="true"></i><span>${esc(nom)}</span><b>${n || ''}</b></div>
         ${ouvert ? `<div class="sous" style="--m-sec:var(--m-${mod})">${vis.map((o) => `<button type="button" data-onglet="${o}" aria-current="${o === cur}">${t('o_' + o)}${cpt[o] ? ` · ${cpt[o]}` : ''}</button>`).join('')}</div>` : ''}`; }).join('')}
       ${org ? `<p class="note" style="margin:auto 10px 0;font-size:12px">${esc(org)}</p>` : ''}`;
     document.body.classList.toggle('sec-lateral', document.documentElement.dataset.design === 'v2' && window.matchMedia('(min-width: 1100px)').matches);
+    let bas = document.getElementById('barre-bas-amb');
+    if (!bas) { bas = document.createElement('nav'); bas.id = 'barre-bas-amb'; bas.className = 'barre-bas-amb'; document.body.append(bas); }
+    if (bas) { bas.hidden = false; document.body.classList.toggle('avec-barre-bas', true);
+      bas.setAttribute('aria-label', t('barre_bas'));
+      bas.innerHTML = `<button type="button" data-onglet="og" aria-current="${cur === 'og'}"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-message-square"/></svg><span>OG</span></button>`
+        + `<button type="button" data-mode-bas><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-sun-moon"/></svg><span>${esc($('#theme').textContent)}</span></button>`; }
     document.title = `Arrimo · ${amb ? t('titre_amb') : t('titre_ccs')}`;
     const n = lireFile().length; const r = $('#reseau');
     r.className = `reseau-s ${n ? 'attente' : etat.enLigne ? 'en-ligne' : 'hors-ligne'}`;
@@ -422,14 +432,50 @@
       ${a.includes('annuler') ? `<p><button class="btn discret" data-act="annuler">${t('annuler')}</button></p>` : ''}
     </section>`;
   }
+  /** Destinations : les 4 plus proches d'abord (proximité d'abord), les autres repliées ; la décision reste à l'équipage. */
+  function choixDestinations(f) {
+    const ids = etat.destinations.map((d) => String(d.id));
+    const lib = (v) => { const d = etat.destinations.find((x) => String(x.id) === v); return `${d.nom}${d.distance_km != null ? ` (${d.distance_km} km)` : ''}`; };
+    const premiers = ids.slice(0, 4); const autres = ids.slice(4);
+    const choisiAutre = autres.includes(String(f.destination));
+    return `${choix('destination', premiers, lib, f.destination)}${autres.length ? `<details${choisiAutre ? ' open' : ''}><summary class="btn discret">${esc(t('autres_dest', { n: autres.length }))}</summary>${choix('destination', autres, lib, f.destination)}</details>` : ''}`;
+  }
+  /** Position GPS récente de l'unité (moins de 2 min) : l'arrivée est calculée par le serveur ; sinon estimation manuelle de secours. */
+  function gpsRecent(u) {
+    const v = etat.vehicules.find((x) => x.id === u.id); const le = v?.position?.le || v?.position?.enregistree_le;
+    return le && Date.now() - new Date(le).getTime() < 120000;
+  }
+  function estimationSecours(u, f) {
+    const grille = `<div class="grille choix" data-choix="delai">${[5, 10, 15, 20, 30].map((n) => `<button type="button" data-v="${n}" aria-pressed="${f.delai === n}">${n}</button>`).join('')}</div>`;
+    if (gpsRecent(u)) return `<p class="note gps-etat ok">${esc(t('gps_actif'))}</p><details${f.delai ? ' open' : ''}><summary class="btn discret">${esc(t('estim_manuelle'))}</summary><p class="note">${esc(t('estim_manuelle_note'))}</p>${grille}</details>`;
+    return `<p class="note gps-etat ko" role="status">${esc(t('gps_indispo'))}</p><label>${esc(t('estim_manuelle'))}</label>${grille}`;
+  }
+  /** Historique de l'équipage : recherche par numéro (préalerte, transport) ; rien n'est affiché en long sans recherche. */
+  function historiqueAmb(u, recentes) {
+    return historiqueRecherche(recentes, etat.transports.filter((d) => d.unite_id === u.id));
+  }
+  /** Historique commun (équipage et CCS) : préalertes closes et transports clos, recherche par numéro, 5 plus récents sans recherche. */
+  function historiqueRecherche(recentes, transports) {
+    const q = String(etat.rechercheHist || '').trim().toLocaleLowerCase();
+    const clos = transports.filter((d) => d.terminee_le || ['refusee', 'annulee'].includes(d.statut));
+    const tout = [...recentes.map((p) => ({ cle: p.numero, html: ligneListe(p), le: p.modifie_le || p.cree_le })),
+      ...clos.map((d) => ({ cle: `${d.numero} ${d.resident_ref || ''}`, html: `<div class="ligne-s"><div><strong>${esc(d.numero)}</strong> <span class="note">${esc(d.origine || '')} → ${esc(d.destination || '')}</span></div><div>${window.ArrimoSillage?.bouton('demande_transport', d.id) || ''}</div></div>`, le: d.terminee_le || d.modifie_le }))]
+      .sort((a, b) => new Date(b.le || 0) - new Date(a.le || 0));
+    const vus = q ? tout.filter((x) => x.cle.toLocaleLowerCase().includes(q)) : tout.slice(0, 5);
+    return `<section class="carte-s"><h2>${t('historique')}</h2>
+      <label for="recherche-hist" class="visuellement-cache">${esc(t('recherche_hist'))}</label>
+      <input id="recherche-hist" type="search" inputmode="search" autocomplete="off" placeholder="${esc(t('recherche_hist'))}" value="${esc(etat.rechercheHist || '')}" style="width:100%;min-height:48px;font-size:17px">
+      ${tout.length ? `<p class="note">${esc(q ? t('hist_resultats', { n: vus.length }) : t('hist_derniers', { n: vus.length, total: tout.length }))}</p>` : ''}
+      ${vus.map((x) => x.html).join('') || `<p class="note">${t('aucune')}</p>`}</section>`;
+  }
   function formulaire(u) {
     const f = etat.formulaire;
     const tr = f.transport ? etat.transports.find((x) => x.id === f.transport) : null;
     return `<section class="carte-s"><h2>${t('nouvelle')} · ${esc(u.numero)}</h2>${tr ? `<p class="bandeau">${esc(t('depuis_transport', { numero: tr.numero, ref: tr.resident_ref }))}</p>` : ''}
-      <label>${t('destination')}</label>${choix('destination', etat.destinations.map((d) => String(d.id)), (v) => { const d = etat.destinations.find((x) => String(x.id) === v); return `${d.nom}${d.distance_km != null ? ` (${d.distance_km} km)` : ''}`; }, f.destination)}
+      <label>${t('destination')}</label>${choixDestinations(f)}
       <label>${t('priorite')}</label>${choix('priorite', ['immediate', 'urgente', 'non_urgente'], (v) => t('prio.' + v), f.priorite)}
       <label>${t('categorie')}</label>${choix('categorie', Object.keys(TXT.fr.cat), (v) => t('cat.' + v), f.categorie)}
-      <label for="delai">${t('delai')}</label><div class="grille choix" data-choix="delai">${[5, 10, 15, 20, 30].map((n) => `<button type="button" data-v="${n}" aria-pressed="${f.delai === n}">${n}</button>`).join('')}</div>
+      ${estimationSecours(u, f)}
       <p><button class="btn pri" data-act="envoyer" style="width:100%">${t('envoyer')}</button></p>
     </section>`;
   }
@@ -506,32 +552,29 @@
     return `${pres ? t('pres_de', { lieu: ArrimoCarte.court(pres.nom) }) : ''} · ${t('il_y_a', { n: minAgo(v.position.le) })}`;
   }
   /* CCS (maquette du 13 nov. 2026) : chiffres clés et résumé de la région par OG, d'après les données affichées */
-  function chiffresCcs() {
-    const d = etat.destinations;
-    const sat = d.filter((h) => h.urgence?.niveau === 'rouge' || (h.statut_declare && !h.statut_declare.perime && ['saturation', 'delestage'].includes(h.statut_declare.statut)));
-    const civ = d.reduce((n, h) => n + (h.urgence?.civieres_libres || 0), 0);
-    const mission = etat.vehicules.filter((v) => ['en_route', 'sur_place', 'transport_hopital'].includes(v.etat)).length;
-    const pa = etat.prealertes.filter((p) => OUVERTES.includes(p.statut)).length;
-    // Retards de prise en charge (créneau dépassé de 15 min sans départ) et incidents signalés : à surveiller par le coordonnateur
+  /** Demandes à coordonner : missions proposées, appels simulés à affecter (démo), demandes des établissements sans réponse. */
+  function aCoordonner() {
+    return [...(etat.missions || []).filter((m) => m.statut === 'proposee'),
+      ...(etat.interventionsDemo || []).filter((x) => !x.mission || ['refusee', 'annulee'].includes(x.statut)),
+      ...(etat.transports || []).filter((x) => x.statut === 'demandee')];
+  }
+  /** Retards nécessitant une intervention : créneau dépassé de 15 min sans départ, incident ouvert, seuil Chrono atteint. */
+  function retardsCcs() {
     const now = Date.now(); const tr = etat.transports || [];
-    const retardsTr = tr.filter((x) => ['demandee', 'acceptee'].includes(x.statut) && (x.plage_confirmee_debut || x.plage_debut) && new Date(x.plage_confirmee_debut || x.plage_debut).getTime() < now - 15 * 60000).length;
+    const retards = tr.filter((x) => ['demandee', 'acceptee'].includes(x.statut) && (x.plage_confirmee_debut || x.plage_debut) && new Date(x.plage_confirmee_debut || x.plage_debut).getTime() < now - 15 * 60000).length;
     const incidents = tr.filter((x) => x.incident_le && !x.terminee_le).length;
-    // Planche 2 : chaque indicateur porte la couleur et le nom de son module ; valeur en 30 px ; le clic ouvre l'onglet
-    const MODS = { appels: ['accueil', L === 'en' ? 'Command' : 'Commandement'], regional: ['urgences', L === 'en' ? 'Emergency' : 'Urgences'], flotte: ['transferts', L === 'en' ? 'Fleet' : 'Flotte'],
-      prealertes: ['urgences', L === 'en' ? 'Pre-alerts' : 'Préalertes'], demandes: ['reseau', L === 'en' ? 'Coordination' : 'Coordination'], chrono: ['urgences', 'Chrono'] };
-    const tuile = (n, l, onglet, rouge = false) => { const [mod, nomMod] = MODS[onglet] || ['accueil', '']; return `<button type="button" class="tuile-c ds-kpi${rouge ? ' alerte' : ''}" style="--k-couleur:var(--m-${mod})" data-onglet="${onglet}"${onglet === 'regional' ? ' data-ancre="ccs-capacites"' : ''}>
-      <span class="ds-kpi-mod">${esc(nomMod)}</span><span class="gros ds-kpi-val num">${esc(n)}</span><span class="note ds-kpi-lib">${esc(l)}</span></button>`; };
-    const chrono = etat.chrono?.attente;
-    const aAffecter = (etat.interventionsDemo || []).filter((x) => !x.mission || ['refusee', 'annulee'].includes(x.statut)).length;
-    const missionsAttente = (etat.missions || []).filter((m) => m.statut === 'proposee').length;
-    const aDestination = etat.vehicules.filter((v) => v.etat === 'a_l_hopital').length;
-    const pression = d.filter((h) => ['orange', 'rouge'].includes(h.urgence?.niveau)).length;
-    return `<div class="tuiles-c">${etat.interventionsDemo ? tuile(aAffecter, t('k_affecter'), 'appels', aAffecter > 0) : ''}${tuile(missionsAttente, t('k_attente'), 'flotte', missionsAttente > 0)}${tuile(pression, t('k_pression'), 'regional', pression > 0)}${tuile(aDestination, t('k_destination'), 'flotte')}
-      ${tuile(d.length, t('k_urgences'), 'regional')}${tuile(sat.length, t('k_sat'), 'regional', sat.length > 0)}
-      ${tuile(civ, t('k_civ'), 'regional')}${tuile(`${mission} / ${etat.vehicules.length}`, t('k_mission'), 'flotte')}
-      ${tuile(etat.vehicules.filter((v) => v.etat === 'disponible' && !v.mission).length, t('k_dispo'), 'flotte')}${tuile(pa, t('k_pa'), 'prealertes')}
-      ${tuile(retardsTr, t('k_retards'), 'demandes', retardsTr > 0)}${tuile(incidents, t('k_incidents'), 'demandes', incidents > 0)}
-      ${chrono ? tuile(chrono.seuil_atteint, t('ch_seuil_actif'), 'chrono', chrono.seuil_atteint > 0) : ''}</div>
+    return retards + incidents + (etat.chrono?.attente?.seuil_atteint || 0);
+  }
+  /** Quatre indicateurs essentiels (cahier V5, 5.5) ; chacun ouvre l'espace concerné. Les détails restent dans Performance. */
+  function chiffresCcs() {
+    const tuile = (n, l, onglet, mod, alerte = false) => `<button type="button" class="tuile-c ds-kpi${alerte ? ' alerte' : ''}" style="--k-couleur:var(--m-${mod})" data-onglet="${onglet}">
+      <span class="gros ds-kpi-val num">${esc(n)}</span><span class="note ds-kpi-lib">${esc(l)}</span></button>`;
+    const a = aCoordonner().length;
+    const enCours = etat.vehicules.filter((v) => ['en_route', 'sur_place', 'transport_hopital', 'a_l_hopital'].includes(v.etat)).length;
+    const dispo = etat.vehicules.filter((v) => v.etat === 'disponible' && !v.mission).length;
+    const r = retardsCcs();
+    return `<div class="tuiles-c tuiles-4">${tuile(a, t('k_coordonner'), 'missions', 'accueil', a > 0)}${tuile(enCours, t('k_en_cours'), 'missions', 'transferts')}
+      ${tuile(etat.vehicules.length ? `${dispo} / ${etat.vehicules.length}` : '—', t('k_dispo'), 'missions', 'transferts')}${tuile(r, t('k_retards_intervention'), 'chrono', 'urgences', r > 0)}</div>
       <p class="note">${etat.actualiseLe ? esc(t('k_frais', { h: heure(etat.actualiseLe) })) : ''}</p>`;
   }
   /** Couverture de la région (lot 6, scénario E) : unités par état ; rupture seulement selon un seuil de simulation ; décision tracée. */
@@ -571,7 +614,7 @@
   function demandesEtablissements() {
     const vue = window.ArrimoVueTransferts;
     return `<section class="carte-s"><h2>${t('demandes_etab')}</h2>${vue.rendre(etat.transports.map(vue.depuisTransport), {
-      sections: true, heure, actions: (l) => window.ArrimoSillage?.bouton('demande_transport', l.id) || '',
+      seulement: 'actifs', heure, actions: (l) => window.ArrimoSillage?.bouton('demande_transport', l.id) || '',
     })}</section>`;
   }
   function bipMission() {
@@ -788,6 +831,9 @@
     const champ = document.getElementById('og-q');
     if (champ && saisie) champ.value = saisie;
     if (champ && actif === 'og-q') champ.focus();
+    // Recherche de l'historique : la saisie et le curseur restent en place malgré les mises à jour en direct
+    const rh = document.getElementById('recherche-hist');
+    if (rh && actif === 'recherche-hist') { rh.focus(); const n = rh.value.length; rh.setSelectionRange(n, n); }
   }
   /** Tableau de bord de l'équipage (cahier ultime, 4.4) : missions à accepter, acceptées, en cours, terminées aujourd'hui, retards, incidents. */
   function resumeMissions() {
@@ -822,18 +868,17 @@
       const r = etat.classees; const o = ongletCourant(false);
       const fermees = etat.prealertes.filter((p) => !OUVERTES.includes(p.statut));
       const bandeau = `<p class="bandeau" style="border-color:#F59E0B"><strong>${t('ccs_consult')}</strong> ${t('ccs_consult_suite')}</p>`;
+      const flotte = `<details class="carte-s flotte-ccs"${etat.flotteOuverte ? ' open' : ''}><summary>${esc(t('flotte_details', { n: etat.vehicules.length }))}</summary>${tableauFlotte()}</details>`;
+      const enCoursPa = `<section class="carte-s"><h2>${t('ccs_en_cours')}</h2>${ouvertes.map(ligneListe).join('') || `<p class="note">${t('aucune')}</p>`}</section>`;
       const sections = {
-        regional: `${bandeau}${chiffresCcs()}${couvertureCcs()}${resumeOg()}
+        missions: `${chiffresCcs()}${etat.interventionsDemo ? appelsDemo() : ''}${demandesEtablissements()}${missionsCcs()}${enCoursPa}${flotte}`,
+        capacites: `${bandeau}${couvertureCcs()}${resumeOg()}
           <section class="carte-s" id="ccs-capacites"><h2>${t('classees')}</h2><label for="depart">${t('depuis')}</label><select id="depart" style="min-height:48px;font-size:17px;max-width:100%">${opts.map(([v, l]) => `<option value="${v}"${v === etat.depart ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>
             ${r?.depart ? `<p class="note">${esc(r.depart.le ? t('classees_aide', { depart: r.depart.nom || '', heure: heure(r.depart.le) }) : t('classees_aide_lieu', { depart: ArrimoCarte.court(r.depart.nom || '') }))}</p>` : ''}${tableauClasse(r, { demander: true })}
             <details class="voir-carte"><summary class="btn">${t('voir_carte')}</summary><div id="carte-region" style="height:min(60vh,440px);margin-top:10px"></div></details></section>
           ${formulaireDemande()}`,
-        appels: appelsDemo(),
-        flotte: `${missionsCcs()}${tableauFlotte()}`,
-        prealertes: `<section class="carte-s"><h2>${t('ccs_en_cours')}</h2>${etat.prealertes.filter((p) => OUVERTES.includes(p.statut)).map(ligneListe).join('') || `<p class="note">${t('aucune')}</p>`}</section>`,
-        demandes: demandesEtablissements(),
         chrono: carteChrono(false),
-        historique: `<section class="carte-s"><h2>${t('historique')}</h2>${fermees.map(ligneListe).join('') || `<p class="note">${t('aucune')}</p>`}</section>`,
+        historique: historiqueRecherche(fermees, etat.transports),
         og: carteOg(false),
       };
       m.innerHTML = `${msg}${sections[o]}`;
@@ -848,7 +893,8 @@
     const superviseur = etat.moi.utilisateur.role === 'superviseur_secours';
     const r = etat.classees; const o = ongletCourant(true);
     const sections = {
-      mission: `${carteMissionAmb(u)}${carteMissionActive(u)}${resumeMissions()}${carteVehicule(u)}${enCours ? carteEnCours(enCours) : enAttente ? '' : formulaire(u)}`,
+      // Mission en cours d'abord (préalerte 911 ou transport) ; « aucune mission active » n'est jamais affiché pendant une préalerte
+      mission: `${enCours ? carteEnCours(enCours) : ''}${carteMissionAmb(u)}${enCours && !missionActive(u) ? '' : carteMissionActive(u)}${superviseur ? resumeMissions() : `<details class="carte-s autres-missions"${etat.autresOuvertes ? ' open' : ''}><summary>${esc(t('autres_missions'))}</summary>${carteTransports(true)}</details>`}${carteVehicule(u)}${enCours || enAttente ? '' : formulaire(u)}`,
       urgences: `<section class="carte-s"><h2>${t('classees')}</h2>${positionCarte(u)}
         ${r?.depuis_etab ? `<label for="depart-amb">${t('depuis_attente')}</label><select id="depart-amb" style="min-height:48px;font-size:17px;max-width:100%">${(etat.hebergements || []).map((e) => `<option value="e:${e.id}"${`e:${e.id}` === etat.departAmb ? ' selected' : ''}>${esc(ArrimoCarte.court(e.nom))}</option>`).join('')}</select>` : ''}
         ${r?.depart ? `<p class="note">${esc(r.depart.le ? t('classees_aide', { depart: u.numero, heure: heure(r.depart.le) }) : t('classees_aide_lieu', { depart: ArrimoCarte.court(r.depart.nom || '') }))}</p>` : ''}${tableauClasse(r, { choisir: !enCours })}
@@ -856,7 +902,7 @@
       transports: carteTransports(true),
       chrono: carteChrono(true),
       historique: `${superviseur ? `<section class="carte-s"><h2>${t('organisation')}</h2>${etat.prealertes.filter((p) => OUVERTES.includes(p.statut)).map(ligneListe).join('') || `<p class="note">${t('aucune')}</p>`}</section>` : ''}
-        <section class="carte-s"><h2>${t('historique')}</h2>${recentes.length ? recentes.map(ligneListe).join('') : `<p class="note">${t('aucune')}</p>`}</section>`,
+        ${historiqueAmb(u, recentes)}`,
       og: carteOg(true),
     };
     m.innerHTML = `${msg}${sections[o]}`;
@@ -908,10 +954,13 @@
     catch (e) { etat.erreur = e.message; }
     await charger();
   }
+  // Historique de l'équipage : filtre immédiat par numéro, sans appel au serveur
+  document.addEventListener('input', (ev) => { if (ev.target.id === 'recherche-hist') { etat.rechercheHist = ev.target.value; rendre(); } });
   document.addEventListener('click', async (ev) => {
     const b = ev.target.closest('button'); if (!b) return;
     if (b.dataset.langue) { L = b.dataset.langue; ecrire('arrimo-langue', L); document.documentElement.lang = L === 'en' ? 'en-CA' : 'fr-CA'; rendre(); return; }
     if (b.dataset.og) return demanderOg(t(b.dataset.og));
+    if (b.matches('[data-mode-bas]')) { $('#theme').click(); setTimeout(() => enTete(), 0); return; }
     if (b.dataset.appelDemo || b.dataset.affecterAppel) {
       const id = b.dataset.affecterAppel;
       b.disabled = true;
@@ -934,7 +983,8 @@
     }
     if (b.dataset.filtreMissions) {
       etat.filtreMissions = b.dataset.filtreMissions;
-      etat.onglet = 'transports';
+      // Embarqué : les autres missions sont dans l'onglet Mission (section dépliée) ; le superviseur a son onglet Transports
+      if (cleOnglets(true) === 'sup') etat.onglet = 'transports'; else { etat.onglet = 'mission'; etat.autresOuvertes = true; }
       rendre();
       document.querySelector(`[data-filtre-missions="${etat.filtreMissions}"]`)?.focus();
       return;
@@ -1013,7 +1063,7 @@
       const h = etat.classees?.urgences?.find((x) => String(x.id) === b.dataset.demander);
       const v0 = etat.depart?.startsWith('u:') ? etat.depart.slice(2) : null;
       const v = v0 && !etat.prealertes.some((p) => String(p.unite_id) === v0 && OUVERTES.includes(p.statut)) ? v0 : null;
-      etat.onglet = 'regional'; etat.demande = { destination: Number(b.dataset.demander), unite: v, priorite: null, categorie: null, delai: Math.min(30, Math.max(5, Math.round((h?.temps_min || 10) / 5) * 5)), signes: [] };
+      etat.onglet = 'capacites'; etat.demande = { destination: Number(b.dataset.demander), unite: v, priorite: null, categorie: null, delai: Math.min(30, Math.max(5, Math.round((h?.temps_min || 10) / 5) * 5)), signes: [] };
       rendre(); document.getElementById('demande-ccs')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return;
     }
     if (b.dataset.act === 'fermer-demande') { etat.demande = null; rendre(); return; }
@@ -1070,7 +1120,7 @@
       await prendrePosition();
       try {
         const r = await envoyer('/secours/prealertes', { unite_id: u.id, destination_id: Number(f.destination), priorite: f.priorite, categorie: f.categorie, delai_min: f.delai, cle: cle(), ...(f.transport ? { demande_transport_id: f.transport } : {}) }, { garder: true });
-        if (r) { etat.message = t('transmise'); etat.formulaire = { priorite: null, categorie: null, destination: null, delai: 10 }; }
+        if (r) { etat.message = t('transmise'); etat.formulaire = { priorite: null, categorie: null, destination: null, delai: null }; }
       } catch (e) { etat.erreur = e.message; }
       await charger();
     }

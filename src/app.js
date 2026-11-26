@@ -705,6 +705,8 @@ function creerApp(pool, options = {}) {
     // Heure d'arrivée calculée depuis la dernière position de l'unité (prise par le téléphone juste avant l'envoi)
     const pos = (await pool.query("SELECT latitude, longitude FROM positions_unites WHERE unite_id = $1 AND enregistree_le > now() - interval '10 minutes' ORDER BY enregistree_le DESC LIMIT 1", [r.unite_id])).rows[0];
     if (pos && !r.rejoue) r.eta = await pa.recalculerEta(pool, r.unite_id, pos).catch(() => null);
+    // Écrans de l'hôpital et du CCS : nouvelle préalerte et son arrivée estimée, en direct (26 nov. 2026)
+    require('./flux').signaler();
     return r;
   }));
   api.get('/secours/prealertes/:id', route((req) => pa.fiche(pool, req.utilisateur, entier(req.params.id, 'id'), req.query)));

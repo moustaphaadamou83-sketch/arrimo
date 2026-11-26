@@ -72,10 +72,14 @@ function lireHeure(b) {
   if (b.heure_prevue) { const d = new Date(b.heure_prevue); if (Number.isNaN(d.getTime())) throw new ErreurHttp(400, 'prealerte_invalide'); return d; }
   return null;
 }
-async function exigerDestination(c, id) {
+/**
+ * Destination d'une préalerte. Liaison Secours active : tous les envois. Chrono seul (architecture modulaire, 26 nov. 2026) :
+ * seuls les logiciels externes autorisés (connecteur) alimentent Chrono ; aucune saisie dans Arrimo n'est exigée de l'équipage.
+ */
+async function exigerDestination(c, id, u = {}) {
   const e = (await c.query(`SELECT id, nom, type_etablissement, modules, actif FROM etablissements WHERE id = $1`, [entier(id)])).rows[0];
   if (!e || !e.actif || (e.type_etablissement || 'hopital') !== 'hopital') throw new ErreurHttp(404, 'hopital_introuvable');
-  if (!TE.moduleActif(e, 'liaison_secours')) throw new ErreurHttp(409, 'liaison_secours_inactive');
+  if (!TE.moduleActif(e, 'liaison_secours') && !(u.connecteur && TE.moduleActif(e, 'chrono'))) throw new ErreurHttp(409, 'liaison_secours_inactive');
   return e;
 }
 /**
@@ -118,7 +122,7 @@ async function creer(pool, u, b) {
       const deja = (await c.query('SELECT * FROM prealertes WHERE organisation_id = $1 AND cle_idempotence = $2', [unite.organisation_id, cle])).rows[0];
       if (deja) return { ...deja, rejoue: true };
     }
-    const dest = await exigerDestination(c, b.destination_id);
+    const dest = await exigerDestination(c, b.destination_id, u);
     // Prolongement d'une demande de transport : même entreprise, résident pris en charge, même hôpital de destination
     let transport = null;
     if (b.demande_transport_id != null) {
@@ -418,7 +422,7 @@ async function agir(pool, u, id, b) {
 }
 /** Changement de destination décidé par les professionnels : l'ancienne est conservée (remplacée), la nouvelle est transmise. */
 async function changerDestination(c, u, pa, b) {
-  const dest = await exigerDestination(c, b.destination_id);
+  const dest = await exigerDestination(c, b.destination_id, u);
   if (dest.id === pa.destination_id) throw new ErreurHttp(409, 'prealerte_statut_incompatible');
   const ancienne = (await c.query(`UPDATE prealertes SET statut = 'remplacee', version = version + 1, modifie_le = now() WHERE id = $1 RETURNING *`, [pa.id])).rows[0];
   const heure = lireHeure(b) || pa.heure_prevue;

@@ -467,6 +467,10 @@ async function agir(pool, u, id, b) {
       }
       await evenement(c, n, a, u, a === 'incident' ? { motif: n.incident_motif } : {});
       await emettre(c, n, `transport.${a}`);
+      // Synchronisation (26 nov. 2026) : l'arrivée au point de départ, la remise et la libération sont annoncées aux établissements concernés
+      const varsEtape = { numero: n.numero, ref: n.resident_ref };
+      if (a === 'sur_place') await require('./services').notifier(c, n.origine_id, null, 'transport_sur_place', varsEtape);
+      if (a === 'remis' || a === 'terminer') await require('./services').notifier(c, n.origine_id, null, `transport_${a}`, varsEtape);
       return n;
     }
     if (cote === 'ambulance') {
@@ -561,7 +565,9 @@ async function agir(pool, u, id, b) {
     if (cote === 'ambulance') await require('./services').notifier(c, n.origine_id, null, `transport_${a}`, vars);
     if (n.destination_id && ['pris_en_charge', 'annuler'].includes(a)) await require('./services').notifier(c, n.destination_id, null, `transport_${a}`, vars);
     return n;
-  });
+  // Signal en direct APRÈS la validation de la transaction, pour toutes les actions (y compris sur place, remise, libération,
+  // préalerte et accusé de réception, qui n'en envoyaient pas) : les écrans relisent un état déjà enregistré.
+  }).finally(() => require('./flux').signaler());
 }
 /** Historique d'une demande autorisée, y compris après archivage. */
 async function fiche(pool, u, id, q = {}) {

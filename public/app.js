@@ -721,13 +721,16 @@ setInterval(() => {
 setInterval(() => { if (etat.token && etat.moi) window.ArrimoSecours?.veille?.(); }, 30000);
 // Mise à jour en direct (SSE) des écrans du préhospitalier : Liaison Secours, urgences proches et suivi des transports, urgence
 let fluxApp = null;
+// Écrans relus à chaque signal (26 nov. 2026) : ajout des transferts, du NSA, des admissions, de la Bourse et de l'accueil CHSLD, qui
+// attendaient jusqu'à 30 s le statut confirmé par l'ambulance. Les formulaires (VUES_FORMULAIRES) restent exclus.
+const VUES_DIRECT = ['secours', 'chrono', 'transports-planifies', 'c-urgences', 'c-mouvements', 'c-accueil', 'c-admissions', 'liaison', 'urgence', 'flux', 'mes-taches', 'transferts', 'nsa', 'admissions', 'bourse'];
 setInterval(() => {
   // Nouvelle session (reconnexion, autre compte) : un nouveau flux ; l'ancien s'arrête
   if (fluxApp && (fluxApp.fini || fluxApp.jeton !== etat.token)) { fluxApp.arreter(); fluxApp = null; }
   if (etat.token && etat.moi && !fluxApp && window.ArrimoFlux) {
     fluxApp = window.ArrimoFlux.ecouter(() => etat.token, () => {
       window.ArrimoSecours?.veille?.();
-      if ($('#modale').hidden && document.visibilityState === 'visible' && !document.activeElement?.closest('#ch-filtres, [data-chrono-retard]') && ['secours', 'chrono', 'transports-planifies', 'c-urgences', 'c-mouvements', 'liaison', 'urgence', 'flux', 'mes-taches'].includes(etat.vue)) rafraichir();
+      if ($('#modale').hidden && document.visibilityState === 'visible' && !document.activeElement?.closest('#ch-filtres, [data-chrono-retard]') && VUES_DIRECT.includes(etat.vue)) rafraichir();
     });
     fluxApp.jeton = etat.token;
   }
