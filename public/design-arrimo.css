@@ -128,8 +128,8 @@
   :root[data-design="v2"] body.nav-verticale .onglets .espace-params .ic { width: 14px; height: 14px; }
   :root[data-design="v2"] body.nav-verticale .onglets-groupe { display: none; }
   /* Sous-onglets d'un module replié : masqués (le module actif reste ouvert) */
-  :root[data-design="v2"] body.nav-verticale #onglets.avec-espaces .ferme-lateral, :root[data-design="v2"] body.nav-verticale #onglets .seul-du-module { display: none !important; }
-  :root[data-design="v2"] body.nav-verticale #onglets.avec-espaces .hors-espace:not(.ferme-lateral):not(.seul-du-module):not([hidden]):not([style*="display: none"]) { display: flex !important; }
+  :root[data-design="v2"] body.nav-verticale #onglets.avec-espaces .ferme-lateral:not([aria-selected="true"]) { display: none !important; }
+  :root[data-design="v2"] body.nav-verticale #onglets.avec-espaces .hors-espace:not(.ferme-lateral):not([hidden]):not([style*="display: none"]) { display: flex !important; }
   /* Repliée : icônes des modules seulement (libellés lus et en infobulle) */
   :root[data-design="v2"] body.nav-verticale.nav-repliee { --largeur-nav: 72px; }
   :root[data-design="v2"] body.nav-verticale.nav-repliee .espace-btn { justify-content: center; padding: 10px 0; }
@@ -438,4 +438,27 @@ div.ds-kpi { cursor: default; }
 .acc-priorites .acc-pa h3 { font-size: 13px; margin: 0; color: var(--texte-2); }
 .acc-priorites .acc-pa ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .acc-priorites .acc-pa li { background: var(--surface-2); border-radius: 10px; padding: 8px 10px; }
-.ds-h li span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ds-h li span { white-space: nowrap; }
+.ds-h li strong { display: block; }
+/* Chevron : cible de repli assez grande */
+:root[data-design="v2"] body.nav-verticale .espace-btn .esp-chevron { padding: 4px 2px; margin: -4px -2px; }
+/* Accessibilité (WCAG AA, 4,5:1) : petits textes à la couleur du module, légèrement assombris en ambiance claire.
+   Écart assumé avec la planche 2, dont le surtitre #0E7C86 sur #EDF4FA n'atteint que 4,46:1. Même teinte, même sens. */
+:root[data-design="v2"]:not([data-theme="sombre"]) .ds-surtitre, :root[data-design="v2"]:not([data-theme="sombre"]) .surtitre-module { color: color-mix(in srgb, var(--m-courant) 80%, #000); }
+:root[data-design="v2"]:not([data-theme="sombre"]) body.nav-verticale .espace-btn.ouvert, :root[data-design="v2"]:not([data-theme="sombre"]) body.nav-verticale .espace-btn.unique.actif { color: color-mix(in srgb, var(--m-espace) 82%, #000); }
+:root[data-design="v2"]:not([data-theme="sombre"]) body.nav-verticale .onglets button[role="tab"][aria-selected="true"] { color: color-mix(in srgb, var(--m-sous, var(--texte)) 82%, #000); }
+:root[data-design="v2"]:not([data-theme="sombre"]) .onglets button[aria-selected="true"] { color: color-mix(in srgb, var(--m-courant) 82%, #000); }
+:root[data-design="v2"]:not([data-theme="sombre"]) .sec-nav .esp.ouvert, :root[data-design="v2"]:not([data-theme="sombre"]) .sec-nav .sous button[aria-current="true"] { color: color-mix(in srgb, var(--m-sec, var(--m-urgences)) 82%, #000); }
+:root[data-design="v2"]:not([data-theme="sombre"]) .ds-prio .niv, :root[data-design="v2"]:not([data-theme="sombre"]) .ds-arrivee .reste { filter: brightness(0.92); }
+/* Cible tactile d'au moins 40 px (recette d'accessibilité) pour le « i » des indicateurs */
+.ds-kpi-info { top: 2px; right: 2px; width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+/* Téléphone : toute cible tactile des composants du design system fait au moins 40 px */
+@media (max-width: 600px) {
+  .ds-legende > button, .ds-cat, .ds-seg button, .ds-son, .ds-mvt-main .flux-groupes .acc-mini-k, .ds-prio, .ds-arrivee, .ds-kpi, .ds-porte-actions .btn, .ds-aside-actions .btn,
+  .sec-nav .sous button, .module-sous-onglets button, .acc-niveau, :root[data-design="v2"] .entete-app .onglets button { min-height: 40px; }
+  .ds-legende { row-gap: 0; }
+}
+/* Tuiles d'indicateurs de tous les modules (Performance, Chrono, Données…) : même carte que la planche 2 (point de module, libellé, valeur 30 px) */
+:root[data-design="v2"] .tuile .lbl { text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 600; color: var(--texte-2); display: flex; align-items: center; gap: 6px; }
+:root[data-design="v2"] .tuile .lbl::before { content: ""; width: 8px; height: 8px; border-radius: 3px; background: var(--m-courant); flex: none; }
+:root[data-design="v2"] .tuile .v { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }

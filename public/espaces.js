@@ -92,7 +92,6 @@
       // Module d'un seul écran : le module lui-même ouvre l'écran (pas de sous-onglet en double)
       b.classList.toggle('unique', vis.length === 1);
       membres.forEach((v, j) => { for (const x of nav.querySelectorAll(`button[role="tab"][data-v="${v}"]`)) {
-        x.classList.toggle('seul-du-module', modeAcc && vis.length === 1);
         x.style.order = modeAcc ? String(i * 100 + 1 + j) : ''; x.style.setProperty('--m-sous', `var(--m-${cle})`);
         x.classList.toggle('ferme-lateral', modeAcc && !ouvert);
       } });
@@ -124,9 +123,9 @@
       const cle = b.dataset.espace; const membres = ESPACES.find((x) => x[0] === cle)?.[4] || [];
       const vis = boutons().filter((x) => visible(x) && membres.includes(x.dataset.v));
       if (vis.length > 1) {
-        // Le chevron replie ou déplie ; un module fermé s'ouvre et devient le module courant ; un module ouvert autre que le courant se replie
+        // Le chevron replie ou déplie le module ; un clic sur son nom l'ouvre (jamais ne le referme) et en fait le module courant
         const o = lireOuverts(); const surChevron = !!ev.target.closest('.esp-chevron');
-        if (o.has(cle) && (surChevron || cle !== actif)) o.delete(cle); else { o.add(cle); actif = cle; }
+        if (surChevron && o.has(cle)) o.delete(cle); else { o.add(cle); if (!surChevron) actif = cle; }
         ecrireOuverts(o); lateral.dernier = actif; appliquer(true); return;
       }
     }
