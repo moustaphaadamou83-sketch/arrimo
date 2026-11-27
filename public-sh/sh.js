@@ -408,6 +408,28 @@ async function configurationOperationnelle(h) {
   }; });
 }
 
+/* Architecture modulaire (27 nov. 2026) : offre commerciale, puis modules et sous-modules du registre universel. Une offre coche les licences
+   compatibles (enregistrées comme le catalogue) ; un sous-module décoché disparaît des menus, cartes, filtres et routes de l'établissement. */
+async function architectureModules(h, v) {
+  const zone = $('#modules', v); if (!zone || !h.relie || etat.moi.utilisateur.role !== 'administration' || !window.ArrimoRegistre) return;
+  const r = await api('GET', `/hopitaux/${h.id}/sous-modules`).catch(() => null); if (!r || !r.famille) return;
+  const off = new Set(r.desactives);
+  const ligne = (cle, nom, niveau) => `<label class="case" style="margin-left:${niveau * 18}px"><input type="checkbox" data-sm="${esc(cle)}"${off.has(cle) ? '' : ' checked'}> ${esc(nom)}</label>`;
+  zone.insertAdjacentHTML('beforeend', `<details class="architecture-modules" open><summary><b>Architecture des modules (registre universel)</b></summary>
+    <p class="note">Quatre conditions : type d’établissement, licence, rôle de l’utilisateur, accès aux données. Désactiver un module rend ses sous-modules inaccessibles, sans supprimer de données ; la réactivation les restaure.</p>
+    <div class="ligne"><label class="lbl" for="am-offre">Offre commerciale</label><select id="am-offre"><option value="">—</option>${r.offres.map((o) => `<option value="${esc(o.id)}">${esc(o.fr)}</option>`).join('')}</select>
+      <button class="btn" type="button" id="am-appliquer-offre">Appliquer l’offre aux licences</button></div><p class="note" id="am-besoins"></p>
+    <div class="pile">${r.nav.map((m) => ligne(m.id, m.fr, 0) + (m.sous || []).map((x) => ligne(`${m.id}.${x.id}`, x.fr, 1)).join('')).join('')}</div>
+    <p class="note">Services techniques internes, toujours présents : ${r.services_techniques.map((x) => esc(x.fr)).join(' · ')}.</p>
+    <button class="btn pri" type="button" id="am-enregistrer">Enregistrer les modules et sous-modules</button></details>`);
+  $('#am-offre', zone).onchange = (e) => { const o = r.offres.find((x) => x.id === e.target.value); $('#am-besoins', zone).textContent = o?.besoins_fr || ''; };
+  $('#am-appliquer-offre', zone).onclick = (ev) => { const o = r.offres.find((x) => x.id === $('#am-offre', zone).value); if (!o) return;
+    const liste = (h.modules || []).map((m) => ({ code: m.code, licence: m.statut === 'inclus' || (['disponible', 'inclus'].includes(m.statut) && (o.modules === '*' || o.modules.includes(m.code))) ? 'souscrit' : (m.licence === 'souscrit' ? 'non_selectionne' : m.licence), parametres: m.parametres }));
+    agir(ev.currentTarget, () => api('PUT', `/hopitaux/${h.id}/modules`, { modules: liste }), `Offre « ${o.fr} » appliquée aux licences.`); };
+  $('#am-enregistrer', zone).onclick = (ev) => { const sm = {}; zone.querySelectorAll('[data-sm]').forEach((c) => { const avant = !off.has(c.dataset.sm); if (c.checked !== avant) sm[c.dataset.sm] = c.checked; });
+    if (!Object.keys(sm).length) return toast('Aucun changement.');
+    agir(ev.currentTarget, () => api('PUT', `/hopitaux/${h.id}/sous-modules`, { sous_modules: sm }), 'Modules et sous-modules transmis à l’établissement.'); };
+}
 function blocModules(h) {
   return `<p class="note">Catalogue et licences consignés dans SH. L'activation fonctionnelle des modules dépend des capacités réellement exposées par Arrimo.</p>
     <div class="pile">${(h.modules || []).map((m) => `<div class="module-sh"><div><b>${esc(m.nom)}</b><div class="note">${esc(m.description)} · dépendances : ${m.dependances.length ? esc(m.dependances.join(', ')) : 'aucune'}</div></div>
@@ -558,6 +580,7 @@ async function vueHopital(v) {
   $('#b-ajout-contact').onclick=()=>ajouterLigne('#liste-contacts','contact-sh',[['nom','Nom du contact'],['fonction','Fonction'],['courriel','Courriel'],['telephone','Téléphone'],['categorie','Catégorie']]);
   $('#b-dossier').onclick=(ev)=>agir(ev.currentTarget,()=>api('PUT',`/hopitaux/${h.id}/dossier`,{sites:lireLignes('#liste-sites','site-sh'),contacts:lireLignes('#liste-contacts','contact-sh')}),'Dossier établissement enregistré.');
   $('#b-modules').onclick=(ev)=>agir(ev.currentTarget,()=>api('PUT',`/hopitaux/${h.id}/modules`,{modules:[...v.querySelectorAll('[data-module]')].map((x)=>({code:x.dataset.module,licence:x.value,parametres:JSON.parse(v.querySelector(`[data-param="${CSS.escape(x.dataset.module)}"]`).value)}))}),'Catalogue enregistré.');
+  architectureModules(h, v);
   ArrimoModulesCartes.brancher(h, $('#zone-cartes-modules', v), { modale, enregistrer: (liste) => agir(null, () => api('PUT', `/hopitaux/${h.id}/modules`, { modules: liste }), ArrimoModulesCartes.T[langueUI === 'en' ? 'en' : 'fr'].enregistre) });
   if ($('#b-export-client')) $('#b-export-client').onclick = (ev) => agir(ev.currentTarget, async () => {
     const r = await api('POST', `/hopitaux/${h.id}/export`);

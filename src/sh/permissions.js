@@ -70,6 +70,8 @@ const PERMISSIONS = {
   'PUT /hopitaux/:id/modules': ['administration', 'commercial'],
   'GET /hopitaux/:id/configuration-operationnelle': ['administration', 'implantation'],
   'PUT /hopitaux/:id/configuration-operationnelle': ['administration'],
+  'GET /hopitaux/:id/sous-modules': ['administration', 'implantation', 'commercial'],
+  'PUT /hopitaux/:id/sous-modules': ['administration'],
   'POST /hopitaux/:id/specialites': ['administration'],
   'POST /hopitaux/:id/relier': ['administration', 'implantation'],
   'GET /hopitaux/:id/connexions': ['administration', 'implantation', 'support'],

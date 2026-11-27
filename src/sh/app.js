@@ -88,6 +88,8 @@ function creerAppSh(pool, { env = process.env } = {}) {
   app.use(express.static(PUBLIC_SH));
   for (const f of ['style.css', 'design-arrimo.css', 'apparence.js', 'icones.svg', 'logo.svg', 'i18n/format.js', 'i18n/fr.js', 'formation/polices/inter-latin-wght-normal.woff2', 'formation/polices/inter-latin-ext-wght-normal.woff2']) app.get(`/${f}`, (req, res) => res.sendFile(path.join(PUBLIC, f)));
   app.use('/polices', express.static(path.join(PUBLIC, 'polices')));
+  // Registre universel des modules : même fichier qu'Arrimo (une seule source pour SH, les environnements et les interfaces)
+  app.get('/registre-modules.js', (req, res) => res.type('application/javascript').sendFile(path.join(__dirname, '..', 'registre-modules.js')));
 
   const ciblesSh = () => cibles(env);
   const cible = (code) => {
@@ -773,6 +775,27 @@ function creerAppSh(pool, { env = process.env } = {}) {
       { ...b, version: req.body.version, par: req.u.email });
     await journal(pool, req.u, 'Configuration opérationnelle publiée', h.code_etab, JSON.stringify(b), h.id);
     return resultat;
+  }));
+  /* Activation hiérarchique (27 nov. 2026) : modules et sous-modules du registre universel, par établissement. Seule l'administration SH
+     modifie ce périmètre ; l'environnement l'applique à ses menus, routes, API, notifications et exports ; chaque changement est journalisé
+     ici ET dans l'environnement. Rien n'est supprimé : données, historiques et événements Chrono restent. */
+  api.get('/hopitaux/:id/sous-modules', route(async (req) => {
+    const h = await hopital(entier(req.params.id));
+    const REG = require('../registre-modules'); const famille = REG.familleDe(h.type_etablissement || 'hopital');
+    if (!famille) return { famille: null, nav: [], desactives: [] };
+    const conf = h.relie ? await appeler(cible(h.environnement), 'GET', `/sh/etablissements/${encodeURIComponent(h.code_etab)}/configuration-operationnelle`) : { modules: {} };
+    return { famille, nav: REG.NAV[famille], desactives: Object.keys(conf.modules || {}).filter((k) => k.startsWith('sm:') && conf.modules[k] === false).map((k) => k.slice(3)),
+      services_techniques: REG.SERVICES_TECHNIQUES, offres: REG.OFFRES };
+  }));
+  api.put('/hopitaux/:id/sous-modules', route(async (req) => {
+    const h = await hopital(entier(req.params.id));
+    if (!h.relie) throw new ErreurSh(409, 'Créez et reliez d’abord l’établissement dans son environnement.');
+    const REG = require('../registre-modules'); const valides = REG.clesSousModules(REG.familleDe(h.type_etablissement || 'hopital'));
+    const sm = req.body?.sous_modules;
+    if (!sm || typeof sm !== 'object' || Array.isArray(sm) || Object.entries(sm).some(([k, v]) => !valides.includes(k) || typeof v !== 'boolean')) throw new ErreurSh(400, 'Sous-module inconnu ou valeur invalide.');
+    const r = await appeler(cible(h.environnement), 'PUT', `/sh/etablissements/${encodeURIComponent(h.code_etab)}`, { sous_modules: sm, par: req.u.email });
+    await journal(pool, req.u, 'Sous-modules modifiés', `${h.code_etab} · ${h.nom}`, Object.entries(sm).map(([k, v]) => `${k} ${v ? 'activé' : 'désactivé'}`).join(', '), h.id);
+    return { modules: r.modules };
   }));
   api.post('/hopitaux/:id/specialites', route(async (req) => {
     const h = await hopital(entier(req.params.id));
