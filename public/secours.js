@@ -257,7 +257,7 @@
       if (!etat.hebergements) etat.hebergements = await api('GET', '/secours/hebergements').catch(() => []);
       await chargerClassees();
       if (ROLES_AMB.includes(etat.moi.utilisateur.role)) etat.unites = await api('GET', '/secours/unites');
-      await window.ArrimoCentre?.charger(api, etat, rendre);
+      await window.ArrimoCentre?.charger(api, etat, rendre, uniteCourante);
       etat.actualiseLe = new Date();
     } catch (e) { if (estReseau(e)) etat.enLigne = false; else etat.erreur = e.message; }
     rendreSiChange();

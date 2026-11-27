@@ -23,7 +23,7 @@
     v.querySelector(':scope > .comm-flotte')?.remove();
     const z = document.createElement('section'); z.className = 'panneau-c comm-flotte';
     const qui = (m) => (m.sens === 'ccs' ? T('ccs') : m.sens === 'ambulance' ? T('ambulance') : T('vous'));
-    z.innerHTML = `<h3>${T('titre')}</h3>${d.unites.length ? d.unites.map((u) => `<div class="item"><div><b class="num">${esc(u.numero)}</b> · <span class="num">${esc(u.mission || '')}</span>
+    z.innerHTML = `<h3>${T('titre')}</h3>${d.unites.length ? d.unites.map((u) => `<div class="item" data-cf-u="${esc(u.numero)}"><div><b class="num">${esc(u.numero)}</b> · <span class="num">${esc(u.mission || '')}</span>${u.etat ? ` · ${esc(t(`transports.ev.${u.etat}`))}` : ''}${u.modifie_le ? ` · <b class="num duree-seule" data-depuis="${esc(u.modifie_le)}">--:--:--</b>` : ''}
         <div class="rapides">${d.rapides.map((r) => `<button type="button" class="btn" data-cf-rapide="${r}" data-cf-unite="${u.id}">${T(`r_${r}`)}</button>`).join('')}</div>
         <form class="ligne" data-cf-form="${u.id}"><input name="texte" maxlength="200" aria-label="${T('texte')}" placeholder="${T('texte')}" autocomplete="off"><button class="btn" type="submit">${T('envoyer')}</button></form></div></div>`).join('') : `<p class="note">${T('aucune')}</p>`}
       ${d.messages.length ? `<div class="fil-msg">${d.messages.slice(0, 15).map((m) => `<p class="msg msg-${esc(m.sens)}"><b>${qui(m)}</b> · <span class="num">${esc(m.unite)}</span> · ${m.code_rapide ? T(`r_${m.code_rapide}`) : ''} ${esc(m.texte || '')}

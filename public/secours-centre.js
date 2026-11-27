@@ -99,7 +99,7 @@
     return ONGLETS[p].filter((o) => o === 'og' || actifs.includes(o) || (p === 'embarque' && o === 'mission' && actifs.includes('mission')));
   }
 
-  async function charger(api, etat, rendre) {
+  async function charger(api, etat, rendre, uniteCourante) {
     C.api = api; C.etat = etat; C.rendre = rendre;
     if (!profil(etat.moi?.utilisateur?.role)) return;
     C.flotte = await api('GET', '/secours/flotte?tri=priorite').catch(() => C.flotte);
@@ -111,6 +111,8 @@
     if (['historique', 'pilotage', 'chrono'].includes(etat.onglet) || !C.hist) await chargerHist();
     if (C.ficheId) await chargerFiche(C.ficheId);
     // Transmission : une mission proposée à cette unité est marquée « reçue » par l'appareil (jamais déduite de l'envoi)
+    // Embarqué : fiche (messages, instructions) du véhicule de l'équipe, relue à chaque signal en direct
+    if (profil(etat.moi.utilisateur.role) === 'embarque') { const u = uniteCourante?.(); C.ficheEmb = u ? await api('GET', `/secours/flotte/${u.id}`).catch(() => C.ficheEmb) : null; }
     if (profil(etat.moi.utilisateur.role) === 'embarque') {
       for (const v of C.flotte?.vehicules || []) {
         const m = v.mission; if (m?.type === 'mission' && m.statut === 'proposee' && !m.transmission?.recue_le) api('POST', `/secours/missions/${m.id}/recue`, {}).catch(() => {});
@@ -293,7 +295,7 @@
     const prochaine = action ? `<button type="button" class="btn pri btn-geant" data-mi-action="${action[0]}" data-mission="${m.id}" data-version="${m.version}">${action[1]}</button>`
       : m ? `<button type="button" class="btn pri btn-geant" data-onglet="mission">${T('e_ouvrir')}</button>` : '';
     if (m?.type === 'mission' && !m.transmission?.consultee_le) C.api?.('POST', `/secours/missions/${m.id}/consultee`, {}).catch(() => {});
-    const instr = (C.fiche?.messages || []).filter((x) => x.sens === 'ccs').slice(0, 3);
+    const instr = (C.ficheEmb?.messages || []).filter((x) => x.sens !== 'ambulance' && !x.lu_le).slice(0, 4);
     return `<section class="carte-s accueil-embarque"><h2>${m ? `${T('e_mission')} · <span class="num">${esc(m.numero)}</span>` : (v && v.statut === 'disponible' ? T('s_disponible') : v ? statutLib(v) : T('s_en_attente'))}</h2>
         ${m ? `<p class="grand-trajet">${esc(m.origine || '—')} → <b>${esc(m.destination || '—')}</b></p>` : `<p class="note">${T('e_aucune')}</p>`}
         ${v ? `<p><b>${statutLib(v)}</b> ${conditions(v)}</p>` : ''}
@@ -303,9 +305,9 @@
       <section class="carte-s"><h2>${T('e_carte')}</h2><div id="carte-amb" style="height:min(48vh,340px)"></div>${v?.position ? `<p class="note">${T('position', { h: hh(v.position.le) })}${ctx.demo ? ` · ${T('simule')}` : ''}</p>` : `<p class="note">${T('e_carte_indispo')}</p>`}
         ${m?.destination && v?.position ? `<p><a class="btn" rel="noopener" target="_blank" href="https://www.openstreetmap.org/directions?from=${v.position.latitude}%2C${v.position.longitude}&to=${encodeURIComponent(m.destination)}">${T('e_nav')}</a></p>` : ''}</section>
       <section class="carte-s"><h2>${T('messages')}</h2><p class="note">${T('e_conduite')}</p>
-        ${instr.map((x) => `<p class="instructions-ccs">${T(`g_${x.genre}`)} · ${x.code_rapide ? T(`r_${x.code_rapide}`) : ''} ${esc(x.texte || '')} <span class="note num">${esc(hh(x.cree_le))}</span>${!x.lu_le ? ` <button type="button" class="btn" data-msg-lu="${x.id}">${T('marquer_lu')}</button>` : ''}</p>`).join('')}
+        ${instr.map((x) => `<p class="instructions-ccs">${x.sens === 'etablissement' ? esc(x.etablissement || '') : T('ccs')} · ${T(`g_${x.genre}`)} · ${x.code_rapide ? T(`r_${x.code_rapide}`) : ''} ${esc(x.texte || '')} <span class="note num">${esc(hh(x.cree_le))}</span>${!x.lu_le ? ` <button type="button" class="btn" data-msg-lu="${x.id}">${T('marquer_lu')}</button>` : ''}</p>`).join('')}
         <div class="rapides grands">${[['retard', 'retard_trafic', T('e_retard')], ['incident', 'incident_vehicule', T('e_incident')], ['assistance', 'besoin_assistance', T('e_assistance')]].map(([g, r, lib]) => `<button type="button" class="btn btn-geant" data-signal="${g}" data-rapide-code="${r}" data-unite="${u.id}">${lib}</button>`).join('')}</div>
-        ${v ? fil(C.fiche?.messages, u.id, 'ambulance') : ''}</section>`;
+        ${v ? fil(C.ficheEmb?.messages, u.id, 'ambulance') : ''}</section>`;
   }
 
   /** Branchement des gestes (délégation sur le contenu, redessiné à chaque mise à jour). */

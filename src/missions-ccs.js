@@ -66,9 +66,12 @@ async function proposerAvecClient(c, u, p, b, interventionId = null) {
   // Instructions opérationnelles et destination connue (facultatives) : transmises avec la mission, jamais une décision d'Arrimo
   const instructions = b.instructions ? String(b.instructions).trim().replace(/\s+/g, ' ').slice(0, 280) : null;
   const destId = b.destination_id ? entier(b.destination_id) : null;
+  // Intervention dans un hébergement (CHSLD, RPA…) de la région : il reçoit l'affectation, le statut et les échanges de la mission
+  const origId = b.origine_id ? entier(b.origine_id) : null;
+  if (origId && !(await c.query("SELECT 1 FROM etablissements WHERE id = $1 AND actif AND COALESCE(type_etablissement, 'hopital') <> 'hopital'", [origId])).rowCount) throw new ErreurHttp(404, 'etab_introuvable');
   if (destId && !(await c.query("SELECT 1 FROM etablissements WHERE id = $1 AND actif AND COALESCE(type_etablissement, 'hopital') = 'hopital'", [destId])).rowCount) throw new ErreurHttp(404, 'hopital_introuvable');
-  const m = (await c.query(`INSERT INTO missions_ccs (numero, unite_id, organisation_ccs_id, lieu, priorite, categorie, cree_par, intervention_demo_id, instructions, destination_id)
-    VALUES ('MI-' || lpad(nextval('mission_ccs_seq')::text, 6, '0'), $1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`, [un.id, p.ccsOrg, b.lieu, b.priorite, b.categorie, u.id, interventionId, instructions, destId])).rows[0];
+  const m = (await c.query(`INSERT INTO missions_ccs (numero, unite_id, organisation_ccs_id, lieu, priorite, categorie, cree_par, intervention_demo_id, instructions, destination_id, origine_id)
+    VALUES ('MI-' || lpad(nextval('mission_ccs_seq')::text, 6, '0'), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`, [un.id, p.ccsOrg, b.lieu, b.priorite, b.categorie, u.id, interventionId, instructions, destId, origId])).rows[0];
   await c.query('INSERT INTO mission_ccs_evenements (mission_id, statut, utilisateur_id) VALUES ($1, $2, $3)', [m.id, 'proposee', u.id]);
   require('./flux').signaler();
   return { ...m, unite: un.numero };

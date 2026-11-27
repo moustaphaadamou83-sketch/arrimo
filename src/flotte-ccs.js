@@ -207,21 +207,24 @@ async function etablissementsDeMission(db, uniteId) {
   const r = await db.query(`SELECT destination_id AS id FROM prealertes WHERE unite_id = $1 AND statut NOT IN ('cloturee', 'annulee', 'remplacee') AND destination_id IS NOT NULL
     UNION SELECT origine_id FROM demandes_transport WHERE unite_id = $1 AND terminee_le IS NULL AND statut IN ('acceptee', 'en_route', 'pris_en_charge', 'arrivee')
     UNION SELECT destination_id FROM demandes_transport WHERE unite_id = $1 AND terminee_le IS NULL AND statut IN ('acceptee', 'en_route', 'pris_en_charge', 'arrivee') AND destination_id IS NOT NULL
-    UNION SELECT destination_id FROM missions_ccs WHERE unite_id = $1 AND statut IN ('proposee', 'acceptee', 'sur_place') AND destination_id IS NOT NULL`, [uniteId]);
+    UNION SELECT destination_id FROM missions_ccs WHERE unite_id = $1 AND statut IN ('proposee', 'acceptee', 'sur_place') AND destination_id IS NOT NULL
+    UNION SELECT origine_id FROM missions_ccs WHERE unite_id = $1 AND statut IN ('proposee', 'acceptee', 'sur_place') AND origine_id IS NOT NULL`, [uniteId]);
   return r.rows.map((x) => x.id);
 }
 /** Côté établissement (Urgences → Secours 911) : ambulances liées à ses missions en cours et leurs échanges avec lui. */
 async function filEtablissement(pool, u, etabId) {
   const id = entier(etabId); require('./auth').exigerEtablissement(u, id);
-  const unites = (await pool.query(`SELECT DISTINCT un.id, un.numero, COALESCE(pa.numero, d.numero, mi.numero) AS mission, ev.etat, ev.modifie_le
+  const unites = (await pool.query(`SELECT DISTINCT un.id, un.numero, COALESCE(pa.numero, d.numero, mi.numero) AS mission, COALESCE(pa.statut, d.statut, mi.statut) AS mission_statut, ev.etat, ev.modifie_le
     FROM unites_secours un LEFT JOIN etats_vehicules ev ON ev.unite_id = un.id
     LEFT JOIN prealertes pa ON pa.unite_id = un.id AND pa.destination_id = $1 AND pa.statut NOT IN ('cloturee', 'annulee', 'remplacee')
     LEFT JOIN demandes_transport d ON d.unite_id = un.id AND (d.origine_id = $1 OR d.destination_id = $1) AND d.terminee_le IS NULL AND d.statut IN ('acceptee', 'en_route', 'pris_en_charge', 'arrivee')
-    LEFT JOIN missions_ccs mi ON mi.unite_id = un.id AND mi.destination_id = $1 AND mi.statut IN ('proposee', 'acceptee', 'sur_place')
+    LEFT JOIN missions_ccs mi ON mi.unite_id = un.id AND (mi.destination_id = $1 OR mi.origine_id = $1) AND mi.statut IN ('proposee', 'acceptee', 'sur_place')
     WHERE COALESCE(pa.id, d.id, mi.id) IS NOT NULL ORDER BY un.numero`, [id])).rows;
   const messages = (await pool.query(`SELECT m.id, m.unite_id, un.numero AS unite, m.sens, m.genre, m.code_rapide, m.texte, m.cree_le, m.lu_le
     FROM messages_flotte m JOIN unites_secours un ON un.id = m.unite_id WHERE m.etablissement_id = $1 AND m.cree_le > now() - interval '24 hours' ORDER BY m.cree_le DESC LIMIT 40`, [id])).rows;
-  return { unites, messages, rapides: RAPIDES.etablissement };
+  // Messages rapides selon le type : l'urgence confirme l'accueil, l'hébergement la préparation du résident
+  const type = (await pool.query('SELECT type_etablissement FROM etablissements WHERE id = $1', [id])).rows[0]?.type_etablissement || 'hopital';
+  return { unites, messages, rapides: RAPIDES.etablissement.filter((r) => (type === 'hopital' ? r !== 'resident_pret' : r !== 'accueil_pret')) };
 }
 async function envoyerEtablissement(pool, u, b = {}) {
   const etab = entier(b.etablissement_id); require('./auth').exigerEtablissement(u, etab);
