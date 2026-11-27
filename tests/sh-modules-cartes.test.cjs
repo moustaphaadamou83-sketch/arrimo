@@ -125,6 +125,12 @@ test('serveur : « Bientôt » refusé, activation et désactivation journalisé
   assert.ok(j.some((x) => /liaison_secours : souscrit → non_selectionne/.test(x.detail)));
   const fiche = await sh('GET', `/hopitaux/${h.id}`);
   assert.ok(!fiche.modules.some((m) => m.code === 'visites_confirmees'), 'Visites confirmées : CHSLD seulement');
+  // Catalogue en base intact ; types de Chrono et du DSN appliqués d'après le code : CHSLD → Chrono oui, DSN jamais ; hôpital → DSN oui
+  assert.ok(fiche.modules.some((m) => m.code === 'dsn'), 'DSN proposé à un hôpital');
+  const c = await sh('POST', '/hopitaux', { type_etablissement: 'chsld', nom: 'CHSLD Bellevue (cartes)', code_etab: 'CBC', environnement: 'pilote', pays_code: 'CA', latitude: 45.41, longitude: -71.91 });
+  const fc = await sh('GET', `/hopitaux/${c.id}`);
+  assert.ok(fc.modules.some((m) => m.code === 'chrono'), 'Chrono proposé à un CHSLD');
+  assert.ok(!fc.modules.some((m) => m.code === 'dsn'), 'DSN jamais proposé à un CHSLD');
   // Chrono activable seul (26 nov. 2026, alimenté par Liaison Secours ou par un connecteur autorisé) et avec Liaison Secours
   assert.strictEqual((await appelSh('PUT', `/hopitaux/${h.id}/modules`, { modules: [{ code: 'chrono', licence: 'souscrit' }] })).statut, 200);
   await sh('PUT', `/hopitaux/${h.id}/modules`, { modules: [{ code: 'liaison_secours', licence: 'souscrit' }, { code: 'chrono', licence: 'souscrit' }] });
