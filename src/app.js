@@ -223,21 +223,22 @@ function creerApp(pool, options = {}) {
   api.use((req, res, next) => { req.utilisateur.langue = req.langue; next(); });
   // Registre universel (27 nov. 2026, §7) : une route dont l'emplacement principal est un sous-module non compatible, sans licence ou
   // désactivé depuis SH est refusée côté serveur, quel que soit le menu. Les données restent en base (rien n'est supprimé).
-  const REG = require('./registre-modules'); const TEreg = require('./types-etablissement'); const cacheEtab = new Map();
+  const REG = require('./registre-modules'); const TEreg = require('./types-etablissement');
   api.use(async (req, res, next) => {
     try {
       const id = Number(req.query.etablissement_id ?? req.body?.etablissement_id);
       if (!Number.isInteger(id) || id <= 0) return next();
-      let e = cacheEtab.get(id);
-      if (!e || e.t < Date.now() - 5000) { const r = (await pool.query('SELECT id, type_etablissement, modules FROM etablissements WHERE id = $1', [id])).rows[0]; e = { t: Date.now(), r }; cacheEtab.set(id, e); }
-      if (!e.r) return next();
-      const v = REG.routeAutorisee(e.r, req.path, TEreg.moduleActif);
+      // Seulement l'établissement de l'utilisateur (son contexte) : un etablissement_id qui désigne un destinataire n'est pas concerné
+      if (!(req.utilisateur.etabs || []).includes(id)) return next();
+      // Lecture directe à chaque appel (aucun cache) : une licence modifiée par SH s'applique immédiatement
+      if (!REG.NAV.hopital.concat(REG.NAV.hebergement).some((m) => m.sous.some((x) => x.routes.some((p) => req.path === p || req.path.startsWith(`${p}/`))))) return next();
+      const r = (await pool.query('SELECT id, type_etablissement, modules FROM etablissements WHERE id = $1', [id])).rows[0];
+      if (!r) return next();
+      const v = REG.routeAutorisee(r, req.path, TEreg.moduleActif);
       if (v && !v.ok) return next(new ErreurHttp(403, 'module_desactive', { module: v.module }));
       return next();
     } catch (err) { return next(err); }
   });
-  /** Invalide le cache après une modification de licence ou de sous-modules (SH, administration). */
-  app.locals.oublierEtab = (id) => cacheEtab.delete(Number(id));
   // Synchronisation de Chrono (27 nov. 2026) : toute écriture réussie sur un lit, une civière, une admission, la NSA, un congé, un
   // patient ou le DSN prévient les écrans en direct APRÈS la réponse (donc après validation) ; le signal ne porte aucune donnée.
   const ECRITURES_SEJOUR = /^\/(lits|civieres|nettoyage|nsa|admissions|conges|patients|dsn|chsld\/places)(\/|$)/;

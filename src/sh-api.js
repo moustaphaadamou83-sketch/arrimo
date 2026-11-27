@@ -279,7 +279,6 @@ function brancherSh(api, pool, route) {
     if (!sets.length) throw new ErreurHttp(400, 'rien_a_modifier');
     const r = (await pool.query(`UPDATE etablissements SET ${sets.join(', ')} WHERE id = $1 RETURNING id, code, nom, partage, module_actif, sous_domaine, modules, vocation`, vals)).rows[0];
     await journalAdmin(pool, systeme, 'Établissement modifié', r.nom, `${detail.join(' · ')} · ${parSh(b)}`, r.id);
-    req.app.locals.oublierEtab?.(r.id);   // licence synchronisée : le contrôle des routes la voit tout de suite
     return r;
   }));
 

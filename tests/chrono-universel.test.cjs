@@ -53,8 +53,13 @@ test('Inconnu jamais transformé en zéro ; entretien limité aux capacités ; i
 
 test('Chrono : module principal du menu, huit sous-menus, un seul moteur (lecture seule)', () => {
   const fs = require('node:fs'); const path = require('node:path'); const lire = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
-  assert.match(lire('public/espaces.js'), /\['chrono', 'timer', 'Chrono', 'Chrono', \['chrono'\]\]/);
-  assert.ok(!/\['urgence', 'secours', 'chrono'/.test(lire('public/espaces.js')), 'sorti d’Urgences');
+  // Registre universel (27 nov. 2026) : Chrono est un module principal (un seul sous-menu), hors d'Urgences, pour l'hôpital et l'hébergement
+  const R = require('../src/registre-modules');
+  for (const f of ['hopital', 'hebergement']) {
+    assert.deepStrictEqual(R.NAV[f].find((m) => m.id === 'chrono').sous.map((x) => x.v), ['chrono'], f);
+    assert.ok(!R.NAV[f].find((m) => m.id === 'urgences').sous.some((x) => x.v === 'chrono'), `${f} : sorti d’Urgences`);
+  }
+  assert.match(lire('public/espaces.js'), /ArrimoRegistre/);
   assert.match(lire('public/chrono.js'), /const SOUS = \['generale', 'patients', 'ambulances', 'capacites', 'previsions', 'qualite', 'alertes', 'historique'\]/);
   assert.ok(!/INSERT|UPDATE|DELETE/.test(lire('src/chrono-universel.js').replace(/\/\*[\s\S]*?\*\//g, '')), 'lecture seule');
 });
