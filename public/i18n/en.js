@@ -148,7 +148,7 @@ window.ARRIMO_I18N.en = {
     attente_seuil: 'At or over threshold', attente_moyenne: 'Average current wait', attente_mediane: 'Median current wait', attente_cumulee: 'Combined current wait', actualise: 'Updated at {h}',
     titre: 'Chrono · ambulances at the emergency department', intro: 'Targets: stretcher released {porte} min after arrival, departure {sortie} min after that, {total} min in total. Same times for the emergency department, the ambulance and the CCS.',
     indicatif: 'Definitions from the MSSS guide; indicative figures until validated with the first ambulance company. Arrimo measures; it calculates no bonus or penalty.',
-    en_route: 'On the way', a_la_porte: 'At the door', termines: 'Completed visits (last 12 hours)', aucune_porte: 'No ambulance at the door.', aucune_route: 'No ambulance announced.', aucun_termine: 'No completed visit.',
+    syn_n: 'Completed visits', syn_moy: 'Average duration', syn_med: 'Median duration', syn_der: 'Last visit', syn_detail: 'Detail of the {n} visits', voir_hist: 'Full history', en_route: 'On the way', a_la_porte: 'At the door', termines: 'Completed visits (last 12 hours)', aucune_porte: 'No ambulance at the door.', aucune_route: 'No ambulance announced.', aucun_termine: 'No completed visit.',
     sans_prealerte: 'no pre-alert', minutes: '{n} min', a_la_porte_depuis: 'At the door for {n} minutes',
     niveau_vert: 'within target', niveau_orange: 'close to target', niveau_rouge: 'beyond target', niveau_critique: 'critical: beyond the total target',
     etape_H11: 'Arrival', etape_H12: 'Triage start', etape_H13: 'Triage end', etape_H14: 'Stretcher released', etape_H15: 'Departure',

@@ -148,7 +148,7 @@ window.ARRIMO_I18N.fr = {
     attente_seuil: 'Au seuil ou au-delà', attente_moyenne: 'Attente en cours moyenne', attente_mediane: 'Attente en cours médiane', attente_cumulee: 'Attente en cours cumulée', actualise: 'Actualisé à {h}',
     titre: 'Chrono · ambulances à l’urgence', intro: 'Cibles : civière libérée en {porte} min après l’arrivée, départ {sortie} min après, {total} min au total. Mêmes heures pour l’urgence, l’ambulance et le CCS.',
     indicatif: 'Définitions du guide du MSSS ; chiffres indicatifs avant validation avec la première entreprise ambulancière. Arrimo mesure, ne calcule aucune prime ni pénalité.',
-    en_route: 'En route', a_la_porte: 'À la porte', termines: 'Passages terminés (12 dernières heures)', aucune_porte: 'Aucune ambulance à la porte.', aucune_route: 'Aucune ambulance annoncée.', aucun_termine: 'Aucun passage terminé.',
+    syn_n: 'Passages terminés', syn_moy: 'Durée moyenne', syn_med: 'Durée médiane', syn_der: 'Dernier passage', syn_detail: 'Détail des {n} passages', voir_hist: 'Historique complet', en_route: 'En route', a_la_porte: 'À la porte', termines: 'Passages terminés (12 dernières heures)', aucune_porte: 'Aucune ambulance à la porte.', aucune_route: 'Aucune ambulance annoncée.', aucun_termine: 'Aucun passage terminé.',
     sans_prealerte: 'sans préalerte', minutes: '{n} min', a_la_porte_depuis: 'À la porte depuis {n} minutes',
     niveau_vert: 'dans la cible', niveau_orange: 'proche de la cible', niveau_rouge: 'au-delà de la cible', niveau_critique: 'critique : au-delà de la cible totale',
     etape_H11: 'Arrivée', etape_H12: 'Début triage', etape_H13: 'Fin triage', etape_H14: 'Civière libérée', etape_H15: 'Départ',
