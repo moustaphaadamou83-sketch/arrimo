@@ -139,7 +139,7 @@ test('Synchronisation : une écriture sur un lit prévient les écrans ; OG rép
   await new Promise((ok) => setTimeout(ok, 450));
   assert.ok(flux.etat().emis > avant, 'signal émis après validation');
   const og = (await appel('coord', '/copilote/question', 'POST', { etablissement_id: ids.h, question: 'Combien de patients en escalade ou en vigilance ?' })).d;
-  assert.match(og.reponse, /patient\(s\) présent\(s\)/, og.reponse); assert.match(og.reponse, /jamais une priorité clinique/);
+  assert.match(og.reponse, /patients présents : \d+ ; en vigilance : \d+ ; en escalade : \d+/, og.reponse); assert.match(og.reponse, /jamais une priorité clinique/);
   const og2 = (await appel('coord', '/copilote/question', 'POST', { etablissement_id: ids.h, question: 'Depuis combien de temps P-81004 attend ?' })).d;
   assert.match(og2.reponse, /P-81004/, og2.reponse);
 });

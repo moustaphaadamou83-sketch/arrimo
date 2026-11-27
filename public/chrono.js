@@ -248,7 +248,7 @@
   const motNiveau = (n) => K(`n_${NIVEAUX.includes(n) ? n : 'gris'}`);
   /* Statut opérationnel (27 nov. 2026) : nomenclature commune, couleur du STATUT (occupé rouge = indisponible, jamais « critique »),
      toujours distincte du niveau de vigilance (bordure de la carte). */
-  const STATUTS = ['disponible', 'occupe', 'reserve', 'a_nettoyer', 'en_nettoyage', 'hors_service', 'conserve', 'inconnu'];
+  const STATUTS = ['disponible', 'occupe', 'reserve', 'a_nettoyer', 'en_nettoyage', 'en_desinfection', 'en_verification', 'hors_service', 'conserve', 'inconnu'];
   const STATUT_DE_TYPE = { occupe: 'occupe', disponible: 'disponible', reserve: 'reserve', nettoyage_attente: 'a_nettoyer', nettoyage_civiere: 'a_nettoyer', nettoyage_en_cours: 'en_nettoyage', indispo: 'hors_service', conservee: 'conserve' };
   const statutDe = (x) => x.statut || STATUT_DE_TYPE[x.type] || 'inconnu';
   const badgeStatut = (st, prefixe = '') => `<span class="statut-op statut-${esc(STATUTS.includes(st) ? st : 'inconnu')}">${prefixe}${K(`st_${STATUTS.includes(st) ? st : 'inconnu'}`)}</span>`;
@@ -323,8 +323,7 @@
       generale: () => vueGenerale(d, { patient, ressource, ambulance, alerte }),
       patients: () => vuePatients(d),
       capacites: () => vueCapacites(d),
-      previsions: () => d.previsions ? `<p class="note">${K('u_prev_note')}</p><div class="tableau"><table><thead><tr><th>${K('u_type')}</th><th>${K('u_libres')}</th><th>${K('u_nettoyage')}</th>${(d.previsions.horizons || []).map((h) => `<th>${K('u_dans', { h })}</th>`).join('')}</tr></thead><tbody>
-        ${(d.previsions.unites || []).map((u) => `<tr><th>${esc(u.type_nom)}</th><td>${u.libres}</td><td>${u.horizons?.[d.previsions.horizons?.[0]]?.liberations ?? '—'}</td>${(d.previsions.horizons || []).map((h) => { const x = u.horizons?.[h]; return `<td>${x ? `${esc(x.libres_prevus)} <span class="note">± ${esc(x.marge)}</span>${x.risque ? ` <span class="badge-flux retard">${K('u_risque')}</span>` : ''}` : '—'}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>` : `<p class="note">${K('u_prev_indispo')}</p>`,
+      previsions: () => vuePrevisions(d.previsions),
       qualite: () => vueQualite(q) || `<p class="note">${K('u_inconnu')}</p>`,
       alertes: () => vueAlertes(d),
       historique: () => `<p class="note">${K('u_hist_note')}</p><p><button type="button" class="btn" id="ch-u-recherche">${K('u_hist_chercher')}</button></p>`,
@@ -353,8 +352,8 @@
       const x = plusAncien(items); const n = val ?? items.length;
       const niveau = items.length ? pire(items) : 'vert';
       const ident = x ? (x.reference || x.ressource || x.numero || x.titre || '') : '';
-      const ou = x ? [x.departement, x.unite].filter(Boolean).map(esc).join(' · ') : '';
-      return `<button type="button" class="carte-supervision niveau-${esc(niveau)}" data-niveau-carte data-aller-chrono="${esc(aller.sous)}"${aller.etape ? ` data-aller-etape="${esc(aller.etape)}"` : ''}${aller.niveau ? ` data-aller-niveau="${esc(aller.niveau)}"` : ''} data-cle="${esc(cle)}">
+      const ou = x ? [...new Set([x.departement, x.unite].filter(Boolean))].map(esc).join(' · ') : '';
+      return `<button type="button" class="carte-supervision niveau-${esc(niveau)}" data-niveau-carte data-aller-chrono="${esc(aller.sous)}"${aller.etape ? ` data-aller-etape="${esc(aller.etape)}"` : ''}${aller.statut ? ` data-aller-statut="${esc(aller.statut)}"` : ''}${aller.niveau ? ` data-aller-niveau="${esc(aller.niveau)}"` : ''} data-cle="${esc(cle)}">
         ${anneauGrand({ depuis: x?.depuis, seuils: x?.seuils_min, niveau: x ? x.niveau : (n ? 'bleu' : 'vert'), etiquette: x ? K('s_plus_ancien') : '' })}
         <span class="sv-corps"><span class="sv-nombre num">${esc(n)}</span><span class="sv-lib">${lib}${estime ? ` <span class="badge-flux">${K('g_estime')}</span>` : ''}</span>
           ${x ? `<span class="sv-ident">${esc(ident)}${ou ? ` · ${ou}` : ''}</span>` : ''}${sous ? `<span class="note">${sous}</span>` : ''}
@@ -377,8 +376,10 @@
       carte('transferts', K('g_transferts'), P.filter((x) => (x.paralleles || []).length), { sous: 'patients', etape: 'attente_transfert' }),
       carte('route', K('g_amb_route'), A.filter((a) => (a.objet === 'prealerte' && a.phase !== 'sur_place') || a.objet === 'transport'), { sous: 'ambulances' }),
       carte('immob', K('g_amb_immob'), A.filter((a) => a.objet === 'prealerte' && a.phase === 'sur_place'), { sous: 'ambulances' }),
-      carte('nettoyage', K('g_nettoyage'), C.filter((c) => String(c.type).startsWith('nettoyage')), { sous: 'capacites' }),
-      carte('reserve', K('g_reserve'), C.filter((c) => c.type === 'reserve'), { sous: 'capacites' }),
+      carte('occupes', K('g_occupes'), C.filter((c) => c.statut === 'occupe'), { sous: 'capacites', statut: 'occupe' }),
+      carte('disponibles', K('g_disponibles'), C.filter((c) => c.statut === 'disponible'), { sous: 'capacites', statut: 'disponible' }),
+      carte('nettoyage', K('g_nettoyage'), C.filter((c) => String(c.type).startsWith('nettoyage')), { sous: 'capacites', statut: 'a_nettoyer' }),
+      carte('reserve', K('g_reserve'), C.filter((c) => c.type === 'reserve'), { sous: 'capacites', statut: 'reserve' }),
       ...(prev != null ? [carte('prev', K('g_prev'), [], { sous: 'previsions' }, { val: prev, estime: true })] : []),
       carte('alertes', K('g_alertes'), AL, { sous: 'alertes' }),
     ];
@@ -401,7 +402,7 @@
   }
 
   /* ---------- Capacités : statut réel de chaque ressource, depuis la même heure que le module Capacités ---------- */
-  const ORDRE_ST = ['occupe', 'disponible', 'reserve', 'a_nettoyer', 'en_nettoyage', 'hors_service', 'conserve'];
+  const ORDRE_ST = ['occupe', 'disponible', 'reserve', 'a_nettoyer', 'en_nettoyage', 'en_desinfection', 'en_verification', 'hors_service', 'conserve'];
   function vueCapacites(d) {
     const C = d.capacites || []; const f = (etatC.fc ||= { statut: '' });
     const parSt = (st) => C.filter((x) => statutDe(x) === st);
@@ -423,33 +424,39 @@
   function brancherCapacites() { $('#v-chrono').querySelectorAll('[data-filtre-statut]').forEach((b) => { b.onclick = () => { (etatC.fc ||= {}).statut = etatC.fc.statut === b.dataset.filtreStatut ? '' : b.dataset.filtreStatut; vueChrono(); }; }); }
 
   /* ---------- Alertes et escalades : cartes larges (en-tête, compteur, description), filtres, compteurs = liste affichée ---------- */
+  const CATS = ['operationnelle', 'technique', 'synchronisation', 'capacites', 'patients', 'transferts', 'ambulances', 'nettoyage'];
   function vueAlertes(d) {
-    const f = (etatC.fa ||= { niveau: '', statut: '', q: '' });
-    // Une seule carte par incident (même titre et même niveau) : les répétitions sont regroupées et comptées
-    const groupes = new Map();
-    for (const a of d.alertes || []) { const k = `${a.titre}|${a.niveau}`; const g = groupes.get(k); if (g) { g.repetitions += 1; if (new Date(a.depuis) < new Date(g.depuis)) g.depuis = a.depuis; } else groupes.set(k, { ...a, repetitions: 1 }); }
-    const toutes = [...groupes.values()];
-    const q = f.q.trim().toLowerCase();
-    const vus = toutes.filter((a) => (!f.niveau || a.niveau === f.niveau) && (!f.statut || a.statut === f.statut) && (!q || String(a.titre).toLowerCase().includes(q)))
+    const f = (etatC.fa ||= { niveau: '', statut: '', q: '', categorie: '' });
+    const resoluesVue = f.statut === 'resolues';
+    // Une carte par incident (clé unique de l'alerte) : jamais deux cartes pour le même fait
+    const parCle = new Map(); for (const a of (resoluesVue ? d.alertes_resolues : d.alertes) || []) if (!parCle.has(a.cle || a.id)) parCle.set(a.cle || a.id, a);
+    const toutes = [...parCle.values()]; const q = f.q.trim().toLowerCase();
+    const vus = toutes.filter((a) => (!f.niveau || a.niveau === f.niveau) && (!f.categorie || a.categorie === f.categorie) && (resoluesVue || !f.statut || a.statut === f.statut) && (!q || String(a.titre).toLowerCase().includes(q)))
       .sort((a, b) => RANG[b.niveau] - RANG[a.niveau] || new Date(a.depuis || 0) - new Date(b.depuis || 0));
     const n = (k) => vus.filter((a) => a.niveau === k).length;
+    const cat = (c) => K(`ac_${CATS.includes(c) ? c : 'operationnelle'}`);
     const carte = (a) => `<article class="carte-alerte niveau-${esc(a.niveau)}" data-niveau-carte>
-        <header><h4>${esc(a.titre)}</h4><span class="cc-niveau"><span class="pastille-chrono"></span><span class="cc-mot">${motNiveau(a.niveau)}</span></span></header>
-        <div class="ca-centre">${anneauGrand({ depuis: a.depuis, seuils: a.seuils_min, niveau: a.niveau, etiquette: K('a_depuis_detection') })}
-          <dl><div><dt>${K('a_statut')}</dt><dd>${K(`u_statut_${['ouverte', 'accusee', 'en_action'].includes(a.statut) ? a.statut : 'ouverte'}`)}</dd></div>
+        <header><div><h4>${esc(a.titre)}</h4><span class="note">${cat(a.categorie)}${a.cible ? ` · ${esc(a.cible)}` : ''}</span></div><span class="cc-niveau"><span class="pastille-chrono"></span><span class="cc-mot">${resoluesVue ? K(`a_st_${a.statut === 'resolue' ? 'resolue' : 'levee'}`) : motNiveau(a.niveau)}</span></span></header>
+        <div class="ca-centre">${resoluesVue ? `<div class="ca-resolue"><b class="num">${a.duree_resolution_min != null ? window.ArrimoDuree.hhmmss(a.duree_resolution_min * 60000) : '—'}</b><span class="note">${K('a_duree_resolution')}</span></div>`
+          : anneauGrand({ depuis: a.depuis, seuils: a.seuils_min, niveau: a.niveau, etiquette: K('a_depuis_detection') })}
+          <dl>${resoluesVue ? '' : `<div><dt>${K('a_statut')}</dt><dd>${K(`u_statut_${['ouverte', 'accusee', 'en_action'].includes(a.statut) ? a.statut : 'ouverte'}`)}</dd></div>`}
             <div><dt>${K('a_detectee')}</dt><dd class="num">${a.depuis ? esc(heureCourte(a.depuis)) : '—'}</dd></div>
+            ${a.fin_le ? `<div><dt>${K('a_fin')}</dt><dd class="num">${esc(heureCourte(a.fin_le))}</dd></div>` : ''}
             ${a.escalade_niveau ? `<div><dt>${K('a_escalade')}</dt><dd>${K('a_niveau_n', { n: a.escalade_niveau })}</dd></div>` : ''}
-            ${a.reaction_min != null ? `<div><dt>${K('a_reaction')}</dt><dd>${K('u_reaction', { n: a.reaction_min })}</dd></div>` : ''}
-            ${a.repetitions > 1 ? `<div><dt>${K('a_repetitions')}</dt><dd>${a.repetitions}</dd></div>` : ''}</dl></div>
-        <p class="note">${K('a_note_cause')}</p></article>`;
+            ${a.responsable_role ? `<div><dt>${K('a_responsable')}</dt><dd>${esc(t(`roles.${a.responsable_role}`) || a.responsable_role)}</dd></div>` : ''}
+            ${a.reaction_min != null ? `<div><dt>${K('a_reaction')}</dt><dd>${K('u_reaction', { n: a.reaction_min })}</dd></div>` : ''}</dl></div>
+        <p class="note">${['technique', 'synchronisation'].includes(a.categorie) ? K('a_note_technique') : K('a_note_cause')}</p>
+        <p><button type="button" class="btn" data-ouvrir-vigilance>${K('a_details')}</button></p></article>`;
+    const opt = (nom, val, lib) => `<option value="${val}"${f[nom] === val ? ' selected' : ''}>${lib}</option>`;
     return `<form class="filtres-chrono" id="cha-filtres" role="search">
-        <label>${K('s_niveau')}<select name="niveau"><option value="">${K('s_tous')}</option>${['rouge', 'orange', 'vert'].map((k) => `<option value="${k}"${f.niveau === k ? ' selected' : ''}>${motNiveau(k)}</option>`).join('')}</select></label>
-        <label>${K('a_statut')}<select name="statut"><option value="">${K('s_tous')}</option>${['ouverte', 'accusee', 'en_action'].map((k) => `<option value="${k}"${f.statut === k ? ' selected' : ''}>${K(`u_statut_${k}`)}</option>`).join('')}</select></label>
+        <label>${K('a_categorie')}<select name="categorie">${opt('categorie', '', K('s_toutes'))}${CATS.map((c) => opt('categorie', c, cat(c))).join('')}</select></label>
+        <label>${K('s_niveau')}<select name="niveau">${opt('niveau', '', K('s_tous'))}${['rouge', 'orange', 'vert'].map((k) => opt('niveau', k, motNiveau(k))).join('')}</select></label>
+        <label>${K('a_statut')}<select name="statut">${opt('statut', '', K('s_tous'))}${['ouverte', 'accusee', 'en_action'].map((k) => opt('statut', k, K(`u_statut_${k}`))).join('')}${opt('statut', 'resolues', K('a_resolues'))}</select></label>
         <label>${K('a_recherche')}<input type="search" name="q" value="${esc(f.q)}" autocomplete="off"></label></form>
-      <div class="tuiles-chrono tuiles-sejours"><div class="tuile-c ds-kpi"><span class="gros num">${vus.length}</span><span class="ds-kpi-lib">${K('a_affichees')}</span></div>
-        <div class="tuile-c ds-kpi ton-rouge"><span class="gros num">${n('rouge')}</span><span class="ds-kpi-lib">${K('s_escalade')}</span></div>
-        <div class="tuile-c ds-kpi ton-orange"><span class="gros num">${n('orange')}</span><span class="ds-kpi-lib">${K('s_vigilance')}</span></div></div>
-      ${vus.length ? `<div class="grille-alertes">${vus.map(carte).join('')}</div>` : `<p class="note vide-chrono">${(d.alertes || []).length ? K('s_aucun_filtre') : K('a_aucune')}</p>`}
+      <div class="tuiles-chrono tuiles-sejours"><div class="tuile-c ds-kpi"><span class="gros num">${vus.length}</span><span class="ds-kpi-lib">${resoluesVue ? K('a_resolues') : K('a_affichees')}</span></div>
+        ${resoluesVue ? '' : `<div class="tuile-c ds-kpi ton-rouge"><span class="gros num">${n('rouge')}</span><span class="ds-kpi-lib">${K('s_escalade')}</span></div>
+        <div class="tuile-c ds-kpi ton-orange"><span class="gros num">${n('orange')}</span><span class="ds-kpi-lib">${K('s_vigilance')}</span></div>`}</div>
+      ${vus.length ? `<div class="grille-alertes">${vus.map(carte).join('')}</div>` : `<p class="note vide-chrono">${toutes.length ? K('s_aucun_filtre') : K('a_aucune')}</p>`}
       <p class="note">${K('a_note')}</p>`;
   }
   function brancherAlertes() {
@@ -457,6 +464,7 @@
     form.onsubmit = (e) => e.preventDefault();
     form.onchange = form.oninput = (e) => { if (!e.target.name) return; etatC.fa[e.target.name] = e.target.value; if (e.type === 'change' || e.target.name !== 'q') { vueChrono(); } };
     form.q.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); etatC.fa.q = e.target.value; vueChrono(); } };
+    $('#v-chrono').querySelectorAll('[data-ouvrir-vigilance]').forEach((b) => { b.onclick = () => allerA(document.querySelector('#onglets button[data-v="vigilance"]') ? 'vigilance' : 'chrono'); });
   }
 
   /* ---------- Qualité de l'information : chaque mesure a un état écrit (synchronisé, retardé, inconnu…) et son explication ---------- */
@@ -497,6 +505,24 @@
     const apres = conteneur.querySelector('.ch-situation, .acc-vue'); if (apres) apres.after(sec); else conteneur.appendChild(sec);
     sec.querySelectorAll('[data-accueil-chrono]').forEach((b) => { b.onclick = () => { etatC.sous = b.dataset.accueilChrono; if (etatC.sous === 'patients') etatC.fp = { etape: b.dataset.allerEtape || '' }; allerA('chrono'); }; });
     window.ArrimoDuree?.tic(); recolorer(sec);
+  }
+
+  /* ---------- Anticipation : situation observée, prévision ESTIMÉE par horizon (jamais une disponibilité réelle), risque, action ---------- */
+  function vuePrevisions(pv) {
+    if (!pv || !(pv.unites || []).length) return `<p class="note">${K('u_prev_indispo')}</p>`;
+    const H = pv.horizons || [];
+    const carte = (u) => {
+      const risque = H.find((h) => u.horizons?.[h]?.risque);
+      return `<article class="carte-alerte niveau-${risque ? 'orange' : 'vert'}"><header><div><h4>${esc(u.type_nom)}</h4><span class="note">${K('p_observe', { l: u.libres, o: u.occupes, d: u.dotes, a: u.en_attente })}</span></div>
+          <span class="statut-op statut-${u.libres > 0 ? 'disponible' : 'occupe'}">${K('p_libres_maint', { n: u.libres })}</span></header>
+        <div class="tableau"><table><thead><tr><th>${K('p_horizon')}</th><th>${K('p_libres_prevus')}</th><th>${K('p_liberations')}</th><th>${K('p_arrivees')}</th><th>${K('p_risque')}</th></tr></thead><tbody>
+          ${H.map((h) => { const x = u.horizons?.[h]; return x ? `<tr><th>${K('u_dans', { h })}</th><td><b class="num">${esc(x.libres_prevus)}</b> <span class="note">± ${esc(x.marge)} · ${K('g_estime')}</span></td><td class="num">${esc(x.liberations)}</td><td class="num">${esc(x.arrivees)}</td>
+            <td>${x.sature ? `<span class="statut-op statut-occupe">${K('p_sature')}</span>` : x.risque ? `<span class="statut-op statut-a_nettoyer">${K('p_risque_oui')}</span>` : `<span class="statut-op statut-disponible">${K('p_risque_non')}</span>`}</td></tr>` : ''; }).join('')}
+        </tbody></table></div>
+        <p class="note">${risque ? K('p_action', { h: risque }) : K('p_action_aucune')}</p></article>`;
+    };
+    return `<p class="note">${K('u_prev_note')}</p><div class="grille-alertes">${pv.unites.map(carte).join('')}</div>
+      <p class="note">${K('p_sources', { s: pv.semaines ?? '—', h: pv.genere_le ? heureCourte(pv.genere_le) : '—' })}</p>`;
   }
 
   /* ---------- Patients et séjours ---------- */
@@ -661,6 +687,7 @@
     const g = ev.target.closest('[data-aller-chrono]'); if (!g || !document.getElementById('v-chrono')?.contains(g)) return;
     etatC.sous = g.dataset.allerChrono;
     if (etatC.sous === 'patients') etatC.fp = { etape: g.dataset.allerEtape || '', niveau: g.dataset.allerNiveau || '' };
+    if (etatC.sous === 'capacites') etatC.fc = { statut: g.dataset.allerStatut || '' };
     vueChrono();
   });
   document.addEventListener('click', (ev) => { const b = ev.target.closest('[data-sous-chrono]'); if (!b || !document.getElementById('v-chrono')?.contains(b)) return; etatC.sous = b.dataset.sousChrono; vueChrono(); });

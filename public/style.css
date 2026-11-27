@@ -1247,13 +1247,13 @@ body.mode-presentation #b-notif, body.mode-presentation #b-menu { visibility: hi
 .statut-op::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: #94A3B8; }
 .statut-disponible { border-color: #16A34A; } .statut-disponible::before { background: #16A34A; }
 .statut-occupe { border-color: #DC2626; } .statut-occupe::before { background: #DC2626; }
-.statut-reserve, .statut-conserve { border-color: #2563EB; } .statut-reserve::before, .statut-conserve::before { background: #2563EB; }
-.statut-a_nettoyer, .statut-en_nettoyage { border-color: #F59E0B; } .statut-a_nettoyer::before, .statut-en_nettoyage::before { background: #F59E0B; }
+.statut-reserve, .statut-conserve, .statut-en_verification { border-color: #2563EB; } .statut-reserve::before, .statut-conserve::before, .statut-en_verification::before { background: #2563EB; }
+.statut-a_nettoyer, .statut-en_nettoyage, .statut-en_desinfection { border-color: #F59E0B; } .statut-a_nettoyer::before, .statut-en_nettoyage::before, .statut-en_desinfection::before { background: #F59E0B; }
 .tuiles-statuts { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--e3); margin-bottom: var(--e3); }
 .tuile-statut { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; text-align: left; border: 1px solid var(--bordure); border-top: 5px solid #94A3B8; border-radius: var(--rayon-carte); background: var(--carte); color: var(--texte); padding: var(--e3) var(--e4); cursor: pointer; font: inherit; min-height: 40px; }
 .tuile-statut[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--principal); }
 .tuile-statut .ts-nombre { font-size: 28px; font-weight: 700; line-height: 1; }
-.statut-bord-disponible { border-top-color: #16A34A; } .statut-bord-occupe { border-top-color: #DC2626; } .statut-bord-reserve, .statut-bord-conserve { border-top-color: #2563EB; } .statut-bord-a_nettoyer, .statut-bord-en_nettoyage { border-top-color: #F59E0B; }
+.statut-bord-disponible { border-top-color: #16A34A; } .statut-bord-occupe { border-top-color: #DC2626; } .statut-bord-reserve, .statut-bord-conserve, .statut-bord-en_verification { border-top-color: #2563EB; } .statut-bord-a_nettoyer, .statut-bord-en_nettoyage, .statut-bord-en_desinfection { border-top-color: #F59E0B; }
 .table-capacites th, .table-capacites td { white-space: nowrap; }
 
 /* Chrono : cartes d'alertes larges (en-tête, compteur et informations, description) */

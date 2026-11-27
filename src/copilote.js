@@ -434,12 +434,12 @@ async function reponseTemporelle(pool, utilisateur, etabId, q, L) {
     const r = d.patients.filter((x) => x.niveau === 'rouge'); const o = d.patients.filter((x) => x.niveau === 'orange');
     const top = [...r, ...o].slice(0, 3).map((x) => `${x.reference} (${ETAPE[x.etape]}, ${x.depuis ? hhmmss(Date.now() - new Date(x.depuis).getTime()) : '—'})`);
     return { mode: 'local', intentions: ['chrono'], sources: ['chrono'], ouvrir: 'chrono',
-      reponse: L === 'en' ? `Fact (Chrono): ${d.patients.length} patient(s) present, ${o.length} on watch, ${r.length} in escalation.${top.length ? ` First: ${top.join('; ')}.` : ''} Time thresholds only, never a clinical priority.`
-        : `Fait (Chrono) : ${d.patients.length} patient(s) présent(s), ${o.length} en vigilance, ${r.length} en escalade.${top.length ? ` En premier : ${top.join(' ; ')}.` : ''} Seuils de temps seulement, jamais une priorité clinique.` };
+      reponse: L === 'en' ? `Fact (Chrono): patients present: ${d.patients.length}; on watch: ${o.length}; in escalation: ${r.length}.${top.length ? ` First: ${top.join('; ')}.` : ''} Time thresholds only, never a clinical priority.`
+        : `Fait (Chrono) : patients présents : ${d.patients.length} ; en vigilance : ${o.length} ; en escalade : ${r.length}.${top.length ? ` En premier : ${top.join(' ; ')}.` : ''} Seuils de temps seulement, jamais une priorité clinique.` };
   }
   const a = d.alertes; const top = a.slice(0, 3).map((x) => `${x.titre} (${x.depuis ? hhmmss(Date.now() - new Date(x.depuis).getTime()) : '—'})`);
   return { mode: 'local', intentions: ['chrono'], sources: ['chrono'], ouvrir: 'chrono',
-    reponse: a.length ? (L === 'en' ? `Fact: ${a.length} active alert(s)/escalation(s). Oldest: ${top.join('; ')}.` : `Fait : ${a.length} alerte(s) ou escalade(s) active(s). Les plus anciennes : ${top.join(' ; ')}.`)
+    reponse: a.length ? (L === 'en' ? `Fact: active alerts or escalations: ${a.length}. Oldest: ${top.join('; ')}.` : `Fait : alertes ou escalades actives : ${a.length}. Les plus anciennes : ${top.join(' ; ')}.`)
       : (L === 'en' ? 'Fact: no active alert or escalation.' : 'Fait : aucune alerte ni escalade active.') };
 }
 async function question(pool, utilisateur, etabId, q, fetchImpl, patientContexteId) {

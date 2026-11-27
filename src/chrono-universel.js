@@ -47,7 +47,11 @@ async function universel(pool, u, etabId) {
   const [civ, lits, prealertes, transports, alertes, qualiteBrute] = await Promise.all([
     pool.query(`SELECT id, code, etat, categorie, patient_ref, arrivee_le, etat_depuis FROM civieres WHERE etablissement_id = $1 ORDER BY code`, [etabId]),
     pool.query(`SELECT l.id, l.code, l.etat, l.patient_ref, l.etat_depuis, l.nsa_depuis, l.nettoyage_debut, un.nom AS unite
-      , l.disponibilite_confirmee_le FROM lits l LEFT JOIN unites un ON un.id = l.unite_id WHERE l.etablissement_id = $1 ORDER BY un.nom, l.code`, [etabId]),
+      , l.disponibilite_confirmee_le, ni.statut AS intervention, ni.debut_le AS intervention_debut, ni.fin_le AS intervention_fin
+      FROM lits l LEFT JOIN unites un ON un.id = l.unite_id
+      -- Nettoyage sous précautions : désinfection (intervention en cours) puis vérification (contrôle requis) ; jamais disponible avant validation
+      LEFT JOIN nettoyage_interventions ni ON ni.lit_id = l.id AND ni.statut IN ('en_cours', 'controle_requis')
+      WHERE l.etablissement_id = $1 ORDER BY un.nom, l.code`, [etabId]),
     pool.query(`SELECT p.id, p.numero, p.statut, p.priorite, p.heure_prevue, p.cree_le, p.recue_le, p.arrivee_signalee_le, p.arrivee_confirmee_le, un.numero AS unite,
         (SELECT json_build_object('minutes', ea.minutes, 'distance_km', ea.distance_km::float, 'le', ea.calcule_le) FROM eta_prealertes ea WHERE ea.prealerte_id = p.id) AS eta,
         (SELECT max(pu.enregistree_le) FROM positions_unites pu WHERE pu.unite_id = p.unite_id) AS derniere_position
@@ -57,8 +61,10 @@ async function universel(pool, u, etabId) {
         d.patient_etat, d.patient_pret_le, d.accueil_pret_le, d.prealerte_eta_min, d.prealerte_eta_le, un.numero AS unite
       FROM demandes_transport d LEFT JOIN unites_secours un ON un.id = d.unite_id
       WHERE (d.origine_id = $1 OR d.destination_id = $1) AND d.statut IN ('acceptee', 'en_route', 'pris_en_charge') ORDER BY d.id`, [etabId]),
-    entretien ? { rows: [] } : pool.query(`SELECT id, titre, niveau, statut, cree_le, accuse_le, echeance, escalade_niveau FROM suivis_alertes
-      WHERE etablissement_id = $1 AND statut IN ('ouverte', 'accusee', 'en_action') ORDER BY cree_le`, [etabId]).catch(() => ({ rows: [] })),
+    // Alertes actives, et levées ou résolues dans les dernières 24 h (filtre « résolues »), avec type, clé d'incident et responsable
+    entretien ? { rows: [] } : pool.query(`SELECT id, cle, type, objet, responsable_role, titre, niveau, statut, cree_le, accuse_le, echeance, escalade_niveau,
+        COALESCE(resolue_le, levee_le) AS fin_le FROM suivis_alertes
+      WHERE etablissement_id = $1 AND (statut IN ('ouverte', 'accusee', 'en_action') OR COALESCE(resolue_le, levee_le) > now() - interval '24 hours') ORDER BY cree_le`, [etabId]).catch(() => ({ rows: [] })),
     entretien ? null : pool.query(`SELECT
         (SELECT count(*)::int FROM notifications WHERE etablissement_id = $1 AND NOT lu AND date < now() - interval '15 minutes') AS notifications_non_lues_15min,
         (SELECT count(*)::int FROM prealertes WHERE destination_id = $1 AND statut NOT IN ('cloturee', 'annulee', 'remplacee') AND recue_le IS NULL AND cree_le < now() - interval '2 minutes') AS prealertes_non_recues,
@@ -68,7 +74,9 @@ async function universel(pool, u, etabId) {
   // Patients et séjours : TOUS les séjours actifs autorisés (lits occupés, civières, demandes d'admission), étape et seuils configurés
   const [patients, organisation] = entretien ? [[], null] : await Promise.all([CS.sejoursActifs(pool, etabId, cfg, now), CS.organisation(pool, etabId)]);
   const capacites = [
-    ...lits.rows.filter((l) => l.etat === 'nettoyage').map((l) => (l.nettoyage_debut
+    ...lits.rows.filter((l) => l.etat === 'nettoyage' && l.intervention === 'en_cours').map((l) => it('nettoyage_en_cours', { objet: 'lit', id: l.id, ressource: l.code, unite: l.unite, phase: 'en_desinfection', statut: 'en_desinfection' }, l.intervention_debut, now)),
+    ...lits.rows.filter((l) => l.etat === 'nettoyage' && l.intervention === 'controle_requis').map((l) => it('nettoyage_attente', { objet: 'lit', id: l.id, ressource: l.code, unite: l.unite, phase: 'en_verification', statut: 'en_verification' }, l.intervention_fin || l.intervention_debut, now)),
+    ...lits.rows.filter((l) => l.etat === 'nettoyage' && !l.intervention).map((l) => (l.nettoyage_debut
       ? it('nettoyage_en_cours', { objet: 'lit', id: l.id, ressource: l.code, unite: l.unite, phase: 'nettoyage_en_cours', attente_avant_nettoyage_min: Math.max(0, Math.round((new Date(l.nettoyage_debut) - new Date(l.etat_depuis)) / 60000)) }, l.nettoyage_debut, now)
       : it('nettoyage_attente', { objet: 'lit', id: l.id, ressource: l.code, unite: l.unite, phase: 'attente_nettoyage' }, l.etat_depuis, now))),
     ...lits.rows.filter((l) => ['reserve', 'indispo'].includes(l.etat)).map((l) => it(l.etat, { objet: 'lit', id: l.id, ressource: l.code, unite: l.unite, phase: l.etat }, l.etat_depuis, now)),
@@ -111,7 +119,14 @@ async function universel(pool, u, etabId) {
             niveau: obsolete ? 'gris' : ['retarde', 'indisponible'].includes(d.patient_etat) || lent ? 'orange' : d.patient_etat === 'pret' || d.accueil_pret_le ? 'vert' : depuis ? 'vert' : 'gris' }; })() };
     }),
   ];
-  const alertesItems = alertes.rows.map((a) => it('alerte', { objet: 'alerte', id: Number(a.id), titre: a.titre, statut: a.statut, escalade_niveau: a.escalade_niveau,
+  // Catégorie d'une alerte d'après son type (règle explicite ; « technique » et « synchronisation » ne sont jamais des urgences cliniques)
+  const categorie = (t = '') => (/connecteur|adt|hl7|fhir|integration|api/.test(t) ? 'technique' : /sync|perime|obsolete|fraicheur/.test(t) ? 'synchronisation'
+    : /nettoyage/.test(t) ? 'nettoyage' : /ambulance|prealerte|secours/.test(t) ? 'ambulances' : /transfert|transport/.test(t) ? 'transferts'
+    : /admission|civiere_sans|conge|nsa|patient|resident/.test(t) ? 'patients' : /lit|civiere|place|hors_service|reserv|capacit/.test(t) ? 'capacites' : 'operationnelle');
+  const actives = alertes.rows.filter((a) => ['ouverte', 'accusee', 'en_action'].includes(a.statut));
+  const resolues = alertes.rows.filter((a) => !['ouverte', 'accusee', 'en_action'].includes(a.statut)).map((a) => ({ objet: 'alerte', id: Number(a.id), cle: a.cle, type: a.type,
+    categorie: categorie(a.type), titre: a.titre, statut: a.statut, depuis: a.cree_le, fin_le: a.fin_le, niveau: 'vert', duree_resolution_min: a.fin_le ? Math.round((new Date(a.fin_le) - new Date(a.cree_le)) / 60000) : null }));
+  const alertesItems = actives.map((a) => it('alerte', { objet: 'alerte', id: Number(a.id), cle: a.cle, type: a.type, categorie: categorie(a.type), cible: a.objet, responsable_role: a.responsable_role, titre: a.titre, statut: a.statut, escalade_niveau: a.escalade_niveau,
     reaction_min: a.accuse_le ? Math.round((new Date(a.accuse_le) - new Date(a.cree_le)) / 60000) : null, echeance: a.echeance }, a.cree_le, now));
   let previsions = null;
   if (!entretien) { try { previsions = await require('./previsions').previsions(pool, u, etabId); } catch { previsions = null; } }
@@ -141,7 +156,7 @@ async function universel(pool, u, etabId) {
   const compte = (l) => ({ total: l.length, rouge: l.filter((x) => x.niveau === 'rouge').length, orange: l.filter((x) => x.niveau === 'orange').length, gris: l.filter((x) => x.niveau === 'gris').length });
   return { etablissement_id: etabId, genere_le: new Date(now).toISOString(), seuils_min: SC, seuils_etapes: entretien ? null : CS.seuilsDe(cfg),
     resume: { patients: compte(patients), capacites: compte(capacites), ambulances: compte(ambulances), alertes: compte(alertesItems) },
-    patients, organisation, capacites, ambulances, alertes: alertesItems, previsions, qualite, performance_t5: performanceT5 };
+    patients, organisation, capacites, ambulances, alertes: alertesItems, alertes_resolues: resolues, previsions, qualite, performance_t5: performanceT5 };
 }
 
 module.exports = { universel, SEUILS, niveau, seuilsEffectifs };
