@@ -270,12 +270,30 @@ window.ARRIMO_I18N.fr.aide = {
       gestes: ['Relisez la liste de vérification de votre protocole.', 'Si une alternative suffit, cliquez « Transfert évité grâce à elle » ; sinon « Transfert fait ».', 'L’administration écrit la liste et les coordonnées.'],
       erreurs: [['Version périmée', 'Quelqu’un a modifié la liste : rechargez l’écran.']],
     },
+    conges: {
+      nom: 'Congés',
+      but: 'Préparer les sorties : congés d’aujourd’hui, de demain et à venir, destination, transport, obstacles au départ et disponibilités prévisionnelles. Un congé prévu n’est jamais un lit libre.',
+      gestes: ['Cliquez une tuile (aujourd’hui, retardés, transport nécessaire…) pour filtrer la liste.', 'Levez les obstacles affichés (transport à confirmer, destination à préciser), puis enregistrez le départ dans Lits.', 'Le compteur Chrono indique le retard ou la durée de préparation, la même durée que dans Chrono.'],
+      erreurs: [['Disponibilité non calculable', 'Une heure de congé confirmée est nécessaire ; le lit ne devient disponible qu’après le départ et le nettoyage.']],
+    },
+    'c-departs': {
+      nom: 'Départs',
+      but: 'Suivre les sorties et fins d’hébergement. Les hospitalisations temporaires et les absences gardent leur place : ce ne sont pas des départs.',
+      gestes: ['Ouvrez le dossier d’un résident pour enregistrer une fin d’hébergement.', 'Suivez une hospitalisation dans Transferts → Hôpital et hébergement.'],
+      erreurs: [['Place conservée', 'Une place conservée n’est jamais comptée comme disponible.']],
+    },
+    'c-alertes': {
+      nom: 'Alertes',
+      but: 'Toutes les alertes de l’établissement : actives, vigilance, escalades, prises en charge, résolues et historique. La même source que Chrono et la cloche.',
+      gestes: ['Choisissez un onglet, puis accusez réception, engagez une action ou confirmez la résolution.', 'Ouvrez l’historique d’une alerte pour voir qui a fait quoi et quand.'],
+      erreurs: [['Version périmée', 'Quelqu’un a déjà traité l’alerte : l’écran se recharge.']],
+    },
     vigilance: {
-      nom: 'Congés · Alertes',
-      but: 'Voir lit par lit les départs prévus (avec leur statut, l’heure et la source) et les blocages expliqués : origine, seuil, fait ou hypothèse, action proposée et responsable.',
+      nom: 'Alertes',
+      but: 'Alertes actives, vigilance, escalades, prises en charge, résolues et historique, expliquées : origine, seuil, fait ou hypothèse, action proposée et responsable. Les congés ont leur propre module.',
       gestes: [
-        'Choisissez l’horizon (4 h, 12 h, 24 h, aujourd’hui, demain), puis filtrez par unité ou par statut.',
-        'Un congé en retard affiche « Vérification nécessaire » : vérifiez avec l’unité, puis enregistrez le départ ou mettez à jour le congé dans Lits.',
+        'Choisissez un onglet (Actives, Vigilance, Escalades, Prises en charge, Résolues, Historique).',
+        'Accusez réception, engagez une action de la liste ou confirmez la résolution ; l’historique garde chaque geste.',
         'Pour chaque alerte, lisez l’origine et le seuil, puis décidez de l’action proposée : rien n’est annulé automatiquement.',
       ],
       erreurs: [

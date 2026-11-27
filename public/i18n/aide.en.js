@@ -270,12 +270,30 @@ window.ARRIMO_I18N.en.aide = {
       gestes: ['Review the checklist from your protocol.', 'If an alternative is enough, click “Transfer avoided thanks to it”; otherwise “Transfer made”.', 'The administration writes the checklist and contact details.'],
       erreurs: [['Outdated version', 'Someone changed the checklist: reload the screen.']],
     },
+    conges: {
+      nom: 'Discharges',
+      but: 'Prepare departures: today, tomorrow and upcoming discharges, destination, transport, obstacles and expected availability. A planned discharge is never a free bed.',
+      gestes: ['Click a tile (today, delayed, transport needed…) to filter the list.', 'Clear the obstacles shown (transport to confirm, destination to specify), then record the departure in Beds.', 'The Chrono counter shows the delay or preparation time, the same duration as in Chrono.'],
+      erreurs: [['Availability cannot be calculated', 'A confirmed discharge time is needed; the bed becomes available only after departure and cleaning.']],
+    },
+    'c-departs': {
+      nom: 'Departures',
+      but: 'Follow exits and end of stay. Temporary hospital stays and absences keep their place: they are not departures.',
+      gestes: ['Open a resident’s record to register an end of stay.', 'Follow a hospital stay in Transfers → Hospital and residence.'],
+      erreurs: [['Place kept', 'A kept place is never counted as available.']],
+    },
+    'c-alertes': {
+      nom: 'Alerts',
+      but: 'All the facility’s alerts: active, watch, escalations, being handled, resolved and history. The same source as Chrono and the bell.',
+      gestes: ['Pick a tab, then acknowledge, start an action or confirm the resolution.', 'Open an alert’s history to see who did what and when.'],
+      erreurs: [['Outdated version', 'Someone already handled the alert: the screen reloads.']],
+    },
     vigilance: {
-      nom: 'Discharges and alerts',
-      but: 'See planned departures bed by bed (status, time and source) and explained blockages: origin, threshold, fact or hypothesis, suggested action and owner.',
+      nom: 'Alerts',
+      but: 'Active alerts, watch, escalations, being handled, resolved and history, explained: origin, threshold, fact or hypothesis, suggested action and owner. Discharges have their own module.',
       gestes: [
-        'Pick the horizon (4 h, 12 h, 24 h, today, tomorrow), then filter by unit or status.',
-        'A late discharge shows “Check needed”: check with the unit, then record the departure or update the discharge in Beds.',
+        'Pick a tab (Active, Watch, Escalations, Being handled, Resolved, History).',
+        'Acknowledge, start an action from the list or confirm the resolution; the history keeps every step.',
         'For each alert, read the origin and threshold, then decide on the suggested action: nothing is cancelled automatically.',
       ],
       erreurs: [
