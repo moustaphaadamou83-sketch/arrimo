@@ -550,7 +550,7 @@
     modale(K('s_detail_titre', { r: r.reference }), `<div class="sejour-detail">${tete}<h4>${K('s_decomposition')}</h4>${frise}${parDep}${table}
       <p class="note">${K('s_note_detail')}</p>${ouvrir.length ? `<p class="actions-sejour">${ouvrir.map(([vue]) => `<button type="button" class="btn" data-ouvrir-vue="${vue}">${vue === 'c-residents' ? K('s_ouvrir_residents') : K(`s_ouvrir_${vue}`)}</button>`).join('')}</p>` : ''}</div>`,
     [{ label: t('general.fermer') }]);
-    const m = $('#modale'); m.querySelector('.boite')?.classList.add('large');
+    const m = $('#modale'); m.querySelector('.boite')?.classList.add('sejour-large');
     m.querySelectorAll('[data-ouvrir-vue]').forEach((b) => { b.onclick = () => { m.hidden = true; allerA(b.dataset.ouvrirVue); }; });
     window.ArrimoDuree?.tic(); recolorer(m);
   }

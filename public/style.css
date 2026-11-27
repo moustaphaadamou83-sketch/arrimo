@@ -1165,7 +1165,6 @@ body.mode-presentation #b-notif, body.mode-presentation #b-menu { visibility: hi
 .anneau-grand .ag-lib { font-size: 11px; color: var(--texte-2); margin-top: 2px; line-height: 1.2; }
 .anneau-grand.niveau-vert .ag-arc { stroke: #16A34A; } .anneau-grand.niveau-orange .ag-arc { stroke: #F59E0B; }
 .anneau-grand.niveau-rouge .ag-arc { stroke: #DC2626; } .anneau-grand.niveau-gris .ag-arc { stroke: #94A3B8; } .anneau-grand.niveau-bleu .ag-arc { stroke: #2563EB; }
-.anneau-grand.niveau-rouge .ag-val { color: #DC2626; }
 .pastille-chrono { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #94A3B8; margin-right: 6px; vertical-align: middle; flex: none; }
 .niveau-vert .pastille-chrono { background: #16A34A; } .niveau-orange .pastille-chrono { background: #F59E0B; } .niveau-rouge .pastille-chrono { background: #DC2626; } .niveau-bleu .pastille-chrono { background: #2563EB; }
 .cc-niveau { display: inline-flex; align-items: center; font-weight: 600; font-size: 13px; margin: 0; }
@@ -1185,7 +1184,7 @@ body.mode-presentation #b-notif, body.mode-presentation #b-menu { visibility: hi
 .ref-patient { font-variant-numeric: tabular-nums; }
 .etape-badge { display: inline-block; border: 1px solid var(--bordure); background: var(--doux, #EEF2F6); color: var(--texte); border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 600; white-space: nowrap; }
 .cs-og { background: var(--doux, #EEF2F6); border-radius: var(--rayon); padding: 6px 8px; }
-.cs-og b { color: #0E5E6F; margin-right: 4px; }
+.cs-og b { color: var(--principal); margin-right: 4px; }
 .grille-sejours { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--e3); margin: var(--e3) 0; align-items: stretch; }
 .grille-sejours.compacte { grid-template-columns: 1fr; }
 .grille-sejours.compacte .carte-chrono { padding: var(--e3); }
@@ -1198,7 +1197,7 @@ body.mode-presentation #b-notif, body.mode-presentation #b-menu { visibility: hi
 .bascule-vue button { border: 0; background: var(--carte); color: var(--texte); padding: 8px 12px; min-height: 38px; cursor: pointer; font-weight: 600; }
 .bascule-vue button[aria-pressed="true"] { background: #0E5E6F; color: #fff; }
 .tuiles-sejours { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
-.tuiles-sejours .tuile-c[aria-pressed="true"] { box-shadow: 0 0 0 2px #0E5E6F; }
+.tuiles-sejours .tuile-c[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--principal); }
 .tuiles-sejours .ton-orange { border-left: 5px solid #F59E0B; } .tuiles-sejours .ton-rouge { border-left: 5px solid #DC2626; } .tuiles-sejours .ton-gris { border-left: 5px solid #94A3B8; }
 .etapes-compte { display: flex; flex-wrap: wrap; gap: 6px; margin: var(--e3) 0; }
 .puce-etape { border: 1px solid var(--bordure); background: var(--carte); color: var(--texte); border-radius: 999px; padding: 5px 12px; min-height: 34px; cursor: pointer; font-size: 13px; }
@@ -1222,13 +1221,13 @@ body.mode-presentation #b-notif, body.mode-presentation #b-menu { visibility: hi
 .bloc-tete h3 { margin: 0; font-size: 16px; }
 .og-priorites { margin: 0; padding-left: 20px; display: grid; gap: 8px; }
 .og-priorites li { padding-left: 4px; }
-.og-priorites li::marker { font-weight: 700; color: #0E5E6F; }
+.og-priorites li::marker { font-weight: 700; color: var(--principal); }
 #v-chrono .lien, #modale .sejour-detail .lien { padding: 0; min-height: 0; font: inherit; }
 @media (max-width: 900px) { .grille-2-chrono { grid-template-columns: 1fr; } }
 @media (max-width: 520px) { .grille-sejours, .grille-supervision { grid-template-columns: 1fr; } .anneau-grand { width: 112px; height: 112px; } .anneau-grand.petit { width: 92px; height: 92px; } .carte-supervision { min-height: 0; } }
 
 /* Fiche de séjour : frise proportionnelle + tableau des étapes */
-#modale .boite.large { width: min(1100px, 96vw); max-height: 92vh; overflow: auto; }
+#modale .boite.sejour-large { width: min(1100px, 96vw); max-height: 92vh; overflow: auto; }
 .sejour-tete { display: flex; gap: var(--e4); align-items: center; flex-wrap: wrap; margin-bottom: var(--e3); }
 .sejour-tete p { margin: 2px 0; }
 .gros-ref { font-size: 22px; font-weight: 700; }
