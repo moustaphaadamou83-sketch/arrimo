@@ -2755,6 +2755,7 @@ ALTER TABLE missions_ccs ADD COLUMN IF NOT EXISTS recue_le timestamptz;
 ALTER TABLE missions_ccs ADD COLUMN IF NOT EXISTS consultee_le timestamptz;
 ALTER TABLE missions_ccs ADD COLUMN IF NOT EXISTS instructions text CHECK (instructions IS NULL OR length(instructions) <= 280);
 ALTER TABLE missions_ccs ADD COLUMN IF NOT EXISTS destination_id int REFERENCES etablissements(id);
+ALTER TABLE missions_ccs ADD COLUMN IF NOT EXISTS origine_id int REFERENCES etablissements(id);
 ALTER TABLE missions_ccs ADD COLUMN IF NOT EXISTS destination_libelle text CHECK (destination_libelle IS NULL OR length(destination_libelle) <= 120);
 CREATE TABLE IF NOT EXISTS messages_flotte (
   id                 bigserial PRIMARY KEY,
