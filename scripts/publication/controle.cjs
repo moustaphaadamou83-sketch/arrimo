@@ -12,6 +12,7 @@ const MIGRATIONS_APP = [
   '20261126-coordination-detection.sql', '20261126-coordination-suivi.sql', '20261126-quotes-parts.sql', '20261126-couverture.sql',
   '20261126-crise-suivi.sql', '20261126-connecteurs-suspension.sql', '20261126-releves.sql', '20261126-chrono-objectifs.sql',
   '20261126-ambiance.sql', '20261126-impact.sql', '20261126-compatibilite.sql', '20261126-exercices.sql',
+  '20261127-chrono-t5.sql', '20261128-flotte-ccs.sql',
 ];
 const ident = (x) => `"${String(x).replaceAll('"', '""')}"`;
 const copie = (x) => /^arrimo_publication_restore_[a-z0-9_]+$/.test(x);
