@@ -1166,8 +1166,8 @@ body.mode-presentation #b-notif, body.mode-presentation #b-menu { visibility: hi
 .anneau-grand.niveau-vert .ag-arc { stroke: #16A34A; } .anneau-grand.niveau-orange .ag-arc { stroke: #F59E0B; }
 .anneau-grand.niveau-rouge .ag-arc { stroke: #DC2626; } .anneau-grand.niveau-gris .ag-arc { stroke: #94A3B8; } .anneau-grand.niveau-bleu .ag-arc { stroke: #2563EB; }
 .anneau-grand.niveau-rouge .ag-val { color: #DC2626; }
-.pastille-niveau { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #94A3B8; margin-right: 6px; vertical-align: middle; flex: none; }
-.niveau-vert .pastille-niveau { background: #16A34A; } .niveau-orange .pastille-niveau { background: #F59E0B; } .niveau-rouge .pastille-niveau { background: #DC2626; } .niveau-bleu .pastille-niveau { background: #2563EB; }
+.pastille-chrono { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #94A3B8; margin-right: 6px; vertical-align: middle; flex: none; }
+.niveau-vert .pastille-chrono { background: #16A34A; } .niveau-orange .pastille-chrono { background: #F59E0B; } .niveau-rouge .pastille-chrono { background: #DC2626; } .niveau-bleu .pastille-chrono { background: #2563EB; }
 .cc-niveau { display: inline-flex; align-items: center; font-weight: 600; font-size: 13px; margin: 0; }
 
 .carte-chrono { display: flex; gap: var(--e4); align-items: center; border: 1px solid var(--bordure); border-left: 5px solid #94A3B8; border-radius: var(--rayon-carte); background: var(--carte); padding: var(--e4); min-width: 0; }
@@ -1216,15 +1216,15 @@ body.mode-presentation #b-notif, body.mode-presentation #b-menu { visibility: hi
 .carte-supervision .sv-nombre { font-size: 30px; font-weight: 700; line-height: 1; }
 .carte-supervision .sv-lib { font-weight: 600; font-size: 14px; }
 .carte-supervision .sv-ident { font-size: 12px; color: var(--texte-2); overflow-wrap: anywhere; }
-.grille-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--e4); align-items: stretch; margin: var(--e4) 0; }
-.grille-2 > .bloc-c { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--bordure); border-radius: var(--rayon-carte); background: var(--carte); padding: var(--e4); }
+.grille-2-chrono { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--e4); align-items: stretch; margin: var(--e4) 0; }
+.grille-2-chrono > .bloc-c { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--bordure); border-radius: var(--rayon-carte); background: var(--carte); padding: var(--e4); }
 .bloc-tete { display: flex; justify-content: space-between; align-items: center; gap: var(--e2); margin-bottom: var(--e2); }
 .bloc-tete h3 { margin: 0; font-size: 16px; }
 .og-priorites { margin: 0; padding-left: 20px; display: grid; gap: 8px; }
 .og-priorites li { padding-left: 4px; }
 .og-priorites li::marker { font-weight: 700; color: #0E5E6F; }
-.lien { background: none; border: 0; padding: 0; color: #0E5E6F; text-decoration: underline; cursor: pointer; font: inherit; }
-@media (max-width: 900px) { .grille-2 { grid-template-columns: 1fr; } }
+#v-chrono .lien, #modale .sejour-detail .lien { padding: 0; min-height: 0; font: inherit; }
+@media (max-width: 900px) { .grille-2-chrono { grid-template-columns: 1fr; } }
 @media (max-width: 520px) { .grille-sejours, .grille-supervision { grid-template-columns: 1fr; } .anneau-grand { width: 112px; height: 112px; } .anneau-grand.petit { width: 92px; height: 92px; } .carte-supervision { min-height: 0; } }
 
 /* Fiche de séjour : frise proportionnelle + tableau des étapes */

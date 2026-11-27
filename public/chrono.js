@@ -260,7 +260,7 @@
   /** Carte commune (patients, capacités, alertes) : anneau + titre + lignes + mot du niveau ; cliquable si `cle`. */
   const carteChrono = (x, { titre, lignes = [], etiquette, cle, petit } = {}) => `<article class="carte-chrono niveau-${esc(x.niveau || 'gris')}" data-niveau-carte data-niveau-serveur="${esc(x.niveau || 'gris')}"${cle ? ` data-sejour="${esc(cle)}" tabindex="0" role="button" aria-label="${K('s_ouvrir', { r: cle })}"` : ''}>
       ${anneauGrand({ depuis: x.depuis, seuils: x.seuils_min, echeance: x.echeance, marge: x.marge_min, niveau: x.niveau, etiquette, petit })}
-      <div class="cc-corps"><h4>${titre}</h4>${lignes.filter(Boolean).map((l) => `<p>${l}</p>`).join('')}<p class="cc-niveau"><span class="pastille-niveau"></span><span class="cc-mot">${motNiveau(x.niveau)}</span></p></div></article>`;
+      <div class="cc-corps"><h4>${titre}</h4>${lignes.filter(Boolean).map((l) => `<p>${l}</p>`).join('')}<p class="cc-niveau"><span class="pastille-chrono"></span><span class="cc-mot">${motNiveau(x.niveau)}</span></p></div></article>`;
   const anneauDuree = (x, { libelle, sous } = {}) => carteChrono(x, { titre: esc(libelle || ''), lignes: [sous ? `<span class="note">${esc(sous)}</span>` : ''], etiquette: x.seuils_min ? K('s_seuil_court', { v: dureeCourte(x.seuils_min.vigilance) }) : '', petit: true });
   /** Durée lisible d'un seuil en minutes : « 4 h », « 7 j », « 45 min ». */
   function dureeCourte(m) { const n = Number(m); if (!Number.isFinite(n)) return '—'; if (n >= 1440 && n % 1440 === 0) return `${n / 1440} ${K('u_j')}`; if (n >= 60 && n % 60 === 0) return `${n / 60} h`; return `${n} min`; }
@@ -355,7 +355,7 @@
         ${anneauGrand({ depuis: x?.depuis, seuils: x?.seuils_min, niveau: x ? x.niveau : (n ? 'bleu' : 'vert'), etiquette: x ? K('s_plus_ancien') : '' })}
         <span class="sv-corps"><span class="sv-nombre num">${esc(n)}</span><span class="sv-lib">${lib}${estime ? ` <span class="badge-flux">${K('g_estime')}</span>` : ''}</span>
           ${x ? `<span class="sv-ident">${esc(ident)}${ou ? ` · ${ou}` : ''}</span>` : ''}${sous ? `<span class="note">${sous}</span>` : ''}
-          <span class="cc-niveau"><span class="pastille-niveau"></span><span class="cc-mot">${items.length ? motNiveau(niveau) : motNiveau('vert')}</span></span></span></button>`;
+          <span class="cc-niveau"><span class="pastille-chrono"></span><span class="cc-mot">${items.length ? motNiveau(niveau) : motNiveau('vert')}</span></span></span></button>`;
     };
     const etapes = (l) => P.filter((x) => l.includes(x.etape));
     const prev = d.previsions?.unites?.reduce((t, u) => t + (Number(u.horizons?.[d.previsions.horizons?.[0]]?.liberations) || 0), 0);
@@ -390,7 +390,7 @@
         <span class="note">(${motNiveau(x.niveau)}${x.depuis ? ` · <span class="duree-seule num" data-depuis="${esc(x.depuis)}">--:--:--</span>` : ''})</span></li>`).join('')}
       ${nett ? `<li class="niveau-orange">${K('g_nettoyage')} : ${nett} · <button type="button" class="lien" data-aller-chrono="capacites">${K('g_voir', { n: nett })}</button></li>` : ''}</ol>`;
     return `<div class="grille-supervision">${cartes.join('')}</div>
-      <div class="grille-2">
+      <div class="grille-2-chrono">
         <section class="bloc-c"><header class="bloc-tete"><h3>${K('g_prioritaires')}</h3>${toutes.length > 6 ? `<button type="button" class="lien" data-aller-chrono="patients" data-aller-niveau="rouge">${K('g_voir', { n: toutes.length })}</button>` : ''}</header>
           ${prio ? `<div class="grille-sejours compacte">${prio}</div>` : `<p class="note">${K('g_aucune')}</p>`}</section>
         <section class="bloc-c"><header class="bloc-tete"><h3>${K('g_og')}</h3></header><p class="note">${K('g_og_note')}</p>${og.length || nett ? ogHtml : `<p class="note">${K('g_og_vide')}</p>`}</section>
@@ -431,13 +431,13 @@
       <div class="cs-anneaux">${total}${et}</div>
       <div class="cc-corps">${info.map((l) => `<p>${l}</p>`).join('')}<p class="note">${seuil}</p>
         ${reco(x.recommandation) ? `<p class="cs-og"><b>OG</b> ${K('s_og', { r: reco(x.recommandation) })}</p>` : ''}
-        <p class="cc-niveau"><span class="pastille-niveau"></span><span class="cc-mot">${motNiveau(x.niveau)}</span></p></div></article>`;
+        <p class="cc-niveau"><span class="pastille-chrono"></span><span class="cc-mot">${motNiveau(x.niveau)}</span></p></div></article>`;
   }
   /** Vue compacte : une ligne par patient, mêmes compteurs (étape, séjour), même clic vers le parcours. */
   function ligneSejour(x) {
     const d = (depuis, s) => (depuis ? `<b class="num duree-seule" data-depuis="${esc(depuis)}"${seuilsAttr(s, depuis)}>--:--:--</b>` : `<span class="note">${K('u_inconnu')}</span>`);
     return `<tr class="niveau-${esc(x.niveau || 'gris')}" data-niveau-carte data-sejour="${esc(x.reference)}" tabindex="0" role="button" aria-label="${K('s_ouvrir', { r: x.reference })}">
-      <th><span class="pastille-niveau"></span> ${esc(x.reference)}</th><td>${etape(x.etape)}</td><td>${lieu(x) || '—'}</td><td>${emplacement(x)}</td>
+      <th><span class="pastille-chrono"></span> ${esc(x.reference)}</th><td>${etape(x.etape)}</td><td>${lieu(x) || '—'}</td><td>${emplacement(x)}</td>
       <td>${d(x.depuis, x.seuils_min)}</td><td>${d(x.sejour_depuis, x.sejour_seuils_min)}</td><td><span class="cc-mot">${motNiveau(x.niveau)}</span></td></tr>`;
   }
   const filtreP = () => (etatC.fp || (etatC.fp = {}));
@@ -534,7 +534,7 @@
     const a = r.actif;
     const tete = a ? `<div class="sejour-tete">${anneauGrand({ depuis: a.depuis, seuils: a.seuils_min, echeance: a.echeance, marge: a.marge_min, niveau: a.niveau, etiquette: etape(a.etape) })}
         <div><p class="gros-ref">${esc(r.reference)}</p><p>${lieu(a)}</p><p><b>${emplacement(a)}</b></p>
-        <p>${K('s_sejour')} <b class="num duree-seule" data-depuis="${esc(r.sejour_depuis)}">--:--:--</b></p><p class="cc-niveau niveau-${esc(a.niveau)}"><span class="pastille-niveau"></span>${motNiveau(a.niveau)}</p></div></div>`
+        <p>${K('s_sejour')} <b class="num duree-seule" data-depuis="${esc(r.sejour_depuis)}">--:--:--</b></p><p class="cc-niveau niveau-${esc(a.niveau)}"><span class="pastille-chrono"></span>${motNiveau(a.niveau)}</p></div></div>`
       : `<p class="gros-ref">${esc(r.reference)}</p><p class="note">${K('s_clos')}</p>`;
     const frise = `<div class="frise-sejour" role="img" aria-label="${K('s_frise', { n: r.etapes.length })}">${r.etapes.filter((e) => e.debut).map((e) => `<div class="frise-ligne"><span class="frise-lib">${libEtape(e)}</span><span class="frise-piste"><span class="frise-seg niveau-${esc(e.niveau)}" style="${pos(e)}"></span></span></div>`).join('')}
       <div class="frise-axe note"><span>${esc(new Date(debutFrise).toLocaleString(langue === 'en' ? 'en-CA' : 'fr-CA', { dateStyle: 'short', timeStyle: 'short' }))}</span><span>${K('s_maintenant')}</span></div></div>`;
@@ -543,7 +543,7 @@
       ${r.etapes.map((e) => `<tr${e.rang_delai ? ` class="rang-delai"` : ''}><th>${libEtape(e)}${e.rang_delai ? ` <span class="badge-flux">${K('s_rang', { n: e.rang_delai })}</span>` : ''}${e.departement ? ` <span class="note">${esc(e.departement)}</span>` : ''}${e.numero ? ` <span class="note">${esc(e.numero)}</span>` : ''}${e.ressource ? ` <span class="note">${esc(e.ressource)}</span>` : ''}</th><td>${quand(e.debut)}</td><td>${e.en_cours ? `<b>${K('s_en_cours')}</b>` : quand(e.fin)}</td>
         <td class="num">${e.en_cours && e.debut ? `<span class="duree-seule" data-depuis="${esc(e.debut)}">--:--:--</span>` : e.duree_min != null ? hh(e.duree_min * 60000) : '—'}</td>
         <td>${e.seuils_min ? `${dureeCourte(e.seuils_min.vigilance)} / ${dureeCourte(e.seuils_min.escalade)}` : e.echeance ? K('s_sortie_prevue', { h: heureCourte(e.echeance) }) : '—'}</td>
-        <td><span class="cc-niveau niveau-${esc(e.niveau)}"><span class="pastille-niveau"></span>${motNiveau(e.niveau)}</span></td><td>${K(`src_${['patients', 'urgences', 'admissions', 'capacites', 'nsa', 'conges', 'transferts', 'transports', 'dsn', 'residents'].includes(e.source) ? e.source : 'patients'}`)}</td></tr>`).join('')}
+        <td><span class="cc-niveau niveau-${esc(e.niveau)}"><span class="pastille-chrono"></span>${motNiveau(e.niveau)}</span></td><td>${K(`src_${['patients', 'urgences', 'admissions', 'capacites', 'nsa', 'conges', 'transferts', 'transports', 'dsn', 'residents'].includes(e.source) ? e.source : 'patients'}`)}</td></tr>`).join('')}
       </tbody></table></div>`;
     const ouvrir = [['urgence', 'urgences'], ['admissions', 'admissions'], ['lits', 'capacites'], ['nsa', 'nsa'], ['patients', 'patients'], ['c-residents', 'residents']]
       .filter(([vue, src]) => r.etapes.some((e) => e.source === src) && document.querySelector(`#onglets button[data-v="${vue}"]`));
