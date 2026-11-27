@@ -412,7 +412,7 @@ async function configurationOperationnelle(h) {
    compatibles (enregistrées comme le catalogue) ; un sous-module décoché disparaît des menus, cartes, filtres et routes de l'établissement. */
 async function architectureModules(h, v) {
   const zone = $('#modules', v); if (!zone || !h.relie || etat.moi.utilisateur.role !== 'administration' || !window.ArrimoRegistre) return;
-  const r = await api('GET', `/hopitaux/${h.id}/sous-modules`).catch(() => null); if (!r || !r.famille) return;
+  const r = await api('GET', `/hopitaux/${h.id}/sous-modules`).catch(() => null); if (!r || !r.famille) return; r.offres = r.famille === 'secours' ? [] : r.offres;
   const off = new Set(r.desactives);
   const ligne = (cle, nom, niveau) => `<label class="case" style="margin-left:${niveau * 18}px"><input type="checkbox" data-sm="${esc(cle)}"${off.has(cle) ? '' : ' checked'}> ${esc(nom)}</label>`;
   zone.insertAdjacentHTML('beforeend', `<details class="architecture-modules" open><summary><b>Architecture des modules (registre universel)</b></summary>
@@ -420,6 +420,9 @@ async function architectureModules(h, v) {
     <div class="ligne"><label class="lbl" for="am-offre">Offre commerciale</label><select id="am-offre"><option value="">—</option>${r.offres.map((o) => `<option value="${esc(o.id)}">${esc(o.fr)}</option>`).join('')}</select>
       <button class="btn" type="button" id="am-appliquer-offre">Appliquer l’offre aux licences</button></div><p class="note" id="am-besoins"></p>
     <div class="pile">${r.nav.map((m) => ligne(m.id, m.fr, 0) + (m.sous || []).map((x) => ligne(`${m.id}.${x.id}`, x.fr, 1)).join('')).join('')}</div>
+    ${r.famille === 'secours' ? `<div class="ligne"><label class="lbl" for="am-vig">Vigilance (min)</label><input id="am-vig" type="number" min="1" max="600" value="${r.seuils?.vigilance_min ?? 20}" style="max-width:90px">
+      <label class="lbl" for="am-esc">Escalade (min)</label><input id="am-esc" type="number" min="2" max="1440" value="${r.seuils?.escalade_min ?? 30}" style="max-width:90px"></div>
+      <p class="note">Seuils d’immobilisation indicatifs (défaut démo 20 / 30 min) : ils alertent le CCS, jamais une réorientation automatique ; ce ne sont pas des normes cliniques.</p>` : ''}
     <p class="note">Services techniques internes, toujours présents : ${r.services_techniques.map((x) => esc(x.fr)).join(' · ')}.</p>
     <button class="btn pri" type="button" id="am-enregistrer">Enregistrer les modules et sous-modules</button></details>`);
   $('#am-offre', zone).onchange = (e) => { const o = r.offres.find((x) => x.id === e.target.value); $('#am-besoins', zone).textContent = o?.besoins_fr || ''; };
@@ -427,8 +430,9 @@ async function architectureModules(h, v) {
     const liste = (h.modules || []).map((m) => ({ code: m.code, licence: m.statut === 'inclus' || (['disponible', 'inclus'].includes(m.statut) && (o.modules === '*' || o.modules.includes(m.code))) ? 'souscrit' : (m.licence === 'souscrit' ? 'non_selectionne' : m.licence), parametres: m.parametres }));
     agir(ev.currentTarget, () => api('PUT', `/hopitaux/${h.id}/modules`, { modules: liste }), `Offre « ${o.fr} » appliquée aux licences.`); };
   $('#am-enregistrer', zone).onclick = (ev) => { const sm = {}; zone.querySelectorAll('[data-sm]').forEach((c) => { const avant = !off.has(c.dataset.sm); if (c.checked !== avant) sm[c.dataset.sm] = c.checked; });
-    if (!Object.keys(sm).length) return toast('Aucun changement.');
-    agir(ev.currentTarget, () => api('PUT', `/hopitaux/${h.id}/sous-modules`, { sous_modules: sm }), 'Modules et sous-modules transmis à l’établissement.'); };
+    const seuils = r.famille === 'secours' ? { vigilance_min: Number($('#am-vig', zone).value), escalade_min: Number($('#am-esc', zone).value) } : null;
+    if (!Object.keys(sm).length && !seuils) return toast('Aucun changement.');
+    agir(ev.currentTarget, () => api('PUT', `/hopitaux/${h.id}/sous-modules`, { sous_modules: sm, ...(seuils ? { seuils } : {}) }), 'Modules et sous-modules transmis à l’établissement.'); };
 }
 function blocModules(h) {
   return `<p class="note">Catalogue et licences consignés dans SH. L'activation fonctionnelle des modules dépend des capacités réellement exposées par Arrimo.</p>

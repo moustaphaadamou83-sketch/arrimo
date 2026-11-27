@@ -121,19 +121,23 @@
         sm('parametres', 'params', 'Paramètres', 'Settings', { roles: RESPONSABLES }), sm('admin', 'admin', 'Administration', 'Administration', { roles: ADMIN }),
         sm('journal', 'journal', 'Journal', 'Activity log', { roles: RESPONSABLES }), sm('support', 'support', 'Assistance', 'Support')] },
     ],
-    // Écrans de secours (public/secours.html) : mêmes règles, profils activés depuis SH sur l'organisation
-    ambulance: [
-      { id: 'accueil', fr: 'Accueil', en: 'Home' }, { id: 'missions', fr: 'Missions', en: 'Missions' }, { id: 'secours_911', fr: 'Secours 911', en: '911 emergency' },
-      { id: 'transports_planifies', fr: 'Transports planifiés', en: 'Scheduled transports' }, { id: 'flotte', fr: 'Gestion de flotte', en: 'Fleet' },
-      { id: 'chrono', fr: 'Chrono', en: 'Chrono' }, { id: 'alertes', fr: 'Alertes', en: 'Alerts' }, { id: 'performance', fr: 'Performance', en: 'Performance' },
-      { id: 'historique', fr: 'Historique', en: 'History' }, { id: 'administration', fr: 'Administration', en: 'Administration' }],
-    embarque: [
-      { id: 'accueil', fr: 'Accueil', en: 'Home' }, { id: 'mission', fr: 'Mission actuelle', en: 'Current mission' }, { id: 'chrono', fr: 'Chrono', en: 'Chrono' },
-      { id: 'actions', fr: 'Actions opérationnelles', en: 'Operational actions' }, { id: 'historique', fr: 'Historique autorisé', en: 'Authorised history' }],
+    // Écrans de secours (public/secours.html), cahiers Ambulance/CCS du 27 nov. 2026 : un profil = une famille ; chaque module est activable
+    // depuis SH par organisation (organisations_secours.modules, clé `sm:<profil>.<module>`). routes = API dont il est l'emplacement principal.
     ccs: [
-      { id: 'missions', fr: 'Missions', en: 'Missions' }, { id: 'prealertes', fr: 'Préalertes', en: 'Pre-alerts' }, { id: 'capacites', fr: 'Capacités autorisées', en: 'Authorised capacity' },
-      { id: 'destinations', fr: 'Destinations', en: 'Destinations' }, { id: 'coordination', fr: 'Coordination', en: 'Coordination' }, { id: 'chrono', fr: 'Chrono', en: 'Chrono' },
-      { id: 'alertes', fr: 'Alertes', en: 'Alerts' }, { id: 'historique', fr: 'Historique', en: 'History' }],
+      { id: 'accueil', fr: 'Accueil', en: 'Home', routes: [] }, { id: 'missions', fr: 'Missions', en: 'Missions', routes: ['/secours/missions', '/secours/interventions-demo'] },
+      { id: 'flotte', fr: 'Flotte', en: 'Fleet', routes: ['/secours/messages'] }, { id: 'bourse', fr: 'Bourse des places', en: 'Placement exchange', routes: ['/secours/urgences-classees', '/secours/destinations'] },
+      { id: 'chrono', fr: 'Chrono', en: 'Chrono', routes: [] }, { id: 'alertes', fr: 'Alertes', en: 'Alerts', routes: ['/secours/flotte/alertes'] },
+      { id: 'pilotage', fr: 'Pilotage', en: 'Steering', routes: [] }, { id: 'historique', fr: 'Historique', en: 'History', routes: ['/secours/flotte/historique'] },
+      { id: 'administration', fr: 'Administration', en: 'Administration', routes: [] }],
+    ambulance: [
+      { id: 'accueil', fr: 'Accueil', en: 'Home', routes: [] }, { id: 'missions', fr: 'Missions', en: 'Missions', routes: ['/secours/transports'] },
+      { id: 'flotte', fr: 'Flotte', en: 'Fleet', routes: [] }, { id: 'equipes', fr: 'Équipes', en: 'Crews', routes: [] },
+      { id: 'chrono', fr: 'Chrono', en: 'Chrono', routes: [] }, { id: 'alertes', fr: 'Alertes', en: 'Alerts', routes: ['/secours/flotte/alertes'] },
+      { id: 'pilotage', fr: 'Pilotage', en: 'Steering', routes: [] }, { id: 'historique', fr: 'Historique', en: 'History', routes: ['/secours/flotte/historique'] },
+      { id: 'administration', fr: 'Administration', en: 'Administration', routes: [] }],
+    embarque: [
+      { id: 'accueil', fr: 'Accueil', en: 'Home', routes: [] }, { id: 'mission', fr: 'Mission', en: 'Mission', routes: [] },
+      { id: 'chrono', fr: 'Chrono', en: 'Chrono', routes: [] }, { id: 'historique', fr: 'Historique', en: 'History', routes: ['/secours/flotte/historique'] }],
   };
 
   /** Catégories de mouvements pertinentes par famille (§8-10) : jamais Inter-hébergement à l'hôpital, jamais Interhospitalier en hébergement. */
@@ -200,7 +204,7 @@
   /** Sous-modules propriétaires d'une route d'API (contrôle côté serveur), par famille. */
   function proprietaires(fam, chemin) {
     const r = [];
-    for (const m of NAV[fam] || []) for (const s of m.sous || []) if (s.routes.some((p) => chemin === p || chemin.startsWith(`${p}/`) || chemin.startsWith(`${p}.`))) r.push([m, s]);
+    for (const m of (['hopital', 'hebergement'].includes(fam) ? NAV[fam] : [])) for (const s of m.sous || []) if (s.routes.some((p) => chemin === p || chemin.startsWith(`${p}/`) || chemin.startsWith(`${p}.`))) r.push([m, s]);
     return r;
   }
   /**
@@ -216,8 +220,26 @@
     const ok = p.some(([m, s]) => !desactiveParSh(etab, m.id) && !desactiveParSh(etab, `${m.id}.${s.id}`) && sousLicence(etab, s.licence, licenceActive));
     return ok ? { ok: true } : { ok: false, raison: p.some(([m, s]) => desactiveParSh(etab, m.id) || desactiveParSh(etab, `${m.id}.${s.id}`)) ? 'sous_module' : 'licence', module: p[0][0].id };
   }
+  /** Famille « secours » (une organisation peut porter plusieurs profils) : un module par profil, ses écrans en sous-modules. */
+  const NAV_SECOURS = [['ccs', 'Profil CCS', 'CCS profile'], ['ambulance', 'Gestionnaire ambulancier', 'Ambulance manager'], ['embarque', 'Ambulancier embarqué', 'On-board paramedic']]
+    .map(([id, fr, en]) => ({ id, fr, en, sous: NAV[id].map((x) => ({ ...x, v: x.id })) }));
+  const navDe = (fam) => (fam === 'secours' ? NAV_SECOURS : NAV[fam] || []);
   /** Clés de sous-modules valides pour une famille (validation de ce que SH envoie). */
-  const clesSousModules = (fam) => (NAV[fam] || []).flatMap((m) => (m.sous ? [m.id, ...m.sous.map((s) => `${m.id}.${s.id}`)] : []));
+  const clesSousModules = (fam) => navDe(fam).flatMap((m) => (m.sous ? [m.id, ...m.sous.map((s) => `${m.id}.${s.id}`)] : []));
+  /** Profil d'interface d'un rôle de secours. */
+  const profilSecours = (role) => ({ repartiteur: 'ccs', superviseur_secours: 'ambulance', paramedic: 'embarque' }[role] || null);
+  /** Modules de secours visibles pour un profil, selon les organisations de l'utilisateur (un module coupé partout disparaît). */
+  function modulesSecours(profil, organisations) {
+    const orgs = organisations && organisations.length ? organisations : [{}];
+    return (NAV[profil] || []).filter((m) => orgs.some((o) => !desactiveParSh(o, profil) && !desactiveParSh(o, `${profil}.${m.id}`))).map((m) => m.id);
+  }
+  /** Route de secours autorisée ? null si aucun module n'en est propriétaire pour ce profil. */
+  function routeSecoursAutorisee(profil, organisations, chemin) {
+    const p = (NAV[profil] || []).filter((m) => m.routes.some((r) => chemin === r || chemin.startsWith(`${r}/`)));
+    if (!p.length) return null;
+    const vis = modulesSecours(profil, organisations);
+    return p.some((m) => vis.includes(m.id)) ? { ok: true } : { ok: false, module: `${profil}.${p[0].id}` };
+  }
 
-  return { FAMILLES, NAV, CATEGORIES_FLUX, SERVICES_TECHNIQUES, OFFRES, REDIRECTIONS, familleDe, interfacePour, ecransAutorises, routeAutorisee, clesSousModules, desactiveParSh };
+  return { NAV_SECOURS, navDe, profilSecours, modulesSecours, routeSecoursAutorisee, FAMILLES, NAV, CATEGORIES_FLUX, SERVICES_TECHNIQUES, OFFRES, REDIRECTIONS, familleDe, interfacePour, ecransAutorises, routeAutorisee, clesSousModules, desactiveParSh };
 }));

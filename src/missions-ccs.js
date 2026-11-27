@@ -63,8 +63,12 @@ async function proposerAvecClient(c, u, p, b, interventionId = null) {
   if (un.etat !== 'disponible') throw new ErreurHttp(409, 'unite_non_disponible', { unite: un.numero });
   if ((await c.query('SELECT 1 FROM missions_ccs WHERE unite_id = $1 AND statut = ANY($2)', [un.id, OUVERTES])).rowCount) throw new ErreurHttp(409, 'unite_deja_sollicitee', { unite: un.numero });
   if (await vehicules.missionActive(c, un.id)) throw new ErreurHttp(409, 'unite_non_disponible', { unite: un.numero });
-  const m = (await c.query(`INSERT INTO missions_ccs (numero, unite_id, organisation_ccs_id, lieu, priorite, categorie, cree_par, intervention_demo_id)
-    VALUES ('MI-' || lpad(nextval('mission_ccs_seq')::text, 6, '0'), $1, $2, $3, $4, $5, $6, $7) RETURNING *`, [un.id, p.ccsOrg, b.lieu, b.priorite, b.categorie, u.id, interventionId])).rows[0];
+  // Instructions opérationnelles et destination connue (facultatives) : transmises avec la mission, jamais une décision d'Arrimo
+  const instructions = b.instructions ? String(b.instructions).trim().replace(/\s+/g, ' ').slice(0, 280) : null;
+  const destId = b.destination_id ? entier(b.destination_id) : null;
+  if (destId && !(await c.query("SELECT 1 FROM etablissements WHERE id = $1 AND actif AND COALESCE(type_etablissement, 'hopital') = 'hopital'", [destId])).rowCount) throw new ErreurHttp(404, 'hopital_introuvable');
+  const m = (await c.query(`INSERT INTO missions_ccs (numero, unite_id, organisation_ccs_id, lieu, priorite, categorie, cree_par, intervention_demo_id, instructions, destination_id)
+    VALUES ('MI-' || lpad(nextval('mission_ccs_seq')::text, 6, '0'), $1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`, [un.id, p.ccsOrg, b.lieu, b.priorite, b.categorie, u.id, interventionId, instructions, destId])).rows[0];
   await c.query('INSERT INTO mission_ccs_evenements (mission_id, statut, utilisateur_id) VALUES ($1, $2, $3)', [m.id, 'proposee', u.id]);
   require('./flux').signaler();
   return { ...m, unite: un.numero };

@@ -321,6 +321,17 @@ function creerApp(pool, options = {}) {
     try { const s = await fs2.suivi(pool, req.utilisateur, req.query.etablissement_id, req.langue); res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="formation-suivi.csv"', 'Cache-Control': 'no-store' }).send(fs2.csv(s, req.langue)); } catch (e) { next(e); }
   });
 
+  // Modules des interfaces de secours désactivés depuis SH (organisation) : leurs API sont refusées côté serveur, données conservées
+  api.use(async (req, res, next) => {
+    try {
+      const profil = REG.profilSecours(req.utilisateur.role);
+      if (!profil || !req.path.startsWith('/secours/')) return next();
+      const orgs = (await pool.query(`SELECT COALESCE(o.modules, '{}'::jsonb) AS modules FROM utilisateur_organisations uo JOIN organisations_secours o ON o.id = uo.organisation_id
+        WHERE uo.utilisateur_id = $1 AND o.actif`, [req.utilisateur.id])).rows;
+      const v = REG.routeSecoursAutorisee(profil, orgs, req.path);
+      return v && !v.ok ? next(new ErreurHttp(403, 'module_desactive', { module: v.module })) : next();
+    } catch (err) { return next(err); }
+  });
   // Rôles de secours (paramédic, superviseur, répartiteur) : écrans de secours seulement, jamais les lits, patients ni résidents
   api.use((req, res, next) => {
     if (!require('./prealertes').ROLES_SECOURS.includes(req.utilisateur.role)) return next();
@@ -514,7 +525,7 @@ function creerApp(pool, options = {}) {
     return { utilisateur: { id: u.id, nom: u.nom, email: u.email, role: u.role, admin: u.admin, gestionnaire: u.gestionnaire,
       totp_actif: u.totp_actif, mdp_temporaire: u.mdp_temporaire, premiers_pas_vus: u.premiers_pas_vus, apparence: u.apparence || 'automatique', ambiance: u.ambiance || 'glacier',
       langue_interface: u.langue_interface || null, preferences_og: u.preferences_og || {} },
-    organisations: (await pool.query(`SELECT o.id, o.code, o.nom, o.type, (SELECT fuseau FROM config_pays WHERE id = o.config_id) AS fuseau FROM utilisateur_organisations uo JOIN organisations_secours o ON o.id = uo.organisation_id
+    organisations: (await pool.query(`SELECT o.id, o.code, o.nom, o.type, o.profils, COALESCE(o.modules, '{}'::jsonb) AS modules, (SELECT fuseau FROM config_pays WHERE id = o.config_id) AS fuseau FROM utilisateur_organisations uo JOIN organisations_secours o ON o.id = uo.organisation_id
       WHERE uo.utilisateur_id = $1 AND o.actif ORDER BY o.nom`, [u.id])).rows,
     // Registre universel : écrans autorisés (type, licence, sous-modules SH, rôle) calculés ici, une seule fois, pour l'interface
     etablissements: rows.map((e) => { const i = REG.interfacePour(e, u, TEreg.moduleActif);
@@ -777,6 +788,19 @@ function creerApp(pool, options = {}) {
   api.post('/secours/unites/:id/etat', route((req) => vh.definir(pool, req.utilisateur, entier(req.params.id, 'id'), req.body)));
   // Missions proposées par le CCS, acceptées ou refusées par l'équipage (16 nov. 2026)
   const mc = require('./missions-ccs');
+  // Centre de commandement CCS et flotte connectée (27-28 nov. 2026) : tableau, fiche, communication, transmission, historique, seuils
+  const fl = require('./flotte-ccs');
+  api.get('/secours/flotte', route((req) => fl.tableau(pool, req.utilisateur, req.query)));
+  api.get('/secours/flotte/alertes', route((req) => fl.alertes(pool, req.utilisateur)));
+  api.get('/secours/flotte/historique', route((req) => fl.historique(pool, req.utilisateur, req.query)));
+  api.get('/secours/flotte/:id', route((req) => fl.fiche(pool, req.utilisateur, req.params.id)));
+  api.get('/secours/flotte/:id/plans', route((req) => fl.plans(pool, req.utilisateur, req.params.id)));
+  api.get('/secours/flotte/:id/messages', route((req) => fl.fil(pool, req.utilisateur, req.params.id)));
+  api.post('/secours/messages', route((req) => fl.envoyer(pool, req.utilisateur, req.body)));
+  api.post('/secours/messages/:id/lu', route((req) => fl.lire(pool, req.utilisateur, req.params.id)));
+  api.post('/secours/missions/:id/recue', route((req) => fl.transmission(pool, req.utilisateur, req.params.id, 'recue')));
+  api.post('/secours/missions/:id/consultee', route((req) => fl.transmission(pool, req.utilisateur, req.params.id, 'consultee')));
+  api.post('/secours/missions/:id/modifier', route((req) => fl.modifierMission(pool, req.utilisateur, req.params.id, req.body)));
   api.get('/secours/missions', route((req) => mc.liste(pool, req.utilisateur)));
   api.get('/secours/interventions-demo', route((req) => mc.interventionsDemo(pool, req.utilisateur)));
   api.post('/secours/interventions-demo', route((req) => mc.recevoirDemo(pool, req.utilisateur, req.body)));

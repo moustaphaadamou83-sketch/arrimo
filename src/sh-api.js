@@ -331,6 +331,27 @@ function brancherSh(api, pool, route) {
       return o;
     });
   }));
+  // Interfaces de secours (28 nov. 2026) : modules et sous-modules par organisation, et seuils d'immobilisation (indicatifs) depuis SH
+  api.get('/sh/organisations-secours/:code/configuration', sh(async (req) => {
+    const o = await orgParCode(req.params.code);
+    return { modules: o.modules || {}, seuils: (await pool.query('SELECT vigilance_min, escalade_min, modifie_le FROM seuils_flotte WHERE organisation_id = $1', [o.id])).rows[0] || { ...require('./flotte-ccs').SEUILS_DEFAUT, defaut: true } };
+  }));
+  api.put('/sh/organisations-secours/:code/configuration', sh(async (req) => {
+    const o = await orgParCode(req.params.code); const b = req.body || {}; const REG = require('./registre-modules'); const detail = [];
+    return transaction(pool, async (c) => {
+      if (b.sous_modules !== undefined) {
+        const valides = REG.clesSousModules('secours'); const m = { ...(o.modules || {}) };
+        if (!b.sous_modules || typeof b.sous_modules !== 'object' || Array.isArray(b.sous_modules)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'sous_modules' });
+        for (const [k, v] of Object.entries(b.sous_modules)) { if (!valides.includes(k) || typeof v !== 'boolean') throw new ErreurHttp(400, 'module_invalide', { module: k }); if (v) Reflect.deleteProperty(m, `sm:${k}`); else m[`sm:${k}`] = false; }
+        await c.query('UPDATE organisations_secours SET modules = $2::jsonb WHERE id = $1', [o.id, m]);
+        detail.push(`sous-modules : ${Object.entries(b.sous_modules).map(([k, v]) => `${k} ${v ? 'activé' : 'désactivé'}`).join(', ')}`);
+      }
+      if (b.seuils !== undefined) { const s0 = await require('./flotte-ccs').definirSeuils(c, o.id, b.seuils, parSh(b)); detail.push(`seuils ${s0.vigilance_min}/${s0.escalade_min} min`); }
+      if (!detail.length) throw new ErreurHttp(400, 'rien_a_modifier');
+      await journalAdmin(c, systeme, 'Organisation de secours configurée', o.nom, `${detail.join(' · ')} · ${parSh(b)}`, null);
+      return { modules: (await c.query('SELECT modules FROM organisations_secours WHERE id = $1', [o.id])).rows[0].modules || {} };
+    });
+  }));
   api.put('/sh/organisations-secours/:code', sh(async (req) => {
     const b = req.body || {}; const o = await orgParCode(req.params.code);
     const sets = []; const vals = [o.id]; const detail = [];

@@ -781,20 +781,26 @@ function creerAppSh(pool, { env = process.env } = {}) {
      ici ET dans l'environnement. Rien n'est supprimé : données, historiques et événements Chrono restent. */
   api.get('/hopitaux/:id/sous-modules', route(async (req) => {
     const h = await hopital(entier(req.params.id));
-    const REG = require('../registre-modules'); const famille = REG.familleDe(h.type_etablissement || 'hopital');
+    const REG = require('../registre-modules'); const secours = TE.estSecours(h.type_etablissement);
+    const famille = secours ? 'secours' : REG.familleDe(h.type_etablissement || 'hopital');
     if (!famille) return { famille: null, nav: [], desactives: [] };
-    const conf = h.relie ? await appeler(cible(h.environnement), 'GET', `/sh/etablissements/${encodeURIComponent(h.code_etab)}/configuration-operationnelle`) : { modules: {} };
-    return { famille, nav: REG.NAV[famille], desactives: Object.keys(conf.modules || {}).filter((k) => k.startsWith('sm:') && conf.modules[k] === false).map((k) => k.slice(3)),
+    const conf = !h.relie ? { modules: {} } : secours ? await appeler(cible(h.environnement), 'GET', `/sh/organisations-secours/${encodeURIComponent(h.code_etab)}/configuration`)
+      : await appeler(cible(h.environnement), 'GET', `/sh/etablissements/${encodeURIComponent(h.code_etab)}/configuration-operationnelle`);
+    return { famille, nav: REG.navDe(famille), seuils: conf.seuils || null, desactives: Object.keys(conf.modules || {}).filter((k) => k.startsWith('sm:') && conf.modules[k] === false).map((k) => k.slice(3)),
       services_techniques: REG.SERVICES_TECHNIQUES, offres: REG.OFFRES };
   }));
   api.put('/hopitaux/:id/sous-modules', route(async (req) => {
     const h = await hopital(entier(req.params.id));
     if (!h.relie) throw new ErreurSh(409, 'Créez et reliez d’abord l’établissement dans son environnement.');
-    const REG = require('../registre-modules'); const valides = REG.clesSousModules(REG.familleDe(h.type_etablissement || 'hopital'));
-    const sm = req.body?.sous_modules;
-    if (!sm || typeof sm !== 'object' || Array.isArray(sm) || Object.entries(sm).some(([k, v]) => !valides.includes(k) || typeof v !== 'boolean')) throw new ErreurSh(400, 'Sous-module inconnu ou valeur invalide.');
-    const r = await appeler(cible(h.environnement), 'PUT', `/sh/etablissements/${encodeURIComponent(h.code_etab)}`, { sous_modules: sm, par: req.u.email });
-    await journal(pool, req.u, 'Sous-modules modifiés', `${h.code_etab} · ${h.nom}`, Object.entries(sm).map(([k, v]) => `${k} ${v ? 'activé' : 'désactivé'}`).join(', '), h.id);
+    const REG = require('../registre-modules'); const secours = TE.estSecours(h.type_etablissement);
+    const valides = REG.clesSousModules(secours ? 'secours' : REG.familleDe(h.type_etablissement || 'hopital'));
+    const sm = req.body?.sous_modules || {}; const seuils = req.body?.seuils;
+    if (typeof sm !== 'object' || Array.isArray(sm) || Object.entries(sm).some(([k, v]) => !valides.includes(k) || typeof v !== 'boolean')) throw new ErreurSh(400, 'Sous-module inconnu ou valeur invalide.');
+    if (seuils && !secours) throw new ErreurSh(400, 'Les seuils d’immobilisation concernent les organisations de secours.');
+    if (!Object.keys(sm).length && !seuils) throw new ErreurSh(400, 'Aucun changement.');
+    const r = secours ? await appeler(cible(h.environnement), 'PUT', `/sh/organisations-secours/${encodeURIComponent(h.code_etab)}/configuration`, { ...(Object.keys(sm).length ? { sous_modules: sm } : {}), ...(seuils ? { seuils } : {}), par: req.u.email })
+      : await appeler(cible(h.environnement), 'PUT', `/sh/etablissements/${encodeURIComponent(h.code_etab)}`, { sous_modules: sm, par: req.u.email });
+    await journal(pool, req.u, 'Sous-modules modifiés', `${h.code_etab} · ${h.nom}`, [...Object.entries(sm).map(([k, v]) => `${k} ${v ? 'activé' : 'désactivé'}`), ...(seuils ? [`seuils ${seuils.vigilance_min}/${seuils.escalade_min} min`] : [])].join(', '), h.id);
     return { modules: r.modules };
   }));
   api.post('/hopitaux/:id/specialites', route(async (req) => {

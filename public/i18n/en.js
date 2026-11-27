@@ -1089,6 +1089,8 @@ window.ARRIMO_I18N.en = {
     question_invalide: "Invalid question.",
     preference_invalide: "Invalid preference.",
     message_introuvable: "Message not found.",
+    message_propre: 'The recipient confirms reading, not the author of the message.',
+    seuils_invalides: 'Invalid thresholds: watch must come before escalation (in minutes).',
     chambre_non_prete: "Room {code} is not ready yet: housekeeping must confirm “Room ready” (Staff and tasks or Cleaning); the admission can then be confirmed.",
     transfert_hopital_ouvert: "A transfer to another hospital is already open for this resident ({numero}).",
     retour_deja_ouvert: "A return to the CHSLD is already being prepared for this resident ({numero}).",
