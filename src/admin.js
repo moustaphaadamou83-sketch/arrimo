@@ -524,13 +524,18 @@ function brancher(api, pool, route, entier, options = {}) {
     exigerGestionnaire(req);
     const id = entier(req.params.id, 'id');
     const MODULES = ['urgence', 'nsa', 'nettoyage', 'national'];
-    const modules = {};
-    for (const k of MODULES) if (req.body.modules && req.body.modules[k] === false) modules[k] = false;
+    // Licence (27 nov. 2026) : seule la console SH étend ou réduit le périmètre commercial. Ici, seuls ces drapeaux opérationnels
+    // changent ; les licences optionnelles (Chrono, Secours 911…) et les sous-modules réglés par SH sont conservés tels quels.
+    const avant = (await pool.query('SELECT modules FROM etablissements WHERE id = $1', [id])).rows[0];
+    if (!avant) throw new ErreurHttp(404, 'etab_introuvable');
+    const modules = { ...(avant.modules || {}) };
+    for (const k of MODULES) { if (req.body.modules && req.body.modules[k] === false) modules[k] = false; else Reflect.deleteProperty(modules, k); }
+    if (req.body.modules && Object.keys(req.body.modules).some((k) => !MODULES.includes(k))) throw new ErreurHttp(403, 'licence_reservee_sh');
     const vocation = req.body.vocation || 'general';
     if (!['general', 'pediatrique', 'specialise'].includes(vocation)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'vocation' });
     const r = (await pool.query('UPDATE etablissements SET modules = $2::jsonb, vocation = $3 WHERE id = $1 RETURNING id, nom, modules, vocation', [id, modules, vocation])).rows[0];
     if (!r) throw new ErreurHttp(404, 'etab_introuvable');
-    await journalAdmin(pool, req.utilisateur, 'Modules modifiés', r.nom, `${vocation} · désactivés : ${Object.keys(modules).join(', ') || 'aucun'}`, id);
+    await journalAdmin(pool, req.utilisateur, 'Modules modifiés', r.nom, `${vocation} · désactivés : ${MODULES.filter((k) => modules[k] === false).join(', ') || 'aucun'}`, id);
     return r;
   }));
 

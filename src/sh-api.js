@@ -188,7 +188,7 @@ function brancherSh(api, pool, route) {
   api.put('/sh/etablissements/:code', sh(async (req) => {
     const b = req.body || {};
     const e = await etabParCode(req.params.code);
-    const sets = []; const vals = [e.id]; const detail = [];
+    const sets = []; const vals = [e.id]; const detail = []; let modulesCourants = null;
     if (b.module_actif !== undefined) {
       const actif = !!b.module_actif;
       const motif = String(b.motif || '').trim();
@@ -209,23 +209,50 @@ function brancherSh(api, pool, route) {
     }
     // Configuration modulaire préparée par SH : modules désactivés (false) et vocation de l'établissement
     if (b.modules !== undefined) {
-      const m = {};
-      for (const k of require('./configuration-operationnelle').MODULES) if (b.modules && b.modules[k] === false) m[k] = false;
-      vals.push(m); sets.push(`modules = $${vals.length}::jsonb`); detail.push(`modules désactivés : ${Object.keys(m).join(', ') || 'aucun'}`);
+      // Fusion (27 nov. 2026) : seuls les drapeaux opérationnels transmis changent ; les licences optionnelles et les sous-modules restent
+      const m = { ...((await pool.query('SELECT modules FROM etablissements WHERE id = $1', [e.id])).rows[0].modules || {}) };
+      for (const k of require('./configuration-operationnelle').MODULES) { if (b.modules && b.modules[k] === false) m[k] = false; else if (b.modules && b.modules[k] === true) Reflect.deleteProperty(m, k); }
+      modulesCourants = m;
+      detail.push(`modules désactivés : ${require('./configuration-operationnelle').MODULES.filter((k) => m[k] === false).join(', ') || 'aucun'}`);
     }
     // Modules choisis un par un dans SH (licence souscrite ou non) : drapeaux de l'établissement recalculés pour ces modules seulement
+    // Offre commerciale (registre universel, §4) : traduite en choix de modules compatibles avec le type, puis appliquée comme modules_choix
+    if (b.offre !== undefined) {
+      const REG = require('./registre-modules'); const TE = require('./types-etablissement');
+      const offre = REG.OFFRES.find((o) => o.id === b.offre); if (!offre) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'offre' });
+      const typeO = (await pool.query('SELECT type_etablissement FROM etablissements WHERE id = $1', [e.id])).rows[0].type_etablissement || 'hopital';
+      const dispo = TE.MODULES.filter((x) => x.types.includes(typeO) && x.statut === 'disponible' && x.drapeau);
+      b.modules_choix = Object.fromEntries(dispo.map((x) => [x.code, offre.modules === '*' || offre.modules.includes(x.code) || x.categorie !== 'optionnel']));
+      detail.push(`offre ${offre.id}`);
+    }
     if (b.modules_choix !== undefined) {
       const TE = require('./types-etablissement');
       const type = (await pool.query('SELECT type_etablissement, modules FROM etablissements WHERE id = $1', [e.id])).rows[0];
       TE.drapeauxDepuisChoix(type.type_etablissement || 'hopital', b.modules_choix);   // validation (type, statut, dépendances)
-      const m = { ...(type.modules || {}) };
+      const m = { ...(modulesCourants || type.modules || {}) };
       for (const [code, actif] of Object.entries(b.modules_choix)) {
         const mod = TE.MODULES.find((x) => x.code === code);
         if (!mod || !mod.drapeau || mod.statut !== 'disponible') continue;
         if (mod.categorie === 'optionnel') { if (actif) m[mod.drapeau] = true; else Reflect.deleteProperty(m, mod.drapeau); } else if (actif) Reflect.deleteProperty(m, mod.drapeau); else m[mod.drapeau] = false;
       }
-      vals.push(m); sets.push(`modules = $${vals.length}::jsonb`); detail.push(`modules : ${Object.entries(b.modules_choix).map(([k, v]) => `${k} ${v ? 'activé' : 'désactivé'}`).join(', ')}`);
+      modulesCourants = m; detail.push(`modules : ${Object.entries(b.modules_choix).map(([k, v]) => `${k} ${v ? 'activé' : 'désactivé'}`).join(', ')}`);
     }
+    // Sous-modules (activation hiérarchique pilotée par SH) : `sm:<module>` ou `sm:<module>.<sous>` à false ; true = retour à l'état par
+    // défaut (clé retirée). Rien n'est supprimé : données, historiques et événements Chrono restent et réapparaissent à la réactivation.
+    if (b.sous_modules !== undefined) {
+      const REG = require('./registre-modules');
+      if (!b.sous_modules || typeof b.sous_modules !== 'object' || Array.isArray(b.sous_modules)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'sous_modules' });
+      const ligne = (await pool.query('SELECT type_etablissement, modules FROM etablissements WHERE id = $1', [e.id])).rows[0];
+      const valides = REG.clesSousModules(REG.familleDe(ligne.type_etablissement));
+      const m = { ...(modulesCourants || ligne.modules || {}) };
+      for (const [cle, actif] of Object.entries(b.sous_modules)) {
+        if (!valides.includes(cle) || typeof actif !== 'boolean') throw new ErreurHttp(400, 'module_invalide', { module: cle });
+        if (actif) Reflect.deleteProperty(m, `sm:${cle}`); else m[`sm:${cle}`] = false;
+      }
+      modulesCourants = m;
+      detail.push(`sous-modules : ${Object.entries(b.sous_modules).map(([k, v]) => `${k} ${v ? 'activé' : 'désactivé'}`).join(', ')}`);
+    }
+    if (modulesCourants) { vals.push(modulesCourants); sets.push(`modules = $${vals.length}::jsonb`); }
     if (b.type_libelle !== undefined || b.type_libelle_en !== undefined) {
       const TE = require('./types-etablissement');
       vals.push(TE.libelleType(b.type_libelle)); sets.push(`type_libelle = $${vals.length}`);
@@ -252,6 +279,7 @@ function brancherSh(api, pool, route) {
     if (!sets.length) throw new ErreurHttp(400, 'rien_a_modifier');
     const r = (await pool.query(`UPDATE etablissements SET ${sets.join(', ')} WHERE id = $1 RETURNING id, code, nom, partage, module_actif, sous_domaine, modules, vocation`, vals)).rows[0];
     await journalAdmin(pool, systeme, 'Établissement modifié', r.nom, `${detail.join(' · ')} · ${parSh(b)}`, r.id);
+    req.app.locals.oublierEtab?.(r.id);   // licence synchronisée : le contrôle des routes la voit tout de suite
     return r;
   }));
 

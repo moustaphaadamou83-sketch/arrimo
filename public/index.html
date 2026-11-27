@@ -155,7 +155,8 @@
       <button role="tab" data-type="hopital" data-module="liaison_chsld" data-v="liaison" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-house"/></svg><span data-i18n="onglets.liaison"></span></button>
       <button role="tab" data-type="hopital" data-v="continuite" aria-selected="false" hidden><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-arrow-right-left"/></svg><span data-i18n="onglets.continuite"></span></button>
       <button role="tab" data-v="nettoyage" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-spray-can"/></svg><span data-i18n="onglets.nettoyage"></span> <span class="n" id="n-net">0</span></button>
-      <button role="tab" data-type="hopital" data-v="vigilance" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-clock"/></svg><span data-i18n="onglets.vigilance"></span> <span class="n" id="n-vig" hidden>0</span></button>
+      <button role="tab" data-type="hopital" data-v="conges" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-log-out"/></svg><span data-i18n="onglets.conges"></span> <span class="n" id="n-conges" hidden>0</span></button>
+      <button role="tab" data-type="hopital" data-v="vigilance" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-bell"/></svg><span data-i18n="onglets.vigilance"></span> <span class="n" id="n-vig" hidden>0</span></button>
       <span class="onglets-groupe" data-type="hopital" aria-hidden="true" data-i18n="nav.pilotage">Pilotage</span>
       <button role="tab" data-type="hopital" data-v="nsa" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-hourglass"/></svg><span data-i18n="onglets.nsa"></span></button>
       <button role="tab" data-type="hopital" data-v="indicateurs" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-chart-column"/></svg><span data-i18n="onglets.indicateurs"></span></button>
@@ -176,6 +177,8 @@
       <button role="tab" data-type="chsld" data-module-optionnel="mode_crise" data-v="crise" aria-selected="false" hidden><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-siren"/></svg><span data-i18n="onglets.crise"></span></button>
       <button role="tab" data-type="chsld" data-module-optionnel="visites_confirmees" data-v="visites" aria-selected="false" hidden><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-clock"/></svg><span data-i18n="onglets.visites"></span></button>
       <button role="tab" data-type="chsld" data-module-optionnel="eviter_transferts" data-v="eviter" aria-selected="false" hidden><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-circle-help"/></svg><span data-i18n="onglets.eviter"></span></button>
+      <button role="tab" data-type="chsld" data-v="c-departs" aria-selected="false" hidden><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-log-out"/></svg><span data-i18n="chsld.nav.departs"></span></button>
+      <button role="tab" data-type="chsld" data-v="c-alertes" aria-selected="false" hidden><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-bell"/></svg><span data-i18n="chsld.nav.alertes"></span> <span class="n" id="n-c-alertes" hidden>0</span></button>
       <button role="tab" data-type="chsld" data-v="c-indicateurs" aria-selected="false" hidden><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-chart-column"/></svg><span data-i18n="chsld.nav.indicateurs"></span></button>
       <span class="onglets-groupe" aria-hidden="true" data-i18n="nav.gestion">Gestion</span>
       <button role="tab" data-module-optionnel="transport_planifie" data-v="transports-planifies" aria-selected="false" hidden><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-clock"/></svg><span data-i18n="onglets.transports-planifies"></span></button>
@@ -215,6 +218,9 @@
     <section id="v-liaison" hidden></section>
     <section id="v-continuite" hidden></section>
     <section id="v-vigilance" hidden></section>
+    <section id="v-conges" hidden></section>
+    <section id="v-c-departs" hidden></section>
+    <section id="v-c-alertes" hidden></section>
     <section id="v-nettoyage" hidden></section>
     <section id="v-nsa" hidden></section>
     <section id="v-indicateurs" hidden></section>
@@ -257,6 +263,7 @@
 <script src="og-avatar.js"></script>
 <script src="support-client.js"></script>
 <script src="design-arrimo.js"></script>
+<script src="registre-modules.js"></script>
 <script src="app.js"></script>
 <script src="nav-plus.js"></script>
 <script src="espaces.js"></script>
@@ -283,6 +290,7 @@
 <script src="donnees.js"></script>
 <script src="crise.js"></script>
 <script src="visites-eviter.js"></script>
+<script src="conges-alertes.js"></script>
 <script src="carte-arrimo.js"></script>
 <script src="flux.js"></script>
 <script src="transports.js"></script>

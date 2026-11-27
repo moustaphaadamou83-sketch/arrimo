@@ -315,7 +315,7 @@
   const ongletCourant = (amb) => { const l = ONGLETS[cleOnglets(amb)]; return l.includes(etat.onglet) ? etat.onglet : l[0]; };
   function enTete() {
     const amb = ROLES_AMB.includes(etat.moi.utilisateur.role);
-    $('#titre').textContent = 'Arrimo · Liaison Secours';
+    $('#titre').textContent = 'Arrimo · Secours 911';
     $('#sous-titre').textContent = `${amb ? t('profil_amb') : t('profil_ccs')} · ${(etat.moi.organisations || []).map((o) => o.nom).join(', ')}`;
     $('#contexte').textContent = `${t('role_' + etat.moi.utilisateur.role)} · ${heure(Date.now())}${etat.moi.demo ? ` · ${t('fictif')}` : ''}`;
     const MODES = ['clair', 'sombre', 'automatique']; const m = window.ArrimoApparence?.mode() || 'automatique';

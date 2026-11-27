@@ -39,6 +39,11 @@
 :root[data-design="v2"][data-espace="reseau"] { --m-courant: var(--m-reseau); }
 :root[data-design="v2"][data-espace="national"] { --m-courant: var(--m-national); }
 :root[data-design="v2"][data-espace="administration"] { --m-courant: var(--m-administration); }
+:root[data-design="v2"][data-espace="chrono"] { --m-courant: var(--m-chrono); }
+:root[data-design="v2"][data-espace="conges"] { --m-courant: var(--m-conges); }
+:root[data-design="v2"][data-espace="departs"] { --m-courant: var(--m-departs); }
+:root[data-design="v2"][data-espace="alertes"] { --m-courant: var(--m-alertes); }
+:root[data-design="v2"][data-espace="residents"] { --m-courant: var(--m-residents); }
 :root[data-design="v2"] body { font-family: var(--police); letter-spacing: 0; }
 :root[data-design="v2"] h1, :root[data-design="v2"] h2, :root[data-design="v2"] h3 { font-weight: 700; letter-spacing: -0.01em; }
 

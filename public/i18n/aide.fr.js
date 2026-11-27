@@ -177,7 +177,7 @@ window.ARRIMO_I18N.fr.aide = {
       ],
     },
     secours: {
-      nom: 'Liaison Secours',
+      nom: 'Secours 911',
       but: 'Les ambulances annoncées par préalerte, avant leur arrivée : entreprise, unité, plaque, équipage, priorité déclarée, catégorie, heure prévue et position. Aucune identité n’est transmise. OG propose le service selon vos règles ; votre équipe décide.',
       gestes: [
         '« Accuser la préalerte » : confirme qu’une personne en a pris connaissance (l’ambulance le voit).',
@@ -265,13 +265,13 @@ window.ARRIMO_I18N.fr.aide = {
       erreurs: [['Plage invalide', 'La fin doit suivre le début, 8 h au plus.']],
     },
     eviter: {
-      nom: 'Avant l’appel',
+      nom: 'Secours 911 · préparer l’intervention',
       but: 'Avant d’appeler l’ambulance, relire la liste de votre établissement et ses alternatives ; noter la décision de l’équipe.',
       gestes: ['Relisez la liste de vérification de votre protocole.', 'Si une alternative suffit, cliquez « Transfert évité grâce à elle » ; sinon « Transfert fait ».', 'L’administration écrit la liste et les coordonnées.'],
       erreurs: [['Version périmée', 'Quelqu’un a modifié la liste : rechargez l’écran.']],
     },
     vigilance: {
-      nom: 'Congés et alertes',
+      nom: 'Congés · Alertes',
       but: 'Voir lit par lit les départs prévus (avec leur statut, l’heure et la source) et les blocages expliqués : origine, seuil, fait ou hypothèse, action proposée et responsable.',
       gestes: [
         'Choisissez l’horizon (4 h, 12 h, 24 h, aujourd’hui, demain), puis filtrez par unité ou par statut.',

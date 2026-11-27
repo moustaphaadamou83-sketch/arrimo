@@ -446,7 +446,7 @@
             ${a.responsable_role ? `<div><dt>${K('a_responsable')}</dt><dd>${esc(t(`roles.${a.responsable_role}`) || a.responsable_role)}</dd></div>` : ''}
             ${a.reaction_min != null ? `<div><dt>${K('a_reaction')}</dt><dd>${K('u_reaction', { n: a.reaction_min })}</dd></div>` : ''}</dl></div>
         <p class="note">${['technique', 'synchronisation'].includes(a.categorie) ? K('a_note_technique') : K('a_note_cause')}</p>
-        <p><button type="button" class="btn" data-ouvrir-vigilance>${K('a_details')}</button></p></article>`;
+        <p><button type="button" class="btn" data-ouvrir-vigilance data-cle="${esc(a.cle || '')}">${K('a_details')}</button></p></article>`;
     const opt = (nom, val, lib) => `<option value="${val}"${f[nom] === val ? ' selected' : ''}>${lib}</option>`;
     return `<form class="filtres-chrono" id="cha-filtres" role="search">
         <label>${K('a_categorie')}<select name="categorie">${opt('categorie', '', K('s_toutes'))}${CATS.map((c) => opt('categorie', c, cat(c))).join('')}</select></label>
@@ -464,7 +464,8 @@
     form.onsubmit = (e) => e.preventDefault();
     form.onchange = form.oninput = (e) => { if (!e.target.name) return; etatC.fa[e.target.name] = e.target.value; if (e.type === 'change' || e.target.name !== 'q') { vueChrono(); } };
     form.q.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); etatC.fa.q = e.target.value; vueChrono(); } };
-    $('#v-chrono').querySelectorAll('[data-ouvrir-vigilance]').forEach((b) => { b.onclick = () => allerA(document.querySelector('#onglets button[data-v="vigilance"]') ? 'vigilance' : 'chrono'); });
+    // Même fiche, même source (module Alertes) : jamais une seconde gestion des alertes
+    $('#v-chrono').querySelectorAll('[data-ouvrir-vigilance]').forEach((b) => { b.onclick = () => (window.ArrimoCongesAlertes ? window.ArrimoCongesAlertes.ouvrir(b.dataset.cle) : allerA('chrono')); });
   }
 
   /* ---------- Qualité de l'information : chaque mesure a un état écrit (synchronisé, retardé, inconnu…) et son explication ---------- */

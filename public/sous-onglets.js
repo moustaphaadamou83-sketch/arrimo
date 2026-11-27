@@ -4,12 +4,12 @@
   // Index = position parmi les enfants directs de l'écran, sans l'en-tête (.entete) ni la barre ; non listé = toujours visible
   const CONFIG = {
     chrono: [['direct', 'En direct', 'Live', [1, 2, 3]], ['rapport', 'Rapport et écarts', 'Report and gaps', [4, 5]]],
-    secours: [['prealertes', 'Préalertes', 'Pre-alerts', [3, 4]], ['urgence', 'Statut et fermetures', 'Status and closures', [1, 2]]],
+    secours: [['prealertes', 'Préalertes et arrivées', 'Pre-alerts and arrivals', [3, 4]], ['urgence', 'Statuts et fermetures', 'Status and closures', [1, 2]]],
     bourse: [['places', 'Places', 'Places', [0, 1]], ['fiche', 'Fiche de transfert', 'Transfer sheet', [2]], ['invites', 'Accès invités', 'Guest access', [3]]],
     donnees: [['tableau', 'Tableau régional', 'Regional table', [0]], ['attente', 'Listes d’attente', 'Waiting lists', [1]], ['refus', 'Refus par motif', 'Declines by reason', [2]]],
-    vigilance: [['alertes', 'Blocages et alertes', 'Blocks and alerts', [3]], ['parcours', 'Parcours à surveiller', 'Paths to watch', [0]], ['conges', 'Congés prévus', 'Planned discharges', [1, 2]]],
+    // vigilance : Alertes a ses propres onglets (Actives, Vigilance, Escalades, Prises en charge, Résolues, Historique)
     visites: [['horaire', 'Horaire', 'Schedule', [0]], ['rapport', 'Rapport mensuel', 'Monthly report', [1]]],
-    eviter: [['appel', 'Avant l’appel', 'Before calling', [0, 1]], ['regler', 'Régler la liste', 'Set the list', [2]]],
+    eviter: [['appel', 'Préparer l’intervention', 'Prepare the call-out', [0, 1]], ['regler', 'Régler la liste', 'Set the list', [2]]],
   };
   const choix = {};
   const langue = () => { try { return localStorage.getItem('arrimo-langue') === 'en' ? 1 : 0; } catch { return 0; } };

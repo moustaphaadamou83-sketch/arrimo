@@ -38,8 +38,9 @@
       type_visite: $('#vi-type').value, prestataire_id: Number($('#vi-pres').value), debut_prevu: new Date($('#vi-debut').value).toISOString(), fin_prevue: new Date($('#vi-fin').value).toISOString(),
       recurrence: $('#vi-rec').value, occurrences: Number($('#vi-n').value) }), t('visites.planifiee'))) !== null || false }]);
   }
-  async function vueEviter() {
-    const v = $('#v-eviter');
+  // Secours 911 (27 nov. 2026) : « Avant l'appel » est intégré à Urgences → Secours 911 de l'hébergement (cible fournie) ; jamais bloquant
+  async function vueEviter(cible) {
+    const v = cible || $('#v-eviter');
     const d = await api('GET', `/eviter?etablissement_id=${etat.ctx}`);
     if (!d) return;
     v.innerHTML = `<div class="entete"><div><h2>${A('titre')}</h2><p class="note">${A('intro')}</p></div></div>
@@ -69,5 +70,5 @@
       verifications: $('#ev-verifs').value.split('\n').map((x) => x.trim()).filter(Boolean),
       alternatives: [...v.querySelectorAll('[data-ev-alt]:checked')].map((c) => ({ code: c.dataset.evAlt, contact: v.querySelector(`[data-ev-contact="${c.dataset.evAlt}"]`).value })) }), t('eviter.enregistre'));
   }
-  window.ArrimoVisitesEviter = { vues: { visites: vueVisites, eviter: vueEviter } };
+  window.ArrimoVisitesEviter = { vueEviter, vues: { visites: vueVisites, eviter: () => vueEviter() } };
 })();

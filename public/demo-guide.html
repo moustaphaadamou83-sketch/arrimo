@@ -42,7 +42,7 @@
     <p>« Confirmer la place et organiser le départ » : l’équipe confirme avec l’usager ou la famille, choisit l’heure, le transport, les documents, coche « Famille avisée ». Le lit passe « à libérer » (congé prévu). Puis « Confirmer le départ » : le lit part au nettoyage, le tableau des lits suit. Le CHSLD ne peut pas confirmer l’arrivée avant ce départ.</p></li>
   <li><span class="qui">CHSLD des Érables → « Admissions et sorties »</span>
     <p>« Confirmer l’arrivée » : le résident est admis ; l’Hôpital B voit « Arrivé au CHSLD ».</p></li>
-  <li><span class="qui">Hôpital B → « Liaison CHSLD et résidences » → Jean Dupont (R-00001), hospitalisé</span>
+  <li><span class="qui">Hôpital B → « Transferts → Hôpital et hébergement » → Jean Dupont (R-00001), hospitalisé</span>
     <p>« Préparer le retour au CHSLD ». CHSLD → « Transferts et hospitalisations » : « Accepter ». Puis l’entretien (<code>entretien.erables@chsld.example.invalid</code>, sur tablette) termine « Préparer la chambre pour le retour de R-00001 » : c’est toujours l’entretien qui confirme que la chambre est propre ; elle est alors déclarée prête d’elle-même.</p></li>
   <li><span class="qui">Hôpital B, puis CHSLD des Érables</span>
     <p>Hôpital : « Confirmer le départ » (le lit part au nettoyage). CHSLD → « Résidents » : Jean Dupont n’est plus « Hospitalisé » mais « De retour de l’hôpital, arrivée à confirmer ». « Confirmer son retour », puis, sur sa fiche, « Réintégrer dans sa chambre » : il est présent.</p></li>
@@ -65,16 +65,16 @@
   <li><span class="qui">CCS · <code>ccs.demo@demo.arrimo</code> (<code>/secours</code>)</span>
     <p><b>Avant la première position d’une ambulance</b>, choisissez « CHSLD des Érables » dans « Depuis » : le classement se calcule depuis cet établissement. Les unités qui ont déjà une préalerte ouverte sont grisées dans la demande.</p>
     <p>« Urgences classées » depuis DM-101 (temps de route OSRM, civières libres, statut, services ; meilleur choix d’OG). « Demander une civière » sur l’Hôpital B : unité, priorité, catégorie, délai, profil fictif (tranche d’âge, sexe, signes). Dessous : les ambulances (état, destination, lieu actuel). Aucune attribution dans Arrimo.</p></li>
-  <li><span class="qui">Hôpital B · <code>hopital.b@demo.arrimo</code> → « Liaison Secours »</span>
-    <p>L’alerte sonne et un bandeau rouge s’affiche <b>quel que soit l’onglet ouvert</b> ; un appui ouvre « Liaison Secours ». Alerte sonore et compte à rebours de 60 s : « Accepté, on vous attend » ou « Réorienter » (motif). Sans réponse : acceptée, le transport continue ; priorité immédiate : averti, sans attente. Une civière est réservée : elle ne peut être donnée à un autre patient. Le CCS et l’ambulance voient la réponse en direct ; après une réorientation, OG propose une autre urgence.</p></li>
+  <li><span class="qui">Hôpital B · <code>hopital.b@demo.arrimo</code> → « Urgences → Secours 911 »</span>
+    <p>L’alerte sonne et un bandeau rouge s’affiche <b>quel que soit l’onglet ouvert</b> ; un appui ouvre « Urgences → Secours 911 ». Alerte sonore et compte à rebours de 60 s : « Accepté, on vous attend » ou « Réorienter » (motif). Sans réponse : acceptée, le transport continue ; priorité immédiate : averti, sans attente. Une civière est réservée : elle ne peut être donnée à un autre patient. Le CCS et l’ambulance voient la réponse en direct ; après une réorientation, OG propose une autre urgence.</p></li>
   <li><span class="qui">CHSLD des Érables</span>
     <p>Le suivi montre l’unité, la plaque, l’état du véhicule, l’hôpital choisi et l’heure d’arrivée prévue. « Confirmer le départ » de l’hospitalisation : le transport ne confirme jamais le départ à la place de l’établissement.</p></li>
-  <li><span class="qui">Hôpital B · <code>hopital.b@demo.arrimo</code> → onglet « Liaison Secours »</span>
+  <li><span class="qui">Hôpital B · <code>hopital.b@demo.arrimo</code> → onglet « Urgences → Secours 911 »</span>
     <p>La préalerte indique le résident et le CHSLD d’origine. « Accuser la préalerte » ; service proposé par OG (règle de l’hôpital) → « Confirmer le service » ; « Préparation en cours » (salle concernée).</p>
     <p class="og">OG : « Quel service est potentiellement concerné ? »</p></li>
   <li><span class="qui">Ambulance, puis Hôpital B</span>
     <p>Ambulance : « Signaler l’arrivée ». Hôpital : « Confirmer le véhicule arrivé » en saisissant DM-101 : l’état passe à « À l’hôpital », le CHSLD voit « arrivée confirmée ». « Confirmer la remise ». Ambulance : transport « Arrivé à destination », puis « Disponible ».</p></li>
-  <li><span class="qui">Hôpital B → onglet « Liaison CHSLD et résidences »</span>
+  <li><span class="qui">Hôpital B → onglet « Transferts → Hôpital et hébergement »</span>
     <p>« Confirmer l’arrivée » → « Orienter / admettre le patient » → urgence (civière libre), puis lit.</p></li>
   <li><span class="qui">Hôpital B, puis CHSLD des Érables</span>
     <p>Hôpital : « Préparer le retour au CHSLD ». CHSLD : accepter, puis terminer la tâche de préparation de la chambre (« Personnel et tâches ») : la chambre est déclarée prête d’elle-même. Hôpital : « Demander un transport » sur le retour ; l’ambulance l’effectue. Hôpital : « Confirmer le départ ». CHSLD : confirmer l’arrivée puis « Réintégrer dans sa chambre ».</p></li>
@@ -108,7 +108,7 @@
   <li><span class="qui">Ambulance (<code>ambulance.demo@demo.arrimo</code>)</span><p>Vehicle status in one tap; accept with DM-101 → on the way → picked up → send the pre-alert (status becomes “Transport to hospital”).</p></li>
   <li><span class="qui">CCS (<code>ccs.demo@demo.arrimo</code>)</span><p>Before an ambulance’s first position, choose “CHSLD des Érables” in “From”. Vehicles on the map and in the list with status, destination and update time; emergency availability; view only.</p></li>
   <li><span class="qui">CHSLD</span><p>Tracking: unit, plate, vehicle status, hospital, expected arrival; confirm departure.</p></li>
-  <li><span class="qui">Hospital B → Emergency liaison</span><p>Acknowledge, confirm the department proposed by OG, preparation.</p></li>
+  <li><span class="qui">Hospital B → Emergency → 911 emergency</span><p>Acknowledge, confirm the department proposed by OG, preparation.</p></li>
   <li><span class="qui">Ambulance, then Hospital B</span><p>Report arrival; confirm vehicle DM-101 (status “At hospital”, CHSLD sees “arrival confirmed”), handover.</p></li>
   <li><span class="qui">Hospital B, then CHSLD</span><p>Admission, then return: room ready, return transport, departure, arrival, reinstatement.</p></li>
   <li><span class="qui">CHSLD → family</span><p>Message to the authorized family member, “Movements” category; no clinical detail.</p></li>

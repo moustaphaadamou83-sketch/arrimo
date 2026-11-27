@@ -3,32 +3,24 @@
    Un espace n'apparaît que s'il contient au moins un module visible pour ce rôle, cet établissement et ses modules activés. */
 (() => {
   const nav = document.getElementById('onglets'); if (!nav) return;
-  const ESPACES = [
-    ['accueil', 'house', 'Accueil', 'Home', ['copilote', 'c-accueil']],
-    ['patients', 'stethoscope', 'Patients & DSN', 'Patients & EHR', ['patients', 'dsn', 'admissions', 'c-residents', 'c-admissions', 'nsa']],
-    ['transferts', 'arrow-right-left', 'Transferts', 'Transfers', ['flux', 'transferts', 'liaison', 'c-demandes', 'c-mouvements', 'transports-planifies']],
-    ['capacites', 'bed-double', 'Capacités', 'Capacity', ['lits', 'c-chambres', 'bourse', 'c-urgences']],
-    // Chrono : module principal (cahier V4 3.1, 27 nov. 2026), sorti d'Urgences ; un seul moteur, plusieurs vues
-    ['chrono', 'timer', 'Chrono', 'Chrono', ['chrono']],
-    ['urgences', 'siren', 'Urgences', 'Emergency', ['urgence', 'secours', 'eviter', 'crise']],
-    ['operations', 'spray-can', 'Opérations', 'Operations', ['mes-taches', 'nettoyage', 'c-taches', 'visites']],
-    ['pilotage', 'chart-column', 'Pilotage', 'Steering', ['continuite', 'vigilance', 'indicateurs', 'c-indicateurs', 'donnees']],
-    ['reseau', 'network', 'Réseau', 'Network', ['reseau', 'c-reseau']],
-    ['national', 'map-pin', 'National', 'National', ['national']],
-    ['administration', 'settings', 'Administration', 'Administration', ['params', 'admin', 'journal', 'support']],
-  ];
-  const en = () => (document.documentElement.lang || '').startsWith('en');
-  // Comptes Hébergement (cahier 2) : même socle, navigation métier Accueil, Résidents, Capacités, Transferts, Urgences, Opérations,
-  // Coordination, Pilotage, Administration (mêmes modules, mêmes routes ; seuls le libellé et l'ordre changent)
+  /* Registre universel (27 nov. 2026) : les modules, leur ordre, leurs intitulés et leurs sous-menus viennent de /registre-modules.js,
+     la même source que le contrôle des routes côté serveur. La famille (hôpital ou hébergement) suit le type d'établissement :
+     une RPA, une RI ou un CHSLD ont la même navigation, sans Interhospitalier ; un hôpital n'a ni Départs ni Inter-hébergement. */
+  const REG = window.ArrimoRegistre;
   const hebergement = () => document.documentElement.dataset.typeEtab === 'chsld';
-  const LIB_HEB = { patients: ['Résidents', 'Residents'], reseau: ['Coordination réseau', 'Network coordination'] };
-  const ORDRE_HEB = ['accueil', 'patients', 'capacites', 'chrono', 'transferts', 'urgences', 'operations', 'reseau', 'pilotage', 'national', 'administration'];
-  const ordonnes = (liste) => (hebergement() ? [...liste].sort((a, b) => ORDRE_HEB.indexOf(a[0]) - ORDRE_HEB.indexOf(b[0])) : liste);
+  const famille = () => (hebergement() ? 'hebergement' : 'hopital');
+  const versEspaces = (f) => (REG?.NAV?.[f] || []).map((m) => [m.id, m.icone, m.fr, m.en, m.sous.map((x) => x.v)]);
+  const PAR_FAMILLE = { hopital: versEspaces('hopital'), hebergement: versEspaces('hebergement') };
+  // ESPACES suit la famille courante (lecture seule pour les tests et les raccourcis)
+  let ESPACES = PAR_FAMILLE.hopital;
+  const en = () => (document.documentElement.lang || '').startsWith('en');
+  const ordonnes = (liste) => liste;
   const espaceDe = (v) => ESPACES.find((x) => x[4].includes(v))?.[0] || null;
   let actif = 'accueil'; let construit = ''; let dernierSel = null;
   const boutons = () => [...nav.querySelectorAll('button[role="tab"][data-v]')];
   const visible = (b) => !b.hidden && b.style.display !== 'none';
   function appliquer(force) {
+    ESPACES = PAR_FAMILLE[famille()];
     const vus = boutons().filter(visible);
     const presents = ESPACES.filter((x) => vus.some((b) => x[4].includes(b.dataset.v)));
     // DSN réservé aux hôpitaux (27 nov. 2026) : sans module DSN visible, l'espace s'appelle « Patients », jamais « Patients & DSN »
@@ -37,7 +29,7 @@
     if (sig !== construit) {
       nav.querySelectorAll('.espace-btn, .espace-saut').forEach((x) => x.remove());
       const frag = document.createDocumentFragment();
-      for (const [cle, ic, fr0, an0] of ordonnes(presents)) { const [fr, an] = hebergement() && LIB_HEB[cle] ? LIB_HEB[cle] : cle === 'patients' && !avecDsn ? ['Patients', 'Patients'] : [fr0, an0]; const b = document.createElement('button'); b.type = 'button'; b.className = 'espace-btn'; b.dataset.espace = cle;
+      for (const [cle, ic, fr, an] of ordonnes(presents)) { const b = document.createElement('button'); b.type = 'button'; b.className = 'espace-btn'; b.dataset.espace = cle;
         // Planche 2 : point de couleur du module, libellé, compteur, chevron (barre latérale) ; icône en navigation horizontale et barre repliée
         b.innerHTML = `<svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-${ic}"/></svg><span class="esp-point" aria-hidden="true"></span><span class="esp-nom">${en() ? an : fr}</span><span class="esp-compte"></span><span class="esp-chevron" aria-hidden="true"></span>`; frag.appendChild(b); }
       const saut = document.createElement('span'); saut.className = 'espace-saut'; saut.setAttribute('aria-hidden', 'true'); frag.appendChild(saut);
@@ -141,6 +133,6 @@
   // Le surtitre suit chaque nouveau rendu d'écran ; la disposition (horizontale, verticale, téléphone) réordonne la barre
   const contenu = document.querySelector('.contenu'); if (contenu) new MutationObserver(() => { clearTimeout(surtitre.t); surtitre.t = setTimeout(surtitre, 40); }).observe(contenu, { childList: true, subtree: true });
   new MutationObserver(() => { clearTimeout(appliquer.t); appliquer.t = setTimeout(appliquer, 30); }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
-  window.ArrimoEspaces = { reveler, espaceDe, ESPACES, appliquer };
+  window.ArrimoEspaces = { reveler, espaceDe, get ESPACES() { return ESPACES; }, appliquer };
   setTimeout(appliquer, 0);
 })();

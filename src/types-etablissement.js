@@ -46,13 +46,13 @@ const MODULES = [
   { code: 'nettoyage', categorie: 'hopital', types: ['hopital'], statut: 'disponible', drapeau: 'nettoyage', nom: 'Nettoyage', nom_en: 'Cleaning' },
   { code: 'national', categorie: 'hopital', types: ['hopital'], statut: 'disponible', drapeau: 'national', nom: 'Tableau national', nom_en: 'National dashboard' },
   // Un seul module commun à tous les hôpitaux : arrivées depuis les CHSLD, accueil, hospitalisations et retours (moteur de coordination commun)
-  { code: 'liaison_chsld', categorie: 'hopital', types: ['hopital'], statut: 'disponible', drapeau: 'liaison_chsld', nom: 'Liaison CHSLD', nom_en: 'CHSLD liaison',
+  { code: 'liaison_chsld', categorie: 'hopital', types: ['hopital'], statut: 'disponible', drapeau: 'liaison_chsld', nom: 'Hôpital et hébergement', nom_en: 'Hospital and residence',
     note: 'Arrivées depuis les CHSLD, accueil, hospitalisations et retours', dependances: ['admissions_hopital', 'transferts'] },
   // Préhospitalier (12 nov. 2026) : préalertes des ambulances, activé explicitement par hôpital depuis SH
-  { code: 'liaison_secours', categorie: 'optionnel', types: ['hopital'], statut: 'disponible', drapeau: 'liaison_secours', nom: 'Liaison Secours', nom_en: 'Emergency liaison',
+  { code: 'liaison_secours', categorie: 'optionnel', types: ['hopital'], statut: 'disponible', drapeau: 'liaison_secours', nom: 'Secours 911 (préalertes et arrivées ambulancières)', nom_en: '911 emergency (pre-alerts and ambulance arrivals)',
     note: 'Préalertes des ambulances : arrivées prévues, accusés, préparation, confirmation du véhicule' },
   // Liaison Établissements (cahier 3) : demandes de transport ambulancier d'un établissement ou d'un hôpital, activées explicitement
-  { code: 'transport_ambulancier', categorie: 'optionnel', types: ['hopital', 'chsld'], statut: 'disponible', drapeau: 'transport_ambulancier', nom: 'Liaison Établissements (transport ambulancier)', nom_en: 'Facility liaison (ambulance transport)',
+  { code: 'transport_ambulancier', categorie: 'optionnel', types: ['hopital', 'chsld'], statut: 'disponible', drapeau: 'transport_ambulancier', nom: 'Secours 911 (prise en charge ambulancière de l’établissement)', nom_en: '911 emergency (facility ambulance requests)',
     note: 'Demandes de transport vers une entreprise ambulancière, suivi des étapes ; référence du résident seulement' },
   // Organisations de secours : profils activés un par un (CCS, Ambulance) ; Urgences-santé = les deux
   { code: 'profil_ccs', categorie: 'secours', types: TYPES_SECOURS, statut: 'disponible', drapeau: 'ccs', nom: 'Profil CCS (répartition, vue régionale)', nom_en: 'CCS profile (dispatch, regional view)' },
@@ -76,7 +76,7 @@ const MODULES = [
   // Chrono universel (27 nov. 2026) : TOUS les types (hôpital, hébergement, secours) ; activé depuis SH, un seul moteur
   { code: 'chrono', categorie: 'optionnel', types: Object.keys(TYPES), statut: 'disponible', drapeau: 'chrono', nom: 'Chrono (temps opérationnels)', nom_en: 'Chrono (operational times)',
     // Activable seul (26 nov. 2026) : alimenté par Liaison Secours si elle est active, sinon par les logiciels externes autorisés (connecteur)
-    note: 'Heures H11 à H15, chrono à la porte, rapport mensuel ; seul ou avec Liaison Secours', note_en: 'H11 to H15 times, door clock, monthly report; standalone or with Emergency liaison' },
+    note: 'Heures H11 à H15, chrono à la porte, rapport mensuel ; seul ou avec Secours 911', note_en: 'H11 to H15 times, door clock, monthly report; standalone or with 911 emergency' },
   { code: 'urgences_direct', categorie: 'optionnel', types: ['hopital', ...TYPES_SECOURS], statut: 'disponible', drapeau: 'urgences_direct', nom: 'Urgences en direct', nom_en: 'Live emergency status',
     note: 'État des urgences, fermetures planifiées, page publique sur consentement', note_en: 'Emergency status, planned closures, public page with consent' },
   { code: 'transferts_suivi', categorie: 'optionnel', types: ['hopital', ...TYPES_SECOURS], statut: 'disponible', drapeau: 'transferts_suivi', nom: 'Transferts (centrale et rapatriements)', nom_en: 'Transfers (hub and repatriation)',
@@ -96,8 +96,8 @@ const MODULES = [
     note: 'Parcours par rôle, capsules courtes, exercices et attestations', note_en: 'Role-based paths, short lessons, exercises and certificates' },
   { code: 'visites_confirmees', categorie: 'optionnel', types: ['chsld'], statut: 'disponible', drapeau: 'visites_confirmees', nom: 'Visites confirmées', nom_en: 'Confirmed visits',
     note: 'Visites prévues du CLSC ou du prestataire, arrivée et départ', note_en: 'Planned CLSC or provider visits, arrival and departure' },
-  { code: 'eviter_transferts', categorie: 'optionnel', types: ['chsld'], statut: 'disponible', drapeau: 'eviter_transferts', nom: 'Éviter les transferts inutiles', nom_en: 'Avoid unnecessary transfers',
-    note: 'Liste de l’établissement et alternatives avant l’appel', note_en: 'Facility checklist and alternatives before calling' },
+  { code: 'eviter_transferts', categorie: 'optionnel', types: ['chsld'], statut: 'disponible', drapeau: 'eviter_transferts', nom: 'Secours 911 · préparation de l’intervention', nom_en: '911 emergency · call-out preparation',
+    note: 'Liste de l’établissement et alternatives, dans Urgences → Secours 911 ; jamais une condition à l’appel au 911', note_en: 'Facility checklist and alternatives, in Emergency → 911 emergency; never a condition for calling 911' },
 ];
 const MODULE = new Map(MODULES.map((m) => [m.code, m]));
 /** Drapeaux opérationnels modifiables (etablissements.modules) pour un type. */

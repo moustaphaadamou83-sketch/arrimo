@@ -8,7 +8,7 @@
  */
 const CATEGORIES = {
   interhospitalier: { fr: 'Interhospitalier', en: 'Inter-hospital', couleur: '#2563EB', texte: '#1D4ED8', fond: '#DBE7FE', forme: 'carre', icone: 'hospital' },
-  interhebergement: { fr: 'Interhébergement', en: 'Between residences', couleur: '#7C3AED', texte: '#6D28D9', fond: '#EDE5FD', forme: 'rond', icone: 'house' },
+  interhebergement: { fr: 'Inter-hébergement', en: 'Between residences', couleur: '#7C3AED', texte: '#6D28D9', fond: '#EDE5FD', forme: 'rond', icone: 'house' },
   hopital_hebergement: { fr: 'Hôpital et hébergement', en: 'Hospital and residence', couleur: '#0D9488', texte: '#0F766E', fond: '#D5F3EF', forme: 'losange', icone: 'arrow-right-left' },
   secours_911: { fr: 'Secours 911', en: '911 emergency', couleur: '#C026D3', texte: '#A21CAF', fond: '#FBE2F7', forme: 'triangle', icone: 'siren' },
   transport_planifie: { fr: 'Transport planifié', en: 'Scheduled transport', couleur: '#0891B2', texte: '#0E7490', fond: '#D6F1F8', forme: 'pilule', icone: 'calendar-clock' },

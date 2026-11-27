@@ -55,6 +55,8 @@ function creerApp(pool, options = {}) {
   });
   // Module Formation (22 nov. 2026) : « Ma formation », page à part pour tous les rôles (avant le statique : le dossier public/formation existe)
   app.get(['/formation', '/formation/'], (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'formation', 'index.html')));
+  // Registre universel des modules (27 nov. 2026) : même fichier pour le serveur et l'interface (une seule source)
+  app.get('/registre-modules.js', (req, res) => res.type('application/javascript').sendFile(path.join(__dirname, 'registre-modules.js')));
   app.use(express.static(path.join(__dirname, '..', 'public')));
   // Pages légales, accessibles sans connexion (français et anglais)
   app.get('/proches', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'proches.html')));
@@ -219,6 +221,23 @@ function creerApp(pool, options = {}) {
   require('./portail-proches').brancherPublic(api, pool, route);
   api.use(exigerSession(pool));
   api.use((req, res, next) => { req.utilisateur.langue = req.langue; next(); });
+  // Registre universel (27 nov. 2026, §7) : une route dont l'emplacement principal est un sous-module non compatible, sans licence ou
+  // désactivé depuis SH est refusée côté serveur, quel que soit le menu. Les données restent en base (rien n'est supprimé).
+  const REG = require('./registre-modules'); const TEreg = require('./types-etablissement'); const cacheEtab = new Map();
+  api.use(async (req, res, next) => {
+    try {
+      const id = Number(req.query.etablissement_id ?? req.body?.etablissement_id);
+      if (!Number.isInteger(id) || id <= 0) return next();
+      let e = cacheEtab.get(id);
+      if (!e || e.t < Date.now() - 5000) { const r = (await pool.query('SELECT id, type_etablissement, modules FROM etablissements WHERE id = $1', [id])).rows[0]; e = { t: Date.now(), r }; cacheEtab.set(id, e); }
+      if (!e.r) return next();
+      const v = REG.routeAutorisee(e.r, req.path, TEreg.moduleActif);
+      if (v && !v.ok) return next(new ErreurHttp(403, 'module_desactive', { module: v.module }));
+      return next();
+    } catch (err) { return next(err); }
+  });
+  /** Invalide le cache après une modification de licence ou de sous-modules (SH, administration). */
+  app.locals.oublierEtab = (id) => cacheEtab.delete(Number(id));
   // Synchronisation de Chrono (27 nov. 2026) : toute écriture réussie sur un lit, une civière, une admission, la NSA, un congé, un
   // patient ou le DSN prévient les écrans en direct APRÈS la réponse (donc après validation) ; le signal ne porte aucune donnée.
   const ECRITURES_SEJOUR = /^\/(lits|civieres|nettoyage|nsa|admissions|conges|patients|dsn|chsld\/places)(\/|$)/;
@@ -496,7 +515,10 @@ function creerApp(pool, options = {}) {
       langue_interface: u.langue_interface || null, preferences_og: u.preferences_og || {} },
     organisations: (await pool.query(`SELECT o.id, o.code, o.nom, o.type, (SELECT fuseau FROM config_pays WHERE id = o.config_id) AS fuseau FROM utilisateur_organisations uo JOIN organisations_secours o ON o.id = uo.organisation_id
       WHERE uo.utilisateur_id = $1 AND o.actif ORDER BY o.nom`, [u.id])).rows,
-    etablissements: rows.map((e) => ({ ...e, acces_direct: u.etabs.includes(e.id) })), configs: configs.rows, demo: env.estDemo(), environnement: env.environnement(),
+    // Registre universel : écrans autorisés (type, licence, sous-modules SH, rôle) calculés ici, une seule fois, pour l'interface
+    etablissements: rows.map((e) => { const i = REG.interfacePour(e, u, TEreg.moduleActif);
+      return { ...e, acces_direct: u.etabs.includes(e.id), famille: i.famille, ecrans: i.modules.flatMap((m) => m.sous.map((x) => x.v)),
+        interface: i.modules.map((m) => ({ id: m.id, sous: m.sous.map((x) => x.id) })), categories_flux: i.categories_flux || null }; }), configs: configs.rows, demo: env.estDemo(), environnement: env.environnement(),
     patients_fictifs: ['demo', 'recette'].includes(env.environnement()) || process.env.ARRIMO_PATIENTS_FICTIFS === '1' };
   }));
 
@@ -846,6 +868,7 @@ function creerApp(pool, options = {}) {
   const vig = require('./vigilance');
   api.get('/conges', route((req) => vig.conges(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'), {
     horizon: req.query.horizon, jour: req.query.jour, unite: req.query.unite, statut: req.query.statut })));
+  api.get('/conges/module', route((req) => vig.congesModule(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   api.get('/vigilance', route((req) => vig.blocages(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   /* ---------- suivi des alertes : accusé, action, escalade, résolution confirmée (lot 2 du chantier coordination) ---------- */
   const suivi = require('./suivi-alertes');

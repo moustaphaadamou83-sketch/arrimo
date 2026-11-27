@@ -101,7 +101,7 @@
    La couleur principale de la marque (#0E5E6F) et les couleurs de statut ne changent pas. Couleurs des modules : identiques pour tous. */
 :root[data-arrimo][data-design="v2"] {
   --m-accueil: #0E7C86; --m-patients: #7C3AED; --m-transferts: #2B59C3; --m-capacites: #047857; --m-urgences: #BE185D; --m-chrono: #0E5E6F;
-  --m-operations: #B45309; --m-pilotage: #4338CA; --m-reseau: #0F766E; --m-national: #86198F; --m-administration: #475569;
+  --m-operations: #B45309; --m-pilotage: #4338CA; --m-reseau: #0F766E; --m-national: #86198F; --m-administration: #475569; --m-conges: #0369A1; --m-departs: #0369A1; --m-alertes: #9A3412; --m-residents: #7C3AED;
 }
 :root[data-arrimo][data-design="v2"][data-ambiance="glacier"]:not([data-theme="sombre"]):not([data-type-etab="chsld"]) {
   --fond: #EDF4FA; --carte: #FFFFFF; --doux: #E5EDF5; --bordure: #D5E0EA; --texte: #20334D; --texte-2: #475569; --texte-2-fond: #475569;
@@ -118,7 +118,7 @@
 }
 :root[data-arrimo][data-design="v2"][data-theme="sombre"] {
   --m-accueil: #5BC4D0; --m-patients: #B794F6; --m-transferts: #8AA8F0; --m-capacites: #5DD3A6; --m-urgences: #F38DB8; --m-chrono: #57C5B6;
-  --m-operations: #F4B35E; --m-pilotage: #A5A9F5; --m-reseau: #5ED1C4; --m-national: #E79BF0; --m-administration: #A9BAC9;
+  --m-operations: #F4B35E; --m-pilotage: #A5A9F5; --m-reseau: #5ED1C4; --m-national: #E79BF0; --m-administration: #A9BAC9; --m-conges: #7CC4F0; --m-departs: #7CC4F0; --m-alertes: #F5A97F; --m-residents: #B794F6;
 }
 /* Navigation : chaque grand module porte sa couleur (icône et indicateur actif), toujours avec son libellé */
 :root[data-arrimo][data-design="v2"] .espace-btn .ic { color: var(--m-espace, currentColor); }
@@ -133,6 +133,11 @@
 :root[data-arrimo][data-design="v2"] .espace-btn[data-espace="reseau"] { --m-espace: var(--m-reseau); }
 :root[data-arrimo][data-design="v2"] .espace-btn[data-espace="national"] { --m-espace: var(--m-national); }
 :root[data-arrimo][data-design="v2"] .espace-btn[data-espace="administration"] { --m-espace: var(--m-administration); }
+:root[data-arrimo][data-design="v2"] .espace-btn[data-espace="chrono"] { --m-espace: var(--m-chrono); }
+:root[data-arrimo][data-design="v2"] .espace-btn[data-espace="conges"] { --m-espace: var(--m-conges); }
+:root[data-arrimo][data-design="v2"] .espace-btn[data-espace="departs"] { --m-espace: var(--m-departs); }
+:root[data-arrimo][data-design="v2"] .espace-btn[data-espace="alertes"] { --m-espace: var(--m-alertes); }
+:root[data-arrimo][data-design="v2"] .espace-btn[data-espace="residents"] { --m-espace: var(--m-residents); }
 /* Sélecteur d'ambiance de la barre supérieure */
 .barre-ambiance { display: none; }
 :root[data-design="v2"] .barre-ambiance { display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; height: var(--h-bouton); border-radius: var(--rayon); }

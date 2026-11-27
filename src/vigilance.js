@@ -543,3 +543,64 @@ async function noterControle(pool, nom, debut, resultat) {
 }
 
 module.exports = { conges, blocages, fraicheur, noterControle, STATUTS_OUVERTS, dureeTexte };
+
+/**
+ * Module Congés (cahier « architecture fonctionnelle », §5, 27 nov. 2026) : préparation des sorties hospitalières. Lecture seule des
+ * congés enregistrés, enrichis par les sources existantes (aucune donnée dupliquée) : transport planifié du lit (demandes_transport.lit_id),
+ * épisode NSA du lit (orientation vers un hébergement). Les durées Chrono partent de l'heure prévue (retard) ou de la création du congé
+ * (préparation) ; elles sont affichées avec l'horloge commune, donc identiques dans tous les modules à un même instant.
+ * Un congé prévu ne rend JAMAIS un lit disponible : la disponibilité réelle suit le départ effectif puis la remise en service.
+ */
+async function congesModule(pool, utilisateur, etabId) {
+  const base = await conges(pool, utilisateur, etabId, {});
+  const lits = [...new Set(base.lignes.map((x) => x.lit_id))];
+  const transports = lits.length ? (await pool.query(
+    `SELECT DISTINCT ON (d.lit_id) d.lit_id, d.numero, d.statut, d.motif_transport, d.plage_debut, d.destination_libelle, de.nom AS destination_nom,
+            COALESCE(de.type_etablissement, NULL) AS destination_type
+       FROM demandes_transport d LEFT JOIN etablissements de ON de.id = d.destination_id
+      WHERE d.origine_id = $1 AND d.lit_id = ANY($2::int[]) AND d.statut NOT IN ('annulee', 'refusee')
+      ORDER BY d.lit_id, d.cree_le DESC`, [etabId, lits])).rows : [];
+  const nsa = lits.length ? (await pool.query(
+    `SELECT DISTINCT ON (lit_id) lit_id, orientation, transitoire FROM nsa_episodes WHERE etablissement_id = $1 AND lit_id = ANY($2::int[]) AND statut = 'actif'
+      ORDER BY lit_id, debut_le DESC`, [etabId, lits])).rows : [];
+  const trParLit = new Map(transports.map((x) => [x.lit_id, x])); const nsaParLit = new Map(nsa.map((x) => [x.lit_id, x]));
+  const cfg = await configEtab(pool, etabId);
+  const { fin: fj } = await bornesJour(pool, cfg.fuseau, 0); const { fin: fd } = await bornesJour(pool, cfg.fuseau, 1);
+  const lignes = base.lignes.map((x) => {
+    const tr = trParLit.get(x.lit_id) || null; const ep = nsaParLit.get(x.lit_id) || null;
+    // Destination : déduite des événements enregistrés seulement (transport du lit, orientation NSA) ; sinon « à préciser »
+    const destination = tr ? (tr.motif_transport === 'retour_domicile' ? 'domicile' : ['depart_nsa', 'retour_chsld'].includes(tr.motif_transport) || (tr.destination_type && tr.destination_type !== 'hopital') ? 'hebergement' : tr.motif_transport === 'transfert_stable' ? 'hopital' : 'autre')
+      : ep ? 'hebergement' : 'a_preciser';
+    const transportConfirme = !!tr && ['acceptee', 'en_route', 'pris_en_charge', 'arrivee'].includes(tr.statut);
+    const ouvert = STATUTS_OUVERTS.includes(x.statut);
+    const obstacles = [];
+    if (ouvert && x.verification) obstacles.push('heure_depassee');
+    if (ouvert && x.statut === 'attente_transport' && !transportConfirme) obstacles.push('transport_non_confirme');
+    if (ouvert && tr && !transportConfirme && tr.statut !== 'arrivee' && x.statut !== 'attente_transport') obstacles.push('transport_en_attente');
+    if (ouvert && destination === 'hebergement' && ep && !tr) obstacles.push('place_hebergement_a_confirmer');
+    if (ouvert && destination === 'a_preciser') obstacles.push('destination_a_preciser');
+    if (ouvert && x.statut === 'reporte') obstacles.push('conge_reporte');
+    const prevu = x.sortie_prevue ? new Date(x.sortie_prevue) : null;
+    const quand = !prevu ? 'sans_heure' : prevu < new Date(fj) ? 'aujourdhui' : prevu < new Date(fd) ? 'demain' : 'a_venir';
+    const etape = !ouvert ? x.statut : x.verification ? 'retarde' : x.statut === 'confirme' ? 'confirme' : 'en_preparation';
+    return { ...x, quand, etape, destination, orientation_hebergement: ep ? { orientation: ep.orientation, transitoire: ep.transitoire } : null,
+      transport: tr ? { numero: tr.numero, statut: tr.statut, motif: tr.motif_transport, plage_debut: tr.plage_debut, destination: tr.destination_nom || tr.destination_libelle || null } : null,
+      transport_necessaire: !!tr || x.statut === 'attente_transport', transport_confirme: transportConfirme, obstacles,
+      // Chrono : retard depuis l'heure prévue, sinon préparation depuis l'enregistrement du congé (référence datée, jamais une durée figée)
+      chrono_depuis: ouvert ? (x.verification ? x.sortie_prevue : x.cree_le || x.derniere_maj) : null, chrono_nature: ouvert ? (x.verification ? 'retard' : 'preparation') : null,
+      lit_disponible: false };
+  });
+  const ouverts = lignes.filter((x) => STATUTS_OUVERTS.includes(x.statut));
+  const n = (f) => ouverts.filter(f).length;
+  return {
+    etablissement: base.etablissement, lu_le: new Date().toISOString(),
+    compteurs: { aujourdhui: n((x) => x.quand === 'aujourdhui'), demain: n((x) => x.quand === 'demain'), a_venir: n((x) => x.quand === 'a_venir' || x.quand === 'sans_heure'),
+      confirmes: n((x) => x.etape === 'confirme'), en_preparation: n((x) => x.etape === 'en_preparation'), retardes: n((x) => x.etape === 'retarde'),
+      domicile: n((x) => x.destination === 'domicile'), hebergement: n((x) => x.destination === 'hebergement'), transport_necessaire: n((x) => x.transport_necessaire),
+      transport_confirme: n((x) => x.transport_confirme), obstacles: n((x) => x.obstacles.length > 0) },
+    // Disponibilités prévisionnelles : après le départ ET la remise en service (nettoyage) ; jamais comptées comme lits libres
+    previsionnelles: ouverts.filter((x) => x.disponibilite_estimee).map((x) => ({ lit: x.lit, unite: x.unite, disponible_vers: x.disponibilite_estimee, regle: x.disponibilite_estimee_regle })),
+    lignes, regles: base.regles, donnees_lues_le: base.donnees_lues_le, controle_periodique: base.controle_periodique,
+  };
+}
+module.exports.congesModule = congesModule;

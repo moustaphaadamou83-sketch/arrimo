@@ -147,6 +147,7 @@ const MESSAGES = {
   patients_reserve_demo: 'La fiche d’identification n’est disponible qu’en démonstration et en recette (données fictives).',
   specialite_inconnue: 'Spécialité inconnue dans le catalogue.',
   module_desactive: 'Le module {module} n’est pas activé pour cet établissement.',
+  licence_reservee_sh: 'Le périmètre de la licence se règle depuis la console SH ; l’administration de l’établissement gère les permissions des utilisateurs.',
   // transferts
   etab_introuvable: 'Établissement introuvable.',
   objet_introuvable: 'Introuvable ou hors de votre périmètre.',

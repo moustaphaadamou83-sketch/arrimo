@@ -53,7 +53,7 @@ const REGLES = {
 };
 const SOURCES = {
   ambulance_immobilisee: ['Chrono (heures H11 à H14)', 'Chrono (times H11 to H14)'],
-  ambulances_attendues: ['Préalertes de Liaison Secours, état des civières', 'Liaison Secours pre-alerts, stretcher status'],
+  ambulances_attendues: ['Préalertes Secours 911, état des civières', '911 emergency pre-alerts, stretcher status'],
   transport_en_retard: ['Demandes de transport', 'Transport requests'],
   transport_non_confirme: ['Demandes de transport', 'Transport requests'],
   placement_non_realise: ['Liaison CHSLD (demandes d’hébergement)', 'Liaison CHSLD (housing requests)'],

@@ -123,12 +123,18 @@ async function mouvements(pool, u, q = {}) {
       pret: manquantes.length === 0, manquantes, minutes_avant_arrivee: avant, estimation: !!l.eta && l.eta_source !== 'confirme',
       risque: manquantes.length > 0 && avant != null && avant <= 15 };
   }
-  return { genere_le: new Date().toISOString(), mouvements: res,
+  // Catégories pertinentes pour le type d'établissement (registre universel) : jamais Inter-hébergement à l'hôpital ni Interhospitalier
+  // en hébergement ; un mouvement hors liste reste visible dans « Autres mouvements » (aucune donnée perdue)
+  const REG = require('./registre-modules');
+  const typeEtab = (await pool.query('SELECT type_etablissement FROM etablissements WHERE id = $1', [id])).rows[0]?.type_etablissement;
+  const permises = REG.CATEGORIES_FLUX[REG.familleDe(typeEtab) || 'territorial'];
+  for (const l of res) if (l.categorie && !permises.includes(l.categorie.code)) { const d = cat.CATEGORIES.autre; l.categorie = { code: 'autre', libelle: cat.libelle('autre', q.langue || u.langue), certain: false, couleur: d.couleur, texte: d.texte, fond: d.fond, forme: d.forme }; }
+  return { genere_le: new Date().toISOString(), mouvements: res, categories: permises,
     resume: { arrivees: res.filter((l) => l.mouvement === 'arrivee').length, departs: res.filter((l) => l.mouvement === 'depart').length, retards: res.filter((l) => l.retard).length,
       prealertes_a_acquitter: res.filter((l) => l.actions.includes('accuser_prealerte')).length,
       arrivees_a_risque: res.filter((l) => l.preparation_accueil?.risque).length,
       ambulances_risque_retard: res.filter((l) => l.marge_preparation?.verdict === 'risque_retard').length,
-      par_categorie: Object.fromEntries(cat.legende().map((c) => [c.code, res.filter((l) => l.categorie?.code === c.code).length])), preparations: res.filter((l) => l.preparation && ['a_faire', 'en_cours'].includes(l.preparation.etat)).length } };
+      par_categorie: Object.fromEntries(cat.legende().filter((c) => permises.includes(c.code)).map((c) => [c.code, res.filter((l) => l.categorie?.code === c.code).length])), preparations: res.filter((l) => l.preparation && ['a_faire', 'en_cours'].includes(l.preparation.etat)).length } };
 }
 
 /** Historique des disponibilités (cahier directeur, 9) : par jour, d'après le journal immuable des lits (source unique) ; état actuel. */

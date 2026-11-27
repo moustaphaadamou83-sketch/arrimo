@@ -612,6 +612,8 @@ const MODULE_ONGLET = { urgence: 'urgence', nsa: 'nsa', nettoyage: 'nettoyage', 
 /** Type de l'établissement courant (hôpital par défaut) : la navigation et l'écran d'accueil en dépendent. */
 const typeEtab = () => etabCtx()?.type_etablissement || 'hopital';
 const chsldSansAccesDirect = () => typeEtab() === 'chsld' && etat.moi?.utilisateur?.gestionnaire && etabCtx()?.acces_direct !== true;
+/** Tous les écrans décrits par le registre universel (les deux familles) : seuls ceux-là sont filtrés par la liste du serveur. */
+const ecransRegistre = () => new Set(Object.values(window.ArrimoRegistre?.NAV || {}).flatMap((l) => l.flatMap((m) => (m.sous || []).map((x) => x.v))));
 function appliquerModules() {
   const entretien = estEntretien();
   const mods = (etabCtx() && etabCtx().modules) || {};
@@ -619,13 +621,18 @@ function appliquerModules() {
   const chsldInterdit = chsldSansAccesDirect();
   document.body.dataset.typeEtab = type; document.documentElement.dataset.typeEtab = type;
   $('#b-notif').hidden = entretien || chsldInterdit;
+  // Registre universel (27 nov. 2026) : écrans autorisés calculés par le serveur (type, licence, sous-modules SH, rôle). Un écran connu du
+  // registre mais absent de la liste n'a pas d'onglet ; un ancien écran fusionné (« Avant l'appel ») n'en a plus nulle part.
+  const ecrans = etabCtx()?.ecrans; const connus = ecransRegistre();
+  const redirige = window.ArrimoRegistre?.REDIRECTIONS?.[etat.vue]; if (redirige) etat.vue = redirige;
   document.querySelectorAll('#onglets button[data-v]').forEach((b) => {
+    const horsRegistre = (Array.isArray(ecrans) && connus.has(b.dataset.v) && !ecrans.includes(b.dataset.v)) || Object.hasOwn(window.ArrimoRegistre?.REDIRECTIONS || {}, b.dataset.v);
     const mod = Object.keys(MODULE_ONGLET).find((k) => MODULE_ONGLET[k] === b.dataset.v);
     const autreType = b.dataset.type && b.dataset.type !== type;
     // Entretien : nettoyage (et ses tâches en CHSLD) seulement
     // Entretien : Nettoyage et Mes tâches (vue personnelle unique ; le tableau des tâches de l'établissement reste aux responsables : pas de doublon)
     const entretienInterdit = entretien && !(b.dataset.v === 'nettoyage' || b.dataset.v === 'mes-taches' || b.dataset.v === 'chrono');  // Chrono : capacités seulement (serveur)
-    b.hidden = autreType || (chsldInterdit && b.dataset.type === 'chsld') || entretienInterdit || (b.dataset.v === 'admin' && !etat.moi.utilisateur.admin) || (mod && mods[mod] === false)
+    b.hidden = autreType || horsRegistre || (chsldInterdit && b.dataset.type === 'chsld') || entretienInterdit || (b.dataset.v === 'admin' && !etat.moi.utilisateur.admin) || (mod && mods[mod] === false)
       || (b.dataset.module && mods[b.dataset.module] === false) || (b.dataset.v === 'patients' && !etat.moi.patients_fictifs)
       // Module optionnel (Liaison Secours) : visible seulement s'il a été activé pour cet établissement
       || (b.dataset.moduleOptionnel && mods[b.dataset.moduleOptionnel] !== true);
@@ -699,7 +706,7 @@ async function rafraichir() {
     await Promise.all([e ? majCompteurs() : null, ({
       copilote: vueCopilote, reseau: vueReseau, national: vueNational, lits: vueLits, urgence: vueUrgence, admissions: vueAdmissions, transferts: vueTransferts,
       nettoyage: vueNettoyage, vigilance: async () => { await vueVigilance(); await window.ArrimoSillage?.vigilance($('#v-vigilance'), etat.ctx); if (['demo', 'recette', 'developpement'].includes(etat.moi?.environnement)) await window.ArrimoExercice?.panneau($('#v-vigilance'), etat.ctx); }, nsa: vueNsa, indicateurs: vueIndicateurs, journal: vueJournal, params: vueParams,
-      admin: vueAdmin, compte: vueCompte, support:vueSupportClient, patients: vuePatients, continuite: vueContinuite, ...(window.ArrimoChsld?.vues || {}), ...(window.ArrimoSecours?.vues || {}), ...(window.ArrimoChrono?.vues || {}), ...(window.ArrimoTransportPlanifie?.vues || {}), ...(window.ArrimoBourse?.vues || {}), flux: () => window.ArrimoFluxVue.afficher($('#v-flux'), optsFlux()), 'mes-taches': () => window.ArrimoMesTaches.afficher($('#v-mes-taches'), optsFlux()), donnees: () => window.ArrimoDonnees.afficher($('#v-donnees'), { api, langue, etablissement_id: etat.ctx }), dsn: vueDsn, ...(window.ArrimoVisitesEviter?.vues || {}), crise: () => window.ArrimoCrise.afficher($('#v-crise'), { api, langue, etablissement_id: etat.ctx }),
+      admin: vueAdmin, compte: vueCompte, support:vueSupportClient, patients: vuePatients, continuite: vueContinuite, ...(window.ArrimoChsld?.vues || {}), ...(window.ArrimoSecours?.vues || {}), ...(window.ArrimoChrono?.vues || {}), ...(window.ArrimoTransportPlanifie?.vues || {}), ...(window.ArrimoBourse?.vues || {}), flux: () => window.ArrimoFluxVue.afficher($('#v-flux'), optsFlux()), 'mes-taches': () => window.ArrimoMesTaches.afficher($('#v-mes-taches'), optsFlux()), donnees: () => window.ArrimoDonnees.afficher($('#v-donnees'), { api, langue, etablissement_id: etat.ctx }), dsn: vueDsn, ...(window.ArrimoVisitesEviter?.vues || {}), ...(window.ArrimoCongesAlertes?.vues || {}), crise: () => window.ArrimoCrise.afficher($('#v-crise'), { api, langue, etablissement_id: etat.ctx }),
     })[etat.vue]()]);
     poserMenuParametres();
     majInfosLieu();
@@ -2059,54 +2066,15 @@ function capaciteReelleHTML(c, F) {
     ${c.ambulances_attendues ? tuile(F('cap_ambulances'), c.ambulances_attendues) : ''}</div>
     <p class="note">${F('capacite_note', { min: c.validite_confirmation_min })}</p></div>`;
 }
+/** Alertes (27 nov. 2026) : module séparé des Congés ; une seule source (Vigilance + suivis), la même que Chrono et la cloche.
+ *  Les panneaux de pilotage de la coordination (capacité réelle, plan, mesures) restent ici, sous la liste des alertes. */
 async function vueVigilance() {
   const v = $('#v-vigilance');
   const F = (k, vars) => esc(t(`fin.${k}`, vars));
-  const f = etat.filtreConges || (etat.filtreConges = { horizon: '24', jour: '', unite: '', statut: '' });
-  const qs = new URLSearchParams({ etablissement_id: etat.ctx, ...(f.jour ? { jour: f.jour } : f.horizon ? { horizon: f.horizon } : {}), ...(f.unite ? { unite: f.unite } : {}), ...(f.statut ? { statut: f.statut } : {}) });
-  const [c, al, lits, plan] = await Promise.all([api('GET', `/conges?${qs}`), api('GET', `/vigilance?etablissement_id=${etat.ctx}`), api('GET', `/lits?etablissement_id=${etat.ctx}`),
-    api('GET', `/coordination/plan?etablissement_id=${etat.ctx}`).catch(() => null)]);
-  const mesures = await api('GET', `/coordination/indicateurs?etablissement_id=${etat.ctx}`).catch(() => null);
-  const unites = [...new Map(lits.map((l) => [l.unite_id, l.unite])).entries()];
-  const filtres = [['4', F('h4')], ['12', F('h12')], ['24', F('h24')], ['aujourdhui', F('aujourdhui')], ['demain', F('demain')]];
-  const fraicheur = `<p class="note">${F('lu_a', { heure: heure(c.donnees_lues_le) })} · ${c.controle_periodique.dernier_le ? F('controle', { heure: heure(c.controle_periodique.dernier_le), min: c.controle_periodique.periode_min }) : F('controle_jamais')}${c.controle_periodique.en_retard ? ` · <span class="alerte">${F('controle_retard')}</span>` : ''}</p>`;
-  const ligne = (x) => `<tr class="${x.verification ? 'retard' : ''}"><td><b class="num">${esc(x.lit)}</b></td><td>${esc(x.service || '—')}<div class="note">${esc(x.unite)}</div></td><td class="num">${esc(x.chambre)}</td>
-    <td>${esc(t(`etats.${x.etat}`))}</td><td>${x.sortie_prevue ? esc(jourHeure(x.sortie_prevue)) : '—'}</td>
-    <td><span class="badge${x.statut === 'confirme' ? ' fort' : ''}">${esc(t(`fin.statut_${x.statut}`))}</span>${x.verification ? `<div class="alerte">${F('verification', { duree: duree(x.retard_min) })}</div>` : ''}</td>
-    <td>${x.depart_reel_le ? esc(jourHeure(x.depart_reel_le)) : '—'}</td><td>${x.nettoyage_requis ? F('oui') : F('non')}</td>
-    <td>${x.disponibilite_estimee ? `${esc(heure(x.disponibilite_estimee))}<div class="note">${F('estimation')}</div>` : `<span class="note">${F('non_calculable')}</span>`}</td>
-    <td class="note">${esc(t(`fin.source_${x.source}`))}<div>${esc(jourHeure(x.derniere_maj))}${x.maj_par ? ` · ${esc(x.maj_par)}` : ''}</div></td></tr>`;
-  const resume = [4, 12, 24].map((h) => `<div><span class="lbl">${F('dans_h', { h })}</span><span class="gros num">${c.resume[h].confirmes + c.resume[h].prevus}</span><span class="note">${F('dont', { c: c.resume[h].confirmes, p: c.resume[h].prevus })}</span></div>`).join('');
-  const couleur = { eleve: 'critique', modere: 'attention', faible: 'info' };
-  const alertes = al.alertes.map((a) => `<div class="fiche alerte-vig" style="--c:var(--${couleur[a.niveau]})">
-      <div class="t"><b>${esc(a.titre)}</b><span class="risque ${a.niveau}">${esc(t(`blocages_niveaux.${a.niveau}`))}</span></div>
-      <div class="note">${esc(a.etablissement)} · ${esc(a.unite || '')}${a.chambre ? ` · ${F('chambre', { n: a.chambre })}` : ''} · ${F('depuis', { duree: duree(a.duree_min) })}</div>
-      <dl class="explication"><dt>${F('origine')}</dt><dd>${esc(a.evenement)}${a.dernier_evenement ? ` — ${F('dernier_evt', { action: a.dernier_evenement.action, heure: jourHeure(a.dernier_evenement.date) })}` : ''}</dd>
-      <dt>${F('seuil')}</dt><dd>${esc(a.seuil.regle)}</dd>
-      <dt>${a.cause.nature === 'fait' ? F('fait') : F('hypothese')}</dt><dd>${esc(a.cause.texte)}</dd>
-      <dt>${F('proposition')}</dt><dd>${esc(a.action)} <span class="note">(${esc(a.responsable)})</span></dd></dl>${suiviAlerteHTML(a.suivi, F)}</div>`).join('');
-  v.innerHTML = `<div class="entete"><div><h2>${F('titre', { etab: etabCtx().nom })}</h2><p>${F('intro')}</p>${fraicheur}</div></div>
-    <div class="resume">${resume}<div><span class="lbl">${F('retards')}</span><span class="gros num">${c.retards}</span><span class="note">${F('retards_note')}</span></div></div>
-    <div class="panneau-c"><h3>${F('conges_titre')}</h3>
-      <div class="chips">${filtres.map(([k, lib]) => `<button class="chip" aria-pressed="${(f.jour || f.horizon) === k}" data-fh="${k}">${lib}</button>`).join('')}</div>
-      <div class="ligne"><div class="champ"><label class="lbl" for="vg-unite">${F('unite')}</label><select id="vg-unite"><option value="">${F('toutes')}</option>${unites.map(([id, nom]) => `<option value="${id}"${String(id) === f.unite ? ' selected' : ''}>${esc(nom)}</option>`).join('')}</select></div>
-      <div class="champ"><label class="lbl" for="vg-statut">${F('statut')}</label><select id="vg-statut"><option value="">${F('tous')}</option>${['prevu', 'confirme', 'attente_transport', 'reporte', 'retard', 'realise', 'annule'].map((k) => `<option value="${k}"${f.statut === k ? ' selected' : ''}>${esc(t(`fin.statut_${k}`))}</option>`).join('')}</select></div></div>
-      ${c.lignes.length ? `<div class="tableau"><table><thead><tr><th>${F('lit')}</th><th>${F('service_unite')}</th><th>${F('chambre_col')}</th><th>${F('occupation')}</th><th>${F('conge_prevu')}</th><th>${F('statut')}</th><th>${F('depart_reel')}</th><th>${F('nettoyage')}</th><th>${F('dispo_estimee')}</th><th>${F('source')}</th></tr></thead><tbody>${c.lignes.map(ligne).join('')}</tbody></table></div>`
-    : `<p class="vide">${F('aucun_conge')}</p>`}
-      <p class="note">${esc(c.regles.deterministe)} ${esc(c.regles.retard)} ${esc(c.regles.estimation)}</p></div>
-    ${al.capacite ? capaciteReelleHTML(al.capacite, F) : ''}${plan ? planCoordinationHTML(plan, F) : ''}${mesures ? mesuresCoordinationHTML(mesures, F) : ''}
-    <div class="panneau-c"><h3>${F('alertes_titre', { n: al.alertes.length })}</h3><p class="note">${Object.values(al.regles_couleurs).map(esc).join(' ')}</p>
-      <div class="pile">${alertes || `<p class="vide">${F('aucune_alerte')}</p>`}</div></div>`;
-  v.querySelectorAll('[data-suivi-op]').forEach((b) => { b.onclick = async () => {
-    const corps = { version: Number(b.dataset.version) };
-    if (b.dataset.suiviOp === 'action') { const s = v.querySelector(`[data-suivi-action="${b.dataset.id}"]`); if (!s?.value) return; corps.action = s.value; }
-    try { await api('POST', `/coordination/alertes/${b.dataset.id}/${b.dataset.suiviOp}`, corps); toast(F(`suivi_fait_${b.dataset.suiviOp}`)); } catch (e) { toast(e.message); }
-    rafraichir();
-  }; });
-  v.querySelectorAll('[data-fh]').forEach((b) => { b.onclick = () => { const k = b.dataset.fh; if (['aujourdhui', 'demain'].includes(k)) { f.jour = k; f.horizon = ''; } else { f.horizon = k; f.jour = ''; } rafraichir(); }; });
-  $('#vg-unite').onchange = (e) => { f.unite = e.target.value; rafraichir(); };
-  $('#vg-statut').onchange = (e) => { f.statut = e.target.value; rafraichir(); };
-  const n = $('#n-vig'); if (n) { const k = al.alertes.filter((a) => a.niveau === 'eleve').length; n.hidden = !k; n.textContent = k; }
+  await window.ArrimoCongesAlertes.vueAlertes(v, { complements: async (zone, al) => {
+    const [plan, mesures] = await Promise.all([api('GET', `/coordination/plan?etablissement_id=${etat.ctx}`).catch(() => null), api('GET', `/coordination/indicateurs?etablissement_id=${etat.ctx}`).catch(() => null)]);
+    zone.insertAdjacentHTML('beforeend', `${al.capacite ? capaciteReelleHTML(al.capacite, F) : ''}${plan ? planCoordinationHTML(plan, F) : ''}${mesures ? mesuresCoordinationHTML(mesures, F) : ''}`);
+  } });
 }
 
 /* ---------------- Copilote : vue d'ensemble et prévisions ---------------- */

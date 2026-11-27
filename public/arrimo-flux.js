@@ -101,11 +101,13 @@
     // Planche 4 : les 7 catégories toujours présentes (couleur + forme + libellé + compteur) ; un clic masque ou montre la catégorie
     const CATS = [['interhospitalier', '#2563EB', '#1D4ED8', '#DBE7FE', 'carre'], ['interhebergement', '#7C3AED', '#6D28D9', '#EDE5FD', 'rond'], ['hopital_hebergement', '#0D9488', '#0F766E', '#D5F3EF', 'losange'],
       ['secours_911', '#C026D3', '#A21CAF', '#FBE2F7', 'triangle'], ['transport_planifie', '#0891B2', '#0E7490', '#D6F1F8', 'pilule'], ['domicile', '#64748B', '#475569', '#E5E9EF', 'contour'], ['autre', '#4F46E5', '#4338CA', '#E2E3FB', 'anneau']];
-    const NOMS_CAT = { fr: { interhospitalier: 'Interhospitalier', interhebergement: 'Interhébergement', hopital_hebergement: 'Hôpital et hébergement', secours_911: 'Secours 911', transport_planifie: 'Transport planifié', domicile: 'Domicile', autre: 'Autres mouvements' },
+    // Registre universel : seules les catégories pertinentes pour ce type d'établissement (liste donnée par le serveur)
+    const CATS_VUES = Array.isArray(d0.categories) ? CATS.filter((x) => d0.categories.includes(x[0])) : CATS;
+    const NOMS_CAT = { fr: { interhospitalier: 'Interhospitalier', interhebergement: 'Inter-hébergement', hopital_hebergement: 'Hôpital et hébergement', secours_911: 'Secours 911', transport_planifie: 'Transport planifié', domicile: 'Domicile', autre: 'Autres mouvements' },
       en: { interhospitalier: 'Inter-hospital', interhebergement: 'Between residences', hopital_hebergement: 'Hospital and residence', secours_911: '911 emergency', transport_planifie: 'Scheduled transport', domicile: 'Home', autre: 'Other movements' } };
     etat.masquees = etat.masquees || [];
     const d = { ...d0, mouvements: d0.mouvements.filter((l) => (!etat.groupe || groupe(l) === etat.groupe) && !etat.masquees.includes(l.categorie?.code)) };
-    const legende = `<div class="ds-cats" role="group" aria-label="${T('categories')}">${CATS.map(([code, c, tx, f, forme]) => { const vu = !etat.masquees.includes(code);
+    const legende = `<div class="ds-cats" role="group" aria-label="${T('categories')}">${CATS_VUES.map(([code, c, tx, f, forme]) => { const vu = !etat.masquees.includes(code);
       return `<button type="button" class="ds-cat cat-mvt" data-forme="${forme}" data-flux-cat="${code}" aria-pressed="${vu}" style="--cat-couleur:${c};--cat-texte:${tx};--cat-fond:${f}">${e(NOMS_CAT[L()][code])} · ${d0.resume.par_categorie?.[code] ?? d0.mouvements.filter((l) => l.categorie?.code === code).length}</button>`; }).join('')}</div>`;
     const ensemble = `<div class="flux-groupes" role="group" aria-label="${T('ensemble')}">${Object.keys(X().gr).map((k) => `<button type="button" class="acc-mini-k flux-groupe${etat.groupe === k ? ' actif' : ''}" data-flux-groupe="${k}" aria-pressed="${etat.groupe === k}"><b>${cpt[k] || 0}</b><span>${e(X().gr[k])}</span></button>`).join('')}</div>`;
     // Étapes communes : Demande, Acceptation, Préparation, Transport, Arrivée, Réception, Clôture

@@ -779,6 +779,22 @@
       <div class="panneau-c"><h3>${C('indicateurs.mouvements')}</h3>${Object.keys(i.mouvements).length ? `<ul class="liste-simple">${Object.entries(i.mouvements).filter(([k]) => k !== 'modification').map(([k, n]) => `<li>${C(`mvt.${k}`)} : <b class="num">${n}</b></li>`).join('')}</ul>` : `<p class="note">${C('fiche.aucun')}</p>`}</div>`;
   }
 
+  /* Secours 911 de l'hébergement (27 nov. 2026) : interventions en cours, départs vers l'hôpital, urgences proches (ex « Urgences proches »)
+     et, si l'établissement l'a activée, la préparation de l'intervention (ex « Avant l'appel », intitulé ambigu retiré). Une réservation de
+     lit ou de place n'est jamais une condition préalable à l'appel au 911 : rien ici ne bloque l'appel. */
+  async function vueSecours911() {
+    const mods = etabCtx()?.modules || {};
+    const v = $('#v-c-urgences');
+    if (mods.transport_ambulancier === true) await window.ArrimoTransports.vueUrgences();
+    else v.innerHTML = `<div class="entete"><div><h2></h2></div></div>`;
+    const h2 = v.querySelector(':scope > .entete h2'); if (h2) h2.textContent = t('chsld.nav.urgences');
+    v.querySelector(':scope > .entete')?.insertAdjacentHTML('afterend', `<p class="note bandeau-911"><b>${esc(t('transports.jamais_conditionnel'))}</b></p>`);
+    if (mods.eviter_transferts === true && window.ArrimoVisitesEviter) {
+      const z = document.createElement('details'); z.className = 'panneau-c preparation-911';
+      z.innerHTML = `<summary><b>${esc(t('onglets.eviter'))}</b></summary><div></div>`; v.appendChild(z);
+      await window.ArrimoVisitesEviter.vueEviter(z.querySelector('div'));
+    }
+  }
   window.ArrimoChsld = { vues: { 'c-accueil': vueAccueil, 'c-residents': vueResidents, 'c-chambres': vueChambres, 'c-demandes': vueDemandes, 'c-admissions': vueAdmissions,
-    'c-taches': vueTaches, 'c-reseau': vueReseau, 'c-mouvements': vueMouvements, 'c-urgences': () => window.ArrimoTransports.vueUrgences(), 'c-indicateurs': vueIndicateurs, liaison: vueLiaison } };
+    'c-taches': vueTaches, 'c-reseau': vueReseau, 'c-mouvements': vueMouvements, 'c-urgences': vueSecours911, 'c-indicateurs': vueIndicateurs, liaison: vueLiaison } };
 })();

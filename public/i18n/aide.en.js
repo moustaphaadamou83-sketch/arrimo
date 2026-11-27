@@ -177,7 +177,7 @@ window.ARRIMO_I18N.en.aide = {
       ],
     },
     secours: {
-      nom: 'Emergency liaison',
+      nom: '911 emergency',
       but: 'Ambulances announced by pre-alert, before they arrive: company, unit, plate, crew, declared priority, category, expected time and position. No identity is sent. OG proposes the department from your rules; your team decides.',
       gestes: [
         '“Acknowledge the pre-alert”: confirms that a person has read it (the ambulance sees it).',
@@ -265,7 +265,7 @@ window.ARRIMO_I18N.en.aide = {
       erreurs: [['Invalid time slot', 'The end must follow the start, within 8 h.']],
     },
     eviter: {
-      nom: 'Before calling',
+      nom: '911 emergency · prepare the call-out',
       but: 'Before calling the ambulance, review your facility’s checklist and alternatives; record the team’s decision.',
       gestes: ['Review the checklist from your protocol.', 'If an alternative is enough, click “Transfer avoided thanks to it”; otherwise “Transfer made”.', 'The administration writes the checklist and contact details.'],
       erreurs: [['Outdated version', 'Someone changed the checklist: reload the screen.']],
