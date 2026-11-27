@@ -280,6 +280,14 @@ async function modifierMission(pool, u, missionId, b = {}) {
 }
 
 /* ---------------- Historique paginé et synthèses (remplace les longues listes des écrans opérationnels) ---------------- */
+/** Nombre, moyenne et médiane des missions terminées, par clé. Indicateurs d'organisation, jamais de sanction automatique. */
+function groupe(lignes, cle) {
+  const m = new Map();
+  for (const x of lignes) { const k = cle(x); if (!k) continue; const g = m.get(k) || { cle: k, nombre: 0, durees: [] }; g.nombre += 1;
+    if (['terminee', 'cloturee', 'arrivee'].includes(x.statut)) { const d = Math.round((new Date(x.fin) - new Date(x.debut)) / 60000); if (d >= 0) g.durees.push(d); } m.set(k, g); }
+  return [...m.values()].map((g) => ({ cle: g.cle, nombre: g.nombre, moyenne_min: g.durees.length ? Math.round(g.durees.reduce((a, b) => a + b, 0) / g.durees.length) : null, mediane_min: mediane(g.durees) }))
+    .sort((a, b) => b.nombre - a.nombre);
+}
 const mediane = (l) => { if (!l.length) return null; const s = [...l].sort((a, b) => a - b); const k = Math.floor(s.length / 2); return s.length % 2 ? s[k] : Math.round((s[k - 1] + s[k]) / 2); };
 async function historique(pool, u, q = {}) {
   if (!cote(u)) throw new ErreurHttp(403, 'role_insuffisant');
@@ -303,7 +311,9 @@ async function historique(pool, u, q = {}) {
   return { jours, total: r.length, page, taille, pages: Math.max(1, Math.ceil(r.length / taille)), lignes: r.slice((page - 1) * taille, page * taille),
     synthese: { nombre: r.length, terminees: durees.length, moyenne_min: durees.length ? Math.round(durees.reduce((a, b) => a + b, 0) / durees.length) : null,
       mediane_min: mediane(durees), dernier: r[0] ? { numero: r[0].numero, fin: r[0].fin, duree_min: Math.round((new Date(r[0].fin) - new Date(r[0].debut)) / 60000) } : null,
-      par_jour: Object.entries(parJour).sort(([a], [b]) => a.localeCompare(b)).map(([jour, n]) => ({ jour, n })) } };
+      par_jour: Object.entries(parJour).sort(([a], [b]) => a.localeCompare(b)).map(([jour, n]) => ({ jour, n })),
+      // Performance par type de mission et par établissement (selon les permissions : périmètre de l'utilisateur seulement)
+      par_type: groupe(r, (x) => x.type), par_etablissement: groupe(r, (x) => x.destination || x.origine).slice(0, 15) } };
 }
 
 /* ---------------- Alertes d'immobilisation pour le CCS (même seuils, jamais de réorientation automatique) ---------------- */

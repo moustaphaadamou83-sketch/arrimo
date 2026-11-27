@@ -24,7 +24,7 @@
       h_titre: 'Historique', h_type: 'Type', h_tous: 'Tous', h_mission: 'Mission CCS', h_prealerte: 'Préalerte', h_transport: 'Transport', h_jours: 'Période', h_j: '{n} jours', h_rech: 'Numéro',
       h_numero: 'Numéro', h_unite: 'Véhicule', h_statut: 'Statut', h_debut: 'Début', h_fin: 'Fin', h_duree: 'Durée', h_aucun: 'Aucun passage terminé sur cette période.',
       syn_titre: 'Synthèse des missions terminées', syn_n: 'Missions terminées', syn_moy: 'Durée moyenne', syn_med: 'Durée médiane', syn_der: 'Dernier passage', syn_voir: 'Voir l’historique complet',
-      pil_titre: 'Pilotage', pil_note: 'Indicateurs d’organisation, jamais un mécanisme automatique de sanction du personnel.', pil_par_jour: 'Missions terminées par jour',
+      pil_titre: 'Pilotage', pil_note: 'Indicateurs d’organisation, jamais un mécanisme automatique de sanction du personnel.', pil_par_jour: 'Missions terminées par jour', pil_type: 'Par type de mission', pil_etab: 'Par établissement',
       al_titre: 'Alertes de la flotte', al_aucune: 'Aucune alerte de flotte.', ouvrir: 'Ouvrir la fiche',
       eq_titre: 'Équipes et véhicules', eq_note: 'Les comptes des équipes sont gérés par l’administration de l’organisation.', adm_titre: 'Administration', adm_modules: 'Modules actifs (réglés dans SH)', adm_org: 'Organisation',
       e_mission: 'Mission actuelle', e_aucune: 'Aucune mission en cours.', e_prochaine: 'Prochaine action', e_accepter: 'Accepter la mission', e_sur_place: 'Arrivés sur place', e_terminer: 'Terminer sans transport',
@@ -62,7 +62,7 @@
       h_titre: 'History', h_type: 'Type', h_tous: 'All', h_mission: 'CCS mission', h_prealerte: 'Pre-alert', h_transport: 'Transport', h_jours: 'Period', h_j: '{n} days', h_rech: 'Number',
       h_numero: 'Number', h_unite: 'Vehicle', h_statut: 'Status', h_debut: 'Start', h_fin: 'End', h_duree: 'Duration', h_aucun: 'No completed run in this period.',
       syn_titre: 'Completed missions summary', syn_n: 'Completed missions', syn_moy: 'Average duration', syn_med: 'Median duration', syn_der: 'Last run', syn_voir: 'See the full history',
-      pil_titre: 'Steering', pil_note: 'Organisational indicators, never an automatic staff penalty mechanism.', pil_par_jour: 'Completed missions per day',
+      pil_titre: 'Steering', pil_note: 'Organisational indicators, never an automatic staff penalty mechanism.', pil_par_jour: 'Completed missions per day', pil_type: 'By mission type', pil_etab: 'By facility',
       al_titre: 'Fleet alerts', al_aucune: 'No fleet alert.', ouvrir: 'Open the record',
       eq_titre: 'Crews and vehicles', eq_note: 'Crew accounts are managed by the organisation’s administration.', adm_titre: 'Administration', adm_modules: 'Active modules (set in SH)', adm_org: 'Organisation',
       e_mission: 'Current mission', e_aucune: 'No mission in progress.', e_prochaine: 'Next action', e_accepter: 'Accept the mission', e_sur_place: 'Arrived on site', e_terminer: 'Finish without transport',
@@ -235,8 +235,14 @@
   }
   function vuePilotage() {
     const s = C.hist?.synthese; const max = Math.max(1, ...(s?.par_jour || []).map((x) => x.n));
-    return `${synthese()}<section class="carte-s"><h2>${T('pil_par_jour')}</h2><div class="barres-jour">${(s?.par_jour || []).map((x) => `<div title="${esc(x.jour)} : ${x.n}"><span style="height:${Math.round(x.n / max * 100)}%"></span><small class="num">${esc(x.jour.slice(5))}</small></div>`).join('') || `<p class="note">${T('h_aucun')}</p>`}</div>
-      <p class="note">${T('pil_note')}</p></section>`;
+    const periode = `<div class="ligne" role="group" aria-label="${T('h_jours')}">${[7, 30, 90, 365].map((n) => `<button type="button" class="chip" data-pil-jours="${n}" aria-pressed="${Number(C.histQ.jours) === n}">${T('h_j', { n })}</button>`).join('')}</div>`;
+    return `${periode}${synthese()}<section class="carte-s"><h2>${T('pil_par_jour')}</h2><div class="barres-jour">${(s?.par_jour || []).map((x) => `<div title="${esc(x.jour)} : ${x.n}"><span style="height:${Math.round(x.n / max * 100)}%"></span><small class="num">${esc(x.jour.slice(5))}</small></div>`).join('') || `<p class="note">${T('h_aucun')}</p>`}</div>
+      <p class="note">${T('pil_note')}</p></section>${tablePil(T('pil_type'), s?.par_type, (k) => T(`h_${k}`))}${tablePil(T('pil_etab'), s?.par_etablissement, esc)}`;
+  }
+  function tablePil(titre, l, lib) {
+    if (!l?.length) return '';
+    return `<section class="carte-s"><h2>${titre}</h2><div class="tableau"><table><thead><tr><th></th><th>${T('syn_n')}</th><th>${T('syn_moy')}</th><th>${T('syn_med')}</th></tr></thead><tbody>
+      ${l.map((g) => `<tr><th scope="row">${lib(g.cle)}</th><td class="num">${g.nombre}</td><td class="num">${esc(duree(g.moyenne_min))}</td><td class="num">${esc(duree(g.mediane_min))}</td></tr>`).join('')}</tbody></table></div></section>`;
   }
   function vueHistorique() {
     const h = C.hist; const q = C.histQ;
@@ -321,6 +327,7 @@
     const fs = racine.querySelector('#fl-statut'); if (fs) fs.onchange = () => { C.statut = fs.value; C.page = 1; C.rendre(); };
     racine.querySelectorAll('[data-fl-page]').forEach((b) => { b.onclick = () => { C.page = Number(b.dataset.flPage); C.rendre(); }; });
     racine.querySelectorAll('[data-h-page]').forEach((b) => { b.onclick = async () => { C.histQ.page = Number(b.dataset.hPage); await chargerHist(); C.rendre(); }; });
+    racine.querySelectorAll('[data-pil-jours]').forEach((b) => { b.onclick = async () => { C.histQ = { ...C.histQ, page: 1, jours: Number(b.dataset.pilJours) }; await chargerHist(); C.rendre(); }; });
     const fh = racine.querySelector('#fl-hist'); if (fh) fh.onsubmit = async (e) => { e.preventDefault(); const d = new FormData(fh); C.histQ = { ...C.histQ, page: 1, type: d.get('type'), jours: d.get('jours'), q: d.get('q') }; await chargerHist(); C.rendre(); };
     const cle = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
     const poster = async (corps) => { try { await C.api('POST', '/secours/messages', { ...corps, cle: cle() }); if (C.ficheId) await chargerFiche(C.ficheId); C.etat.message = TX[L()].envoye; } catch (e) { C.etat.erreur = e.message; } C.rendre(); };

@@ -723,6 +723,15 @@ async function lireNotifications(pool, utilisateur, etabId) {
     `SELECT n.*, t.numero FROM notifications n LEFT JOIN transferts t ON t.id = n.transfert_id
       WHERE n.etablissement_id = $1 AND ($2 OR n.code IS DISTINCT FROM 'chrono_seuil_atteint')
       ORDER BY n.date DESC LIMIT 50`, [etabId, require('./chrono').peutLireAlerte(utilisateur)]);
+  // Registre universel (27 nov. 2026) : la cloche suit les modules activés ; une notification d'un module désactivé est conservée en base
+  // (jamais supprimée) mais n'est pas montrée tant que le module n'est pas réactivé.
+  const TE = require('./types-etablissement');
+  const ici = (await pool.query('SELECT type_etablissement, modules FROM etablissements WHERE id = $1', [etabId])).rows[0] || {};
+  const PAR_PREFIXE = { secours: ['liaison_secours', 'transport_ambulancier'], chrono: ['chrono'], nsa: ['nsa', 'demandes_hebergement'], visite: ['visites_confirmees'], bourse: ['bourse_places'], crise: ['mode_crise'] };
+  for (let i = rows.length - 1; i >= 0; i -= 1) {
+    const lic = PAR_PREFIXE[String(rows[i].code || '').split('_')[0]];
+    if (lic && !lic.some((c) => TE.moduleActif(ici, c))) rows.splice(i, 1);
+  }
   const nomType = await traducteurTypes(pool, utilisateur.langue);
   const fuseau = rows.some((n) => n.vars?.arrivee || n.vars?.debut) ? (await etablissement(pool, etabId)).config.fuseau : null;
   for (const n of rows) {

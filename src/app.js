@@ -529,7 +529,7 @@ function creerApp(pool, options = {}) {
     return { utilisateur: { id: u.id, nom: u.nom, email: u.email, role: u.role, admin: u.admin, gestionnaire: u.gestionnaire,
       totp_actif: u.totp_actif, mdp_temporaire: u.mdp_temporaire, premiers_pas_vus: u.premiers_pas_vus, apparence: u.apparence || 'automatique', ambiance: u.ambiance || 'glacier',
       langue_interface: u.langue_interface || null, preferences_og: u.preferences_og || {} },
-    organisations: (await pool.query(`SELECT o.id, o.code, o.nom, o.type, o.profils, COALESCE(o.modules, '{}'::jsonb) AS modules, (SELECT fuseau FROM config_pays WHERE id = o.config_id) AS fuseau FROM utilisateur_organisations uo JOIN organisations_secours o ON o.id = uo.organisation_id
+    organisations: (await pool.query(`SELECT o.id, o.code, o.nom, o.type, o.profils, COALESCE(o.modules, '{}'::jsonb) AS modules, (SELECT numero_urgence FROM config_pays WHERE id = o.config_id) AS numero_urgence, (SELECT fuseau FROM config_pays WHERE id = o.config_id) AS fuseau FROM utilisateur_organisations uo JOIN organisations_secours o ON o.id = uo.organisation_id
       WHERE uo.utilisateur_id = $1 AND o.actif ORDER BY o.nom`, [u.id])).rows,
     // Registre universel : écrans autorisés (type, licence, sous-modules SH, rôle) calculés ici, une seule fois, pour l'interface
     etablissements: rows.map((e) => { const i = REG.interfacePour(e, u, TEreg.moduleActif);

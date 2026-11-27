@@ -44,7 +44,7 @@
   const X = () => TXT[L()]; const T = (k, v = {}) => e(String(X()[k]).replace(/\{(\w+)\}/g, (m, y) => v[y] ?? m));
   const h = (d) => (d ? new Date(d).toLocaleTimeString(L() === 'en' ? 'en-CA' : 'fr-CA', { hour: '2-digit', minute: '2-digit' }) : '');
   const jour = (d) => (d ? new Date(d).toLocaleDateString(L() === 'en' ? 'en-CA' : 'fr-CA', { day: 'numeric', month: 'short' }) : '');
-  const etat = { sens: '', jour: 'aujourdhui', groupe: '' };
+  const etatBase = { sens: '', jour: 'aujourdhui', groupe: '' }; let etat = etatBase;
   // Vue d'ensemble des transferts (cahier directeur, 8.1) : statut regroupé
   const groupe = (l) => (['refuse', 'annule'].includes(l.statut) ? 'annules' : l.statut === 'termine' ? 'termines' : l.statut === 'arrive' ? 'arrives' : ['en_route_depart', 'en_transport'].includes(l.statut) ? 'transport'
     : l.preparation && ['a_faire', 'en_cours'].includes(l.preparation.etat) ? 'preparation' : l.statut === 'accepte' ? 'acceptes' : 'attente');
@@ -80,6 +80,8 @@
 
   /** Vue complète (onglet Flux). */
   async function afficher(v, o) {
+    // Sous-menus Domicile, Autres mouvements, Historique (27 nov. 2026) : même Flux, état propre à l'écran, aucune donnée copiée
+    etat = o.preset ? (v.fluxEtat ||= { sens: '', jour: 'aujourdhui', groupe: '', masquees: [], ...o.preset }) : etatBase;
     const filtre = (k, val, lib) => `<button type="button" class="btn${etat[k] === val ? ' pri' : ''}" data-flux-${k}="${val}" aria-pressed="${etat[k] === val}">${T(lib)}</button>`;
     const barre = `<div class="ligne flux-filtres" role="group">${filtre('sens', '', 'tous')}${filtre('sens', 'arrivees', 'arrivees')}${filtre('sens', 'departs', 'departs')}<span class="sep"></span>${filtre('jour', 'aujourdhui', 'aujourdhui')}${filtre('jour', 'demain', 'demain')}${filtre('jour', 'historique', 'historique')}</div>`;
     const lierFiltres = () => {

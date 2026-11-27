@@ -95,7 +95,7 @@ window.ARRIMO_I18N.fr = {
     cap_occupes: 'Occupés', cap_reserves: 'Réservés', cap_nettoyage: 'Nettoyage', cap_non_confirmes: 'Vides non confirmés', cap_operationnels: 'Opérationnels', cap_indispo: 'Indisponibles',
     cap_note: '{op} lits opérationnels sur {vides} vides : {nc} vides n’ont pas de confirmation récente. Une sortie prévue reste un lit occupé.', k_lits: 'Lits libres', k_urgence: 'Urgence (civières occupées)', k_arrivees: 'Arrivées prévues', k_prealertes: 'Préalertes actives', k_porte: 'Ambulances à la porte', k_transferts: 'Transferts actifs', q_niveau: 'Pourquoi sommes-nous en {niveau} ?', k_places: 'Places libres', k_departs: 'Départs prévus', k_preparer: 'Chambres à préparer', k_taches: 'Tâches prioritaires',  bandeau: 'Accueil personnalisé', bonjour: 'Bonjour, {nom}' },
   messagerie: { titre: 'Arrimo Connect : messagerie interne' },
-  onglets: { 'mes-taches': 'Mes tâches', flux: 'Flux', dsn: 'Dossier santé',  visites: 'Visites', eviter: 'Préparer l’intervention', crise: 'Mode crise', donnees: 'Données', bourse: 'Bourse', 'transports-planifies': 'Transports planifiés', conges: 'Congés', chrono: 'Chrono', continuite: 'Sillage', 
+  onglets: { 'mes-taches': 'Mes tâches', flux: 'Flux', dsn: 'Dossier santé',  visites: 'Visites', eviter: 'Préparer l’intervention', crise: 'Mode crise', donnees: 'Données', bourse: 'Bourse', 'transports-planifies': 'Transports planifiés', conges: 'Congés', 'flux-domicile': 'Domicile', 'flux-autres': 'Autres mouvements', 'flux-historique': 'Historique', 'urgence-statuts': 'Statuts et fermetures', chrono: 'Chrono', continuite: 'Sillage', 
     patients: 'Patients', 
     vigilance: 'Alertes',
     national: 'National',

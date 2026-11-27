@@ -613,6 +613,11 @@ const MODULE_ONGLET = { urgence: 'urgence', nsa: 'nsa', nettoyage: 'nettoyage', 
 const typeEtab = () => etabCtx()?.type_etablissement || 'hopital';
 const chsldSansAccesDirect = () => typeEtab() === 'chsld' && etat.moi?.utilisateur?.gestionnaire && etabCtx()?.acces_direct !== true;
 /** Tous les écrans décrits par le registre universel (les deux familles) : seuls ceux-là sont filtrés par la liste du serveur. */
+/** Catégories de Flux masquées pour un sous-menu consacré à une seule catégorie. */
+const CATS_SAUF = (garder) => ['interhospitalier', 'interhebergement', 'hopital_hebergement', 'secours_911', 'transport_planifie', 'domicile', 'autre'].filter((c) => c !== garder);
+/** Numéro d'urgence de l'établissement courant : celui de son profil de pays (réglé dans SH ; 911 au Québec). */
+const numeroUrgence = () => (etat.moi?.configs || []).find((x) => x.id === etabCtx()?.config_id)?.numero_urgence || null;
+const libelleSecours = (num) => (langue === 'en' ? (num ? `${num} emergency` : 'Emergency response') : (num ? `Secours ${num}` : 'Secours d’urgence'));
 const ecransRegistre = () => new Set(Object.values(window.ArrimoRegistre?.NAV || {}).flatMap((l) => l.flatMap((m) => (m.sous || []).map((x) => x.v))));
 function appliquerModules() {
   const entretien = estEntretien();
@@ -623,6 +628,9 @@ function appliquerModules() {
   $('#b-notif').hidden = entretien || chsldInterdit;
   // Registre universel (27 nov. 2026) : écrans autorisés calculés par le serveur (type, licence, sous-modules SH, rôle). Un écran connu du
   // registre mais absent de la liste n'a pas d'onglet ; un ancien écran fusionné (« Avant l'appel ») n'en a plus nulle part.
+  // Numéro d'urgence local (profil de pays) : « Secours 911 » au Canada, le numéro configuré ailleurs, jamais 911 imposé
+  const num = numeroUrgence();
+  for (const v of ['secours', 'c-urgences']) { const sp = document.querySelector(`#onglets button[data-v="${v}"] span:not(.n)`); if (sp) sp.textContent = libelleSecours(num); }
   const ecrans = etabCtx()?.ecrans; const connus = ecransRegistre();
   const redirige = window.ArrimoRegistre?.REDIRECTIONS?.[etat.vue]; if (redirige) etat.vue = redirige;
   document.querySelectorAll('#onglets button[data-v]').forEach((b) => {
@@ -706,7 +714,11 @@ async function rafraichir() {
     await Promise.all([e ? majCompteurs() : null, ({
       copilote: vueCopilote, reseau: vueReseau, national: vueNational, lits: vueLits, urgence: vueUrgence, admissions: vueAdmissions, transferts: vueTransferts,
       nettoyage: vueNettoyage, vigilance: async () => { await vueVigilance(); await window.ArrimoSillage?.vigilance($('#v-vigilance'), etat.ctx); if (['demo', 'recette', 'developpement'].includes(etat.moi?.environnement)) await window.ArrimoExercice?.panneau($('#v-vigilance'), etat.ctx); }, nsa: vueNsa, indicateurs: vueIndicateurs, journal: vueJournal, params: vueParams,
-      admin: vueAdmin, compte: vueCompte, support:vueSupportClient, patients: vuePatients, continuite: vueContinuite, ...(window.ArrimoChsld?.vues || {}), ...(window.ArrimoSecours?.vues || {}), ...(window.ArrimoChrono?.vues || {}), ...(window.ArrimoTransportPlanifie?.vues || {}), ...(window.ArrimoBourse?.vues || {}), flux: () => window.ArrimoFluxVue.afficher($('#v-flux'), optsFlux()), 'mes-taches': () => window.ArrimoMesTaches.afficher($('#v-mes-taches'), optsFlux()), donnees: () => window.ArrimoDonnees.afficher($('#v-donnees'), { api, langue, etablissement_id: etat.ctx }), dsn: vueDsn, ...(window.ArrimoVisitesEviter?.vues || {}), ...(window.ArrimoCongesAlertes?.vues || {}), crise: () => window.ArrimoCrise.afficher($('#v-crise'), { api, langue, etablissement_id: etat.ctx }),
+      admin: vueAdmin, compte: vueCompte, support:vueSupportClient, patients: vuePatients, continuite: vueContinuite, ...(window.ArrimoChsld?.vues || {}), ...(window.ArrimoSecours?.vues || {}), ...(window.ArrimoChrono?.vues || {}), ...(window.ArrimoTransportPlanifie?.vues || {}), ...(window.ArrimoBourse?.vues || {}), flux: () => window.ArrimoFluxVue.afficher($('#v-flux'), optsFlux()),
+      'flux-domicile': () => window.ArrimoFluxVue.afficher($('#v-flux-domicile'), { ...optsFlux(), preset: { masquees: CATS_SAUF('domicile') } }),
+      'flux-autres': () => window.ArrimoFluxVue.afficher($('#v-flux-autres'), { ...optsFlux(), preset: { masquees: CATS_SAUF('autre') } }),
+      'flux-historique': () => window.ArrimoFluxVue.afficher($('#v-flux-historique'), { ...optsFlux(), preset: { jour: 'historique' } }),
+      'urgence-statuts': () => window.ArrimoSecours?.vues?.['urgence-statuts']?.(), 'mes-taches': () => window.ArrimoMesTaches.afficher($('#v-mes-taches'), optsFlux()), donnees: () => window.ArrimoDonnees.afficher($('#v-donnees'), { api, langue, etablissement_id: etat.ctx }), dsn: vueDsn, ...(window.ArrimoVisitesEviter?.vues || {}), ...(window.ArrimoCongesAlertes?.vues || {}), crise: () => window.ArrimoCrise.afficher($('#v-crise'), { api, langue, etablissement_id: etat.ctx }),
     })[etat.vue]()]);
     poserMenuParametres();
     majInfosLieu();

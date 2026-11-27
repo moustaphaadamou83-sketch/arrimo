@@ -101,6 +101,12 @@ function brancherSh(api, pool, route) {
     const nom = String(b.nom || '').trim().slice(0, 80); if (nom.length < 2) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'nom' });
     return transaction(pool, async (c) => {
       const avant = (await c.query('SELECT * FROM config_pays WHERE code = $1 FOR UPDATE', [code])).rows[0];
+      // Numéro d'urgence local (facultatif) : jamais imposé ; transmis seulement s'il est fourni
+      if (b.numero_urgence !== undefined) {
+        const n = String(b.numero_urgence ?? '').trim();
+        if (!/^[0-9]{2,4}$/.test(n)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'numero_urgence' });
+        if (avant) await c.query('UPDATE config_pays SET numero_urgence = $2 WHERE id = $1', [avant.id, n]);
+      }
       if (avant) {
         if (avant.pays_code && avant.pays_code !== pays) throw new ErreurHttp(409, 'profil_pays_changement_interdit');
         const utilise = (await c.query('SELECT 1 FROM etablissements WHERE config_id = $1 OR profil_config_id = $1 LIMIT 1', [avant.id])).rowCount;

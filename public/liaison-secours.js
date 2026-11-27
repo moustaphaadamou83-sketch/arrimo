@@ -202,7 +202,6 @@
     v.innerHTML = `<div class="entete"><div><h2>${S('titre', { etab: e?.nom || '' })}</h2><p>${S('intro')}</p></div>
         <div class="actions"><button class="btn" type="button" id="ls-og"><img src="og-robot.svg" alt="" width="20" height="20" style="vertical-align:middle;margin-right:6px">${S('og')}</button></div></div>
       <p class="note">${S('regle')}</p>
-      ${urg ? panneauUrgence(urg) : ''}${ud ? panneauFermetures(ud) : ''}
       <div class="chips" role="group"><button class="chip" type="button" data-ls-vue="liste" aria-pressed="${etatS.affichage === 'liste'}">${S('liste')}</button><button class="chip" type="button" data-ls-vue="carte" aria-pressed="${etatS.affichage === 'carte'}">${S('carte')}</button>
         <label class="case" style="margin-left:12px"><input type="checkbox" id="ls-son"${son() ? ' checked' : ''}> ${S('son')}</label></div>
       ${etatS.affichage === 'carte' ? '<div id="ls-carte" style="height:420px;border-radius:12px;margin:12px 0"></div>' : ''}
@@ -210,11 +209,11 @@
       ${closes.length ? `<details><summary class="note">${S('historique')} (${closes.length})</summary><div class="liste">${closes.map(carteP).join('')}</div></details>` : ''}`;
     if (etatS.affichage === 'carte') dessinerCarte(v, ouvertes).catch(() => {});
     const compteur = $('#n-secours'); if (compteur) { const n = ouvertes.filter((p) => !p.prise_en_compte_le).length; compteur.textContent = n; compteur.hidden = !n; }
-    brancher(v);
+    brancher(v, ud);
   }
   // Compte à rebours de la confirmation : seul le texte change chaque seconde
   setInterval(() => document.querySelectorAll('#v-secours [data-echeance]').forEach((x) => { x.textContent = `${Math.max(0, Math.round((new Date(x.dataset.echeance).getTime() - Date.now()) / 1000))} s`; }), 1000);
-  function brancher(v) {
+  function brancher(v, ud = null) {
     v.querySelectorAll('[data-ls-rep]').forEach((b) => { b.onclick = () => {
       const id = b.dataset.id;
       if (b.dataset.lsRep === 'accepter') return agir(b, () => api('POST', `/secours/prealertes/${id}/reponse`, { etablissement_id: etat.ctx, reponse: 'accepter' }), t('liaison_secours.cf_ok'));
@@ -232,7 +231,7 @@
     v.querySelectorAll('[data-ls-cd]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/secours/prealertes/${b.dataset.id}/correspondance/confirmer`, { etablissement_id: etat.ctx, patient_id: Number(b.dataset.lsCd) }), t('liaison_secours.ok')); });
     v.querySelectorAll('[data-ls-urg]').forEach((b) => { b.onclick = () => (b.dataset.lsUrg === 'fermee_temporairement' ? modaleFermeture()
       : agir(b, () => api('POST', '/secours/urgence', { etablissement_id: etat.ctx, statut: b.dataset.lsUrg }), t('liaison_secours.ok'))); });
-    if ($('#fd-planifier')) $('#fd-planifier').onclick = () => modalePlanifier(ud.services);
+    if ($('#fd-planifier') && ud) $('#fd-planifier').onclick = () => modalePlanifier(ud.services);
     v.querySelectorAll('[data-fd-action]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/urgences-direct/fermetures/${b.dataset.fd}/action`, { action: b.dataset.fdAction, version: Number(b.dataset.v) }), t('liaison_secours.ok')); });
     v.querySelectorAll('[data-ls-vue]').forEach((b) => { b.onclick = () => { etatS.affichage = b.dataset.lsVue; ls.ecrire('arrimo-secours-affichage', etatS.affichage); vueSecours(); }; });
     const caseSon = v.querySelector('#ls-son'); if (caseSon) caseSon.onchange = () => { ls.ecrire('arrimo-secours-son', caseSon.checked ? '1' : null); if (caseSon.checked) bip(); };
@@ -361,5 +360,12 @@
   }
   // Interconnexion (28 nov. 2026) : échanges avec les ambulances et le CCS des préalertes en cours, dans Secours 911 (aucun module CCS en plus)
   const vueSecours911 = async () => { await vueSecours(); await window.ArrimoCommFlotte?.panneau(document.getElementById('v-secours')); };
-  window.ArrimoSecours = { vues: { secours: vueSecours911 }, admin, veille };
+  /** Urgences → Statuts et fermetures (27 nov. 2026) : écran propre, sorti de Secours 911 (aucun doublon). */
+  async function vueStatuts() {
+    const v = $('#v-urgence-statuts'); if (!v) return;
+    const [urg, ud] = await Promise.all([api('GET', `/secours/urgence?etablissement_id=${etat.ctx}`).catch(() => null), api('GET', `/urgences-direct?etablissement_id=${etat.ctx}`).catch(() => null)]);
+    v.innerHTML = `<div class="entete"><div><h2>${esc(t('onglets.urgence-statuts'))}</h2></div></div>${urg ? panneauUrgence(urg) : ''}${ud ? panneauFermetures(ud) : ''}`;
+    brancher(v, ud);
+  }
+  window.ArrimoSecours = { vues: { secours: vueSecours911, 'urgence-statuts': vueStatuts }, admin, veille };
 })();

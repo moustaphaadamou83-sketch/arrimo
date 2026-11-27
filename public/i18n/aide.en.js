@@ -270,6 +270,10 @@ window.ARRIMO_I18N.en.aide = {
       gestes: ['Review the checklist from your protocol.', 'If an alternative is enough, click “Transfer avoided thanks to it”; otherwise “Transfer made”.', 'The administration writes the checklist and contact details.'],
       erreurs: [['Outdated version', 'Someone changed the checklist: reload the screen.']],
     },
+    'flux-domicile': { nom: 'Transfers · Home', but: 'Movements to or from home, in the same Flow (same record, same timeline).', gestes: ['Open a movement to see its shared record.'], erreurs: [] },
+    'flux-autres': { nom: 'Transfers · Other movements', but: 'Movements that fit no other category, to be checked.', gestes: ['Open a movement to specify its nature.'], erreurs: [] },
+    'flux-historique': { nom: 'Transfers · History', but: 'Closed movements (arrived, completed, declined, cancelled), available without cluttering operational screens.', gestes: ['Search a reference or browse the last days.'], erreurs: [] },
+    'urgence-statuts': { nom: 'Emergency · Status and closures', but: 'Declare the emergency department status and plan service closures, seen by the CCS and ambulances.', gestes: ['Declare the actual status; plan a closure with its expected reopening.'], erreurs: [] },
     conges: {
       nom: 'Discharges',
       but: 'Prepare departures: today, tomorrow and upcoming discharges, destination, transport, obstacles and expected availability. A planned discharge is never a free bed.',

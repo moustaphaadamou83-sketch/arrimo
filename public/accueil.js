@@ -50,10 +50,13 @@
      Aucune valeur inventée : un indicateur absent n'est pas affiché ; une préparation inconnue reste « ? », jamais 0. */
   const DS = () => window.ArrimoDS;
   const ESP_NOMS = { accueil: ['Accueil', 'Home'], patients: ['Patients', 'Patients'], transferts: ['Transferts', 'Transfers'], capacites: ['Capacités', 'Capacity'], urgences: ['Urgences', 'Emergency'],
-    operations: ['Opérations', 'Operations'], pilotage: ['Pilotage', 'Steering'], reseau: ['Réseau', 'Network'], national: ['National', 'National'], administration: ['Administration', 'Administration'] };
+    operations: ['Opérations', 'Operations'], pilotage: ['Pilotage', 'Steering'], reseau: ['Réseau', 'Network'], national: ['National', 'National'], administration: ['Administration', 'Administration'],
+    conges: ['Congés', 'Discharges'], alertes: ['Alertes', 'Alerts'], chrono: ['Chrono', 'Chrono'], residents: ['Résidents', 'Residents'], departs: ['Départs', 'Departures'] };
+  // Tableau de bord dynamique (27 nov. 2026) : une carte dont l'écran cible est désactivé (licence, sous-module SH, rôle) n'est pas affichée
+  const ouvrable = (v) => { if (!v) return true; const b = document.querySelector(`#onglets button[data-v="${v}"]`); return !b || !b.hidden; };
   const espaceKpi = (k) => k.module || window.ArrimoEspaces?.espaceDe?.(k.aller) || 'accueil';
   function vueEnsemble(o) {
-    const n = o.niveau; const kpis = (o.kpis || []).filter((k) => k && k.val != null).slice(0, 6);
+    const n = o.niveau; const kpis = (o.kpis || []).filter((k) => k && k.val != null && ouvrable(k.aller)).slice(0, 6);
     const maintenant = new Date().toLocaleTimeString(L() === 'en' ? 'en-CA' : 'fr-CA', { hour: '2-digit', minute: '2-digit', timeZone: o.fuseau || undefined }).replace(':', ' h ');
     const tete = `<div class="ds-tete"><div class="ds-tete-titre"><span class="ds-surtitre">${T('surtitre', { e: o.etablissement || '' })}</span><h2>${T('situation_a', { h: maintenant })}</h2></div>
       <div class="ds-tete-outils">${n ? `<button type="button" class="acc-niveau n-${e(n.code)}" data-acc-niveau aria-expanded="false"><span class="pastille-niveau" aria-hidden="true"></span>${T('situation')} <b>${T(`niveau.${n.code}`)}</b></button>` : ''}

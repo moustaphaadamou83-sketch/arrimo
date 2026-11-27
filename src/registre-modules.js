@@ -24,7 +24,8 @@
   'use strict';
   /** Familles d'interface : le type d'établissement choisit la famille (une RPA, une RI ou un CHSLD partagent l'hébergement). */
   const FAMILLES = {
-    hopital: { fr: 'Hôpital', en: 'Hospital', types: ['hopital'] },
+    // Les cliniques sont des types locaux d'hôpital dans SH (même famille d'interface)
+    hopital: { fr: 'Hôpital ou clinique', en: 'Hospital or clinic', types: ['hopital'] },
     hebergement: { fr: 'Hébergement (CHSLD, RPA, autres)', en: 'Residential care (CHSLD, RPA, other)', types: ['chsld', 'maison_aines', 'rpa', 'ressource_intermediaire'] },
     ccs: { fr: 'Centre de communication santé', en: 'Health communication centre', types: ['ccs', 'urgences_sante'] },
     ambulance: { fr: 'Entreprise ambulancière', en: 'Ambulance company', types: ['entreprise_ambulanciere', 'urgences_sante'] },
@@ -61,11 +62,14 @@
         sm('interhospitalier', 'transferts', 'Interhospitalier', 'Inter-hospital', { licence: 'transferts' }),
         // Fusion de « Liaison CHSLD et résidences » : arrivées, accueils, hospitalisations et retours, dans les deux directions
         sm('hopital_hebergement', 'liaison', 'Hôpital et hébergement', 'Hospital and residence', { licence: 'liaison_chsld', routes: ['/liaison-chsld'] }),
-        sm('transports_planifies', 'transports-planifies', 'Transports planifiés', 'Scheduled transports', { licence: 'transport_planifie' })] },
+        sm('transports_planifies', 'transports-planifies', 'Transports planifiés', 'Scheduled transports', { licence: 'transport_planifie' }),
+        sm('domicile', 'flux-domicile', 'Domicile', 'Home'), sm('autres', 'flux-autres', 'Autres mouvements', 'Other movements'),
+        sm('historique', 'flux-historique', 'Historique', 'History', { routes: ['/arrimo-flux/historique'] })] },
       { id: 'urgences', icone: 'siren', fr: 'Urgences', en: 'Emergency', sous: [
         sm('vue_generale', 'urgence', 'Vue générale des urgences', 'Emergency overview', { licence: 'urgence' }),
         // Emplacement principal de Secours 911 (ex-« Liaison Secours ») : préalertes, arrivées ambulancières, préparation de l'accueil
         sm('secours_911', 'secours', 'Secours 911', '911 emergency', { licence: 'liaison_secours' }),
+        sm('statuts', 'urgence-statuts', 'Statuts et fermetures', 'Status and closures', { licence: ['liaison_secours', 'urgences_direct'], roles: RESPONSABLES }),
         sm('crise', 'crise', 'Mode crise', 'Crisis mode', { licence: 'mode_crise', routes: ['/crise'], roles: RESPONSABLES })] },
       { id: 'chrono', icone: 'timer', fr: 'Chrono', en: 'Chrono', sous: [sm('chrono', 'chrono', 'Chrono', 'Chrono', { licence: 'chrono', roles: [...PERSONNEL, 'entretien'] })] },
       { id: 'alertes', icone: 'bell', fr: 'Alertes', en: 'Alerts', sous: [sm('alertes', 'vigilance', 'Alertes', 'Alerts', { routes: ['/vigilance', '/coordination/alertes'] })] },
@@ -99,7 +103,9 @@
         sm('interhebergement', 'c-reseau', 'Inter-hébergement', 'Between residences', { licence: 'reseau_chsld' }),
         // Fusion de « Transferts et hospitalisations » : hospitalisations et retours, avec filtres dédiés
         sm('hopital_hebergement', 'c-mouvements', 'Hôpital et hébergement', 'Hospital and residence', { licence: 'hospitalisations' }),
-        sm('transports_planifies', 'transports-planifies', 'Transports planifiés', 'Scheduled transports', { licence: 'transport_planifie' })] },
+        sm('transports_planifies', 'transports-planifies', 'Transports planifiés', 'Scheduled transports', { licence: 'transport_planifie' }),
+        sm('domicile', 'flux-domicile', 'Domicile', 'Home'), sm('autres', 'flux-autres', 'Autres mouvements', 'Other movements'),
+        sm('historique', 'flux-historique', 'Historique', 'History', { routes: ['/arrimo-flux/historique'] })] },
       { id: 'urgences', icone: 'siren', fr: 'Urgences', en: 'Emergency', sous: [
         // Secours 911 de l'hébergement : demandes de prise en charge ambulancière, interventions, départs vers l'hôpital, suivi autorisé.
         // Intègre l'ancien « Avant l'appel » (préparation de l'intervention) : jamais une condition préalable à l'appel au 911.

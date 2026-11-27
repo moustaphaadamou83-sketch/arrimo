@@ -4,7 +4,7 @@
   // Index = position parmi les enfants directs de l'écran, sans l'en-tête (.entete) ni la barre ; non listé = toujours visible
   const CONFIG = {
     chrono: [['direct', 'En direct', 'Live', [1, 2, 3]], ['rapport', 'Rapport et écarts', 'Report and gaps', [4, 5]]],
-    secours: [['prealertes', 'Préalertes et arrivées', 'Pre-alerts and arrivals', [3, 4]], ['urgence', 'Statuts et fermetures', 'Status and closures', [1, 2]]],
+    // secours : Statuts et fermetures a son propre sous-menu (Urgences → Statuts et fermetures)
     bourse: [['places', 'Places', 'Places', [0, 1]], ['fiche', 'Fiche de transfert', 'Transfer sheet', [2]], ['invites', 'Accès invités', 'Guest access', [3]]],
     donnees: [['tableau', 'Tableau régional', 'Regional table', [0]], ['attente', 'Listes d’attente', 'Waiting lists', [1]], ['refus', 'Refus par motif', 'Declines by reason', [2]]],
     // vigilance : Alertes a ses propres onglets (Actives, Vigilance, Escalades, Prises en charge, Résolues, Historique)

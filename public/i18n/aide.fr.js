@@ -270,6 +270,10 @@ window.ARRIMO_I18N.fr.aide = {
       gestes: ['Relisez la liste de vérification de votre protocole.', 'Si une alternative suffit, cliquez « Transfert évité grâce à elle » ; sinon « Transfert fait ».', 'L’administration écrit la liste et les coordonnées.'],
       erreurs: [['Version périmée', 'Quelqu’un a modifié la liste : rechargez l’écran.']],
     },
+    'flux-domicile': { nom: 'Transferts · Domicile', but: 'Les mouvements vers ou depuis le domicile, dans le même Flux (même dossier, même chronologie).', gestes: ['Ouvrez un mouvement pour voir sa fiche commune.'], erreurs: [] },
+    'flux-autres': { nom: 'Transferts · Autres mouvements', but: 'Les mouvements qui n’entrent dans aucune autre catégorie, à vérifier.', gestes: ['Ouvrez un mouvement pour préciser sa nature.'], erreurs: [] },
+    'flux-historique': { nom: 'Transferts · Historique', but: 'Les mouvements clos (arrivés, terminés, refusés, annulés), consultables sans encombrer les écrans opérationnels.', gestes: ['Recherchez une référence ou parcourez les derniers jours.'], erreurs: [] },
+    'urgence-statuts': { nom: 'Urgences · Statuts et fermetures', but: 'Déclarer l’état de l’urgence et planifier les fermetures de services, vus par le CCS et les ambulances.', gestes: ['Déclarez l’état réel ; planifiez une fermeture avec sa réouverture prévue.'], erreurs: [] },
     conges: {
       nom: 'Congés',
       but: 'Préparer les sorties : congés d’aujourd’hui, de demain et à venir, destination, transport, obstacles au départ et disponibilités prévisionnelles. Un congé prévu n’est jamais un lit libre.',

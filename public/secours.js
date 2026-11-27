@@ -318,7 +318,8 @@
   const ongletCourant = (amb) => { const l = listeOnglets(amb); return l.includes(etat.onglet) ? etat.onglet : l[0]; };
   function enTete() {
     const amb = ROLES_AMB.includes(etat.moi.utilisateur.role);
-    $('#titre').textContent = 'Arrimo · Secours 911';
+    // Numéro d'urgence du profil de pays de l'organisation (911 au Québec, jamais imposé ailleurs)
+    const num = etat.moi.organisations?.[0]?.numero_urgence; $('#titre').textContent = num ? `Arrimo · ${L === 'en' ? `${num} emergency` : `Secours ${num}`}` : 'Arrimo · Secours';
     $('#sous-titre').textContent = `${amb ? t('profil_amb') : t('profil_ccs')} · ${(etat.moi.organisations || []).map((o) => o.nom).join(', ')}`;
     $('#contexte').textContent = `${t('role_' + etat.moi.utilisateur.role)} · ${heure(Date.now())}${etat.moi.demo ? ` · ${t('fictif')}` : ''}`;
     const MODES = ['clair', 'sombre', 'automatique']; const m = window.ArrimoApparence?.mode() || 'automatique';
