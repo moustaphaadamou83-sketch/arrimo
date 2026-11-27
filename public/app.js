@@ -239,11 +239,13 @@ function messageErreur(data, statut) {
   return (data && data.erreur) || t('general.erreur_http', { statut });
 }
 async function api(methode, chemin, corps, essai = 0) {
+  const t0 = Date.now();
   const r = await fetch(`/api${chemin}`, {
     method: methode,
     headers: { 'Content-Type': 'application/json', 'X-Langue': langue, ...(etat.token ? { Authorization: `Bearer ${etat.token}` } : {}) },
     body: corps ? JSON.stringify(corps) : undefined,
   });
+  window.ArrimoHorloge?.mesurer(r.headers.get('X-Heure-Serveur'), t0, Date.now());
   let data = null; let lu = true;
   try { data = await r.json(); } catch { lu = false; /* réponse vide ou interrompue */ }
   // Lecture interrompue (changement d'écran, réseau) : une lecture GET est relancée une fois ; jamais un « null » silencieux
@@ -1182,7 +1184,7 @@ async function vueLits() {
   const cols = ORDRE_ETATS.map((st) => {
     const items = liste.filter((l) => l.etat === st);
     return `<div class="col e-${st}"><h3>${esc(t(`etats.${st}`))} <span class="num">${items.length}</span></h3>${items.map((l) => `<div class="fiche e-${st}">
-      <div class="t"><b>${esc(l.code)}</b><span class="note num" title="${esc(t('lits.depuis_titre'))}">${depuis(l.etat_depuis)}</span></div>
+      <div class="t"><b>${esc(l.code)}</b><span class="note num duree-seule" data-depuis="${esc(l.etat_depuis)}" title="${esc(t('lits.depuis_titre'))}">${depuis(l.etat_depuis)}</span></div>
       <div class="note">${esc(t('lits.chambre', { unite: l.unite, ch: l.chambre }))}</div>
       ${l.etat === 'libre' ? `<div class="note"><span class="badge">${esc(t(`reseau.confirmation_${l.disponibilite_confirmation}`))}</span>${l.disponibilite_confirmee_le ? ` · ${esc(heure(l.disponibilite_confirmee_le))}${l.disponibilite_confirmee_par ? ` · ${esc(l.disponibilite_confirmee_par)}` : ''} · ${esc(t('lits.confirmation_validite', { min: l.confirmation_lit_validite_min }))}` : ''}</div>` : ''}
       ${l.patient_ref ? `<div class="note">${t('lits.patient', { ref: esc(l.patient_ref) })}${l.patient_nom_court ? ` · ${esc(l.patient_nom_court)}` : ''}${l.transfert_numero ? ` · ${esc(l.transfert_numero)}` : ''}</div>` : ''}
@@ -1824,11 +1826,11 @@ async function vueUrgence() {
     return `<div class="fiche e-${c.etat}"${c.reservation ? ' style="border-left-color:#2563EB"' : ''}>
       <div class="t"><b>${esc(c.code)}</b><span class="note">${c.reservation ? `<b style="color:#2563EB">${esc(t('urgence.reservee'))}</b>` : esc(t(`etats.${c.etat}`))}</span></div>
       ${c.reservation ? `<div class="note">${esc(t('urgence.reservee_pour', { unite: c.reservation.unite, numero: c.reservation.numero }))}</div>` : ''}
-      ${c.patient_ref ? `<div class="note">${t('lits.patient', { ref: esc(c.patient_ref) })}${c.patient_nom_court ? ` · ${esc(c.patient_nom_court)}` : ''} · <span class="${classeDuree(c.heures)}">${U('depuis_h', { duree: duree(c.heures * 60) })}</span></div>${libelleAge(c.groupe_age)}` : ''}
+      ${c.patient_ref ? `<div class="note">${t('lits.patient', { ref: esc(c.patient_ref) })}${c.patient_nom_court ? ` · ${esc(c.patient_nom_court)}` : ''} · <span class="${classeDuree(c.heures)}">${U('depuis_h', { duree: duree(c.heures * 60) })}${c.arrivee_le ? ` · <b class="num duree-seule" data-depuis="${esc(c.arrivee_le)}">--:--:--</b>` : ''}</span></div>${libelleAge(c.groupe_age)}` : ''}
       ${c.demande_id ? `<div class="note">${c.demande_statut === 'assignee' ? t('urgence.lit_assigne', { code: esc(c.lit_code) }) : U('demande', { type: c.type_nom, prio: c.demande_priorite_affichage })}</div><div class="note">${esc(c.demande_priorite_explication)}</div>`
     : c.etat === 'occupee' ? `<div class="alerte">${U('sans_demande')}</div>` : ''}
       ${c.motif_indispo ? `<div class="note">${esc(t('lits.motif', { motif: t(`motifs.${c.motif_indispo}`) }))}</div>` : ''}
-      ${c.etat !== 'occupee' ? `<div class="note num" title="${esc(t('lits.depuis_titre'))}">${depuis(c.etat_depuis)}</div>` : ''}
+      ${c.etat !== 'occupee' ? `<div class="note num duree-seule" data-depuis="${esc(c.etat_depuis)}" title="${esc(t('lits.depuis_titre'))}">${depuis(c.etat_depuis)}</div>` : ''}
       ${actif && actions.length ? `<div class="actions">${actions.map(([a, p]) => `<button class="btn${p ? ' pri' : ''}" data-civ="${c.id}" data-a="${a}" data-version="${c.version}" data-code="${esc(c.code)}">${U(`a_${a}`)}</button>`).join('')}</div>` : ''}
     </div>`;
   };

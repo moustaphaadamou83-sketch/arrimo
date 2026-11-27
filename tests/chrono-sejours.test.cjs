@@ -176,3 +176,26 @@ test('Universalité : Chrono permis à tous les types ; CHSLD = résidents et s�
   assert.strictEqual(dec.s, 200, JSON.stringify(dec.d)); assert.deepStrictEqual(dec.d.etapes.map((e) => e.etape), ['resident_present', 'hospitalise_externe']);
   assert.strictEqual((await appel('chs', `/dsn/patients?etablissement_id=${c}`)).s, 403, 'aucun DSN en CHSLD');
 });
+
+test('Une seule heure de début : Chrono · Capacités = module Capacités (lit occupé) ; horloge serveur ; mission ancienne jamais « normale »', async () => {
+  const d = await universel('coord', ids.h);
+  const occ = d.capacites.find((x) => x.objet === 'lit' && x.id === ids.l1);
+  assert.ok(occ, 'lit occupé présent dans Chrono · Capacités'); assert.strictEqual(occ.statut, 'occupe'); assert.strictEqual(occ.reference, 'P-81001');
+  const lits = (await appel('coord', `/lits?etablissement_id=${ids.h}`)).d;
+  const l = lits.find((x) => x.id === ids.l1);
+  assert.strictEqual(new Date(occ.depuis).getTime(), new Date(l.etat_depuis).getTime(), 'même heure de début dans les deux modules');
+  const p = d.patients.find((x) => x.reference === 'P-81001');
+  assert.strictEqual(new Date(p.ressource_depuis).getTime(), new Date(l.etat_depuis).getTime(), 'carte patient : occupation du lit = Capacités');
+  assert.strictEqual(p.statut_ressource, 'occupe');
+  assert.ok(d.capacites.some((x) => x.statut === 'disponible'), 'lits disponibles présents avec leur statut');
+  // Horloge commune : chaque réponse porte l'heure du serveur en millisecondes
+  const r = await fetch(`${base}/api/chrono/universel?etablissement_id=${ids.h}`, { headers: { Authorization: `Bearer ${tok.coord}` } });
+  const h = Number(r.headers.get('x-heure-serveur')); assert.ok(Math.abs(h - Date.now()) < 5000, 'X-Heure-Serveur');
+  // Transport ouvert depuis 3 jours : signalé « non clôturé », niveau gris, jamais vert ; rien n'est supprimé
+  const autre = (await pool.query("SELECT id FROM etablissements WHERE type_etablissement = 'hopital' AND id NOT IN ($1, $2) LIMIT 1", [ids.h, ids.autre])).rows[0].id;
+  const org = (await pool.query("INSERT INTO organisations_secours (code, nom, type, profils, config_id) SELECT 'AMB-CS', 'Ambulances Chrono', 'ambulancier', '{ambulance}', config_id FROM etablissements WHERE id = $1 RETURNING id", [ids.h])).rows[0].id;
+  await pool.query("INSERT INTO demandes_transport (numero, organisation_id, origine_id, destination_id, resident_ref, statut, heure_souhaitee, en_route_le, cree_le) VALUES ('DT-090001', $1, $2, $3, 'P-81001', 'en_route', now() - interval '3 days', now() - interval '3 days', now() - interval '3 days')", [org, ids.h, autre]);
+  const t = (await universel('coord', ids.h)).ambulances.find((x) => x.numero === 'DT-090001');
+  assert.ok(t && t.obsolete && t.cause === 'mission_non_cloturee' && t.niveau === 'gris', JSON.stringify(t));
+  assert.strictEqual((await pool.query("SELECT count(*)::int n FROM demandes_transport WHERE numero = 'DT-090001'")).rows[0].n, 1, 'mission conservée');
+});

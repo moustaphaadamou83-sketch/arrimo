@@ -108,6 +108,8 @@ function creerApp(pool, options = {}) {
   });
   // Langue des textes produits par le serveur : paramètre « langue » (adresse ou corps) ou en-tête X-Langue (français par défaut)
   api.use((req, res, next) => { req.langue = langueDe(req.query.langue || req.body?.langue || req.get('x-langue')); next(); });
+  // Horloge commune (27 nov. 2026) : heure du serveur en millisecondes ; tous les compteurs des écrans s'y calent
+  api.use((req, res, next) => { res.set('X-Heure-Serveur', String(Date.now())); res.set('Access-Control-Expose-Headers', 'X-Heure-Serveur'); next(); });
   const route = (fn) => (req, res, next) => Promise.resolve(fn(req, res))
     .then(async (r) => {
       // Noms des types d'unité dans la langue demandée

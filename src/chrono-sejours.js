@@ -74,6 +74,7 @@ async function residentsActifs(db, etabId, cfg, now) {
     const paralleles = x.transport ? [{ type: 'transport', ...x.transport }] : [];
     return { type: 'sejour', objet: x.lit_id ? 'lit' : 'resident', id: x.lit_id || x.id, resident_id: x.id, reference: x.reference, ressource: x.code || null, chambre: x.chambre,
       unite: x.unite, unite_id: x.unite_id, departement: x.departement, departement_id: x.departement_id, service: x.service, service_id: x.service_id,
+      ressource_depuis: null, statut_ressource: x.lit_id ? (['hospitalise', 'retour_a_reintegrer', 'absent'].includes(x.statut) ? 'conserve' : 'occupe') : null,
       etape, phase: etape, depuis: depuis || null, seuils_min: s ? { vigilance: s.vigilance, escalade: s.escalade } : null, seuil_source: s?.source || null, objectif_min: s ? s.vigilance : null,
       sejour_depuis: sejourDepuis || null, sejour_seuils_min: null, niveau_etape: niveauEtape, niveau_sejour: null, niveau: niveauEtape,
       place_conservee: ['hospitalise', 'retour_a_reintegrer', 'absent'].includes(x.statut) && !!x.lit_id,
@@ -147,7 +148,9 @@ async function sejoursActifs(db, etabId, cfg, now = Date.now()) {
     const niveauEtape = niveauDuree(etapeDepuis, S[etape], now, extra.echeance);
     const niveauSejour = sSejour ? niveauDuree(base.debut_ressource, sSejour, now) : null;
     const sEt = S[etape];
-    return { type: 'sejour', ...base, debut_ressource: undefined, etape, phase: etape, depuis: etapeDepuis || null,
+    // Trois durées distinctes, jamais confondues : séjour total, occupation de la ressource actuelle (même heure que Capacités), étape
+    return { type: 'sejour', ...base, debut_ressource: undefined, ressource_depuis: base.debut_ressource || null,
+      statut_ressource: ['lit', 'civiere'].includes(base.objet) ? 'occupe' : null, etape, phase: etape, depuis: etapeDepuis || null,
       seuils_min: sEt && !sEt.echeance ? { vigilance: sEt.vigilance, escalade: sEt.escalade } : null, seuil_source: sEt?.source || null,
       objectif_min: sEt && !sEt.echeance ? sEt.vigilance : null,
       sejour_depuis: sejourDepuis, sejour_seuils_min: sSejour ? { vigilance: sSejour.vigilance, escalade: sSejour.escalade } : null,

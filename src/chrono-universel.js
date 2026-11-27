@@ -45,15 +45,15 @@ async function universel(pool, u, etabId) {
   // Seuils propres à CETTE requête (jamais partagés entre établissements)
   const SC = seuilsEffectifs(cfg); const it = (type, x, depuis, n, extra = {}) => item(type, x, depuis, n, extra, SC);
   const [civ, lits, prealertes, transports, alertes, qualiteBrute] = await Promise.all([
-    pool.query(`SELECT id, code, etat, patient_ref, arrivee_le, etat_depuis FROM civieres WHERE etablissement_id = $1 AND etat <> 'libre' ORDER BY code`, [etabId]),
+    pool.query(`SELECT id, code, etat, categorie, patient_ref, arrivee_le, etat_depuis FROM civieres WHERE etablissement_id = $1 ORDER BY code`, [etabId]),
     pool.query(`SELECT l.id, l.code, l.etat, l.patient_ref, l.etat_depuis, l.nsa_depuis, l.nettoyage_debut, un.nom AS unite
-      FROM lits l LEFT JOIN unites un ON un.id = l.unite_id WHERE l.etablissement_id = $1 AND (l.etat IN ('nettoyage', 'reserve', 'indispo') OR l.nsa_depuis IS NOT NULL) ORDER BY un.nom, l.code`, [etabId]),
+      , l.disponibilite_confirmee_le FROM lits l LEFT JOIN unites un ON un.id = l.unite_id WHERE l.etablissement_id = $1 ORDER BY un.nom, l.code`, [etabId]),
     pool.query(`SELECT p.id, p.numero, p.statut, p.priorite, p.heure_prevue, p.cree_le, p.recue_le, p.arrivee_signalee_le, p.arrivee_confirmee_le, un.numero AS unite,
         (SELECT json_build_object('minutes', ea.minutes, 'distance_km', ea.distance_km::float, 'le', ea.calcule_le) FROM eta_prealertes ea WHERE ea.prealerte_id = p.id) AS eta,
         (SELECT max(pu.enregistree_le) FROM positions_unites pu WHERE pu.unite_id = p.unite_id) AS derniere_position
       FROM prealertes p JOIN unites_secours un ON un.id = p.unite_id
       WHERE p.destination_id = $1 AND p.statut NOT IN ('cloturee', 'annulee', 'remplacee') ORDER BY p.cree_le`, [etabId]),
-    pool.query(`SELECT d.id, d.numero, d.statut, d.origine_id, d.destination_id, d.en_route_le, d.sur_place_le, d.pris_en_charge_le, d.arrivee_le,
+    pool.query(`SELECT d.id, d.numero, d.statut, d.cree_le, d.origine_id, d.destination_id, d.en_route_le, d.sur_place_le, d.pris_en_charge_le, d.arrivee_le,
         d.patient_etat, d.patient_pret_le, d.accueil_pret_le, d.prealerte_eta_min, d.prealerte_eta_le, un.numero AS unite
       FROM demandes_transport d LEFT JOIN unites_secours un ON un.id = d.unite_id
       WHERE (d.origine_id = $1 OR d.destination_id = $1) AND d.statut IN ('acceptee', 'en_route', 'pris_en_charge') ORDER BY d.id`, [etabId]),
@@ -74,6 +74,17 @@ async function universel(pool, u, etabId) {
     ...lits.rows.filter((l) => ['reserve', 'indispo'].includes(l.etat)).map((l) => it(l.etat, { objet: 'lit', id: l.id, ressource: l.code, unite: l.unite, phase: l.etat }, l.etat_depuis, now)),
     ...civ.rows.filter((c) => ['nettoyage', 'indispo'].includes(c.etat)).map((c) => it(c.etat === 'nettoyage' ? 'nettoyage_civiere' : 'indispo', { objet: 'civiere', id: c.id, ressource: c.code, phase: c.etat === 'nettoyage' ? 'attente_nettoyage' : 'indispo' }, c.etat_depuis, now)),
   ];
+  // Lits et civières OCCUPÉS et DISPONIBLES (27 nov. 2026) : statut réel, depuis la même heure que Capacités (etat_depuis / arrivee_le).
+  // Aucun seuil : niveau « sans seuil » ; le statut (occupé rouge, disponible vert) est distinct du niveau de vigilance.
+  const sansSeuil = (x, depuis) => ({ ...x, depuis: depuis || null, niveau: depuis ? 'bleu' : 'gris', seuils_min: null, objectif_min: null });
+  for (const l of lits.rows.filter((x) => ['occupe', 'libre'].includes(x.etat))) {
+    capacites.push(sansSeuil({ type: l.etat === 'occupe' ? 'occupe' : 'disponible', objet: 'lit', id: l.id, ressource: l.code, unite: l.unite, phase: l.etat === 'occupe' ? 'occupe' : 'disponible',
+      statut: l.etat === 'occupe' ? 'occupe' : 'disponible', reference: entretien ? undefined : (l.patient_ref || undefined), disponibilite_confirmee_le: l.etat === 'libre' ? l.disponibilite_confirmee_le : undefined }, l.etat_depuis));
+  }
+  for (const c of civ.rows.filter((x) => ['occupee', 'libre'].includes(x.etat))) {
+    capacites.push(sansSeuil({ type: c.etat === 'occupee' ? 'occupe' : 'disponible', objet: 'civiere', id: c.id, ressource: c.code, phase: c.etat === 'occupee' ? 'occupe' : 'disponible',
+      statut: c.etat === 'occupee' ? 'occupe' : 'disponible', corridor: c.categorie === 'debordement', reference: entretien ? undefined : (c.patient_ref || undefined) }, c.etat === 'occupee' ? (c.arrivee_le || c.etat_depuis) : c.etat_depuis));
+  }
   // Hébergement : place conservée (résident hospitalisé ou absent) — jamais disponible ; même entretien seulement par le module Entretien
   for (const p of patients.filter((x) => x.place_conservee)) capacites.push({ type: 'conservee', objet: 'lit', id: p.id, ressource: p.ressource, unite: p.unite, phase: 'place_conservee',
     depuis: p.depuis, niveau: p.niveau, seuils_min: p.seuils_min, objectif_min: p.objectif_min, reference: entretien ? undefined : p.reference });
@@ -84,14 +95,20 @@ async function universel(pool, u, etabId) {
       const gpsAge = minutes(p.derniere_position, now);
       return { objet: 'prealerte', id: p.id, numero: p.numero, unite: p.unite, priorite: p.priorite, phase: arrivee ? 'sur_place' : 'en_approche',
         depuis: arrivee || null, arrivee_estimee: arrivee ? null : finEta(p), estimation_fiable: !arrivee && gpsAge != null && gpsAge <= 2,
-        derniere_position: p.derniere_position, niveau: arrivee ? niveau('alerte', arrivee, now) : finEta(p) ? 'vert' : 'gris' };
+        derniere_position: p.derniere_position,
+        // Préalerte jamais arrivée et créée il y a plus de 24 h : non clôturée (à vérifier), jamais « normale »
+        obsolete: !arrivee && minutes(p.cree_le, now) >= 24 * 60, cause: !arrivee && minutes(p.cree_le, now) >= 24 * 60 ? 'mission_non_cloturee' : null,
+        niveau: arrivee ? niveau('alerte', arrivee, now, SC) : minutes(p.cree_le, now) >= 24 * 60 ? 'gris' : finEta(p) ? 'vert' : 'gris' };
     }),
     ...transports.rows.map((d) => {
       const fin = d.prealerte_eta_min != null && d.prealerte_eta_le ? new Date(new Date(d.prealerte_eta_le).getTime() + d.prealerte_eta_min * 60000).toISOString() : null;
       const depuis = d.pris_en_charge_le || d.sur_place_le || d.en_route_le || null;
       return { objet: 'transport', id: d.id, numero: d.numero, unite: d.unite, sens: d.origine_id === etabId ? 'depart' : 'arrivee', phase: d.statut === 'en_route' && d.sur_place_le ? 'sur_place_depart' : d.statut,
         depuis, arrivee_estimee: fin, objectif_t5: fin ? new Date(new Date(fin).getTime() - 5 * 60000).toISOString() : null, patient_etat: d.patient_etat, patient_pret_le: d.patient_pret_le, accueil_pret_le: d.accueil_pret_le,
-        niveau: d.patient_etat === 'pret' || d.accueil_pret_le ? 'vert' : ['retarde', 'indisponible'].includes(d.patient_etat) ? 'orange' : depuis ? 'vert' : 'gris' };
+        // Mission ouverte depuis plus de 24 h : jamais « normale » ; signalée non clôturée (à vérifier), conservée telle quelle (aucune suppression)
+        ...(() => { const age = minutes(depuis || d.cree_le, now); const obsolete = age != null && age >= 24 * 60; const lent = age != null && age >= Math.max(60, 2 * (cfg.transport_retard_marge_min || 30)) && !obsolete;
+          return { obsolete, cause: obsolete ? 'mission_non_cloturee' : null,
+            niveau: obsolete ? 'gris' : ['retarde', 'indisponible'].includes(d.patient_etat) || lent ? 'orange' : d.patient_etat === 'pret' || d.accueil_pret_le ? 'vert' : depuis ? 'vert' : 'gris' }; })() };
     }),
   ];
   const alertesItems = alertes.rows.map((a) => it('alerte', { objet: 'alerte', id: Number(a.id), titre: a.titre, statut: a.statut, escalade_niveau: a.escalade_niveau,

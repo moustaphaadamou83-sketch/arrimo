@@ -22,7 +22,7 @@
   // Coordination, Pilotage, Administration (mêmes modules, mêmes routes ; seuls le libellé et l'ordre changent)
   const hebergement = () => document.documentElement.dataset.typeEtab === 'chsld';
   const LIB_HEB = { patients: ['Résidents', 'Residents'], reseau: ['Coordination réseau', 'Network coordination'] };
-  const ORDRE_HEB = ['accueil', 'patients', 'capacites', 'transferts', 'urgences', 'operations', 'reseau', 'pilotage', 'national', 'administration'];
+  const ORDRE_HEB = ['accueil', 'patients', 'capacites', 'chrono', 'transferts', 'urgences', 'operations', 'reseau', 'pilotage', 'national', 'administration'];
   const ordonnes = (liste) => (hebergement() ? [...liste].sort((a, b) => ORDRE_HEB.indexOf(a[0]) - ORDRE_HEB.indexOf(b[0])) : liste);
   const espaceDe = (v) => ESPACES.find((x) => x[4].includes(v))?.[0] || null;
   let actif = 'accueil'; let construit = ''; let dernierSel = null;

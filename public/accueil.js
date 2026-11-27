@@ -235,6 +235,8 @@
     const travaux = [syntheses(synthesesZone, o)];
     if (window.ArrimoFluxVue) travaux.push(window.ArrimoFluxVue.panneau(v.querySelector('#acc-flux'), { ...o, prealertesDans: v.querySelector('#acc-prealertes') }));
     if (o.chrono) travaux.push(chrono(v.querySelector('#acc-chrono'), o));
+    // Chrono universel : résumé des séjours sous la vue d'ensemble (même composant que l'Accueil des CHSLD, même source)
+    if (o.chrono) travaux.push(Promise.resolve(window.ArrimoChrono?.resumeAccueil(v.querySelector('.ds-accueil') || v, o.etablissement_id)).catch(() => null));
     if (o.taches) travaux.push(taches(v.querySelector('#acc-taches'), o));
     await Promise.all(travaux.map((p) => p.catch(() => {})));
   }

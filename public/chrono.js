@@ -246,6 +246,12 @@
   const NIVEAUX = ['vert', 'orange', 'rouge', 'gris', 'bleu'];
   const RANG = { rouge: 4, orange: 3, gris: 2, vert: 1, bleu: 0 };
   const motNiveau = (n) => K(`n_${NIVEAUX.includes(n) ? n : 'gris'}`);
+  /* Statut opérationnel (27 nov. 2026) : nomenclature commune, couleur du STATUT (occupé rouge = indisponible, jamais « critique »),
+     toujours distincte du niveau de vigilance (bordure de la carte). */
+  const STATUTS = ['disponible', 'occupe', 'reserve', 'a_nettoyer', 'en_nettoyage', 'hors_service', 'conserve', 'inconnu'];
+  const STATUT_DE_TYPE = { occupe: 'occupe', disponible: 'disponible', reserve: 'reserve', nettoyage_attente: 'a_nettoyer', nettoyage_civiere: 'a_nettoyer', nettoyage_en_cours: 'en_nettoyage', indispo: 'hors_service', conservee: 'conserve' };
+  const statutDe = (x) => x.statut || STATUT_DE_TYPE[x.type] || 'inconnu';
+  const badgeStatut = (st, prefixe = '') => `<span class="statut-op statut-${esc(STATUTS.includes(st) ? st : 'inconnu')}">${prefixe}${K(`st_${STATUTS.includes(st) ? st : 'inconnu'}`)}</span>`;
   const seuilsAttr = (s, depuis) => (s && depuis ? ` data-seuil-v="${esc(s.vigilance)}" data-seuil-e="${esc(s.escalade)}" data-objectif-min="${esc(s.escalade)}"` : '');
   function anneauGrand({ depuis, seuils, echeance, marge, niveau, etiquette, petit = false }) {
     const repere = seuils ? Math.max(1, Math.min(99, (seuils.vigilance / seuils.escalade) * 100)) : null;
@@ -267,11 +273,11 @@
   /** Recoloration à la seconde : chaque élément à seuil calcule son niveau ; la carte prend le pire (rouge > orange > gris > vert > bleu). */
   function recolorer(racine = document) {
     racine.querySelectorAll('[data-seuil-v][data-depuis]').forEach((el) => {
-      const m = (Date.now() - new Date(el.dataset.depuis).getTime()) / 60000;
+      const m = ((window.ArrimoHorloge?.maintenant() ?? Date.now()) - new Date(el.dataset.depuis).getTime()) / 60000;
       el.dataset.niv = m >= Number(el.dataset.seuilE) ? 'rouge' : m >= Number(el.dataset.seuilV) ? 'orange' : 'vert';
     });
     racine.querySelectorAll('[data-echeance]').forEach((el) => {
-      const m = (Date.now() - new Date(el.dataset.echeance).getTime()) / 60000;
+      const m = ((window.ArrimoHorloge?.maintenant() ?? Date.now()) - new Date(el.dataset.echeance).getTime()) / 60000;
       el.dataset.niv = m >= Number(el.dataset.margeMin || 0) ? 'rouge' : m >= 0 ? 'orange' : 'vert';
     });
     racine.querySelectorAll('.anneau-grand[data-niv]').forEach((a) => {
@@ -309,29 +315,26 @@
     const ambulance = (x) => `<div class="anneau-chrono niveau-${esc(x.niveau)}"${x.depuis ? ` data-depuis="${esc(x.depuis)}"` : ''}>
         <svg viewBox="0 0 44 44" aria-hidden="true"><circle class="ac-fond" cx="22" cy="22" r="19"/><circle class="ac-arc" cx="22" cy="22" r="19" pathLength="100" stroke-dasharray="0 100"/></svg>
         <div><b class="${x.depuis ? 'ac-val ' : ''}num">${x.depuis ? '--:--:--' : x.arrivee_estimee ? `<span data-decompte="${esc(x.arrivee_estimee)}" data-decompte-fin="${K('u_eta_passee')}">--:--:--</span>` : K('u_eta_inconnue')}</b>
-        <span>${esc(x.unite || '—')} · ${esc(x.numero)}</span><small class="note">${phase(x.phase)}${x.objet === 'prealerte' && !x.depuis && !x.estimation_fiable ? ` · ${K('u_estimation_non_fiable')}` : ''}</small>
+        <span>${esc(x.unite || '—')} · ${esc(x.numero)}</span><small class="note">${phase(x.phase)}${x.objet === 'prealerte' && !x.depuis && !x.estimation_fiable ? ` · ${K('u_estimation_non_fiable')}` : ''}</small>${x.obsolete ? `<small class="alerte-obsolete">${K('a_non_cloturee')}</small>` : ''}
         ${x.objet === 'transport' ? window.ArrimoVueTransferts.preparation({ ...x, destination_id: x.sens === 'arrivee' ? 1 : null }, { heure: heureCourte }) : ''}</div></div>`;
     const alerte = (x) => anneauDuree(x, { libelle: x.titre, sous: `${K(`u_statut_${x.statut}`)}${x.escalade_niveau ? ` · ${K('u_escalade', { n: x.escalade_niveau })}` : ''}${x.reaction_min != null ? ` · ${K('u_reaction', { n: x.reaction_min })}` : ''}` });
     const q = d.qualite;
     const corps = {
       generale: () => vueGenerale(d, { patient, ressource, ambulance, alerte }),
       patients: () => vuePatients(d),
-      capacites: () => liste(d.capacites, ressource, K('u_aucun')),
+      capacites: () => vueCapacites(d),
       previsions: () => d.previsions ? `<p class="note">${K('u_prev_note')}</p><div class="tableau"><table><thead><tr><th>${K('u_type')}</th><th>${K('u_libres')}</th><th>${K('u_nettoyage')}</th>${(d.previsions.horizons || []).map((h) => `<th>${K('u_dans', { h })}</th>`).join('')}</tr></thead><tbody>
         ${(d.previsions.unites || []).map((u) => `<tr><th>${esc(u.type_nom)}</th><td>${u.libres}</td><td>${u.horizons?.[d.previsions.horizons?.[0]]?.liberations ?? '—'}</td>${(d.previsions.horizons || []).map((h) => { const x = u.horizons?.[h]; return `<td>${x ? `${esc(x.libres_prevus)} <span class="note">± ${esc(x.marge)}</span>${x.risque ? ` <span class="badge-flux retard">${K('u_risque')}</span>` : ''}` : '—'}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>` : `<p class="note">${K('u_prev_indispo')}</p>`,
-      qualite: () => q ? `<p class="note">${K('u_qualite_note')}</p><dl class="qualite-chrono">
-        <div><dt>${K('u_q_sync')}</dt><dd>${q.synchronisation_ms?.p50 != null ? `${q.synchronisation_ms.p50} ms (p95 ${q.synchronisation_ms.p95} ms)` : K('u_inconnu')}</dd></div>
-        <div><dt>${K('u_q_notifs')}</dt><dd>${q.notifications_non_lues_15min ?? K('u_inconnu')}</dd></div>
-        <div><dt>${K('u_q_pa')}</dt><dd>${q.prealertes_non_recues ?? K('u_inconnu')}</dd></div>
-        <div><dt>${K('u_q_gps')}</dt><dd>${q.gps_obsoletes}</dd></div>
-        <div><dt>${K('u_q_eta')}</dt><dd>${q.eta_transport_obsoletes ?? K('u_inconnu')}</dd></div></dl>` : `<p class="note">${K('u_inconnu')}</p>`,
-      alertes: () => liste(d.alertes, alerte, K('u_aucun')),
+      qualite: () => vueQualite(q) || `<p class="note">${K('u_inconnu')}</p>`,
+      alertes: () => vueAlertes(d),
       historique: () => `<p class="note">${K('u_hist_note')}</p><p><button type="button" class="btn" id="ch-u-recherche">${K('u_hist_chercher')}</button></p>`,
     };
     const amb = '';  // Vue générale : les ambulances sont résumées par leurs cartes ; la liste complète reste dans « Ambulances »
     v.innerHTML = `${nav(cur)}<div class="entete"><div><h2>${K('u_titre')} · ${nomSous(cur)}</h2><p class="note">${K('u_seuils')}</p></div></div><section class="panneau-c">${corps[cur]()}${amb}</section>`;
     $('#ch-u-recherche')?.addEventListener('click', () => $('#b-recherche')?.click());
     if (cur === 'patients') brancherPatients(d);
+    if (cur === 'capacites') brancherCapacites(d);
+    if (cur === 'alertes') brancherAlertes(d);
     brancherFiches(v);
     window.ArrimoDuree?.tic(); recolorer(v);
     clearInterval(etatC.recolore);
@@ -397,6 +400,105 @@
       </div>${tableT5(d.performance_t5)}`;
   }
 
+  /* ---------- Capacités : statut réel de chaque ressource, depuis la même heure que le module Capacités ---------- */
+  const ORDRE_ST = ['occupe', 'disponible', 'reserve', 'a_nettoyer', 'en_nettoyage', 'hors_service', 'conserve'];
+  function vueCapacites(d) {
+    const C = d.capacites || []; const f = (etatC.fc ||= { statut: '' });
+    const parSt = (st) => C.filter((x) => statutDe(x) === st);
+    const plusAncien = (l) => l.filter((x) => x.depuis).sort((a, b) => new Date(a.depuis) - new Date(b.depuis))[0];
+    const tuiles = ORDRE_ST.filter((st) => parSt(st).length).map((st) => { const l = parSt(st); const x = plusAncien(l); return `<button type="button" class="tuile-statut statut-bord-${st}" data-filtre-statut="${st}" aria-pressed="${f.statut === st}">
+        ${badgeStatut(st)}<span class="ts-nombre num">${l.length}</span>${x ? `<span class="note">${K('s_plus_ancien_c')} <b class="num duree-seule" data-depuis="${esc(x.depuis)}">--:--:--</b> · ${esc(x.ressource || '')}</span>` : ''}</button>`; }).join('');
+    // Par défaut : ce qui demande une action (à nettoyer, en nettoyage, réservé, hors service) ; tout statut se choisit en un clic
+    const vus = (f.statut ? parSt(f.statut) : C.filter((x) => !['occupe', 'disponible'].includes(statutDe(x)))).sort((a, b) => RANG[b.niveau] - RANG[a.niveau] || new Date(a.depuis || 0) - new Date(b.depuis || 0));
+    const ligne = (x) => `<tr class="niveau-${esc(x.niveau)}" data-niveau-carte><th>${esc(x.ressource || '—')}${x.corridor ? ` <span class="note">${K('s_corridor')}</span>` : ''}</th><td>${x.objet === 'civiere' ? K('s_civiere') : K('s_lit_maj')}</td><td>${esc(x.unite || '—')}</td>
+        <td>${badgeStatut(statutDe(x))}</td><td>${x.reference ? esc(x.reference) : '—'}</td><td>${x.depuis ? `<span class="note">${esc(heureCourte(x.depuis))}</span>` : '—'}</td>
+        <td>${x.depuis ? `<b class="num duree-seule" data-depuis="${esc(x.depuis)}"${seuilsAttr(x.seuils_min, x.depuis)}>--:--:--</b>` : `<span class="note">${K('u_inconnu')}</span>`}</td>
+        <td><span class="cc-niveau"><span class="pastille-chrono"></span><span class="cc-mot">${motNiveau(x.niveau)}</span></span></td></tr>`;
+    return `<div class="tuiles-statuts">${tuiles}</div>
+      <p class="note">${f.statut ? K('s_filtre_statut', { s: K(`st_${f.statut}`), n: vus.length }) : K('s_a_traiter', { n: vus.length })} ${f.statut ? `<button type="button" class="lien" data-filtre-statut="">${K('s_reinitialiser')}</button>` : ''}</p>
+      ${vus.length ? `<div class="tableau"><table class="table-capacites"><thead><tr><th>${K('s_ressource')}</th><th>${K('s_type')}</th><th>${K('s_unite')}</th><th>${K('s_statut')}</th><th>${K('s_patient')}</th><th>${K('s_debut')}</th><th>${K('s_duree')}</th><th>${K('s_niveau')}</th></tr></thead>
+        <tbody>${vus.slice(0, 200).map(ligne).join('')}</tbody></table></div>${vus.length > 200 ? `<p class="note">${K('s_premiers', { n: 200, t: vus.length })}</p>` : ''}` : `<p class="note">${K('u_aucun')}</p>`}
+      <p class="note">${K('s_note_capacites')}</p>`;
+  }
+  function brancherCapacites() { $('#v-chrono').querySelectorAll('[data-filtre-statut]').forEach((b) => { b.onclick = () => { (etatC.fc ||= {}).statut = etatC.fc.statut === b.dataset.filtreStatut ? '' : b.dataset.filtreStatut; vueChrono(); }; }); }
+
+  /* ---------- Alertes et escalades : cartes larges (en-tête, compteur, description), filtres, compteurs = liste affichée ---------- */
+  function vueAlertes(d) {
+    const f = (etatC.fa ||= { niveau: '', statut: '', q: '' });
+    // Une seule carte par incident (même titre et même niveau) : les répétitions sont regroupées et comptées
+    const groupes = new Map();
+    for (const a of d.alertes || []) { const k = `${a.titre}|${a.niveau}`; const g = groupes.get(k); if (g) { g.repetitions += 1; if (new Date(a.depuis) < new Date(g.depuis)) g.depuis = a.depuis; } else groupes.set(k, { ...a, repetitions: 1 }); }
+    const toutes = [...groupes.values()];
+    const q = f.q.trim().toLowerCase();
+    const vus = toutes.filter((a) => (!f.niveau || a.niveau === f.niveau) && (!f.statut || a.statut === f.statut) && (!q || String(a.titre).toLowerCase().includes(q)))
+      .sort((a, b) => RANG[b.niveau] - RANG[a.niveau] || new Date(a.depuis || 0) - new Date(b.depuis || 0));
+    const n = (k) => vus.filter((a) => a.niveau === k).length;
+    const carte = (a) => `<article class="carte-alerte niveau-${esc(a.niveau)}" data-niveau-carte>
+        <header><h4>${esc(a.titre)}</h4><span class="cc-niveau"><span class="pastille-chrono"></span><span class="cc-mot">${motNiveau(a.niveau)}</span></span></header>
+        <div class="ca-centre">${anneauGrand({ depuis: a.depuis, seuils: a.seuils_min, niveau: a.niveau, etiquette: K('a_depuis_detection') })}
+          <dl><div><dt>${K('a_statut')}</dt><dd>${K(`u_statut_${['ouverte', 'accusee', 'en_action'].includes(a.statut) ? a.statut : 'ouverte'}`)}</dd></div>
+            <div><dt>${K('a_detectee')}</dt><dd class="num">${a.depuis ? esc(heureCourte(a.depuis)) : '—'}</dd></div>
+            ${a.escalade_niveau ? `<div><dt>${K('a_escalade')}</dt><dd>${K('a_niveau_n', { n: a.escalade_niveau })}</dd></div>` : ''}
+            ${a.reaction_min != null ? `<div><dt>${K('a_reaction')}</dt><dd>${K('u_reaction', { n: a.reaction_min })}</dd></div>` : ''}
+            ${a.repetitions > 1 ? `<div><dt>${K('a_repetitions')}</dt><dd>${a.repetitions}</dd></div>` : ''}</dl></div>
+        <p class="note">${K('a_note_cause')}</p></article>`;
+    return `<form class="filtres-chrono" id="cha-filtres" role="search">
+        <label>${K('s_niveau')}<select name="niveau"><option value="">${K('s_tous')}</option>${['rouge', 'orange', 'vert'].map((k) => `<option value="${k}"${f.niveau === k ? ' selected' : ''}>${motNiveau(k)}</option>`).join('')}</select></label>
+        <label>${K('a_statut')}<select name="statut"><option value="">${K('s_tous')}</option>${['ouverte', 'accusee', 'en_action'].map((k) => `<option value="${k}"${f.statut === k ? ' selected' : ''}>${K(`u_statut_${k}`)}</option>`).join('')}</select></label>
+        <label>${K('a_recherche')}<input type="search" name="q" value="${esc(f.q)}" autocomplete="off"></label></form>
+      <div class="tuiles-chrono tuiles-sejours"><div class="tuile-c ds-kpi"><span class="gros num">${vus.length}</span><span class="ds-kpi-lib">${K('a_affichees')}</span></div>
+        <div class="tuile-c ds-kpi ton-rouge"><span class="gros num">${n('rouge')}</span><span class="ds-kpi-lib">${K('s_escalade')}</span></div>
+        <div class="tuile-c ds-kpi ton-orange"><span class="gros num">${n('orange')}</span><span class="ds-kpi-lib">${K('s_vigilance')}</span></div></div>
+      ${vus.length ? `<div class="grille-alertes">${vus.map(carte).join('')}</div>` : `<p class="note vide-chrono">${(d.alertes || []).length ? K('s_aucun_filtre') : K('a_aucune')}</p>`}
+      <p class="note">${K('a_note')}</p>`;
+  }
+  function brancherAlertes() {
+    const form = $('#cha-filtres'); if (!form) return;
+    form.onsubmit = (e) => e.preventDefault();
+    form.onchange = form.oninput = (e) => { if (!e.target.name) return; etatC.fa[e.target.name] = e.target.value; if (e.type === 'change' || e.target.name !== 'q') { vueChrono(); } };
+    form.q.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); etatC.fa.q = e.target.value; vueChrono(); } };
+  }
+
+  /* ---------- Qualité de l'information : chaque mesure a un état écrit (synchronisé, retardé, inconnu…) et son explication ---------- */
+  function vueQualite(q) {
+    if (!q) return '';
+    const ligne = (lib, val, etat, explic) => `<div class="q-ligne q-${etat}"><dt>${lib}</dt><dd><span class="q-etat">${K(`q_${etat}`)}</span> <b class="num">${val}</b><span class="note">${explic}</span></dd></div>`;
+    const sync = q.synchronisation_ms?.p50;
+    const h = window.ArrimoHorloge?.etat?.() || {};
+    return `<p class="note">${K('u_qualite_note')}</p><dl class="qualite-chrono qualite-detaillee">
+      ${ligne(K('u_q_sync'), sync != null ? `${sync} ms (p95 ${q.synchronisation_ms.p95} ms)` : '—', sync == null ? 'inconnu' : sync <= 1000 ? 'synchronise' : 'retarde', sync == null ? K('q_x_jamais') : K('q_x_sync', { n: q.signaux_emis ?? 0 }))}
+      ${ligne(K('q_horloge'), h.mesures ? `${Math.round(h.decalage)} ms` : '—', h.mesures ? (Math.abs(h.decalage) <= 1000 ? 'synchronise' : 'retarde') : 'inconnu', h.mesures ? K('q_x_horloge', { rtt: Math.round(h.rtt ?? 0) }) : K('q_x_jamais'))}
+      ${ligne(K('u_q_notifs'), q.notifications_non_lues_15min ?? '—', q.notifications_non_lues_15min == null ? 'inconnu' : q.notifications_non_lues_15min ? 'en_attente' : 'synchronise', K('q_x_notifs'))}
+      ${ligne(K('u_q_pa'), q.prealertes_non_recues ?? '—', q.prealertes_non_recues == null ? 'inconnu' : q.prealertes_non_recues ? 'retarde' : 'synchronise', K('q_x_pa'))}
+      ${ligne(K('u_q_gps'), q.gps_obsoletes, q.gps_obsoletes ? 'obsolete' : 'synchronise', K('q_x_gps'))}
+      ${ligne(K('u_q_eta'), q.eta_transport_obsoletes ?? '—', q.eta_transport_obsoletes == null ? 'inconnu' : q.eta_transport_obsoletes ? 'obsolete' : 'synchronise', K('q_x_eta'))}
+    </dl><p class="note">${K('q_note')}</p>`;
+  }
+
+  /** Résumé Chrono pour les Accueils (hôpital, hébergement) : même source, mêmes anneaux, clic vers le sous-menu. */
+  async function resumeAccueil(conteneur, etabId) {
+    if (!conteneur || !document.querySelector('#onglets button[data-v="chrono"]:not([hidden])')) return;
+    const d = await api('GET', `/chrono/universel?etablissement_id=${etabId}`).catch(() => null); if (!d) return;
+    const heb = hebergementC(); const P = d.patients || []; const Cp = d.capacites || [];
+    const pire = (l) => l.map((x) => x.niveau).sort((a, b) => RANG[b] - RANG[a])[0] || 'vert';
+    const ancien = (l) => l.filter((x) => x.depuis).sort((a, b) => new Date(a.depuis) - new Date(b.depuis))[0];
+    const tuile = (lib, l, sous, extra = {}) => { const x = ancien(l); return `<button type="button" class="carte-supervision petite niveau-${esc(l.length ? pire(l) : 'vert')}" data-niveau-carte data-accueil-chrono="${sous}"${extra.etape ? ` data-aller-etape="${extra.etape}"` : ''}>
+        ${anneauGrand({ depuis: x?.depuis, seuils: x?.seuils_min, niveau: x ? x.niveau : 'vert', etiquette: x ? K('s_plus_ancien') : '', petit: true })}
+        <span class="sv-corps"><span class="sv-nombre num">${l.length}</span><span class="sv-lib">${lib}</span>${x ? `<span class="sv-ident">${esc(x.reference || x.ressource || '')}</span>` : ''}</span></button>`; };
+    const et = (l) => P.filter((x) => l.includes(x.etape));
+    const cartes = heb ? [tuile(K('g_suivis_res'), P, 'patients'), tuile(K('e_attente_admission_heb'), et(['attente_admission_heb']), 'patients', { etape: 'attente_admission_heb' }),
+      tuile(K('g_conservees'), et(['hospitalise_externe', 'absent', 'retour_a_reintegrer']), 'patients', { etape: 'hospitalise_externe' }), tuile(K('e_transfert_en_cours'), et(['transfert_en_cours']), 'patients', { etape: 'transfert_en_cours' }),
+      tuile(K('g_nettoyage'), Cp.filter((c) => String(c.type).startsWith('nettoyage')), 'capacites')]
+      : [tuile(K('g_suivis'), P, 'patients'), tuile(K('g_attente_admission'), et(['attente_lit', 'lit_assigne']), 'patients', { etape: 'attente_lit' }), tuile(K('g_nsa'), et(['nsa']), 'patients', { etape: 'nsa' }),
+        tuile(K('g_nettoyage'), Cp.filter((c) => String(c.type).startsWith('nettoyage')), 'capacites'), tuile(K('g_alertes'), d.alertes || [], 'alertes')];
+    const sec = document.createElement('section'); sec.className = 'panneau-c resume-chrono';
+    sec.innerHTML = `<header class="bloc-tete"><h3>Chrono · ${heb ? K('u_residents') : K('u_patients')}</h3><button type="button" class="lien" data-accueil-chrono="generale">${K('g_ouvrir_chrono')}</button></header><div class="grille-supervision">${cartes.join('')}</div>`;
+    conteneur.querySelector('.resume-chrono')?.remove();
+    const apres = conteneur.querySelector('.ch-situation, .acc-vue'); if (apres) apres.after(sec); else conteneur.appendChild(sec);
+    sec.querySelectorAll('[data-accueil-chrono]').forEach((b) => { b.onclick = () => { etatC.sous = b.dataset.accueilChrono; if (etatC.sous === 'patients') etatC.fp = { etape: b.dataset.allerEtape || '' }; allerA('chrono'); }; });
+    window.ArrimoDuree?.tic(); recolorer(sec);
+  }
+
   /* ---------- Patients et séjours ---------- */
   const ETAPES_SEJOUR = ['urgence_civiere', 'attente_lit', 'lit_assigne', 'hospitalise', 'nsa', 'conge_prevu'];
   const etape = (k) => K(`e_${k}`);
@@ -420,7 +522,8 @@
     const et = anneauGrand({ depuis: x.depuis, seuils: x.seuils_min, echeance: x.echeance, marge: x.marge_min, niveau: x.niveau_etape || x.niveau, petit: true,
       etiquette: x.etape === 'conge_prevu' && x.echeance && new Date(x.echeance) > new Date() ? K('s_avant_sortie') : K('s_etape_actuelle') });
     const info = [
-      lieu(x), `<b>${emplacement(x)}</b>${x.place_conservee ? ` · <span class="badge-flux">${K('s_place_conservee')}</span>` : ''}`,
+      lieu(x), `<b>${emplacement(x)}</b> ${x.statut_ressource ? badgeStatut(x.statut_ressource, x.objet === 'civiere' ? `${K('s_civiere')} ` : x.objet === 'lit' ? `${K('s_lit_maj')} ` : '') : ''}`,
+      x.ressource_depuis ? `${K('s_occupation')} <b class="num duree-seule" data-depuis="${esc(x.ressource_depuis)}">--:--:--</b>` : '',
       x.arrivee_le ? K('s_arrivee', { h: quandCourt(x.arrivee_le) }) : '',
       x.destination_prevue ? K('s_destination', { d: destination(x.destination_prevue) }) : '',
       x.motif_attente ? K('s_motif', { m: motif(x.motif_attente) }) : '',
@@ -561,5 +664,7 @@
     vueChrono();
   });
   document.addEventListener('click', (ev) => { const b = ev.target.closest('[data-sous-chrono]'); if (!b || !document.getElementById('v-chrono')?.contains(b)) return; etatC.sous = b.dataset.sousChrono; vueChrono(); });
-  window.ArrimoChrono = { vues: { chrono: vueChrono } };
+  window.ArrimoChrono = { vues: { chrono: vueChrono }, resumeAccueil };
+  // Les anneaux d'un résumé d'Accueil sont recolorés chaque seconde, comme dans Chrono
+  setInterval(() => { document.querySelectorAll('.resume-chrono').forEach((s) => recolorer(s)); }, 1000);
 })();

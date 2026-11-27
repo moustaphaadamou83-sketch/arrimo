@@ -126,6 +126,8 @@
       <h3 class="titre-section">${C('accueil.raccourcis')}</h3>
       <div class="ch-raccourcis">${raccourci('c-residents', 'users', t('chsld.nav.residents'))}${raccourci('c-chambres', 'bed-double', t('chsld.nav.chambres'))}${raccourci('c-demandes', 'clipboard-list', t('chsld.nav.demandes'))}
         ${raccourci('c-taches', 'clipboard-check', t('chsld.nav.taches'))}${raccourci('c-mouvements', 'ambulance', t('chsld.nav.mouvements'))}<button class="ch-raccourci" type="button" data-ch-og>${icone('sparkles')}<span>${esc(window.ArrimoNomOg?.nom() || 'OG')}</span></button></div>`;
+    // Chrono universel (27 nov. 2026) : résumé Chrono des résidents sous le bandeau de situation (même moteur, même source)
+    window.ArrimoChrono?.resumeAccueil(v, ctx());
     // Cahier ultime : accueil d'abord opérationnel (bandeau, préalertes, mouvements) ; communications des proches repliées en bas, sans encombrer
     v.querySelectorAll('[data-ch-aller]').forEach((b) => { b.onclick = () => allerA(b.dataset.chAller); });
     const og = v.querySelector('[data-ch-og]'); if (og) og.onclick = () => document.querySelector('#og-open')?.click();

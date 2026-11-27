@@ -106,6 +106,22 @@
     return `<div class="prep-etats">${patient}${accueil}${t5}</div>`;
   }
   window.ArrimoVueTransferts = { rendre, depuisTransport, kanban, colonneTransport, COLONNES, preparation, PREP, arriveeEstimee };
+  /* Horloge commune (27 nov. 2026) : tous les compteurs utilisent l'heure du SERVEUR (décalage mesuré à chaque réponse de l'API,
+     au milieu de l'aller-retour, lissé) ; deux écrans synchronisés affichent la même seconde. */
+  const H = { decalage: 0, mesures: 0, rtt: null };
+  window.ArrimoHorloge = {
+    maintenant: () => Date.now() + H.decalage,
+    mesurer(entete, t0, t1) {
+      const s = Number(entete); if (!Number.isFinite(s) || s <= 0) return;
+      const rtt = t1 - t0; if (rtt < 0 || rtt > 5000) return;
+      const d = s + rtt / 2 - t1;
+      // Les mesures à aller-retour court sont les plus fiables ; une première mesure est prise telle quelle
+      if (!H.mesures || rtt <= (H.rtt ?? Infinity) * 1.5) { H.decalage = H.mesures ? H.decalage * 0.5 + d * 0.5 : d; H.rtt = H.rtt == null ? rtt : Math.min(H.rtt, rtt); }
+      H.mesures += 1;
+    },
+    etat: () => ({ ...H }),
+  };
+  const maintenant = () => window.ArrimoHorloge.maintenant();
   /* Format des durées (cahier Chrono ultime, 20) : HH:MM:SS, jours au-delà de 24 h ; inconnu → « --:--:-- », jamais 0. */
   function hhmmss(ms) {
     if (!Number.isFinite(ms)) return '--:--:--';
@@ -116,13 +132,13 @@
   /** Comptes à rebours [data-decompte] (échéance ISO) : chaque seconde ; une fois l'échéance passée, le libellé de fin. */
   function tic() {
     document.querySelectorAll('[data-decompte]').forEach((el) => {
-      const ms = new Date(el.dataset.decompte).getTime() - Date.now();
+      const ms = new Date(el.dataset.decompte).getTime() - maintenant();
       el.textContent = ms >= 0 ? hhmmss(ms) : `${el.dataset.decompteFin || ''} (+${hhmmss(ms)})`;
       el.classList.toggle('depasse', ms < 0);
     });
     // Durées écoulées [data-depuis] : HH:MM:SS ; l'anneau ne montre une proportion que s'il existe un objectif (sinon vide, jamais arbitraire)
     document.querySelectorAll('[data-depuis]').forEach((el) => {
-      const ms = Date.now() - new Date(el.dataset.depuis).getTime(); const val = el.querySelector('.ac-val') || (el.classList.contains('duree-seule') ? el : null);
+      const ms = maintenant() - new Date(el.dataset.depuis).getTime(); const val = el.querySelector('.ac-val') || (el.classList.contains('duree-seule') ? el : null);
       if (val) { const txt = hhmmss(ms); const m = val.classList.contains('ag-val') && txt.match(/^(.+?) (\d\d:\d\d:\d\d)$/);
         if (m) { if (val.dataset.txt !== txt) { val.dataset.txt = txt; val.innerHTML = `<span class="ag-jours">${m[1]}</span>${m[2]}`; } } else val.textContent = txt; }
       const obj = Number(el.dataset.objectifMin); const arc = el.querySelector('.ac-arc');
