@@ -2425,7 +2425,7 @@ test('RPA, RI, RTF, maison des aînés : type choisi dans SH, écrans CHSLD sous
     // 4. Arrimo Famille : la RPA est rangée sous « Résidence privée pour aînés (RPA) »
     const liste = await require('../src/proches-comptes').etablissements(poolPilote);
     const x = liste.find((y) => y.id === E); if (x) assert.strictEqual(x.type, 'rpa', 'le proche la trouve sous RPA');
-    // 5. Écrans : la navigation dit « RPA », jamais « CHSLD » ; l'hôpital voit « Liaison CHSLD et résidences »
+    // 5. Écrans : la navigation dit « RPA », jamais « CHSLD » ; l'hôpital voit « Hôpital et hébergement » (ex-Liaison CHSLD, fusionnée le 27 nov. 2026)
     const ouvrir = async (jeton, id, langue = 'fr') => {
       const ctx = await nav.newContext({ viewport: { width: 1366, height: 900 } }); const pg = await ctx.newPage(); pg.on('pageerror', (er) => err.push(String(er)));
       await pg.addInitScript(({ jeton, id, langue }) => { localStorage.setItem('arrimo-token', jeton); localStorage.setItem('arrimo-ctx', String(id)); localStorage.setItem('arrimo-langue', langue); }, { jeton, id, langue });
@@ -2441,7 +2441,7 @@ test('RPA, RI, RTF, maison des aînés : type choisi dans SH, écrans CHSLD sous
       await pg.close();
     }
     const hop = await ouvrir(sessions.b, L.B);
-    assert.match(await hop.evaluate(() => document.querySelector('#onglets').textContent), /Liaison CHSLD et résidences/);
+    assert.match(await hop.evaluate(() => document.querySelector('#onglets').textContent), /Hôpital et hébergement/);
     assert.deepStrictEqual(err, [], 'aucune erreur JavaScript');
   } finally {
     await nav.close();

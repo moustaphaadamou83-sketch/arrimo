@@ -232,7 +232,7 @@ for (const L of LARGEURS) {
     await pp.close();
 
     // 1. Le problème : Copilote de l'Hôpital X
-    const x = await ouvrir(L, 'hopital.x@demo.arrimo');
+    let x = await ouvrir(L, 'hopital.x@demo.arrimo');
     await verifierAide(x, L, '01b-aide-coordination', 'coordonnateur');
     await x.waitForSelector('#v-copilote .acc-niveau');
     assert.match(await x.textContent('#v-copilote .acc-niveau'), /rouge|orange/i);
@@ -371,7 +371,9 @@ for (const L of LARGEURS) {
     assert.ok(await x.locator('#v-indicateurs .titre-section').count() >= 2);
     await onglet(x, 'reseau');
     await verifier(x, L, '13-reseau');
-    // Tableau national : du plus proche au plus loin, filtre « lit libre », « Transférer ici »
+    // Tableau national : réservé au gestionnaire du réseau (registre universel, 27 nov. 2026) ; jamais affiché à un coordonnateur
+    assert.ok(await x.locator('#onglets button[data-v="national"]').isHidden(), 'National réservé aux profils habilités');
+    const xr = x; x = await ouvrir(L, 'reseau@demo.arrimo');
     await onglet(x, 'national');
     await verifier(x, L, '13b-national');
     await x.selectOption('#n-type', { label: 'Médecine' });
@@ -382,6 +384,7 @@ for (const L of LARGEURS) {
     await x.waitForSelector('#modale:not([hidden]) #m-npat');
     await verifier(x, L, '13c-national-transferer');
     await x.keyboard.press('Escape');
+    await x.close(); x = xr;
     await onglet(x, 'journal');
     await verifier(x, L, '14-journal');
     await onglet(x, 'params');
@@ -535,7 +538,7 @@ test('interface en anglais : aucun texte français restant (noms propres except�
     await x.waitForSelector('#v-copilote .reponse');
     await ecran(x, `02-question-${i}`);
   }
-  for (const vue of ['reseau', 'national', 'lits', 'urgence', 'admissions', 'transferts', 'nettoyage', 'vigilance', 'nsa', 'indicateurs', 'journal', 'params']) {
+  for (const vue of ['reseau', 'lits', 'urgence', 'admissions', 'transferts', 'nettoyage', 'conges', 'vigilance', 'nsa', 'indicateurs', 'journal', 'params']) {
     await onglet(x, vue);
     await ecran(x, `03-${vue}`);
   }
@@ -655,7 +658,7 @@ for (const L of LARGEURS.slice(1)) {
     const x = await ouvrir(L, 'hopital.x@demo.arrimo', 'en');
     await x.waitForSelector('#v-copilote .acc-niveau');
     await ecran(x, '01-copilot');
-    for (const vue of ['reseau', 'national', 'lits', 'urgence', 'admissions', 'transferts', 'nettoyage', 'vigilance', 'nsa', 'indicateurs', 'journal', 'params']) {
+    for (const vue of ['reseau', 'lits', 'urgence', 'admissions', 'transferts', 'nettoyage', 'conges', 'vigilance', 'nsa', 'indicateurs', 'journal', 'params']) {
       await onglet(x, vue);
       await ecran(x, `03-${vue}`);
     }

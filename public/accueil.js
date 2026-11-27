@@ -53,7 +53,9 @@
     operations: ['Opérations', 'Operations'], pilotage: ['Pilotage', 'Steering'], reseau: ['Réseau', 'Network'], national: ['National', 'National'], administration: ['Administration', 'Administration'],
     conges: ['Congés', 'Discharges'], alertes: ['Alertes', 'Alerts'], chrono: ['Chrono', 'Chrono'], residents: ['Résidents', 'Residents'], departs: ['Départs', 'Departures'] };
   // Tableau de bord dynamique (27 nov. 2026) : une carte dont l'écran cible est désactivé (licence, sous-module SH, rôle) n'est pas affichée
-  const ouvrable = (v) => { if (!v) return true; const b = document.querySelector(`#onglets button[data-v="${v}"]`); return !b || !b.hidden; };
+  // Source : écrans autorisés calculés par le serveur (registre), jamais l'état momentané des onglets dans la page
+  const ouvrable = (v) => { if (!v) return true; const e = typeof etabCtx === 'function' ? etabCtx() : null; const connus = typeof ecransRegistre === 'function' ? ecransRegistre() : null;
+    return !e || !Array.isArray(e.ecrans) || !connus || !connus.has(v) || e.ecrans.includes(v); };
   const espaceKpi = (k) => k.module || window.ArrimoEspaces?.espaceDe?.(k.aller) || 'accueil';
   function vueEnsemble(o) {
     const n = o.niveau; const kpis = (o.kpis || []).filter((k) => k && k.val != null && ouvrable(k.aller)).slice(0, 6);
