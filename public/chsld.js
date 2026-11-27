@@ -789,6 +789,7 @@
     else v.innerHTML = `<div class="entete"><div><h2></h2></div></div>`;
     const h2 = v.querySelector(':scope > .entete h2'); if (h2) h2.textContent = t('chsld.nav.urgences');
     v.querySelector(':scope > .entete')?.insertAdjacentHTML('afterend', `<p class="note bandeau-911"><b>${esc(t('transports.jamais_conditionnel'))}</b></p>`);
+    await window.ArrimoCommFlotte?.panneau(v);
     if (mods.eviter_transferts === true && window.ArrimoVisitesEviter) {
       const z = document.createElement('details'); z.className = 'panneau-c preparation-911';
       z.innerHTML = `<summary><b>${esc(t('onglets.eviter'))}</b></summary><div></div>`; v.appendChild(z);

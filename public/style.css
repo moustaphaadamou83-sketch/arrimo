@@ -1285,3 +1285,37 @@ body.mode-presentation #b-notif, body.mode-presentation #b-menu { visibility: hi
 .resume-chrono { margin: var(--e4) 0; }
 .resume-chrono .grille-supervision { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); margin-bottom: 0; }
 .carte-supervision.petite { min-height: 0; }
+
+/* Composant temporel partagé des anneaux Chrono (27 nov. 2026) : aucun texte ne touche ni ne dépasse l'anneau, quelle que soit la durée */
+.anneau-grand .ag-centre, .secours .cg-centre, .duree-cercle { container-type: inline-size; padding: 0 16%; box-sizing: border-box; }
+.anneau-grand .ag-val, .secours .cg-valeur, .duree-anneau { display: flex; flex-direction: column; align-items: center; max-width: 100%; overflow: hidden; line-height: 1.08;
+  font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; white-space: nowrap; letter-spacing: 0; }
+.anneau-grand .ag-val .duree-hms, .secours .cg-valeur .duree-hms, .duree-anneau .duree-hms { font-size: clamp(10px, 21cqi, 54px); }
+.anneau-grand .ag-val .duree-jours, .secours .cg-valeur .duree-jours, .duree-anneau .duree-jours { font-size: clamp(9px, 13cqi, 30px); font-weight: 600; }
+.anneau-grand .ag-val .ag-jours { display: none; }
+/* Centre de commandement CCS et interface embarquée (27 nov. 2026) : cartes alignées, deux colonnes, gros boutons sur tablette */
+.tuiles-ccs { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.tuiles-ccs .tuile-c { text-align: left; cursor: pointer; }
+.deux-colonnes-ccs { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.deux-colonnes-ccs > .col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+@media (max-width: 1100px) { .deux-colonnes-ccs { grid-template-columns: 1fr; } }
+.grille-flotte { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+.carte-flotte { border: 1px solid var(--bordure); border-left: 4px solid #94A3B8; border-radius: 10px; padding: 10px; background: var(--carte, var(--fond-carte, transparent)); color: inherit; cursor: pointer; min-width: 0; }
+.carte-flotte header { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.carte-flotte p { margin: 2px 0; overflow-wrap: anywhere; }
+.carte-flotte.niveau-orange { border-left-color: #F59E0B; } .carte-flotte.niveau-rouge { border-left-color: #DC2626; } .carte-flotte.niveau-vert { border-left-color: #16A34A; }
+.carte-flotte:focus-visible { outline: 3px solid var(--principal); outline-offset: 2px; }
+.cf-corps { display: flex; gap: 10px; align-items: center; } .cf-corps > div:last-child { min-width: 0; flex: 1; }
+.anneau-grand.niveau-orange .ag-arc { stroke: #F59E0B; } .anneau-grand.niveau-rouge .ag-arc { stroke: #DC2626; } .anneau-grand.niveau-vert .ag-arc { stroke: #16A34A; }
+.barre-flotte { flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; } .barre-flotte input[type=search] { min-width: 220px; flex: 1; }
+.puce.cond-immobilisation, .puce.cond-retard { border-color: #B45309; color: #92400E; } .puce.cond-perte_connexion, .puce.cond-position_obsolete { border-color: #64748B; }
+.btn.btn-geant { min-height: 64px; font-size: 20px; padding: 0 22px; width: 100%; }
+.rapides { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; } .rapides.grands { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.rapides .btn { min-height: 44px; }
+.fil-msg .msg { margin: 4px 0; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--bordure); } .fil-msg .msg-ccs { border-left: 4px solid var(--principal); }
+.instructions-ccs { border-left: 4px solid var(--principal); padding: 6px 10px; background: color-mix(in srgb, var(--principal) 8%, transparent); border-radius: 6px; }
+.grand-trajet { font-size: 20px; }
+.phases-mission, .chronologie-mission { padding-left: 18px; } .phases-mission li { margin: 3px 0; }
+.barres-jour { display: flex; gap: 4px; align-items: flex-end; height: 140px; } .barres-jour > div { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; }
+.barres-jour span { width: 100%; background: var(--principal); border-radius: 3px 3px 0 0; min-height: 2px; } .barres-jour small { font-size: 10px; }
+.aide-i { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--bordure); font-size: 12px; cursor: help; }

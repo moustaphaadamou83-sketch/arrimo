@@ -340,6 +340,10 @@ function creerApp(pool, options = {}) {
     return ok ? next() : next(new ErreurHttp(403, 'role_secours'));
   });
 
+  // Interconnexion (28 nov. 2026) : l'urgence ou l'hébergement échange avec les ambulances et le CCS de ses missions en cours (Urgences → Secours 911)
+  api.get('/etablissement/flotte', route((req) => require('./flotte-ccs').filEtablissement(pool, req.utilisateur, req.query.etablissement_id)));
+  api.post('/etablissement/flotte/messages', route((req) => require('./flotte-ccs').envoyerEtablissement(pool, req.utilisateur, req.body)));
+  api.post('/etablissement/flotte/messages/:id/lu', route((req) => require('./flotte-ccs').lire(pool, req.utilisateur, req.params.id)));
   // Sillage transversal (22 nov. 2026) : chronologie d'un parcours depuis n'importe quel module, mêmes droits ; Vigilance des parcours
   api.get('/sillage', route((req) => require('./sillage').fil(pool, req.utilisateur, String(req.query.objet || ''), req.query.id)));
   api.get('/secours/sillage', route((req) => require('./sillage').fil(pool, req.utilisateur, String(req.query.objet || ''), req.query.id)));
@@ -790,6 +794,7 @@ function creerApp(pool, options = {}) {
   const mc = require('./missions-ccs');
   // Centre de commandement CCS et flotte connectée (27-28 nov. 2026) : tableau, fiche, communication, transmission, historique, seuils
   const fl = require('./flotte-ccs');
+  api.get('/secours/og-ccs', route((req) => require('./og-ccs').tableau(pool, req.utilisateur)));   // OG proactif permanent du CCS
   api.get('/secours/flotte', route((req) => fl.tableau(pool, req.utilisateur, req.query)));
   api.get('/secours/flotte/alertes', route((req) => fl.alertes(pool, req.utilisateur)));
   api.get('/secours/flotte/historique', route((req) => fl.historique(pool, req.utilisateur, req.query)));

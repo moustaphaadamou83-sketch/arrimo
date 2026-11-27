@@ -133,18 +133,30 @@
   function tic() {
     document.querySelectorAll('[data-decompte]').forEach((el) => {
       const ms = new Date(el.dataset.decompte).getTime() - maintenant();
-      el.textContent = ms >= 0 ? hhmmss(ms) : `${el.dataset.decompteFin || ''} (+${hhmmss(ms)})`;
+      // Dans un anneau : composant partagé (jours / HH:MM:SS sur deux lignes, signe + après l'échéance), jamais hors du cercle
+      if (el.classList.contains('ag-val') || el.classList.contains('duree-anneau')) poser(el, ms, ms >= 0 ? '' : '+');
+      else el.textContent = ms >= 0 ? hhmmss(ms) : `${el.dataset.decompteFin || ''} (+${hhmmss(ms)})`;
       el.classList.toggle('depasse', ms < 0);
     });
     // Durées écoulées [data-depuis] : HH:MM:SS ; l'anneau ne montre une proportion que s'il existe un objectif (sinon vide, jamais arbitraire)
     document.querySelectorAll('[data-depuis]').forEach((el) => {
-      const ms = maintenant() - new Date(el.dataset.depuis).getTime(); const val = el.querySelector('.ac-val') || (el.classList.contains('duree-seule') ? el : null);
+      const ms = maintenant() - new Date(el.dataset.depuis).getTime(); const val = el.querySelector('.ac-val, .ag-val') || (el.classList.contains('duree-seule') ? el : null);
       if (val) { const txt = hhmmss(ms); const m = val.classList.contains('ag-val') && txt.match(/^(.+?) (\d\d:\d\d:\d\d)$/);
-        if (m) { if (val.dataset.txt !== txt) { val.dataset.txt = txt; val.innerHTML = `<span class="ag-jours">${m[1]}</span>${m[2]}`; } } else val.textContent = txt; }
+        if (val.classList.contains('ag-val') || val.classList.contains('duree-anneau')) poser(val, ms); else if (m) val.textContent = txt; else val.textContent = txt; }
       const obj = Number(el.dataset.objectifMin); const arc = el.querySelector('.ac-arc');
       if (arc && obj > 0 && Number.isFinite(ms)) arc.setAttribute('stroke-dasharray', `${Math.min(100, Math.max(0, (ms / 60000 / obj) * 100)).toFixed(1)} 100`);
     });
   }
-  window.ArrimoDuree = { hhmmss, tic };
+  /* Composant temporel partagé (cahiers Ambulance/CCS, 27 nov. 2026) : dans un cercle, les jours sur une ligne et HH:MM:SS sur la
+     suivante ; la taille suit le diamètre de l'anneau (unités de conteneur), chiffres de largeur constante, marge intérieure fixe.
+     Même texte que hhmmss (mêmes horodatages) : seule la mise en page change. */
+  function anneauHtml(ms, prefixe = '') {
+    const txt = hhmmss(ms); const m = txt.match(/^(.+?) (\d\d:\d\d:\d\d)$/);
+    const e = (x) => String(x).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    return m ? `<span class="duree-jours">${e(prefixe)}${e(m[1])}</span><span class="duree-hms">${e(m[2])}</span>` : `<span class="duree-hms">${e(prefixe)}${e(txt)}</span>`;
+  }
+  /** Écrit la durée dans un élément d'anneau sans le redessiner si rien n'a changé. */
+  function poser(el, ms, prefixe = '') { const h = anneauHtml(ms, prefixe); if (el.dataset.h !== h) { el.dataset.h = h; el.innerHTML = h; } }
+  window.ArrimoDuree = { hhmmss, tic, anneauHtml, poser };
   if (typeof setInterval === 'function' && typeof document.querySelectorAll === 'function') setInterval(tic, 1000);
 })();

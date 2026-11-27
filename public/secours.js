@@ -181,7 +181,7 @@
   const ecrire = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch { /* stockage indisponible */ } };
   let L = lire('arrimo-langue') === 'en' ? 'en' : 'fr';
   const t = (k, v = {}) => {
-    let s = k.split('.').reduce((o, x) => (o == null ? o : o[x]), TXT[L]) ?? k;
+    let s = k.split('.').reduce((o, x) => (o == null ? o : o[x]), TXT[L]) ?? window.ArrimoCentre?.TX?.[L]?.[k] ?? k;
     s = String(s).replace(/\{(\w+)\}/g, (m, x) => (v[x] ?? m));
     return s;
   };
@@ -257,6 +257,7 @@
       if (!etat.hebergements) etat.hebergements = await api('GET', '/secours/hebergements').catch(() => []);
       await chargerClassees();
       if (ROLES_AMB.includes(etat.moi.utilisateur.role)) etat.unites = await api('GET', '/secours/unites');
+      await window.ArrimoCentre?.charger(api, etat, rendre);
       etat.actualiseLe = new Date();
     } catch (e) { if (estReseau(e)) etat.enLigne = false; else etat.erreur = e.message; }
     rendreSiChange();
@@ -312,7 +313,9 @@
   // Rôle Embarqué (paramédic, directive du 26 nov. 2026) : trois onglets, OG et le mode en bas ; le superviseur (organisation) garde ses transports
   const EN_BAS = ['og'];
   const cleOnglets = (amb) => (!amb ? 'ccs' : etat.moi?.utilisateur.role === 'superviseur_secours' ? 'sup' : 'amb');
-  const ongletCourant = (amb) => { const l = ONGLETS[cleOnglets(amb)]; return l.includes(etat.onglet) ? etat.onglet : l[0]; };
+  // Cahiers Ambulance/CCS (27 nov. 2026) : onglets du profil (CCS, gestionnaire, embarqué) filtrés par les modules activés dans SH
+  const listeOnglets = (amb) => window.ArrimoCentre?.onglets(etat.moi) || ONGLETS[cleOnglets(amb)];
+  const ongletCourant = (amb) => { const l = listeOnglets(amb); return l.includes(etat.onglet) ? etat.onglet : l[0]; };
   function enTete() {
     const amb = ROLES_AMB.includes(etat.moi.utilisateur.role);
     $('#titre').textContent = 'Arrimo · Secours 911';
@@ -324,13 +327,12 @@
     const dem = etat.transports.filter((d) => ['demandee', 'acceptee', 'en_route', 'pris_en_charge'].includes(d.statut)).length;
     const cpt = { prealertes: ouv, demandes: dem, transports: dem, missions: amb ? 0 : aCoordonner().length };
     const cur = ongletCourant(amb);
-    $('#onglets-s').innerHTML = ONGLETS[cleOnglets(amb)].filter((o) => !EN_BAS.includes(o)).map((o) => `<button type="button" role="tab" data-onglet="${o}" aria-selected="${o === cur}">${t('o_' + o)}${cpt[o] ? `<span class="pastille-n">${cpt[o]}</span>` : ''}</button>`).join('');
+    $('#onglets-s').innerHTML = listeOnglets(amb).filter((o) => !EN_BAS.includes(o)).map((o) => `<button type="button" role="tab" data-onglet="${o}" aria-selected="${o === cur}">${t('o_' + o)}${cpt[o] ? `<span class="pastille-n">${cpt[o]}</span>` : ''}</button>`).join('');
     // Planche 2 (proposition visuelle validée) : modules colorés, sous-onglets indentés au filet de couleur ; parité complète avec les onglets du haut
     const EN = L === 'en';
-    const GROUPES = amb
-      ? [['accueil', t('o_mission'), ['mission', 'transports']], ['urgences', t('o_chrono'), ['chrono']], ['pilotage', t('o_historique'), ['historique']]]
-      : [['accueil', t('o_missions'), ['missions']], ['reseau', t('o_capacites'), ['capacites']], ['urgences', t('o_chrono'), ['chrono']], ['pilotage', t('o_historique'), ['historique']]];
-    const permis = ONGLETS[cleOnglets(amb)];
+    const COUL = { accueil: 'accueil', missions: 'transferts', mission: 'transferts', flotte: 'capacites', equipes: 'capacites', bourse: 'reseau', chrono: 'chrono', alertes: 'urgences', pilotage: 'pilotage', historique: 'administration', administration: 'administration', transports: 'transferts', urgences: 'urgences', capacites: 'reseau' };
+    const GROUPES = listeOnglets(amb).filter((o) => !EN_BAS.includes(o)).map((o) => [COUL[o] || 'accueil', t('o_' + o), [o]]);
+    const permis = listeOnglets(amb);
     let nav = document.getElementById('sec-nav');
     if (!nav) { nav = document.createElement('nav'); nav.id = 'sec-nav'; nav.className = 'sec-nav'; document.body.prepend(nav); }
     nav.setAttribute('aria-label', EN ? 'Main navigation' : 'Navigation principale');
@@ -876,7 +878,7 @@
       const flotte = `<details class="carte-s flotte-ccs"${etat.flotteOuverte ? ' open' : ''}><summary>${esc(t('flotte_details', { n: etat.vehicules.length }))}</summary>${tableauFlotte()}</details>`;
       const enCoursPa = `<section class="carte-s"><h2>${t('ccs_en_cours')}</h2>${ouvertes.map(ligneListe).join('') || `<p class="note">${t('aucune')}</p>`}</section>`;
       const sections = {
-        missions: `${chiffresCcs()}${etat.interventionsDemo ? appelsDemo() : ''}${demandesEtablissements()}${missionsCcs()}${enCoursPa}${flotte}`,
+        missions: `${chiffresCcs()}${etat.interventionsDemo ? appelsDemo() : ''}${demandesEtablissements()}${missionsCcs()}${enCoursPa}`,
         capacites: `${bandeau}${couvertureCcs()}${resumeOg()}
           <section class="carte-s" id="ccs-capacites"><h2>${t('classees')}</h2><label for="depart">${t('depuis')}</label><select id="depart" style="min-height:48px;font-size:17px;max-width:100%">${opts.map(([v, l]) => `<option value="${v}"${v === etat.depart ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>
             ${r?.depart ? `<p class="note">${esc(r.depart.le ? t('classees_aide', { depart: r.depart.nom || '', heure: heure(r.depart.le) }) : t('classees_aide_lieu', { depart: ArrimoCarte.court(r.depart.nom || '') }))}</p>` : ''}${tableauClasse(r, { demander: true })}
@@ -886,7 +888,11 @@
         historique: historiqueRecherche(fermees, etat.transports),
         og: carteOg(false),
       };
-      m.innerHTML = `${msg}${sections[o]}`;
+      sections.bourse = sections.capacites;
+      const centre = window.ArrimoCentre?.section(o, { moi: etat.moi, classees: etat.classees, demo: etat.moi.demo, resumeOg, tableauClasse: () => tableauClasse(etat.classees, { demander: true }) });
+      m.innerHTML = `${msg}${centre ?? sections[o] ?? sections.missions}`;
+      window.ArrimoCentre?.brancher(m);
+      if (o === 'accueil' && document.getElementById('carte-region')) dessinerCarte().catch(() => {});
       const det = m.querySelector('.voir-carte'); if (det) det.addEventListener('toggle', () => { if (det.open) dessinerCarte().catch(() => {}); });
       return;
     }
@@ -910,7 +916,11 @@
         ${historiqueAmb(u, recentes)}`,
       og: carteOg(true),
     };
-    m.innerHTML = `${msg}${sections[o]}`;
+    sections.missions = `${sections.mission}${sections.transports}`;
+    const centre = window.ArrimoCentre?.section(o, { moi: etat.moi, unite: u, demo: etat.moi.demo, compteur: compteurMission(u) });
+    m.innerHTML = `${msg}${centre ?? sections[o] ?? sections.mission}`;
+    window.ArrimoCentre?.brancher(m);
+    if (o === 'accueil' && document.getElementById('carte-amb')) dessinerCarteAmbulance(u).catch(() => {});
     const det = m.querySelector('.voir-carte'); if (det) det.addEventListener('toggle', () => { if (det.open) dessinerCarteAmbulance(u).catch(() => {}); });
   }
 
@@ -939,7 +949,8 @@
   }
   function compteurMission(u) {
     const p = etat.prealertes.find((x) => x.unite_id === u.id && OUVERTES.includes(x.statut));
-    const d = p ? null : missionActive(u);
+    // Cohérence (cahier §7) : le compteur suit seulement la mission affectée à CE véhicule ; une demande encore sans véhicule n'est jamais chronométrée ici
+    const d0 = p ? null : missionActive(u); const d = d0 && d0.unite_id === u.id ? d0 : null;
     if (!p && !d) return `<section class="carte-s chrono-grand"><h2>${t('cg_titre')}</h2><p class="note">${t('cg_aucune')}</p></section>`;
     let mode; let repere; let libelle; let etapes; let distance = null; let numero; let vers; let categorie;
     if (p) {
@@ -978,7 +989,8 @@
       const txt = window.ArrimoDuree ? window.ArrimoDuree.hhmmss(ms) : '--:--:--';
       const enRetard = a.dataset.cgMode === 'jusqua' && ms < 0;
       // Heure estimée dépassée : le grand compteur montre le dépassement, qui continue d'avancer (jamais figé à 00:00)
-      a.querySelector('.cg-valeur').textContent = enRetard ? `+${txt}` : txt;
+      // Composant partagé : jours sur une ligne, HH:MM:SS sur la suivante, toujours à l'intérieur de l'anneau
+      if (window.ArrimoDuree?.poser) window.ArrimoDuree.poser(a.querySelector('.cg-valeur'), ms, enRetard ? '+' : ''); else a.querySelector('.cg-valeur').textContent = enRetard ? `+${txt}` : txt;
       a.querySelector('.cg-arc').setAttribute('stroke-dasharray', `${ss} 60`);
       if (a.classList.contains('retard') !== enRetard) { a.classList.toggle('retard', enRetard); a.querySelector('.cg-lib').textContent = enRetard ? t('cg_depasse') : a.dataset.cgLib; }
     });
@@ -1003,7 +1015,7 @@
       </form>
       <h3>${t('ch_porte')}</h3>${porte || `<p class="note">${t('ch_aucun')}</p>`}
       <h3>${t('ch_route')}</h3>${d.en_route.length ? `<ul>${d.en_route.map((p) => `<li>${esc(p.unite)} → ${esc(p.hopital)}${p.eta_min != null ? ` · ${p.eta_min} min` : ''}</li>`).join('')}</ul>` : `<p class="note">${t('ch_aucun')}</p>`}
-      <h3>${t('ch_termines')}</h3>${d.termines.length ? `<ul>${d.termines.map((p) => `<li>${esc(p.unite)} · ${esc(p.hopital)}${p.durees.total != null ? ` · ${t('ch_total', { n: p.durees.total })}` : ''}</li>`).join('')}</ul>` : `<p class="note">${t('ch_aucun')}</p>`}</section>${dureesChronoPlanifiees(amb, filtres)}`;
+      ${window.ArrimoCentre ? window.ArrimoCentre.syntheseChrono() : ''}</section>${dureesChronoPlanifiees(amb, filtres)}`;
   }
 
   async function agir(p, corps) {

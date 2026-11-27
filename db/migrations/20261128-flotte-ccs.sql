@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS messages_flotte (
   unite_id           int  NOT NULL REFERENCES unites_secours(id),
   mission_id         int  REFERENCES missions_ccs(id),
   organisation_ccs_id int REFERENCES organisations_secours(id),
-  sens               text NOT NULL CHECK (sens IN ('ccs', 'ambulance')),
+  sens               text NOT NULL CHECK (sens IN ('ccs', 'ambulance', 'etablissement')),
+  etablissement_id   int  REFERENCES etablissements(id),   -- urgence ou hébergement concerné par la mission (émetteur ou destinataire)
   genre              text NOT NULL CHECK (genre IN ('message', 'instruction', 'destination', 'retard', 'incident', 'assistance', 'reception', 'remise_dispo', 'etape')),
   code_rapide        text CHECK (code_rapide IS NULL OR code_rapide ~ '^[a-z_]{2,40}$'),
   texte              text CHECK (texte IS NULL OR length(texte) <= 200),

@@ -124,7 +124,7 @@
     // Écrans de secours (public/secours.html), cahiers Ambulance/CCS du 27 nov. 2026 : un profil = une famille ; chaque module est activable
     // depuis SH par organisation (organisations_secours.modules, clé `sm:<profil>.<module>`). routes = API dont il est l'emplacement principal.
     ccs: [
-      { id: 'accueil', fr: 'Accueil', en: 'Home', routes: [] }, { id: 'missions', fr: 'Missions', en: 'Missions', routes: ['/secours/missions', '/secours/interventions-demo'] },
+      { id: 'accueil', fr: 'Accueil', en: 'Home', routes: ['/secours/og-ccs'] }, { id: 'missions', fr: 'Missions', en: 'Missions', routes: ['/secours/missions', '/secours/interventions-demo'] },
       { id: 'flotte', fr: 'Flotte', en: 'Fleet', routes: ['/secours/messages'] }, { id: 'bourse', fr: 'Bourse des places', en: 'Placement exchange', routes: ['/secours/urgences-classees', '/secours/destinations'] },
       { id: 'chrono', fr: 'Chrono', en: 'Chrono', routes: [] }, { id: 'alertes', fr: 'Alertes', en: 'Alerts', routes: ['/secours/flotte/alertes'] },
       { id: 'pilotage', fr: 'Pilotage', en: 'Steering', routes: [] }, { id: 'historique', fr: 'Historique', en: 'History', routes: ['/secours/flotte/historique'] },

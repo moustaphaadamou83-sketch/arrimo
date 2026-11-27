@@ -20,7 +20,8 @@ const GENRES_AMBULANCE = ['message', 'retard', 'incident', 'assistance', 'recept
 const GENRES_CCS = ['message', 'instruction', 'destination'];
 // Messages rapides prédéfinis (aucun texte libre nécessaire en conduite ; libellés dans l'interface)
 const RAPIDES = { ambulance: ['bien_recu', 'en_route', 'retard_trafic', 'attente_civiere', 'besoin_assistance', 'incident_vehicule', 'disponible'],
-  ccs: ['bien_recu', 'appelez_ccs', 'nouvelle_destination', 'attendre_instructions', 'retour_base', 'priorite_modifiee'] };
+  ccs: ['bien_recu', 'appelez_ccs', 'nouvelle_destination', 'attendre_instructions', 'retour_base', 'priorite_modifiee'],
+  etablissement: ['bien_recu', 'accueil_pret', 'resident_pret', 'preparation_en_cours', 'retard_preparation', 'appelez_nous'] };
 const POSITION_OBSOLETE_MIN = 10; const DECONNEXION_MIN = 15;
 const entier = (v) => { const n = Number(v); return Number.isSafeInteger(n) && n > 0 ? n : null; };
 const minutes = (d, now) => (d ? Math.max(0, Math.round((now - new Date(d).getTime()) / 60000)) : null);
@@ -44,6 +45,7 @@ function statutDe(v, m) {
   if (e === 'en_route') return 'en_route';
   if (m?.mi_statut === 'proposee') return 'mission_affectee';
   if (m?.mi_statut === 'acceptee') return 'mission_acceptee';
+  if (m?.tr_statut === 'acceptee') return 'mission_acceptee';
   return 'disponible';
 }
 
@@ -150,7 +152,7 @@ async function fiche(pool, u, uniteId) {
 /** Plans A, B, C de destination proposés par OG (capacités confirmées, temps de trajet, restrictions) : jamais appliqués seuls. */
 async function plans(pool, u, uniteId) {
   const r = await vehicules.urgencesClassees(pool, u, { unite_id: uniteId }).catch((e) => { if (e.statut === 400) return []; throw e; });
-  return { plans: (r || []).slice(0, 3).map((h, i) => ({ plan: 'ABC'[i], id: h.id, nom: h.nom, temps_min: h.temps_min ?? null, distance_km: h.distance_km ?? null,
+  return { plans: ((r && r.urgences) || []).filter((h) => !h.ecartee && h.rang < 3).slice(0, 3).map((h, i) => ({ plan: 'ABC'[i], id: h.id, nom: h.nom, temps_min: h.temps_min ?? null, distance_km: h.distance_km ?? null,
     civieres_libres: h.urgence?.civieres_libres ?? null, statut: h.statut_declare?.statut || null, services: h.services_ouverts || [], source_temps: h.source_distance || null })),
   note: 'Proposition d’OG : la décision appartient au professionnel ou au système habilité. Une disponibilité affichée n’est pas une acceptation du patient.' };
 }
@@ -163,8 +165,8 @@ async function uniteAutorisee(db, u, uniteId) {
 }
 async function fil(pool, u, uniteId) {
   await uniteAutorisee(pool, u, uniteId);
-  return (await pool.query(`SELECT m.id, m.sens, m.genre, m.code_rapide, m.texte, m.mission_id, m.cree_le, m.recu_le, m.lu_le, uc.nom AS auteur
-    FROM messages_flotte m LEFT JOIN utilisateurs uc ON uc.id = m.cree_par WHERE m.unite_id = $1 ORDER BY m.cree_le DESC LIMIT 50`, [entier(uniteId)])).rows;
+  return (await pool.query(`SELECT m.id, m.sens, m.genre, m.code_rapide, m.texte, m.mission_id, m.cree_le, m.recu_le, m.lu_le, uc.nom AS auteur, e.nom AS etablissement
+    FROM messages_flotte m LEFT JOIN utilisateurs uc ON uc.id = m.cree_par LEFT JOIN etablissements e ON e.id = m.etablissement_id WHERE m.unite_id = $1 ORDER BY m.cree_le DESC LIMIT 50`, [entier(uniteId)])).rows;
 }
 async function envoyer(pool, u, b = {}) {
   const c0 = cote(u); if (!c0) throw new ErreurHttp(403, 'role_insuffisant');
@@ -176,25 +178,63 @@ async function envoyer(pool, u, b = {}) {
   const texte = b.texte ? String(b.texte).trim().replace(/\s+/g, ' ').slice(0, 200) : null;
   if (!rapide && !texte) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'texte' });
   const cle = b.cle ? String(b.cle) : null; if (cle && !/^[A-Za-z0-9_-]{8,64}$/.test(cle)) throw new ErreurHttp(400, 'cle_idempotence_invalide');
+  const etab = b.etablissement_id ? Number(b.etablissement_id) : null;
+  if (etab && !(await etablissementsDeMission(pool, entier(b.unite_id))).includes(etab)) throw new ErreurHttp(404, 'etab_introuvable');
   const mission = (await pool.query(`SELECT id, organisation_ccs_id FROM missions_ccs WHERE unite_id = $1 AND statut IN ('proposee', 'acceptee', 'sur_place') ORDER BY id DESC LIMIT 1`, [entier(b.unite_id)])).rows[0];
   // Événement rejoué après une reconnexion (même clé) : le premier enregistrement est rendu, jamais un doublon
-  const r = (await pool.query(`INSERT INTO messages_flotte (unite_id, mission_id, organisation_ccs_id, sens, genre, code_rapide, texte, cle_idempotence, cree_par)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (unite_id, cle_idempotence) DO NOTHING RETURNING *`,
-  [entier(b.unite_id), mission?.id || null, mission?.organisation_ccs_id || null, c0, genre, rapide, texte, cle, u.id])).rows[0]
+  const r = (await pool.query(`INSERT INTO messages_flotte (unite_id, mission_id, organisation_ccs_id, sens, genre, code_rapide, texte, cle_idempotence, cree_par, etablissement_id)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT (unite_id, cle_idempotence) DO NOTHING RETURNING *`,
+  [entier(b.unite_id), mission?.id || null, mission?.organisation_ccs_id || null, c0, genre, rapide, texte, cle, u.id, etab])).rows[0]
     || (await pool.query('SELECT *, true AS rejoue FROM messages_flotte WHERE unite_id = $1 AND cle_idempotence = $2', [entier(b.unite_id), cle])).rows[0];
   require('./flux').signaler();
   return r;
 }
 /** Accusé de lecture par le destinataire (l'auteur ne peut pas accuser son propre message). */
 async function lire(pool, u, id) {
-  const c0 = cote(u); if (!c0) throw new ErreurHttp(403, 'role_insuffisant');
   const m = (await pool.query('SELECT * FROM messages_flotte WHERE id = $1', [entier(id)])).rows[0];
   if (!m) throw new ErreurHttp(404, 'message_introuvable');
-  await uniteAutorisee(pool, u, m.unite_id);
+  let c0 = cote(u);
+  if (c0) await uniteAutorisee(pool, u, m.unite_id);
+  else { if (!m.etablissement_id) throw new ErreurHttp(404, 'message_introuvable'); require('./auth').exigerEtablissement(u, m.etablissement_id); c0 = 'etablissement'; }
   if (m.sens === c0) throw new ErreurHttp(409, 'message_propre');
   const r = (await pool.query('UPDATE messages_flotte SET recu_le = COALESCE(recu_le, now()), lu_le = COALESCE(lu_le, now()), lu_par = COALESCE(lu_par, $2) WHERE id = $1 RETURNING *', [m.id, u.id])).rows[0];
   require('./flux').signaler();
   return r;
+}
+
+/* ---------------- Établissements liés à une mission (urgence de destination, hébergement d'origine ou de destination) ---------------- */
+async function etablissementsDeMission(db, uniteId) {
+  const r = await db.query(`SELECT destination_id AS id FROM prealertes WHERE unite_id = $1 AND statut NOT IN ('cloturee', 'annulee', 'remplacee') AND destination_id IS NOT NULL
+    UNION SELECT origine_id FROM demandes_transport WHERE unite_id = $1 AND terminee_le IS NULL AND statut IN ('acceptee', 'en_route', 'pris_en_charge', 'arrivee')
+    UNION SELECT destination_id FROM demandes_transport WHERE unite_id = $1 AND terminee_le IS NULL AND statut IN ('acceptee', 'en_route', 'pris_en_charge', 'arrivee') AND destination_id IS NOT NULL
+    UNION SELECT destination_id FROM missions_ccs WHERE unite_id = $1 AND statut IN ('proposee', 'acceptee', 'sur_place') AND destination_id IS NOT NULL`, [uniteId]);
+  return r.rows.map((x) => x.id);
+}
+/** Côté établissement (Urgences → Secours 911) : ambulances liées à ses missions en cours et leurs échanges avec lui. */
+async function filEtablissement(pool, u, etabId) {
+  const id = entier(etabId); require('./auth').exigerEtablissement(u, id);
+  const unites = (await pool.query(`SELECT DISTINCT un.id, un.numero, COALESCE(pa.numero, d.numero, mi.numero) AS mission, ev.etat, ev.modifie_le
+    FROM unites_secours un LEFT JOIN etats_vehicules ev ON ev.unite_id = un.id
+    LEFT JOIN prealertes pa ON pa.unite_id = un.id AND pa.destination_id = $1 AND pa.statut NOT IN ('cloturee', 'annulee', 'remplacee')
+    LEFT JOIN demandes_transport d ON d.unite_id = un.id AND (d.origine_id = $1 OR d.destination_id = $1) AND d.terminee_le IS NULL AND d.statut IN ('acceptee', 'en_route', 'pris_en_charge', 'arrivee')
+    LEFT JOIN missions_ccs mi ON mi.unite_id = un.id AND mi.destination_id = $1 AND mi.statut IN ('proposee', 'acceptee', 'sur_place')
+    WHERE COALESCE(pa.id, d.id, mi.id) IS NOT NULL ORDER BY un.numero`, [id])).rows;
+  const messages = (await pool.query(`SELECT m.id, m.unite_id, un.numero AS unite, m.sens, m.genre, m.code_rapide, m.texte, m.cree_le, m.lu_le
+    FROM messages_flotte m JOIN unites_secours un ON un.id = m.unite_id WHERE m.etablissement_id = $1 AND m.cree_le > now() - interval '24 hours' ORDER BY m.cree_le DESC LIMIT 40`, [id])).rows;
+  return { unites, messages, rapides: RAPIDES.etablissement };
+}
+async function envoyerEtablissement(pool, u, b = {}) {
+  const etab = entier(b.etablissement_id); require('./auth').exigerEtablissement(u, etab);
+  if (!['coordonnateur', 'admin_etab', 'gestionnaire', 'equipe_soins'].includes(u.role)) throw new ErreurHttp(403, 'role_insuffisant');
+  const unite = entier(b.unite_id); if (!unite || !(await etablissementsDeMission(pool, unite)).includes(etab)) throw new ErreurHttp(404, 'unite_introuvable');
+  const rapide = b.code_rapide ? String(b.code_rapide) : null; if (rapide && !RAPIDES.etablissement.includes(rapide)) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'code_rapide' });
+  const texte = b.texte ? String(b.texte).trim().replace(/\s+/g, ' ').slice(0, 200) : null; if (!rapide && !texte) throw new ErreurHttp(400, 'parametre_invalide', { nom: 'texte' });
+  const cle = b.cle ? String(b.cle) : null; if (cle && !/^[A-Za-z0-9_-]{8,64}$/.test(cle)) throw new ErreurHttp(400, 'cle_idempotence_invalide');
+  const genre = ['reception', 'etape'].includes(b.genre) ? b.genre : 'message';
+  const r = (await pool.query(`INSERT INTO messages_flotte (unite_id, sens, genre, code_rapide, texte, cle_idempotence, cree_par, etablissement_id) VALUES ($1, 'etablissement', $2, $3, $4, $5, $6, $7)
+    ON CONFLICT (unite_id, cle_idempotence) DO NOTHING RETURNING *`, [unite, genre, rapide, texte, cle, u.id, etab])).rows[0];
+  require('./flux').signaler();
+  return r || { rejoue: true };
 }
 
 /* ---------------- Transmission d'une mission : envoyée ≠ reçue ≠ consultée ≠ acceptée ---------------- */
@@ -207,7 +247,9 @@ async function transmission(pool, u, missionId, etape) {
     await uniteAutorisee(c, u, m.unite_id);
     const col = etape === 'recue' ? 'recue_le' : 'consultee_le';
     if (m[col]) return m;   // déjà enregistré : un événement dupliqué ne change rien
-    const n = (await c.query(`UPDATE missions_ccs SET ${col} = now(), recue_le = COALESCE(recue_le, now()) WHERE id = $1 RETURNING *`, [m.id])).rows[0];
+    // Consultée implique reçue (l'écran l'a forcément reçue) ; une seule affectation par colonne
+    const n = (await c.query(etape === 'recue' ? 'UPDATE missions_ccs SET recue_le = now() WHERE id = $1 RETURNING *'
+      : 'UPDATE missions_ccs SET consultee_le = now(), recue_le = COALESCE(recue_le, now()) WHERE id = $1 RETURNING *', [m.id])).rows[0];
     await c.query('INSERT INTO mission_ccs_evenements (mission_id, statut, utilisateur_id) VALUES ($1, $2, $3)', [m.id, etape, u.id]);
     require('./flux').signaler();
     return n;
@@ -277,4 +319,4 @@ async function definirSeuils(db, organisationId, b, par) {
   [organisationId, vig, esc, par || null])).rows[0];
 }
 
-module.exports = { tableau, fiche, plans, fil, envoyer, lire, transmission, modifierMission, historique, alertes, seuils, definirSeuils, statutDe, carte, STATUTS, CONDITIONS, RAPIDES, SEUILS_DEFAUT };
+module.exports = { filEtablissement, envoyerEtablissement, etablissementsDeMission, tableau, fiche, plans, fil, envoyer, lire, transmission, modifierMission, historique, alertes, seuils, definirSeuils, statutDe, carte, STATUTS, CONDITIONS, RAPIDES, SEUILS_DEFAUT };

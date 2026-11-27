@@ -359,5 +359,7 @@
     document.getElementById('alerte-secours-fermer').onclick = () => b.remove();
     clearTimeout(veille.minuteur); veille.minuteur = setTimeout(() => b.remove(), 20000);
   }
-  window.ArrimoSecours = { vues: { secours: vueSecours }, admin, veille };
+  // Interconnexion (28 nov. 2026) : échanges avec les ambulances et le CCS des préalertes en cours, dans Secours 911 (aucun module CCS en plus)
+  const vueSecours911 = async () => { await vueSecours(); await window.ArrimoCommFlotte?.panneau(document.getElementById('v-secours')); };
+  window.ArrimoSecours = { vues: { secours: vueSecours911 }, admin, veille };
 })();
