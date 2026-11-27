@@ -2818,7 +2818,7 @@ test('démonstration : un seul compte par CHSLD (administrateur), six comptes d�
         await pg.goto(basePilote); await pg.waitForSelector('body[data-pret="1"]');
         if (await pg.locator('#b-premiers-pas-ok').isVisible().catch(() => false)) await pg.click('#b-premiers-pas-ok');
         if (theme === 'sombre') await pg.evaluate(() => { document.documentElement.dataset.theme = 'sombre'; });
-        await pg.waitForSelector('#v-c-accueil .acc-kpis');
+        await pg.waitForSelector('#v-c-accueil .acc-kpis', { timeout: 60000 });   // premier affichage sous la charge de la recette (six largeurs × thèmes)
         assert.strictEqual(await pg.evaluate(() => document.documentElement.dataset.typeEtab), 'chsld');
         assert.match(await pg.evaluate(() => getComputedStyle(document.querySelector('.entete-app')).backgroundImage), /linear-gradient/, 'barre CHSLD');
         assert.strictEqual(await pg.locator('#v-c-accueil .ch-kpi').count(), 12, '7 capacités et 5 résidents');
