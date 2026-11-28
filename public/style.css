@@ -1342,7 +1342,7 @@ body.mode-presentation #b-notif, body.mode-presentation #b-menu { visibility: hi
 .en-ring-l { font-size: .7rem; color: var(--texte-2-fond); max-width: 100px; line-height: 1.15; }
 .en-phases { display: grid; gap: 4px; padding: 8px 10px; background: var(--fond); border-radius: 10px; }
 .en-l { display: flex; justify-content: space-between; gap: 8px; font-size: .88rem; } .en-l span { color: var(--texte-2-fond); } .en-l.actif span, .en-l.actif b { color: var(--principal); font-weight: 800; }
-.en-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; } .en-actions .btn { flex: 1 1 140px; min-height: 44px; }
+.en-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; } .en-actions .btn { flex: 1 1 140px; min-height: 48px; }
 .en-faites li { margin: 4px 0; } .crit { color: var(--critique-texte); }
 @media (max-width: 900px) { .en-layout { grid-template-columns: 1fr; } }
 #v-entretien-accueil .en-identite { flex-direction: row; justify-content: flex-start; text-align: left; }

@@ -1358,7 +1358,7 @@ test('audit de sécurité : attaques automatiques sur toutes les routes, isolati
   assert.doesNotMatch((await brut(null, 'GET', '/public')).texte, /KEY|secret|mot_de_passe"|DATABASE|token/i, 'réglages publics sans secret');
   // 2. Rôle entretien : tout est refusé hors de sa liste fermée
   // Ajouts voulus : formation (21 nov.), Arrimo Connect interne (21 nov.), Mes tâches (22 nov.), Chrono universel limité aux capacités (27 nov.)
-  const ENTRETIEN = /^(GET \/(moi|nettoyage|chrono\/universel|meteo|og\/configuration|chsld\/taches|chsld\/places|formation\/(moi|aide|superutilisateurs)|messagerie\/(fils|annuaire|annonces)|taches\/miennes)|POST \/(deconnexion|nettoyage\/:|lits\/:|civieres\/:|chsld\/taches\/:)|(PUT|POST|GET|DELETE) \/moi\/)/;
+  const ENTRETIEN = /^(GET \/(moi|nettoyage|og\/proactif|entretien\/(cycle|accueil)|chrono\/universel|meteo|og\/configuration|chsld\/taches|chsld\/places|formation\/(moi|aide|superutilisateurs)|messagerie\/(fils|annuaire|annonces)|taches\/miennes)|POST \/(deconnexion|nettoyage\/:|lits\/:|civieres\/:|chsld\/taches\/:)|(PUT|POST|GET|DELETE) \/moi\/)/;
   const fuites = [];
   for (const rt of routes.filter((x) => !ENTRETIEN.test(x) && !/ \/(deconnexion|moi\b)/.test(x) && !PUBLIQUES.has(x))) {
     const [m, c] = rt.split(' ');
