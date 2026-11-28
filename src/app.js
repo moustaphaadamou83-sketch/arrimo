@@ -234,8 +234,8 @@ function creerApp(pool, options = {}) {
       if (!REG.NAV.hopital.concat(REG.NAV.hebergement).some((m) => m.sous.some((x) => x.routes.some((p) => req.path === p || req.path.startsWith(`${p}/`))))) return next();
       const r = (await pool.query('SELECT id, type_etablissement, modules FROM etablissements WHERE id = $1', [id])).rows[0];
       if (!r) return next();
-      const v = REG.routeAutorisee(r, req.path, TEreg.moduleActif);
-      if (v && !v.ok) return next(new ErreurHttp(403, 'module_desactive', { module: v.module }));
+      const v = REG.routeAutorisee(r, req.path, TEreg.moduleActif, req.utilisateur);
+      if (v && !v.ok) return next(new ErreurHttp(403, v.raison === 'profil' ? 'module_hors_profil' : 'module_desactive', { module: v.module }));
       return next();
     } catch (err) { return next(err); }
   });
@@ -526,7 +526,7 @@ function creerApp(pool, options = {}) {
       `SELECT c.*, COALESCE(json_agg(t.* ORDER BY t.ordre) FILTER (WHERE t.id IS NOT NULL), '[]') AS types
          FROM config_pays c LEFT JOIN types_unite t ON t.config_id = c.id
         WHERE c.id = ANY($1::int[]) GROUP BY c.id`, [[...new Set(rows.map((e) => e.config_id))]]);
-    return { utilisateur: { id: u.id, nom: u.nom, email: u.email, role: u.role, admin: u.admin, gestionnaire: u.gestionnaire,
+    return { utilisateur: { id: u.id, nom: u.nom, email: u.email, role: u.role, profil: u.profil || null, admin: u.admin, gestionnaire: u.gestionnaire,
       totp_actif: u.totp_actif, mdp_temporaire: u.mdp_temporaire, premiers_pas_vus: u.premiers_pas_vus, apparence: u.apparence || 'automatique', ambiance: u.ambiance || 'glacier',
       langue_interface: u.langue_interface || null, preferences_og: u.preferences_og || {} },
     organisations: (await pool.query(`SELECT o.id, o.code, o.nom, o.type, o.profils, COALESCE(o.modules, '{}'::jsonb) AS modules, (SELECT numero_urgence FROM config_pays WHERE id = o.config_id) AS numero_urgence, (SELECT fuseau FROM config_pays WHERE id = o.config_id) AS fuseau FROM utilisateur_organisations uo JOIN organisations_secours o ON o.id = uo.organisation_id

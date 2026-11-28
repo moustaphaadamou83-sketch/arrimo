@@ -75,9 +75,9 @@
       { id: 'chrono', icone: 'timer', fr: 'Chrono', en: 'Chrono', sous: [sm('chrono', 'chrono', 'Chrono', 'Chrono', { licence: 'chrono' })] },
       { id: 'alertes', icone: 'bell', fr: 'Alertes', en: 'Alerts', sous: [sm('alertes', 'vigilance', 'Alertes', 'Alerts', { routes: ['/vigilance', '/coordination/alertes'] })] },
       { id: 'operations', icone: 'spray-can', fr: 'Opérations', en: 'Operations', sous: [
-        // Décision de Moustafa (28 nov. 2026) : l'espace Opérations est réservé au rôle entretien, dans tous les établissements
-        sm('mes_taches', 'mes-taches', 'Mes tâches', 'My tasks', { roles: ['entretien'] }),
-        sm('nettoyage', 'nettoyage', 'Nettoyage', 'Cleaning', { licence: 'nettoyage', roles: ['entretien'] })] },
+        // Opérations : ouvert au personnel et à l'entretien ; le MODÈLE DE PROFIL du compte décide s'il apparaît (28 nov. 2026)
+        sm('mes_taches', 'mes-taches', 'Mes tâches', 'My tasks', { roles: [...PERSONNEL, 'entretien'] }),
+        sm('nettoyage', 'nettoyage', 'Nettoyage', 'Cleaning', { licence: 'nettoyage', roles: [...PERSONNEL, 'entretien'] })] },
       { id: 'pilotage', icone: 'chart-column', fr: 'Pilotage', en: 'Steering', sous: [
         sm('indicateurs', 'indicateurs', 'Indicateurs', 'Indicators', { licence: 'rapports' }),
         sm('donnees', 'donnees', 'Données', 'Data', { licence: 'donnees_regionales', routes: ['/donnees'] }),
@@ -119,9 +119,8 @@
       { id: 'chrono', icone: 'timer', fr: 'Chrono', en: 'Chrono', sous: [sm('chrono', 'chrono', 'Chrono', 'Chrono', { licence: 'chrono' })] },
       { id: 'alertes', icone: 'bell', fr: 'Alertes', en: 'Alerts', sous: [sm('alertes', 'c-alertes', 'Alertes', 'Alerts', { routes: ['/coordination/alertes'] })] },
       { id: 'operations', icone: 'spray-can', fr: 'Opérations', en: 'Operations', sous: [
-        // Décision de Moustafa (28 nov. 2026) : l'espace Opérations est réservé au rôle entretien
-        sm('mes_taches', 'mes-taches', 'Mes tâches', 'My tasks', { roles: ['entretien'] }),
-        sm('nettoyage', 'nettoyage', 'Entretien', 'Housekeeping', { licence: 'entretien_chsld', roles: ['entretien'] })] },
+        sm('mes_taches', 'mes-taches', 'Mes tâches', 'My tasks', { roles: [...PERSONNEL, 'entretien'] }),
+        sm('nettoyage', 'nettoyage', 'Entretien', 'Housekeeping', { licence: 'entretien_chsld', roles: [...PERSONNEL, 'entretien'] })] },
       { id: 'pilotage', icone: 'chart-column', fr: 'Pilotage', en: 'Steering', sous: [
         sm('indicateurs', 'c-indicateurs', 'Indicateurs', 'Indicators', { licence: 'rapports' }),
         sm('donnees', 'donnees', 'Données', 'Data', { licence: 'donnees_regionales', routes: ['/donnees'] }),
@@ -183,6 +182,29 @@
     { id: 'chrono_performance', fr: 'Chrono avec Performance', en: 'Chrono with Performance', modules: ['chrono', 'donnees_regionales'] },
   ];
 
+  /**
+   * Modèles de profils (cahier du 28 nov. 2026) : réutilisables par TOUT établissement de la famille, attribués à un compte nominatif
+   * (utilisateurs.profil) depuis SH ou l'administration. Un modèle fixe le rôle de base (droits des routes) et les modules visibles ;
+   * modules = null : tous les modules autorisés au rôle. Le contrôle est fait côté serveur (routes) ET dans l'interface.
+   */
+  const P = (role, fr, en, modules) => ({ role, fr, en, modules });
+  const PROFILS = {
+    hopital: {
+      direction: P('admin_etab', 'Direction et administration', 'Management and administration', null),
+      coordination: P('coordonnateur', 'Coordonnatrice', 'Coordinator', ['accueil', 'patients', 'capacites', 'conges', 'transferts', 'urgences', 'operations', 'chrono', 'alertes', 'reseau']),
+      accueil_admissions: P('coordonnateur', 'Accueil et admissions', 'Reception and admissions', ['accueil', 'patients', 'capacites', 'urgences', 'operations']),
+      triage: P('equipe_soins', 'Urgences et triage', 'Emergency and triage', ['accueil', 'patients', 'urgences', 'capacites', 'transferts', 'operations', 'chrono', 'alertes']),
+      soignant: P('equipe_soins', 'Personnel soignant', 'Care staff', ['accueil', 'patients', 'capacites', 'conges', 'transferts', 'operations', 'chrono', 'alertes']),
+      entretien: P('entretien', 'Entretien', 'Housekeeping', ['accueil', 'operations']),
+    },
+    hebergement: {
+      direction_coordination: P('admin_etab', 'Direction et coordination', 'Management and coordination', ['accueil', 'residents', 'capacites', 'departs', 'transferts', 'urgences', 'operations', 'chrono', 'alertes', 'pilotage', 'reseau', 'administration']),
+      soignant: P('equipe_soins', 'Personnel soignant', 'Care staff', ['accueil', 'residents', 'capacites', 'departs', 'transferts', 'urgences', 'operations', 'chrono', 'alertes']),
+      entretien: P('entretien', 'Entretien', 'Housekeeping', ['accueil', 'operations']),
+    },
+  };
+  /** Modèle du compte pour cette famille (null : pas de modèle, le rôle seul s'applique). */
+  const profilDe = (fam, utilisateur) => (utilisateur && utilisateur.profil && PROFILS[fam] && PROFILS[fam][utilisateur.profil]) || null;
   const modulesDe = (etab) => (etab && etab.modules) || {};
   /** Licence d'un sous-module : un code, ou une liste dont UN code suffit (fusion de deux anciens écrans). */
   const sousLicence = (etab, lic, licenceActive) => !lic || (Array.isArray(lic) ? lic.some((c) => licenceActive(etab, c)) : licenceActive(etab, lic));
@@ -198,8 +220,10 @@
     if (!fam) return { famille: null, modules: [] };
     const role = (utilisateur && utilisateur.role) || 'coordonnateur';
     const modules = [];
+    const modele = profilDe(fam, utilisateur);
     for (const m of NAV[fam]) {
       if (desactiveParSh(etab, m.id)) continue;
+      if (modele && modele.modules && !modele.modules.includes(m.id)) continue;
       const sous = m.sous.filter((s) => s.roles.includes(role) && !desactiveParSh(etab, `${m.id}.${s.id}`) && sousLicence(etab, s.licence, licenceActive));
       if (sous.length) modules.push({ ...m, sous });
     }
@@ -221,12 +245,15 @@
    * Route d'API autorisée pour cet établissement ? Une route sans propriétaire n'est pas concernée (null). Sinon il suffit qu'UN de
    * ses sous-modules propriétaires soit compatible, sous licence et non désactivé par SH. Le rôle reste contrôlé par la route elle-même.
    */
-  function routeAutorisee(etab, chemin, licenceActive) {
+  function routeAutorisee(etab, chemin, licenceActive, utilisateur = null) {
     const fam = familleDe(etab && etab.type_etablissement);
     if (!fam) return null;
     const p = proprietaires(fam, chemin);
     // Route d'une autre famille : la compatibilité de type reste contrôlée par la route elle-même (jamais de refus par déduction ici)
     if (!p.length) return null;
+    // Modèle de profil : une route dont aucun module propriétaire n'est dans le profil est refusée (contrôle serveur, pas seulement le menu)
+    const modele = profilDe(fam, utilisateur);
+    if (modele && modele.modules && !p.some(([m]) => modele.modules.includes(m.id))) return { ok: false, raison: 'profil', module: p[0][0].id };
     const ok = p.some(([m, s]) => !desactiveParSh(etab, m.id) && !desactiveParSh(etab, `${m.id}.${s.id}`) && sousLicence(etab, s.licence, licenceActive));
     return ok ? { ok: true } : { ok: false, raison: p.some(([m, s]) => desactiveParSh(etab, m.id) || desactiveParSh(etab, `${m.id}.${s.id}`)) ? 'sous_module' : 'licence', module: p[0][0].id };
   }
@@ -251,5 +278,5 @@
     return p.some((m) => vis.includes(m.id)) ? { ok: true } : { ok: false, module: `${profil}.${p[0].id}` };
   }
 
-  return { NAV_SECOURS, navDe, profilSecours, modulesSecours, routeSecoursAutorisee, FAMILLES, NAV, CATEGORIES_FLUX, SERVICES_TECHNIQUES, OFFRES, REDIRECTIONS, familleDe, interfacePour, ecransAutorises, routeAutorisee, clesSousModules, desactiveParSh };
+  return { PROFILS, profilDe, NAV_SECOURS, navDe, profilSecours, modulesSecours, routeSecoursAutorisee, FAMILLES, NAV, CATEGORIES_FLUX, SERVICES_TECHNIQUES, OFFRES, REDIRECTIONS, familleDe, interfacePour, ecransAutorises, routeAutorisee, clesSousModules, desactiveParSh };
 }));

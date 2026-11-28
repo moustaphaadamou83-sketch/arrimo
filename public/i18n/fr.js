@@ -744,7 +744,7 @@ window.ARRIMO_I18N.fr = {
       capacite_invalide: 'Capacité de chambre invalide : « {valeur} ».', capacite_depassee: 'La capacité déclarée de la chambre serait dépassée.',
       code_invalide: 'Code invalide : « {valeur} » (lettres, chiffres, tirets, points).', oui_non: 'Valeur attendue : oui ou non (« {valeur} »).',
       lit_autre_chambre: 'Le lit « {valeur} » existe déjà dans une autre chambre.', categorie_inconnue: 'Catégorie inconnue : « {valeur} » (reguliere ou debordement).',
-      courriel_invalide: 'Courriel invalide : « {valeur} ».', role_inconnu: 'Rôle inconnu : « {valeur} » (coordonnateur, entretien ou admin_etab).',
+      courriel_invalide: 'Courriel invalide : « {valeur} ».', profil_inconnu: 'Profil inconnu pour ce type d’établissement : « {valeur} ».', profil_role_incompatible: 'Le profil {profil} correspond au rôle {role}.', role_inconnu: 'Rôle inconnu : « {valeur} » (coordonnateur, entretien ou admin_etab).',
       courriel_autre_etab: 'Ce courriel appartient déjà à un compte d’un autre établissement.', doublon: 'Doublon : déjà présent à la ligne {premiere}.',
     },
   },

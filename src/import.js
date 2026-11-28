@@ -43,7 +43,8 @@ const MODELES = {
       ['Soins intensifs', '101', 'SI-101', 'oui', 'oui', 'oui', 'oui', 'soins intensifs']] },
   civieres: { colonnes: ['civiere', 'categorie', 'unite', 'attributs_json', 'actif'], obligatoires: ['civiere', 'categorie'],
     exemples: [['URG-01', 'reguliere', 'Urgence'], ['URG-02', 'reguliere', 'Urgence'], ['COR-01', 'debordement', '']] },
-  utilisateurs: { colonnes: ['nom', 'courriel', 'role'], obligatoires: ['nom', 'courriel', 'role'],
+  // Colonne facultative « profil » (28 nov. 2026) : modèle de profil du registre universel (modules visibles), compatible avec le rôle
+  utilisateurs: { colonnes: ['nom', 'courriel', 'role', 'profil'], obligatoires: ['nom', 'courriel', 'role'],
     exemples: [['Coordination des lits', 'coordination@hopital.exemple', 'coordonnateur'], ['Équipe d’entretien', 'entretien@hopital.exemple', 'entretien']] },
 };
 // Noms de colonnes qui trahiraient une donnée de patient : le fichier est refusé
@@ -251,14 +252,23 @@ async function verifier(db, etabId, type, contenu) {
       if (!COURRIEL.test(courriel)) { err(n, 'courriel', 'courriel_invalide', { valeur: v.courriel }); continue; }
       const role = sansAccents(v.role);
       if (!ROLES.includes(role)) { err(n, 'role', 'role_inconnu', { valeur: v.role }); continue; }
+      // Modèle de profil : connu pour la famille de l'établissement et du même rôle de base
+      const profil = v.profil ? sansAccents(v.profil) : null;
+      if (profil) {
+        const REG = require('./registre-modules');
+        const fam = REG.familleDe((await db.query('SELECT type_etablissement FROM etablissements WHERE id = $1', [etabId])).rows[0]?.type_etablissement);
+        const m = REG.PROFILS[fam]?.[profil];
+        if (!m) { err(n, 'profil', 'profil_inconnu', { valeur: v.profil }); continue; }
+        if (m.role !== role) { err(n, 'profil', 'profil_role_incompatible', { profil, role: m.role }); continue; }
+      }
       cle = courriel;
-      const u = (await db.query(`SELECT u.id, u.nom, u.role, array_agg(ue.etablissement_id) FILTER (WHERE ue.etablissement_id IS NOT NULL) AS etabs
+      const u = (await db.query(`SELECT u.id, u.nom, u.role, u.profil, array_agg(ue.etablissement_id) FILTER (WHERE ue.etablissement_id IS NOT NULL) AS etabs
         FROM utilisateurs u LEFT JOIN utilisateur_etablissements ue ON ue.utilisateur_id = u.id WHERE u.email = $1 GROUP BY u.id`, [courriel])).rows[0];
       // Un compte existant n'est modifiable que s'il appartient à cet établissement seul : un compte partagé avec un autre
       // établissement promu ici obtiendrait aussi des droits là-bas (même règle que la modification directe d'un compte).
       if (u && (u.role === 'gestionnaire' || !(u.etabs || []).length || !(u.etabs || []).every((e) => e === etabId))) { err(n, 'courriel', 'courriel_autre_etab', { valeur: courriel }); continue; }
-      action = !u ? 'creer' : u.nom !== v.nom || u.role !== role ? 'maj' : 'inchange';
-      d = { email: courriel, nom: v.nom, role, utilisateur_id: u?.id };
+      action = !u ? 'creer' : u.nom !== v.nom || u.role !== role || (profil && u.profil !== profil) ? 'maj' : 'inchange';
+      d = { email: courriel, nom: v.nom, role, profil, utilisateur_id: u?.id };
     }
     if (vus.has(cle)) { err(n, COLONNE_CLE[type], 'doublon', { premiere: vus.get(cle) }); continue; }
     vus.set(cle, n);
@@ -317,13 +327,13 @@ async function importer(pool, utilisateur, etabId, type, contenu, empreinte, jou
         await c.query('UPDATE civieres SET categorie = $2,unite_id=$3,attributs=$4::jsonb,actif=$5 WHERE id = $1', [d.civiere_id, d.categorie,d.unite_id,JSON.stringify(d.attributs),d.actif]);
       } else if (type === 'utilisateurs' && d.action === 'creer') {
         const temporaire = options.invitations ? require('node:crypto').randomBytes(32).toString('hex') : motDePasseTemporaire();
-        const u = (await c.query(`INSERT INTO utilisateurs (email, nom, mot_de_passe_hash, role, mdp_temporaire, invitation_en_attente) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-          [d.email, d.nom, await hacherAsync(temporaire), d.role, !options.invitations, !!options.invitations])).rows[0];
+        const u = (await c.query(`INSERT INTO utilisateurs (email, nom, mot_de_passe_hash, role, mdp_temporaire, invitation_en_attente, profil) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+          [d.email, d.nom, await hacherAsync(temporaire), d.role, !options.invitations, !!options.invitations, d.profil || null])).rows[0];
         await c.query('INSERT INTO utilisateur_etablissements VALUES ($1, $2)', [u.id, etabId]);
         comptes.push({ nom: d.nom, courriel: d.email, role: d.role, invitation_en_attente: !!options.invitations,
           ...(!options.invitations ? { mot_de_passe_temporaire: temporaire } : {}) });
       } else if (type === 'utilisateurs') {
-        await c.query('UPDATE utilisateurs SET nom = $2, role = $3 WHERE id = $1', [d.utilisateur_id, d.nom, d.role]);
+        await c.query('UPDATE utilisateurs SET nom = $2, role = $3, profil = COALESCE($4, profil) WHERE id = $1', [d.utilisateur_id, d.nom, d.role, d.profil || null]);
       }
     }
     if (type === 'utilisateurs' && options.invitations) {

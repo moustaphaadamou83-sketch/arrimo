@@ -2773,7 +2773,7 @@ test('démos sans double authentification : administration directe, activation r
   } finally { remettre('ARRIMO_ENV', avant.env); remettre('ARRIMO_DEMO', avant.demo); remettre('ARRIMO_2FA_ADMIN', avant.deuxfa); }
 });
 
-test('démonstration : un seul compte par CHSLD (administrateur), six comptes désactivés sans perte ; thème CHSLD clair et sombre, trois largeurs', { timeout: 240000 }, async () => {
+test('démonstration : comptes par profil par CHSLD (direction et coordination, soignant, entretien), direction en double désactivée sans perte ; thème CHSLD clair et sombre, trois largeurs', { timeout: 240000 }, async () => {
   const { simplifierComptesDemo } = require('../src/demo-chsld');
   const { ROLES, courrielDe } = require('../db/provisionner-chsld');
   const compte = async (sql, v) => (await poolPilote.query(sql, v)).rows[0].n;
@@ -2785,14 +2785,15 @@ test('démonstration : un seul compte par CHSLD (administrateur), six comptes d�
     await assert.rejects(simplifierComptesDemo(poolPilote), (e) => e.statut === 403 || e.status === 403 || /residents_reserve_demo/.test(String(e.code || e.message)), 'jamais hors démonstration publique');
     process.env.ARRIMO_ENV = 'demo';
     const r = await simplifierComptesDemo(poolPilote);
-    assert.deepStrictEqual(r.actifs, CHSLD.map((c) => courrielDe(c, 'coordination')));
-    assert.strictEqual(r.desactives.length, 6);
+    assert.deepStrictEqual([...r.actifs].sort(), CHSLD.flatMap((c) => ['coordination', 'soins', 'entretien'].map((k) => courrielDe(c, k))).sort());
+    assert.strictEqual(r.desactives.length, 2);
     assert.deepStrictEqual(await simplifierComptesDemo(poolPilote), r, 'idempotent');
   } finally { if (envAvant === undefined) delete process.env.ARRIMO_ENV; else process.env.ARRIMO_ENV = envAvant; }
   for (const c of CHSLD) for (const [, cle] of ROLES) {
     const x = await appel(null, 'POST', '/connexion', { email: courrielDe(c, cle), mot_de_passe: MDP });
     if (cle === 'coordination') { assert.strictEqual(x.statut, 200, `${cle} ${c.code}`); sessions[`${c.code}_admin`] = x.corps.token; }
-    else assert.strictEqual(x.statut, 401, `${cle} ${c.code} : connexion refusée`);
+    else if (cle === 'direction') assert.strictEqual(x.statut, 401, `${cle} ${c.code} : connexion refusée`);
+    else assert.strictEqual(x.statut, 200, `${cle} ${c.code} : profil actif`);
   }
   const moi = await api(`${CHSLD[0].code}_admin`, 'GET', '/moi');
   assert.strictEqual(moi.utilisateur.role, 'admin_etab'); assert.deepStrictEqual(moi.etablissements.map((e) => e.code), ['CHSLD-ERA']);
@@ -2805,8 +2806,8 @@ test('démonstration : un seul compte par CHSLD (administrateur), six comptes d�
   assert.deepStrictEqual({ residents: await compte('SELECT count(*)::int n FROM residents'), mouvements: await compte('SELECT count(*)::int n FROM resident_mouvements'), lits: avant.lits }, { residents: avant.residents, mouvements: avant.mouvements, lits: avant.lits });
   assert.ok(await compte('SELECT count(*)::int n FROM journal') >= avant.journal);
   assert.strictEqual((await poolPilote.query(`SELECT string_agg(u.email || u.role || u.mot_de_passe_hash || u.actif, ',' ORDER BY u.id) s FROM utilisateurs u WHERE u.email LIKE 'hopital.%'`)).rows[0].s, avant.hop);
-  assert.strictEqual(await compte(`SELECT count(*)::int n FROM journal_admin WHERE action = 'Compte de démonstration CHSLD désactivé'`), 6);
-  assert.strictEqual(await compte(`SELECT count(*)::int n FROM utilisateurs WHERE email LIKE '%@chsld.example.invalid' AND NOT actif`), 6, 'désactivés, pas supprimés');
+  assert.strictEqual(await compte(`SELECT count(*)::int n FROM journal_admin WHERE action = 'Compte de démonstration CHSLD désactivé'`), 2);
+  assert.strictEqual(await compte(`SELECT count(*)::int n FROM utilisateurs WHERE email LIKE '%@chsld.example.invalid' AND NOT actif`), 2, 'désactivés, pas supprimés');
   // Thème CHSLD : clair et sombre, ordinateur, tablette, téléphone ; OG visible ; aucun débordement ; hôpital inchangé
   const { chromium } = require('playwright'); const dossier = path.resolve('.local/captures-chsld'); fs.mkdirSync(dossier, { recursive: true });
   const navigateur = await chromium.launch(); const erreurs = [];

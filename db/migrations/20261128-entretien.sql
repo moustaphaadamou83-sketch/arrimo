@@ -15,3 +15,5 @@ BEGIN
 END $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS taches_etab_horodatage ON taches_etab;
 CREATE TRIGGER taches_etab_horodatage BEFORE INSERT OR UPDATE ON taches_etab FOR EACH ROW EXECUTE FUNCTION taches_etab_horodatage();
+-- Modèles de profils (28 nov. 2026) : un compte nominatif porte un modèle (registre universel src/registre-modules.js, PROFILS)
+ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS profil text CHECK (profil IS NULL OR profil ~ '^[a-z_]{2,40}$');

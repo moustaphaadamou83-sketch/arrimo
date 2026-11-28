@@ -303,3 +303,24 @@ test('Mes tâches universel et OG proactif (28 nov.) : heures de création et de
   }
   assert.strictEqual((await appel('ent', 'GET', `/og/proactif?etablissement_id=${ids.h}`)).s, 403, 'autre établissement refusé');
 });
+
+test('Modèles de profils (28 nov.) : modules visibles selon le profil, refus serveur hors profil, import SH avec profil', async () => {
+  const REG = require('../src/registre-modules'); const TE = require('../src/types-etablissement');
+  const e = (await pool.query('SELECT * FROM etablissements WHERE id = $1', [ids.h])).rows[0];
+  const mods = (p, role) => REG.interfacePour(e, { role, profil: p }, TE.moduleActif).modules.map((m) => m.id);
+  assert.ok(mods('coordination', 'coordonnateur').every((m) => REG.PROFILS.hopital.coordination.modules.includes(m)));
+  assert.ok(!mods('coordination', 'coordonnateur').includes('administration') && !mods('coordination', 'coordonnateur').includes('pilotage'));
+  assert.deepStrictEqual(mods('entretien', 'entretien'), ['accueil', 'operations']);
+  assert.ok(mods('direction', 'admin_etab').includes('administration'));
+  // Serveur : un compte « accueil et admissions » n'ouvre pas une route d'un module hors profil (Transferts : Flux)
+  await pool.query("UPDATE utilisateurs SET profil = 'accueil_admissions' WHERE email = 'hop@demo.arrimo'");
+  const r = await appel('hop', 'GET', `/arrimo-flux?etablissement_id=${ids.h}`); assert.strictEqual(r.s, 403, JSON.stringify(r.d)); assert.strictEqual(r.d.code, 'module_hors_profil');
+  await pool.query("UPDATE utilisateurs SET profil = 'coordination' WHERE email = 'hop@demo.arrimo'");
+  assert.strictEqual((await appel('hop', 'GET', `/arrimo-flux?etablissement_id=${ids.h}`)).s, 200);
+  await pool.query("UPDATE utilisateurs SET profil = NULL WHERE email = 'hop@demo.arrimo'");
+  // Import (SH) : profil inconnu ou incompatible refusé ; profil valide enregistré
+  const imp = require('../src/import');
+  const v1 = await imp.verifier(pool, ids.h, 'utilisateurs', 'nom;courriel;role;profil\nX;x.triage@hopital.exemple;equipe_soins;triage\nY;y@hopital.exemple;coordonnateur;triage\nZ;z@hopital.exemple;coordonnateur;inexistant');
+  const codes = (v1.erreurs || v1.lignes?.filter((l) => l.erreurs?.length).flatMap((l) => l.erreurs) || []).map((x) => x.code || x);
+  assert.ok(JSON.stringify(v1).includes('profil_role_incompatible') && JSON.stringify(v1).includes('profil_inconnu'), JSON.stringify(v1).slice(0, 400)); void codes;
+});

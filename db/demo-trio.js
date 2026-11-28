@@ -7,11 +7,16 @@ const { demoReseau } = require('./demo-reseau');
 
 const ACCES = path.join(__dirname, '..', '.local', 'acces-demo-trio.txt');
 const COMPTES = [
-  ['hopital.a@demo.arrimo', 'Coordination Hôpital A', 'HX'],
+  // Hôpital A (28 nov. 2026) : un compte nominatif par profil (modèles du registre universel)
+  ['hopital.a@demo.arrimo', 'Coordonnatrice Hôpital A', 'HX', 'coordonnateur', 'coordination'],
+  ['direction.a@demo.arrimo', 'Direction Hôpital A', 'HX', 'admin_etab', 'direction'],
+  ['admissions.a@demo.arrimo', 'Accueil et admissions Hôpital A', 'HX', 'coordonnateur', 'accueil_admissions'],
+  ['triage.a@demo.arrimo', 'Urgences et triage Hôpital A', 'HX', 'equipe_soins', 'triage'],
+  ['soins.a@demo.arrimo', 'Personnel soignant Hôpital A', 'HX', 'equipe_soins', 'soignant'],
   ['hopital.b@demo.arrimo', 'Coordination Hôpital B', 'HY'],
   ['hopital.c@demo.arrimo', 'Coordination Hôpital C', 'HC'],
   // Entretien de l'Hôpital A (28 nov. 2026) : espace Opérations seulement (Mes tâches, Nettoyage)
-  ['entretien.a@demo.arrimo', 'Entretien Hôpital A', 'HX', 'entretien'],
+  ['entretien.a@demo.arrimo', 'Entretien Hôpital A', 'HX', 'entretien', 'entretien'],
 ];
 
 async function preparerDemoTrio(pool, { silencieux = false, fichierAcces = ACCES } = {}) {
@@ -26,11 +31,11 @@ async function preparerDemoTrio(pool, { silencieux = false, fichierAcces = ACCES
   // Un exemple réservé explicite dans chaque hôpital rend visible la différence entre capacité libre et réservée.
   await pool.query(`UPDATE lits SET etat = 'reserve', etat_depuis = now() - interval '20 minutes'
     WHERE id = (SELECT min(id) FROM lits WHERE etablissement_id = (SELECT id FROM etablissements WHERE code = 'HC') AND etat = 'occupe')`);
-  for (const [email, nom, code, role = 'coordonnateur'] of COMPTES) {
+  for (const [email, nom, code, role = 'coordonnateur', profil = null] of COMPTES) {
     const etab = (await pool.query('SELECT id FROM etablissements WHERE code = $1', [code])).rows[0];
     const utilisateur = (await pool.query(
-      `INSERT INTO utilisateurs (email, nom, mot_de_passe_hash, role) VALUES ($1, $2, $3, $4) RETURNING id`,
-      [email, nom, hash, role])).rows[0];
+      `INSERT INTO utilisateurs (email, nom, mot_de_passe_hash, role, profil) VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [email, nom, hash, role, profil])).rows[0];
     await pool.query('INSERT INTO utilisateur_etablissements (utilisateur_id, etablissement_id) VALUES ($1, $2)', [utilisateur.id, etab.id]);
   }
   // Noms alignés sur les comptes : le compte « Hôpital A » ouvre bien « Hôpital A », etc.

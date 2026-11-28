@@ -84,14 +84,18 @@ async function simplifierComptesDemo(pool, liste = CHSLD) {
       for (const [, cle] of ROLES) {
         const email = courrielDe(ch, cle);
         // Compte rattaché à ce seul CHSLD de démonstration
-        const u = (await c.query(`SELECT u.id, u.role, u.actif FROM utilisateurs u WHERE u.email = $1 AND u.email LIKE $3
+        const u = (await c.query(`SELECT u.id, u.role, u.actif, u.profil FROM utilisateurs u WHERE u.email = $1 AND u.email LIKE $3
           AND EXISTS (SELECT 1 FROM utilisateur_etablissements ue WHERE ue.utilisateur_id = u.id AND ue.etablissement_id = $2)
           AND NOT EXISTS (SELECT 1 FROM utilisateur_etablissements ue WHERE ue.utilisateur_id = u.id AND ue.etablissement_id <> $2) FOR UPDATE`, [email, etab.id, domaine])).rows[0];
         if (!u) throw new ErreurHttp(409, 'demo_chsld_comptes_incomplets');
-        if (cle === 'coordination') {
-          if (u.role !== 'admin_etab' || !u.actif) {
-            await c.query(`UPDATE utilisateurs SET role = 'admin_etab', actif = true WHERE id = $1`, [u.id]);
-            await journalAdmin(c, { id: null }, 'Compte de démonstration CHSLD : administrateur de l’établissement', email, 'démonstration fictive · compte unique', etab.id);
+        // Profils (28 nov. 2026) : Direction et coordination (compte de coordination), Personnel soignant, Entretien ; le compte « direction »
+        // ferait doublon avec la coordination devenue administratrice : il reste désactivé (données conservées)
+        const PROFIL = { coordination: ['admin_etab', 'direction_coordination'], soins: ['equipe_soins', 'soignant'], entretien: ['entretien', 'entretien'] }[cle];
+        if (PROFIL) {
+          const [role, profil] = PROFIL;
+          if (u.role !== role || !u.actif || u.profil !== profil) {
+            await c.query('UPDATE utilisateurs SET role = $2, actif = true, profil = $3 WHERE id = $1', [u.id, role, profil]);
+            await journalAdmin(c, { id: null }, `Compte de démonstration CHSLD : profil ${profil}`, email, 'démonstration fictive · compte nominatif', etab.id);
           }
           actifs.push(email);
         } else {
