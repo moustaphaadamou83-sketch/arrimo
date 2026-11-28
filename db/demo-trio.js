@@ -10,6 +10,8 @@ const COMPTES = [
   ['hopital.a@demo.arrimo', 'Coordination Hôpital A', 'HX'],
   ['hopital.b@demo.arrimo', 'Coordination Hôpital B', 'HY'],
   ['hopital.c@demo.arrimo', 'Coordination Hôpital C', 'HC'],
+  // Entretien de l'Hôpital A (28 nov. 2026) : espace Opérations seulement (Mes tâches, Nettoyage)
+  ['entretien.a@demo.arrimo', 'Entretien Hôpital A', 'HX', 'entretien'],
 ];
 
 async function preparerDemoTrio(pool, { silencieux = false, fichierAcces = ACCES } = {}) {
@@ -24,11 +26,11 @@ async function preparerDemoTrio(pool, { silencieux = false, fichierAcces = ACCES
   // Un exemple réservé explicite dans chaque hôpital rend visible la différence entre capacité libre et réservée.
   await pool.query(`UPDATE lits SET etat = 'reserve', etat_depuis = now() - interval '20 minutes'
     WHERE id = (SELECT min(id) FROM lits WHERE etablissement_id = (SELECT id FROM etablissements WHERE code = 'HC') AND etat = 'occupe')`);
-  for (const [email, nom, code] of COMPTES) {
+  for (const [email, nom, code, role = 'coordonnateur'] of COMPTES) {
     const etab = (await pool.query('SELECT id FROM etablissements WHERE code = $1', [code])).rows[0];
     const utilisateur = (await pool.query(
-      `INSERT INTO utilisateurs (email, nom, mot_de_passe_hash, role) VALUES ($1, $2, $3, 'coordonnateur') RETURNING id`,
-      [email, nom, hash])).rows[0];
+      `INSERT INTO utilisateurs (email, nom, mot_de_passe_hash, role) VALUES ($1, $2, $3, $4) RETURNING id`,
+      [email, nom, hash, role])).rows[0];
     await pool.query('INSERT INTO utilisateur_etablissements (utilisateur_id, etablissement_id) VALUES ($1, $2)', [utilisateur.id, etab.id]);
   }
   // Noms alignés sur les comptes : le compte « Hôpital A » ouvre bien « Hôpital A », etc.

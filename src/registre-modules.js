@@ -74,8 +74,9 @@
       { id: 'chrono', icone: 'timer', fr: 'Chrono', en: 'Chrono', sous: [sm('chrono', 'chrono', 'Chrono', 'Chrono', { licence: 'chrono', roles: [...PERSONNEL, 'entretien'] })] },
       { id: 'alertes', icone: 'bell', fr: 'Alertes', en: 'Alerts', sous: [sm('alertes', 'vigilance', 'Alertes', 'Alerts', { routes: ['/vigilance', '/coordination/alertes'] })] },
       { id: 'operations', icone: 'spray-can', fr: 'Opérations', en: 'Operations', sous: [
-        sm('mes_taches', 'mes-taches', 'Mes tâches', 'My tasks', { roles: [...PERSONNEL, 'entretien'] }),
-        sm('nettoyage', 'nettoyage', 'Nettoyage', 'Cleaning', { licence: 'nettoyage', roles: [...PERSONNEL, 'entretien'] })] },
+        // Décision de Moustafa (28 nov. 2026) : l'espace Opérations est réservé au rôle entretien, dans tous les établissements
+        sm('mes_taches', 'mes-taches', 'Mes tâches', 'My tasks', { roles: ['entretien'] }),
+        sm('nettoyage', 'nettoyage', 'Nettoyage', 'Cleaning', { licence: 'nettoyage', roles: ['entretien'] })] },
       { id: 'pilotage', icone: 'chart-column', fr: 'Pilotage', en: 'Steering', sous: [
         sm('indicateurs', 'indicateurs', 'Indicateurs', 'Indicators', { licence: 'rapports' }),
         sm('donnees', 'donnees', 'Données', 'Data', { licence: 'donnees_regionales', routes: ['/donnees'] }),
@@ -91,7 +92,10 @@
       { id: 'accueil', icone: 'house', fr: 'Accueil', en: 'Home', sous: [sm('accueil', 'c-accueil', 'Accueil', 'Home')] },
       { id: 'residents', icone: 'users', fr: 'Résidents', en: 'Residents', sous: [
         sm('residents', 'c-residents', 'Résidents', 'Residents', { licence: 'residents' }),
-        sm('admissions', 'c-admissions', 'Admissions', 'Admissions', { licence: 'residents' })] },
+        sm('admissions', 'c-admissions', 'Admissions', 'Admissions', { licence: 'residents' }),
+        // Déplacés depuis Opérations (28 nov. 2026) : la coordination les garde
+        sm('taches', 'c-taches', 'Personnel et tâches', 'Staff and tasks', { licence: 'taches' }),
+        sm('visites', 'visites', 'Visites confirmées', 'Confirmed visits', { licence: 'visites_confirmees', routes: ['/visites'] })] },
       { id: 'capacites', icone: 'bed-double', fr: 'Capacités', en: 'Capacity', sous: [
         sm('places', 'c-chambres', 'Chambres et places', 'Rooms and places', { licence: 'chambres' }),
         sm('bourse', 'bourse', 'Bourse des places', 'Placement exchange', { licence: 'bourse_places', routes: ['/bourse'] })] },
@@ -114,10 +118,9 @@
       { id: 'chrono', icone: 'timer', fr: 'Chrono', en: 'Chrono', sous: [sm('chrono', 'chrono', 'Chrono', 'Chrono', { licence: 'chrono', roles: [...PERSONNEL, 'entretien'] })] },
       { id: 'alertes', icone: 'bell', fr: 'Alertes', en: 'Alerts', sous: [sm('alertes', 'c-alertes', 'Alertes', 'Alerts', { routes: ['/coordination/alertes'] })] },
       { id: 'operations', icone: 'spray-can', fr: 'Opérations', en: 'Operations', sous: [
-        sm('mes_taches', 'mes-taches', 'Mes tâches', 'My tasks', { roles: [...PERSONNEL, 'entretien'] }),
-        sm('nettoyage', 'nettoyage', 'Entretien', 'Housekeeping', { licence: 'entretien_chsld', roles: [...PERSONNEL, 'entretien'] }),
-        sm('taches', 'c-taches', 'Personnel et tâches', 'Staff and tasks', { licence: 'taches' }),
-        sm('visites', 'visites', 'Visites confirmées', 'Confirmed visits', { licence: 'visites_confirmees', routes: ['/visites'] })] },
+        // Décision de Moustafa (28 nov. 2026) : l'espace Opérations est réservé au rôle entretien
+        sm('mes_taches', 'mes-taches', 'Mes tâches', 'My tasks', { roles: ['entretien'] }),
+        sm('nettoyage', 'nettoyage', 'Entretien', 'Housekeeping', { licence: 'entretien_chsld', roles: ['entretien'] })] },
       { id: 'pilotage', icone: 'chart-column', fr: 'Pilotage', en: 'Steering', sous: [
         sm('indicateurs', 'c-indicateurs', 'Indicateurs', 'Indicators', { licence: 'rapports' }),
         sm('donnees', 'donnees', 'Données', 'Data', { licence: 'donnees_regionales', routes: ['/donnees'] }),
