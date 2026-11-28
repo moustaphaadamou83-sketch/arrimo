@@ -100,10 +100,10 @@
         <section class="panneau-c"><h3>${T('en_cours')}</h3>${enCours.length ? `<div class="en-grille">${enCours.map((r) => carte(r)).join('')}</div>` : `<p class="note">${T('aucune')}</p>`}</section>
         <section class="panneau-c"><h3>${T('prochaines')}</h3>${prochaines.length ? `<div class="en-grille">${prochaines.map((r) => carte(r)).join('')}</div>` : `<p class="note">${T('aucune')}</p>`}
           <p class="note">${T('libere_dispo')}</p></section></div>
-        <aside><section class="panneau-c"><h3>${T('taches')}</h3>${d.taches.length ? `<ul class="liste-simple">${d.taches.map((x) => `<li><b>${e(x.lieu || '')}</b> ${e(x.titre)}${x.prioritaire ? ` · <b class="crit">${ic('triangle-alert')}</b>` : ''}</li>`).join('')}</ul>` : `<p class="note">${T('aucune_tache')}</p>`}
-          <button class="btn" type="button" data-en-aller="mes-taches">${T('taches')}</button></section>
+        <aside><div id="en-og"></div><div id="en-taches"></div>
           <section class="panneau-c"><h3>${T('terminees')} (${d.terminees.length})</h3>${d.terminees.length ? `<ul class="liste-simple en-faites">${d.terminees.slice(0, 8).map(carteFaite).join('')}</ul>` : `<p class="note">—</p>`}</section></aside></div>`;
     v.querySelectorAll('[data-en-aller]').forEach((b) => { b.onclick = () => (b.dataset.enAller === 'messages' ? window.ArrimoConnectInterne?.ouvrir('mes') : o.ouvrir?.(b.dataset.enAller)); });
+    window.ArrimoMesTaches?.resume(v.querySelector('#en-taches'), o); window.ArrimoOgProactif?.panneau(v.querySelector('#en-og'), o);
     o.brancher?.(v); brancherCivieres(v, o); animer(v);
   }
   function brancherCivieres(v, o) {

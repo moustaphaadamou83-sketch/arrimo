@@ -122,21 +122,12 @@
     lier(zone, o);
   }
   /** Zone F : Mes tâches (moteur unique des tâches : celles de mon rôle ou à mon nom). */
+  /** Zone « Mes tâches » : composant universel commun à tous les profils (public/mes-taches.js), sans liste longue sur l'Accueil. */
   async function taches(zone, o) {
-    let l; try { l = await o.api('GET', `/taches/miennes?etablissement_id=${o.etablissement_id}`); } catch { zone.remove(); return; }
-    const ouvertes = l.taches || []; const now = Date.now();
-    const n = (f) => ouvertes.filter(f).length;
-    zone.innerHTML = `<section class="panneau-c acc-taches"><div class="ligne" style="justify-content:space-between"><h3><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-check"/></svg> ${T('taches')}</h3><button class="btn" type="button" data-acc-aller="mes-taches">${T('ouvrir_taches')}</button></div>
-      ${ouvertes.length ? `<p class="note">${n((x) => x.statut === 'a_faire')} ${T('a_faire')} · ${n((x) => x.statut === 'en_cours')} ${T('en_cours')} · <b>${n((x) => x.echeance && new Date(x.echeance).getTime() < now)} ${T('retard')}</b></p>
-        ${l.non_attribuees ? `<p class="note">${T('non_attr', { n: l.non_attribuees })}</p>` : ''}
-        <ul class="liste-simple">${ouvertes.slice(0, l.personnel ? 8 : 4).map((x) => `<li><b>${e(x.lieu || '')}</b> ${e(x.titre)}${x.echeance ? ` · ${h(x.echeance)}` : ''}${x.assigne_nom ? ` · <span class="note">${e(x.assigne_nom)}</span>` : ''}
-          ${l.personnel && x.source === 'tache' ? `<span class="ligne acc-attrib"><label class="sr-only" for="acc-at-${x.id}">${T('a_qui')}</label><select id="acc-at-${x.id}"><option value="">${T('file')}</option>${l.personnel.filter((p) => !x.assigne_role || p.role === x.assigne_role || ['coordonnateur', 'admin_etab', 'gestionnaire'].includes(p.role)).map((p) => `<option value="${p.id}"${p.id === x.assigne_a ? ' selected' : ''}>${e(p.nom)}</option>`).join('')}</select><button class="btn" type="button" data-acc-attribuer="${x.id}">${T('attribuer')}</button></span>` : ''}</li>`).join('')}</ul>` : `<p class="note">${T('aucune_tache')}</p>`}</section>`;
-    zone.querySelectorAll('[data-acc-attribuer]').forEach((bt) => { bt.onclick = async () => {
-      const id = bt.dataset.accAttribuer; const val = zone.querySelector(`#acc-at-${id}`).value;
-      try { await o.api('POST', `/taches/${id}/attribuer`, { utilisateur_id: val ? Number(val) : null }); o.toast?.(T('attribuee')); taches(zone, o); } catch (err) { o.toast?.(err.message, true); }
-    }; });
-    lier(zone, o);
+    if (window.ArrimoMesTaches?.resume) return window.ArrimoMesTaches.resume(zone, o);
+    zone.remove();
   }
+
   /** Zone G : prévisions compactes (moteur de prévision existant ; horizon et marge affichés). */
   function previsions(p) {
     if (!p || !p.horizons?.length) return '';
@@ -210,7 +201,7 @@
     v.innerHTML = `<div class="ds-accueil">${vueEnsemble(o)}
       <div class="ds-deux">${carteCapacite(o.capacite) || '<div id="acc-flux"></div>'}${carteOg(o)}</div>
       ${carteArrivees(o)}
-      <div class="ds-secondaire">${o.chrono ? '<div id="acc-chrono"></div>' : ''}${o.taches ? '<div id="acc-taches"></div>' : ''}${previsions(o.previsions)}</div>
+      <div class="ds-secondaire">${o.chrono ? '<div id="acc-chrono"></div>' : ''}${o.taches ? '<div id="acc-taches"></div>' : ''}<div id="acc-og-proactif"></div>${previsions(o.previsions)}</div>
       ${carteCapacite(o.capacite) ? '<div id="acc-flux"></div>' : ''}</div>`;
     const synthesesZone = document.createElement('div');
     synthesesZone.className = 'ds-secondaire';
@@ -243,6 +234,7 @@
     // Chrono universel : résumé des séjours sous la vue d'ensemble (même composant que l'Accueil des CHSLD, même source)
     if (o.chrono) travaux.push(Promise.resolve(window.ArrimoChrono?.resumeAccueil(v.querySelector('.ds-accueil') || v, o.etablissement_id)).catch(() => null));
     if (o.taches) travaux.push(taches(v.querySelector('#acc-taches'), o));
+    travaux.push(window.ArrimoOgProactif?.panneau(v.querySelector('#acc-og-proactif'), o));
     await Promise.all(travaux.map((p) => p.catch(() => {})));
   }
   const cle = 'arrimo-accueil-perso';

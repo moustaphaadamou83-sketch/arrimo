@@ -251,7 +251,7 @@ function creerApp(pool, options = {}) {
   api.use((req, res, next) => {
     if (req.utilisateur.role !== 'entretien') return next();
     // La météo de l'en-tête et le nom de l'assistant (lecture seule, propres à l'établissement) s'affichent aussi pour l'entretien.
-    const ok = (req.method === 'GET' && ['/moi', '/nettoyage', '/meteo', '/og/configuration', '/chsld/taches', '/chsld/places', '/chrono/universel', '/entretien/cycle', '/entretien/accueil'].includes(req.path)) || req.path.startsWith('/moi/')
+    const ok = (req.method === 'GET' && ['/moi', '/nettoyage', '/meteo', '/og/configuration', '/chsld/taches', '/chsld/places', '/chrono/universel', '/entretien/cycle', '/entretien/accueil', '/og/proactif'].includes(req.path)) || req.path.startsWith('/moi/')
       || req.path.startsWith('/formation/')   // Module Formation : son parcours Hygiène et salubrité
       || (req.method === 'GET' && req.path === '/taches/miennes')
       || req.path.startsWith('/messagerie/')   // Arrimo Connect : communications internes (mêmes droits que tout employé)
@@ -618,6 +618,7 @@ function creerApp(pool, options = {}) {
   require('./evenements').brancher(api, pool, route, entier);
   api.get('/nettoyage', route((req) => t.fileNettoyage(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   // Entretien (28 nov. 2026) : cycle de remise en disponibilité (mêmes heures que Capacités et Chrono) et Accueil de l'agent
+  api.get('/og/proactif', route((req) => require('./og-proactif').proactif(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   api.get('/entretien/cycle', route((req) => require('./entretien').ressources(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   api.get('/entretien/accueil', route((req) => require('./entretien').accueil(pool, req.utilisateur, entier(req.query.etablissement_id, 'etablissement_id'))));
   api.post('/nettoyage/civieres/:id/debut', route((req) => require('./entretien').debutCiviere(pool, req.utilisateur, entier(req.params.id, 'id'))));

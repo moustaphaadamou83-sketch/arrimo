@@ -1347,3 +1347,15 @@ body.mode-presentation #b-notif, body.mode-presentation #b-menu { visibility: hi
 @media (max-width: 900px) { .en-layout { grid-template-columns: 1fr; } }
 #v-entretien-accueil .en-identite { flex-direction: row; justify-content: flex-start; text-align: left; }
 .en-actions .btn { white-space: normal; line-height: 1.2; height: auto; padding: 8px 12px; }
+.mt-progression { height: 10px; border-radius: 999px; background: var(--fond); border: 1px solid var(--bordure); overflow: hidden; margin: 8px 0 4px; }
+.mt-progression span { display: block; height: 100%; background: var(--principal); }
+.mt-num { color: var(--texte-2-fond); margin-right: 4px; } ol.mt-liste { list-style: none; } .mt-fenetre { max-height: 70vh; overflow: auto; min-width: min(80vw, 900px); }
+.mt-progression { height: 10px; border-radius: 999px; background: var(--fond); border: 1px solid var(--bordure); overflow: hidden; margin: 8px 0 4px; }
+.mt-progression span { display: block; height: 100%; background: var(--principal); }
+.mt-num { color: var(--texte-2-fond); margin-right: 4px; } ol.mt-liste { list-style: none; } .mt-fenetre { max-height: 70vh; overflow: auto; min-width: min(80vw, 900px); }
+/* OG proactif : faits, prévisions, inconnus */
+.og-proactif h3 { display: flex; align-items: center; gap: 8px; } .og-points { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.og-p { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--bordure); border-left: 4px solid #94A3B8; border-radius: 10px; }
+.og-p.n-rouge { border-left-color: #DC2626; } .og-p.n-orange { border-left-color: #F59E0B; } .og-p.n-vert { border-left-color: #16A34A; } .og-p.n-bleu { border-left-color: #2563EB; }
+.og-type { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--texte-2-fond); }
+@media (max-width: 600px) { .og-p { grid-template-columns: 1fr; } }

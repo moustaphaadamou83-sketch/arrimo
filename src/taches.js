@@ -50,7 +50,7 @@ async function miennes(pool, u, q = {}) {
   exigerEtablissement(u, id);
   const e = (await pool.query('SELECT type_etablissement FROM etablissements WHERE id = $1', [id])).rows[0];
   const resp = RESPONSABLES.includes(u.role);
-  const t = (await pool.query(`SELECT t.id, t.type, t.titre, t.statut, t.echeance, t.assigne_role, t.assigne_a, t.version, l.code AS lieu, x.nom AS assigne_nom
+  const t = (await pool.query(`SELECT t.id, t.type, t.titre, t.detail AS instructions, t.statut, t.echeance, t.assigne_role, t.assigne_a, t.version, t.cree_le, COALESCE(t.statut_depuis, t.cree_le) AS statut_depuis, t.assigne_le, l.code AS lieu, x.nom AS assigne_nom
       FROM taches_etab t LEFT JOIN lits l ON l.id = t.lit_id LEFT JOIN utilisateurs x ON x.id = t.assigne_a
      WHERE t.etablissement_id = $1 AND t.statut IN ('a_faire', 'en_cours')
        AND (t.assigne_a = $2 OR (t.assigne_a IS NULL AND (t.assigne_role = $3 OR ($4 AND t.assigne_role IS NULL))))
@@ -59,8 +59,12 @@ async function miennes(pool, u, q = {}) {
   // Nettoyages (lits et civières) : pour l'entretien et les responsables
   let nett = [];
   if (u.role === 'entretien' || resp) {
-    nett = (await pool.query(`SELECT 'lit:' || l.id AS id, 'nettoyage' AS type, l.code AS lieu, CASE WHEN l.nettoyage_debut IS NULL THEN 'a_faire' ELSE 'en_cours' END AS statut, l.etat_depuis AS depuis
-      FROM lits l WHERE l.etablissement_id = $1 AND l.etat = 'nettoyage' AND l.actif ORDER BY l.etat_depuis`, [id])).rows
+    // Lits ET civières à nettoyer (28 nov. 2026) ; création = libération, statut actuel = début du nettoyage s'il a commencé
+    nett = (await pool.query(`SELECT 'lit:' || l.id AS id, 'nettoyage' AS type, l.code AS lieu, CASE WHEN l.nettoyage_debut IS NULL THEN 'a_faire' ELSE 'en_cours' END AS statut, l.etat_depuis AS depuis,
+        l.etat_depuis AS cree_le, COALESCE(l.nettoyage_debut, l.etat_depuis) AS statut_depuis
+      FROM lits l WHERE l.etablissement_id = $1 AND l.etat = 'nettoyage' AND l.actif
+      UNION ALL SELECT 'civiere:' || c.id, 'nettoyage', c.code, CASE WHEN c.nettoyage_debut IS NULL THEN 'a_faire' ELSE 'en_cours' END, c.etat_depuis, c.etat_depuis, COALESCE(c.nettoyage_debut, c.etat_depuis)
+      FROM civieres c WHERE c.etablissement_id = $1 AND c.etat = 'nettoyage' AND c.actif ORDER BY 5`, [id])).rows
       .map((x) => ({ ...x, source: 'nettoyage', titre: (u.langue === 'en' ? 'Clean ' : 'Nettoyer ') + x.lieu, echeance: null }));
   }
   const [pt, pn] = await Promise.all([lireParametres(pool, id, 'taches'), lireParametres(pool, id, 'nettoyage')]);
@@ -74,7 +78,7 @@ async function miennes(pool, u, q = {}) {
   // Responsable : personnes actives de l'établissement (attribution, réattribution) — nom et rôle seulement
   const personnel = resp ? (await pool.query(`SELECT x.id, x.nom, x.role FROM utilisateurs x JOIN utilisateur_etablissements ue ON ue.utilisateur_id = x.id
       WHERE ue.etablissement_id = $1 AND x.actif ORDER BY x.role, x.nom`, [id])).rows : undefined;
-  return { taches: toutes, terminees, parametres: { taches: pt, nettoyage: { delai_nettoyage_min: pn.delai_nettoyage_min, types_intervention: pn.types_intervention } }, chsld: e?.type_etablissement === 'chsld', personnel, non_attribuees: resp ? t.filter((x) => !x.assigne_a).length : undefined, ecran: e?.type_etablissement === 'chsld' ? 'c-taches' : 'nettoyage' };
+  return { maintenant: new Date().toISOString(), taches: toutes, terminees, parametres: { taches: pt, nettoyage: { delai_nettoyage_min: pn.delai_nettoyage_min, types_intervention: pn.types_intervention } }, chsld: e?.type_etablissement === 'chsld', personnel, non_attribuees: resp ? t.filter((x) => !x.assigne_a).length : undefined, ecran: e?.type_etablissement === 'chsld' ? 'c-taches' : 'nettoyage' };
 }
 
 /**

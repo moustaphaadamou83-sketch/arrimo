@@ -284,3 +284,22 @@ test('Entretien (28 nov.) : cycle de remise en disponibilité d’un lit et d’
   assert.deepStrictEqual(vues.sort(), ['entretien-accueil', 'mes-taches', 'nettoyage']);
   void entH;
 });
+
+test('Mes tâches universel et OG proactif (28 nov.) : heures de création et de statut tenues par la base ; OG typé (fait, prévision, inconnu), mêmes droits', async () => {
+  const t = (await pool.query("INSERT INTO taches_etab (etablissement_id, type, titre, assigne_role, cree_par) VALUES ($1, 'administratif', 'Vérifier le registre', 'coordonnateur', $2) RETURNING id, cree_le, statut_depuis", [ids.c, ids.coord])).rows[0];
+  assert.ok(t.statut_depuis, 'heure du statut à la création');
+  await pool.query("UPDATE taches_etab SET assigne_a = $2 WHERE id = $1", [t.id, ids.coord]);
+  const a = (await pool.query('SELECT assigne_le FROM taches_etab WHERE id = $1', [t.id])).rows[0]; assert.ok(a.assigne_le, 'heure d’affectation');
+  await new Promise((r) => setTimeout(r, 20));
+  await pool.query("UPDATE taches_etab SET statut = 'en_cours' WHERE id = $1", [t.id]);
+  const b = (await pool.query('SELECT statut_depuis, cree_le FROM taches_etab WHERE id = $1', [t.id])).rows[0]; assert.ok(new Date(b.statut_depuis) > new Date(b.cree_le), 'statut horodaté');
+  const m = (await appel('coord', 'GET', `/taches/miennes?etablissement_id=${ids.c}`)).d; const x = m.taches.find((y) => y.id === t.id);
+  assert.ok(m.maintenant && x.cree_le && x.statut_depuis);
+  for (const qui of ['coord', 'ent', 'hop']) {
+    const etab = qui === 'hop' ? ids.h : ids.c;
+    const r = await appel(qui, 'GET', `/og/proactif?etablissement_id=${etab}`); assert.strictEqual(r.s, 200, `${qui} ${JSON.stringify(r.d)}`);
+    assert.ok(r.d.points.every((p) => ['fait', 'prevision', 'inconnu'].includes(p.type)));
+    if (qui === 'ent') assert.ok(!/P-\d{5}|R-\d{5}/.test(JSON.stringify(r.d)), 'aucune référence patient pour l’entretien');
+  }
+  assert.strictEqual((await appel('ent', 'GET', `/og/proactif?etablissement_id=${ids.h}`)).s, 403, 'autre établissement refusé');
+});

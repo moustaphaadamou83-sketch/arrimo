@@ -4,7 +4,8 @@
    par l'entretien). Responsable : file non attribuée, filtres, attribution, et Paramètres du module (visibles seulement pour lui). */
 (() => {
   const TXT = {
-    fr: { releve: 'Relève entre équipes', releve_intro: 'Transmettre à l’équipe suivante ce qui reste ouvert (numéros et compteurs seulement).', releve_cpt: 'Tâches ouvertes : {t} (en retard : {r}) · nettoyages : {n} · alertes suivies : {a} (élevées : {e})', releve_transmettre: 'Transmettre la relève', releve_quart: 'Quart', q_jour: 'Jour', q_soir: 'Soir', q_nuit: 'Nuit', releve_derniere: 'Dernière relève ({q}) transmise par {par} à {h}', releve_accusee: 'accusée par {par} à {h}', releve_non_accusee: 'non accusée', releve_accuser: 'Accuser la relève', releve_ok: 'Relève enregistrée.',
+    fr: { r_restantes: 'Tâches restantes', r_progression: 'Progression du jour : {f} sur {t}', r_voir: 'Voir mes tâches', existe: 'Existe depuis', dans_statut: 'Dans ce statut depuis', instructions: 'Instructions', nouvelles: 'Nouvelle tâche : {n}',
+      releve: 'Relève entre équipes', releve_intro: 'Transmettre à l’équipe suivante ce qui reste ouvert (numéros et compteurs seulement).', releve_cpt: 'Tâches ouvertes : {t} (en retard : {r}) · nettoyages : {n} · alertes suivies : {a} (élevées : {e})', releve_transmettre: 'Transmettre la relève', releve_quart: 'Quart', q_jour: 'Jour', q_soir: 'Soir', q_nuit: 'Nuit', releve_derniere: 'Dernière relève ({q}) transmise par {par} à {h}', releve_accusee: 'accusée par {par} à {h}', releve_non_accusee: 'non accusée', releve_accuser: 'Accuser la relève', releve_ok: 'Relève enregistrée.',
       titre: 'Mes tâches', intro: 'Toutes vos tâches, quelle que soit leur origine : préparation, nettoyage, administratif, relances.', a_faire: 'À faire', en_cours: 'En cours', retard: 'En retard',
       prioritaires: 'Prioritaires', terminees: 'Terminées aujourd’hui', non_attr: 'Non attribuées', aucune: 'Aucune tâche dans cette catégorie.', ou: 'Où', quand: 'Échéance', priorite: 'Priorité',
       haute: 'Haute', normale: 'Normale', commencer: 'Commencer', terminer: 'Terminer', suspendre: 'Suspendre', signaler: 'Signaler un problème', ouvrir_nett: 'Ouvrir Nettoyage', fait: 'Tâche mise à jour.', par: 'par {n}', a: 'à {h}',
@@ -15,7 +16,8 @@
       notifier_attribution: 'Notifier la personne à qui une tâche est attribuée', attribution_auto: 'Attribution automatique', auto_aucune: 'Aucune : file du rôle, attribuée par un responsable', auto_seul: 'À la seule personne active du rôle, s’il n’y en a qu’une', delai_nettoyage_min: 'Délai cible d’un nettoyage (minutes) ; au-delà, il est en retard',
       types_intervention: 'Types d’intervention applicables', enregistrer: 'Enregistrer', enregistre: 'Paramètres enregistrés.', lecture: 'Lecture seule : seuls l’administration et la coordination modifient.',
       ti: { courant: 'Nettoyage courant', apres_depart: 'Nettoyage après départ', desinfection: 'Désinfection', preparation_chambre: 'Préparation de chambre', preparation_materielle: 'Préparation matérielle', verification: 'Vérification de remise en état' } },
-    en: { releve: 'Shift handover', releve_intro: 'Hand over to the next team what remains open (numbers and counts only).', releve_cpt: 'Open tasks: {t} (overdue: {r}) · cleanings: {n} · tracked alerts: {a} (high: {e})', releve_transmettre: 'Send handover', releve_quart: 'Shift', q_jour: 'Day', q_soir: 'Evening', q_nuit: 'Night', releve_derniere: 'Last handover ({q}) sent by {par} at {h}', releve_accusee: 'acknowledged by {par} at {h}', releve_non_accusee: 'not acknowledged', releve_accuser: 'Acknowledge handover', releve_ok: 'Handover recorded.',
+    en: { r_restantes: 'Tasks remaining', r_progression: 'Today’s progress: {f} of {t}', r_voir: 'See my tasks', existe: 'Exists for', dans_statut: 'In this status for', instructions: 'Instructions', nouvelles: 'New task: {n}',
+      releve: 'Shift handover', releve_intro: 'Hand over to the next team what remains open (numbers and counts only).', releve_cpt: 'Open tasks: {t} (overdue: {r}) · cleanings: {n} · tracked alerts: {a} (high: {e})', releve_transmettre: 'Send handover', releve_quart: 'Shift', q_jour: 'Day', q_soir: 'Evening', q_nuit: 'Night', releve_derniere: 'Last handover ({q}) sent by {par} at {h}', releve_accusee: 'acknowledged by {par} at {h}', releve_non_accusee: 'not acknowledged', releve_accuser: 'Acknowledge handover', releve_ok: 'Handover recorded.',
       titre: 'My tasks', intro: 'All your tasks, whatever their origin: preparation, cleaning, administrative, follow-ups.', a_faire: 'To do', en_cours: 'In progress', retard: 'Overdue',
       prioritaires: 'Priority', terminees: 'Done today', non_attr: 'Unassigned', aucune: 'No task in this category.', ou: 'Where', quand: 'Due', priorite: 'Priority',
       haute: 'High', normale: 'Normal', commencer: 'Start', terminer: 'Finish', suspendre: 'Pause', signaler: 'Report a problem', ouvrir_nett: 'Open Cleaning', fait: 'Task updated.', par: 'by {n}', a: 'at {h}',
@@ -42,8 +44,10 @@
     // Signaler un problème : message au responsable par Arrimo Connect, sans quitter l'écran
     if (x.statut !== 'faite') actions.push(`<button class="btn" type="button" data-connect-ouvrir="contacter">${T('signaler')}</button>`);
     if (d.personnel && x.source === 'tache' && x.statut !== 'faite') actions.push(`<span class="ligne acc-attrib"><label class="sr-only" for="mt-at-${x.id}">${T('a_qui')}</label><select id="mt-at-${x.id}"><option value="">${T('file')}</option>${d.personnel.filter((p) => !x.assigne_role || p.role === x.assigne_role || RESP.includes(p.role)).map((p) => `<option value="${p.id}"${p.id === x.assigne_a ? ' selected' : ''}>${e(p.nom)}</option>`).join('')}</select><button class="btn" type="button" data-mt-attribuer="${x.id}">${T('attribuer')}</button></span>`);
-    return `<li class="mt-carte${x.en_retard ? ' retard' : ''}"><div class="mt-tete"><b>${e(x.titre)}</b><span class="badge-flux ${x.statut === 'faite' ? 'ok' : x.en_retard ? 'retard' : 'cours'}">${e(x.statut === 'faite' ? T('terminees') : x.statut === 'en_cours' ? T('en_cours') : T('a_faire'))}${x.en_retard ? ` · ${T('retard')}` : ''}</span></div>
+    return `<li class="mt-carte${x.en_retard ? ' retard' : ''}"><div class="mt-tete"><b><span class="mt-num">${o.numero || ''}</span>${e(x.titre)}</b><span class="badge-flux ${x.statut === 'faite' ? 'ok' : x.en_retard ? 'retard' : 'cours'}">${e(x.statut === 'faite' ? T('terminees') : x.statut === 'en_cours' ? T('en_cours') : T('a_faire'))}${x.en_retard ? ` · ${T('retard')}` : ''}</span></div>
       <dl class="mt-dl"><dt>${T('ou')}</dt><dd>${e(x.lieu || '—')}</dd><dt>${T('quand')}</dt><dd>${x.statut === 'faite' ? `${h(x.fait_le)}${x.fait_par_nom ? ` · ${T('par', { n: x.fait_par_nom })}` : ''}` : h(x.echeance)}</dd>
+      ${x.statut !== 'faite' && x.cree_le ? `<dt>${T('existe')}</dt><dd class="num" data-mt-vivant="${e(x.cree_le)}">—</dd><dt>${T('dans_statut')}</dt><dd class="num" data-mt-vivant="${e(x.statut_depuis || x.cree_le)}">—</dd>` : ''}
+      ${x.instructions ? `<dt>${T('instructions')}</dt><dd>${e(x.instructions)}</dd>` : ''}
       <dt>${T('priorite')}</dt><dd>${x.prioritaire ? `<b>${T('haute')}</b>` : T('normale')}</dd><dt>${T('filtre_type')}</dt><dd>${e(X().ty[x.type] || x.type)}${x.assigne_nom ? ` · ${e(x.assigne_nom)}` : ''}</dd></dl>
       ${actions.length ? `<div class="ligne">${actions.join('')}</div>` : ''}</li>`;
   }
@@ -79,8 +83,10 @@
     v.innerHTML = `<div class="entete"><div><h2><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-check"/></svg> ${T('titre')}</h2><p class="note">${T('intro')}</p></div></div>
       <div class="flux-groupes" role="group" aria-label="${T('filtre_vue')}">${Object.keys(groupes).map((k) => `<button type="button" class="acc-mini-k flux-groupe${etat.vue === k ? ' actif' : ''}${k === 'retard' && groupes[k].length ? ' alerte' : ''}" data-mt-vue="${k}" aria-pressed="${etat.vue === k}"><b>${groupes[k].length}</b><span>${lib(k)}</span></button>`).join('')}</div>
       ${types.length > 1 ? `<div class="ligne"><label class="lbl" for="mt-type">${T('filtre_type')}</label><select id="mt-type"><option value="">${T('tous_types')}</option>${types.map((k) => `<option value="${k}"${etat.type === k ? ' selected' : ''}>${e(X().ty[k] || k)}</option>`).join('')}</select></div>` : ''}
-      ${liste.length ? `<ul class="mt-liste">${liste.map((x) => carte(x, d, o)).join('')}</ul>` : `<p class="note">${T('aucune')}</p>`}
+      ${liste.length ? `<ol class="mt-liste">${liste.map((x, i) => carte(x, d, { ...o, numero: `${i + 1}. ` })).join('')}</ol>` : `<p class="note">${T('aucune')}</p>`}
       <div id="mt-releve"></div>${resp ? '<div id="mt-params"></div>' : ''}`;
+    if (d.maintenant) decalage = new Date(d.maintenant).getTime() - Date.now();
+    animer(v);
     releve(v.querySelector('#mt-releve'), o);
     v.querySelectorAll('[data-mt-vue]').forEach((b) => { b.onclick = () => { etat.vue = b.dataset.mtVue; afficher(v, o); }; });
     v.querySelector('#mt-type')?.addEventListener('change', (ev) => { etat.type = ev.target.value; afficher(v, o); });
@@ -111,5 +117,38 @@
     const ok = zone.querySelector('#mt-releve-ok');
     if (ok) ok.onclick = async () => { try { await o.api('POST', `/taches/releve/${ok.dataset.id}/accuser`); o.toast?.(T('releve_ok')); } catch (err) { o.toast?.(err.message, true); } releve(zone, o); };
   }
-  window.ArrimoMesTaches = { afficher };
+  /* Compteurs Chrono des tâches : heure du SERVEUR (décalage mesuré), jamais celle de l'appareil */
+  let decalage = 0;
+  const dm = (m) => (m >= 1440 ? `${Math.floor(m / 1440)} ${L() === 'en' ? 'd' : 'j'} ${Math.floor((m % 1440) / 60)} h` : m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `${m} min`);
+  function animer(racine) {
+    const tic = () => { if (!racine.isConnected) return clearInterval(id); const now = Date.now() + decalage;
+      racine.querySelectorAll('[data-mt-vivant]').forEach((x) => { x.textContent = dm(Math.max(0, Math.floor((now - new Date(x.dataset.mtVivant).getTime()) / 60000))); }); };
+    const id = setInterval(tic, 15000); tic();
+  }
+  /** Carte compacte universelle « Mes tâches » (tous les profils compatibles) : compteurs, progression du jour ; clic = liste numérotée. */
+  let dernierTotal = null;
+  async function resume(zone, o) {
+    if (!zone) return;
+    let d; try { d = await o.api('GET', `/taches/miennes?etablissement_id=${o.etablissement_id}`); } catch { zone.remove(); return; }
+    if (d.maintenant) decalage = new Date(d.maintenant).getTime() - Date.now();
+    const l = d.taches || []; const fini = (d.terminees || []).length; const n = (f) => l.filter(f).length;
+    if (dernierTotal != null && l.length > dernierTotal) { o.toast?.(T('nouvelles', { n: l.length - dernierTotal })); window.ArrimoSon?.jouer('tache'); }
+    dernierTotal = l.length;
+    const k = (v, lib, ton) => `<div class="acc-mini-k${ton && v ? ` ${ton}` : ''}"><b class="num">${v}</b><span>${lib}</span></div>`;
+    const total = l.length + fini;
+    zone.innerHTML = `<section class="panneau-c mt-resume"><div class="ligne" style="justify-content:space-between"><h3><svg class="ic" aria-hidden="true" focusable="false"><use href="/icones.svg#i-check"/></svg> ${T('titre')}</h3>
+        <button class="btn" type="button" data-mt-ouvrir>${T('r_voir')}</button></div>
+      <div class="acc-mini">${k(l.length, T('r_restantes'))}${k(n((x) => x.statut === 'a_faire'), T('a_faire'))}${k(n((x) => x.statut === 'en_cours'), T('en_cours'))}
+        ${k(n((x) => x.prioritaire), T('prioritaires'), 'alerte')}${k(n((x) => x.en_retard), T('retard'), 'alerte')}${k(fini, T('terminees'))}</div>
+      ${total ? `<div class="mt-progression" role="progressbar" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${fini}" aria-label="${T('r_progression', { f: fini, t: total })}"><span style="width:${Math.round((fini / total) * 100)}%"></span></div>
+        <p class="note">${T('r_progression', { f: fini, t: total })}</p>` : `<p class="note">${T('aucune')}</p>`}</section>`;
+    zone.querySelector('[data-mt-ouvrir]').onclick = () => ouvrirListe(o);
+  }
+  /** Liste numérotée dans une fenêtre (même vue, mêmes actions, mêmes droits que l'écran Mes tâches). */
+  function ouvrirListe(o) {
+    if (typeof modale !== 'function') return o.ouvrir?.('mes-taches');
+    modale(X().titre, '<div id="mt-fenetre" class="mt-fenetre"></div>', [{ label: L() === 'en' ? 'Close' : 'Fermer' }]);
+    afficher(document.getElementById('mt-fenetre'), o);
+  }
+  window.ArrimoMesTaches = { afficher, resume, ouvrirListe };
 })();
