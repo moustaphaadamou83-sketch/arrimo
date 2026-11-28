@@ -28,6 +28,17 @@ window.ARRIMO_I18N.fr.aide = {
     },
   },
   ecrans: {
+    'entretien-accueil': {
+      nom: 'Accueil de l’agent d’entretien',
+      but: 'Voir d’un coup d’œil ce qui est à nettoyer, ce qui est en cours et ce qui attend une vérification, avec l’heure exacte de libération de chaque lit ou civière.',
+      gestes: [
+        'Chaque carte indique le lieu, l’heure de libération, le protocole et un compteur Chrono de la phase en cours.',
+        '« Commencer le nettoyage » arrête l’attente et démarre la mesure du nettoyage ; « Nettoyé, prêt » remet la ressource en disponibilité si le protocole le permet.',
+        'Un lit libéré n’est jamais disponible avant le nettoyage et, si nécessaire, la vérification.',
+        'OG signale les attentes longues et les vérifications en attente ; « Mes tâches » résume vos tâches.',
+      ],
+      erreurs: [['Heure de libération inconnue', 'Aucune durée n’est estimée tant que l’heure de libération n’est pas enregistrée.']],
+    },
     'mes-taches': {
       nom: 'Mes tâches',
       but: 'Retrouver en un seul endroit toutes vos tâches : préparation de chambre, nettoyage, administratif, transmissions et relances.',

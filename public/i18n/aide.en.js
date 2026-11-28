@@ -28,6 +28,17 @@ window.ARRIMO_I18N.en.aide = {
     },
   },
   ecrans: {
+    'entretien-accueil': {
+      nom: 'Housekeeping agent home',
+      but: 'See at a glance what needs cleaning, what is in progress and what awaits a check, with the exact release time of each bed or stretcher.',
+      gestes: [
+        'Each card shows the location, release time, protocol and a Chrono counter for the current phase.',
+        '“Start cleaning” stops the wait and starts timing the cleaning; “Cleaned, ready” makes the resource available again when the protocol allows.',
+        'A released bed is never available before cleaning and, when required, the check.',
+        'OG reports long waits and pending checks; “My tasks” summarizes your tasks.',
+      ],
+      erreurs: [['Release time unknown', 'No duration is estimated until the release time is recorded.']],
+    },
     'mes-taches': {
       nom: 'My tasks',
       but: 'Find all your tasks in one place: room preparation, cleaning, administrative work, handovers and follow-ups.',

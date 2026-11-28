@@ -313,6 +313,8 @@ for (const L of LARGEURS) {
 
     // 4. Les lits qui ne tournent pas : nettoyage par l'entretien (tablette), NSA, lits fermés
     const e = await ouvrir(L, 'entretien.x@demo.arrimo');
+    // L'agent arrive sur son Accueil (28 nov. 2026), puis ouvre Nettoyage
+    await e.waitForSelector('#v-entretien-accueil:not([hidden])'); await onglet(e, 'nettoyage');
     await e.waitForSelector('#v-nettoyage .net-item');
     if (L.tactile) {
       // Utilisable d'une main : grandes cibles, actions à portée du pouce (à droite)
@@ -592,6 +594,7 @@ test('interface en anglais : aucun texte français restant (noms propres except�
   await ecran(y, '10-notifications-y');
 
   const e = await ouvrir(L, 'entretien.x@demo.arrimo', 'en');
+  await e.waitForSelector('#v-entretien-accueil:not([hidden])'); await onglet(e, 'nettoyage');
   await e.waitForSelector('#v-nettoyage .net-item');
   await ecran(e, '11-cleaning');
 
@@ -666,7 +669,7 @@ for (const L of LARGEURS.slice(1)) {
     await x.waitForSelector('#v-compte:not([hidden]) h2');
     await ecran(x, '04-account');
     const e = await ouvrir(L, 'entretien.x@demo.arrimo', 'en');
-    await e.waitForSelector('#v-nettoyage:not([hidden])');
+    await e.waitForSelector('#v-entretien-accueil:not([hidden])');
     await ecran(e, '05-cleaning');
     const r = await ouvrir(L, 'reseau@demo.arrimo', 'en');
     await onglet(r, 'national');

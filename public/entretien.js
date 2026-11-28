@@ -56,7 +56,7 @@
             : `<button class="btn pri" type="button" data-fini="${r.id}" data-genre="lit" data-version="${r.version}" data-code="${e(r.code)}">${T('pret')}</button>`;
     const ligne = (lib, val, actif) => `<div class="en-l${actif ? ' actif' : ''}"><span>${lib}</span><b class="num">${val}</b></div>`;
     return `<article class="en-carte net-item ph-${e(r.phase)}" data-en-res="${e(r.genre)}:${r.id}">
-      <header class="en-tete"><div><h3>${r.genre === 'civiere' ? T('civiere') : T('lit')} ${e(r.code)}</h3><p class="note">${lieu.map(([k, v]) => `${k} ${e(v)}`).join(' · ') || '—'}</p></div>
+      <header class="en-tete"><div><h3>${r.genre === 'civiere' ? T('civiere') : T('lit')} <span class="donnee">${e(r.code)}</span></h3><p class="note">${lieu.map(([k, v]) => `${k} <span class="donnee">${e(v)}</span>`).join(' · ') || '—'}</p></div>
         <span class="en-statut">${T(`ph.${r.phase}`)}</span></header>
       <p class="en-lib">${ic('clock')} ${T('liberation')} <b>${heure(r.liberation_le)}</b></p>
       <div class="en-ring" data-en-depuis="${e(debutPhase(r) || '')}" data-en-total="${e(r.liberation_le || '')}" role="timer" aria-label="${T(`ph.${r.phase}`)}">
@@ -65,7 +65,7 @@
         ${ligne(T('d_nettoyage'), r.phase === 'nettoyage' ? `<span data-en-vivant="${e(r.nettoyage_debut)}">—</span>` : dm(r.nettoyage_min), r.phase === 'nettoyage')}
         ${r.verification_debut || r.phase === 'verification' ? ligne(T('d_verification'), r.phase === 'verification' ? `<span data-en-vivant="${e(r.verification_debut)}">—</span>` : dm(r.verification_min), r.phase === 'verification') : ''}
         ${ligne(T('d_total'), `<span data-en-vivant="${e(r.liberation_le)}">—</span>`, false)}${r.occupation_min != null ? ligne(T('d_occupation'), dm(r.occupation_min), false) : ''}</div>
-      <p class="note">${T('protocole')} : <b>${e(protocole)}</b>${(r.precautions || []).length ? ` · ${T('precautions')} : ${e(r.precautions.join(', '))}` : ''}</p>
+      <p class="note">${T('protocole')} : <b${r.protocole ? ' class="donnee"' : ''}>${e(protocole)}</b>${(r.precautions || []).length ? ` · ${T('precautions')} : ${e(r.precautions.join(', '))}` : ''}</p>
       ${o.actions === false ? '' : `<div class="en-actions">${action}<button class="btn" type="button" data-connect-ouvrir="contacter">${T('signaler')}</button></div>`}</article>`;
   }
   /** Carte d'une ressource remise en disponibilité aujourd'hui : durées figées de chaque phase. */
