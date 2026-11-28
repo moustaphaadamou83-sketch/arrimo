@@ -1780,7 +1780,9 @@ async function vueCopilote() {
   const niv = v.querySelector('.alerte-copilote'); const detailsNiveau = niv ? niv.innerHTML : '';
   const ancien = document.createElement('div'); while (v.firstChild) ancien.appendChild(v.firstChild);
   const mods = etabCtx().modules || {};
-  const [fx, ch, cy] = await Promise.all([api('GET', `/arrimo-flux?etablissement_id=${etat.ctx}`).catch(() => null), mods.chrono === true ? api('GET', `/chrono?etablissement_id=${etat.ctx}`).catch(() => null) : null,
+  // Flux seulement si le profil du compte a Transferts (registre : le serveur refuserait la route sinon)
+  const avecFlux = (etabCtx()?.ecrans || ['flux']).includes('flux');
+  const [fx, ch, cy] = await Promise.all([avecFlux ? api('GET', `/arrimo-flux?etablissement_id=${etat.ctx}`).catch(() => null) : null, mods.chrono === true ? api('GET', `/chrono?etablissement_id=${etat.ctx}`).catch(() => null) : null,
     api('GET', `/capacites/cycle?etablissement_id=${etat.ctx}`).catch(() => null)]);
   const A = (k, vars) => t(`accueil.${k}`, vars);
   // Planche 2 : six indicateurs, chacun rattaché à son module (couleur) ; valeurs réelles seulement

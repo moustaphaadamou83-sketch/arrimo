@@ -197,6 +197,9 @@
   }
   /** Panneau compact de l'Accueil : préalertes reçues (à acquitter) et prochains mouvements. */
   async function panneau(zone, o) {
+    // Profil sans Transferts : aucun panneau Flux (jamais de requête refusée)
+    const ecrans = (typeof etabCtx === 'function' ? etabCtx()?.ecrans : null);
+    if (Array.isArray(ecrans) && !ecrans.includes('flux')) { zone.innerHTML = ''; return; }
     let d; try { d = await o.api('GET', `/arrimo-flux?etablissement_id=${o.etablissement_id}`); } catch { zone.innerHTML = ''; return; }
     // Bourse des places (si le module est activé) : à droite des mouvements ; lits réellement libres distingués des places déclarées
     const b = o.bourse ? await o.api('GET', `/bourse?etablissement_id=${o.etablissement_id}`).catch(() => null) : null;

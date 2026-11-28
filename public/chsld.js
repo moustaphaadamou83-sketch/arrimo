@@ -135,7 +135,7 @@
     if (window.ArrimoAccueil && window.optsFlux) {
       v.querySelector('.ch-situation')?.remove();
       const ancien = document.createElement('div'); while (v.firstChild) ancien.appendChild(v.firstChild);
-      const fx = await api('GET', `/arrimo-flux?etablissement_id=${ctx()}`).catch(() => null);
+      const fx = ((typeof etabCtx === 'function' ? etabCtx()?.ecrans : null) || ['flux']).includes('flux') ? await api('GET', `/arrimo-flux?etablissement_id=${ctx()}`).catch(() => null) : null;
       const A = (k) => t(`accueil.${k}`);
       const prep = fx ? fx.resume.preparations : null;
       // Planche 2 : capacité réelle des places (mêmes chiffres que l'écran Chambres), segments cliquables
