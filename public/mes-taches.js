@@ -104,7 +104,9 @@
   }
   /** Relève entre équipes (complémentaire nº 3, §6) : transmission horodatée, accusée par l'équipe entrante. */
   async function releve(zone, o) {
+    // Relève de quart : personnel soignant et coordination (l'entretien n'y a pas accès, refus du serveur)
     if (!zone) return;
+    if (window.etat?.moi?.utilisateur?.role === 'entretien' || o.role === 'entretien') { zone.innerHTML = ''; return; }
     const r = await o.api('GET', `/taches/releve?etablissement_id=${o.etablissement_id}`).catch(() => null); if (!r) return;
     const c = r.maintenant.compteurs; const d = r.derniere; const h = (x) => new Date(x).toLocaleTimeString(L() === 'en' ? 'en-CA' : 'fr-CA', { hour: '2-digit', minute: '2-digit' });
     zone.innerHTML = `<section class="panneau-c"><h3>${T('releve')}</h3><p class="note">${T('releve_intro')}</p>

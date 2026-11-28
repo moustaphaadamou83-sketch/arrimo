@@ -53,6 +53,7 @@ async function ouvrir(L, email, langue) {
   page.erreurs = [];
   page.on('console', (m) => { if (m.type() === 'error') page.erreurs.push(m.text()); });
   page.on('pageerror', (e) => page.erreurs.push(String(e)));
+  page.on('response', (r) => { if (r.status() === 403) page.erreurs.push(`403 ${r.request().method()} ${new URL(r.url()).pathname}`); });
   if (langue) await page.addInitScript((l) => { try { localStorage.setItem('arrimo-langue', l); } catch { /* */ } }, langue);
   await page.addInitScript(() => { window.ARRIMO_VEILLE_MS = 1000; });   // notifications en direct : vérifiées chaque seconde pendant le test
   await page.goto(base);
