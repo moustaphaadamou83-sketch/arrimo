@@ -49,7 +49,8 @@
 
   const NAV = {
     hopital: [
-      { id: 'accueil', icone: 'house', fr: 'Accueil', en: 'Home', sous: [sm('accueil', 'copilote', 'Accueil', 'Home', { roles: [...PERSONNEL, 'entretien'] })] },
+      // Accueil de l'agent d'entretien (28 nov. 2026) : tableau de bord propre à son métier, même moteur que Nettoyage et Chrono
+      { id: 'accueil', icone: 'house', fr: 'Accueil', en: 'Home', sous: [sm('accueil', 'copilote', 'Accueil', 'Home'), sm('accueil_entretien', 'entretien-accueil', 'Accueil', 'Home', { roles: ['entretien'] })] },
       { id: 'patients', icone: 'stethoscope', fr: 'Patients', en: 'Patients', sous: [
         sm('patients', 'patients', 'Patients', 'Patients'), sm('dsn', 'dsn', 'Dossier santé', 'Health record', { licence: 'dsn', routes: ['/dsn'] }),
         sm('admissions', 'admissions', 'Admissions', 'Admissions', { licence: 'admissions_hopital' }),
@@ -71,7 +72,7 @@
         sm('secours_911', 'secours', 'Secours 911', '911 emergency', { licence: 'liaison_secours' }),
         sm('statuts', 'urgence-statuts', 'Statuts et fermetures', 'Status and closures', { licence: ['liaison_secours', 'urgences_direct'], roles: RESPONSABLES }),
         sm('crise', 'crise', 'Mode crise', 'Crisis mode', { licence: 'mode_crise', routes: ['/crise'], roles: RESPONSABLES })] },
-      { id: 'chrono', icone: 'timer', fr: 'Chrono', en: 'Chrono', sous: [sm('chrono', 'chrono', 'Chrono', 'Chrono', { licence: 'chrono', roles: [...PERSONNEL, 'entretien'] })] },
+      { id: 'chrono', icone: 'timer', fr: 'Chrono', en: 'Chrono', sous: [sm('chrono', 'chrono', 'Chrono', 'Chrono', { licence: 'chrono' })] },
       { id: 'alertes', icone: 'bell', fr: 'Alertes', en: 'Alerts', sous: [sm('alertes', 'vigilance', 'Alertes', 'Alerts', { routes: ['/vigilance', '/coordination/alertes'] })] },
       { id: 'operations', icone: 'spray-can', fr: 'Opérations', en: 'Operations', sous: [
         // Décision de Moustafa (28 nov. 2026) : l'espace Opérations est réservé au rôle entretien, dans tous les établissements
@@ -89,7 +90,7 @@
         sm('journal', 'journal', 'Journal', 'Activity log', { roles: RESPONSABLES }), sm('support', 'support', 'Assistance', 'Support')] },
     ],
     hebergement: [
-      { id: 'accueil', icone: 'house', fr: 'Accueil', en: 'Home', sous: [sm('accueil', 'c-accueil', 'Accueil', 'Home')] },
+      { id: 'accueil', icone: 'house', fr: 'Accueil', en: 'Home', sous: [sm('accueil', 'c-accueil', 'Accueil', 'Home'), sm('accueil_entretien', 'entretien-accueil', 'Accueil', 'Home', { roles: ['entretien'] })] },
       { id: 'residents', icone: 'users', fr: 'Résidents', en: 'Residents', sous: [
         sm('residents', 'c-residents', 'Résidents', 'Residents', { licence: 'residents' }),
         sm('admissions', 'c-admissions', 'Admissions', 'Admissions', { licence: 'residents' }),
@@ -115,7 +116,7 @@
         // Intègre l'ancien « Avant l'appel » (préparation de l'intervention) : jamais une condition préalable à l'appel au 911.
         sm('secours_911', 'c-urgences', 'Secours 911', '911 emergency', { licence: ['transport_ambulancier', 'eviter_transferts'], routes: ['/urgences-proches', '/eviter'] }),
         sm('crise', 'crise', 'Mode crise', 'Crisis mode', { licence: 'mode_crise', routes: ['/crise'], roles: RESPONSABLES })] },
-      { id: 'chrono', icone: 'timer', fr: 'Chrono', en: 'Chrono', sous: [sm('chrono', 'chrono', 'Chrono', 'Chrono', { licence: 'chrono', roles: [...PERSONNEL, 'entretien'] })] },
+      { id: 'chrono', icone: 'timer', fr: 'Chrono', en: 'Chrono', sous: [sm('chrono', 'chrono', 'Chrono', 'Chrono', { licence: 'chrono' })] },
       { id: 'alertes', icone: 'bell', fr: 'Alertes', en: 'Alerts', sous: [sm('alertes', 'c-alertes', 'Alertes', 'Alerts', { routes: ['/coordination/alertes'] })] },
       { id: 'operations', icone: 'spray-can', fr: 'Opérations', en: 'Operations', sous: [
         // Décision de Moustafa (28 nov. 2026) : l'espace Opérations est réservé au rôle entretien

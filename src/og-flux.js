@@ -39,6 +39,12 @@ async function chambre(pool, etabs, code, L) {
   const lignes = [`${l.code} (${l.etab}) : ${ETAT[l.etat] || l.etat}${l.patient_ref ? ` · ${l.patient_ref}` : ''}.`];
   if (t) lignes.push(T(L, `Préparation ${t.statut === 'en_cours' ? 'en cours' : 'à faire'} par l’entretien${t.echeance ? `, échéance ${dh(L, t.echeance)}` : ''} : la chambre n’est PAS encore prête.`, `Preparation ${t.statut === 'en_cours' ? 'in progress' : 'to do'} by housekeeping${t.echeance ? `, due ${dh(L, t.echeance)}` : ''}: the room is NOT ready yet.`));
   else if (l.entretien_statut === 'propre') lignes.push(T(L, 'Chambre déclarée prête par l’entretien.', 'Room declared ready by housekeeping.'));
+  // Cycle de remise en disponibilité (mêmes heures que l'Entretien, Capacités et Chrono) : libéré n'est jamais disponible
+  if (l.etat === 'nettoyage') {
+    const c = (await require('./entretien').ressources(pool, { id: 0, role: 'coordonnateur', etabs: [l.etablissement_id] }, l.etablissement_id, { jour: false })).en_cours.find((x) => x.genre === 'lit' && x.id === l.id);
+    if (c) lignes.push(T(L, `Libéré le ${dh(L, c.liberation_le)} ; ${({ attente: 'en attente de nettoyage', nettoyage: 'nettoyage en cours', verification: 'en attente de vérification' })[c.phase]} ; attente avant nettoyage ${c.attente_min ?? '—'} min${c.nettoyage_min != null ? `, nettoyage ${c.nettoyage_min} min` : ''} ; depuis la libération : ${c.total_min} min. Pas encore disponible.`,
+      `Released on ${dh(L, c.liberation_le)}; ${({ attente: 'waiting for cleaning', nettoyage: 'cleaning in progress', verification: 'awaiting check' })[c.phase]}; wait before cleaning ${c.attente_min ?? '—'} min${c.nettoyage_min != null ? `, cleaning ${c.nettoyage_min} min` : ''}; since release: ${c.total_min} min. Not available yet.`));
+  }
   if (fini?.termine_le) lignes.push(T(L, `Dernière préparation confirmée ${fini.nom ? `par ${fini.nom} ` : ''}le ${dh(L, fini.termine_le)}.`, `Last preparation confirmed ${fini.nom ? `by ${fini.nom} ` : ''}on ${dh(L, fini.termine_le)}.`));
   return lignes.join('\n') + pied(L, T(L, 'Chambres et lits, Personnel et tâches', 'Rooms and beds, Staff and tasks'));
 }
@@ -52,7 +58,7 @@ async function repondre(pool, u, etabId, question, langue) {
   if (dt && /\b(ou en est|transport|ambulance|vehicule|arrive\w*|heure|statut|status|where|vehicle|eta|when)\b/.test(qn)) return rep(await transport(pool, u, etabs, dt[0].toUpperCase(), L), 'transport', 'transports-planifies');
   // 2. Chambre par code (ERA-309, MED-202A…)
   const code = String(question || '').match(/\b[A-Z]{2,6}-\d{2,4}[A-Z]?\b/);
-  if (code && !/^(DT|PA|TR|TRX|DH|CH|VI|MC|CO|EV|SIM|DSN|DOC|P|R)-/i.test(code[0]) && /\b(prete?s?|pret|nettoy\w*|propre|preparee?s?|ready|clean\w*|prepared)\b/.test(qn) && !/\b(conge|sortie|compatibles?|nsa|orient\w*|discharge)\b/.test(qn)) {
+  if (code && !/^(DT|PA|TR|TRX|DH|CH|VI|MC|CO|EV|SIM|DSN|DOC|P|R)-/i.test(code[0]) && /\b(prete?s?|pret|nettoy\w*|propre|preparee?s?|ready|clean\w*|prepared|liber\w*|released?|disponible|available)\b/.test(qn) && !/\b(conge|sortie|compatibles?|nsa|orient\w*|discharge)\b/.test(qn)) {
     const r = await chambre(pool, etabs, code[0].toUpperCase(), L); if (r) return rep(r, 'chambre', 'c-chambres');
   }
   if (!etabId || !etabs.includes(Number(etabId))) return null;

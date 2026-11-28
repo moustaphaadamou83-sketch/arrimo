@@ -723,7 +723,7 @@ const CAPSULES = [
     exercice: [{ scene: 1, consigne: ST('Repérez vos tâches en retard.', 'Find your overdue tasks.') }],
     objectif: ST('Vous saurez voir votre travail du jour, les préparations de chambres et les échéances à respecter.', 'You will know your work for the day, room preparations and due times.'),
     scenes: [
-      { ecran: 'nettoyage', cible: '.kpis-ent', st: ST('« Mon travail aujourd’hui » : à nettoyer, en cours, préparations, en retard, terminées.', '“My work today”: to clean, in progress, preparations, overdue, done.') },
+      { ecran: 'entretien-accueil', cible: '.en-kpis', st: ST('Votre Accueil : à nettoyer, en cours, à vérifier, tâches prioritaires, terminées aujourd’hui, messages ; chaque carte ouvre la liste.', 'Your Home: to clean, in progress, awaiting check, priority tasks, done today, messages; each card opens the list.') },
       { ecran: 'nettoyage', cible: '#v-nettoyage', st: ST('Les préparations de chambres pour les arrivées apparaissent aussi dans Nettoyage.', 'Room preparations for arrivals also appear in Cleaning.') },
       { ecran: 'mes-taches', cible: '#v-mes-taches', st: ST('Dans « Mes tâches », commencez puis terminez la tâche pour déclarer la chambre prête : l’admission peut alors être confirmée.', 'In “My tasks”, start then finish the task to declare the room ready: the admission can then be confirmed.') },
     ],

@@ -598,7 +598,7 @@ async function demarrer() {
   appliquerDisposition(disposition()); majInfosLieu(); majMeteo(true); chargerNomOg();
   $('#b-notif').hidden = entretien;
   $('#b-recherche').hidden = entretien;
-  if (entretien) etat.vue = 'nettoyage';
+  if (entretien) etat.vue = 'entretien-accueil';
   document.querySelectorAll('#onglets button[data-v]').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.v === etat.vue)));
   document.querySelectorAll('.contenu > section').forEach((sec) => { sec.hidden = sec.id !== `v-${etat.vue}`; });
   await rafraichir();
@@ -639,7 +639,9 @@ function appliquerModules() {
     const autreType = b.dataset.type && b.dataset.type !== type;
     // Entretien : nettoyage (et ses tâches en CHSLD) seulement
     // Entretien : Nettoyage et Mes tâches (vue personnelle unique ; le tableau des tâches de l'établissement reste aux responsables : pas de doublon)
-    const entretienInterdit = entretien && !(b.dataset.v === 'nettoyage' || b.dataset.v === 'mes-taches' || b.dataset.v === 'chrono');  // Chrono : capacités seulement (serveur)
+    // Entretien (28 nov. 2026) : Accueil (son tableau de bord) et Opérations (Mes tâches, Nettoyage) ; Chrono est dans ses écrans, pas un module
+    const entretienInterdit = entretien && !['entretien-accueil', 'nettoyage', 'mes-taches'].includes(b.dataset.v);
+    if (!entretien && b.dataset.v === 'entretien-accueil') { b.hidden = true; return; }
     b.hidden = autreType || horsRegistre || (chsldInterdit && b.dataset.type === 'chsld') || entretienInterdit || (b.dataset.v === 'admin' && !etat.moi.utilisateur.admin) || (mod && mods[mod] === false)
       || (b.dataset.module && mods[b.dataset.module] === false) || (b.dataset.v === 'patients' && !etat.moi.patients_fictifs)
       // Module optionnel (Liaison Secours) : visible seulement s'il a été activé pour cet établissement
@@ -718,7 +720,7 @@ async function rafraichir() {
       'flux-domicile': () => window.ArrimoFluxVue.afficher($('#v-flux-domicile'), { ...optsFlux(), preset: { masquees: CATS_SAUF('domicile') } }),
       'flux-autres': () => window.ArrimoFluxVue.afficher($('#v-flux-autres'), { ...optsFlux(), preset: { masquees: CATS_SAUF('autre') } }),
       'flux-historique': () => window.ArrimoFluxVue.afficher($('#v-flux-historique'), { ...optsFlux(), preset: { jour: 'historique' } }),
-      'urgence-statuts': () => window.ArrimoSecours?.vues?.['urgence-statuts']?.(), 'mes-taches': () => window.ArrimoMesTaches.afficher($('#v-mes-taches'), optsFlux()), donnees: () => window.ArrimoDonnees.afficher($('#v-donnees'), { api, langue, etablissement_id: etat.ctx }), dsn: vueDsn, ...(window.ArrimoVisitesEviter?.vues || {}), ...(window.ArrimoCongesAlertes?.vues || {}), crise: () => window.ArrimoCrise.afficher($('#v-crise'), { api, langue, etablissement_id: etat.ctx }),
+      'urgence-statuts': () => window.ArrimoSecours?.vues?.['urgence-statuts']?.(), 'mes-taches': () => window.ArrimoMesTaches.afficher($('#v-mes-taches'), optsFlux()), 'entretien-accueil': () => window.ArrimoEntretien.accueil($('#v-entretien-accueil'), { ...optsFlux(), brancher: brancherNettoyage }), donnees: () => window.ArrimoDonnees.afficher($('#v-donnees'), { api, langue, etablissement_id: etat.ctx }), dsn: vueDsn, ...(window.ArrimoVisitesEviter?.vues || {}), ...(window.ArrimoCongesAlertes?.vues || {}), crise: () => window.ArrimoCrise.afficher($('#v-crise'), { api, langue, etablissement_id: etat.ctx }),
     })[etat.vue]()]);
     poserMenuParametres();
     majInfosLieu();
@@ -2419,14 +2421,9 @@ async function vueNettoyage() {
   const actionsSous = (l) => { const i = l.intervention;
     return `${!i && l.autorisee ? `<button class="btn" data-debut="${l.id}">${N('commencer')}</button>` : ''}${i?.statut === 'en_cours' ? `<button class="btn pri" data-terminer="${l.id}">${N('terminer')}</button>` : ''}${superviseur && i?.statut === 'controle_requis' && !i.version_changee ? `<button class="btn pri" data-valider="${l.id}">${N('valider')}</button>` : ''}${superviseur && i ? `<button class="btn" data-reprendre="${l.id}">${N('reprendre')}</button>` : ''}`; };
   v.innerHTML = `<div class="entete"><div><h2>${N('titre', { etab: etabCtx().nom })}</h2><p>${N('intro')}</p></div></div>
-    <div class="liste">${liste.map((l, i) => `<div class="net-item" style="--c:${couleur[l.priorite]}"><div>
-      <div class="grand">${i + 1}. ${esc(l.code)}</div>
-      <div class="note">${l.genre === 'civiere' ? N('civiere', { cat: t(`urgence.une_${l.categorie}`) }) : `${N('chambre', { unite: l.unite, ch: l.chambre })}${l.isolement ? N('isolement') : ''}`}</div>
-      <div style="font-size:13px">${esc(l.raison)}</div>
-      ${l.genre === 'lit' ? consignesNettoyageHTML(l) : ''}
-      <div class="note">${l.nettoyage_debut ? N('commence_il_y_a', { duree: depuis(l.nettoyage_debut) }) : N('attente_depuis', { duree: depuis(l.etat_depuis) })}</div>${compteurNettoyage(l)}</div>
-      <div class="actions">${l.precautions?.length || l.intervention ? actionsSous(l) : l.nettoyage_debut || l.genre === 'civiere' ? '' : `<button class="btn" data-debut="${l.id}">${N('commencer')}</button>`}
-        ${l.precautions?.length || l.intervention ? '' : `<button class="btn pri" data-fini="${l.id}" data-genre="${l.genre}" data-version="${l.version}" data-code="${esc(l.code)}">${N('termine')}</button>`}</div></div>`).join('') || `<p class="note">${N('aucun')}</p>`}</div>`;
+    <div class="liste" id="net-grille"></div>`;
+  // Cartes d'intervention en grille (28 nov. 2026) : même composant que l'Accueil de l'agent ; heures et durées du cycle (Chrono)
+  await window.ArrimoEntretien.grille($('#net-grille'), { ...optsFlux(), brancher: () => {} });
   // Cahier ultime (section 9) : les préparations de chambres (tâches de l'entretien) sont visibles ici aussi, même source que « Personnel et tâches »
   const taches = etabCtx()?.type_etablissement === 'chsld' ? ((await api('GET', `/chsld/taches?etablissement_id=${etat.ctx}`).catch(() => null)) || []) : [];
   const prep = (Array.isArray(taches) ? taches : taches.taches || []).filter((x) => ['preparation_chambre', 'entretien'].includes(x.type) && ['a_faire', 'en_cours'].includes(x.statut));
@@ -2436,25 +2433,14 @@ async function vueNettoyage() {
       <div class="actions"><button class="btn pri" type="button" data-net-tache>${N('ouvrir_tache')}</button></div></div>`).join('')}</div></section>`);
     v.querySelectorAll('[data-net-tache]').forEach((b) => { b.onclick = () => document.querySelector('#onglets button[data-v="c-taches"]')?.click(); });
   }
-  // Tableau de bord Entretien (cahier ultime, 4.3) : bonjour, mon travail aujourd'hui, prochaines échéances ; jamais une page vide
-  if (role === 'entretien' || etat.moi.utilisateur.role === 'entretien') {
-    const toutes = etabCtx()?.type_etablissement === 'chsld' ? ((await api('GET', `/chsld/taches?etablissement_id=${etat.ctx}&toutes=1`).catch(() => null)) || []) : [];
-    const lt = Array.isArray(toutes) ? toutes : toutes.taches || [];
-    const auj = new Date().toDateString();
-    const ouvertes = lt.filter((x) => ['a_faire', 'en_cours'].includes(x.statut));
-    const retard = ouvertes.filter((x) => x.echeance && new Date(x.echeance) < new Date());
-    const faites = lt.filter((x) => x.statut === 'faite' && x.fait_le && new Date(x.fait_le).toDateString() === auj);
-    const prochaines = ouvertes.filter((x) => x.echeance).sort((a, b) => new Date(a.echeance) - new Date(b.echeance)).slice(0, 4);
-    const k = (lib, n, ton) => `<div class="kpi-ent${ton ? ` ${ton}` : ''}"><span class="v num">${n}</span><span class="lbl">${lib}</span></div>`;
-    v.insertAdjacentHTML('afterbegin', `${bandeauAccueil()}<section class="panneau-c"><h3>${N('mon_travail')}</h3><div class="kpis-ent">
-      ${k(N('k_a_nettoyer'), liste.filter((l) => !l.nettoyage_debut).length)}${k(N('k_en_cours'), liste.filter((l) => l.nettoyage_debut).length + ouvertes.filter((x) => x.statut === 'en_cours').length)}
-      ${k(N('k_preparations'), ouvertes.filter((x) => x.type === 'preparation_chambre').length)}${k(N('k_retard'), retard.length, retard.length ? 'alerte' : '')}${k(N('k_faites'), faites.length, 'ok')}</div>
-      ${prochaines.length ? `<h4>${N('prochaines')}</h4><ul class="liste-simple">${prochaines.map((x) => `<li><b>${esc(x.lit || '')}</b> · ${esc(x.titre)} · ${N('echeance', { h: new Date(x.echeance).toLocaleString(locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: fuseau() }) })}</li>`).join('')}</ul>` : ''}
-      ${!liste.length && !ouvertes.length ? `<p class="note">${N('rien_a_faire')}${faites.length ? ` ${N('dernieres', { liste: faites.slice(0, 3).map((x) => x.lit || x.titre).join(', ') })}` : ''}</p>` : ''}</section>`);
-  }
+  // Le tableau de bord de l'agent est son Accueil (28 nov. 2026) : plus de doublon ici
   // Réglages du module : administration et responsables seulement (cahier ultime, section 15) ; les consignes restent sur chaque tâche
   if (superviseur) { v.insertAdjacentHTML('beforeend', `<details class="panneau-c" id="net-config"${etat.netConfigOuverte ? ' open' : ''}><summary><b>${N('config')}</b></summary><div id="net-config-corps"></div></details>`);
     const cfg = $('#net-config'); cfg.ontoggle = () => { etat.netConfigOuverte = cfg.open; if (cfg.open) chargerConfigNettoyage(superviseur); }; if (cfg.open) chargerConfigNettoyage(superviseur); }
+  brancherNettoyage(v);
+}
+/** Gestes du nettoyage (mêmes routes et mêmes règles partout : Nettoyage, Accueil de l'agent). */
+function brancherNettoyage(v) {
   for (const a of ['terminer', 'valider', 'reprendre']) v.querySelectorAll(`[data-${a}]`).forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/nettoyage/${b.dataset[a]}/${a}`), t('nettoyage.ok')); });
   v.querySelectorAll('[data-debut]').forEach((b) => { b.onclick = () => agir(b, () => api('POST', `/nettoyage/${b.dataset.debut}/debut`), t('nettoyage.commence_ok')); });
   v.querySelectorAll('[data-fini]').forEach((b) => {

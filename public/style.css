@@ -1319,3 +1319,31 @@ body.mode-presentation #b-notif, body.mode-presentation #b-menu { visibility: hi
 .barres-jour { display: flex; gap: 4px; align-items: flex-end; height: 140px; } .barres-jour > div { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; }
 .barres-jour span { width: 100%; background: var(--principal); border-radius: 3px 3px 0 0; min-height: 2px; } .barres-jour small { font-size: 10px; }
 .aide-i { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--bordure); font-size: 12px; cursor: help; }
+/* Entretien (28 nov. 2026) : Accueil de l'agent et cartes d'intervention en grille alignée ; jetons de la charte, clair et sombre */
+.en-identite { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.en-identite h2 { margin: 0; } .en-identite .en-sync { margin-left: auto; }
+.en-avatar { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 1.2rem; background: var(--principal); color: #fff; flex: none; }
+.en-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 0 0 14px; }
+.en-kpi { display: grid; gap: 2px; text-align: left; padding: 12px 14px; border: 1px solid var(--bordure); border-radius: 12px; background: var(--carte); color: var(--texte); font: inherit; cursor: pointer; min-height: 76px; }
+.en-kpi .v { font-size: 1.8rem; font-weight: 800; color: var(--principal); } .en-kpi .lbl { color: var(--texte-2-fond); font-weight: 600; font-size: .9rem; }
+.en-kpi.alerte { border-color: var(--critique-texte); } .en-kpi.alerte .v { color: var(--critique-texte); }
+.en-kpi:focus-visible { outline: 3px solid var(--principal); outline-offset: 2px; }
+.en-layout { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(260px, 1fr); gap: 14px; align-items: start; }
+.en-layout > aside { display: grid; gap: 14px; } .en-layout section { margin: 0 0 14px; }
+.en-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 12px; align-items: stretch; }
+.en-carte { display: flex; flex-direction: column; gap: 8px; padding: 14px; border: 1px solid var(--bordure); border-radius: 12px; background: var(--carte); min-width: 0; }
+.en-carte.ph-attente { border-top: 4px solid #F59E0B; } .en-carte.ph-nettoyage { border-top: 4px solid #2563EB; } .en-carte.ph-verification { border-top: 4px solid #94A3B8; }
+.en-tete { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; } .en-tete h3 { margin: 0; font-size: 1.05rem; } .en-tete .note { margin: 2px 0 0; overflow-wrap: anywhere; }
+.en-statut { font-size: .82rem; font-weight: 700; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--bordure); white-space: nowrap; }
+.en-lib { margin: 0; font-size: .92rem; } .en-lib .ic { vertical-align: -3px; }
+.en-ring { width: 128px; height: 128px; margin: 4px auto; border-radius: 50%; border: 7px solid var(--bordure); border-top-color: var(--principal); border-right-color: var(--principal);
+  display: grid; place-content: center; text-align: center; gap: 0; }
+.en-ring-v { font-size: 1.3rem; font-weight: 800; font-variant-numeric: tabular-nums; } .en-ring-j { font-size: .85rem; font-weight: 700; color: var(--texte-2-fond); min-height: 1em; }
+.en-ring-l { font-size: .7rem; color: var(--texte-2-fond); max-width: 100px; line-height: 1.15; }
+.en-phases { display: grid; gap: 4px; padding: 8px 10px; background: var(--fond); border-radius: 10px; }
+.en-l { display: flex; justify-content: space-between; gap: 8px; font-size: .88rem; } .en-l span { color: var(--texte-2-fond); } .en-l.actif span, .en-l.actif b { color: var(--principal); font-weight: 800; }
+.en-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; } .en-actions .btn { flex: 1 1 140px; min-height: 44px; }
+.en-faites li { margin: 4px 0; } .crit { color: var(--critique-texte); }
+@media (max-width: 900px) { .en-layout { grid-template-columns: 1fr; } }
+#v-entretien-accueil .en-identite { flex-direction: row; justify-content: flex-start; text-align: left; }
+.en-actions .btn { white-space: normal; line-height: 1.2; height: auto; padding: 8px 12px; }

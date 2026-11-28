@@ -141,6 +141,7 @@
   </header>
   <div class="voile-nav" id="voile-nav" hidden></div>
   <nav class="onglets" id="onglets" role="tablist" data-i18n-attr="aria-label:nav.principale">
+      <button role="tab" data-v="entretien-accueil" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-house"/></svg><span data-i18n="onglets.entretien-accueil"></span></button>
       <button role="tab" data-type="hopital" data-v="copilote" aria-selected="true"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-house"/></svg><span data-i18n="onglets.copilote"></span></button>
       <button role="tab" data-v="mes-taches" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-check"/></svg><span data-i18n="onglets.mes-taches"></span></button>
       <button role="tab" data-v="flux" aria-selected="false"><svg class="ic" aria-hidden="true" focusable="false"><use href="icones.svg#i-arrow-right-left"/></svg><span data-i18n="onglets.flux"></span></button>
@@ -201,6 +202,7 @@
   <main class="contenu">
     <section id="v-copilote"></section>
     <section id="v-flux" hidden></section>
+    <section id="v-entretien-accueil" hidden></section>
     <section id="v-mes-taches" hidden></section>
     <aside id="messagerie-panneau" class="messagerie-panneau" role="dialog" aria-modal="false" aria-labelledby="msg-titre" hidden></aside>
     <section id="v-reseau" hidden></section>
@@ -287,6 +289,7 @@
 <script src="tableaux.js"></script>
 <script src="accueil.js"></script>
 <script src="mes-taches.js"></script>
+<script src="entretien.js"></script>
 <script src="messagerie.js"></script>
 <script src="formation-aide.js"></script>
 <script src="chsld.js"></script>

@@ -243,3 +243,44 @@ test('Professionnalisation : catalogue des KPI complet (formule, source, périod
   }
   assert.deepStrictEqual(fautes, [], 'emojis dans l’interface');
 });
+
+test('Entretien (28 nov.) : cycle de remise en disponibilité d’un lit et d’une civière, phases mesurées, libéré ≠ disponible, droits de l’entretien', async () => {
+  const entH = await compte('enth', 'entretien', { etab: ids.h });
+  const lit = (await pool.query("SELECT id, version, code FROM lits WHERE etablissement_id = $1 AND etat = 'occupe' ORDER BY id LIMIT 1", [ids.h])).rows[0];
+  // Libération par la coordination : le lit passe en nettoyage (indisponible), heure de libération enregistrée
+  assert.strictEqual((await appel('hop', 'POST', `/lits/${lit.id}/action`, { action: 'liberer', version: lit.version })).s, 200);
+  let cy = (await appel('enth', 'GET', `/entretien/cycle?etablissement_id=${ids.h}`)).d; let r = cy.en_cours.find((x) => x.genre === 'lit' && x.id === lit.id);
+  assert.ok(r && r.phase === 'attente' && r.liberation_le && r.total_min === 0 && r.nettoyage_min === null, JSON.stringify(r));
+  assert.ok(!JSON.stringify(cy).match(/"patient_ref"|P-\d{5}/), 'aucune référence patient pour l’entretien');
+  assert.strictEqual((await pool.query('SELECT etat FROM lits WHERE id = $1', [lit.id])).rows[0].etat, 'nettoyage', 'libéré n’est pas disponible');
+  // Début du nettoyage : la phase « attente » s'arrête, « nettoyage » démarre
+  assert.strictEqual((await appel('enth', 'POST', `/nettoyage/${lit.id}/debut`)).s, 200);
+  cy = (await appel('enth', 'GET', `/entretien/cycle?etablissement_id=${ids.h}`)).d; r = cy.en_cours.find((x) => x.genre === 'lit' && x.id === lit.id);
+  assert.ok(r.phase === 'nettoyage' && r.nettoyage_debut && r.attente_min != null && r.nettoyage_min != null, JSON.stringify(r));
+  // Nettoyé, prêt : disponible ; durées figées dans « terminées aujourd'hui »
+  const v = (await pool.query('SELECT version FROM lits WHERE id = $1', [lit.id])).rows[0].version;
+  assert.strictEqual((await appel('enth', 'POST', `/lits/${lit.id}/action`, { action: 'nettoyage_ok', version: v })).s, 200);
+  cy = (await appel('enth', 'GET', `/entretien/cycle?etablissement_id=${ids.h}`)).d;
+  assert.ok(!cy.en_cours.some((x) => x.genre === 'lit' && x.id === lit.id));
+  const f = cy.terminees.find((x) => x.genre === 'lit' && x.id === lit.id); assert.ok(f && f.phase === 'disponible' && f.total_min != null && f.disponible_le && f.nettoyage_debut, JSON.stringify(f));
+  // Civière : libérée, début du nettoyage (nouveau), prête
+  const c = (await pool.query("SELECT id, version FROM civieres WHERE etablissement_id = $1 AND etat = 'occupee' AND NOT EXISTS (SELECT 1 FROM demandes_admission d WHERE d.civiere_id = civieres.id AND d.statut IN ('attente', 'assignee')) ORDER BY id LIMIT 1", [ids.h])).rows[0];
+  if (c) {
+    assert.strictEqual((await appel('hop', 'POST', `/civieres/${c.id}/action`, { action: 'liberer', version: c.version })).s, 200);
+    assert.strictEqual((await appel('enth', 'POST', `/nettoyage/civieres/${c.id}/debut`)).s, 200);
+    assert.strictEqual((await appel('enth', 'POST', `/nettoyage/civieres/${c.id}/debut`)).s, 409, 'pas de double début');
+    cy = (await appel('enth', 'GET', `/entretien/cycle?etablissement_id=${ids.h}`)).d; r = cy.en_cours.find((x) => x.genre === 'civiere' && x.id === c.id);
+    assert.ok(r && r.phase === 'nettoyage' && r.nettoyage_debut, JSON.stringify(r));
+    const v2 = (await pool.query('SELECT version FROM civieres WHERE id = $1', [c.id])).rows[0].version;
+    assert.strictEqual((await appel('enth', 'POST', `/civieres/${c.id}/action`, { action: 'nettoyage_ok', version: v2 })).s, 200);
+    assert.strictEqual((await pool.query('SELECT nettoyage_debut FROM civieres WHERE id = $1', [c.id])).rows[0].nettoyage_debut, null);
+  }
+  // Accueil de l'agent : identité réelle et indicateurs ; refusé dans un autre établissement ; modules de l'entretien seulement
+  const a = await appel('enth', 'GET', `/entretien/accueil?etablissement_id=${ids.h}`); assert.strictEqual(a.s, 200); assert.strictEqual(a.d.identite.nom, 'Nom enth');
+  assert.strictEqual((await appel('enth', 'GET', `/entretien/accueil?etablissement_id=${ids.c}`)).s, 403);
+  assert.strictEqual((await appel('enth', 'GET', `/lits?etablissement_id=${ids.h}`)).s, 403, 'pas de Capacités générales');
+  const REG = require('../src/registre-modules');
+  const vues = REG.NAV.hopital.flatMap((m) => m.sous.filter((x) => x.roles.includes('entretien')).map((x) => x.v));
+  assert.deepStrictEqual(vues.sort(), ['entretien-accueil', 'mes-taches', 'nettoyage']);
+  void entH;
+});

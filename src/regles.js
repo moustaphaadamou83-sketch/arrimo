@@ -256,7 +256,8 @@ async function changerEtatCiviere(client, pool, utilisateurId, civiereId, nouvea
     `UPDATE civieres SET etat = $2::text, version = version + 1, etat_depuis = now(),
             patient_ref = CASE WHEN $2::text = 'occupee' THEN $3::text ELSE NULL END,
             arrivee_le = CASE WHEN $2::text = 'occupee' THEN $4::timestamptz ELSE NULL END,
-            motif_indispo = CASE WHEN $2::text = 'indispo' THEN $5::text ELSE NULL END
+            motif_indispo = CASE WHEN $2::text = 'indispo' THEN $5::text ELSE NULL END,
+            nettoyage_debut = NULL
       WHERE id = $1 RETURNING *`,
     [cv.id, nouveau, patientRef, arrivee, nouveau === 'indispo' ? opts.motif : null]);
   if (nouveau === 'libre') await require('./alertes').civiereLiberee(client, cv.id);

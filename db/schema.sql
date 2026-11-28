@@ -2785,3 +2785,5 @@ CREATE TABLE IF NOT EXISTS seuils_flotte (
   CHECK (escalade_min > vigilance_min)
 );
 ALTER TABLE organisations_secours ADD COLUMN IF NOT EXISTS modules jsonb;
+-- Entretien (28 nov. 2026) : début du nettoyage d'une civière, pour mesurer l'attente et la durée du nettoyage (comme pour les lits)
+ALTER TABLE civieres ADD COLUMN IF NOT EXISTS nettoyage_debut timestamptz;
